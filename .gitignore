@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.vite/
+out/
+test-results/
+playwright-report/
+dev/topologies/
