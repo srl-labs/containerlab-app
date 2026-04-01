@@ -60,6 +60,22 @@ export interface SSHAccessResponse {
   command: string;
 }
 
+export type TerminalProtocol = "ssh" | "shell" | "telnet";
+
+export interface TerminalSessionInfo {
+  sessionId: string;
+  username: string;
+  labName: string;
+  nodeName: string;
+  protocol: TerminalProtocol;
+  state: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActivity: string;
+  exitCode?: number | null;
+  error?: string;
+}
+
 export interface LogsResponse {
   containerName: string;
   logs: string;
@@ -388,6 +404,44 @@ export class ClabApiClient {
     return (await res.json()) as SSHAccessResponse;
   }
 
+  async createTerminalSession(
+    token: string,
+    labName: string,
+    nodeName: string,
+    options: {
+      protocol: TerminalProtocol;
+      cols: number;
+      rows: number;
+      sshUsername?: string;
+      telnetPort?: number;
+    }
+  ): Promise<TerminalSessionInfo> {
+    const body = JSON.stringify({
+      protocol: options.protocol,
+      cols: options.cols,
+      rows: options.rows,
+      sshUsername: options.sshUsername,
+      telnetPort: options.telnetPort
+    });
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/terminal-sessions`,
+      token,
+      body,
+      "application/json"
+    );
+    return (await res.json()) as TerminalSessionInfo;
+  }
+
+  async getTerminalSession(token: string, sessionId: string): Promise<TerminalSessionInfo> {
+    const res = await this.get(`/api/v1/terminal-sessions/${enc(sessionId)}`, token);
+    return (await res.json()) as TerminalSessionInfo;
+  }
+
+  async deleteTerminalSession(token: string, sessionId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/terminal-sessions/${enc(sessionId)}`, token);
+  }
+
   async getNodeLogs(
     token: string,
     labName: string,
@@ -567,4 +621,10 @@ export function isNotFoundError(error: unknown): boolean {
   }
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("(404)");
+}
+
+export function buildWebSocketUrl(baseUrl: string, path: string): string {
+  const url = new URL(path, baseUrl);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return url.toString();
 }

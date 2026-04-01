@@ -35,7 +35,13 @@ import { useAuth } from "./hooks/useAuth";
 import { useEventStream } from "./hooks/useEventStream";
 import { LoginPage } from "./components/LoginPage";
 import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
+import { RuntimeTerminalWindows } from "./components/RuntimeTerminalWindows";
 import { SettingsOverlay } from "./components/SettingsOverlay";
+import {
+  loadTerminalPreferences,
+  persistTerminalPreferences,
+  type TerminalPreferences
+} from "./runtimeTerminalSettings";
 import { createStandaloneExplorerBridge } from "./standaloneExplorer";
 import {
   createStandaloneLifecycleManager,
@@ -260,16 +266,11 @@ function setupStandaloneUiHost(): void {
       if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
         return;
       }
-      if (msg.command === "clab-node-attach-shell") {
-        runtimeUiActions.notify(
-          "Interactive shell is not available in standalone mode yet. Showing SSH access instead.",
-          "info"
-        );
-      }
-      runtimeUiActions.openSsh({
+      runtimeUiActions.openTerminal({
         ...target,
+        protocol: msg.command === "clab-node-attach-shell" ? "shell" : "ssh",
         nodeName: msg.nodeName,
-        title: `SSH: ${msg.nodeName}`
+        title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`
       });
       return;
     }
@@ -369,6 +370,9 @@ function StandaloneApp() {
   const { isAuthenticated, loading, logout, login, error } = useAuth();
   const connected = useLabStore((s) => s.connected);
   const [apiUrl, setApiUrl] = useState("");
+  const [terminalPreferences, setTerminalPreferences] = useState<TerminalPreferences>(() =>
+    loadTerminalPreferences()
+  );
 
   // Start event stream when authenticated
   useEventStream(isAuthenticated);
@@ -438,6 +442,11 @@ function StandaloneApp() {
     void logout();
   }, [logout]);
 
+  const handleSaveTerminalPreferences = useCallback((next: TerminalPreferences) => {
+    setTerminalPreferences(persistTerminalPreferences(next));
+    runtimeUiActions.notify("Terminal settings updated.", "success");
+  }, []);
+
   if (loading) {
     return (
       <div style={{
@@ -466,6 +475,7 @@ function StandaloneApp() {
     <>
       <App initialData={initialData} runtime={standaloneRuntime!} />
       <MuiThemeProvider>
+        <RuntimeTerminalWindows />
         <RuntimeActionDialogs />
       </MuiThemeProvider>
       <SettingsOverlayMounted
@@ -474,8 +484,10 @@ function StandaloneApp() {
         onLogout={handleLogout}
         onShowInspectAll={runtimeUiActions.openInspectAll}
         onShowVersion={runtimeUiActions.openVersion}
+        onSaveTerminalPreferences={handleSaveTerminalPreferences}
         connected={connected}
         apiUrl={apiUrl || "unknown"}
+        terminalPreferences={terminalPreferences}
       />
     </>
   );
@@ -490,8 +502,10 @@ function SettingsOverlayMounted(props: {
   onLogout: () => void;
   onShowInspectAll: () => void;
   onShowVersion: () => void;
+  onSaveTerminalPreferences: (next: TerminalPreferences) => void;
   connected: boolean;
   apiUrl: string;
+  terminalPreferences: TerminalPreferences;
 }) {
   const overlayContainer = document.getElementById("settings-overlay");
   if (!overlayContainer) return null;
@@ -504,8 +518,10 @@ function SettingsOverlayMounted(props: {
         onLogout={props.onLogout}
         onShowInspectAll={props.onShowInspectAll}
         onShowVersion={props.onShowVersion}
+        onSaveTerminalPreferences={props.onSaveTerminalPreferences}
         apiUrl={props.apiUrl}
         connected={props.connected}
+        terminalPreferences={props.terminalPreferences}
       />
     </MuiThemeProvider>,
     overlayContainer

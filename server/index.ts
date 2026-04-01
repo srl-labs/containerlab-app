@@ -9,6 +9,7 @@ import Fastify from "fastify";
 import type { FastifyRequest } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
+import fastifyWebsocket from "@fastify/websocket";
 import { ClabApiClient } from "./clabApiClient.js";
 import { getApiUrlFromRequest, getTokenFromRequest } from "./middleware.js";
 import { registerAuthRoutes } from "./auth.js";
@@ -19,6 +20,7 @@ import { registerLabProxy } from "./labProxy.js";
 import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
 import { registerRuntimeProxy } from "./runtimeProxy.js";
+import { registerTerminalStreamProxy } from "./terminalStreamProxy.js";
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "http://localhost:8080";
@@ -34,6 +36,7 @@ async function start(): Promise<void> {
     origin: IS_DEV ? true : false,
     credentials: true
   });
+  await app.register(fastifyWebsocket);
 
   const topologySessions = createStandaloneTopologySessionManager();
 
@@ -59,6 +62,7 @@ async function start(): Promise<void> {
   registerFileProxy(app, getClient);
   registerLabProxy(app, getClient, topologySessions);
   registerRuntimeProxy(app, getClient, topologySessions);
+  registerTerminalStreamProxy(app, getClient);
   app.get("/api/config", async (request, reply) => {
     const clabApiUrl = getApiUrlFromRequest(request, DEFAULT_CLAB_API_URL);
     return reply.send({ clabApiUrl, defaultClabApiUrl: DEFAULT_CLAB_API_URL });

@@ -614,23 +614,26 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.node.ssh":
-      case "containerlab.node.attachShell": {
+      case "containerlab.node.attachShell":
+      case "containerlab.node.telnet": {
         if (!actionTopologyRef || !item?.name) {
           postExplorerError("Node access requires a running lab item.");
           return;
         }
 
-        if (commandId === "containerlab.node.attachShell") {
-          runtimeUiActions.notify(
-            "Interactive shell is not available in standalone mode yet. Showing SSH access instead.",
-            "info"
-          );
-        }
+        const protocol =
+          commandId === "containerlab.node.attachShell"
+            ? "shell"
+            : commandId === "containerlab.node.telnet"
+              ? "telnet"
+              : "ssh";
+        const titlePrefix = protocol === "shell" ? "Shell" : protocol === "telnet" ? "Telnet" : "SSH";
 
-        runtimeUiActions.openSsh({
+        runtimeUiActions.openTerminal({
           topologyRef: actionTopologyRef,
           nodeName: item.name,
-          title: `SSH: ${item.label || item.name}`
+          protocol,
+          title: `${titlePrefix}: ${item.label || item.name}`
         });
         return;
       }

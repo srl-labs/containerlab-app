@@ -5,7 +5,8 @@ import type {
   ClabApiClient,
   InspectContainerInfo,
   NetemResetRequest,
-  NetemSetRequest
+  NetemSetRequest,
+  TerminalProtocol
 } from "./clabApiClient.js";
 import { getTokenFromRequest } from "./middleware.js";
 import {
@@ -28,6 +29,15 @@ interface NodeBody extends RuntimeTargetBody {
   duration?: string;
   sshUsername?: string;
   tail?: string;
+}
+
+interface TerminalBody extends RuntimeTargetBody {
+  nodeName: string;
+  protocol: TerminalProtocol;
+  cols?: number;
+  rows?: number;
+  sshUsername?: string;
+  telnetPort?: number;
 }
 
 interface NetemBody extends RuntimeTargetBody {
@@ -172,6 +182,10 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function normalizeOptionalInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
 function stripTopologySuffix(name: string): string {
   return name.replace(/\.clab\.(ya?ml)$/i, "");
 }
@@ -293,6 +307,62 @@ export function registerRuntimeProxy(
           tail: normalizeOptionalString(request.body.tail) ?? "200"
         });
         return reply.send(logs);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: TerminalBody }>(
+    "/api/runtime/terminal-sessions",
+    async (request: FastifyRequest<{ Body: TerminalBody }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
+        const session = await client.createTerminalSession(token, target.labName, resolvedNode.container.name, {
+          protocol: request.body.protocol,
+          cols: normalizeOptionalInteger(request.body.cols) ?? 120,
+          rows: normalizeOptionalInteger(request.body.rows) ?? 36,
+          sshUsername: normalizeOptionalString(request.body.sshUsername),
+          telnetPort: normalizeOptionalInteger(request.body.telnetPort)
+        });
+        return reply.send(session);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/runtime/terminal-sessions/:sessionId",
+    async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        const session = await client.getTerminalSession(token, request.params.sessionId);
+        return reply.send(session);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.delete<{ Params: { sessionId: string } }>(
+    "/api/runtime/terminal-sessions/:sessionId",
+    async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        await client.deleteTerminalSession(token, request.params.sessionId);
+        return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
       }

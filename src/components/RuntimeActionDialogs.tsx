@@ -29,7 +29,6 @@ import {
   inspectLab,
   netemFieldsFromShowResponse,
   normalizeNetemFields,
-  requestNodeSsh,
   resetNetem,
   saveLabConfigs,
   setNetem,
@@ -194,13 +193,11 @@ export function RuntimeActionDialogs() {
   const logsRequest = useRuntimeUiStore((state) => state.logsRequest);
   const netemRequest = useRuntimeUiStore((state) => state.netemRequest);
   const snackbar = useRuntimeUiStore((state) => state.snackbar);
-  const sshRequest = useRuntimeUiStore((state) => state.sshRequest);
   const versionOpen = useRuntimeUiStore((state) => state.versionOpen);
   const closeInspect = useRuntimeUiStore((state) => state.closeInspect);
   const closeLogs = useRuntimeUiStore((state) => state.closeLogs);
   const closeNetem = useRuntimeUiStore((state) => state.closeNetem);
   const closeSnackbar = useRuntimeUiStore((state) => state.closeSnackbar);
-  const closeSsh = useRuntimeUiStore((state) => state.closeSsh);
 
   const [inspectLoading, setInspectLoading] = useState(false);
   const [inspectError, setInspectError] = useState<string | null>(null);
@@ -211,16 +208,6 @@ export function RuntimeActionDialogs() {
   const [logsError, setLogsError] = useState<string | null>(null);
   const [logsTail, setLogsTail] = useState("200");
   const [logsContent, setLogsContent] = useState("");
-
-  const [sshLoading, setSshLoading] = useState(false);
-  const [sshError, setSshError] = useState<string | null>(null);
-  const [sshCommand, setSshCommand] = useState<string>("");
-  const [sshDetails, setSshDetails] = useState<{
-    expiration: string;
-    host: string;
-    port: number;
-    username: string;
-  } | null>(null);
 
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
@@ -360,52 +347,6 @@ export function RuntimeActionDialogs() {
       setLogsLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!sshRequest) {
-      setSshCommand("");
-      setSshDetails(null);
-      setSshError(null);
-      return;
-    }
-
-    let cancelled = false;
-    setSshLoading(true);
-    setSshError(null);
-
-    const load = async () => {
-      try {
-        const ssh = await requestNodeSsh({
-          sessionId: sshRequest.sessionId,
-          topologyRef: sshRequest.topologyRef,
-          nodeName: sshRequest.nodeName
-        });
-        if (cancelled) {
-          return;
-        }
-        setSshCommand(ssh.command);
-        setSshDetails({
-          expiration: ssh.expiration,
-          host: ssh.host,
-          port: ssh.port,
-          username: ssh.username
-        });
-      } catch (error) {
-        if (!cancelled) {
-          setSshError(error instanceof Error ? error.message : String(error));
-        }
-      } finally {
-        if (!cancelled) {
-          setSshLoading(false);
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [sshRequest]);
 
   useEffect(() => {
     if (!versionOpen) {
@@ -658,48 +599,6 @@ export function RuntimeActionDialogs() {
         </DialogContent>
         <DialogActions>
           <Button onClick={closeLogs}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={sshRequest !== null} onClose={closeSsh} maxWidth="sm" fullWidth>
-        <DialogTitle>{sshRequest?.title ?? "SSH Access"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {sshLoading ? <Typography>Requesting SSH access...</Typography> : null}
-            {sshError ? <Alert severity="error">{sshError}</Alert> : null}
-            {sshDetails ? (
-              <>
-                <Stack spacing={0.5}>
-                  <Typography variant="body2">Host: {sshDetails.host}</Typography>
-                  <Typography variant="body2">Port: {sshDetails.port}</Typography>
-                  <Typography variant="body2">Username: {sshDetails.username}</Typography>
-                  <Typography variant="body2">Expires: {sshDetails.expiration}</Typography>
-                </Stack>
-                <TextField
-                  label="SSH Command"
-                  value={sshCommand}
-                  fullWidth
-                  multiline
-                  minRows={2}
-                  slotProps={{ input: { readOnly: true } }}
-                />
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(sshCommand).then(
-                      () => runtimeUiActions.notify("SSH command copied.", "success"),
-                      () => runtimeUiActions.notify("Failed to copy SSH command.", "error")
-                    );
-                  }}
-                >
-                  Copy Command
-                </Button>
-              </>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeSsh}>Close</Button>
         </DialogActions>
       </Dialog>
 

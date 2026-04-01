@@ -37,6 +37,22 @@ export interface SSHAccessResponse {
   command: string;
 }
 
+export type TerminalProtocol = "ssh" | "shell" | "telnet";
+
+export interface TerminalSessionInfo {
+  sessionId: string;
+  username: string;
+  labName: string;
+  nodeName: string;
+  protocol: TerminalProtocol;
+  state: string;
+  createdAt: string;
+  expiresAt: string;
+  lastActivity: string;
+  exitCode?: number | null;
+  error?: string;
+}
+
 export interface LogsResponse {
   containerName: string;
   logs: string;
@@ -146,6 +162,37 @@ export async function requestNodeSsh(input: RuntimeTargetRequest & {
   sshUsername?: string;
 }): Promise<SSHAccessResponse> {
   return await requestJson<SSHAccessResponse>("/api/runtime/ssh", asJsonBody(input));
+}
+
+export async function openTerminalSession(input: RuntimeTargetRequest & {
+  nodeName: string;
+  protocol: TerminalProtocol;
+  cols: number;
+  rows: number;
+  sshUsername?: string;
+  telnetPort?: number;
+}): Promise<TerminalSessionInfo> {
+  return await requestJson<TerminalSessionInfo>("/api/runtime/terminal-sessions", asJsonBody(input));
+}
+
+export async function fetchTerminalSession(sessionId: string): Promise<TerminalSessionInfo> {
+  return await requestJson<TerminalSessionInfo>(`/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function closeTerminalSession(sessionId: string): Promise<void> {
+  await requestJson<{ success: boolean }>(`/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+}
+
+export function connectTerminalSessionWebSocket(sessionId: string): WebSocket {
+  const url = new URL(
+    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}/stream`,
+    window.location.origin
+  );
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  return new WebSocket(url);
 }
 
 export async function fetchNodeLogs(input: RuntimeTargetRequest & {

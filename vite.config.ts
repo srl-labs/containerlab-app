@@ -22,9 +22,16 @@ export default defineConfig({
     port: 5173,
     open: false,
     proxy: {
-      "/auth": "http://localhost:3000",
-      "/api": "http://localhost:3000",
-      "/files": "http://localhost:3000"
+      "/auth": {
+        target: "http://localhost:3000"
+      },
+      "/api": {
+        target: "http://localhost:3000",
+        ws: true
+      },
+      "/files": {
+        target: "http://localhost:3000"
+      }
     }
   },
   build: {
