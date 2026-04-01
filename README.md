@@ -1,47 +1,151 @@
 # containerlab-web
 
-Standalone browser runtime for containerlab built on `@srl-labs/clab-ui`.
+[![GitHub releases](https://img.shields.io/github/v/release/srl-labs/containerlab-web.svg?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://github.com/srl-labs/containerlab-web/releases)
+[![Doc](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/cmd/tools/api-server/start/)
+[![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
+[![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
 
-This repo owns:
+A standalone browser host for [containerlab](https://containerlab.dev/) built on top of [`@srl-labs/clab-ui`](https://github.com/srl-labs/clab-ui). It provides a Vite frontend plus a Fastify backend that authenticates against `clab-api-server`, proxies topology and lifecycle operations, and streams runtime events into the UI.
 
-- the Vite frontend host
-- the Fastify backend proxy
-- the standalone unit and Playwright E2E suites
-- the static assets and schema copy needed by the standalone app
+![screenshot](https://raw.githubusercontent.com/srl-labs/containerlab-web/refs/heads/main/resources/screenshot.png)
 
-`@srl-labs/clab-ui` remains the shared package consumed by both this repo and
-`vscode-containerlab`.
+---
+
+## Key Features
+
+- **Standalone TopoViewer Runtime:**
+  Runs the shared `@srl-labs/clab-ui` experience directly in the browser without VS Code.
+
+- **Login + API Endpoint Selection:**
+  Authenticate against `clab-api-server` and choose the API URL from the login flow (persisted in secure httpOnly cookies).
+
+- **Live Explorer (Running / Local / Help):**
+  Shows deployed labs, local topology files, and quick links. Supports actions like open in TopoViewer, deploy, destroy, and redeploy.
+
+- **Real-Time Lab and Interface Updates:**
+  Bridges `clab-api-server` NDJSON streams to browser SSE, including interface state and stats updates.
+
+- **Session-Based Topology Editing:**
+  Uses topology sessions with deployed/undeployed mode handling and refreshes when external topology document updates are detected.
+
+- **Lifecycle Command Integration:**
+  Deploy, destroy, and redeploy commands are proxied through the backend with streamed logs and cancellation support.
+
+- **Export Support:**
+  Supports SVG export flows from the shared UI in standalone mode.
+
+---
 
 ## Requirements
 
-- Node.js `>= 24`
-- npm
-- Playwright Chromium for E2E runs
+- **Node.js** `>= 24` (see `.nvmrc`)
+- **npm**
+- A reachable **clab-api-server** (default: `http://localhost:8080`)
+- **GitHub token** for GitHub Packages access (`@srl-labs/clab-ui`)
+- (Optional) **Playwright Chromium** for E2E tests
 
-Install dependencies:
+---
 
-```bash
-npm install
-```
+## Getting Started
 
-The published `@srl-labs/clab-ui` dependency is pulled from GitHub Packages, so
-set `GITHUB_TOKEN` before installing.
+1. Export a GitHub token so npm can fetch the shared UI package:
 
-Install Playwright once for E2E:
+   ```bash
+   export GITHUB_TOKEN=<your-token>
+   ```
 
-```bash
-npx playwright install chromium
-```
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Make sure `clab-api-server` is running (for example):
+
+   ```bash
+   containerlab tools api-server start
+   ```
+
+4. Start the standalone app:
+
+   ```bash
+   npm run dev
+   ```
+
+5. Open `http://localhost:3000`, then log in with your API credentials and endpoint.
+
+---
 
 ## Common Commands
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start the standalone frontend and backend |
-| `npm run build` | Build frontend and backend production artifacts |
-| `npm run typecheck` | Typecheck app, server, and E2E TypeScript |
-| `npm run test:unit` | Run standalone unit tests |
-| `npm run test:e2e` | Run the Playwright suite |
-| `npm run start` | Start the built backend |
+| `npm run dev` | Start backend + Vite frontend in development mode |
+| `npm run build` | Build client bundle and backend server |
+| `npm run build:server` | Build backend server only (`dist/server/index.cjs`) |
+| `npm run start` | Start the built production backend |
+| `npm run preview` | Preview the built Vite frontend |
+| `npm run typecheck` | Typecheck client and server TypeScript |
+| `npm run test:unit` | Run unit tests for `src/` and `server/` |
+| `npm run test:e2e` | Run Playwright E2E tests |
+| `npm run test:e2e:ui` | Run Playwright in UI mode |
+| `npm run test:e2e:debug` | Run Playwright in debug mode |
 
-By default this repo depends on the published `@srl-labs/clab-ui` package.
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `3000` | Fastify server port |
+| `CLAB_API_URL` | `http://localhost:8080` | Default `clab-api-server` endpoint |
+| `VITE_DEV_URL` | `http://localhost:5173` | Vite dev server URL used by backend proxy |
+| `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Interface stats interval requested from API event stream |
+| `NODE_ENV` | `development` / `production` | Controls dev proxy mode vs static asset serving |
+
+---
+
+## Running Tests
+
+### Unit Tests
+
+```bash
+npm run test:unit
+```
+
+### E2E Tests
+
+Install Playwright browser (once per machine):
+
+```bash
+npx playwright install chromium
+```
+
+Run the suite:
+
+```bash
+npm run test:e2e
+```
+
+The Playwright config starts `npm run dev` automatically and runs tests against the Vite frontend (`http://localhost:5173`).
+
+---
+
+## Repository Scope
+
+This repository owns:
+
+- the Vite frontend host
+- the Fastify backend proxy
+- standalone unit and Playwright E2E test suites
+- static resources and the bundled schema used by the standalone app
+
+`@srl-labs/clab-ui` remains the shared package consumed by both this repo and `vscode-containerlab`.
+
+---
+
+## Feedback and Contributions
+
+- **GitHub Issues:** [Create an issue](https://github.com/srl-labs/containerlab-web/issues)
+- **Pull Requests:** Contributions are welcome
+- **Discord:** Join the [containerlab Discord](https://discord.gg/vAyddtaEV9)
