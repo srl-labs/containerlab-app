@@ -369,6 +369,7 @@ function renderApp(): void {
 function StandaloneApp() {
   const { isAuthenticated, loading, logout, login, error } = useAuth();
   const connected = useLabStore((s) => s.connected);
+  const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
   const [apiUrl, setApiUrl] = useState("");
   const [terminalPreferences, setTerminalPreferences] = useState<TerminalPreferences>(() =>
     loadTerminalPreferences()
@@ -429,11 +430,12 @@ function StandaloneApp() {
     [login, refreshApiConfig]
   );
 
-  const handleToggleTheme = useCallback(() => {
-    document.documentElement.classList.toggle("light");
-    currentTheme = document.documentElement.classList.contains("light") ? "light" : "dark";
-    applyThemeVars(currentTheme);
-    persistTheme(currentTheme);
+  const handleThemeChange = useCallback((nextTheme: "light" | "dark") => {
+    document.documentElement.classList.toggle("light", nextTheme === "light");
+    currentTheme = nextTheme;
+    setTheme(nextTheme);
+    applyThemeVars(nextTheme);
+    persistTheme(nextTheme);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -479,11 +481,9 @@ function StandaloneApp() {
         <RuntimeActionDialogs />
       </MuiThemeProvider>
       <SettingsOverlayMounted
-        currentTheme={currentTheme}
-        onToggleTheme={handleToggleTheme}
+        currentTheme={theme}
+        onThemeChange={handleThemeChange}
         onLogout={handleLogout}
-        onShowInspectAll={runtimeUiActions.openInspectAll}
-        onShowVersion={runtimeUiActions.openVersion}
         onSaveTerminalPreferences={handleSaveTerminalPreferences}
         connected={connected}
         apiUrl={apiUrl || "unknown"}
@@ -498,10 +498,8 @@ function StandaloneApp() {
  */
 function SettingsOverlayMounted(props: {
   currentTheme: "light" | "dark";
-  onToggleTheme: () => void;
+  onThemeChange: (nextTheme: "light" | "dark") => void;
   onLogout: () => void;
-  onShowInspectAll: () => void;
-  onShowVersion: () => void;
   onSaveTerminalPreferences: (next: TerminalPreferences) => void;
   connected: boolean;
   apiUrl: string;
@@ -514,10 +512,8 @@ function SettingsOverlayMounted(props: {
     <MuiThemeProvider>
       <SettingsOverlay
         currentTheme={props.currentTheme}
-        onToggleTheme={props.onToggleTheme}
+        onThemeChange={props.onThemeChange}
         onLogout={props.onLogout}
-        onShowInspectAll={props.onShowInspectAll}
-        onShowVersion={props.onShowVersion}
         onSaveTerminalPreferences={props.onSaveTerminalPreferences}
         apiUrl={props.apiUrl}
         connected={props.connected}

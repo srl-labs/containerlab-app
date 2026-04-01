@@ -1,6 +1,10 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = (process.env.CI ?? "").length > 0;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Playwright configuration for React TopoViewer E2E tests.
@@ -10,7 +14,7 @@ const isCI = (process.env.CI ?? "").length > 0;
  * Retries are enabled to handle flaky network/timing issues.
  */
 export default defineConfig({
-  globalSetup: require.resolve("./global-setup"),
+  globalSetup: path.join(__dirname, "global-setup.ts"),
   testDir: "./specs",
   // CI runners are slower and more variable; reduce intra-file parallelism to
   // avoid intermittent timeouts while still allowing worker parallelism.

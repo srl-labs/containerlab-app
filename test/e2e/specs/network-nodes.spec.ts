@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 import type { Page } from "@playwright/test";
 import Ajv from "ajv";
@@ -15,6 +16,7 @@ const KIND_NOKIA_SRLINUX = "nokia_srlinux";
 const SEL_APPLY_BTN = '[data-testid="panel-apply-btn"]';
 
 // Load schema for validation
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(__dirname, "../../../schema/clab.schema.json");
 const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
 const ajv = new Ajv({ strict: false, allErrors: true });

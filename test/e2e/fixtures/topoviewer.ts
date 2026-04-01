@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { writeFileSync } from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
 import type { Locator, TestInfo } from "@playwright/test";
 import { test as base } from "@playwright/test";
@@ -13,6 +14,7 @@ const TOPOLOGY_NODE_TYPE = "topology-node";
 const NETWORK_NODE_TYPE = "network-node";
 
 // Topologies directory path (must match dev server config)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TOPOLOGIES_DIR = path.resolve(__dirname, "../../../dev/topologies");
 
 /**
