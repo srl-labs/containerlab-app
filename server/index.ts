@@ -18,6 +18,7 @@ import { registerFileProxy } from "./fileProxy.js";
 import { registerLabProxy } from "./labProxy.js";
 import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
+import { registerRuntimeProxy } from "./runtimeProxy.js";
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "http://localhost:8080";
@@ -57,6 +58,7 @@ async function start(): Promise<void> {
   registerTopologyProxy(app, getClient, topologySessions);
   registerFileProxy(app, getClient);
   registerLabProxy(app, getClient, topologySessions);
+  registerRuntimeProxy(app, getClient, topologySessions);
   app.get("/api/config", async (request, reply) => {
     const clabApiUrl = getApiUrlFromRequest(request, DEFAULT_CLAB_API_URL);
     return reply.send({ clabApiUrl, defaultClabApiUrl: DEFAULT_CLAB_API_URL });

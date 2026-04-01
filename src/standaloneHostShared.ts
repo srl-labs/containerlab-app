@@ -23,6 +23,7 @@ export interface ExplorerTreeItem {
   link?: string;
   labName?: string;
   name?: string;
+  containerName?: string;
   cID?: string;
   kind?: string;
   image?: string;

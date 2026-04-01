@@ -28,6 +28,77 @@ export interface LifecycleActionResult {
   logs?: string[];
 }
 
+export interface InspectContainerInfo {
+  name: string;
+  containerId: string;
+  image: string;
+  kind: string;
+  state: string;
+  status: string;
+  ipv4Address: string;
+  ipv6Address: string;
+  labName: string;
+  labPath: string;
+  absLabPath: string;
+  group: string;
+  owner: string;
+}
+
+export type InspectAllLabsResponse = Record<string, InspectContainerInfo[]>;
+export type InspectLabResponse = InspectContainerInfo[];
+
+export interface SaveConfigResponse {
+  message: string;
+  output: string;
+}
+
+export interface SSHAccessResponse {
+  port: number;
+  host: string;
+  username: string;
+  expiration: string;
+  command: string;
+}
+
+export interface LogsResponse {
+  containerName: string;
+  logs: string;
+}
+
+export interface VersionResponse {
+  versionInfo: string;
+}
+
+export interface VersionCheckResponse {
+  checkResult: string;
+}
+
+export interface NetemSetRequest {
+  containerName: string;
+  interface: string;
+  delay?: string;
+  jitter?: string;
+  loss?: number;
+  rate?: number;
+  corruption?: number;
+}
+
+export interface NetemResetRequest {
+  containerName: string;
+  interface: string;
+}
+
+export interface NetemInterfaceInfo {
+  interface: string;
+  delay: string;
+  jitter: string;
+  packet_loss: number;
+  rate: number;
+  corruption?: number;
+}
+
+export type NetemShowResponse = Record<string, NetemInterfaceInfo[]>;
+
 export interface TopologyDocEvent {
   type: "topology-doc";
   labName: string;
@@ -265,6 +336,115 @@ export class ClabApiClient {
       }
       throw error;
     }
+  }
+
+  async listLabs(token: string): Promise<InspectAllLabsResponse> {
+    const res = await this.get("/api/v1/labs", token);
+    return (await res.json()) as InspectAllLabsResponse;
+  }
+
+  async inspectLab(token: string, labName: string): Promise<InspectLabResponse> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}`, token);
+    return (await res.json()) as InspectLabResponse;
+  }
+
+  async saveLab(
+    token: string,
+    labName: string,
+    options: { nodeFilter?: string } = {}
+  ): Promise<SaveConfigResponse> {
+    const params = new URLSearchParams();
+    if (options.nodeFilter) {
+      params.set("nodeFilter", options.nodeFilter);
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/save${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+    return (await res.json()) as SaveConfigResponse;
+  }
+
+  async requestSshAccess(
+    token: string,
+    labName: string,
+    nodeName: string,
+    options: { sshUsername?: string; duration?: string } = {}
+  ): Promise<SSHAccessResponse> {
+    const body = JSON.stringify({
+      sshUsername: options.sshUsername,
+      duration: options.duration
+    });
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/ssh`,
+      token,
+      body,
+      "application/json"
+    );
+    return (await res.json()) as SSHAccessResponse;
+  }
+
+  async getNodeLogs(
+    token: string,
+    labName: string,
+    nodeName: string,
+    options: { tail?: string; follow?: boolean } = {}
+  ): Promise<LogsResponse> {
+    const params = new URLSearchParams();
+    if (options.tail) {
+      params.set("tail", options.tail);
+    }
+    if (options.follow) {
+      params.set("follow", "true");
+    }
+    const query = params.toString();
+    const res = await this.get(
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/logs${query ? `?${query}` : ""}`,
+      token
+    );
+    return (await res.json()) as LogsResponse;
+  }
+
+  async getVersion(token: string): Promise<VersionResponse> {
+    const res = await this.get("/api/v1/version", token);
+    return (await res.json()) as VersionResponse;
+  }
+
+  async checkVersion(token: string): Promise<VersionCheckResponse> {
+    const res = await this.get("/api/v1/version/check", token);
+    return (await res.json()) as VersionCheckResponse;
+  }
+
+  async showNetem(token: string, containerName: string): Promise<NetemShowResponse> {
+    const res = await this.get(
+      `/api/v1/tools/netem/show?containerName=${encodeURIComponent(containerName)}`,
+      token
+    );
+    return (await res.json()) as NetemShowResponse;
+  }
+
+  async setNetem(token: string, request: NetemSetRequest): Promise<void> {
+    await this.request(
+      "POST",
+      "/api/v1/tools/netem/set",
+      token,
+      JSON.stringify(request),
+      "application/json"
+    );
+  }
+
+  async resetNetem(token: string, request: NetemResetRequest): Promise<void> {
+    await this.request(
+      "POST",
+      "/api/v1/tools/netem/reset",
+      token,
+      JSON.stringify(request),
+      "application/json"
+    );
   }
 
   /**

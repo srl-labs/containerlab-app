@@ -18,6 +18,8 @@ interface SettingsOverlayProps {
   currentTheme: "light" | "dark";
   onToggleTheme: () => void;
   onLogout: () => void;
+  onShowInspectAll: () => void;
+  onShowVersion: () => void;
   apiUrl: string;
   connected: boolean;
 }
@@ -26,6 +28,8 @@ export function SettingsOverlay({
   currentTheme,
   onToggleTheme,
   onLogout,
+  onShowInspectAll,
+  onShowVersion,
   apiUrl,
   connected
 }: SettingsOverlayProps) {
@@ -107,6 +111,15 @@ export function SettingsOverlay({
               fullWidth
             >
               {currentTheme === "dark" ? "Light" : "Dark"} Mode
+            </Button>
+          </Box>
+
+          <Box sx={{ display: "flex", gap: 1, mb: 1.5 }}>
+            <Button size="small" variant="outlined" fullWidth onClick={onShowInspectAll}>
+              Inspect Labs
+            </Button>
+            <Button size="small" variant="outlined" fullWidth onClick={onShowVersion}>
+              About
             </Button>
           </Box>
 

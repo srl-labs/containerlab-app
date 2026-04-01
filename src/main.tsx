@@ -34,6 +34,7 @@ import { useLabStore, type LabState } from "./stores/labStore";
 import { useAuth } from "./hooks/useAuth";
 import { useEventStream } from "./hooks/useEventStream";
 import { LoginPage } from "./components/LoginPage";
+import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 import { SettingsOverlay } from "./components/SettingsOverlay";
 import { createStandaloneExplorerBridge } from "./standaloneExplorer";
 import {
@@ -45,6 +46,7 @@ import {
   normalizePathValue
 } from "./standaloneHostShared";
 import { createStandaloneTopologyManager } from "./standaloneTopology";
+import { runtimeUiActions } from "./stores/runtimeUiStore";
 
 // Monaco workers setup
 const monacoGlobal = self as typeof self & {
@@ -162,13 +164,18 @@ scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
 // Standalone host bridge - explicit UI host with API-backed topology transport.
 function setupStandaloneUiHost(): void {
   type VscodeMessage = {
+    baseName?: string;
     command?: string;
+    dashboardJson?: string;
+    data?: unknown;
     type?: string;
+    fileLine?: string;
+    interfaceName?: string;
     level?: string;
     message?: string;
-    fileLine?: string;
+    nodeName?: string;
+    panelYaml?: string;
     requestId?: string;
-    baseName?: string;
     svgContent?: string;
   };
 
@@ -188,6 +195,16 @@ function setupStandaloneUiHost(): void {
     const msg = message as VscodeMessage | undefined;
 
     if (!msg?.command) return;
+
+    const getActiveTopologyTarget = () => {
+      const topologyRef = topologyManager.getCurrentTopologyRef();
+      if (!topologyRef) {
+        runtimeUiActions.notify("No active topology session is available.", "error");
+        return null;
+      }
+      const sessionId = topologyManager.getCurrentSessionId() ?? undefined;
+      return { sessionId, topologyRef };
+    };
 
     if (msg.command === "reactTopoViewerLog" || msg.command === "topoViewerLog") {
       return;
@@ -209,18 +226,90 @@ function setupStandaloneUiHost(): void {
     if (msg.command === EXPORT_COMMANDS.EXPORT_SVG_GRAFANA_BUNDLE) {
       const baseName = typeof msg.baseName === "string" ? msg.baseName.trim() || "topology" : "topology";
       const svgContent = typeof msg.svgContent === "string" ? msg.svgContent : "";
+      const dashboardJson = typeof msg.dashboardJson === "string" ? msg.dashboardJson : "";
+      const panelYaml = typeof msg.panelYaml === "string" ? msg.panelYaml : "";
       if (svgContent) {
         triggerDownload(`${baseName}.svg`, svgContent, "image/svg+xml");
       }
+      if (dashboardJson) {
+        triggerDownload(`${baseName}.grafana.json`, dashboardJson, "application/json");
+      }
+      if (panelYaml) {
+        triggerDownload(`${baseName}.flow_panel.yaml`, panelYaml, "application/yaml");
+      }
+      const files = [
+        svgContent ? `${baseName}.svg` : null,
+        dashboardJson ? `${baseName}.grafana.json` : null,
+        panelYaml ? `${baseName}.flow_panel.yaml` : null
+      ].filter((value): value is string => value !== null);
       window.dispatchEvent(
         new MessageEvent("message", {
           data: {
             type: MSG_SVG_EXPORT_RESULT,
             requestId: msg.requestId ?? "",
             success: true,
-            files: [`${baseName}.svg`]
+            files
           }
         })
+      );
+      return;
+    }
+
+    if (msg.command === "clab-node-connect-ssh" || msg.command === "clab-node-attach-shell") {
+      const target = getActiveTopologyTarget();
+      if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+        return;
+      }
+      if (msg.command === "clab-node-attach-shell") {
+        runtimeUiActions.notify(
+          "Interactive shell is not available in standalone mode yet. Showing SSH access instead.",
+          "info"
+        );
+      }
+      runtimeUiActions.openSsh({
+        ...target,
+        nodeName: msg.nodeName,
+        title: `SSH: ${msg.nodeName}`
+      });
+      return;
+    }
+
+    if (msg.command === "clab-node-view-logs") {
+      const target = getActiveTopologyTarget();
+      if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+        return;
+      }
+      runtimeUiActions.openLogs({
+        ...target,
+        nodeName: msg.nodeName,
+        title: `Logs: ${msg.nodeName}`
+      });
+      return;
+    }
+
+    if (msg.command === "clab-link-impairment") {
+      const target = getActiveTopologyTarget();
+      if (
+        !target ||
+        typeof msg.nodeName !== "string" ||
+        msg.nodeName.trim().length === 0
+      ) {
+        return;
+      }
+      runtimeUiActions.openNetem({
+        ...target,
+        nodeName: msg.nodeName,
+        preferredInterfaceName:
+          typeof msg.interfaceName === "string" ? msg.interfaceName : undefined,
+        title: `Impairments: ${msg.nodeName}`
+      });
+      return;
+    }
+
+    if (msg.command === "topo-toggle-split-view") {
+      runtimeUiActions.notify(
+        "Split view is not available in standalone mode yet.",
+        "info"
       );
       return;
     }
@@ -376,10 +465,15 @@ function StandaloneApp() {
   return (
     <>
       <App initialData={initialData} runtime={standaloneRuntime!} />
+      <MuiThemeProvider>
+        <RuntimeActionDialogs />
+      </MuiThemeProvider>
       <SettingsOverlayMounted
         currentTheme={currentTheme}
         onToggleTheme={handleToggleTheme}
         onLogout={handleLogout}
+        onShowInspectAll={runtimeUiActions.openInspectAll}
+        onShowVersion={runtimeUiActions.openVersion}
         connected={connected}
         apiUrl={apiUrl || "unknown"}
       />
@@ -394,6 +488,8 @@ function SettingsOverlayMounted(props: {
   currentTheme: "light" | "dark";
   onToggleTheme: () => void;
   onLogout: () => void;
+  onShowInspectAll: () => void;
+  onShowVersion: () => void;
   connected: boolean;
   apiUrl: string;
 }) {
@@ -406,6 +502,8 @@ function SettingsOverlayMounted(props: {
         currentTheme={props.currentTheme}
         onToggleTheme={props.onToggleTheme}
         onLogout={props.onLogout}
+        onShowInspectAll={props.onShowInspectAll}
+        onShowVersion={props.onShowVersion}
         apiUrl={props.apiUrl}
         connected={props.connected}
       />

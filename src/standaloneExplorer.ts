@@ -6,6 +6,10 @@ import type {
 } from "@srl-labs/clab-ui/explorer";
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
+import { type NetemFields, createTopologyFile } from "./runtimeApi";
+import { deleteTopologyFileFlow, saveConfigsFlow } from "./components/RuntimeActionDialogs";
+import { runtimeUiActions } from "./stores/runtimeUiStore";
+import { useAuthStore } from "./stores/authStore";
 import type { LabState } from "./stores/labStore";
 import type { LifecycleApiCallResult } from "./standaloneLifecycle";
 import type {
@@ -27,6 +31,27 @@ import {
   topologyPathsLikelyMatch,
   topologyEntryLabName
 } from "./standaloneHostShared";
+
+const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
+
+function loadShowNonOwnedLabsSetting(): boolean {
+  try {
+    const raw = localStorage.getItem(SHOW_NON_OWNED_LABS_STORAGE_KEY);
+    return raw !== "false";
+  } catch {
+    return true;
+  }
+}
+
+function persistShowNonOwnedLabsSetting(nextValue: boolean): void {
+  try {
+    localStorage.setItem(SHOW_NON_OWNED_LABS_STORAGE_KEY, String(nextValue));
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
+let showNonOwnedLabs = loadShowNonOwnedLabsSetting();
 
 interface StandaloneExplorerBridgeOptions {
   debounceMs: number;
@@ -139,6 +164,27 @@ const HELP_LINKS = [
   { label: "Join our Discord server", url: "https://discord.gg/vAyddtaEV9" }
 ] as const;
 
+function getLabOwner(lab: LabState): string {
+  if (lab.owner.trim().length > 0) {
+    return lab.owner.trim();
+  }
+  return lab.containers.values().next().value?.owner?.trim() ?? "";
+}
+
+function shouldShowRunningLab(lab: LabState): boolean {
+  if (showNonOwnedLabs) {
+    return true;
+  }
+
+  const currentUsername = useAuthStore.getState().username;
+  const owner = getLabOwner(lab);
+  if (!currentUsername || !owner) {
+    return true;
+  }
+
+  return normalizeLabName(owner) === normalizeLabName(currentUsername);
+}
+
 function findTopologyEntryForRunningLab(lab: LabState, files: TopologyFileEntry[]): TopologyFileEntry | undefined {
   const pathHints = new Set<string>();
   const normalizedTopologyPath = normalizePathValue(lab.topologyPath);
@@ -214,7 +260,12 @@ export function createStandaloneExplorerBridge(
     const items: ExplorerTreeItem[] = [];
 
     for (const lab of labs.values()) {
+      if (!shouldShowRunningLab(lab)) {
+        continue;
+      }
+
       const labName = lab.name;
+      const topologyEntry = findTopologyEntryForRunningLab(lab, files);
       const containers: ExplorerTreeItem[] = [];
 
       for (const [, container] of lab.containers) {
@@ -250,8 +301,11 @@ export function createStandaloneExplorerBridge(
               contextValue: getInterfaceContextValue(state),
               collapsibleState: TREE_ITEM_NONE,
               cID: container.containerId,
+              containerName: container.name,
+              labName,
               name: iface.name,
               mac: iface.mac,
+              topologyRef: topologyEntry?.topologyRef,
               children: []
             } satisfies ExplorerTreeItem;
           });
@@ -273,10 +327,12 @@ export function createStandaloneExplorerBridge(
           contextValue: "containerlabContainer",
           state: container.state,
           status: container.status,
+          labName,
           name: container.name,
           cID: container.containerId,
           kind: container.kind,
           image: container.image,
+          topologyRef: topologyEntry?.topologyRef,
           v4Address: container.ipv4Address,
           v6Address: container.ipv6Address,
           collapsibleState: interfaces.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
@@ -284,7 +340,6 @@ export function createStandaloneExplorerBridge(
         });
       }
 
-      const topologyEntry = findTopologyEntryForRunningLab(lab, files);
       const labPath = topologyEntry?.path;
       const fallbackPathHint =
         lab.topologyPath || (lab.containers.values().next().value?.labPath as string | undefined);
@@ -420,6 +475,42 @@ export function createStandaloneExplorerBridge(
         await options.loadTopologyFile(actionTopologyRef, { deploymentState });
         return;
       }
+      case "containerlab.editor.topoViewerEditor": {
+        const rawFileName = window.prompt("New topology file name", "new-lab.clab.yml");
+        if (!rawFileName) {
+          return;
+        }
+
+        try {
+          const created = await createTopologyFile({ fileName: rawFileName });
+          options.invalidateTopologyFileListCache();
+          controller.scheduleSnapshot(0);
+          runtimeUiActions.notify(`Created topology file "${rawFileName}".`, "success");
+          await options.loadTopologyFile(created.topologyRef, { deploymentState: "undeployed" });
+          return;
+        } catch (error) {
+          runtimeUiActions.notify(
+            error instanceof Error ? error.message : String(error),
+            "error"
+          );
+          return;
+        }
+      }
+      case "containerlab.inspectAll": {
+        runtimeUiActions.openInspectAll();
+        return;
+      }
+      case "containerlab.inspectOneLab": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+        runtimeUiActions.openInspectLab(
+          { topologyRef: actionTopologyRef },
+          `Inspect: ${targetLabel ?? actionTopologyRef.labName}`
+        );
+        return;
+      }
       case "containerlab.lab.deploy":
       case "containerlab.lab.deploy.specificFile": {
         if (!actionTopologyRef) {
@@ -462,6 +553,138 @@ export function createStandaloneExplorerBridge(
         } catch (error) {
           console.error("[Standalone] Redeploy failed:", error);
         }
+        return;
+      }
+      case "containerlab.lab.save": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+
+        try {
+          await saveConfigsFlow(
+            { topologyRef: actionTopologyRef },
+            `Saved configs for ${actionTopologyRef.labName}.`
+          );
+        } catch (error) {
+          console.error("[Standalone] Save failed:", error);
+        }
+        return;
+      }
+      case "containerlab.lab.delete": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+
+        const deleted = await deleteTopologyFileFlow({ topologyRef: actionTopologyRef });
+        if (deleted) {
+          options.invalidateTopologyFileListCache();
+          controller.scheduleSnapshot(0);
+        }
+        return;
+      }
+      case "containerlab.treeView.runningLabs.hideNonOwnedLabs": {
+        showNonOwnedLabs = false;
+        persistShowNonOwnedLabsSetting(false);
+        controller.scheduleSnapshot(0);
+        runtimeUiActions.notify("Hiding non-owned labs.", "info");
+        return;
+      }
+      case "containerlab.treeView.runningLabs.showNonOwnedLabs": {
+        showNonOwnedLabs = true;
+        persistShowNonOwnedLabsSetting(true);
+        controller.scheduleSnapshot(0);
+        runtimeUiActions.notify("Showing non-owned labs.", "info");
+        return;
+      }
+      case "containerlab.node.save": {
+        if (!actionTopologyRef || !item?.name) {
+          postExplorerError("Node save requires a running lab item.");
+          return;
+        }
+
+        await saveConfigsFlow(
+          {
+            topologyRef: actionTopologyRef,
+            nodeName: item.name
+          },
+          `Saved config for ${item.label || item.name}.`
+        );
+        return;
+      }
+      case "containerlab.node.ssh":
+      case "containerlab.node.attachShell": {
+        if (!actionTopologyRef || !item?.name) {
+          postExplorerError("Node access requires a running lab item.");
+          return;
+        }
+
+        if (commandId === "containerlab.node.attachShell") {
+          runtimeUiActions.notify(
+            "Interactive shell is not available in standalone mode yet. Showing SSH access instead.",
+            "info"
+          );
+        }
+
+        runtimeUiActions.openSsh({
+          topologyRef: actionTopologyRef,
+          nodeName: item.name,
+          title: `SSH: ${item.label || item.name}`
+        });
+        return;
+      }
+      case "containerlab.node.showLogs": {
+        if (!actionTopologyRef || !item?.name) {
+          postExplorerError("Node logs require a running lab item.");
+          return;
+        }
+
+        runtimeUiActions.openLogs({
+          topologyRef: actionTopologyRef,
+          nodeName: item.name,
+          title: `Logs: ${item.label || item.name}`
+        });
+        return;
+      }
+      case "containerlab.node.manageImpairments": {
+        if (!actionTopologyRef || !item?.name) {
+          postExplorerError("Impairments require a running lab item.");
+          return;
+        }
+
+        runtimeUiActions.openNetem({
+          topologyRef: actionTopologyRef,
+          nodeName: item.name,
+          title: `Impairments: ${item.label || item.name}`
+        });
+        return;
+      }
+      case "containerlab.interface.setDelay":
+      case "containerlab.interface.setJitter":
+      case "containerlab.interface.setLoss":
+      case "containerlab.interface.setRate":
+      case "containerlab.interface.setCorruption": {
+        if (!actionTopologyRef || !item?.containerName) {
+          postExplorerError("Interface impairments require a running interface item.");
+          return;
+        }
+
+        const fieldByCommand: Record<string, keyof NetemFields> = {
+          "containerlab.interface.setDelay": "delay",
+          "containerlab.interface.setJitter": "jitter",
+          "containerlab.interface.setLoss": "loss",
+          "containerlab.interface.setRate": "rate",
+          "containerlab.interface.setCorruption": "corruption"
+        };
+
+        runtimeUiActions.openNetem({
+          topologyRef: actionTopologyRef,
+          nodeName: item.containerName,
+          preferredField: fieldByCommand[commandId],
+          preferredInterfaceName: item.label || item.name,
+          title: `Impairments: ${item.containerName}`
+        });
         return;
       }
       case "containerlab.node.copyName": {
@@ -522,6 +745,12 @@ export function createStandaloneExplorerBridge(
       await executeExplorerCommand(binding.commandId, binding.args ?? []);
     },
     publish: sendExplorerMessage,
+    getSnapshotOptions() {
+      return {
+        hideNonOwnedLabs: !showNonOwnedLabs,
+        isLocalCaptureAllowed: false
+      };
+    },
     onFilterTextChanged(filterText) {
       explorerFilterText = filterText;
     },

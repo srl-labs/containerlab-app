@@ -1,6 +1,29 @@
 import { useEffect, useCallback } from "react";
 import { useAuthStore } from "../stores/authStore";
 
+const USERNAME_STORAGE_KEY = "clab-standalone-username";
+
+function loadPersistedUsername(): string | null {
+  try {
+    const raw = localStorage.getItem(USERNAME_STORAGE_KEY);
+    return raw && raw.trim().length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistUsername(username: string | null): void {
+  try {
+    if (username && username.trim().length > 0) {
+      localStorage.setItem(USERNAME_STORAGE_KEY, username);
+      return;
+    }
+    localStorage.removeItem(USERNAME_STORAGE_KEY);
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
 export function useAuth() {
   const { isAuthenticated, username, loading, error, setAuthenticated, setUnauthenticated, setLoading, setError } =
     useAuthStore();
@@ -12,12 +35,14 @@ export function useAuth() {
       .then(async (res) => {
         const data = (await res.json().catch(() => ({}))) as { authenticated?: boolean };
         if (res.ok && data.authenticated) {
-          setAuthenticated("user");
+          setAuthenticated(loadPersistedUsername() ?? "user");
         } else {
+          persistUsername(null);
           setUnauthenticated();
         }
       })
       .catch(() => {
+        persistUsername(null);
         setUnauthenticated();
       });
   }, [setAuthenticated, setUnauthenticated, setLoading]);
@@ -39,6 +64,7 @@ export function useAuth() {
           throw new Error(data.error ?? "Login failed");
         }
 
+        persistUsername(loginUsername);
         setAuthenticated(loginUsername);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Login failed";
@@ -51,6 +77,7 @@ export function useAuth() {
 
   const logout = useCallback(async () => {
     await fetch("/auth/logout", { method: "POST", credentials: "include" });
+    persistUsername(null);
     setUnauthenticated();
   }, [setUnauthenticated]);
 
