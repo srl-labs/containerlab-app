@@ -21,8 +21,10 @@ import {
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
   isTopologyRunning,
+  normalizeLabName,
   normalizePathValue,
   safeFilename,
+  topologyPathsLikelyMatch,
   topologyEntryLabName
 } from "./standaloneHostShared";
 
@@ -138,14 +140,52 @@ const HELP_LINKS = [
 ] as const;
 
 function findTopologyEntryForRunningLab(lab: LabState, files: TopologyFileEntry[]): TopologyFileEntry | undefined {
+  const pathHints = new Set<string>();
+  const normalizedTopologyPath = normalizePathValue(lab.topologyPath);
+  if (normalizedTopologyPath) {
+    pathHints.add(normalizedTopologyPath);
+  }
   for (const container of lab.containers.values()) {
     const containerPath = normalizePathValue(container.labPath);
     if (!containerPath) {
       continue;
     }
+    pathHints.add(containerPath);
     const exact = files.find((entry) => normalizePathValue(entry.path) === containerPath);
     if (exact) {
       return exact;
+    }
+  }
+
+  const loosePathMatches = files.filter((entry) => {
+    const entryPath = normalizePathValue(entry.path);
+    for (const pathHint of pathHints) {
+      if (topologyPathsLikelyMatch(entryPath, pathHint)) {
+        return true;
+      }
+    }
+    return false;
+  });
+  if (loosePathMatches.length === 1) {
+    return loosePathMatches[0];
+  }
+
+  const normalizedLabName = normalizeLabName(lab.name);
+  if (!normalizedLabName) {
+    return undefined;
+  }
+  const nameMatches = files.filter(
+    (entry) => normalizeLabName(topologyEntryLabName(entry)) === normalizedLabName
+  );
+  if (nameMatches.length === 1) {
+    return nameMatches[0];
+  }
+  if (nameMatches.length > 1 && loosePathMatches.length > 0) {
+    const combinedMatches = nameMatches.filter((entry) =>
+      loosePathMatches.some((candidate) => candidate.path === entry.path)
+    );
+    if (combinedMatches.length === 1) {
+      return combinedMatches[0];
     }
   }
   return undefined;

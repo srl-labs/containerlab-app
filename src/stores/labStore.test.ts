@@ -127,6 +127,81 @@ test("stats-only updates preserve existing interface metadata", () => {
   assert.equal(iface.txPackets, "99");
 });
 
+test("interface events without lab-path are matched to an existing lab via container name", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent({
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl3",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+
+  store.processEvent({
+    type: "interface",
+    action: "snapshot",
+    attributes: {
+      name: "clab-demo-srl3",
+      lab: "demo",
+      ifname: "e1-1",
+      alias: "ethernet-1/1",
+      state: "up",
+      type: "veth"
+    }
+  });
+
+  const iface = firstLab()?.containers.get("clab-demo-srl3")?.interfaces.get("e1-1");
+  assert.ok(iface);
+  assert.equal(iface.alias, "ethernet-1/1");
+  assert.equal(iface.state, "up");
+});
+
+test("interface stats can resolve container name from actor_name when attributes.name is absent", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent({
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl4",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+
+  store.processEvent({
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl4",
+      lab: "demo",
+      ifname: "eth1",
+      state: "up",
+      type: "veth"
+    }
+  });
+
+  store.processEvent({
+    type: "interface",
+    action: "stats",
+    actor_name: "clab-demo-srl4",
+    attributes: {
+      lab: "demo",
+      interface: "eth1",
+      rx_bps: 1111,
+      tx_bps: 2222
+    }
+  } as unknown as Parameters<typeof store.processEvent>[0]);
+
+  const iface = firstLab()?.containers.get("clab-demo-srl4")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.rxBps, "1111");
+  assert.equal(iface.txBps, "2222");
+});
+
 test("processEvent keeps duplicate lab names separate when topology paths differ", () => {
   const store = useLabStore.getState();
 

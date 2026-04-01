@@ -144,6 +144,27 @@ function isTopologyRef(value: unknown): value is TopologyRef {
   );
 }
 
+function createEmptySnapshot(
+  mode: "edit" | "view",
+  deploymentState: DeploymentState
+): TopologySnapshot {
+  return {
+    revision: 1,
+    nodes: [],
+    edges: [],
+    annotations: {},
+    yamlFileName: "",
+    annotationsFileName: "",
+    yamlContent: "",
+    annotationsContent: "{}",
+    labName: "",
+    mode,
+    deploymentState,
+    canUndo: false,
+    canRedo: false
+  };
+}
+
 async function attachDocumentRevision(
   client: ClabApiClient,
   token: string,
@@ -237,7 +258,11 @@ export function registerTopologyProxy(
       const body = request.body;
       const sessionId = body.sessionId?.trim() ?? "";
       if (!sessionId) {
-        return reply.status(400).send({ error: "Missing sessionId" });
+        const deploymentState = body.deploymentState ?? "unknown";
+        const mode = body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+        return reply.send({
+          snapshot: createEmptySnapshot(mode, deploymentState)
+        });
       }
 
       const session = sessions.getSession(sessionId, token, client.getBaseUrl());

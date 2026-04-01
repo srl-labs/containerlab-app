@@ -81,6 +81,17 @@ function getAttrString(
   return undefined;
 }
 
+function getEventString(event: EventData, ...keys: string[]): string | undefined {
+  const source = event as unknown as Record<string, unknown>;
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function normalizeLabStorePath(pathValue: string | undefined): string {
   return (pathValue ?? "")
     .trim()
@@ -125,6 +136,42 @@ function findExistingLabEntry(
   }
 
   return null;
+}
+
+function findLabEntryByContainerName(
+  labs: Map<string, LabState>,
+  containerName: string | undefined
+): { key: string; lab: LabState } | null {
+  if (!containerName || containerName.trim().length === 0) {
+    return null;
+  }
+  const target = containerName.trim();
+  for (const [key, lab] of labs.entries()) {
+    if (lab.containers.has(target)) {
+      return { key, lab };
+    }
+  }
+  return null;
+}
+
+function findLabEntryByName(
+  labs: Map<string, LabState>,
+  labName: string | undefined
+): { key: string; lab: LabState } | null {
+  const target = normalizeLabStoreName(labName);
+  if (!target) {
+    return null;
+  }
+  const matches: Array<{ key: string; lab: LabState }> = [];
+  for (const [key, lab] of labs.entries()) {
+    if (normalizeLabStoreName(lab.name) === target) {
+      matches.push({ key, lab });
+      if (matches.length > 1) {
+        return null;
+      }
+    }
+  }
+  return matches[0] ?? null;
 }
 
 function extractContainerState(attrs: Record<string, EventAttributeValue>): ContainerState {
@@ -206,14 +253,28 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
     const attrs = event.attributes;
     const labName = getAttrString(attrs, "lab", "containerlab") ?? "";
     const labPath = getAttrString(attrs, "lab-path", "clab-topo-file") ?? "";
-    const labKey = resolveLabStoreKey(labPath);
-    if (!labKey) return;
+    const preferredLabKey = resolveLabStoreKey(labPath);
+    const containerName =
+      getAttrString(attrs, "name", "container-name", "container") ??
+      getEventString(event, "actor_name", "actorName") ??
+      "";
 
     const previousLabs = get().labs;
     const labs = new Map(previousLabs);
-    const existingEntry = findExistingLabEntry(previousLabs, labPath);
+    let existingEntry = findExistingLabEntry(previousLabs, labPath);
+    if (!existingEntry && containerName) {
+      existingEntry = findLabEntryByContainerName(previousLabs, containerName);
+    }
+    if (!existingEntry && !preferredLabKey && labName) {
+      existingEntry = findLabEntryByName(previousLabs, labName);
+    }
+    const labKey = preferredLabKey ?? existingEntry?.key ?? null;
+    if (!labKey) {
+      return;
+    }
+
     const existingLab = existingEntry?.lab;
-    if (existingEntry && existingEntry.key !== labKey) {
+    if (existingEntry && preferredLabKey && existingEntry.key !== preferredLabKey) {
       labs.delete(existingEntry.key);
     }
     const lab: LabState = existingLab
@@ -230,7 +291,6 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
           containers: new Map()
         };
 
-    const containerName = getAttrString(attrs, "name") ?? "";
     if (!containerName) return;
     const action = event.action;
 

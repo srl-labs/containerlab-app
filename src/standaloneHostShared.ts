@@ -73,6 +73,31 @@ export function normalizePathValue(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//, "");
 }
 
+export function normalizeLabName(labName: string | undefined): string {
+  return (labName ?? "").trim().toLowerCase();
+}
+
+function hasPathBoundarySuffix(pathValue: string, suffix: string): boolean {
+  if (pathValue === suffix) {
+    return true;
+  }
+  if (!pathValue.endsWith(suffix)) {
+    return false;
+  }
+
+  const boundaryIndex = pathValue.length - suffix.length - 1;
+  return boundaryIndex >= 0 && pathValue[boundaryIndex] === "/";
+}
+
+export function topologyPathsLikelyMatch(leftPath: string, rightPath: string): boolean {
+  const left = normalizePathValue(leftPath).toLowerCase();
+  const right = normalizePathValue(rightPath).toLowerCase();
+  if (!left || !right) {
+    return false;
+  }
+  return hasPathBoundarySuffix(left, right) || hasPathBoundarySuffix(right, left);
+}
+
 export function isAbsolutePath(pathValue: string): boolean {
   const normalized = normalizePathValue(pathValue);
   return normalized.startsWith("/") || normalized.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(normalized);
@@ -151,30 +176,63 @@ export function firstArgAsTopologyRef(args: unknown[]): TopologyRef | undefined 
 }
 
 export function findLabStateForTopology(
-  topologyRef: Pick<TopologyRef, "yamlPath"> | undefined,
+  topologyRef: (Pick<TopologyRef, "yamlPath"> & Partial<Pick<TopologyRef, "labName">>) | undefined,
   labs: Map<string, LabState>
 ): LabState | undefined {
   const normalizedPath = topologyRef?.yamlPath ? normalizePathValue(topologyRef.yamlPath) : "";
   if (!normalizedPath) {
-    return undefined;
+    const normalizedLabName = normalizeLabName(topologyRef?.labName);
+    if (!normalizedLabName) {
+      return undefined;
+    }
+    const byName = [...labs.values()].filter(
+      (lab) => normalizeLabName(lab.name) === normalizedLabName
+    );
+    return byName.length === 1 ? byName[0] : undefined;
   }
 
+  const byPath: LabState[] = [];
   for (const lab of labs.values()) {
-    if (normalizePathValue(lab.topologyPath) === normalizedPath) {
-      return lab;
+    if (topologyPathsLikelyMatch(lab.topologyPath, normalizedPath)) {
+      byPath.push(lab);
+      continue;
     }
     for (const container of lab.containers.values()) {
-      if (normalizePathValue(container.labPath) === normalizedPath) {
-        return lab;
+      if (topologyPathsLikelyMatch(container.labPath, normalizedPath)) {
+        byPath.push(lab);
+        break;
       }
     }
+  }
+
+  if (byPath.length === 1) {
+    return byPath[0];
+  }
+  if (byPath.length > 1) {
+    const normalizedLabName = normalizeLabName(topologyRef?.labName);
+    if (!normalizedLabName) {
+      return undefined;
+    }
+    const byName = byPath.filter((lab) => normalizeLabName(lab.name) === normalizedLabName);
+    return byName.length === 1 ? byName[0] : undefined;
+  }
+
+  const normalizedLabName = normalizeLabName(topologyRef?.labName);
+  if (!normalizedLabName) {
+    return undefined;
+  }
+  const byName = [...labs.values()].filter(
+    (lab) => normalizeLabName(lab.name) === normalizedLabName
+  );
+  if (byName.length === 1) {
+    return byName[0];
   }
 
   return undefined;
 }
 
 export function isTopologyRunning(
-  topologyRef: Pick<TopologyRef, "yamlPath"> | undefined,
+  topologyRef: (Pick<TopologyRef, "yamlPath"> & Partial<Pick<TopologyRef, "labName">>) | undefined,
   labs: Map<string, LabState>
 ): boolean {
   return findLabStateForTopology(topologyRef, labs) !== undefined;

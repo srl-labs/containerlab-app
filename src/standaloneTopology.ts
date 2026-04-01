@@ -13,9 +13,13 @@ import {
   type DeploymentState,
   type TopologyDocEventMessage,
   type TopologyFileEntry,
+  firstArgAsTreeItem,
   firstArgAsTopologyRef,
   isTopologyRunning,
-  normalizePathValue
+  normalizeLabName,
+  normalizePathValue,
+  topologyEntryLabName,
+  topologyPathsLikelyMatch
 } from "./standaloneHostShared";
 
 interface StandaloneTopologyManagerOptions {
@@ -96,6 +100,101 @@ export function createStandaloneTopologyManager(
   function findEntryByPath(files: TopologyFileEntry[], pathValue: string): TopologyFileEntry | undefined {
     const normalized = normalizePathValue(pathValue);
     return files.find((entry) => normalizePathValue(entry.path) === normalized);
+  }
+
+  function findEntriesByPathHint(
+    files: TopologyFileEntry[],
+    pathValue: string | undefined
+  ): TopologyFileEntry[] {
+    if (!pathValue) {
+      return [];
+    }
+    const normalizedPath = normalizePathValue(pathValue);
+    if (!normalizedPath) {
+      return [];
+    }
+    const exactMatches = files.filter((entry) => normalizePathValue(entry.path) === normalizedPath);
+    if (exactMatches.length > 0) {
+      return exactMatches;
+    }
+    return files.filter((entry) => topologyPathsLikelyMatch(entry.path, normalizedPath));
+  }
+
+  function findEntriesByLabName(
+    files: TopologyFileEntry[],
+    labNameValue: string | undefined
+  ): TopologyFileEntry[] {
+    const normalizedLabName = normalizeLabName(labNameValue);
+    if (!normalizedLabName) {
+      return [];
+    }
+    return files.filter((entry) => normalizeLabName(topologyEntryLabName(entry)) === normalizedLabName);
+  }
+
+  function extractLabNameFromLabel(label: unknown): string | undefined {
+    if (typeof label !== "string") {
+      return undefined;
+    }
+    const trimmed = label.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    const withOwnerSuffix = trimmed.match(/^(.+?)\s+\([^()]+\)$/);
+    return withOwnerSuffix?.[1]?.trim() || trimmed;
+  }
+
+  function resolveTopologyEntryFromArgs(
+    files: TopologyFileEntry[],
+    args: unknown[]
+  ): TopologyFileEntry | undefined {
+    const requestedTopologyRef = firstArgAsTopologyRef(args);
+    const item = firstArgAsTreeItem(args);
+    const pathHints = new Set<string>();
+    if (requestedTopologyRef?.yamlPath) {
+      pathHints.add(requestedTopologyRef.yamlPath);
+    }
+    if (typeof item?.description === "string") {
+      pathHints.add(item.description);
+    }
+    if (typeof item?.tooltip === "string") {
+      pathHints.add(item.tooltip);
+    }
+
+    const aggregatedPathMatches: TopologyFileEntry[] = [];
+    for (const pathHint of pathHints) {
+      const matches = findEntriesByPathHint(files, pathHint);
+      if (matches.length === 1) {
+        return matches[0];
+      }
+      for (const match of matches) {
+        if (!aggregatedPathMatches.some((entry) => entry.path === match.path)) {
+          aggregatedPathMatches.push(match);
+        }
+      }
+    }
+
+    const labNameHint =
+      requestedTopologyRef?.labName ??
+      item?.labName ??
+      extractLabNameFromLabel(item?.label);
+    const nameMatches = findEntriesByLabName(files, labNameHint);
+    if (nameMatches.length === 1) {
+      return nameMatches[0];
+    }
+    if (nameMatches.length > 1 && aggregatedPathMatches.length > 0) {
+      const intersection = nameMatches.filter((entry) =>
+        aggregatedPathMatches.some((candidate) => candidate.path === entry.path)
+      );
+      if (intersection.length === 1) {
+        return intersection[0];
+      }
+    }
+
+    if (aggregatedPathMatches.length === 1) {
+      return aggregatedPathMatches[0];
+    }
+
+    return undefined;
   }
 
   async function destroyTopologySession(sessionId: string | null): Promise<void> {
@@ -332,23 +431,14 @@ export function createStandaloneTopologyManager(
 
   async function resolveTopologyRef(args: unknown[]): Promise<TopologyRef | undefined> {
     const files = await listTopologyFiles();
-    const requestedTopologyRef = firstArgAsTopologyRef(args);
-    if (!requestedTopologyRef?.yamlPath) {
-      return undefined;
-    }
-
-    const exactMatch = findEntryByPath(files, requestedTopologyRef.yamlPath);
-    return exactMatch?.topologyRef;
+    const resolvedEntry = resolveTopologyEntryFromArgs(files, args);
+    return resolvedEntry?.topologyRef;
   }
 
   async function resolveApiTopologyPath(args: unknown[]): Promise<string | undefined> {
     const files = await listTopologyFiles();
-    const requestedTopologyRef = firstArgAsTopologyRef(args);
-    if (!requestedTopologyRef?.yamlPath) {
-      return undefined;
-    }
-    const exactMatch = findEntryByPath(files, requestedTopologyRef.yamlPath);
-    return exactMatch?.path;
+    const resolvedEntry = resolveTopologyEntryFromArgs(files, args);
+    return resolvedEntry?.path;
   }
 
   function handleLabStateChange(previousLabs: Map<string, LabState>, nextLabs: Map<string, LabState>): void {
