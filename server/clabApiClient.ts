@@ -89,6 +89,35 @@ export interface VersionCheckResponse {
   checkResult: string;
 }
 
+export type CustomNodeTemplate = Record<string, unknown>;
+
+export interface CustomNodesResponse {
+  customNodes: CustomNodeTemplate[];
+  defaultNode: string;
+}
+
+export interface CustomIconInfo {
+  name: string;
+  source: "workspace" | "global";
+  dataUri: string;
+  format: "svg" | "png";
+}
+
+export interface IconListResponse {
+  icons: CustomIconInfo[];
+}
+
+export interface IconUploadRequest {
+  fileName: string;
+  contentType?: string;
+  dataBase64: string;
+}
+
+export interface IconUploadResponse {
+  success: boolean;
+  iconName: string;
+}
+
 export interface NetemSetRequest {
   containerName: string;
   interface: string;
@@ -471,6 +500,91 @@ export class ClabApiClient {
   async checkVersion(token: string): Promise<VersionCheckResponse> {
     const res = await this.get("/api/v1/version/check", token);
     return (await res.json()) as VersionCheckResponse;
+  }
+
+  async getCustomNodes(token: string): Promise<CustomNodesResponse> {
+    const res = await this.get("/api/v1/ui/custom-nodes", token);
+    return (await res.json()) as CustomNodesResponse;
+  }
+
+  async replaceCustomNodes(
+    token: string,
+    customNodes: CustomNodeTemplate[]
+  ): Promise<CustomNodesResponse> {
+    const res = await this.request(
+      "PUT",
+      "/api/v1/ui/custom-nodes",
+      token,
+      JSON.stringify({ customNodes }),
+      "application/json"
+    );
+    return (await res.json()) as CustomNodesResponse;
+  }
+
+  async saveCustomNode(token: string, customNode: CustomNodeTemplate): Promise<CustomNodesResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/ui/custom-nodes",
+      token,
+      JSON.stringify(customNode),
+      "application/json"
+    );
+    return (await res.json()) as CustomNodesResponse;
+  }
+
+  async deleteCustomNode(token: string, name: string): Promise<CustomNodesResponse> {
+    const res = await this.request(
+      "DELETE",
+      `/api/v1/ui/custom-nodes/${enc(name)}`,
+      token
+    );
+    return (await res.json()) as CustomNodesResponse;
+  }
+
+  async setDefaultCustomNode(token: string, name: string): Promise<CustomNodesResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/ui/custom-nodes/default",
+      token,
+      JSON.stringify({ name }),
+      "application/json"
+    );
+    return (await res.json()) as CustomNodesResponse;
+  }
+
+  async listGlobalIcons(token: string): Promise<IconListResponse> {
+    const res = await this.get("/api/v1/ui/icons", token);
+    return (await res.json()) as IconListResponse;
+  }
+
+  async uploadGlobalIcon(token: string, request: IconUploadRequest): Promise<IconUploadResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/ui/icons",
+      token,
+      JSON.stringify(request),
+      "application/json"
+    );
+    return (await res.json()) as IconUploadResponse;
+  }
+
+  async deleteGlobalIcon(token: string, iconName: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/ui/icons/${enc(iconName)}`, token);
+  }
+
+  async listLabIcons(token: string, labName: string): Promise<IconListResponse> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/ui/icons`, token);
+    return (await res.json()) as IconListResponse;
+  }
+
+  async reconcileLabIcons(token: string, labName: string, usedIcons: string[]): Promise<void> {
+    await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/ui/icons/reconcile`,
+      token,
+      JSON.stringify({ usedIcons }),
+      "application/json"
+    );
   }
 
   async showNetem(token: string, containerName: string): Promise<NetemShowResponse> {

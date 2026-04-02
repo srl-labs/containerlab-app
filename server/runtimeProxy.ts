@@ -55,6 +55,22 @@ interface CreateTopologyFileBody {
   fileName: string;
 }
 
+interface UiCustomNodeDefaultBody {
+  name: string;
+}
+
+interface UiIconUploadBody {
+  fileName: string;
+  contentType?: string;
+  dataBase64: string;
+}
+
+interface UiIconListBody extends RuntimeTargetBody {}
+
+interface UiIconReconcileBody extends RuntimeTargetBody {
+  usedIcons?: string[];
+}
+
 type ClientResolver = (request: FastifyRequest) => ClabApiClient;
 
 interface ResolvedLabTarget {
@@ -472,6 +488,134 @@ export function registerRuntimeProxy(
       return handleRouteError(reply, error);
     }
   });
+
+  app.get("/api/runtime/ui/custom-nodes", async (request, reply) => {
+    const token = getTokenFromRequest(request);
+    if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      const client = getClient(request);
+      return reply.send(await client.getCustomNodes(token));
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
+
+  app.post<{ Body: Record<string, unknown> }>(
+    "/api/runtime/ui/custom-nodes",
+    async (request: FastifyRequest<{ Body: Record<string, unknown> }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        return reply.send(await client.saveCustomNode(token, request.body));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.delete<{ Params: { name: string } }>(
+    "/api/runtime/ui/custom-nodes/:name",
+    async (request: FastifyRequest<{ Params: { name: string } }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        return reply.send(await client.deleteCustomNode(token, request.params.name));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: UiCustomNodeDefaultBody }>(
+    "/api/runtime/ui/custom-nodes/default",
+    async (request: FastifyRequest<{ Body: UiCustomNodeDefaultBody }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        const name = normalizeOptionalString(request.body.name);
+        if (!name) {
+          throw new RequestError("Missing custom node name", 400);
+        }
+        return reply.send(await client.setDefaultCustomNode(token, name));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: UiIconListBody }>(
+    "/api/runtime/ui/icons/list",
+    async (request: FastifyRequest<{ Body: UiIconListBody }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        return reply.send(await client.listLabIcons(token, target.labName));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: UiIconUploadBody }>(
+    "/api/runtime/ui/icons",
+    async (request: FastifyRequest<{ Body: UiIconUploadBody }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        return reply.send(await client.uploadGlobalIcon(token, request.body));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.delete<{ Params: { iconName: string } }>(
+    "/api/runtime/ui/icons/:iconName",
+    async (request: FastifyRequest<{ Params: { iconName: string } }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        await client.deleteGlobalIcon(token, request.params.iconName);
+        return reply.send({ success: true });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: UiIconReconcileBody }>(
+    "/api/runtime/ui/icons/reconcile",
+    async (request: FastifyRequest<{ Body: UiIconReconcileBody }>, reply: FastifyReply) => {
+      const token = getTokenFromRequest(request);
+      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const client = getClient(request);
+        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        const usedIcons = Array.isArray(request.body.usedIcons)
+          ? request.body.usedIcons.filter((value): value is string => typeof value === "string")
+          : [];
+        await client.reconcileLabIcons(token, target.labName, usedIcons);
+        return reply.send({ success: true });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
 
   app.post<{ Body: CreateTopologyFileBody }>(
     "/api/runtime/topology-file/create",

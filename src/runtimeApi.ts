@@ -1,4 +1,8 @@
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import type {
+  CustomIconInfo,
+  CustomNodeTemplate,
+  TopologyRef
+} from "@srl-labs/clab-ui/session";
 
 export interface RuntimeTargetRequest {
   sessionId?: string;
@@ -64,6 +68,20 @@ export interface VersionResponse {
 
 export interface VersionCheckResponse {
   checkResult: string;
+}
+
+export interface CustomNodesResponse {
+  customNodes: CustomNodeTemplate[];
+  defaultNode: string;
+}
+
+export interface IconListResponse {
+  icons: CustomIconInfo[];
+}
+
+export interface IconUploadResponse {
+  success: boolean;
+  iconName: string;
 }
 
 export interface NetemFields {
@@ -208,6 +226,66 @@ export async function fetchVersionInfo(): Promise<VersionResponse> {
 
 export async function fetchVersionCheck(): Promise<VersionCheckResponse> {
   return await requestJson<VersionCheckResponse>("/api/runtime/version/check");
+}
+
+export async function fetchUiCustomNodes(): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>("/api/runtime/ui/custom-nodes");
+}
+
+export async function saveUiCustomNode(data: Record<string, unknown>): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>("/api/runtime/ui/custom-nodes", asJsonBody(data));
+}
+
+export async function deleteUiCustomNode(name: string): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(`/api/runtime/ui/custom-nodes/${encodeURIComponent(name)}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+}
+
+export async function setDefaultUiCustomNode(name: string): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    "/api/runtime/ui/custom-nodes/default",
+    asJsonBody({ name })
+  );
+}
+
+export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconListResponse> {
+  return await requestJson<IconListResponse>("/api/runtime/ui/icons/list", asJsonBody(target));
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < buffer.length; index += chunkSize) {
+    binary += String.fromCharCode(...buffer.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+export async function uploadUiIcon(file: File): Promise<IconUploadResponse> {
+  return await requestJson<IconUploadResponse>(
+    "/api/runtime/ui/icons",
+    asJsonBody({
+      fileName: file.name,
+      contentType: file.type || undefined,
+      dataBase64: await fileToBase64(file)
+    })
+  );
+}
+
+export async function deleteUiIcon(iconName: string): Promise<void> {
+  await requestJson<{ success: boolean }>(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`, {
+    method: "DELETE",
+    credentials: "include"
+  });
+}
+
+export async function reconcileUiIcons(input: RuntimeTargetRequest & {
+  usedIcons: string[];
+}): Promise<void> {
+  await requestJson<{ success: boolean }>("/api/runtime/ui/icons/reconcile", asJsonBody(input));
 }
 
 export async function fetchNetem(input: RuntimeTargetRequest & {

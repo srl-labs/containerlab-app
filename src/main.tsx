@@ -52,6 +52,16 @@ import {
   normalizePathValue
 } from "./standaloneHostShared";
 import { createStandaloneTopologyManager } from "./standaloneTopology";
+import {
+  deleteUiCustomNode,
+  deleteUiIcon,
+  fetchUiCustomNodes,
+  fetchUiIcons,
+  reconcileUiIcons,
+  saveUiCustomNode,
+  setDefaultUiCustomNode,
+  uploadUiIcon
+} from "./runtimeApi";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
 
 // Monaco workers setup
@@ -83,6 +93,74 @@ const initialData = {
   defaultNode: "",
   customIcons: []
 };
+
+function applyCustomNodes(
+  customNodes: ReturnType<typeof useTopoViewerStore.getState>["customNodes"],
+  defaultNode: string
+): void {
+  useTopoViewerStore.getState().setCustomNodes(customNodes, defaultNode);
+}
+
+function applyCustomIcons(customIcons: ReturnType<typeof useTopoViewerStore.getState>["customIcons"]): void {
+  useTopoViewerStore.getState().setCustomIcons(customIcons);
+}
+
+function applyCustomNodeError(error: string | null): void {
+  useTopoViewerStore.getState().setCustomNodeError(error);
+}
+
+function clearStandaloneUiState(): void {
+  applyCustomNodes([], "");
+  applyCustomIcons([]);
+  applyCustomNodeError(null);
+}
+
+function pickIconFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".svg,.png,image/svg+xml,image/png";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    let settled = false;
+    let cancelTimer: number | null = null;
+    const clearCancelTimer = () => {
+      if (cancelTimer !== null) {
+        window.clearTimeout(cancelTimer);
+        cancelTimer = null;
+      }
+    };
+    const cleanup = (file: File | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearCancelTimer();
+      window.removeEventListener("focus", handleWindowFocus);
+      input.removeEventListener("change", handleChange);
+      input.removeEventListener("cancel", handleCancel);
+      input.remove();
+      resolve(file);
+    };
+    const handleChange = () => {
+      cleanup(input.files?.[0] ?? null);
+    };
+    const handleCancel = () => {
+      cleanup(null);
+    };
+    const handleWindowFocus = () => {
+      clearCancelTimer();
+      cancelTimer = window.setTimeout(() => {
+        cleanup(input.files?.[0] ?? null);
+      }, 300);
+    };
+    input.addEventListener("change", handleChange, { once: true });
+    input.addEventListener("cancel", handleCancel, { once: true });
+    window.addEventListener("focus", handleWindowFocus, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
 
 // Theme management
 let currentTheme: "light" | "dark" = "dark";
@@ -143,6 +221,25 @@ const topologyManager = createStandaloneTopologyManager({
   }
 });
 
+async function refreshCustomNodesForAuthenticatedUser(): Promise<void> {
+  const response = await fetchUiCustomNodes();
+  applyCustomNodes(response.customNodes, response.defaultNode);
+}
+
+async function refreshCustomIconsForCurrentTopology(): Promise<void> {
+  const topologyRef = topologyManager.getCurrentTopologyRef();
+  if (!topologyRef) {
+    applyCustomIcons([]);
+    return;
+  }
+
+  const response = await fetchUiIcons({
+    sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+    topologyRef
+  });
+  applyCustomIcons(response.icons);
+}
+
 const lifecycleManager = createStandaloneLifecycleManager({
   getCurrentSessionId: topologyManager.getCurrentSessionId,
   getCurrentTopologyRef: topologyManager.getCurrentTopologyRef,
@@ -176,13 +273,16 @@ function setupStandaloneUiHost(): void {
     data?: unknown;
     type?: string;
     fileLine?: string;
+    iconName?: string;
     interfaceName?: string;
     level?: string;
     message?: string;
+    name?: string;
     nodeName?: string;
     panelYaml?: string;
     requestId?: string;
     svgContent?: string;
+    usedIcons?: unknown;
   };
 
   const warnedCommands = new Set<string>();
@@ -315,6 +415,110 @@ function setupStandaloneUiHost(): void {
       return;
     }
 
+    if (msg.command === "save-custom-node") {
+      const { command: _command, ...payload } = msg;
+      void saveUiCustomNode(payload as Record<string, unknown>).then((response) => {
+        applyCustomNodeError(null);
+        applyCustomNodes(response.customNodes, response.defaultNode);
+      }).catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        applyCustomNodeError(errorMessage);
+        runtimeUiActions.notify(errorMessage, "error");
+      });
+      return;
+    }
+
+    if (msg.command === "delete-custom-node") {
+      const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
+      if (!nodeName) {
+        applyCustomNodeError("Missing custom node name.");
+        return;
+      }
+      void deleteUiCustomNode(nodeName).then((response) => {
+        applyCustomNodeError(null);
+        applyCustomNodes(response.customNodes, response.defaultNode);
+      }).catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        applyCustomNodeError(errorMessage);
+        runtimeUiActions.notify(errorMessage, "error");
+      });
+      return;
+    }
+
+    if (msg.command === "set-default-custom-node") {
+      const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
+      if (!nodeName) {
+        applyCustomNodeError("Missing custom node name.");
+        return;
+      }
+      void setDefaultUiCustomNode(nodeName).then((response) => {
+        applyCustomNodeError(null);
+        applyCustomNodes(response.customNodes, response.defaultNode);
+      }).catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        applyCustomNodeError(errorMessage);
+        runtimeUiActions.notify(errorMessage, "error");
+      });
+      return;
+    }
+
+    if (msg.command === "icon-list") {
+      void refreshCustomIconsForCurrentTopology().catch(() => {
+        applyCustomIcons([]);
+      });
+      return;
+    }
+
+    if (msg.command === "icon-upload") {
+      void (async () => {
+        try {
+          const file = await pickIconFile();
+          if (!file) {
+            return;
+          }
+          await uploadUiIcon(file);
+          await refreshCustomIconsForCurrentTopology();
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          runtimeUiActions.notify(errorMessage, "error");
+        }
+      })();
+      return;
+    }
+
+    if (msg.command === "icon-delete") {
+      const iconName = typeof msg.iconName === "string" ? msg.iconName.trim() : "";
+      if (!iconName) {
+        runtimeUiActions.notify("Missing icon name.", "error");
+        return;
+      }
+      void deleteUiIcon(iconName).then(() => refreshCustomIconsForCurrentTopology()).catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        runtimeUiActions.notify(errorMessage, "error");
+      });
+      return;
+    }
+
+    if (msg.command === "icon-reconcile") {
+      const target = topologyManager.getCurrentTopologyRef()
+        ? {
+            sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+            topologyRef: topologyManager.getCurrentTopologyRef() ?? undefined
+          }
+        : null;
+      if (!target) {
+        return;
+      }
+      const usedIcons = Array.isArray(msg.usedIcons)
+        ? msg.usedIcons.filter((value): value is string => typeof value === "string")
+        : [];
+      void reconcileUiIcons({ ...target, usedIcons }).catch((error: unknown) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error("[Standalone] icon reconcile failed:", errorMessage);
+      });
+      return;
+    }
+
     if (!warnedCommands.has(msg.command)) {
       warnedCommands.add(msg.command);
       console.warn(`[Standalone] Unhandled VS Code command: ${msg.command}`);
@@ -416,6 +620,36 @@ function StandaloneApp() {
   }, [isAuthenticated, refreshApiConfig]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (!isAuthenticated) {
+      clearStandaloneUiState();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void (async () => {
+      try {
+        await refreshCustomNodesForAuthenticatedUser();
+        if (!cancelled) {
+          applyCustomNodeError(null);
+        }
+      } catch (error: unknown) {
+        if (cancelled) {
+          return;
+        }
+        applyCustomNodes([], "");
+        applyCustomNodeError(error instanceof Error ? error.message : String(error));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     topologyManager.setAuthenticated(isAuthenticated);
     return () => {
       topologyManager.closeEventStream();
@@ -440,6 +674,7 @@ function StandaloneApp() {
 
   const handleLogout = useCallback(() => {
     topologyManager.closeEventStream();
+    clearStandaloneUiState();
     void topologyManager.disposeCurrentSession();
     void logout();
   }, [logout]);

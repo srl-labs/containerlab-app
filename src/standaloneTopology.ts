@@ -21,6 +21,7 @@ import {
   topologyEntryLabName,
   topologyPathsLikelyMatch
 } from "./standaloneHostShared";
+import { fetchUiIcons } from "./runtimeApi";
 
 interface StandaloneTopologyManagerOptions {
   debounceMs: number;
@@ -215,6 +216,7 @@ export function createStandaloneTopologyManager(
     const sessionId = currentSessionId;
     currentSessionId = null;
     closeTopologyEventStream();
+    useTopoViewerStore.getState().setCustomIcons([]);
     await destroyTopologySession(sessionId);
   }
 
@@ -394,6 +396,7 @@ export function createStandaloneTopologyManager(
     const canonicalTopologyRef = entry.topologyRef;
     currentTopologyRef = canonicalTopologyRef;
     currentFilePath = canonicalTopologyRef.yamlPath;
+    useTopoViewerStore.getState().setCustomIcons([]);
     const initialDeploymentState =
       loadOptions.deploymentState ??
       (isTopologyRunning(canonicalTopologyRef, options.getLabs()) ? "deployed" : "undeployed");
@@ -407,6 +410,15 @@ export function createStandaloneTopologyManager(
       deploymentState: initialDeploymentState,
       mode: initialMode
     });
+    try {
+      const iconList = await fetchUiIcons({
+        sessionId: currentSessionId ?? undefined,
+        topologyRef: canonicalTopologyRef
+      });
+      useTopoViewerStore.getState().setCustomIcons(iconList.icons);
+    } catch {
+      useTopoViewerStore.getState().setCustomIcons([]);
+    }
     const snapshot = await refreshTopologySnapshot({}, options.getSessionClient());
 
     const stateFromApi = await resolveDeploymentState(canonicalTopologyRef);
@@ -479,6 +491,7 @@ export function createStandaloneTopologyManager(
       if (!isAuthenticated) {
         currentTopologyRef = null;
         currentFilePath = null;
+        useTopoViewerStore.getState().setCustomIcons([]);
         void disposeCurrentSession();
       }
       ensureTopologyEventStream();
