@@ -286,12 +286,12 @@ export function EndpointManager({
   }, []);
 
   const editSessionDurationValid = isValidEndpointSessionDuration(editSessionDuration);
-  const editHasChanges =
-    Boolean(editEndpoint) &&
-    (editUrl.trim() !== editEndpoint.url ||
+  const editHasChanges = editEndpoint
+    ? editUrl.trim() !== editEndpoint.url ||
       editLabel.trim() !== editEndpoint.label ||
       editUsername.trim() !== editEndpoint.username ||
-      editSessionDuration.trim() !== editEndpoint.sessionDuration);
+      editSessionDuration.trim() !== editEndpoint.sessionDuration
+    : false;
 
   const handleUpdateEndpoint = useCallback(async () => {
     if (

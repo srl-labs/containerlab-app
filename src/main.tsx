@@ -9,8 +9,8 @@ import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { App, useTopoViewerStore } from "@srl-labs/clab-ui";
 import "@srl-labs/clab-ui/styles/global.css";
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import * as EditorWorkerModule from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worker?worker";
 
 import {
   createApiClabUiHost,
@@ -69,6 +69,8 @@ const monacoGlobal = self as typeof self & {
     getWorker: (workerId: string, label: string) => Worker;
   };
 };
+const EditorWorker = (EditorWorkerModule as { default: new () => Worker }).default;
+const JsonWorker = (JsonWorkerModule as { default: new () => Worker }).default;
 
 if (!monacoGlobal.MonacoEnvironment) {
   monacoGlobal.MonacoEnvironment = {

@@ -63,14 +63,15 @@ export function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void 
   }, [endpoints, processEvent, setEndpointStatus, setLabConnected]);
 
   useEffect(() => {
+    const sources = sourcesRef.current;
     return () => {
-      for (const source of sourcesRef.current.values()) {
+      for (const source of sources.values()) {
         source.close();
       }
-      for (const endpointId of sourcesRef.current.keys()) {
+      for (const endpointId of sources.keys()) {
         setLabConnected(endpointId, false);
       }
-      sourcesRef.current.clear();
+      sources.clear();
     };
   }, [setLabConnected]);
 }

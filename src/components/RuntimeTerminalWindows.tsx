@@ -332,6 +332,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
     };
   }, [
     runtimeContainer?.kind,
+    windowState.endpointId,
     windowState.id,
     windowState.nodeName,
     windowState.protocol,
@@ -423,7 +424,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
       socket.close();
       websocketRef.current = null;
     };
-  }, [windowState.id, windowState.sessionId]);
+  }, [windowState.endpointId, windowState.id, windowState.sessionId]);
 
   useEffect(() => {
     return () => {

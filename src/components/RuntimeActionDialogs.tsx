@@ -249,10 +249,6 @@ export function RuntimeActionDialogs() {
     () => sortedInterfaceNames(runtimeContainer),
     [runtimeContainer]
   );
-  const availableInterfaceKey = useMemo(
-    () => availableInterfaces.join("\u0000"),
-    [availableInterfaces]
-  );
 
   useEffect(() => {
     if (!inspectRequest) {
@@ -449,7 +445,7 @@ export function RuntimeActionDialogs() {
     return () => {
       cancelled = true;
     };
-  }, [availableInterfaceKey, netemRequest]);
+  }, [availableInterfaces, netemRequest]);
 
   const applyNetem = async (interfaceName: string): Promise<void> => {
     if (!netemRequest) {
@@ -652,10 +648,6 @@ export function RuntimeActionDialogs() {
                             <TextField
                               size="small"
                               value={fields[fieldKey]}
-                              autoFocus={
-                                netemRequest?.preferredInterfaceName === interfaceName &&
-                                netemRequest.preferredField === fieldKey
-                              }
                               onChange={(event) => {
                                 const value = event.target.value;
                                 setNetemFieldsByInterface((current) => ({

@@ -4,7 +4,7 @@ import type {
   HostRuntimeInterfaceStats
 } from "@srl-labs/clab-ui/host";
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
-import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";
+import type { InterfaceState, LabState } from "./stores/labStore";
 import { findLabStateForTopology } from "./standaloneHostShared";
 
 function findLabState(

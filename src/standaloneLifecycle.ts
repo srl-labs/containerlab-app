@@ -17,7 +17,6 @@ import type {
 
 const LIFECYCLE_STATE_WAIT_TIMEOUT_MS = 120_000;
 const LIFECYCLE_STATE_WAIT_POLL_MS = 750;
-const LIFECYCLE_RESPONSE_LOG_LIMIT = 500;
 const LIFECYCLE_TIMESTAMP_LEVEL_PATTERN =
   /^(?:\d{2}:\d{2}:\d{2}|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (INFO|WARN|ERRO|ERROR|FATAL|PANIC)\b/;
 
@@ -190,26 +189,6 @@ function shouldDisplayLifecycleLogLine(line: string): boolean {
     trimmed.startsWith("🎉=") ||
     trimmed.startsWith("deprecated type=")
   );
-}
-
-function normalizeLifecycleResponseLogs(lines: string[]): string[] {
-  const normalized: string[] = [];
-  let previous = "";
-  for (const rawLine of lines) {
-    const line = rawLine.trimEnd();
-    if (!shouldDisplayLifecycleLogLine(line)) {
-      continue;
-    }
-    if (line === previous) {
-      continue;
-    }
-    normalized.push(line);
-    previous = line;
-    if (normalized.length >= LIFECYCLE_RESPONSE_LOG_LIMIT) {
-      break;
-    }
-  }
-  return normalized;
 }
 
 async function queryLabRunningState(target: {
