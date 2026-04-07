@@ -30,6 +30,7 @@ import { useLabStore } from "./stores/labStore";
 import { useEndpointStore, type EndpointSessionDuration } from "./stores/endpointStore";
 import { useAuth } from "./hooks/useAuth";
 import { useEventStream } from "./hooks/useEventStream";
+import { LabTabsBar } from "./components/LabTabsBar";
 import { LoginPage } from "./components/LoginPage";
 import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 import { RuntimeTerminalWindows } from "./components/RuntimeTerminalWindows";
@@ -46,11 +47,16 @@ import {
   isStandaloneLifecycleCommand
 } from "./standaloneLifecycle";
 import {
+  type DeploymentState,
   extractEndpointIdFromTopologyId,
   labsEqualForExplorer,
   normalizePathValue
 } from "./standaloneHostShared";
 import { createStandaloneTopologyManager } from "./standaloneTopology";
+import {
+  resolveLabTab,
+  useLabTabsStore
+} from "./stores/labTabsStore";
 import {
   deleteUiCustomNode,
   deleteUiIcon,
@@ -255,6 +261,98 @@ const topologyManager = createStandaloneTopologyManager({
   }
 });
 
+let topologyTabActivationQueue: Promise<void> = Promise.resolve();
+
+function queueTopologyTabActivation(task: () => Promise<void>): Promise<void> {
+  const run = topologyTabActivationQueue.then(task, task);
+  topologyTabActivationQueue = run.catch(() => {});
+  return run;
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function resolveLabTabFallbackEndpointId(): string | undefined {
+  return topologyManager.getCurrentEndpointId() ?? getDefaultEndpointId();
+}
+
+async function activateLabTabById(
+  tabId: string,
+  options: { deploymentState?: DeploymentState } = {}
+): Promise<void> {
+  const tab = useLabTabsStore.getState().tabs.find((entry) => entry.id === tabId);
+  if (!tab) {
+    return;
+  }
+  useLabTabsStore.getState().setActiveTab(tab.id);
+  try {
+    await queueTopologyTabActivation(async () => {
+      await topologyManager.loadTopologyFile(tab.topologyRef, {
+        deploymentState: options.deploymentState,
+        endpointId: tab.endpointId
+      });
+    });
+  } catch (error: unknown) {
+    runtimeUiActions.notify(toErrorMessage(error), "error");
+    throw error;
+  }
+}
+
+async function openTopologyInTab(
+  topologyRef: TopologyRef,
+  options: { deploymentState?: DeploymentState; endpointId?: string } = {}
+): Promise<void> {
+  const resolvedTab = resolveLabTab(
+    {
+      endpointId: options.endpointId,
+      topologyRef
+    },
+    resolveLabTabFallbackEndpointId()
+  );
+  const openResult = useLabTabsStore.getState().openOrFocusTab(resolvedTab);
+  await activateLabTabById(openResult.tab.id, {
+    deploymentState: options.deploymentState
+  });
+}
+
+async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
+  const closeResult = useLabTabsStore.getState().closeTab(tabId);
+  if (!closeResult.removed || !closeResult.wasActive) {
+    return;
+  }
+  if (closeResult.nextActiveTabId) {
+    await activateLabTabById(closeResult.nextActiveTabId);
+    return;
+  }
+  await queueTopologyTabActivation(async () => {
+    await topologyManager.clearActiveTopology();
+  });
+}
+
+async function closeEndpointTabsAndActivateNext(endpointId: string): Promise<void> {
+  const closeResult = useLabTabsStore.getState().closeTabsByEndpoint(endpointId);
+  if (closeResult.removedCount === 0) {
+    return;
+  }
+  if (closeResult.removedWasActive) {
+    if (closeResult.nextActiveTabId) {
+      await activateLabTabById(closeResult.nextActiveTabId);
+    } else {
+      await queueTopologyTabActivation(async () => {
+        await topologyManager.clearActiveTopology();
+      });
+    }
+  }
+}
+
+async function clearLabTabsAndActiveTopology(): Promise<void> {
+  useLabTabsStore.getState().clear();
+  await queueTopologyTabActivation(async () => {
+    await topologyManager.clearActiveTopology();
+  });
+}
+
 async function refreshCustomNodesForAuthenticatedUser(): Promise<void> {
   const response = await fetchUiCustomNodes(getConnectedEndpointIdForUiAssets());
   applyCustomNodes(response.customNodes, response.defaultNode);
@@ -292,8 +390,9 @@ const explorerBridge = createStandaloneExplorerBridge({
   invalidateTopologyFileListCache: topologyManager.invalidateTopologyFileListCache,
   invokeLifecycleApi: lifecycleManager.invokeLifecycleApi,
   listTopologyFiles: topologyManager.listTopologyFiles,
-  loadTopologyFile: topologyManager.loadTopologyFile,
+  loadTopologyFile: openTopologyInTab,
   removeEndpoint: async (endpointId) => {
+    await closeEndpointTabsAndActivateNext(endpointId);
     await topologyManager.disposeEndpointSession(endpointId);
   },
   resolveApiTopologyPath: topologyManager.resolveApiTopologyPath,
@@ -608,6 +707,361 @@ function renderApp(): void {
   reactRoot.render(<StandaloneApp />);
 }
 
+interface TabsHostResolution {
+  created: boolean;
+  host: HTMLDivElement | null;
+}
+
+function resolveLabTabsHostElement(): TabsHostResolution {
+  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
+  if (!(appRoot instanceof HTMLDivElement)) {
+    return { created: false, host: null };
+  }
+
+  const existingHost = appRoot.querySelector("[data-standalone-lab-tabs-host='true']");
+  if (existingHost instanceof HTMLDivElement) {
+    return { created: false, host: existingHost };
+  }
+
+  const mainElement = appRoot.querySelector("main");
+  if (!(mainElement instanceof HTMLElement)) {
+    return { created: false, host: null };
+  }
+
+  const host = document.createElement("div");
+  host.setAttribute("data-standalone-lab-tabs-host", "true");
+  host.style.position = "absolute";
+  host.style.top = "0";
+  host.style.left = "0";
+  host.style.right = "0";
+  host.style.zIndex = "7";
+  host.style.pointerEvents = "auto";
+  mainElement.insertBefore(host, mainElement.firstChild);
+  return { created: true, host };
+}
+
+function resolveLabEmptyStateHostElement(): TabsHostResolution {
+  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
+  if (!(appRoot instanceof HTMLDivElement)) {
+    return { created: false, host: null };
+  }
+
+  const mainElement = appRoot.querySelector("main");
+  if (!(mainElement instanceof HTMLElement)) {
+    return { created: false, host: null };
+  }
+
+  const existingHost = mainElement.querySelector("[data-standalone-lab-empty-host='true']");
+  if (existingHost instanceof HTMLDivElement) {
+    return { created: false, host: existingHost };
+  }
+
+  const host = document.createElement("div");
+  host.setAttribute("data-standalone-lab-empty-host", "true");
+  host.style.position = "absolute";
+  host.style.top = "0";
+  host.style.left = "0";
+  host.style.right = "0";
+  host.style.bottom = "0";
+  host.style.zIndex = "6";
+  host.style.pointerEvents = "none";
+  mainElement.appendChild(host);
+  return { created: true, host };
+}
+
+function useLabTabsPortalHost(): HTMLDivElement | null {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let ownedHost: HTMLDivElement | null = null;
+    let observer: MutationObserver | null = null;
+
+    const attach = () => {
+      const resolution = resolveLabTabsHostElement();
+      if (!resolution.host) {
+        return false;
+      }
+      if (resolution.created) {
+        ownedHost = resolution.host;
+      }
+      if (mounted) {
+        setHost(resolution.host);
+      }
+      return true;
+    };
+
+    if (!attach()) {
+      observer = new MutationObserver(() => {
+        if (attach()) {
+          observer?.disconnect();
+          observer = null;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      mounted = false;
+      observer?.disconnect();
+      if (ownedHost && ownedHost.parentElement) {
+        ownedHost.remove();
+      }
+      setHost(null);
+    };
+  }, []);
+
+  return host;
+}
+
+function StandaloneLabTabsMount(): React.JSX.Element | null {
+  const host = useLabTabsPortalHost();
+  const tabs = useLabTabsStore((state) => state.tabs);
+  const activeTabId = useLabTabsStore((state) => state.activeTabId);
+  const endpoints = useEndpointStore((state) => state.endpoints);
+
+  const endpointLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const endpoint of endpoints.values()) {
+      labels.set(endpoint.id, endpoint.label);
+    }
+    return labels;
+  }, [endpoints]);
+
+  const handleActivate = useCallback((tabId: string) => {
+    void activateLabTabById(tabId);
+  }, []);
+
+  const handleClose = useCallback((tabId: string) => {
+    void closeLabTabAndActivateNext(tabId);
+  }, []);
+
+  if (!host) {
+    return null;
+  }
+
+  return createPortal(
+    <LabTabsBar
+      activeTabId={activeTabId}
+      endpointLabels={endpointLabels}
+      onActivate={handleActivate}
+      onClose={handleClose}
+      tabs={tabs}
+    />,
+    host
+  );
+}
+
+function useLabEmptyStatePortalHost(): HTMLDivElement | null {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let ownedHost: HTMLDivElement | null = null;
+    let observer: MutationObserver | null = null;
+
+    const attach = () => {
+      const resolution = resolveLabEmptyStateHostElement();
+      if (!resolution.host) {
+        return false;
+      }
+      if (resolution.created) {
+        ownedHost = resolution.host;
+      }
+      if (mounted) {
+        setHost(resolution.host);
+      }
+      return true;
+    };
+
+    if (!attach()) {
+      observer = new MutationObserver(() => {
+        if (attach()) {
+          observer?.disconnect();
+          observer = null;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      mounted = false;
+      observer?.disconnect();
+      if (ownedHost && ownedHost.parentElement) {
+        ownedHost.remove();
+      }
+      setHost(null);
+    };
+  }, []);
+
+  return host;
+}
+
+function computeContextPanelOcclusion(
+  host: HTMLDivElement | null
+): { left: number; right: number } {
+  if (!host) {
+    return { left: 0, right: 0 };
+  }
+  const hostRect = host.getBoundingClientRect();
+  if (hostRect.width <= 0 || hostRect.height <= 0) {
+    return { left: 0, right: 0 };
+  }
+
+  const panel = document.querySelector<HTMLElement>(
+    "[data-testid='context-panel'] .MuiDrawer-paper"
+  );
+  if (!panel) {
+    return { left: 0, right: 0 };
+  }
+
+  const panelRect = panel.getBoundingClientRect();
+  const overlapLeft = Math.max(hostRect.left, panelRect.left);
+  const overlapRight = Math.min(hostRect.right, panelRect.right);
+  const overlapWidth = Math.max(0, overlapRight - overlapLeft);
+  if (overlapWidth <= 0) {
+    return { left: 0, right: 0 };
+  }
+
+  const panelMid = (panelRect.left + panelRect.right) / 2;
+  const hostMid = (hostRect.left + hostRect.right) / 2;
+  return panelMid < hostMid
+    ? { left: overlapWidth, right: 0 }
+    : { left: 0, right: overlapWidth };
+}
+
+function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; right: number } {
+  const [occlusion, setOcclusion] = useState<{ left: number; right: number }>({
+    left: 0,
+    right: 0
+  });
+
+  useEffect(() => {
+    if (!host) {
+      setOcclusion({ left: 0, right: 0 });
+      return;
+    }
+
+    let observer: MutationObserver | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let rafId: number | null = null;
+
+    const update = () => {
+      setOcclusion((previous) => {
+        const next = computeContextPanelOcclusion(host);
+        if (next.left === previous.left && next.right === previous.right) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    const scheduleUpdate = () => {
+      if (rafId !== null) {
+        return;
+      }
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        update();
+      });
+    };
+
+    const attachPanelResizeObserver = () => {
+      resizeObserver?.disconnect();
+      resizeObserver = new ResizeObserver(() => {
+        scheduleUpdate();
+      });
+      resizeObserver.observe(host);
+      const panel = document.querySelector<HTMLElement>(
+        "[data-testid='context-panel'] .MuiDrawer-paper"
+      );
+      if (panel) {
+        resizeObserver.observe(panel);
+      }
+    };
+
+    observer = new MutationObserver(() => {
+      attachPanelResizeObserver();
+      scheduleUpdate();
+    });
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["class", "style"]
+    });
+
+    window.addEventListener("resize", scheduleUpdate);
+    attachPanelResizeObserver();
+    update();
+
+    return () => {
+      window.removeEventListener("resize", scheduleUpdate);
+      observer?.disconnect();
+      resizeObserver?.disconnect();
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
+  }, [host]);
+
+  return occlusion;
+}
+
+function StandaloneLabEmptyStateMount(): React.JSX.Element | null {
+  const host = useLabEmptyStatePortalHost();
+  const tabs = useLabTabsStore((state) => state.tabs);
+  const occlusion = useEmptyStateOcclusion(host);
+
+  if (!host || tabs.length > 0) {
+    return null;
+  }
+
+  return createPortal(
+    <div
+      data-testid="standalone-empty-lab-state"
+      style={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "var(--vscode-editor-background, #1e1e1e)",
+        color: "var(--vscode-editor-foreground, #d4d4d4)",
+        textAlign: "center",
+        paddingLeft: occlusion.left,
+        paddingRight: occlusion.right
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 12,
+          maxWidth: 460,
+          padding: "20px 24px"
+        }}
+      >
+        <img
+          src="/containerlab.svg"
+          alt="containerlab"
+          style={{
+            width: 120,
+            height: "auto",
+            opacity: 0.95
+          }}
+        />
+        <div style={{ fontSize: 18, fontWeight: 600 }}>No lab is open</div>
+        <div style={{ fontSize: 13, opacity: 0.82, lineHeight: 1.4 }}>
+          Open a lab from the explorer, or create a new `*.clab.yml` file to start.
+        </div>
+      </div>
+    </div>,
+    host
+  );
+}
+
 /**
  * Root component that handles auth and renders the app.
  */
@@ -659,6 +1113,7 @@ function StandaloneApp() {
 
     if (!hasEndpointSession) {
       clearStandaloneUiState();
+      void clearLabTabsAndActiveTopology();
       return () => {
         cancelled = true;
       };
@@ -666,6 +1121,7 @@ function StandaloneApp() {
 
     if (!hasConnectedEndpoint) {
       clearStandaloneUiState();
+      void clearLabTabsAndActiveTopology();
       return () => {
         cancelled = true;
       };
@@ -692,15 +1148,22 @@ function StandaloneApp() {
   }, [hasConnectedEndpoint, hasEndpointSession]);
 
   useEffect(() => {
-    const currentEndpointId = topologyManager.getCurrentEndpointId();
-    if (!currentEndpointId) {
+    const endpointIds = new Set(endpointList.map((endpoint) => endpoint.id));
+    const staleEndpointIds = new Set<string>();
+    for (const tab of useLabTabsStore.getState().tabs) {
+      if (!endpointIds.has(tab.endpointId)) {
+        staleEndpointIds.add(tab.endpointId);
+      }
+    }
+    if (staleEndpointIds.size === 0) {
       return;
     }
-    if (endpointList.some((endpoint) => endpoint.id === currentEndpointId)) {
-      return;
-    }
-    clearStandaloneUiState();
-    void topologyManager.disposeEndpointSession(currentEndpointId);
+
+    void (async () => {
+      for (const endpointId of staleEndpointIds) {
+        await closeEndpointTabsAndActivateNext(endpointId);
+      }
+    })();
   }, [endpointList]);
 
   useEffect(() => {
@@ -739,11 +1202,7 @@ function StandaloneApp() {
 
   const handleRemoveEndpoint = useCallback(
     async (endpointId: string) => {
-      const currentEndpointId = topologyManager.getCurrentEndpointId();
-      if (currentEndpointId === endpointId) {
-        clearStandaloneUiState();
-        await topologyManager.disposeEndpointSession(endpointId);
-      }
+      await closeEndpointTabsAndActivateNext(endpointId);
       await removeEndpoint(endpointId);
       scheduleExplorerSnapshot(0);
     },
@@ -761,7 +1220,7 @@ function StandaloneApp() {
   const handleLogout = useCallback(() => {
     topologyManager.closeEventStream();
     clearStandaloneUiState();
-    void topologyManager.disposeCurrentSession();
+    void clearLabTabsAndActiveTopology();
     void logout();
   }, [logout]);
 
@@ -821,6 +1280,8 @@ function StandaloneApp() {
   return (
     <>
       <App initialData={initialData} runtime={standaloneRuntime!} />
+      <StandaloneLabTabsMount />
+      <StandaloneLabEmptyStateMount />
       <MuiThemeProvider>
         <RuntimeTerminalWindows />
         <RuntimeActionDialogs />

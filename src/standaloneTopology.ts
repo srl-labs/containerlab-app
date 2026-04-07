@@ -42,6 +42,7 @@ interface HostContextOptions {
 }
 
 export interface StandaloneTopologyManager {
+  clearActiveTopology(): Promise<void>;
   closeEventStream(): void;
   disposeCurrentSession(): Promise<void>;
   disposeEndpointSession(endpointId: string): Promise<void>;
@@ -330,6 +331,29 @@ export function createStandaloneTopologyManager(
     await destroyTopologySession(sessionId, endpointId);
   }
 
+  async function clearActiveTopology(): Promise<void> {
+    currentTopologyRef = null;
+    currentFilePath = null;
+    currentSourcePreference = "api-file";
+    await disposeCurrentSession();
+    setHostContext(
+      {
+        topologyRef: undefined,
+        sessionId: undefined,
+        path: "",
+        mode: "edit",
+        deploymentState: "unknown",
+        runtimeContainers: []
+      },
+      options.getSessionClient()
+    );
+    useTopoViewerStore.getState().setInitialData({
+      labName: "",
+      mode: "edit",
+      deploymentState: "unknown"
+    });
+  }
+
   async function createTopologySession(
     topologyRef: TopologyRef,
     hostOptions: HostContextOptions = {},
@@ -526,10 +550,6 @@ export function createStandaloneTopologyManager(
       : normalizeStandaloneTopologyRef(topologyRef, endpointId);
     const canonicalEndpointId = entry?.endpointId ?? endpointId;
     const sourcePreference = entry?.topologyRef ? "api-file" : "running-lab-doc";
-    currentEndpointId = canonicalEndpointId;
-    currentTopologyRef = canonicalTopologyRef;
-    currentFilePath = canonicalTopologyRef.yamlPath;
-    currentSourcePreference = sourcePreference;
     useTopoViewerStore.getState().setCustomIcons([]);
     const initialDeploymentState =
       loadOptions.deploymentState ??
@@ -605,6 +625,7 @@ export function createStandaloneTopologyManager(
   }
 
   return {
+    clearActiveTopology,
     closeEventStream: closeTopologyEventStream,
     disposeCurrentSession,
     async disposeEndpointSession(endpointId) {
