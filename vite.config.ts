@@ -10,10 +10,34 @@ export default defineConfig({
   root: __dirname,
   publicDir: path.resolve(__dirname, "resources"),
   resolve: {
-    dedupe: ["react", "react-dom"]
+    dedupe: [
+      "react",
+      "react-dom",
+      "@emotion/cache",
+      "@emotion/react",
+      "@emotion/styled",
+      "@mui/icons-material",
+      "@mui/material",
+      "@mui/private-theming",
+      "@mui/styled-engine",
+      "@mui/system",
+      "@mui/utils"
+    ]
   },
   optimizeDeps: {
-    include: ["react", "react-dom"]
+    include: [
+      "react",
+      "react-dom",
+      "@emotion/cache",
+      "@emotion/react",
+      "@emotion/styled",
+      "@mui/icons-material",
+      "@mui/material",
+      "@mui/private-theming",
+      "@mui/styled-engine",
+      "@mui/system",
+      "@mui/utils"
+    ]
   },
   css: {
     postcss: path.resolve(__dirname, "postcss.config.cjs")
@@ -21,6 +45,12 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
+    fs: {
+      allow: [
+        __dirname,
+        path.resolve(__dirname, "../clab-ui")
+      ]
+    },
     proxy: {
       "/auth": {
         target: "http://localhost:3000"

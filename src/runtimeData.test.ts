@@ -8,8 +8,11 @@ import {
 import { buildStandaloneTopologyRefFromPath } from "./standaloneHostShared";
 import type { ContainerState, LabState } from "./stores/labStore";
 
+const ENDPOINT_ID = "endpoint-1";
+
 function buildContainer(rxBps: string): ContainerState {
   return {
+    endpointId: ENDPOINT_ID,
     name: "clab-demo-srl1",
     containerId: "cid-1",
     labName: "demo",
@@ -47,6 +50,7 @@ function buildLabs(rxBps: string): Map<string, LabState> {
     [
       "demo",
       {
+        endpointId: ENDPOINT_ID,
         name: "demo",
         owner: "user",
         topologyPath: "/tmp/demo.clab.yml",
@@ -75,6 +79,7 @@ test("getRuntimeContainersForTopology prefers exact topology path over lab name"
     [
       "demo",
       {
+        endpointId: ENDPOINT_ID,
         name: "demo",
         owner: "user",
         topologyPath: "/labs/demo-a.clab.yml",

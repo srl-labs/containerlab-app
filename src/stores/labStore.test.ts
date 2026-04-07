@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { useLabStore } from "./labStore";
 
+const ENDPOINT_ID = "endpoint-1";
+
 function firstLab() {
   return [...useLabStore.getState().labs.values()][0];
 }
@@ -13,7 +15,7 @@ test.beforeEach(() => {
 test("processEvent merges interface-stats events keyed by attributes.interface", () => {
   const store = useLabStore.getState();
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {
@@ -28,7 +30,7 @@ test("processEvent merges interface-stats events keyed by attributes.interface",
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface",
     action: "create",
     attributes: {
@@ -44,7 +46,7 @@ test("processEvent merges interface-stats events keyed by attributes.interface",
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface-stats",
     action: "stats",
     attributes: {
@@ -77,7 +79,7 @@ test("processEvent merges interface-stats events keyed by attributes.interface",
 test("stats-only updates preserve existing interface metadata", () => {
   const store = useLabStore.getState();
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {
@@ -87,7 +89,7 @@ test("stats-only updates preserve existing interface metadata", () => {
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface",
     action: "create",
     attributes: {
@@ -103,7 +105,7 @@ test("stats-only updates preserve existing interface metadata", () => {
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface-stats",
     action: "stats",
     attributes: {
@@ -130,7 +132,7 @@ test("stats-only updates preserve existing interface metadata", () => {
 test("interface events without lab-path are matched to an existing lab via container name", () => {
   const store = useLabStore.getState();
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {
@@ -140,7 +142,7 @@ test("interface events without lab-path are matched to an existing lab via conta
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface",
     action: "snapshot",
     attributes: {
@@ -162,7 +164,7 @@ test("interface events without lab-path are matched to an existing lab via conta
 test("interface stats can resolve container name from actor_name when attributes.name is absent", () => {
   const store = useLabStore.getState();
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {
@@ -172,7 +174,7 @@ test("interface stats can resolve container name from actor_name when attributes
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface",
     action: "create",
     attributes: {
@@ -184,7 +186,7 @@ test("interface stats can resolve container name from actor_name when attributes
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "interface",
     action: "stats",
     actor_name: "clab-demo-srl4",
@@ -194,7 +196,7 @@ test("interface stats can resolve container name from actor_name when attributes
       rx_bps: 1111,
       tx_bps: 2222
     }
-  } as unknown as Parameters<typeof store.processEvent>[0]);
+  } as unknown as Parameters<typeof store.processEvent>[1]);
 
   const iface = firstLab()?.containers.get("clab-demo-srl4")?.interfaces.get("eth1");
   assert.ok(iface);
@@ -205,7 +207,7 @@ test("interface stats can resolve container name from actor_name when attributes
 test("processEvent keeps duplicate lab names separate when topology paths differ", () => {
   const store = useLabStore.getState();
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {
@@ -215,7 +217,7 @@ test("processEvent keeps duplicate lab names separate when topology paths differ
     }
   });
 
-  store.processEvent({
+  store.processEvent(ENDPOINT_ID, {
     type: "container",
     action: "start",
     attributes: {

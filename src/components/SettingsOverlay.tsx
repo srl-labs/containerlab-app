@@ -13,16 +13,17 @@ import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Paper from "@mui/material/Paper";
-import type { Theme } from "@mui/material/styles";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import type { Theme } from "@mui/material/styles";
 import {
   Close as CloseIcon,
   DarkMode as DarkModeIcon,
+  DnsRounded as DnsRoundedIcon,
   InfoOutlined as InfoOutlinedIcon,
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
@@ -30,18 +31,48 @@ import {
   Terminal as TerminalIcon
 } from "@mui/icons-material";
 
+import { subscribeEndpointUiAction, type EndpointUiAction } from "../endpointActions";
 import { fetchVersionCheck, fetchVersionInfo } from "../runtimeApi";
 import type { TerminalPreferences } from "../runtimeTerminalSettings";
+import {
+  type EndpointConfig,
+  type EndpointSessionDuration
+} from "../stores/endpointStore";
+import { EndpointManager } from "./EndpointManager";
 
-type SettingsSectionKey = "general" | "terminal" | "about";
+type SettingsSectionKey = "endpoints" | "general" | "terminal" | "about";
 
 interface SettingsOverlayProps {
   currentTheme: "light" | "dark";
-  onThemeChange: (nextTheme: "light" | "dark") => void;
+  defaultApiUrl: string;
+  endpoints: EndpointConfig[];
+  onAddEndpoint: (input: {
+    label?: string;
+    password: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
   onLogout: () => void;
+  onReconnectEndpoint: (input: {
+    endpointId: string;
+    password: string;
+    username: string;
+  }) => Promise<void>;
+  onRemoveEndpoint: (endpointId: string) => Promise<void>;
+  onUpdateEndpoint: (input: {
+    endpointId: string;
+    label: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
+  onSetEndpointSessionDuration: (
+    endpointId: string,
+    sessionDuration: EndpointSessionDuration
+  ) => void;
   onSaveTerminalPreferences: (next: TerminalPreferences) => void;
-  apiUrl: string;
-  connected: boolean;
+  onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
 }
 
@@ -62,6 +93,12 @@ const SETTINGS_SECTIONS: Array<{
   description: string;
   icon: React.ReactElement;
 }> = [
+  {
+    key: "endpoints",
+    label: "Endpoints",
+    description: "Connection management and credentials",
+    icon: <DnsRoundedIcon fontSize="small" />
+  },
   {
     key: "general",
     label: "General",
@@ -124,41 +161,6 @@ function SectionCard(props: {
   );
 }
 
-function StatusPill(props: { connected: boolean }) {
-  const { connected } = props;
-  const color = connected ? "success.main" : "warning.main";
-
-  return (
-    <Box
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 0.75,
-        px: 1.25,
-        py: 0.5,
-        borderRadius: 999,
-        border: 1,
-        borderColor: color,
-        bgcolor: "background.paper",
-        color
-      }}
-    >
-      <Box
-        sx={{
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          bgcolor: color,
-          flexShrink: 0
-        }}
-      />
-      <Typography variant="caption" fontWeight={700} sx={{ color: "inherit" }}>
-        {connected ? "Connected" : "Disconnected"}
-      </Typography>
-    </Box>
-  );
-}
-
 function parseTerminalPreferencesDraft(
   sshUserMappingText: string,
   telnetPortText: string
@@ -213,16 +215,22 @@ function parseTerminalPreferencesDraft(
 
 export function SettingsOverlay({
   currentTheme,
-  onThemeChange,
+  defaultApiUrl,
+  endpoints,
+  onAddEndpoint,
   onLogout,
+  onReconnectEndpoint,
+  onRemoveEndpoint,
+  onUpdateEndpoint,
+  onSetEndpointSessionDuration,
   onSaveTerminalPreferences,
-  apiUrl,
-  connected,
+  onThemeChange,
   terminalPreferences
 }: SettingsOverlayProps) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("general");
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("endpoints");
+  const [requestedEndpointAction, setRequestedEndpointAction] = useState<EndpointUiAction | null>(null);
   const [sshUserMappingText, setSshUserMappingText] = useState("");
   const [telnetPortText, setTelnetPortText] = useState("");
   const [versionLoading, setVersionLoading] = useState(false);
@@ -230,16 +238,23 @@ export function SettingsOverlay({
   const [versionInfo, setVersionInfo] = useState("");
   const [versionCheck, setVersionCheck] = useState("");
 
+  const primaryEndpoint =
+    endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
+
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
     setTelnetPortText(String(terminalPreferences.telnetPort));
   }, [terminalPreferences]);
 
   useEffect(() => {
-    if (dialogOpen) {
-      setActiveSection("general");
-    }
-  }, [dialogOpen]);
+    const unsubscribe = subscribeEndpointUiAction((action) => {
+      setPanelOpen(false);
+      setDialogOpen(true);
+      setActiveSection("endpoints");
+      setRequestedEndpointAction(action);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     if (!dialogOpen || activeSection !== "about") {
@@ -250,9 +265,12 @@ export function SettingsOverlay({
     setVersionLoading(true);
     setVersionError(null);
 
-    const load = async () => {
+    void (async () => {
       try {
-        const [version, check] = await Promise.all([fetchVersionInfo(), fetchVersionCheck()]);
+        const [version, check] = await Promise.all([
+          fetchVersionInfo(primaryEndpoint?.id),
+          fetchVersionCheck(primaryEndpoint?.id)
+        ]);
         if (cancelled) {
           return;
         }
@@ -267,13 +285,12 @@ export function SettingsOverlay({
           setVersionLoading(false);
         }
       }
-    };
+    })();
 
-    void load();
     return () => {
       cancelled = true;
     };
-  }, [activeSection, dialogOpen]);
+  }, [activeSection, dialogOpen, primaryEndpoint?.id]);
 
   const terminalDraft = useMemo(
     () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText),
@@ -282,11 +299,18 @@ export function SettingsOverlay({
 
   const handleTogglePanel = useCallback(() => setPanelOpen((prev) => !prev), []);
   const handleClosePanel = useCallback(() => setPanelOpen(false), []);
-  const handleOpenDialog = useCallback(() => {
-    setPanelOpen(false);
-    setDialogOpen(true);
+  const handleOpenDialog = useCallback(
+    (section: SettingsSectionKey = "endpoints") => {
+      setPanelOpen(false);
+      setActiveSection(section);
+      setDialogOpen(true);
+    },
+    []
+  );
+  const handleCloseDialog = useCallback(() => {
+    setDialogOpen(false);
+    setRequestedEndpointAction(null);
   }, []);
-  const handleCloseDialog = useCallback(() => setDialogOpen(false), []);
 
   const handleLogoutClick = useCallback(() => {
     setPanelOpen(false);
@@ -303,6 +327,29 @@ export function SettingsOverlay({
 
   const renderSectionContent = () => {
     switch (activeSection) {
+      case "endpoints":
+        return (
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="h6">Endpoints</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Configure every `clab-api-server` session that should appear in the explorer. The
+                selected target endpoint is resolved per action from endpoint context or a picker.
+              </Typography>
+            </Box>
+            <EndpointManager
+              defaultApiUrl={defaultApiUrl}
+              endpoints={endpoints}
+              onAddEndpoint={onAddEndpoint}
+              onReconnectEndpoint={onReconnectEndpoint}
+              onRemoveEndpoint={onRemoveEndpoint}
+              onUpdateEndpoint={onUpdateEndpoint}
+              onSetEndpointSessionDuration={onSetEndpointSessionDuration}
+              onRequestedActionHandled={() => setRequestedEndpointAction(null)}
+              requestedAction={requestedEndpointAction}
+            />
+          </Stack>
+        );
       case "general":
         return (
           <Stack spacing={3}>
@@ -317,44 +364,44 @@ export function SettingsOverlay({
               title="Color Theme"
               description="Theme changes apply immediately and persist in local browser storage."
             >
-                <ToggleButtonGroup
-                  exclusive
-                  value={currentTheme}
-                  onChange={(_event, nextTheme: "light" | "dark" | null) => {
-                    if (nextTheme) {
-                      onThemeChange(nextTheme);
-                    }
-                  }}
-                  sx={{
-                    alignSelf: "flex-start",
-                    "& .MuiToggleButton-root": {
-                      px: 1.75,
-                      color: "text.primary",
-                      borderColor: "divider"
-                    },
-                    "& .MuiToggleButton-root.Mui-selected": {
-                      bgcolor: "action.selected",
-                      color: "text.primary",
-                      borderColor: "text.primary"
-                    },
-                    "& .MuiToggleButton-root.Mui-selected:hover": {
-                      bgcolor: "action.hover"
-                    }
-                  }}
-                >
-                  <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <DarkModeIcon fontSize="small" />
-                      <span>Dark</span>
-                    </Stack>
-                  </ToggleButton>
-                  <ToggleButton value="light" data-testid="standalone-settings-theme-light">
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <LightModeIcon fontSize="small" />
-                      <span>Light</span>
-                    </Stack>
-                  </ToggleButton>
-                </ToggleButtonGroup>
+              <ToggleButtonGroup
+                exclusive
+                value={currentTheme}
+                onChange={(_event, nextTheme: "light" | "dark" | null) => {
+                  if (nextTheme) {
+                    onThemeChange(nextTheme);
+                  }
+                }}
+                sx={{
+                  alignSelf: "flex-start",
+                  "& .MuiToggleButton-root": {
+                    px: 1.75,
+                    color: "text.primary",
+                    borderColor: "divider"
+                  },
+                  "& .MuiToggleButton-root.Mui-selected": {
+                    bgcolor: "action.selected",
+                    color: "text.primary",
+                    borderColor: "text.primary"
+                  },
+                  "& .MuiToggleButton-root.Mui-selected:hover": {
+                    bgcolor: "action.hover"
+                  }
+                }}
+              >
+                <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <DarkModeIcon fontSize="small" />
+                    <span>Dark</span>
+                  </Stack>
+                </ToggleButton>
+                <ToggleButton value="light" data-testid="standalone-settings-theme-light">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <LightModeIcon fontSize="small" />
+                    <span>Light</span>
+                  </Stack>
+                </ToggleButton>
+              </ToggleButtonGroup>
             </SectionCard>
           </Stack>
         );
@@ -372,67 +419,67 @@ export function SettingsOverlay({
               description="Configure standalone defaults for SSH username resolution and telnet access."
               tone="info"
             >
-                <TextField
-                  label="SSH User Mapping JSON"
-                  value={sshUserMappingText}
-                  onChange={(event) => setSshUserMappingText(event.target.value)}
-                  fullWidth
-                  multiline
-                  minRows={12}
-                  error={terminalDraft.field === "ssh"}
-                  helperText={
-                    terminalDraft.field === "ssh"
-                      ? terminalDraft.error
-                      : "JSON object mapping container kinds to default SSH usernames."
+              <TextField
+                label="SSH User Mapping JSON"
+                value={sshUserMappingText}
+                onChange={(event) => setSshUserMappingText(event.target.value)}
+                fullWidth
+                multiline
+                minRows={12}
+                error={terminalDraft.field === "ssh"}
+                helperText={
+                  terminalDraft.field === "ssh"
+                    ? terminalDraft.error
+                    : "JSON object mapping container kinds to default SSH usernames."
+                }
+                data-testid="standalone-settings-ssh-mapping"
+                sx={{
+                  "& textarea": {
+                    fontFamily: "monospace",
+                    fontSize: "0.85rem"
                   }
-                  data-testid="standalone-settings-ssh-mapping"
+                }}
+              />
+              <TextField
+                label="Telnet Port"
+                value={telnetPortText}
+                onChange={(event) => setTelnetPortText(event.target.value)}
+                fullWidth
+                error={terminalDraft.field === "telnet"}
+                helperText={
+                  terminalDraft.field === "telnet"
+                    ? terminalDraft.error
+                    : "Default telnet port used by standalone terminal actions."
+                }
+                slotProps={{ htmlInput: { inputMode: "numeric", pattern: "[0-9]*" } }}
+                data-testid="standalone-settings-telnet-port"
+              />
+              {terminalDraft.error === null ? (
+                <Alert
+                  severity="info"
+                  variant="outlined"
                   sx={{
-                    "& textarea": {
-                      fontFamily: "monospace",
-                      fontSize: "0.85rem"
+                    color: "text.primary",
+                    borderColor: "info.main",
+                    bgcolor: "background.paper",
+                    "& .MuiAlert-icon": {
+                      color: "info.main"
                     }
                   }}
-                />
-                <TextField
-                  label="Telnet Port"
-                  value={telnetPortText}
-                  onChange={(event) => setTelnetPortText(event.target.value)}
-                  fullWidth
-                  error={terminalDraft.field === "telnet"}
-                  helperText={
-                    terminalDraft.field === "telnet"
-                      ? terminalDraft.error
-                      : "Default telnet port used by standalone terminal actions."
-                  }
-                  slotProps={{ htmlInput: { inputMode: "numeric", pattern: "[0-9]*" } }}
-                  data-testid="standalone-settings-telnet-port"
-                />
-                {terminalDraft.error === null ? (
-                  <Alert
-                    severity="info"
-                    variant="outlined"
-                    sx={{
-                      color: "text.primary",
-                      borderColor: "info.main",
-                      bgcolor: "background.paper",
-                      "& .MuiAlert-icon": {
-                        color: "info.main"
-                      }
-                    }}
-                  >
-                    Saving writes normalized terminal preferences to local browser storage.
-                  </Alert>
-                ) : null}
-                <Box>
-                  <Button
-                    variant="outlined"
-                    onClick={handleSaveTerminalSettings}
-                    disabled={terminalDraft.error !== null}
-                    data-testid="standalone-settings-save-terminal"
-                  >
-                    Save Terminal Settings
-                  </Button>
-                </Box>
+                >
+                  Saving writes normalized terminal preferences to local browser storage.
+                </Alert>
+              ) : null}
+              <Box>
+                <Button
+                  variant="outlined"
+                  onClick={handleSaveTerminalSettings}
+                  disabled={terminalDraft.error !== null}
+                  data-testid="standalone-settings-save-terminal"
+                >
+                  Save Terminal Settings
+                </Button>
+              </Box>
             </SectionCard>
           </Stack>
         );
@@ -528,7 +575,7 @@ export function SettingsOverlay({
             top: 8,
             right: 48,
             zIndex: 1200,
-            width: 320,
+            width: 340,
             maxWidth: "calc(100vw - 64px)",
             p: 2,
             border: 1,
@@ -544,27 +591,9 @@ export function SettingsOverlay({
               </IconButton>
             </Stack>
             <Divider />
-            <Stack spacing={1}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="caption" color="text.secondary">
-                    API Server
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontFamily: "monospace",
-                      fontSize: "0.76rem",
-                      wordBreak: "break-all"
-                    }}
-                  >
-                    {apiUrl}
-                  </Typography>
-                </Box>
-                <StatusPill connected={connected} />
-              </Stack>
-              <Button variant="outlined" onClick={handleOpenDialog} data-testid="standalone-settings-open-dialog">
-                Open Preferences
+            <Stack spacing={1.5}>
+              <Button variant="outlined" onClick={() => handleOpenDialog("general")}>
+                General Settings
               </Button>
               <Button
                 variant="outlined"
@@ -572,7 +601,7 @@ export function SettingsOverlay({
                 startIcon={<LogoutIcon />}
                 onClick={handleLogoutClick}
               >
-                Logout
+                Disconnect Sessions
               </Button>
             </Stack>
           </Stack>
@@ -672,7 +701,7 @@ export function SettingsOverlay({
               </List>
             </Box>
             <Box sx={{ flex: 1, minWidth: 0, overflow: "auto" }}>
-              <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 840 }}>{renderSectionContent()}</Box>
+              <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 860 }}>{renderSectionContent()}</Box>
             </Box>
           </Box>
         </DialogContent>

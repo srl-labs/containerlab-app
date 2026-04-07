@@ -14,6 +14,12 @@ export interface LoginResponse {
   token: string;
 }
 
+interface LoginRequest {
+  username: string;
+  password: string;
+  sessionDuration?: string;
+}
+
 export interface TopologyEntry {
   labName: string;
   yamlFileName: string;
@@ -166,15 +172,26 @@ export class ClabApiClient {
     return this.baseUrl;
   }
 
-  async login(username: string, password: string): Promise<LoginResponse> {
+  async login(
+    username: string,
+    password: string,
+    sessionDuration?: string
+  ): Promise<LoginResponse> {
+    const body: LoginRequest = { username, password };
+    if (sessionDuration) {
+      body.sessionDuration = sessionDuration;
+    }
+
     const res = await fetch(`${this.baseUrl}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify(body)
     });
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
-      throw new Error(`Login failed: ${text}`);
+      const err: HttpError = new Error(`Login failed: ${text}`);
+      err.status = res.status;
+      throw err;
     }
     return (await res.json()) as LoginResponse;
   }

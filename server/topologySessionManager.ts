@@ -12,6 +12,7 @@ type DeploymentState = "deployed" | "undeployed" | "unknown";
 
 interface SessionRecord {
   baseUrl: string;
+  endpointId: string;
   host: TopologySessionCore;
   lastAccess: number;
   sessionId: string;
@@ -23,6 +24,7 @@ interface CreateSessionOptions {
   client: ClabApiClient;
   containerDataProvider: ContainerDataProvider;
   deploymentState: DeploymentState;
+  endpointId: string;
   mode: "edit" | "view";
   token: string;
   topologyRef: TopologyRef;
@@ -33,9 +35,10 @@ const SESSION_TTL_MS = 5 * 60 * 1000;
 export interface StandaloneTopologySessionManager {
   createSession(options: CreateSessionOptions): SessionRecord;
   disposeAll(): void;
+  disposeSessionsForEndpoint(endpointId: string): void;
   disposeSession(sessionId: string): boolean;
   disposeSessionsForToken(token: string, baseUrl?: string): void;
-  getSession(sessionId: string, token: string, baseUrl: string): SessionRecord | null;
+  getSession(sessionId: string, endpointId?: string): SessionRecord | null;
 }
 
 export function createStandaloneTopologySessionManager(): StandaloneTopologySessionManager {
@@ -89,6 +92,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
       const record: SessionRecord = {
         baseUrl: options.client.getBaseUrl(),
+        endpointId: options.endpointId,
         host,
         lastAccess: Date.now(),
         sessionId,
@@ -110,6 +114,15 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
     disposeSession,
 
+    disposeSessionsForEndpoint(endpointId) {
+      for (const [sessionId, session] of sessions.entries()) {
+        if (session.endpointId !== endpointId) {
+          continue;
+        }
+        disposeSession(sessionId);
+      }
+    },
+
     disposeSessionsForToken(token, baseUrl) {
       for (const [sessionId, session] of sessions.entries()) {
         if (session.token !== token) {
@@ -122,12 +135,12 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
       }
     },
 
-    getSession(sessionId, token, baseUrl) {
+    getSession(sessionId, endpointId) {
       const session = sessions.get(sessionId);
       if (!session) {
         return null;
       }
-      if (session.token !== token || session.baseUrl !== baseUrl) {
+      if (endpointId && session.endpointId !== endpointId) {
         return null;
       }
       session.lastAccess = Date.now();

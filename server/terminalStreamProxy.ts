@@ -2,9 +2,14 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
 
 import { buildWebSocketUrl } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { FastifyReply } from "fastify";
+import type { EndpointEntry } from "./endpointSessionStore.js";
 
-type ClientResolver = (request: FastifyRequest) => { getBaseUrl(): string };
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
 
 function isValidCloseCode(code: number): boolean {
   return (
@@ -31,25 +36,25 @@ function closeSocket(socket: WebSocket, code: number | undefined, reason: string
 
 export function registerTerminalStreamProxy(
   app: FastifyInstance,
-  getClient: ClientResolver
+  resolveEndpoint: EndpointResolver
 ): void {
-  app.get<{ Params: { sessionId: string } }>(
+  app.get<{ Params: { sessionId: string }; Querystring: { endpointId?: string } }>(
     "/api/runtime/terminal-sessions/:sessionId/stream",
     { websocket: true },
     (socket, request) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(request, {} as FastifyReply, request.query.endpointId);
+      if (!resolved) {
         closeSocket(socket, 1008, "Not authenticated");
         return;
       }
 
       const sessionId = request.params.sessionId.trim();
-      const client = getClient(request);
+      const { client, endpoint } = resolved;
       const upstream = new WebSocket(
         buildWebSocketUrl(client.getBaseUrl(), `/api/v1/terminal-sessions/${encodeURIComponent(sessionId)}/stream`),
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${endpoint.token}`
           }
         }
       );

@@ -4,6 +4,7 @@ import type { LabState } from "./stores/labStore";
 
 export const TREE_ITEM_NONE = 0;
 export const TREE_ITEM_COLLAPSED = 1;
+const ENDPOINT_TOPOLOGY_ID_SEPARATOR = "::";
 
 export type DeploymentState = "deployed" | "undeployed" | "unknown";
 export type LifecycleCommandType = "deploy" | "destroy" | "redeploy";
@@ -30,11 +31,13 @@ export interface ExplorerTreeItem {
   mac?: string;
   v4Address?: string;
   v6Address?: string;
+  endpointId?: string;
   topologyRef?: TopologyRef;
   children?: ExplorerTreeItem[];
 }
 
 export interface TopologyFileEntry {
+  endpointId: string;
   filename: string;
   path: string;
   hasAnnotations: boolean;
@@ -124,14 +127,40 @@ function isTopologyRefLike(value: unknown): value is TopologyRef {
   );
 }
 
-export function normalizeStandaloneTopologyRef(topologyRef: TopologyRef): TopologyRef {
+export function extractEndpointIdFromTopologyId(topologyId: string | undefined): string | undefined {
+  if (typeof topologyId !== "string" || !topologyId.startsWith("standalone:")) {
+    return undefined;
+  }
+  const raw = topologyId.slice("standalone:".length);
+  const separatorIndex = raw.indexOf(ENDPOINT_TOPOLOGY_ID_SEPARATOR);
+  if (separatorIndex <= 0) {
+    return undefined;
+  }
+  const endpointId = raw.slice(0, separatorIndex).trim();
+  return endpointId.length > 0 ? endpointId : undefined;
+}
+
+export function buildEndpointScopedTopologyId(yamlPath: string, endpointId: string): string {
+  return `standalone:${endpointId}${ENDPOINT_TOPOLOGY_ID_SEPARATOR}${normalizePathValue(yamlPath)}`;
+}
+
+export function normalizeStandaloneTopologyRef(
+  topologyRef: TopologyRef,
+  endpointId?: string
+): TopologyRef {
   const yamlPath = normalizePathValue(topologyRef.yamlPath);
   const labName = topologyRef.labName.trim();
   const source = topologyRef.source === "vscode" ? "vscode" : "standalone";
+  const resolvedEndpointId = endpointId ?? extractEndpointIdFromTopologyId(topologyRef.topologyId);
 
   return {
     ...topologyRef,
-    topologyId: source === "standalone" ? `standalone:${yamlPath}` : topologyRef.topologyId,
+    topologyId:
+      source === "standalone"
+        ? resolvedEndpointId
+          ? buildEndpointScopedTopologyId(yamlPath, resolvedEndpointId)
+          : `standalone:${yamlPath}`
+        : topologyRef.topologyId,
     labName,
     yamlPath,
     annotationsPath: topologyRef.annotationsPath
@@ -145,17 +174,20 @@ export function normalizeStandaloneTopologyRef(topologyRef: TopologyRef): Topolo
 
 export function buildStandaloneTopologyRefFromPath(
   pathValue: string,
-  labName?: string
+  labName?: string,
+  endpointId?: string
 ): TopologyRef {
   const normalizedPath = normalizePathValue(pathValue);
   const resolvedLabName = (labName ?? stripTopologySuffix(safeFilename(normalizedPath))).trim();
   return normalizeStandaloneTopologyRef({
-    topologyId: `standalone:${normalizedPath}`,
+    topologyId: endpointId
+      ? buildEndpointScopedTopologyId(normalizedPath, endpointId)
+      : `standalone:${normalizedPath}`,
     labName: resolvedLabName,
     yamlPath: normalizedPath,
     annotationsPath: `${normalizedPath}.annotations.json`,
     source: "standalone"
-  });
+  }, endpointId);
 }
 
 export function firstArgAsTreeItem(args: unknown[]): ExplorerTreeItem | undefined {
@@ -177,9 +209,15 @@ export function firstArgAsTopologyRef(args: unknown[]): TopologyRef | undefined 
 }
 
 export function findLabStateForTopology(
-  topologyRef: (Pick<TopologyRef, "yamlPath"> & Partial<Pick<TopologyRef, "labName">>) | undefined,
+  topologyRef: (
+    Pick<TopologyRef, "yamlPath"> &
+    Partial<Pick<TopologyRef, "topologyId">> &
+    Partial<Pick<TopologyRef, "labName">> &
+    { endpointId?: string }
+  ) | undefined,
   labs: Map<string, LabState>
 ): LabState | undefined {
+  const endpointId = topologyRef?.endpointId ?? extractEndpointIdFromTopologyId(topologyRef?.topologyId);
   const normalizedPath = topologyRef?.yamlPath ? normalizePathValue(topologyRef.yamlPath) : "";
   if (!normalizedPath) {
     const normalizedLabName = normalizeLabName(topologyRef?.labName);
@@ -187,13 +225,18 @@ export function findLabStateForTopology(
       return undefined;
     }
     const byName = [...labs.values()].filter(
-      (lab) => normalizeLabName(lab.name) === normalizedLabName
+      (lab) =>
+        (!endpointId || lab.endpointId === endpointId) &&
+        normalizeLabName(lab.name) === normalizedLabName
     );
     return byName.length === 1 ? byName[0] : undefined;
   }
 
   const byPath: LabState[] = [];
   for (const lab of labs.values()) {
+    if (endpointId && lab.endpointId !== endpointId) {
+      continue;
+    }
     if (topologyPathsLikelyMatch(lab.topologyPath, normalizedPath)) {
       byPath.push(lab);
       continue;
@@ -223,7 +266,9 @@ export function findLabStateForTopology(
     return undefined;
   }
   const byName = [...labs.values()].filter(
-    (lab) => normalizeLabName(lab.name) === normalizedLabName
+    (lab) =>
+      (!endpointId || lab.endpointId === endpointId) &&
+      normalizeLabName(lab.name) === normalizedLabName
   );
   if (byName.length === 1) {
     return byName[0];
@@ -233,7 +278,12 @@ export function findLabStateForTopology(
 }
 
 export function isTopologyRunning(
-  topologyRef: (Pick<TopologyRef, "yamlPath"> & Partial<Pick<TopologyRef, "labName">>) | undefined,
+  topologyRef: (
+    Pick<TopologyRef, "yamlPath"> &
+    Partial<Pick<TopologyRef, "topologyId">> &
+    Partial<Pick<TopologyRef, "labName">> &
+    { endpointId?: string }
+  ) | undefined,
   labs: Map<string, LabState>
 ): boolean {
   return findLabStateForTopology(topologyRef, labs) !== undefined;
@@ -253,6 +303,7 @@ export function labsEqualForExplorer(
       return false;
     }
     if (
+      previousLab.endpointId !== nextLab.endpointId ||
       previousLab.owner !== nextLab.owner ||
       previousLab.topologyPath !== nextLab.topologyPath ||
       previousLab.containers.size !== nextLab.containers.size
@@ -266,6 +317,7 @@ export function labsEqualForExplorer(
         return false;
       }
       if (
+        previousContainer.endpointId !== nextContainer.endpointId ||
         previousContainer.nodeName !== nextContainer.nodeName ||
         previousContainer.kind !== nextContainer.kind ||
         previousContainer.image !== nextContainer.image ||

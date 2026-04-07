@@ -7,7 +7,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { EndpointEntry } from "./endpointSessionStore.js";
 import type {
   TopologyRef,
   TopologyHostCommand,
@@ -17,7 +17,10 @@ import type {
 import { createRuntimeContainerDataProvider } from "@srl-labs/clab-ui/session";
 import type { HostRuntimeContainer, HostRuntimeInterface } from "@srl-labs/clab-ui/host";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
-import { resolveCanonicalStandaloneTopologyRef } from "./topologyIdentity.js";
+import {
+  extractEndpointIdFromTopologyId,
+  resolveCanonicalStandaloneTopologyRef
+} from "./topologyIdentity.js";
 
 interface RuntimeContainerPayload {
   name: string;
@@ -179,18 +182,26 @@ async function attachDocumentRevision(
   return documentRevision ? { ...snapshot, documentRevision } : snapshot;
 }
 
-type ClientResolver = (request: FastifyRequest) => ClabApiClient;
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 export function registerTopologyProxy(
   app: FastifyInstance,
-  getClient: ClientResolver,
+  resolveEndpoint: EndpointResolver,
   sessions: StandaloneTopologySessionManager
 ): void {
   app.post<{ Body: SnapshotRequest }>(
     "/api/topology/sessions",
     async (request: FastifyRequest<{ Body: SnapshotRequest }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+      );
+      if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
 
@@ -199,11 +210,12 @@ export function registerTopologyProxy(
         return reply.status(400).send({ error: "Missing topologyRef" });
       }
 
-      const client = getClient(request);
+      const { client, endpoint } = resolved;
       const canonicalTopologyRef = await resolveCanonicalStandaloneTopologyRef(
         client,
-        token,
-        topologyRef
+        endpoint.token,
+        topologyRef,
+        endpoint.id
       );
       const deploymentState = request.body.deploymentState ?? "undeployed";
       const mode = request.body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
@@ -213,7 +225,8 @@ export function registerTopologyProxy(
 
       const session = sessions.createSession({
         client,
-        token,
+        token: endpoint.token,
+        endpointId: endpoint.id,
         topologyRef: canonicalTopologyRef,
         mode,
         deploymentState,
@@ -230,13 +243,12 @@ export function registerTopologyProxy(
   app.delete<{ Params: { sessionId: string } }>(
     "/api/topology/sessions/:sessionId",
     async (request, reply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
 
-      const client = getClient(request);
-      const session = sessions.getSession(request.params.sessionId, token, client.getBaseUrl());
+      const session = sessions.getSession(request.params.sessionId, resolved.endpoint.id);
       if (!session) {
         return reply.status(404).send({ error: "Topology session not found" });
       }
@@ -249,11 +261,15 @@ export function registerTopologyProxy(
   app.post<{ Body: SnapshotRequest }>(
     "/api/topology/snapshot",
     async (request: FastifyRequest<{ Body: SnapshotRequest }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+      );
+      if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
-      const client = getClient(request);
+      const { client, endpoint } = resolved;
 
       const body = request.body;
       const sessionId = body.sessionId?.trim() ?? "";
@@ -265,7 +281,7 @@ export function registerTopologyProxy(
         });
       }
 
-      const session = sessions.getSession(sessionId, token, client.getBaseUrl());
+      const session = sessions.getSession(sessionId, endpoint.id);
       if (!session) {
         return reply.status(404).send({ error: "Topology session not found" });
       }
@@ -284,7 +300,12 @@ export function registerTopologyProxy(
         } else {
           snapshot = await session.host.getSnapshot();
         }
-        snapshot = await attachDocumentRevision(client, token, session.topologyRef, snapshot);
+        snapshot = await attachDocumentRevision(
+          client,
+          endpoint.token,
+          session.topologyRef,
+          snapshot
+        );
 
         return reply.send({ snapshot });
       } catch (error) {
@@ -298,11 +319,11 @@ export function registerTopologyProxy(
   app.post<{ Body: CommandRequest }>(
     "/api/topology/command",
     async (request: FastifyRequest<{ Body: CommandRequest }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
-      const client = getClient(request);
+      const { client, endpoint } = resolved;
 
       const body = request.body;
       const sessionId = body.sessionId?.trim() ?? "";
@@ -310,7 +331,7 @@ export function registerTopologyProxy(
         return reply.status(400).send({ error: "Missing sessionId or command" });
       }
 
-      const session = sessions.getSession(sessionId, token, client.getBaseUrl());
+      const session = sessions.getSession(sessionId, endpoint.id);
       if (!session) {
         return reply.status(404).send({ error: "Topology session not found" });
       }
@@ -333,7 +354,7 @@ export function registerTopologyProxy(
         ) {
           response.snapshot = await attachDocumentRevision(
             client,
-            token,
+            endpoint.token,
             session.topologyRef,
             response.snapshot
           );

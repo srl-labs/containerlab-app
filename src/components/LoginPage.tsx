@@ -1,47 +1,188 @@
-import React, { useState, useCallback, type FormEvent } from "react";
+import React, { useCallback, useState } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import Alert from "@mui/material/Alert";
-import Paper from "@mui/material/Paper";
+import {
+  LockOutlined as LockOutlinedIcon,
+  SettingsEthernet as SettingsEthernetIcon
+} from "@mui/icons-material";
 import InputAdornment from "@mui/material/InputAdornment";
-import CircularProgress from "@mui/material/CircularProgress";
-import IconButton from "@mui/material/IconButton";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import {
+  endpointStatusHint,
+  endpointStatusLabel,
+  endpointStatusSeverity,
+  endpointNeedsReconnect
+} from "../endpointStatus";
+
+import {
+  endpointSessionDurationLabel,
+  type EndpointConfig,
+  type EndpointSessionDuration
+} from "../stores/endpointStore";
+import { EndpointManager } from "./EndpointManager";
 
 interface LoginPageProps {
+  defaultApiUrl: string;
+  endpoints: EndpointConfig[];
   error: string | null;
-  apiUrl: string;
-  onApiUrlChange: (apiUrl: string) => void;
-  onLogin: (username: string, password: string, apiUrl: string) => Promise<void>;
+  onAddEndpoint: (input: {
+    label?: string;
+    password: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
+  onReconnectEndpoint: (input: {
+    endpointId: string;
+    password: string;
+    username: string;
+  }) => Promise<void>;
+  onRemoveEndpoint: (endpointId: string) => Promise<void>;
+  onUpdateEndpoint: (input: {
+    endpointId: string;
+    label: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
 }
 
-export function LoginPage({ error, apiUrl, onApiUrlChange, onLogin }: LoginPageProps) {
-  const [username, setUsername] = useState("");
+function ReconnectCard({
+  endpoint,
+  onReconnect
+}: {
+  endpoint: EndpointConfig;
+  onReconnect: (input: { endpointId: string; password: string; username: string }) => Promise<void>;
+}) {
+  const [username, setUsername] = useState(endpoint.username);
   const [password, setPassword] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = useCallback(
-    async (e: FormEvent) => {
-      e.preventDefault();
-      if (!username.trim() || !password.trim() || !apiUrl.trim()) return;
-      setSubmitting(true);
-      try {
-        await onLogin(username.trim(), password, apiUrl.trim());
-      } catch {
-        // Error is handled by the auth store
-      } finally {
-        setSubmitting(false);
-      }
-    },
-    [username, password, apiUrl, onLogin]
+  const handleReconnect = useCallback(async () => {
+    if (!password.trim()) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onReconnect({
+        endpointId: endpoint.id,
+        password,
+        username: username.trim()
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [endpoint.id, onReconnect, password, username]);
+
+  const endpointUrl = endpoint.url.replace(/^https?:\/\//i, "");
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 2,
+        borderColor: "#3c3c3c",
+        bgcolor: "rgba(255,255,255,0.02)"
+      }}
+    >
+      <Stack spacing={1.5}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <SettingsEthernetIcon fontSize="small" sx={{ color: "#858585" }} />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle2" fontWeight={600} noWrap>
+              {endpoint.label}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: "#858585", fontFamily: "monospace", fontSize: "0.75rem" }}
+              noWrap
+            >
+              {endpointUrl} &middot; {endpoint.username}
+            </Typography>
+            <Typography variant="caption" sx={{ color: "#858585", display: "block" }}>
+              Keep signed in: {endpointSessionDurationLabel(endpoint.sessionDuration)}
+            </Typography>
+          </Box>
+        </Stack>
+
+        {error && (
+          <Alert severity="error" variant="outlined" sx={{ py: 0.25 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Alert severity={endpointStatusSeverity(endpoint.status)} variant="outlined" sx={{ py: 0.25 }}>
+          {endpointStatusLabel(endpoint.status)}. {endpointStatusHint(endpoint.status)}
+        </Alert>
+
+        <Stack spacing={1}>
+          <TextField
+            size="small"
+            label="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            fullWidth
+          />
+        </Stack>
+
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          <TextField
+            size="small"
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                void handleReconnect();
+              }
+            }}
+            fullWidth
+            slotProps={{
+              inputLabel: { shrink: true },
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlinedIcon sx={{ fontSize: 16 }} />
+                  </InputAdornment>
+                )
+              }
+            }}
+          />
+          <Button
+            variant="contained"
+            onClick={handleReconnect}
+            disabled={busy || !username.trim() || !password.trim() || !endpointNeedsReconnect(endpoint.status)}
+            sx={{ textTransform: "none", flexShrink: 0 }}
+          >
+            {busy ? "Connecting..." : "Connect"}
+          </Button>
+        </Stack>
+      </Stack>
+    </Paper>
   );
+}
+
+export function LoginPage({
+  defaultApiUrl,
+  endpoints,
+  error,
+  onAddEndpoint,
+  onReconnectEndpoint,
+  onRemoveEndpoint,
+  onUpdateEndpoint
+}: LoginPageProps) {
+  const disconnectedEndpoints = endpoints.filter((ep) => ep.status !== "connected");
+  const hasPersistedEndpoints = disconnectedEndpoints.length > 0;
+  const [showAddForm, setShowAddForm] = useState(false);
 
   return (
     <Box
@@ -49,7 +190,8 @@ export function LoginPage({ error, apiUrl, onApiUrlChange, onLogin }: LoginPageP
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        height: "100vh",
+        minHeight: "100vh",
+        px: 2,
         color: "#cccccc",
         background:
           "radial-gradient(ellipse at 50% 0%, rgba(60, 190, 239, 0.08) 0%, transparent 60%), #1e1e1e"
@@ -58,8 +200,8 @@ export function LoginPage({ error, apiUrl, onApiUrlChange, onLogin }: LoginPageP
       <Paper
         elevation={8}
         sx={{
-          p: 4,
-          width: 400,
+          p: { xs: 3, md: 4 },
+          width: "min(520px, 100%)",
           bgcolor: "#252526",
           color: "#cccccc",
           border: 1,
@@ -67,7 +209,6 @@ export function LoginPage({ error, apiUrl, onApiUrlChange, onLogin }: LoginPageP
           borderRadius: 3
         }}
       >
-        {/* Animated logo from containerlab.dev */}
         <Box
           sx={{
             display: "flex",
@@ -87,115 +228,56 @@ export function LoginPage({ error, apiUrl, onApiUrlChange, onLogin }: LoginPageP
               pointerEvents: "none"
             }}
           />
-          <Typography
-            variant="body2"
-            sx={{ color: "#9d9d9d", mt: 1 }}
-          >
-            Sign in to manage your network labs
+          <Typography variant="body2" sx={{ color: "#9d9d9d", mt: 1, textAlign: "center" }}>
+            {hasPersistedEndpoints
+              ? "Enter your password to reconnect to your endpoints."
+              : "Connect one or more `clab-api-server` endpoints to manage labs in the browser."}
           </Typography>
         </Box>
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
-            {error}
-          </Alert>
+        {hasPersistedEndpoints && !showAddForm ? (
+          <Stack spacing={2}>
+            {error ? <Alert severity="error" variant="outlined">{error}</Alert> : null}
+            {disconnectedEndpoints.map((endpoint) => (
+              <ReconnectCard
+                key={endpoint.id}
+                endpoint={endpoint}
+                onReconnect={onReconnectEndpoint}
+              />
+            ))}
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => setShowAddForm(true)}
+              sx={{ alignSelf: "center", textTransform: "none", color: "#858585" }}
+            >
+              Manage saved endpoints
+            </Button>
+          </Stack>
+        ) : (
+          <Stack spacing={2}>
+            <EndpointManager
+              defaultApiUrl={defaultApiUrl}
+              endpoints={endpoints}
+              externalError={error}
+              mode={hasPersistedEndpoints ? "manage" : "initial"}
+              onAddEndpoint={onAddEndpoint}
+              onReconnectEndpoint={onReconnectEndpoint}
+              onRemoveEndpoint={onRemoveEndpoint}
+              onUpdateEndpoint={onUpdateEndpoint}
+            />
+            {hasPersistedEndpoints && (
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => setShowAddForm(false)}
+                sx={{ alignSelf: "center", textTransform: "none", color: "#858585" }}
+              >
+                Back to reconnect
+              </Button>
+            )}
+          </Stack>
         )}
-
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            fullWidth
-            autoFocus
-            sx={{ mb: 2 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <PersonOutlineIcon fontSize="small" sx={{ color: "#c5c5c5" }} />
-                  </InputAdornment>
-                )
-              }
-            }}
-          />
-          <TextField
-            label="Password"
-            type={showPassword ? "text" : "password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            sx={{ mb: 2 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockOutlinedIcon fontSize="small" sx={{ color: "#c5c5c5" }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword((v) => !v)}
-                      edge="end"
-                      size="small"
-                      tabIndex={-1}
-                      sx={{
-                        color: "#6a6a6a",
-                        opacity: 0.6,
-                        transition: "opacity 0.2s",
-                        "&:hover": { opacity: 1, color: "#9d9d9d" }
-                      }}
-                    >
-                      {showPassword ? <VisibilityOffIcon sx={{ fontSize: 18 }} /> : <VisibilityIcon sx={{ fontSize: 18 }} />}
-                    </IconButton>
-                  </InputAdornment>
-                )
-              }
-            }}
-          />
-          <TextField
-            label="API Endpoint"
-            value={apiUrl}
-            onChange={(e) => onApiUrlChange(e.target.value)}
-            fullWidth
-            sx={{ mb: 3 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SettingsEthernetIcon fontSize="small" sx={{ color: "#c5c5c5" }} />
-                  </InputAdornment>
-                )
-              }
-            }}
-            placeholder="http://localhost:8080"
-            helperText="Base URL of the clab-api-server"
-          />
-
-          <Button
-            type="submit"
-            variant="contained"
-            fullWidth
-            size="large"
-            disabled={submitting || !username.trim() || !password.trim() || !apiUrl.trim()}
-            sx={{
-              py: 1.2,
-              borderRadius: 2,
-              textTransform: "none",
-              fontSize: "1rem",
-              fontWeight: 500
-            }}
-          >
-            {submitting ? (
-              <CircularProgress size={22} color="inherit" sx={{ mr: 1 }} />
-            ) : null}
-            {submitting ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
       </Paper>
     </Box>
   );

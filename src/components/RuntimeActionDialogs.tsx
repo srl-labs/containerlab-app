@@ -134,10 +134,19 @@ function scoreNodeMatch(labName: string, container: ContainerState, requestedNod
 
 function findRuntimeContainer(
   labs: Map<string, LabState>,
-  input: { topologyRef?: { labName?: string; yamlPath?: string }; nodeName: string }
+  input: {
+    endpointId?: string;
+    nodeName: string;
+    topologyRef?: RuntimeTargetRequest["topologyRef"];
+  }
 ): ContainerState | undefined {
   const topologyHint = input.topologyRef?.yamlPath
-    ? { yamlPath: input.topologyRef.yamlPath, labName: input.topologyRef.labName }
+    ? {
+        topologyId: input.topologyRef.topologyId,
+        yamlPath: input.topologyRef.yamlPath,
+        labName: input.topologyRef.labName,
+        endpointId: input.endpointId
+      }
     : undefined;
   const lab = findLabStateForTopology(topologyHint, labs);
   const candidateLabs = lab ? [lab] : [...labs.values()];
@@ -230,6 +239,7 @@ export function RuntimeActionDialogs() {
       return undefined;
     }
     return findRuntimeContainer(labs, {
+      endpointId: netemRequest.endpointId,
       topologyRef: netemRequest.topologyRef,
       nodeName: netemRequest.nodeName
     });
@@ -786,6 +796,7 @@ export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Prom
 }
 
 export async function saveConfigsFlow(target: {
+  endpointId?: string;
   sessionId?: string;
   topologyRef?: RuntimeTargetRequest["topologyRef"];
   nodeName?: string;

@@ -9,8 +9,11 @@ import {
 } from "./standaloneHostShared";
 import type { ContainerState, LabState } from "./stores/labStore";
 
+const ENDPOINT_ID = "endpoint-1";
+
 function buildContainer(labName: string, labPath: string): ContainerState {
   return {
+    endpointId: ENDPOINT_ID,
     name: `clab-${labName}-srl1`,
     containerId: `cid-${labName}`,
     labName,
@@ -32,6 +35,7 @@ function buildLabs(): Map<string, LabState> {
     [
       "runtime-lab",
       {
+        endpointId: ENDPOINT_ID,
         name: "runtime-lab",
         owner: "user",
         topologyPath: "/labs/demo-a.clab.yml",

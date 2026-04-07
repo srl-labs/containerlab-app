@@ -127,7 +127,10 @@ export function getRuntimeContainersForLab(
 }
 
 export function getRuntimeContainersForTopology(
-  topologyRef: Pick<TopologyRef, "labName" | "yamlPath"> | undefined,
+  topologyRef: (
+    Pick<TopologyRef, "yamlPath"> &
+    Partial<Pick<TopologyRef, "labName" | "topologyId">>
+  ) | undefined,
   labs: Map<string, LabState>
 ): HostRuntimeContainer[] {
   return getRuntimeContainers(findLabStateForTopology(topologyRef, labs));

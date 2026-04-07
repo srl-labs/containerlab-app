@@ -60,10 +60,19 @@ function scoreNodeMatch(labName: string, container: ContainerState, requestedNod
 
 function findRuntimeContainer(
   labs: Map<string, LabState>,
-  input: { topologyRef?: { labName?: string; yamlPath?: string }; nodeName: string }
+  input: {
+    endpointId?: string;
+    nodeName: string;
+    topologyRef?: RuntimeTerminalWindow["topologyRef"];
+  }
 ): ContainerState | undefined {
   const topologyHint = input.topologyRef?.yamlPath
-    ? { yamlPath: input.topologyRef.yamlPath, labName: input.topologyRef.labName }
+    ? {
+        topologyId: input.topologyRef.topologyId,
+        yamlPath: input.topologyRef.yamlPath,
+        labName: input.topologyRef.labName,
+        endpointId: input.endpointId
+      }
     : undefined;
   const lab = findLabStateForTopology(topologyHint, labs);
   const candidateLabs = lab ? [lab] : [...labs.values()];
@@ -166,10 +175,11 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
   const runtimeContainer = useMemo(
     () =>
       findRuntimeContainer(labs, {
+        endpointId: windowState.endpointId,
         topologyRef: windowState.topologyRef,
         nodeName: windowState.nodeName
       }),
-    [labs, windowState.nodeName, windowState.topologyRef]
+    [labs, windowState.endpointId, windowState.nodeName, windowState.topologyRef]
   );
 
   useEffect(() => {
@@ -293,6 +303,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
     const rows = xtermRef.current.rows || 36;
 
     void openTerminalSession({
+      endpointId: windowState.endpointId,
       sessionId: windowState.sessionId,
       topologyRef: windowState.topologyRef,
       nodeName: windowState.nodeName,
@@ -304,7 +315,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
     })
       .then((session) => {
         if (cancelled) {
-          void closeTerminalSession(session.sessionId).catch(() => {});
+          void closeTerminalSession(session.sessionId, windowState.endpointId).catch(() => {});
           return;
         }
         runtimeUiActions.setTerminalSession(windowState.id, session.sessionId);
@@ -335,7 +346,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
     }
 
     sessionClosedRef.current = false;
-    const socket = connectTerminalSessionWebSocket(windowState.sessionId);
+    const socket = connectTerminalSessionWebSocket(windowState.sessionId, windowState.endpointId);
     websocketRef.current = socket;
 
     socket.onmessage = (event) => {
@@ -423,10 +434,10 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
         socket.close();
       }
       if (sessionId) {
-        void closeTerminalSession(sessionId).catch(() => {});
+        void closeTerminalSession(sessionId, windowState.endpointId).catch(() => {});
       }
     };
-  }, [windowState.sessionId]);
+  }, [windowState.endpointId, windowState.sessionId]);
 
   const handleHeaderMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -506,7 +517,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
       socket.close();
     }
     if (windowState.sessionId) {
-      void closeTerminalSession(windowState.sessionId).catch(() => {});
+      void closeTerminalSession(windowState.sessionId, windowState.endpointId).catch(() => {});
     }
     runtimeUiActions.closeTerminal(windowState.id);
   };

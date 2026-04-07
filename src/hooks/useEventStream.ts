@@ -1,50 +1,78 @@
 import { useEffect, useRef } from "react";
+
+import {
+  useEndpointStore,
+  type EndpointConfig
+} from "../stores/endpointStore";
 import { useLabStore, type EventData } from "../stores/labStore";
 
-/**
- * Connects to the SSE events endpoint and processes events into the lab store.
- * Handles reconnection automatically via EventSource.
- */
-export function useEventStream(enabled: boolean): void {
-  const processEvent = useLabStore((s) => s.processEvent);
-  const setConnected = useLabStore((s) => s.setConnected);
-  const eventSourceRef = useRef<EventSource | null>(null);
+export function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
+  const processEvent = useLabStore((state) => state.processEvent);
+  const setLabConnected = useLabStore((state) => state.setConnected);
+  const setEndpointStatus = useEndpointStore((state) => state.setStatus);
+  const sourcesRef = useRef<Map<string, EventSource>>(new Map());
 
   useEffect(() => {
-    if (!enabled) {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-        setConnected(false);
+    const streamableEndpoints = endpoints.filter(
+      (endpoint) => endpoint.status === "connected" || endpoint.status === "offline"
+    );
+    const activeEndpointIds = new Set(streamableEndpoints.map((endpoint) => endpoint.id));
+    const configuredEndpointIds = new Set(endpoints.map((endpoint) => endpoint.id));
+
+    for (const [endpointId, source] of sourcesRef.current.entries()) {
+      if (activeEndpointIds.has(endpointId)) {
+        continue;
       }
-      return;
+      source.close();
+      sourcesRef.current.delete(endpointId);
+      setLabConnected(endpointId, false);
+      if (!configuredEndpointIds.has(endpointId)) {
+        setEndpointStatus(endpointId, "saved");
+      }
     }
 
-    const es = new EventSource("/api/events");
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      setConnected(true);
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as EventData;
-        processEvent(data);
-      } catch {
-        // Skip malformed events
+    for (const endpoint of streamableEndpoints) {
+      if (sourcesRef.current.has(endpoint.id)) {
+        continue;
       }
-    };
 
-    es.onerror = () => {
-      setConnected(false);
-      // EventSource auto-reconnects
-    };
+      const url = new URL("/api/events", window.location.origin);
+      url.searchParams.set("endpointId", endpoint.id);
+      const source = new EventSource(url);
+      sourcesRef.current.set(endpoint.id, source);
 
+      source.onopen = () => {
+        setLabConnected(endpoint.id, true);
+        setEndpointStatus(endpoint.id, "connected");
+      };
+
+      source.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as EventData;
+          processEvent(endpoint.id, payload);
+        } catch {
+          // Ignore malformed event payloads.
+        }
+      };
+
+      source.onerror = () => {
+        setLabConnected(endpoint.id, false);
+        setEndpointStatus(endpoint.id, "offline");
+      };
+    }
+  }, [endpoints, processEvent, setEndpointStatus, setLabConnected]);
+
+  useEffect(() => {
     return () => {
-      es.close();
-      eventSourceRef.current = null;
-      setConnected(false);
+      for (const source of sourcesRef.current.values()) {
+        source.close();
+      }
+      for (const endpointId of sourcesRef.current.keys()) {
+        setLabConnected(endpointId, false);
+      }
+      sourcesRef.current.clear();
     };
-  }, [enabled, processEvent, setConnected]);
+  }, [setLabConnected]);
 }
+
+export const useEventStream = useMultiEndpointEventStreams;

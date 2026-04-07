@@ -4,7 +4,12 @@ import type {
   TopologyRef
 } from "@srl-labs/clab-ui/session";
 
+import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
+import { useEndpointStore } from "./stores/endpointStore";
+import { useLabStore } from "./stores/labStore";
+
 export interface RuntimeTargetRequest {
+  endpointId?: string;
   sessionId?: string;
   topologyRef?: TopologyRef;
 }
@@ -112,6 +117,26 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function resolveEndpointId(target?: RuntimeTargetRequest | { endpointId?: string }): string | undefined {
+  return target?.endpointId;
+}
+
+function resolveTargetEndpointId(target?: RuntimeTargetRequest): string | undefined {
+  return resolveEndpointId(target) ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId);
+}
+
+function withEndpointHeaders(init: RequestInit = {}, endpointId?: string): RequestInit {
+  if (!endpointId) {
+    return init;
+  }
+  const headers = new Headers(init.headers);
+  headers.set("x-endpoint-id", endpointId);
+  return {
+    ...init,
+    headers
+  };
+}
+
 async function readError(response: Response): Promise<string> {
   const fallback = `${response.status} ${response.statusText}`.trim();
   const text = await response.text().catch(() => fallback);
@@ -132,13 +157,34 @@ async function readError(response: Response): Promise<string> {
   return text;
 }
 
-async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    credentials: "include",
-    ...init
-  });
+function markEndpointUnavailable(endpointId: string | undefined, status: "offline" | "session_expired"): void {
+  if (!endpointId) {
+    return;
+  }
+  useLabStore.getState().setConnected(endpointId, false);
+  useEndpointStore.getState().setStatus(endpointId, status);
+}
+
+async function requestJson<T>(
+  input: string,
+  init?: RequestInit,
+  endpointId?: string
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(input, {
+      credentials: "include",
+      ...init
+    });
+  } catch (error) {
+    markEndpointUnavailable(endpointId, "offline");
+    throw error;
+  }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      markEndpointUnavailable(endpointId, "session_expired");
+    }
     throw new Error(await readError(response));
   }
 
@@ -149,29 +195,43 @@ async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-function asJsonBody(body: unknown): RequestInit {
-  return {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  };
+function asJsonBody(body: unknown, endpointId?: string): RequestInit {
+  return withEndpointHeaders(
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    },
+    endpointId
+  );
 }
 
-export async function inspectAllLabs(): Promise<InspectAllLabsResponse> {
-  return await requestJson<InspectAllLabsResponse>("/api/runtime/inspect/all");
+export async function inspectAllLabs(endpointId?: string): Promise<InspectAllLabsResponse> {
+  return await requestJson<InspectAllLabsResponse>(
+    "/api/runtime/inspect/all",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
 }
 
 export async function inspectLab(target: RuntimeTargetRequest): Promise<InspectLabResponse> {
+  const endpointId = resolveTargetEndpointId(target);
   return await requestJson<InspectLabResponse>(
     "/api/runtime/inspect/lab",
-    asJsonBody(target)
+    asJsonBody(target, endpointId),
+    endpointId
   );
 }
 
 export async function saveLabConfigs(input: RuntimeTargetRequest & {
   nodeName?: string;
 }): Promise<SaveConfigResponse> {
-  return await requestJson<SaveConfigResponse>("/api/runtime/save", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<SaveConfigResponse>(
+    "/api/runtime/save",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function requestNodeSsh(input: RuntimeTargetRequest & {
@@ -179,7 +239,12 @@ export async function requestNodeSsh(input: RuntimeTargetRequest & {
   duration?: string;
   sshUsername?: string;
 }): Promise<SSHAccessResponse> {
-  return await requestJson<SSHAccessResponse>("/api/runtime/ssh", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<SSHAccessResponse>(
+    "/api/runtime/ssh",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function openTerminalSession(input: RuntimeTargetRequest & {
@@ -190,25 +255,41 @@ export async function openTerminalSession(input: RuntimeTargetRequest & {
   sshUsername?: string;
   telnetPort?: number;
 }): Promise<TerminalSessionInfo> {
-  return await requestJson<TerminalSessionInfo>("/api/runtime/terminal-sessions", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<TerminalSessionInfo>(
+    "/api/runtime/terminal-sessions",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
-export async function fetchTerminalSession(sessionId: string): Promise<TerminalSessionInfo> {
-  return await requestJson<TerminalSessionInfo>(`/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`);
+export async function fetchTerminalSession(
+  sessionId: string,
+  endpointId?: string
+): Promise<TerminalSessionInfo> {
+  return await requestJson<TerminalSessionInfo>(
+    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`,
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
 }
 
-export async function closeTerminalSession(sessionId: string): Promise<void> {
-  await requestJson<{ success: boolean }>(`/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
+export async function closeTerminalSession(sessionId: string, endpointId?: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`,
+    withEndpointHeaders({ method: "DELETE" }, endpointId),
+    endpointId
+  );
 }
 
-export function connectTerminalSessionWebSocket(sessionId: string): WebSocket {
+export function connectTerminalSessionWebSocket(sessionId: string, endpointId?: string): WebSocket {
   const url = new URL(
     `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}/stream`,
     window.location.origin
   );
+  if (endpointId) {
+    url.searchParams.set("endpointId", endpointId);
+  }
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return new WebSocket(url);
 }
@@ -217,41 +298,78 @@ export async function fetchNodeLogs(input: RuntimeTargetRequest & {
   nodeName: string;
   tail?: string;
 }): Promise<LogsResponse> {
-  return await requestJson<LogsResponse>("/api/runtime/logs", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<LogsResponse>(
+    "/api/runtime/logs",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
-export async function fetchVersionInfo(): Promise<VersionResponse> {
-  return await requestJson<VersionResponse>("/api/runtime/version");
+export async function fetchVersionInfo(endpointId?: string): Promise<VersionResponse> {
+  return await requestJson<VersionResponse>(
+    "/api/runtime/version",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
 }
 
-export async function fetchVersionCheck(): Promise<VersionCheckResponse> {
-  return await requestJson<VersionCheckResponse>("/api/runtime/version/check");
+export async function fetchVersionCheck(endpointId?: string): Promise<VersionCheckResponse> {
+  return await requestJson<VersionCheckResponse>(
+    "/api/runtime/version/check",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
 }
 
-export async function fetchUiCustomNodes(): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>("/api/runtime/ui/custom-nodes");
+export async function fetchUiCustomNodes(endpointId?: string): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    "/api/runtime/ui/custom-nodes",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
 }
 
-export async function saveUiCustomNode(data: Record<string, unknown>): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>("/api/runtime/ui/custom-nodes", asJsonBody(data));
+export async function saveUiCustomNode(
+  data: Record<string, unknown>,
+  endpointId?: string
+): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    "/api/runtime/ui/custom-nodes",
+    asJsonBody(data, endpointId),
+    endpointId
+  );
 }
 
-export async function deleteUiCustomNode(name: string): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(`/api/runtime/ui/custom-nodes/${encodeURIComponent(name)}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
+export async function deleteUiCustomNode(
+  name: string,
+  endpointId?: string
+): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    `/api/runtime/ui/custom-nodes/${encodeURIComponent(name)}`,
+    withEndpointHeaders({ method: "DELETE" }, endpointId),
+    endpointId
+  );
 }
 
-export async function setDefaultUiCustomNode(name: string): Promise<CustomNodesResponse> {
+export async function setDefaultUiCustomNode(
+  name: string,
+  endpointId?: string
+): Promise<CustomNodesResponse> {
   return await requestJson<CustomNodesResponse>(
     "/api/runtime/ui/custom-nodes/default",
-    asJsonBody({ name })
+    asJsonBody({ name }, endpointId),
+    endpointId
   );
 }
 
 export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconListResponse> {
-  return await requestJson<IconListResponse>("/api/runtime/ui/icons/list", asJsonBody(target));
+  const endpointId = resolveTargetEndpointId(target);
+  return await requestJson<IconListResponse>(
+    "/api/runtime/ui/icons/list",
+    asJsonBody(target, endpointId),
+    endpointId
+  );
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -264,34 +382,49 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export async function uploadUiIcon(file: File): Promise<IconUploadResponse> {
+export async function uploadUiIcon(file: File, endpointId?: string): Promise<IconUploadResponse> {
   return await requestJson<IconUploadResponse>(
     "/api/runtime/ui/icons",
-    asJsonBody({
-      fileName: file.name,
-      contentType: file.type || undefined,
-      dataBase64: await fileToBase64(file)
-    })
+    asJsonBody(
+      {
+        fileName: file.name,
+        contentType: file.type || undefined,
+        dataBase64: await fileToBase64(file)
+      },
+      endpointId
+    ),
+    endpointId
   );
 }
 
-export async function deleteUiIcon(iconName: string): Promise<void> {
-  await requestJson<{ success: boolean }>(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`, {
-    method: "DELETE",
-    credentials: "include"
-  });
+export async function deleteUiIcon(iconName: string, endpointId?: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/ui/icons/${encodeURIComponent(iconName)}`,
+    withEndpointHeaders({ method: "DELETE" }, endpointId),
+    endpointId
+  );
 }
 
 export async function reconcileUiIcons(input: RuntimeTargetRequest & {
   usedIcons: string[];
 }): Promise<void> {
-  await requestJson<{ success: boolean }>("/api/runtime/ui/icons/reconcile", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/ui/icons/reconcile",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function fetchNetem(input: RuntimeTargetRequest & {
   nodeName: string;
 }): Promise<NetemShowResult> {
-  return await requestJson<NetemShowResult>("/api/runtime/netem/show", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<NetemShowResult>(
+    "/api/runtime/netem/show",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function setNetem(input: RuntimeTargetRequest & {
@@ -303,23 +436,36 @@ export async function setNetem(input: RuntimeTargetRequest & {
   rate?: number;
   corruption?: number;
 }): Promise<void> {
-  await requestJson<{ success: boolean }>("/api/runtime/netem/set", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/netem/set",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function resetNetem(input: RuntimeTargetRequest & {
   nodeName: string;
   interfaceName: string;
 }): Promise<void> {
-  await requestJson<{ success: boolean }>("/api/runtime/netem/reset", asJsonBody(input));
+  const endpointId = resolveTargetEndpointId(input);
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/netem/reset",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
 }
 
 export async function createTopologyFile(input: {
   content?: string;
+  endpointId?: string;
   fileName: string;
 }): Promise<{ success: boolean; topologyRef: TopologyRef }> {
+  const endpointId = resolveEndpointId(input);
   return await requestJson<{ success: boolean; topologyRef: TopologyRef }>(
     "/api/runtime/topology-file/create",
-    asJsonBody(input)
+    asJsonBody(input, endpointId),
+    endpointId
   );
 }
 
@@ -327,9 +473,11 @@ export async function deleteTopologyFile(target: RuntimeTargetRequest): Promise<
   path: string;
   success: boolean;
 }> {
+  const endpointId = resolveTargetEndpointId(target);
   return await requestJson<{ path: string; success: boolean }>(
     "/api/runtime/topology-file/delete",
-    asJsonBody(target)
+    asJsonBody(target, endpointId),
+    endpointId
   );
 }
 

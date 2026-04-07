@@ -4,25 +4,31 @@
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { FastifyReply } from "fastify";
+import type { EndpointEntry } from "./endpointSessionStore.js";
 import { buildStandaloneTopologyRef } from "./topologyIdentity.js";
 
-type ClientResolver = (request: FastifyRequest) => ClabApiClient;
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
-export function registerFileProxy(app: FastifyInstance, getClient: ClientResolver): void {
+export function registerFileProxy(app: FastifyInstance, resolveEndpoint: EndpointResolver): void {
   app.get("/files", async (request, reply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) {
       return reply.status(401).send({ error: "Not authenticated" });
     }
 
     try {
-      const client = getClient(request);
-      const topologies = await client.listTopologies(token);
+      const { client, endpoint } = resolved;
+      const topologies = await client.listTopologies(endpoint.token);
       // Transform to the format expected by the Explorer bridge.
       return reply.send(topologies.map((topo) => {
-        const topologyRef = buildStandaloneTopologyRef(topo);
+        const topologyRef = buildStandaloneTopologyRef(topo, endpoint.id);
         return {
+          endpointId: endpoint.id,
           filename: topo.yamlFileName,
           path: topologyRef.yamlPath,
           hasAnnotations: topo.hasAnnotations,

@@ -1,25 +1,21 @@
 import { create } from "zustand";
 
 interface AuthState {
-  isAuthenticated: boolean;
-  username: string | null;
-  loading: boolean;
+  defaultApiUrl: string;
   error: string | null;
-  setAuthenticated: (username: string) => void;
-  setUnauthenticated: () => void;
-  setLoading: (loading: boolean) => void;
+  loading: boolean;
+  clearError: () => void;
+  setDefaultApiUrl: (defaultApiUrl: string) => void;
   setError: (error: string | null) => void;
+  setLoading: (loading: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  isAuthenticated: false,
-  username: null,
-  loading: true,
+  defaultApiUrl: "",
   error: null,
-  setAuthenticated: (username) =>
-    set({ isAuthenticated: true, username, loading: false, error: null }),
-  setUnauthenticated: () =>
-    set({ isAuthenticated: false, username: null, loading: false, error: null }),
-  setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error, loading: false })
+  loading: true,
+  clearError: () => set({ error: null }),
+  setDefaultApiUrl: (defaultApiUrl) => set({ defaultApiUrl }),
+  setError: (error) => set({ error, loading: false }),
+  setLoading: (loading) => set({ loading })
 }));

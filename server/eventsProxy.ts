@@ -7,9 +7,13 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { EndpointEntry } from "./endpointSessionStore.js";
 
-type ClientResolver = (request: FastifyRequest) => ClabApiClient;
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 const DEFAULT_INTERFACE_STATS_INTERVAL = "1s";
 
 function resolveInterfaceStatsInterval(): string {
@@ -17,14 +21,14 @@ function resolveInterfaceStatsInterval(): string {
   return value && value.length > 0 ? value : DEFAULT_INTERFACE_STATS_INTERVAL;
 }
 
-export function registerEventsProxy(app: FastifyInstance, getClient: ClientResolver): void {
+export function registerEventsProxy(app: FastifyInstance, resolveEndpoint: EndpointResolver): void {
   app.get("/api/events", async (request: FastifyRequest, reply: FastifyReply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) {
       return reply.status(401).send({ error: "Not authenticated" });
     }
 
-    const client = getClient(request);
+    const { client, endpoint } = resolved;
 
     // Set SSE headers
     reply.raw.writeHead(200, {
@@ -45,7 +49,7 @@ export function registerEventsProxy(app: FastifyInstance, getClient: ClientResol
     });
 
     try {
-      const response = await client.openEventStream(token, {
+      const response = await client.openEventStream(endpoint.token, {
         initialState: true,
         interfaceStats: true,
         interfaceStatsInterval: resolveInterfaceStatsInterval()

@@ -1,16 +1,18 @@
 import { createExplorerController } from "@srl-labs/clab-ui/host";
 import type {
+  ExplorerAction,
   ExplorerIncomingMessage,
   ExplorerSnapshotProviders,
   ExplorerUiState
 } from "@srl-labs/clab-ui/explorer";
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
+import { dispatchEndpointUiAction } from "./endpointActions";
 import { type NetemFields, createTopologyFile } from "./runtimeApi";
 import { deleteTopologyFileFlow, saveConfigsFlow } from "./components/RuntimeActionDialogs";
-import { runtimeUiActions } from "./stores/runtimeUiStore";
-import { useAuthStore } from "./stores/authStore";
+import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
+import { runtimeUiActions } from "./stores/runtimeUiStore";
 import type { LifecycleApiCallResult } from "./standaloneLifecycle";
 import type {
   DeploymentState,
@@ -22,6 +24,8 @@ import {
   TREE_ITEM_COLLAPSED,
   TREE_ITEM_NONE,
   SimpleExplorerProvider,
+  buildStandaloneTopologyRefFromPath,
+  extractEndpointIdFromTopologyId,
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
   isTopologyRunning,
@@ -53,10 +57,13 @@ function persistShowNonOwnedLabsSetting(nextValue: boolean): void {
 
 let showNonOwnedLabs = loadShowNonOwnedLabsSetting();
 
+type ExplorerSnapshotMessage = Extract<ExplorerIncomingMessage, { command: "snapshot" }>;
+
 interface StandaloneExplorerBridgeOptions {
   debounceMs: number;
+  getEndpoints: () => EndpointConfig[];
   getLabs: () => Map<string, LabState>;
-  invalidateTopologyFileListCache: () => void;
+  invalidateTopologyFileListCache: (endpointId?: string) => void;
   invokeLifecycleApi: (
     endpoint: LifecycleCommandEndpoint,
     topologyRef: TopologyRef,
@@ -66,8 +73,9 @@ interface StandaloneExplorerBridgeOptions {
   listTopologyFiles: () => Promise<TopologyFileEntry[]>;
   loadTopologyFile: (
     topologyRef: TopologyRef,
-    options?: { deploymentState?: DeploymentState }
+    options?: { deploymentState?: DeploymentState; endpointId?: string }
   ) => Promise<void>;
+  removeEndpoint: (endpointId: string) => Promise<void>;
   resolveApiTopologyPath: (args: unknown[]) => Promise<string | undefined>;
   resolveDeploymentState: (topologyRef: TopologyRef) => Promise<DeploymentState | undefined>;
   resolveTopologyRef: (args: unknown[]) => Promise<TopologyRef | undefined>;
@@ -84,9 +92,18 @@ export interface StandaloneExplorerBridge {
   scheduleSnapshot: (delay?: number) => void;
 }
 
+const HELP_LINKS = [
+  { label: "Containerlab Documentation", url: "https://containerlab.dev/" },
+  { label: "VS Code Extension Documentation", url: "https://containerlab.dev/manual/vsc-extension/" },
+  { label: "Browse Labs on GitHub (srl-labs)", url: "https://github.com/srl-labs/" },
+  { label: "Join our Discord server", url: "https://discord.gg/vAyddtaEV9" }
+] as const;
+
 function filterTreeItems(items: ExplorerTreeItem[], filterText: string): ExplorerTreeItem[] {
   const query = filterText.trim().toLowerCase();
-  if (query.length === 0) return items;
+  if (query.length === 0) {
+    return items;
+  }
 
   const visit = (item: ExplorerTreeItem): ExplorerTreeItem | null => {
     const filteredChildren = (item.children ?? [])
@@ -125,8 +142,12 @@ function buildContainerTooltip(input: {
     `Image: ${input.image}`,
     `ID: ${input.id}`
   ];
-  if (input.ipv4 && input.ipv4 !== "N/A") lines.push(`IPv4: ${input.ipv4}`);
-  if (input.ipv6 && input.ipv6 !== "N/A") lines.push(`IPv6: ${input.ipv6}`);
+  if (input.ipv4 && input.ipv4 !== "N/A") {
+    lines.push(`IPv4: ${input.ipv4}`);
+  }
+  if (input.ipv6 && input.ipv6 !== "N/A") {
+    lines.push(`IPv6: ${input.ipv6}`);
+  }
   return lines.join("\n");
 }
 
@@ -148,21 +169,18 @@ function buildInterfaceTooltip(input: {
     `MAC: ${input.mac || "N/A"}`,
     `MTU: ${input.mtu || "N/A"}`
   ];
-  if (input.rxBps) lines.push(`RX: ${input.rxBps} bps`);
-  if (input.txBps) lines.push(`TX: ${input.txBps} bps`);
+  if (input.rxBps) {
+    lines.push(`RX: ${input.rxBps} bps`);
+  }
+  if (input.txBps) {
+    lines.push(`TX: ${input.txBps} bps`);
+  }
   return lines.join("\n");
 }
 
 function getInterfaceContextValue(state: string): string {
   return state.toLowerCase() === "up" ? "containerlabInterfaceUp" : "containerlabInterfaceDown";
 }
-
-const HELP_LINKS = [
-  { label: "Containerlab Documentation", url: "https://containerlab.dev/" },
-  { label: "VS Code Extension Documentation", url: "https://containerlab.dev/manual/vsc-extension/" },
-  { label: "Browse Labs on GitHub (srl-labs)", url: "https://github.com/srl-labs/" },
-  { label: "Join our Discord server", url: "https://discord.gg/vAyddtaEV9" }
-] as const;
 
 function getLabOwner(lab: LabState): string {
   if (lab.owner.trim().length > 0) {
@@ -171,21 +189,26 @@ function getLabOwner(lab: LabState): string {
   return lab.containers.values().next().value?.owner?.trim() ?? "";
 }
 
-function shouldShowRunningLab(lab: LabState): boolean {
+function shouldShowRunningLab(
+  lab: LabState,
+  endpointsById: ReadonlyMap<string, EndpointConfig>
+): boolean {
   if (showNonOwnedLabs) {
     return true;
   }
 
-  const currentUsername = useAuthStore.getState().username;
+  const endpointUser = endpointsById.get(lab.endpointId)?.username;
   const owner = getLabOwner(lab);
-  if (!currentUsername || !owner) {
+  if (!endpointUser || !owner) {
     return true;
   }
-
-  return normalizeLabName(owner) === normalizeLabName(currentUsername);
+  return normalizeLabName(owner) === normalizeLabName(endpointUser);
 }
 
-function findTopologyEntryForRunningLab(lab: LabState, files: TopologyFileEntry[]): TopologyFileEntry | undefined {
+function findTopologyEntryForRunningLab(
+  lab: LabState,
+  files: TopologyFileEntry[]
+): TopologyFileEntry | undefined {
   const pathHints = new Set<string>();
   const normalizedTopologyPath = normalizePathValue(lab.topologyPath);
   if (normalizedTopologyPath) {
@@ -237,6 +260,57 @@ function findTopologyEntryForRunningLab(lab: LabState, files: TopologyFileEntry[
   return undefined;
 }
 
+function buildEndpointRootItem(
+  endpoint: EndpointConfig,
+  idPrefix: string,
+  children: ExplorerTreeItem[]
+): ExplorerTreeItem {
+  const endpointUrl = endpoint.url.replace(/^https?:\/\//i, "");
+  return {
+    id: `${idPrefix}:${endpoint.id}`,
+    label: endpoint.label,
+    description: endpointUrl,
+    tooltip: `${endpoint.url}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`,
+    contextValue: "containerlabEndpoint",
+    endpointId: endpoint.id,
+    state: endpoint.status,
+    collapsibleState: children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
+    children
+  };
+}
+
+function buildEndpointSectionItem(
+  endpointId: string,
+  kind: "running" | "local",
+  children: ExplorerTreeItem[]
+): ExplorerTreeItem {
+  const count = children.length;
+  return {
+    id: `endpoint-section:${kind}:${endpointId}`,
+    label: kind === "running" ? "Running Labs" : "Undeployed Labs",
+    tooltip: `${count} ${kind === "running" ? "running" : "undeployed"} lab${count === 1 ? "" : "s"}`,
+    contextValue:
+      kind === "running" ? "containerlabEndpointSectionRunning" : "containerlabEndpointSectionLocal",
+    endpointId,
+    collapsibleState: count > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
+    children
+  };
+}
+
+function dedupeExplorerActions(actions: ExplorerAction[]): ExplorerAction[] {
+  const seen = new Set<string>();
+  const deduped: ExplorerAction[] = [];
+  for (const action of actions) {
+    const key = `${action.commandId}:${action.label}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(action);
+  }
+  return deduped;
+}
+
 export function createStandaloneExplorerBridge(
   options: StandaloneExplorerBridgeOptions
 ): StandaloneExplorerBridge {
@@ -246,8 +320,10 @@ export function createStandaloneExplorerBridge(
   const unhandledCommands = new Set<string>();
 
   function sendExplorerMessage(message: ExplorerIncomingMessage): void {
+    const outgoing =
+      message.command === "snapshot" ? transformSnapshotForEndpointRoots(message) : message;
     for (const subscriber of explorerSubscribers) {
-      subscriber(message);
+      subscriber(outgoing);
     }
   }
 
@@ -255,17 +331,30 @@ export function createStandaloneExplorerBridge(
     sendExplorerMessage({ command: "error", message });
   }
 
-  function buildRunningLabItems(filterText: string, files: TopologyFileEntry[]): ExplorerTreeItem[] {
+  function collectRunningLabItemsByEndpoint(files: TopologyFileEntry[]): Map<string, ExplorerTreeItem[]> {
     const labs = options.getLabs();
-    const items: ExplorerTreeItem[] = [];
+    const endpoints = options.getEndpoints();
+    const endpointsById = new Map(endpoints.map((endpoint) => [endpoint.id, endpoint]));
+    const filesByEndpoint = new Map<string, TopologyFileEntry[]>();
+    for (const file of files) {
+      const bucket = filesByEndpoint.get(file.endpointId) ?? [];
+      bucket.push(file);
+      filesByEndpoint.set(file.endpointId, bucket);
+    }
 
+    const labItemsByEndpoint = new Map<string, ExplorerTreeItem[]>();
     for (const lab of labs.values()) {
-      if (!shouldShowRunningLab(lab)) {
+      if (!shouldShowRunningLab(lab, endpointsById)) {
         continue;
       }
 
-      const labName = lab.name;
-      const topologyEntry = findTopologyEntryForRunningLab(lab, files);
+      const endpointFiles = filesByEndpoint.get(lab.endpointId) ?? [];
+      const topologyEntry = findTopologyEntryForRunningLab(lab, endpointFiles);
+      const topologyRef =
+        topologyEntry?.topologyRef ??
+        (lab.topologyPath
+          ? buildStandaloneTopologyRefFromPath(lab.topologyPath, lab.name, lab.endpointId)
+          : undefined);
       const containers: ExplorerTreeItem[] = [];
 
       for (const [, container] of lab.containers) {
@@ -282,10 +371,10 @@ export function createStandaloneExplorerBridge(
             const stateText = state ? state.toUpperCase() : "";
             const description = hasAlias
               ? `${stateText || "UNKNOWN"} (${iface.name})`
-              : (stateText || iface.type || undefined);
+              : stateText || iface.type || undefined;
 
             return {
-              id: `running-interface:${container.name}:${iface.name}`,
+              id: `running-interface:${lab.endpointId}:${container.name}:${iface.name}`,
               label,
               description,
               tooltip: buildInterfaceTooltip({
@@ -302,16 +391,17 @@ export function createStandaloneExplorerBridge(
               collapsibleState: TREE_ITEM_NONE,
               cID: container.containerId,
               containerName: container.name,
-              labName,
-              name: iface.name,
+              endpointId: lab.endpointId,
+              labName: lab.name,
               mac: iface.mac,
-              topologyRef: topologyEntry?.topologyRef,
+              name: iface.name,
+              topologyRef,
               children: []
             } satisfies ExplorerTreeItem;
           });
 
         containers.push({
-          id: `running-container:${container.name}`,
+          id: `running-container:${lab.endpointId}:${container.name}`,
           label: container.nodeName || container.name,
           description: container.status || container.state,
           tooltip: buildContainerTooltip({
@@ -325,14 +415,15 @@ export function createStandaloneExplorerBridge(
             ipv6: container.ipv6Address
           }),
           contextValue: "containerlabContainer",
+          endpointId: lab.endpointId,
           state: container.state,
           status: container.status,
-          labName,
+          labName: lab.name,
           name: container.name,
           cID: container.containerId,
           kind: container.kind,
           image: container.image,
-          topologyRef: topologyEntry?.topologyRef,
+          topologyRef,
           v4Address: container.ipv4Address,
           v6Address: container.ipv6Address,
           collapsibleState: interfaces.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
@@ -340,26 +431,25 @@ export function createStandaloneExplorerBridge(
         });
       }
 
-      const labPath = topologyEntry?.path;
       const fallbackPathHint =
         lab.topologyPath || (lab.containers.values().next().value?.labPath as string | undefined);
-      const pathHint = labPath ?? fallbackPathHint;
-      const fallbackOwner = lab.containers.values().next().value?.owner as string | undefined;
-      const owner = (lab.owner || fallbackOwner || "").trim();
-      const labLabel = owner ? `${labName} (${owner})` : labName;
+      const pathHint = topologyEntry?.path ?? fallbackPathHint;
+      const owner = getLabOwner(lab);
+      const labLabel = owner ? `${lab.name} (${owner})` : lab.name;
       const labItem: ExplorerTreeItem = {
-        id: `running-lab:${labName}`,
+        id: `running-lab:${lab.endpointId}:${lab.name}`,
         label: labLabel,
         description: pathHint || "No API topology file",
-        tooltip: pathHint || `No API topology file available for running lab "${labName}"`,
+        tooltip: pathHint || `No API topology file available for running lab "${lab.name}"`,
         contextValue: "containerlabLabDeployed",
         collapsibleState: containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
-        labName,
-        topologyRef: topologyEntry?.topologyRef,
+        endpointId: lab.endpointId,
+        labName: lab.name,
+        topologyRef,
         children: containers
       };
 
-      if (topologyEntry?.topologyRef) {
+      if (topologyRef) {
         labItem.command = {
           command: "containerlab.lab.graph.topoViewer",
           title: "Open TopoViewer",
@@ -367,43 +457,90 @@ export function createStandaloneExplorerBridge(
         };
       }
 
-      items.push(labItem);
+      const bucket = labItemsByEndpoint.get(lab.endpointId) ?? [];
+      bucket.push(labItem);
+      labItemsByEndpoint.set(lab.endpointId, bucket);
     }
 
-    return filterTreeItems(items, filterText);
+    return labItemsByEndpoint;
   }
 
-  async function buildLocalLabItems(
+  function collectLocalLabItemsByEndpoint(files: TopologyFileEntry[]): Map<string, ExplorerTreeItem[]> {
+    const runningLabs = options.getLabs();
+    const filesByEndpoint = new Map<string, TopologyFileEntry[]>();
+    for (const file of files) {
+      const bucket = filesByEndpoint.get(file.endpointId) ?? [];
+      bucket.push(file);
+      filesByEndpoint.set(file.endpointId, bucket);
+    }
+
+    const localItemsByEndpoint = new Map<string, ExplorerTreeItem[]>();
+    for (const [endpointId, endpointFiles] of filesByEndpoint.entries()) {
+      const items = endpointFiles
+        .filter((file) => !isTopologyRunning(file.topologyRef, runningLabs))
+        .map((file) => {
+          const labName = topologyEntryLabName(file);
+          const item: ExplorerTreeItem = {
+            id: `local-lab:${file.endpointId}:${file.path}`,
+            label: file.filename || safeFilename(file.path),
+            description: file.path,
+            tooltip: file.path,
+            contextValue: "containerlabLabUndeployed",
+            collapsibleState: TREE_ITEM_NONE,
+            endpointId: file.endpointId,
+            labName,
+            topologyRef: file.topologyRef,
+            children: []
+          };
+          item.command = {
+            command: "containerlab.lab.graph.topoViewer",
+            title: "Open TopoViewer",
+            arguments: [item]
+          };
+          return item;
+        });
+      localItemsByEndpoint.set(endpointId, items);
+    }
+
+    return localItemsByEndpoint;
+  }
+
+  function buildEndpointGroupedItems(
     filterText: string,
     files: TopologyFileEntry[]
-  ): Promise<ExplorerTreeItem[]> {
-    const runningLabs = options.getLabs();
-    const items = files
-      .filter((file) => {
-        return !isTopologyRunning(file.topologyRef, runningLabs);
-      })
-      .map((file) => {
-        const labName = topologyEntryLabName(file);
-        const item: ExplorerTreeItem = {
-          id: `local-lab:${file.path}`,
-          label: file.filename || safeFilename(file.path),
-          description: file.path,
-          tooltip: file.path,
-          contextValue: "containerlabLabUndeployed",
+  ): ExplorerTreeItem[] {
+    const endpoints = options.getEndpoints();
+    const runningByEndpoint = collectRunningLabItemsByEndpoint(files);
+    const localByEndpoint = collectLocalLabItemsByEndpoint(files);
+
+    const endpointItems = endpoints.map((endpoint) => {
+      if (!endpoint.connected) {
+        const placeholderLabel =
+          endpoint.status === "saved"
+            ? "Saved endpoint — reconnect to restore the session"
+            : endpoint.status === "session_expired"
+              ? "Session expired — reconnect with your credentials"
+              : "Endpoint is offline — reconnect when it is reachable";
+        const placeholder: ExplorerTreeItem = {
+          id: `endpoint-disconnected:${endpoint.id}`,
+          label: placeholderLabel,
+          contextValue: "containerlabEndpointDisconnected",
           collapsibleState: TREE_ITEM_NONE,
-          labName,
-          topologyRef: file.topologyRef,
+          endpointId: endpoint.id,
           children: []
         };
-        item.command = {
-          command: "containerlab.lab.graph.topoViewer",
-          title: "Open TopoViewer",
-          arguments: [item]
-        };
-        return item;
-      });
+        return buildEndpointRootItem(endpoint, "endpoint", [placeholder]);
+      }
+      const runningItems = filterTreeItems(runningByEndpoint.get(endpoint.id) ?? [], filterText);
+      const localItems = filterTreeItems(localByEndpoint.get(endpoint.id) ?? [], filterText);
+      const groups = [
+        buildEndpointSectionItem(endpoint.id, "running", runningItems),
+        buildEndpointSectionItem(endpoint.id, "local", localItems)
+      ];
+      return buildEndpointRootItem(endpoint, "endpoint", filterTreeItems(groups, filterText));
+    });
 
-    return filterTreeItems(items, filterText);
+    return filterTreeItems(endpointItems, filterText);
   }
 
   function buildHelpItems(): ExplorerTreeItem[] {
@@ -421,12 +558,43 @@ export function createStandaloneExplorerBridge(
     }));
   }
 
+  function transformSnapshotForEndpointRoots(
+    message: ExplorerSnapshotMessage
+  ): ExplorerSnapshotMessage {
+    const runningSection = message.sections.find((section) => section.id === "runningLabs");
+    const localSection = message.sections.find((section) => section.id === "localLabs");
+    if (!runningSection) {
+      return message;
+    }
+
+    return {
+      ...message,
+      sections: message.sections
+        .filter((section) => section.id !== "localLabs")
+        .map((section) => {
+          if (section.id !== "runningLabs") {
+            return section;
+          }
+          return {
+            ...section,
+            label: "Endpoints",
+            count: options.getEndpoints().length,
+            appearance: "bareTree",
+            toolbarActions: dedupeExplorerActions([
+              ...section.toolbarActions,
+              ...(localSection?.toolbarActions ?? [])
+            ])
+          };
+        })
+    };
+  }
+
   async function buildExplorerProviders(
     filterText: string = explorerFilterText
   ): Promise<ExplorerSnapshotProviders> {
     const files = await options.listTopologyFiles();
-    const runningItems = buildRunningLabItems(filterText, files);
-    const localItems = await buildLocalLabItems(filterText, files);
+    const runningItems = buildEndpointGroupedItems(filterText, files);
+    const localItems: ExplorerTreeItem[] = [];
     const helpItems = buildHelpItems();
 
     return {
@@ -440,6 +608,53 @@ export function createStandaloneExplorerBridge(
     const requestedTopologyRef = firstArgAsTopologyRef(args);
     const item = firstArgAsTreeItem(args);
     const actionTopologyRef = requestedTopologyRef ?? (await options.resolveTopologyRef(args));
+    const actionEndpointId =
+      item?.endpointId ??
+      extractEndpointIdFromTopologyId(actionTopologyRef?.topologyId);
+    const endpoints = options.getEndpoints();
+    const findEndpointById = (endpointId?: string): EndpointConfig | undefined =>
+      endpointId ? endpoints.find((entry) => entry.id === endpointId) : undefined;
+    const resolveEndpointForAction = (
+      actionDescription: string,
+      preferredEndpointId?: string
+    ): string | null => {
+      const preferred = findEndpointById(preferredEndpointId);
+      if (preferred?.status === "connected") {
+        return preferred.id;
+      }
+
+      const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+      if (connectedEndpoints.length === 0) {
+        postExplorerError(`Connect an endpoint before trying to ${actionDescription}.`);
+        return null;
+      }
+      if (connectedEndpoints.length === 1) {
+        return connectedEndpoints[0].id;
+      }
+
+      const optionsText = connectedEndpoints
+        .map((endpoint, index) => `${index + 1}. ${endpoint.label} (${endpoint.url})`)
+        .join("\n");
+      const rawSelection = window.prompt(
+        `Select endpoint for ${actionDescription}:\n${optionsText}\n\nEnter number (1-${connectedEndpoints.length}).`,
+        "1"
+      );
+      if (!rawSelection) {
+        return null;
+      }
+
+      const selectedIndex = Number.parseInt(rawSelection, 10);
+      if (
+        !Number.isFinite(selectedIndex) ||
+        selectedIndex < 1 ||
+        selectedIndex > connectedEndpoints.length
+      ) {
+        runtimeUiActions.notify("Invalid endpoint selection.", "error");
+        return null;
+      }
+
+      return connectedEndpoints[selectedIndex - 1].id;
+    };
     const targetLabel =
       actionTopologyRef?.labName ??
       item?.labName ??
@@ -448,7 +663,39 @@ export function createStandaloneExplorerBridge(
     switch (commandId) {
       case "containerlab.openLink": {
         const link = typeof args[0] === "string" ? args[0] : undefined;
-        if (link) window.open(link, "_blank", "noopener,noreferrer");
+        if (link) {
+          window.open(link, "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
+      case "containerlab.endpoint.reconnect": {
+        if (!actionEndpointId) {
+          postExplorerError("No endpoint is associated with this item.");
+          return;
+        }
+        dispatchEndpointUiAction({ action: "reconnect", endpointId: actionEndpointId });
+        return;
+      }
+      case "containerlab.endpoint.remove": {
+        if (!actionEndpointId) {
+          postExplorerError("No endpoint is associated with this item.");
+          return;
+        }
+        dispatchEndpointUiAction({ action: "remove", endpointId: actionEndpointId });
+        return;
+      }
+      case "containerlab.endpoint.copyUrl": {
+        if (!actionEndpointId) {
+          postExplorerError("No endpoint is associated with this item.");
+          return;
+        }
+        const endpoint = findEndpointById(actionEndpointId);
+        if (!endpoint) {
+          postExplorerError("Endpoint metadata is not available.");
+          return;
+        }
+        await navigator.clipboard.writeText(endpoint.url).catch(() => {});
+        runtimeUiActions.notify(`Copied endpoint URL for ${endpoint.label}.`, "success");
         return;
       }
       case "containerlab.lab.graph.topoViewer":
@@ -468,33 +715,47 @@ export function createStandaloneExplorerBridge(
             : item?.contextValue === "containerlabLabUndeployed"
               ? "undeployed"
               : undefined;
-        const resolvedState = actionTopologyRef
-          ? await options.resolveDeploymentState(actionTopologyRef)
-          : undefined;
+        const resolvedState = await options.resolveDeploymentState(actionTopologyRef);
         const deploymentState = resolvedState ?? itemState;
-        await options.loadTopologyFile(actionTopologyRef, { deploymentState });
+        await options.loadTopologyFile(actionTopologyRef, { deploymentState, endpointId: actionEndpointId });
         return;
       }
       case "containerlab.editor.topoViewerEditor": {
+        const endpointId = resolveEndpointForAction("create a topology file", actionEndpointId);
+        if (!endpointId) {
+          return;
+        }
+
         const rawFileName = window.prompt("New topology file name", "new-lab.clab.yml");
         if (!rawFileName) {
           return;
         }
 
         try {
-          const created = await createTopologyFile({ fileName: rawFileName });
-          options.invalidateTopologyFileListCache();
+          const created = await createTopologyFile({ endpointId, fileName: rawFileName });
+          options.invalidateTopologyFileListCache(endpointId);
           controller.scheduleSnapshot(0);
           runtimeUiActions.notify(`Created topology file "${rawFileName}".`, "success");
-          await options.loadTopologyFile(created.topologyRef, { deploymentState: "undeployed" });
-          return;
+          await options.loadTopologyFile(created.topologyRef, {
+            deploymentState: "undeployed",
+            endpointId
+          });
         } catch (error) {
-          runtimeUiActions.notify(
-            error instanceof Error ? error.message : String(error),
-            "error"
-          );
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
+      case "containerlab.lab.cloneRepo": {
+        const endpointId = resolveEndpointForAction("clone a repository", actionEndpointId);
+        if (!endpointId) {
           return;
         }
+        const endpoint = findEndpointById(endpointId);
+        runtimeUiActions.notify(
+          `Clone Repository is not implemented in standalone mode yet${endpoint ? ` for ${endpoint.label}` : ""}.`,
+          "info"
+        );
+        return;
       }
       case "containerlab.inspectAll": {
         runtimeUiActions.openInspectAll();
@@ -506,7 +767,7 @@ export function createStandaloneExplorerBridge(
           return;
         }
         runtimeUiActions.openInspectLab(
-          { topologyRef: actionTopologyRef },
+          { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
           `Inspect: ${targetLabel ?? actionTopologyRef.labName}`
         );
         return;
@@ -519,7 +780,7 @@ export function createStandaloneExplorerBridge(
         }
         try {
           await options.invokeLifecycleApi("deploy", actionTopologyRef, false);
-          options.invalidateTopologyFileListCache();
+          options.invalidateTopologyFileListCache(actionEndpointId);
         } catch (error) {
           console.error("[Standalone] Deploy failed:", error);
         }
@@ -532,9 +793,12 @@ export function createStandaloneExplorerBridge(
           return;
         }
         try {
-          const cleanup = commandId === "containerlab.lab.destroy.cleanup";
-          await options.invokeLifecycleApi("destroy", actionTopologyRef, cleanup);
-          options.invalidateTopologyFileListCache();
+          await options.invokeLifecycleApi(
+            "destroy",
+            actionTopologyRef,
+            commandId === "containerlab.lab.destroy.cleanup"
+          );
+          options.invalidateTopologyFileListCache(actionEndpointId);
         } catch (error) {
           console.error("[Standalone] Destroy failed:", error);
         }
@@ -547,9 +811,12 @@ export function createStandaloneExplorerBridge(
           return;
         }
         try {
-          const cleanup = commandId === "containerlab.lab.redeploy.cleanup";
-          await options.invokeLifecycleApi("redeploy", actionTopologyRef, cleanup);
-          options.invalidateTopologyFileListCache();
+          await options.invokeLifecycleApi(
+            "redeploy",
+            actionTopologyRef,
+            commandId === "containerlab.lab.redeploy.cleanup"
+          );
+          options.invalidateTopologyFileListCache(actionEndpointId);
         } catch (error) {
           console.error("[Standalone] Redeploy failed:", error);
         }
@@ -560,15 +827,10 @@ export function createStandaloneExplorerBridge(
           postExplorerError("No canonical topology reference is available for this item.");
           return;
         }
-
-        try {
-          await saveConfigsFlow(
-            { topologyRef: actionTopologyRef },
-            `Saved configs for ${actionTopologyRef.labName}.`
-          );
-        } catch (error) {
-          console.error("[Standalone] Save failed:", error);
-        }
+        await saveConfigsFlow(
+          { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
+          `Saved configs for ${actionTopologyRef.labName}.`
+        );
         return;
       }
       case "containerlab.lab.delete": {
@@ -576,10 +838,12 @@ export function createStandaloneExplorerBridge(
           postExplorerError("No canonical topology reference is available for this item.");
           return;
         }
-
-        const deleted = await deleteTopologyFileFlow({ topologyRef: actionTopologyRef });
+        const deleted = await deleteTopologyFileFlow({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef
+        });
         if (deleted) {
-          options.invalidateTopologyFileListCache();
+          options.invalidateTopologyFileListCache(actionEndpointId);
           controller.scheduleSnapshot(0);
         }
         return;
@@ -603,9 +867,9 @@ export function createStandaloneExplorerBridge(
           postExplorerError("Node save requires a running lab item.");
           return;
         }
-
         await saveConfigsFlow(
           {
+            endpointId: actionEndpointId,
             topologyRef: actionTopologyRef,
             nodeName: item.name
           },
@@ -630,6 +894,7 @@ export function createStandaloneExplorerBridge(
         const titlePrefix = protocol === "shell" ? "Shell" : protocol === "telnet" ? "Telnet" : "SSH";
 
         runtimeUiActions.openTerminal({
+          endpointId: actionEndpointId,
           topologyRef: actionTopologyRef,
           nodeName: item.name,
           protocol,
@@ -642,8 +907,8 @@ export function createStandaloneExplorerBridge(
           postExplorerError("Node logs require a running lab item.");
           return;
         }
-
         runtimeUiActions.openLogs({
+          endpointId: actionEndpointId,
           topologyRef: actionTopologyRef,
           nodeName: item.name,
           title: `Logs: ${item.label || item.name}`
@@ -655,8 +920,8 @@ export function createStandaloneExplorerBridge(
           postExplorerError("Impairments require a running lab item.");
           return;
         }
-
         runtimeUiActions.openNetem({
+          endpointId: actionEndpointId,
           topologyRef: actionTopologyRef,
           nodeName: item.name,
           title: `Impairments: ${item.label || item.name}`
@@ -682,6 +947,7 @@ export function createStandaloneExplorerBridge(
         };
 
         runtimeUiActions.openNetem({
+          endpointId: actionEndpointId,
           topologyRef: actionTopologyRef,
           nodeName: item.containerName,
           preferredField: fieldByCommand[commandId],
@@ -691,43 +957,52 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.node.copyName": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node) await navigator.clipboard.writeText(node.name || node.label || "").catch(() => {});
+        if (item) {
+          await navigator.clipboard.writeText(item.name || item.label || "").catch(() => {});
+        }
         return;
       }
       case "containerlab.node.copyID": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.cID) await navigator.clipboard.writeText(node.cID).catch(() => {});
+        if (item?.cID) {
+          await navigator.clipboard.writeText(item.cID).catch(() => {});
+        }
         return;
       }
       case "containerlab.node.copyKind": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.kind) await navigator.clipboard.writeText(node.kind).catch(() => {});
+        if (item?.kind) {
+          await navigator.clipboard.writeText(item.kind).catch(() => {});
+        }
         return;
       }
       case "containerlab.node.copyImage": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.image) await navigator.clipboard.writeText(node.image).catch(() => {});
+        if (item?.image) {
+          await navigator.clipboard.writeText(item.image).catch(() => {});
+        }
         return;
       }
       case "containerlab.node.copyIPv4Address": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.v4Address) await navigator.clipboard.writeText(node.v4Address).catch(() => {});
+        if (item?.v4Address) {
+          await navigator.clipboard.writeText(item.v4Address).catch(() => {});
+        }
         return;
       }
       case "containerlab.node.copyIPv6Address": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.v6Address) await navigator.clipboard.writeText(node.v6Address).catch(() => {});
+        if (item?.v6Address) {
+          await navigator.clipboard.writeText(item.v6Address).catch(() => {});
+        }
         return;
       }
       case "containerlab.interface.copyMACAddress": {
-        const node = args[0] as ExplorerTreeItem | undefined;
-        if (node?.mac) await navigator.clipboard.writeText(node.mac).catch(() => {});
+        if (item?.mac) {
+          await navigator.clipboard.writeText(item.mac).catch(() => {});
+        }
         return;
       }
       case "containerlab.lab.copyPath": {
         const apiLabPath = actionTopologyRef?.yamlPath ?? (await options.resolveApiTopologyPath(args));
-        if (apiLabPath) await navigator.clipboard.writeText(apiLabPath).catch(() => {});
+        if (apiLabPath) {
+          await navigator.clipboard.writeText(apiLabPath).catch(() => {});
+        }
         return;
       }
       default: {

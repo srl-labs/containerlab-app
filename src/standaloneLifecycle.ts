@@ -54,7 +54,7 @@ interface StandaloneLifecycleManagerOptions {
   getCurrentSessionId: () => string | null;
   getCurrentTopologyRef: () => TopologyRef | null;
   invalidateTopologyFileListCache: () => void;
-  removeLabFromRuntimeStore: (topologyRef: Pick<TopologyRef, "yamlPath">) => void;
+  removeLabFromRuntimeStore: (topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">) => void;
   scheduleExplorerSnapshot: (delay?: number) => void;
   scheduleTopologySnapshotRefresh: (delay?: number) => void;
   syncHostContext: (options?: {

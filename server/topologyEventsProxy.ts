@@ -1,24 +1,28 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 import type { ClabApiClient } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { EndpointEntry } from "./endpointSessionStore.js";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
 
-type ClientResolver = (request: FastifyRequest) => ClabApiClient;
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 export function registerTopologyEventsProxy(
   app: FastifyInstance,
-  getClient: ClientResolver,
+  resolveEndpoint: EndpointResolver,
   sessions: StandaloneTopologySessionManager
 ): void {
-  app.get<{ Querystring: { sessionId?: string } }>(
+  app.get<{ Querystring: { endpointId?: string; sessionId?: string } }>(
     "/api/topology/events",
     async (
-      request: FastifyRequest<{ Querystring: { sessionId?: string } }>,
+      request: FastifyRequest<{ Querystring: { endpointId?: string; sessionId?: string } }>,
       reply: FastifyReply
     ) => {
-      const token = getTokenFromRequest(request);
-      if (!token) {
+      const resolved = resolveEndpoint(request, reply, request.query.endpointId);
+      if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
 
@@ -27,8 +31,8 @@ export function registerTopologyEventsProxy(
         return reply.status(400).send({ error: "Missing sessionId" });
       }
 
-      const client = getClient(request);
-      const session = sessions.getSession(sessionId, token, client.getBaseUrl());
+      const { client, endpoint } = resolved;
+      const session = sessions.getSession(sessionId, endpoint.id);
       if (!session) {
         return reply.status(404).send({ error: "Topology session not found" });
       }
@@ -49,7 +53,7 @@ export function registerTopologyEventsProxy(
 
       try {
         const response = await client.openTopologyEventStream(
-          token,
+          endpoint.token,
           session.topologyRef.labName,
           session.topologyRef.yamlPath
         );

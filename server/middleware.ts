@@ -1,46 +1,34 @@
-/**
- * Fastify middleware for cookie-based JWT session management.
- */
+import type { FastifyReply, FastifyRequest } from "fastify";
 
-import type { FastifyRequest, FastifyReply } from "fastify";
+const SESSION_COOKIE_NAME = "clab_session";
+const LEGACY_TOKEN_COOKIE_NAME = "clab_token";
+const LEGACY_API_URL_COOKIE_NAME = "clab_api_url";
+const SESSION_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
-const COOKIE_NAME = "clab_token";
-const API_URL_COOKIE_NAME = "clab_api_url";
-
-/**
- * Extracts JWT token from httpOnly cookie.
- * Attaches it to request headers for downstream use.
- */
-export function getTokenFromRequest(request: FastifyRequest): string | null {
-  const cookies = request.cookies as Record<string, string | undefined>;
-  return cookies[COOKIE_NAME] ?? null;
+export interface LegacySessionCookies {
+  token: string;
+  url: string;
 }
 
-/**
- * Sets JWT token as httpOnly cookie on the response.
- */
-export function setTokenCookie(reply: FastifyReply, token: string): void {
-  void reply.setCookie(COOKIE_NAME, token, {
+export function getSessionIdFromRequest(request: FastifyRequest): string | null {
+  const cookies = request.cookies as Record<string, string | undefined>;
+  const sessionId = cookies[SESSION_COOKIE_NAME]?.trim();
+  return sessionId && sessionId.length > 0 ? sessionId : null;
+}
+
+export function setSessionCookie(reply: FastifyReply, sessionId: string): void {
+  void reply.setCookie(SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
     sameSite: "strict",
     path: "/",
-    maxAge: 3600 // 1 hour, matches default JWT expiration
+    maxAge: SESSION_COOKIE_MAX_AGE_SECONDS
   });
 }
 
-/**
- * Clears the JWT cookie.
- */
-export function clearTokenCookie(reply: FastifyReply): void {
-  void reply.clearCookie(COOKIE_NAME, {
-    path: "/"
-  });
+export function clearSessionCookie(reply: FastifyReply): void {
+  void reply.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
 }
 
-/**
- * Normalizes and validates API endpoint URL.
- * Accepts host:port shorthand and normalizes to absolute HTTP(S) URL.
- */
 export function normalizeApiUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
@@ -57,37 +45,53 @@ export function normalizeApiUrl(raw: string): string | null {
   }
 }
 
-/**
- * Resolves API endpoint from cookie, with configured default fallback.
- */
-export function getApiUrlFromRequest(request: FastifyRequest, fallback: string): string {
-  const cookies = request.cookies as Record<string, string | undefined>;
-  const raw = cookies[API_URL_COOKIE_NAME];
-  const normalized = raw ? normalizeApiUrl(raw) : null;
-  return normalized ?? fallback;
-}
-
-/**
- * Stores the selected API endpoint in a session cookie.
- */
-export function setApiUrlCookie(reply: FastifyReply, apiUrl: string): void {
-  void reply.setCookie(API_URL_COOKIE_NAME, apiUrl, {
-    httpOnly: true,
-    sameSite: "strict",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30 // 30 days
-  });
-}
-
-/**
- * Auth guard - returns 401 if no valid token present.
- */
-export async function requireAuth(
+export function getLegacySessionCookies(
   request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
-  const token = getTokenFromRequest(request);
+  fallbackApiUrl: string
+): LegacySessionCookies | null {
+  const cookies = request.cookies as Record<string, string | undefined>;
+  const token = cookies[LEGACY_TOKEN_COOKIE_NAME]?.trim();
   if (!token) {
+    return null;
+  }
+
+  const normalizedUrl = normalizeApiUrl(cookies[LEGACY_API_URL_COOKIE_NAME] ?? fallbackApiUrl);
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  return {
+    token,
+    url: normalizedUrl
+  };
+}
+
+export function clearLegacySessionCookies(reply: FastifyReply): void {
+  void reply.clearCookie(LEGACY_TOKEN_COOKIE_NAME, { path: "/" });
+  void reply.clearCookie(LEGACY_API_URL_COOKIE_NAME, { path: "/" });
+}
+
+export function getEndpointIdFromRequest(request: FastifyRequest): string | undefined {
+  const rawHeader = request.headers["x-endpoint-id"];
+  if (typeof rawHeader === "string" && rawHeader.trim().length > 0) {
+    return rawHeader.trim();
+  }
+  if (Array.isArray(rawHeader)) {
+    const first = rawHeader.find((value) => typeof value === "string" && value.trim().length > 0);
+    if (first) {
+      return first.trim();
+    }
+  }
+
+  const query = request.query as Record<string, unknown> | undefined;
+  const fromQuery = query?.endpointId;
+  return typeof fromQuery === "string" && fromQuery.trim().length > 0
+    ? fromQuery.trim()
+    : undefined;
+}
+
+export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!getSessionIdFromRequest(request)) {
     reply.status(401).send({ error: "Not authenticated" });
   }
 }

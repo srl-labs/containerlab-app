@@ -1,36 +1,54 @@
-/**
- * Standalone web app backend server.
- *
- * Serves the React frontend and proxies API requests to clab-api-server.
- * In development mode, proxies unmatched requests to Vite dev server.
- */
-
 import Fastify from "fastify";
-import type { FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyWebsocket from "@fastify/websocket";
-import { ClabApiClient } from "./clabApiClient.js";
-import { getApiUrlFromRequest, getTokenFromRequest } from "./middleware.js";
+
 import { registerAuthRoutes } from "./auth.js";
+import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.js";
+import {
+  DEFAULT_ENDPOINT_SESSION_DURATION,
+  buildEndpointId,
+  createEndpointSessionStore
+} from "./endpointSessionStore.js";
 import { registerEventsProxy } from "./eventsProxy.js";
-import { registerTopologyProxy } from "./topologyProxy.js";
 import { registerFileProxy } from "./fileProxy.js";
 import { registerLabProxy } from "./labProxy.js";
-import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
-import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
+import {
+  getEndpointIdFromRequest,
+  getLegacySessionCookies,
+  getSessionIdFromRequest,
+  setSessionCookie
+} from "./middleware.js";
 import { registerRuntimeProxy } from "./runtimeProxy.js";
 import { registerTerminalStreamProxy } from "./terminalStreamProxy.js";
+import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
+import { registerTopologyProxy } from "./topologyProxy.js";
+import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
+import { ClabApiClient } from "./clabApiClient.js";
 
 const PORT = parseInt(process.env.PORT ?? "3000", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "http://localhost:8080";
 const VITE_DEV_URL = process.env.VITE_DEV_URL ?? "http://localhost:5173";
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+interface ResolvedEndpoint {
+  client: ClabApiClient;
+  endpoint: EndpointEntry;
+  session: EndpointSession;
+}
+
+function defaultEndpointLabel(url: string): string {
+  try {
+    return new URL(url).host || url;
+  } catch {
+    return url;
+  }
+}
+
 async function start(): Promise<void> {
   const app = Fastify({ logger: true });
 
-  // Plugins
   await app.register(fastifyCookie);
   await app.register(fastifyCors, {
     origin: IS_DEV ? true : false,
@@ -38,38 +56,136 @@ async function start(): Promise<void> {
   });
   await app.register(fastifyWebsocket);
 
+  const endpointSessions = createEndpointSessionStore();
   const topologySessions = createStandaloneTopologySessionManager();
 
-  const getClient = (request: FastifyRequest): ClabApiClient =>
-    new ClabApiClient({
-      baseUrl: getApiUrlFromRequest(request, DEFAULT_CLAB_API_URL)
-    });
-
-  // Register routes
-  registerAuthRoutes(app, getClient, DEFAULT_CLAB_API_URL, (request) => {
-    const token = getTokenFromRequest(request);
-    if (!token) {
-      return;
+  const maybeSetSessionCookie = (reply: FastifyReply, sessionId: string): void => {
+    if (typeof (reply as Partial<FastifyReply>).setCookie === "function") {
+      setSessionCookie(reply, sessionId);
     }
-    topologySessions.disposeSessionsForToken(
-      token,
-      getApiUrlFromRequest(request, DEFAULT_CLAB_API_URL)
-    );
+  };
+
+  const migrateLegacySession = (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): EndpointSession | null => {
+    const legacy = getLegacySessionCookies(request, DEFAULT_CLAB_API_URL);
+    if (!legacy) {
+      return null;
+    }
+
+    const existingSessionId = getSessionIdFromRequest(request);
+    if (existingSessionId) {
+      const existing = endpointSessions.getSession(existingSessionId);
+      if (existing) {
+        return existing;
+      }
+    }
+
+    const sessionId = existingSessionId ?? globalThis.crypto.randomUUID();
+    if (!existingSessionId) {
+      maybeSetSessionCookie(reply, sessionId);
+    }
+
+    const migratedEntry: EndpointEntry = {
+      id: buildEndpointId(),
+      url: legacy.url,
+      label: defaultEndpointLabel(legacy.url),
+      token: legacy.token,
+      username: "user",
+      sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION
+    };
+
+    return endpointSessions.replaceSession(sessionId, [migratedEntry]);
+  };
+
+  const resolveSession = (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): EndpointSession | null => {
+    const sessionId = getSessionIdFromRequest(request);
+    if (sessionId) {
+      const session = endpointSessions.getSession(sessionId);
+      if (session) {
+        return session;
+      }
+    }
+    return migrateLegacySession(request, reply);
+  };
+
+  const ensureSession = (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ): EndpointSession => {
+    const resolved = resolveSession(request, reply);
+    if (resolved) {
+      return resolved;
+    }
+
+    const sessionId = getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
+    if (!getSessionIdFromRequest(request)) {
+      maybeSetSessionCookie(reply, sessionId);
+    }
+    return endpointSessions.replaceSession(sessionId, []);
+  };
+
+  const resolveEndpoint = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    preferredEndpointId?: string
+  ): ResolvedEndpoint | null => {
+    const session = resolveSession(request, reply);
+    if (!session || session.endpoints.size === 0) {
+      return null;
+    }
+
+    const endpointId = preferredEndpointId ?? getEndpointIdFromRequest(request);
+    const endpoint = endpointId
+      ? session.endpoints.get(endpointId) ?? null
+      : Array.from(session.endpoints.values())[0] ?? null;
+    if (!endpoint) {
+      return null;
+    }
+
+    return {
+      session,
+      endpoint,
+      client: new ClabApiClient({ baseUrl: endpoint.url })
+    };
+  };
+
+  const listEndpoints = (request: FastifyRequest, reply: FastifyReply): EndpointEntry[] => {
+    const session = resolveSession(request, reply);
+    return session ? Array.from(session.endpoints.values()) : [];
+  };
+
+  registerAuthRoutes(app, {
+    defaultApiUrl: DEFAULT_CLAB_API_URL,
+    disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
+    ensureSession,
+    endpointSessions,
+    resolveSession
   });
-  registerEventsProxy(app, getClient);
-  registerTopologyEventsProxy(app, getClient, topologySessions);
-  registerTopologyProxy(app, getClient, topologySessions);
-  registerFileProxy(app, getClient);
-  registerLabProxy(app, getClient, topologySessions);
-  registerRuntimeProxy(app, getClient, topologySessions);
-  registerTerminalStreamProxy(app, getClient);
+  registerEventsProxy(app, resolveEndpoint);
+  registerTopologyEventsProxy(app, resolveEndpoint, topologySessions);
+  registerTopologyProxy(app, resolveEndpoint, topologySessions);
+  registerFileProxy(app, resolveEndpoint);
+  registerLabProxy(app, resolveEndpoint, topologySessions);
+  registerRuntimeProxy(app, resolveEndpoint, listEndpoints, topologySessions);
+  registerTerminalStreamProxy(app, resolveEndpoint);
+
   app.get("/api/config", async (request, reply) => {
-    const clabApiUrl = getApiUrlFromRequest(request, DEFAULT_CLAB_API_URL);
-    return reply.send({ clabApiUrl, defaultClabApiUrl: DEFAULT_CLAB_API_URL });
+    const endpoints = listEndpoints(request, reply).map((entry) => ({
+      id: entry.id,
+      url: entry.url,
+      label: entry.label,
+      username: entry.username,
+      sessionDuration: entry.sessionDuration
+    }));
+    return reply.send({ endpoints, defaultClabApiUrl: DEFAULT_CLAB_API_URL });
   });
 
   if (IS_DEV) {
-    // In development, proxy unmatched requests to Vite dev server
     app.route({
       method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
       url: "/*",
@@ -82,20 +198,19 @@ async function start(): Promise<void> {
               headers[key] = value;
             }
           }
-          // Remove host header to avoid Vite rejecting it
           delete headers.host;
 
           const response = await fetch(url, {
             method: request.method,
             headers,
-            body: request.method !== "GET" && request.method !== "HEAD"
-              ? JSON.stringify(request.body)
-              : undefined
+            body:
+              request.method !== "GET" && request.method !== "HEAD"
+                ? JSON.stringify(request.body)
+                : undefined
           });
 
           reply.status(response.status);
           for (const [key, value] of response.headers.entries()) {
-            // Skip transfer-encoding as Fastify handles it
             if (key.toLowerCase() === "transfer-encoding") continue;
             reply.header(key, value);
           }
@@ -109,7 +224,6 @@ async function start(): Promise<void> {
       }
     });
   } else {
-    // In production, serve static files from dist/client
     const fastifyStatic = await import("@fastify/static");
     const path = await import("node:path");
     const clientRoot = path.resolve(process.cwd(), "dist/client");
@@ -119,13 +233,13 @@ async function start(): Promise<void> {
       prefix: "/"
     });
 
-    // SPA fallback
     app.setNotFoundHandler((_request, reply) => {
       return reply.sendFile("index.html");
     });
   }
 
   app.addHook("onClose", async () => {
+    endpointSessions.dispose();
     topologySessions.disposeAll();
   });
 

@@ -3,6 +3,7 @@ import { create } from "zustand";
 type EventAttributeValue = string | number;
 
 export interface ContainerState {
+  endpointId: string;
   name: string;
   containerId: string;
   labName: string;
@@ -43,6 +44,7 @@ export interface InterfaceState {
 }
 
 export interface LabState {
+  endpointId: string;
   name: string;
   owner: string;
   topologyPath: string;
@@ -51,10 +53,14 @@ export interface LabState {
 
 interface LabStoreState {
   labs: Map<string, LabState>;
-  connected: boolean;
-  setConnected: (connected: boolean) => void;
-  processEvent: (event: EventData) => void;
+  labsByEndpoint: Map<string, Map<string, LabState>>;
+  connectedByEndpoint: Map<string, boolean>;
   clear: () => void;
+  clearEndpoint: (endpointId: string) => void;
+  getAllLabs: () => Map<string, LabState>;
+  getLabsForEndpoint: (endpointId: string) => Map<string, LabState>;
+  processEvent: (endpointId: string, event: EventData) => void;
+  setConnected: (endpointId: string, connected: boolean) => void;
 }
 
 export interface EventData {
@@ -96,7 +102,7 @@ function normalizeLabStorePath(pathValue: string | undefined): string {
   return (pathValue ?? "")
     .trim()
     .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
+    .replace(/\/+?/g, "/")
     .replace(/^\.\//, "");
 }
 
@@ -174,8 +180,12 @@ function findLabEntryByName(
   return matches[0] ?? null;
 }
 
-function extractContainerState(attrs: Record<string, EventAttributeValue>): ContainerState {
+function extractContainerState(
+  endpointId: string,
+  attrs: Record<string, EventAttributeValue>
+): ContainerState {
   return {
+    endpointId,
     name: getAttrString(attrs, "name") ?? "",
     containerId: getAttrString(attrs, "container-id", "id", "name") ?? "",
     labName: getAttrString(attrs, "lab", "containerlab") ?? "",
@@ -243,13 +253,31 @@ function upsertInterface(
   container.interfaces.set(interfaceName, next);
 }
 
+function mergeLabsByEndpoint(
+  labsByEndpoint: Map<string, Map<string, LabState>>
+): Map<string, LabState> {
+  const merged = new Map<string, LabState>();
+  for (const [endpointId, endpointLabs] of labsByEndpoint.entries()) {
+    for (const [labKey, lab] of endpointLabs.entries()) {
+      merged.set(`${endpointId}:${labKey}`, lab);
+    }
+  }
+  return merged;
+}
+
 export const useLabStore = create<LabStoreState>((set, get) => ({
   labs: new Map(),
-  connected: false,
+  labsByEndpoint: new Map(),
+  connectedByEndpoint: new Map(),
 
-  setConnected: (connected) => set({ connected }),
+  setConnected: (endpointId, connected) =>
+    set((state) => {
+      const connectedByEndpoint = new Map(state.connectedByEndpoint);
+      connectedByEndpoint.set(endpointId, connected);
+      return { connectedByEndpoint };
+    }),
 
-  processEvent: (event) => {
+  processEvent: (endpointId, event) => {
     const attrs = event.attributes;
     const labName = getAttrString(attrs, "lab", "containerlab") ?? "";
     const labPath = getAttrString(attrs, "lab-path", "clab-topo-file") ?? "";
@@ -259,14 +287,14 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
       getEventString(event, "actor_name", "actorName") ??
       "";
 
-    const previousLabs = get().labs;
-    const labs = new Map(previousLabs);
-    let existingEntry = findExistingLabEntry(previousLabs, labPath);
+    const previousLabsByEndpoint = get().labsByEndpoint;
+    const endpointLabs = new Map(previousLabsByEndpoint.get(endpointId) ?? new Map());
+    let existingEntry = findExistingLabEntry(endpointLabs, labPath);
     if (!existingEntry && containerName) {
-      existingEntry = findLabEntryByContainerName(previousLabs, containerName);
+      existingEntry = findLabEntryByContainerName(endpointLabs, containerName);
     }
     if (!existingEntry && !preferredLabKey && labName) {
-      existingEntry = findLabEntryByName(previousLabs, labName);
+      existingEntry = findLabEntryByName(endpointLabs, labName);
     }
     const labKey = preferredLabKey ?? existingEntry?.key ?? null;
     if (!labKey) {
@@ -275,16 +303,18 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
 
     const existingLab = existingEntry?.lab;
     if (existingEntry && preferredLabKey && existingEntry.key !== preferredLabKey) {
-      labs.delete(existingEntry.key);
+      endpointLabs.delete(existingEntry.key);
     }
     const lab: LabState = existingLab
       ? {
+          endpointId,
           name: labName || existingLab.name,
           owner: existingLab.owner,
           topologyPath: labPath || existingLab.topologyPath,
           containers: new Map(existingLab.containers)
         }
       : {
+          endpointId,
           name: labName,
           owner: getAttrString(attrs, "clab-owner", "owner") ?? "",
           topologyPath: labPath,
@@ -297,19 +327,18 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
     if (event.type === "container") {
       if (action === "destroy" || action === "die" || action === "kill") {
         lab.containers.delete(containerName);
-        // If no containers left, remove the lab
         if (lab.containers.size === 0) {
-          labs.delete(labKey);
+          endpointLabs.delete(labKey);
         } else {
-          labs.set(labKey, lab);
+          endpointLabs.set(labKey, lab);
         }
       } else {
-        // start, create, running, health_status, etc.
-        const incoming = extractContainerState(attrs);
+        const incoming = extractContainerState(endpointId, attrs);
         const existing = lab.containers.get(containerName);
-        const container = {
+        const container: ContainerState = {
           ...(existing ?? incoming),
           ...incoming,
+          endpointId,
           interfaces: new Map(existing?.interfaces ?? incoming.interfaces)
         };
         if (incoming.owner) {
@@ -322,13 +351,13 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
           lab.name = incoming.labName;
         }
         lab.containers.set(containerName, container);
-        labs.set(labKey, lab);
+        endpointLabs.set(labKey, lab);
       }
     } else if (event.type === "interface" || event.type === "interface-stats") {
       const existing = lab.containers.get(containerName);
-      const placeholder = extractContainerState(attrs);
+      const placeholder = extractContainerState(endpointId, attrs);
       const container: ContainerState = existing
-        ? { ...existing, interfaces: new Map(existing.interfaces) }
+        ? { ...existing, endpointId, interfaces: new Map(existing.interfaces) }
         : placeholder;
       upsertInterface(container, attrs, action);
       lab.containers.set(containerName, container);
@@ -338,11 +367,38 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
       if (placeholder.labName) {
         lab.name = placeholder.labName;
       }
-      labs.set(labKey, lab);
+      endpointLabs.set(labKey, lab);
     }
 
-    set({ labs });
+    set((state) => {
+      const labsByEndpoint = new Map(state.labsByEndpoint);
+      labsByEndpoint.set(endpointId, endpointLabs);
+      return {
+        labsByEndpoint,
+        labs: mergeLabsByEndpoint(labsByEndpoint)
+      };
+    });
   },
 
-  clear: () => set({ labs: new Map(), connected: false })
+  clearEndpoint: (endpointId) =>
+    set((state) => {
+      const labsByEndpoint = new Map(state.labsByEndpoint);
+      const connectedByEndpoint = new Map(state.connectedByEndpoint);
+      labsByEndpoint.delete(endpointId);
+      connectedByEndpoint.delete(endpointId);
+      return {
+        labsByEndpoint,
+        connectedByEndpoint,
+        labs: mergeLabsByEndpoint(labsByEndpoint)
+      };
+    }),
+
+  clear: () => set({
+    labs: new Map(),
+    labsByEndpoint: new Map(),
+    connectedByEndpoint: new Map()
+  }),
+
+  getAllLabs: () => get().labs,
+  getLabsForEndpoint: (endpointId) => get().labsByEndpoint.get(endpointId) ?? new Map()
 }));

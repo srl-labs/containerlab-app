@@ -2,6 +2,7 @@ import type { AlertColor } from "@mui/material/Alert";
 import { create } from "zustand";
 
 import type { NetemFields, RuntimeTargetRequest, TerminalProtocol } from "../runtimeApi";
+import { extractEndpointIdFromTopologyId } from "../standaloneHostShared";
 
 export interface RuntimeInspectRequest {
   mode: "all" | "lab";
@@ -83,14 +84,16 @@ const defaultSnackbar: SnackbarState = {
 };
 
 function topologyKey(target: RuntimeTargetRequest): string {
+  const endpointId =
+    target.endpointId ?? extractEndpointIdFromTopologyId(target.topologyRef?.topologyId) ?? "default";
   if (typeof target.sessionId === "string" && target.sessionId.trim().length > 0) {
-    return `session:${target.sessionId.trim()}`;
+    return `session:${endpointId}:${target.sessionId.trim()}`;
   }
   const topologyRef = target.topologyRef;
   if (!topologyRef) {
-    return "unknown";
+    return `unknown:${endpointId}`;
   }
-  return `topology:${topologyRef.labName ?? ""}:${topologyRef.yamlPath ?? ""}`;
+  return `topology:${endpointId}:${topologyRef.topologyId ?? ""}:${topologyRef.labName ?? ""}:${topologyRef.yamlPath ?? ""}`;
 }
 
 function terminalMatchKey(request: RuntimeTerminalRequest): string {

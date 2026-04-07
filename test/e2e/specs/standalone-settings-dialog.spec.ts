@@ -40,9 +40,11 @@ test.describe("Standalone Settings Dialog", () => {
     const panel = page.locator(SEL_SETTINGS_PANEL);
     await expect(panel).toBeVisible();
     await expect(panel.getByText("Quick Settings")).toBeVisible();
-    await expect(panel.getByText("API Server")).toBeVisible();
+    await expect(panel.getByText("Endpoints")).toBeVisible();
+    await expect(panel.getByText("Configured Endpoints")).toBeVisible();
     await expect(panel.getByRole("button", { name: "Logout" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Open Preferences" })).toBeVisible();
+    await expect(panel.getByRole("button", { name: /Manage .* Endpoint/ })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "General Settings" })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Inspect Labs" })).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "About" })).toHaveCount(0);
   });

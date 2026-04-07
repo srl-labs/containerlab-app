@@ -4,7 +4,7 @@
  * Modeled on dev/main.tsx but connects to the real clab-api-server
  * through the Fastify backend instead of using mock data.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { App, useTopoViewerStore } from "@srl-labs/clab-ui";
@@ -24,19 +24,17 @@ import {
   parseSchemaData,
   type TopologyRef
 } from "@srl-labs/clab-ui/session";
-import type {
-  ExplorerIncomingMessage,
-  ExplorerUiState
-} from "@srl-labs/clab-ui/explorer";
 
 import clabSchema from "../schema/clab.schema.json";
-import { useLabStore, type LabState } from "./stores/labStore";
+import { useLabStore } from "./stores/labStore";
+import { useEndpointStore, type EndpointSessionDuration } from "./stores/endpointStore";
 import { useAuth } from "./hooks/useAuth";
 import { useEventStream } from "./hooks/useEventStream";
 import { LoginPage } from "./components/LoginPage";
 import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 import { RuntimeTerminalWindows } from "./components/RuntimeTerminalWindows";
 import { SettingsOverlay } from "./components/SettingsOverlay";
+import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
   loadTerminalPreferences,
   persistTerminalPreferences,
@@ -48,6 +46,7 @@ import {
   isStandaloneLifecycleCommand
 } from "./standaloneLifecycle";
 import {
+  extractEndpointIdFromTopologyId,
   labsEqualForExplorer,
   normalizePathValue
 } from "./standaloneHostShared";
@@ -183,12 +182,43 @@ currentTheme = loadPersistedTheme();
 
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
-function removeLabFromRuntimeStore(topologyRef: Pick<TopologyRef, "yamlPath">): void {
+function getConfiguredEndpoints() {
+  return Array.from(useEndpointStore.getState().endpoints.values());
+}
+
+function getDefaultEndpointId(): string | undefined {
+  return getConfiguredEndpoints()[0]?.id;
+}
+
+function getConnectedEndpointIdForUiAssets(): string | undefined {
+  const configuredEndpoints = getConfiguredEndpoints();
+  const currentEndpointId = topologyManager.getCurrentEndpointId();
+  if (
+    currentEndpointId &&
+    configuredEndpoints.some(
+      (endpoint) => endpoint.id === currentEndpointId && endpoint.status === "connected"
+    )
+  ) {
+    return currentEndpointId;
+  }
+
+  return configuredEndpoints.find((endpoint) => endpoint.status === "connected")?.id;
+}
+
+function getEndpointIdForEditorContext(): string | undefined {
+  return topologyManager.getCurrentEndpointId() ?? getConnectedEndpointIdForUiAssets();
+}
+
+function removeLabFromRuntimeStore(topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">): void {
   useLabStore.setState((state) => {
     let changed = false;
     const nextLabs = new Map(state.labs);
+    const endpointId = extractEndpointIdFromTopologyId(topologyRef.topologyId);
     const normalizedPath = normalizePathValue(topologyRef.yamlPath ?? "");
     for (const [key, lab] of nextLabs.entries()) {
+      if (endpointId && lab.endpointId !== endpointId) {
+        continue;
+      }
       const matchesPath =
         normalizedPath.length > 0 &&
         (normalizePathValue(lab.topologyPath) === normalizedPath ||
@@ -209,6 +239,8 @@ let standaloneRuntime: ReturnType<typeof createClabUiRuntime> | null = null;
 
 const topologyManager = createStandaloneTopologyManager({
   debounceMs: TOPOLOGY_REFRESH_DEBOUNCE_MS,
+  getEndpoints: getConfiguredEndpoints,
+  getDefaultEndpointId: getDefaultEndpointId,
   getSessionClient: () => {
     if (!standaloneRuntime) {
       throw new Error("Standalone runtime is not initialized.");
@@ -222,7 +254,7 @@ const topologyManager = createStandaloneTopologyManager({
 });
 
 async function refreshCustomNodesForAuthenticatedUser(): Promise<void> {
-  const response = await fetchUiCustomNodes();
+  const response = await fetchUiCustomNodes(getConnectedEndpointIdForUiAssets());
   applyCustomNodes(response.customNodes, response.defaultNode);
 }
 
@@ -234,6 +266,7 @@ async function refreshCustomIconsForCurrentTopology(): Promise<void> {
   }
 
   const response = await fetchUiIcons({
+    endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
     sessionId: topologyManager.getCurrentSessionId() ?? undefined,
     topologyRef
   });
@@ -252,11 +285,15 @@ const lifecycleManager = createStandaloneLifecycleManager({
 
 const explorerBridge = createStandaloneExplorerBridge({
   debounceMs: EXPLORER_REFRESH_DEBOUNCE_MS,
+  getEndpoints: getConfiguredEndpoints,
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache: topologyManager.invalidateTopologyFileListCache,
   invokeLifecycleApi: lifecycleManager.invokeLifecycleApi,
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: topologyManager.loadTopologyFile,
+  removeEndpoint: async (endpointId) => {
+    await topologyManager.disposeEndpointSession(endpointId);
+  },
   resolveApiTopologyPath: topologyManager.resolveApiTopologyPath,
   resolveDeploymentState: topologyManager.resolveDeploymentState,
   resolveTopologyRef: topologyManager.resolveTopologyRef
@@ -308,8 +345,9 @@ function setupStandaloneUiHost(): void {
         runtimeUiActions.notify("No active topology session is available.", "error");
         return null;
       }
+      const endpointId = topologyManager.getCurrentEndpointId() ?? undefined;
       const sessionId = topologyManager.getCurrentSessionId() ?? undefined;
-      return { sessionId, topologyRef };
+      return { endpointId, sessionId, topologyRef };
     };
 
     if (msg.command === "reactTopoViewerLog" || msg.command === "topoViewerLog") {
@@ -417,7 +455,7 @@ function setupStandaloneUiHost(): void {
 
     if (msg.command === "save-custom-node") {
       const { command: _command, ...payload } = msg;
-      void saveUiCustomNode(payload as Record<string, unknown>).then((response) => {
+      void saveUiCustomNode(payload as Record<string, unknown>, getEndpointIdForEditorContext()).then((response) => {
         applyCustomNodeError(null);
         applyCustomNodes(response.customNodes, response.defaultNode);
       }).catch((error: unknown) => {
@@ -434,7 +472,7 @@ function setupStandaloneUiHost(): void {
         applyCustomNodeError("Missing custom node name.");
         return;
       }
-      void deleteUiCustomNode(nodeName).then((response) => {
+      void deleteUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
         applyCustomNodeError(null);
         applyCustomNodes(response.customNodes, response.defaultNode);
       }).catch((error: unknown) => {
@@ -451,7 +489,7 @@ function setupStandaloneUiHost(): void {
         applyCustomNodeError("Missing custom node name.");
         return;
       }
-      void setDefaultUiCustomNode(nodeName).then((response) => {
+      void setDefaultUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
         applyCustomNodeError(null);
         applyCustomNodes(response.customNodes, response.defaultNode);
       }).catch((error: unknown) => {
@@ -476,7 +514,7 @@ function setupStandaloneUiHost(): void {
           if (!file) {
             return;
           }
-          await uploadUiIcon(file);
+          await uploadUiIcon(file, getEndpointIdForEditorContext());
           await refreshCustomIconsForCurrentTopology();
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : String(error);
@@ -492,7 +530,7 @@ function setupStandaloneUiHost(): void {
         runtimeUiActions.notify("Missing icon name.", "error");
         return;
       }
-      void deleteUiIcon(iconName).then(() => refreshCustomIconsForCurrentTopology()).catch((error: unknown) => {
+      void deleteUiIcon(iconName, getEndpointIdForEditorContext()).then(() => refreshCustomIconsForCurrentTopology()).catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
         runtimeUiActions.notify(errorMessage, "error");
       });
@@ -502,6 +540,7 @@ function setupStandaloneUiHost(): void {
     if (msg.command === "icon-reconcile") {
       const target = topologyManager.getCurrentTopologyRef()
         ? {
+            endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
             sessionId: topologyManager.getCurrentSessionId() ?? undefined,
             topologyRef: topologyManager.getCurrentTopologyRef() ?? undefined
           }
@@ -571,18 +610,33 @@ function renderApp(): void {
  * Root component that handles auth and renders the app.
  */
 function StandaloneApp() {
-  const { isAuthenticated, loading, logout, login, error } = useAuth();
-  const connected = useLabStore((s) => s.connected);
+  const {
+    addEndpoint,
+    defaultApiUrl,
+    endpointList,
+    error,
+    hasConnectedEndpoint,
+    hasEndpointSession,
+    loading,
+    logout,
+    reconnectEndpoint,
+    refreshConfig,
+    removeEndpoint,
+    updateEndpoint,
+    setEndpointSessionDuration
+  } = useAuth();
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
-  const [apiUrl, setApiUrl] = useState("");
   const [terminalPreferences, setTerminalPreferences] = useState<TerminalPreferences>(() =>
     loadTerminalPreferences()
   );
 
-  // Start event stream when authenticated
-  useEventStream(isAuthenticated);
+  const startupScreen = useMemo(
+    () => resolveStandaloneStartupScreen(endpointList),
+    [endpointList]
+  );
 
-  // Refresh explorer when lab state changes
+  useEventStream(endpointList);
+
   const labsRef = useRef(useLabStore.getState().labs);
   useEffect(() => {
     const unsub = useLabStore.subscribe((state) => {
@@ -598,31 +652,17 @@ function StandaloneApp() {
     return unsub;
   }, []);
 
-  const refreshApiConfig = useCallback(async () => {
-    try {
-      const res = await fetch("/api/config", { credentials: "include" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { clabApiUrl?: string; defaultClabApiUrl?: string };
-      if (typeof data.clabApiUrl === "string" && data.clabApiUrl.length > 0) {
-        setApiUrl(data.clabApiUrl);
-        return;
-      }
-      if (typeof data.defaultClabApiUrl === "string" && data.defaultClabApiUrl.length > 0) {
-        setApiUrl(data.defaultClabApiUrl);
-      }
-    } catch {
-      // Keep current value if config endpoint is temporarily unavailable
-    }
-  }, []);
-
-  useEffect(() => {
-    void refreshApiConfig();
-  }, [isAuthenticated, refreshApiConfig]);
-
   useEffect(() => {
     let cancelled = false;
 
-    if (!isAuthenticated) {
+    if (!hasEndpointSession) {
+      clearStandaloneUiState();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!hasConnectedEndpoint) {
       clearStandaloneUiState();
       return () => {
         cancelled = true;
@@ -647,21 +687,65 @@ function StandaloneApp() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated]);
+  }, [hasConnectedEndpoint, hasEndpointSession]);
 
   useEffect(() => {
-    topologyManager.setAuthenticated(isAuthenticated);
+    const currentEndpointId = topologyManager.getCurrentEndpointId();
+    if (!currentEndpointId) {
+      return;
+    }
+    if (endpointList.some((endpoint) => endpoint.id === currentEndpointId)) {
+      return;
+    }
+    clearStandaloneUiState();
+    void topologyManager.disposeEndpointSession(currentEndpointId);
+  }, [endpointList]);
+
+  useEffect(() => {
+    topologyManager.setAuthenticated(hasEndpointSession);
     return () => {
       topologyManager.closeEventStream();
     };
-  }, [isAuthenticated]);
+  }, [hasEndpointSession]);
 
-  const handleLogin = useCallback(
-    async (username: string, password: string, selectedApiUrl: string) => {
-      await login(username, password, selectedApiUrl);
-      await refreshApiConfig();
+  useEffect(() => {
+    scheduleExplorerSnapshot(0);
+  }, [endpointList]);
+
+  const handleAddEndpoint = useCallback(
+    async (input: {
+      label?: string;
+      password: string;
+      sessionDuration: EndpointSessionDuration;
+      url: string;
+      username: string;
+    }) => {
+      await addEndpoint(input);
+      await refreshConfig().catch(() => {});
+      scheduleExplorerSnapshot(0);
     },
-    [login, refreshApiConfig]
+    [addEndpoint, refreshConfig]
+  );
+
+  const handleReconnectEndpoint = useCallback(
+    async (input: { endpointId: string; password: string; username: string }) => {
+      await reconnectEndpoint(input);
+      scheduleExplorerSnapshot(0);
+    },
+    [reconnectEndpoint]
+  );
+
+  const handleRemoveEndpoint = useCallback(
+    async (endpointId: string) => {
+      const currentEndpointId = topologyManager.getCurrentEndpointId();
+      if (currentEndpointId === endpointId) {
+        clearStandaloneUiState();
+        await topologyManager.disposeEndpointSession(endpointId);
+      }
+      await removeEndpoint(endpointId);
+      scheduleExplorerSnapshot(0);
+    },
+    [removeEndpoint]
   );
 
   const handleThemeChange = useCallback((nextTheme: "light" | "dark") => {
@@ -684,6 +768,27 @@ function StandaloneApp() {
     runtimeUiActions.notify("Terminal settings updated.", "success");
   }, []);
 
+  const handleSetEndpointSessionDuration = useCallback(
+    (endpointId: string, sessionDuration: EndpointSessionDuration) => {
+      setEndpointSessionDuration(endpointId, sessionDuration);
+    },
+    [setEndpointSessionDuration]
+  );
+
+  const handleUpdateEndpoint = useCallback(
+    async (input: {
+      endpointId: string;
+      label: string;
+      sessionDuration: EndpointSessionDuration;
+      url: string;
+      username: string;
+    }) => {
+      await updateEndpoint(input);
+      scheduleExplorerSnapshot(0);
+    },
+    [updateEndpoint]
+  );
+
   if (loading) {
     return (
       <div style={{
@@ -695,14 +800,17 @@ function StandaloneApp() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (startupScreen === "login") {
     return (
       <MuiThemeProvider>
         <LoginPage
+          defaultApiUrl={defaultApiUrl}
+          endpoints={endpointList}
           error={error}
-          apiUrl={apiUrl}
-          onApiUrlChange={setApiUrl}
-          onLogin={handleLogin}
+          onAddEndpoint={handleAddEndpoint}
+          onReconnectEndpoint={handleReconnectEndpoint}
+          onRemoveEndpoint={handleRemoveEndpoint}
+          onUpdateEndpoint={handleUpdateEndpoint}
         />
       </MuiThemeProvider>
     );
@@ -717,11 +825,16 @@ function StandaloneApp() {
       </MuiThemeProvider>
       <SettingsOverlayMounted
         currentTheme={theme}
+        defaultApiUrl={defaultApiUrl}
+        endpoints={endpointList}
+        onAddEndpoint={handleAddEndpoint}
         onThemeChange={handleThemeChange}
         onLogout={handleLogout}
+        onReconnectEndpoint={handleReconnectEndpoint}
+        onRemoveEndpoint={handleRemoveEndpoint}
+        onUpdateEndpoint={handleUpdateEndpoint}
+        onSetEndpointSessionDuration={handleSetEndpointSessionDuration}
         onSaveTerminalPreferences={handleSaveTerminalPreferences}
-        connected={connected}
-        apiUrl={apiUrl || "unknown"}
         terminalPreferences={terminalPreferences}
       />
     </>
@@ -733,11 +846,35 @@ function StandaloneApp() {
  */
 function SettingsOverlayMounted(props: {
   currentTheme: "light" | "dark";
-  onThemeChange: (nextTheme: "light" | "dark") => void;
+  defaultApiUrl: string;
+  endpoints: ReturnType<typeof useAuth>["endpointList"];
+  onAddEndpoint: (input: {
+    label?: string;
+    password: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
   onLogout: () => void;
+  onReconnectEndpoint: (input: {
+    endpointId: string;
+    password: string;
+    username: string;
+  }) => Promise<void>;
+  onRemoveEndpoint: (endpointId: string) => Promise<void>;
+  onUpdateEndpoint: (input: {
+    endpointId: string;
+    label: string;
+    sessionDuration: EndpointSessionDuration;
+    url: string;
+    username: string;
+  }) => Promise<void>;
+  onSetEndpointSessionDuration: (
+    endpointId: string,
+    sessionDuration: EndpointSessionDuration
+  ) => void;
   onSaveTerminalPreferences: (next: TerminalPreferences) => void;
-  connected: boolean;
-  apiUrl: string;
+  onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
 }) {
   const overlayContainer = document.getElementById("settings-overlay");
@@ -747,11 +884,16 @@ function SettingsOverlayMounted(props: {
     <MuiThemeProvider>
       <SettingsOverlay
         currentTheme={props.currentTheme}
+        defaultApiUrl={props.defaultApiUrl}
+        endpoints={props.endpoints}
+        onAddEndpoint={props.onAddEndpoint}
         onThemeChange={props.onThemeChange}
         onLogout={props.onLogout}
+        onReconnectEndpoint={props.onReconnectEndpoint}
+        onRemoveEndpoint={props.onRemoveEndpoint}
+        onUpdateEndpoint={props.onUpdateEndpoint}
+        onSetEndpointSessionDuration={props.onSetEndpointSessionDuration}
         onSaveTerminalPreferences={props.onSaveTerminalPreferences}
-        apiUrl={props.apiUrl}
-        connected={props.connected}
         terminalPreferences={props.terminalPreferences}
       />
     </MuiThemeProvider>,

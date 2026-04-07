@@ -9,7 +9,7 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development concurrently -k -n server,vite \"tsx watch server/index.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts'\"",
+    "dev": "NODE_ENV=development concurrently -k -n server,vite \"tsx watch server/index.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts --force'\"",
     "build": "vite build --config vite.config.ts && npm run build:server",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/server/index.cjs --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
@@ -29,7 +29,7 @@
     "@fastify/websocket": "^11.2.0",
     "@mui/icons-material": "^7.3.8",
     "@mui/material": "^7.3.8",
-    "@srl-labs/clab-ui": "^0.0.20",
+    "@srl-labs/clab-ui": "0.0.21",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "ajv": "^8.18.0",

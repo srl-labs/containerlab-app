@@ -1,21 +1,24 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { ClabApiClient } from "./clabApiClient.js";
 import type {
-  ClabApiClient,
   InspectContainerInfo,
   NetemResetRequest,
   NetemSetRequest,
   TerminalProtocol
 } from "./clabApiClient.js";
-import { getTokenFromRequest } from "./middleware.js";
+import type { EndpointEntry } from "./endpointSessionStore.js";
+import { getEndpointIdFromRequest } from "./middleware.js";
 import {
   buildStandaloneTopologyRef,
+  extractEndpointIdFromTopologyId,
   resolveCanonicalStandaloneTopologyRef
 } from "./topologyIdentity.js";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
 
 interface RuntimeTargetBody {
+  endpointId?: string;
   sessionId?: string;
   topologyRef?: TopologyRef;
 }
@@ -50,7 +53,7 @@ interface NetemBody extends RuntimeTargetBody {
   corruption?: number;
 }
 
-interface CreateTopologyFileBody {
+interface CreateTopologyFileBody extends RuntimeTargetBody {
   content?: string;
   fileName: string;
 }
@@ -71,7 +74,13 @@ interface UiIconReconcileBody extends RuntimeTargetBody {
   usedIcons?: string[];
 }
 
-type ClientResolver = (request: FastifyRequest) => ClabApiClient;
+type EndpointResolver = (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  endpointId?: string
+) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
+
+type EndpointListResolver = (request: FastifyRequest, reply: FastifyReply) => EndpointEntry[];
 
 interface ResolvedLabTarget {
   labName: string;
@@ -96,16 +105,19 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   return reply.status(500).send({ error: message });
 }
 
+function resolveRequestedEndpointId(target?: RuntimeTargetBody): string | undefined {
+  return target?.endpointId ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId);
+}
+
 async function resolveLabTarget(
-  request: FastifyRequest,
-  token: string,
+  endpoint: EndpointEntry,
   client: ClabApiClient,
   sessions: StandaloneTopologySessionManager,
   target: RuntimeTargetBody
 ): Promise<ResolvedLabTarget> {
   const sessionId = target.sessionId?.trim() ?? "";
   if (sessionId) {
-    const session = sessions.getSession(sessionId, token, client.getBaseUrl());
+    const session = sessions.getSession(sessionId, endpoint.id);
     if (!session) {
       throw new RequestError("Topology session not found", 404);
     }
@@ -117,7 +129,12 @@ async function resolveLabTarget(
   }
 
   if (target.topologyRef) {
-    const topologyRef = await resolveCanonicalStandaloneTopologyRef(client, token, target.topologyRef);
+    const topologyRef = await resolveCanonicalStandaloneTopologyRef(
+      client,
+      endpoint.token,
+      target.topologyRef,
+      endpoint.id
+    );
     return {
       labName: topologyRef.labName,
       topologyRef,
@@ -224,19 +241,57 @@ function buildDefaultTopologyContent(labName: string): string {
   return `name: ${labName}\ntopology:\n  nodes: {}\n`;
 }
 
+function mergeInspectAllResponses(
+  entries: Array<{ endpoint: EndpointEntry; labs: Record<string, InspectContainerInfo[]> }>
+): Record<string, InspectContainerInfo[]> {
+  if (entries.length <= 1) {
+    return entries[0]?.labs ?? {};
+  }
+
+  const merged: Record<string, InspectContainerInfo[]> = {};
+  for (const { endpoint, labs } of entries) {
+    for (const [labName, containers] of Object.entries(labs)) {
+      merged[`${labName} @ ${endpoint.label}`] = containers;
+    }
+  }
+  return merged;
+}
+
 export function registerRuntimeProxy(
   app: FastifyInstance,
-  getClient: ClientResolver,
+  resolveEndpoint: EndpointResolver,
+  listEndpoints: EndpointListResolver,
   sessions: StandaloneTopologySessionManager
 ): void {
   app.get("/api/runtime/inspect/all", async (request, reply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) return reply.status(401).send({ error: "Not authenticated" });
+    const requestedEndpointId = getEndpointIdFromRequest(request);
+    const specific = requestedEndpointId
+      ? resolveEndpoint(request, reply, requestedEndpointId)
+      : null;
+    if (requestedEndpointId) {
+      if (!specific) {
+        return reply.status(401).send({ error: "Not authenticated" });
+      }
+      try {
+        return reply.send(await specific.client.listLabs(specific.endpoint.token));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+
+    const endpoints = listEndpoints(request, reply);
+    if (endpoints.length === 0) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
 
     try {
-      const client = getClient(request);
-      const labs = await client.listLabs(token);
-      return reply.send(labs);
+      const responses = await Promise.all(
+        endpoints.map(async (endpoint) => ({
+          endpoint,
+          labs: await new ClabApiClient({ baseUrl: endpoint.url }).listLabs(endpoint.token)
+        }))
+      );
+      return reply.send(mergeInspectAllResponses(responses));
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -245,13 +300,13 @@ export function registerRuntimeProxy(
   app.post<{ Body: RuntimeTargetBody }>(
     "/api/runtime/inspect/lab",
     async (request: FastifyRequest<{ Body: RuntimeTargetBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const lab = await client.inspectLab(token, target.labName);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const lab = await client.inspectLab(endpoint.token, target.labName);
         return reply.send(lab);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -262,25 +317,25 @@ export function registerRuntimeProxy(
   app.post<{ Body: SaveBody }>(
     "/api/runtime/save",
     async (request: FastifyRequest<{ Body: SaveBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
         let nodeFilter: string | undefined;
 
         if (typeof request.body.nodeName === "string" && request.body.nodeName.trim().length > 0) {
           const resolvedNode = await resolveNodeTarget(
             client,
-            token,
+            endpoint.token,
             target.labName,
             request.body.nodeName
           );
           nodeFilter = resolvedNode.nodeFilter;
         }
 
-        const result = await client.saveLab(token, target.labName, { nodeFilter });
+        const result = await client.saveLab(endpoint.token, target.labName, { nodeFilter });
         return reply.send(result);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -291,17 +346,27 @@ export function registerRuntimeProxy(
   app.post<{ Body: NodeBody }>(
     "/api/runtime/ssh",
     async (request: FastifyRequest<{ Body: NodeBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
-        const sshAccess = await client.requestSshAccess(token, target.labName, resolvedNode.container.name, {
-          duration: normalizeOptionalString(request.body.duration),
-          sshUsername: normalizeOptionalString(request.body.sshUsername)
-        });
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+        const sshAccess = await client.requestSshAccess(
+          endpoint.token,
+          target.labName,
+          resolvedNode.container.name,
+          {
+            duration: normalizeOptionalString(request.body.duration),
+            sshUsername: normalizeOptionalString(request.body.sshUsername)
+          }
+        );
         return reply.send(sshAccess);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -312,14 +377,19 @@ export function registerRuntimeProxy(
   app.post<{ Body: NodeBody }>(
     "/api/runtime/logs",
     async (request: FastifyRequest<{ Body: NodeBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
-        const logs = await client.getNodeLogs(token, target.labName, resolvedNode.container.name, {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+        const logs = await client.getNodeLogs(endpoint.token, target.labName, resolvedNode.container.name, {
           tail: normalizeOptionalString(request.body.tail) ?? "200"
         });
         return reply.send(logs);
@@ -332,20 +402,30 @@ export function registerRuntimeProxy(
   app.post<{ Body: TerminalBody }>(
     "/api/runtime/terminal-sessions",
     async (request: FastifyRequest<{ Body: TerminalBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
-        const session = await client.createTerminalSession(token, target.labName, resolvedNode.container.name, {
-          protocol: request.body.protocol,
-          cols: normalizeOptionalInteger(request.body.cols) ?? 120,
-          rows: normalizeOptionalInteger(request.body.rows) ?? 36,
-          sshUsername: normalizeOptionalString(request.body.sshUsername),
-          telnetPort: normalizeOptionalInteger(request.body.telnetPort)
-        });
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+        const session = await client.createTerminalSession(
+          endpoint.token,
+          target.labName,
+          resolvedNode.container.name,
+          {
+            protocol: request.body.protocol,
+            cols: normalizeOptionalInteger(request.body.cols) ?? 120,
+            rows: normalizeOptionalInteger(request.body.rows) ?? 36,
+            sshUsername: normalizeOptionalString(request.body.sshUsername),
+            telnetPort: normalizeOptionalInteger(request.body.telnetPort)
+          }
+        );
         return reply.send(session);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -356,12 +436,14 @@ export function registerRuntimeProxy(
   app.get<{ Params: { sessionId: string } }>(
     "/api/runtime/terminal-sessions/:sessionId",
     async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const session = await client.getTerminalSession(token, request.params.sessionId);
+        const session = await resolved.client.getTerminalSession(
+          resolved.endpoint.token,
+          request.params.sessionId
+        );
         return reply.send(session);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -372,12 +454,11 @@ export function registerRuntimeProxy(
   app.delete<{ Params: { sessionId: string } }>(
     "/api/runtime/terminal-sessions/:sessionId",
     async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        await client.deleteTerminalSession(token, request.params.sessionId);
+        await resolved.client.deleteTerminalSession(resolved.endpoint.token, request.params.sessionId);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -388,14 +469,19 @@ export function registerRuntimeProxy(
   app.post<{ Body: NetemBody }>(
     "/api/runtime/netem/show",
     async (request: FastifyRequest<{ Body: NetemBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
-        const impairments = await client.showNetem(token, resolvedNode.container.name);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+        const impairments = await client.showNetem(endpoint.token, resolvedNode.container.name);
         return reply.send({
           containerName: resolvedNode.container.name,
           impairments
@@ -409,8 +495,8 @@ export function registerRuntimeProxy(
   app.post<{ Body: NetemBody }>(
     "/api/runtime/netem/set",
     async (request: FastifyRequest<{ Body: NetemBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
         const interfaceName = normalizeOptionalString(request.body.interfaceName);
@@ -418,9 +504,14 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing interfaceName", 400);
         }
 
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
         const netemRequest: NetemSetRequest = {
           containerName: resolvedNode.container.name,
           interface: interfaceName,
@@ -430,7 +521,7 @@ export function registerRuntimeProxy(
           rate: parseOptionalNumber(request.body.rate),
           corruption: parseOptionalNumber(request.body.corruption)
         };
-        await client.setNetem(token, netemRequest);
+        await client.setNetem(endpoint.token, netemRequest);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -441,8 +532,8 @@ export function registerRuntimeProxy(
   app.post<{ Body: NetemBody }>(
     "/api/runtime/netem/reset",
     async (request: FastifyRequest<{ Body: NetemBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
         const interfaceName = normalizeOptionalString(request.body.interfaceName);
@@ -450,14 +541,19 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing interfaceName", 400);
         }
 
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        const resolvedNode = await resolveNodeTarget(client, token, target.labName, request.body.nodeName);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
         const netemRequest: NetemResetRequest = {
           containerName: resolvedNode.container.name,
           interface: interfaceName
         };
-        await client.resetNetem(token, netemRequest);
+        await client.resetNetem(endpoint.token, netemRequest);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -466,36 +562,33 @@ export function registerRuntimeProxy(
   );
 
   app.get("/api/runtime/version", async (request, reply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) return reply.status(401).send({ error: "Not authenticated" });
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      const client = getClient(request);
-      return reply.send(await client.getVersion(token));
+      return reply.send(await resolved.client.getVersion(resolved.endpoint.token));
     } catch (error) {
       return handleRouteError(reply, error);
     }
   });
 
   app.get("/api/runtime/version/check", async (request, reply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) return reply.status(401).send({ error: "Not authenticated" });
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      const client = getClient(request);
-      return reply.send(await client.checkVersion(token));
+      return reply.send(await resolved.client.checkVersion(resolved.endpoint.token));
     } catch (error) {
       return handleRouteError(reply, error);
     }
   });
 
   app.get("/api/runtime/ui/custom-nodes", async (request, reply) => {
-    const token = getTokenFromRequest(request);
-    if (!token) return reply.status(401).send({ error: "Not authenticated" });
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      const client = getClient(request);
-      return reply.send(await client.getCustomNodes(token));
+      return reply.send(await resolved.client.getCustomNodes(resolved.endpoint.token));
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -504,12 +597,11 @@ export function registerRuntimeProxy(
   app.post<{ Body: Record<string, unknown> }>(
     "/api/runtime/ui/custom-nodes",
     async (request: FastifyRequest<{ Body: Record<string, unknown> }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        return reply.send(await client.saveCustomNode(token, request.body));
+        return reply.send(await resolved.client.saveCustomNode(resolved.endpoint.token, request.body));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -519,12 +611,11 @@ export function registerRuntimeProxy(
   app.delete<{ Params: { name: string } }>(
     "/api/runtime/ui/custom-nodes/:name",
     async (request: FastifyRequest<{ Params: { name: string } }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        return reply.send(await client.deleteCustomNode(token, request.params.name));
+        return reply.send(await resolved.client.deleteCustomNode(resolved.endpoint.token, request.params.name));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -534,16 +625,15 @@ export function registerRuntimeProxy(
   app.post<{ Body: UiCustomNodeDefaultBody }>(
     "/api/runtime/ui/custom-nodes/default",
     async (request: FastifyRequest<{ Body: UiCustomNodeDefaultBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
         const name = normalizeOptionalString(request.body.name);
         if (!name) {
           throw new RequestError("Missing custom node name", 400);
         }
-        return reply.send(await client.setDefaultCustomNode(token, name));
+        return reply.send(await resolved.client.setDefaultCustomNode(resolved.endpoint.token, name));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -553,13 +643,12 @@ export function registerRuntimeProxy(
   app.post<{ Body: UiIconListBody }>(
     "/api/runtime/ui/icons/list",
     async (request: FastifyRequest<{ Body: UiIconListBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
-        return reply.send(await client.listLabIcons(token, target.labName));
+        const target = await resolveLabTarget(resolved.endpoint, resolved.client, sessions, request.body);
+        return reply.send(await resolved.client.listLabIcons(resolved.endpoint.token, target.labName));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -569,12 +658,11 @@ export function registerRuntimeProxy(
   app.post<{ Body: UiIconUploadBody }>(
     "/api/runtime/ui/icons",
     async (request: FastifyRequest<{ Body: UiIconUploadBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        return reply.send(await client.uploadGlobalIcon(token, request.body));
+        return reply.send(await resolved.client.uploadGlobalIcon(resolved.endpoint.token, request.body));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -584,12 +672,11 @@ export function registerRuntimeProxy(
   app.delete<{ Params: { iconName: string } }>(
     "/api/runtime/ui/icons/:iconName",
     async (request: FastifyRequest<{ Params: { iconName: string } }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        await client.deleteGlobalIcon(token, request.params.iconName);
+        await resolved.client.deleteGlobalIcon(resolved.endpoint.token, request.params.iconName);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -600,16 +687,15 @@ export function registerRuntimeProxy(
   app.post<{ Body: UiIconReconcileBody }>(
     "/api/runtime/ui/icons/reconcile",
     async (request: FastifyRequest<{ Body: UiIconReconcileBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        const target = await resolveLabTarget(resolved.endpoint, resolved.client, sessions, request.body);
         const usedIcons = Array.isArray(request.body.usedIcons)
           ? request.body.usedIcons.filter((value): value is string => typeof value === "string")
           : [];
-        await client.reconcileLabIcons(token, target.labName, usedIcons);
+        await resolved.client.reconcileLabIcons(resolved.endpoint.token, target.labName, usedIcons);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -620,22 +706,22 @@ export function registerRuntimeProxy(
   app.post<{ Body: CreateTopologyFileBody }>(
     "/api/runtime/topology-file/create",
     async (request: FastifyRequest<{ Body: CreateTopologyFileBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
+        const { client, endpoint } = resolved;
         const fileName = validateTopologyFileName(request.body.fileName);
         const labName = stripTopologySuffix(fileName);
-        if (await client.headFile(token, labName, fileName)) {
+        if (await client.headFile(endpoint.token, labName, fileName)) {
           throw new RequestError(`Topology file "${fileName}" already exists.`, 409);
         }
 
         const content =
           normalizeOptionalString(request.body.content) ?? buildDefaultTopologyContent(labName);
-        await client.putFile(token, labName, fileName, content);
+        await client.putFile(endpoint.token, labName, fileName, content);
 
-        const topologies = await client.listTopologies(token);
+        const topologies = await client.listTopologies(endpoint.token);
         const topologyEntry = topologies.find(
           (entry) => entry.labName === labName && entry.yamlFileName === fileName
         );
@@ -643,14 +729,16 @@ export function registerRuntimeProxy(
         return reply.send({
           success: true,
           topologyRef: topologyEntry
-            ? buildStandaloneTopologyRef(topologyEntry)
-            : {
-                topologyId: `standalone:${fileName}`,
-                labName,
-                yamlPath: fileName,
-                annotationsPath: `${fileName}.annotations.json`,
-                source: "standalone"
-              }
+            ? buildStandaloneTopologyRef(topologyEntry, endpoint.id)
+            : buildStandaloneTopologyRef(
+                {
+                  annotationsFileName: `${fileName}.annotations.json`,
+                  hasAnnotations: false,
+                  labName,
+                  yamlFileName: fileName
+                },
+                endpoint.id
+              )
         });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -661,16 +749,16 @@ export function registerRuntimeProxy(
   app.post<{ Body: RuntimeTargetBody }>(
     "/api/runtime/topology-file/delete",
     async (request: FastifyRequest<{ Body: RuntimeTargetBody }>, reply: FastifyReply) => {
-      const token = getTokenFromRequest(request);
-      if (!token) return reply.status(401).send({ error: "Not authenticated" });
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const client = getClient(request);
-        const target = await resolveLabTarget(request, token, client, sessions, request.body);
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
         if (!target.yamlPath) {
           throw new RequestError("Missing topology file path", 400);
         }
-        await client.deleteFile(token, target.labName, target.yamlPath);
+        await client.deleteFile(endpoint.token, target.labName, target.yamlPath);
         return reply.send({ success: true, path: target.yamlPath });
       } catch (error) {
         return handleRouteError(reply, error);
