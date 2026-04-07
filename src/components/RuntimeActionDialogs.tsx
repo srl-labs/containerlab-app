@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -6,9 +6,11 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Paper from "@mui/material/Paper";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
+import Switch from "@mui/material/Switch";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -196,6 +198,13 @@ function mergeInterfaceFields(
   return next;
 }
 
+function countLogLines(content: string): number {
+  if (!content) {
+    return 0;
+  }
+  return content.split(/\r?\n/).length;
+}
+
 export function RuntimeActionDialogs() {
   const labs = useLabStore((state) => state.labs);
   const inspectRequest = useRuntimeUiStore((state) => state.inspectRequest);
@@ -216,7 +225,11 @@ export function RuntimeActionDialogs() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
   const [logsTail, setLogsTail] = useState("200");
+  const [logsFollow, setLogsFollow] = useState(true);
+  const [logsFilter, setLogsFilter] = useState("");
   const [logsContent, setLogsContent] = useState("");
+  const logsFetchRequestIdRef = useRef(0);
+  const logsPaperRef = useRef<HTMLDivElement | null>(null);
 
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
@@ -233,6 +246,20 @@ export function RuntimeActionDialogs() {
     () => filterInspectGroups(inspectGroups, inspectFilter),
     [inspectGroups, inspectFilter]
   );
+
+  const filteredLogsContent = useMemo(() => {
+    const normalizedFilter = logsFilter.trim().toLowerCase();
+    if (!normalizedFilter) {
+      return logsContent;
+    }
+    return logsContent
+      .split(/\r?\n/)
+      .filter((line) => line.toLowerCase().includes(normalizedFilter))
+      .join("\n");
+  }, [logsContent, logsFilter]);
+
+  const totalLogLines = useMemo(() => countLogLines(logsContent), [logsContent]);
+  const visibleLogLines = useMemo(() => countLogLines(filteredLogsContent), [filteredLogsContent]);
 
   const runtimeContainer = useMemo(() => {
     if (!netemRequest) {
@@ -291,68 +318,97 @@ export function RuntimeActionDialogs() {
     };
   }, [inspectRequest]);
 
-  useEffect(() => {
-    if (!logsRequest) {
-      setLogsContent("");
-      setLogsError(null);
-      setLogsTail("200");
-      return;
-    }
-
-    let cancelled = false;
-    const initialTail = "200";
-    setLogsTail(initialTail);
-    setLogsLoading(true);
-    setLogsError(null);
-
-    const load = async () => {
-      try {
-        const response = await fetchNodeLogs({
-          sessionId: logsRequest.sessionId,
-          topologyRef: logsRequest.topologyRef,
-          nodeName: logsRequest.nodeName,
-          tail: initialTail
-        });
-        if (!cancelled) {
-          setLogsContent(response.logs);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setLogsError(error instanceof Error ? error.message : String(error));
-        }
-      } finally {
-        if (!cancelled) {
-          setLogsLoading(false);
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [logsRequest]);
-
-  const refreshLogs = async (): Promise<void> => {
+  const fetchLogs = useCallback(async (tailValue: string, showLoading: boolean): Promise<void> => {
     if (!logsRequest) {
       return;
     }
-    setLogsLoading(true);
+    const requestId = ++logsFetchRequestIdRef.current;
+    if (showLoading) {
+      setLogsLoading(true);
+    }
     setLogsError(null);
     try {
       const response = await fetchNodeLogs({
         sessionId: logsRequest.sessionId,
         topologyRef: logsRequest.topologyRef,
         nodeName: logsRequest.nodeName,
-        tail: logsTail
+        tail: tailValue
       });
+      if (requestId !== logsFetchRequestIdRef.current) {
+        return;
+      }
       setLogsContent(response.logs);
     } catch (error) {
+      if (requestId !== logsFetchRequestIdRef.current) {
+        return;
+      }
       setLogsError(error instanceof Error ? error.message : String(error));
     } finally {
-      setLogsLoading(false);
+      if (showLoading && requestId === logsFetchRequestIdRef.current) {
+        setLogsLoading(false);
+      }
     }
-  };
+  }, [logsRequest]);
+
+  useEffect(() => {
+    if (!logsRequest) {
+      logsFetchRequestIdRef.current += 1;
+      setLogsContent("");
+      setLogsError(null);
+      setLogsTail("200");
+      setLogsFollow(true);
+      setLogsFilter("");
+      setLogsLoading(false);
+      return;
+    }
+
+    const initialTail = "200";
+    setLogsTail(initialTail);
+    setLogsFollow(true);
+    setLogsFilter("");
+    void fetchLogs(initialTail, true);
+    return () => {
+      logsFetchRequestIdRef.current += 1;
+    };
+  }, [fetchLogs, logsRequest]);
+
+  useEffect(() => {
+    if (!logsRequest || !logsFollow) {
+      return;
+    }
+    const intervalId = window.setInterval(() => {
+      void fetchLogs(logsTail, false);
+    }, 2000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchLogs, logsFollow, logsRequest, logsTail]);
+
+  useEffect(() => {
+    if (!logsFollow) {
+      return;
+    }
+    const paperNode = logsPaperRef.current;
+    if (!paperNode) {
+      return;
+    }
+    paperNode.scrollTop = paperNode.scrollHeight;
+  }, [filteredLogsContent, logsFollow]);
+
+  const exportLogs = useCallback((): void => {
+    if (!logsRequest || !filteredLogsContent) {
+      return;
+    }
+    const safeNodeName = logsRequest.nodeName.trim().replace(/[^A-Za-z0-9._-]/g, "-") || "node";
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const blob = new Blob([filteredLogsContent], { type: "text/plain;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeNodeName}-logs-${stamp}.log`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+  }, [filteredLogsContent, logsRequest]);
 
   useEffect(() => {
     if (!versionOpen) {
@@ -573,13 +629,38 @@ export function RuntimeActionDialogs() {
                 size="small"
                 sx={{ maxWidth: 200 }}
               />
-              <Button variant="outlined" onClick={() => void refreshLogs()} disabled={logsLoading}>
+              <TextField
+                label="Find"
+                value={logsFilter}
+                onChange={(event) => setLogsFilter(event.target.value)}
+                size="small"
+                sx={{ minWidth: 240 }}
+              />
+              <Button variant="outlined" onClick={() => void fetchLogs(logsTail, true)} disabled={logsLoading}>
                 Refresh
               </Button>
+              <Button variant="outlined" onClick={exportLogs} disabled={!filteredLogsContent}>
+                Export
+              </Button>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={logsFollow}
+                    onChange={(event) => setLogsFollow(event.target.checked)}
+                  />
+                }
+                label="Follow"
+              />
             </Stack>
             {logsLoading ? <Typography>Loading logs...</Typography> : null}
             {logsError ? <Alert severity="error">{logsError}</Alert> : null}
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              {logsFilter.trim()
+                ? `Showing ${visibleLogLines}/${totalLogLines} lines`
+                : `${totalLogLines} lines`}
+            </Typography>
             <Paper
+              ref={logsPaperRef}
               variant="outlined"
               sx={{
                 bgcolor: "background.default",
@@ -598,7 +679,7 @@ export function RuntimeActionDialogs() {
                   wordBreak: "break-word"
                 }}
               >
-                {logsContent || "No logs returned."}
+                {filteredLogsContent || (logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
               </Typography>
             </Paper>
           </Stack>
