@@ -136,10 +136,17 @@ export function getRuntimeContainersForTopology(
   return getRuntimeContainers(findLabStateForTopology(topologyRef, labs));
 }
 
+export interface RuntimeContainerCompareOptions {
+  includeInterfaceStats?: boolean;
+}
+
 export function runtimeContainersEqual(
   previous: HostRuntimeContainer[],
-  next: HostRuntimeContainer[]
+  next: HostRuntimeContainer[],
+  options: RuntimeContainerCompareOptions = {}
 ): boolean {
+  const includeInterfaceStats = options.includeInterfaceStats ?? true;
+
   if (previous.length !== next.length) {
     return false;
   }
@@ -178,9 +185,11 @@ export function runtimeContainersEqual(
         prevIface.type !== nextIface.type ||
         prevIface.mac !== nextIface.mac ||
         prevIface.mtu !== nextIface.mtu ||
-        prevIface.ifIndex !== nextIface.ifIndex ||
-        !runtimeInterfaceStatsEqual(prevIface.stats, nextIface.stats)
+        prevIface.ifIndex !== nextIface.ifIndex
       ) {
+        return false;
+      }
+      if (includeInterfaceStats && !runtimeInterfaceStatsEqual(prevIface.stats, nextIface.stats)) {
         return false;
       }
     }

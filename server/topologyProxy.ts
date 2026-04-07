@@ -9,12 +9,18 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
 import type {
+  TopologyEdgeData,
+  TopologyNodeData,
   TopologyRef,
   TopologyHostCommand,
   TopologyHostResponseMessage,
   TopologySnapshot
 } from "@srl-labs/clab-ui/session";
-import { createRuntimeContainerDataProvider } from "@srl-labs/clab-ui/session";
+import {
+  buildRuntimeEdgeStatsUpdates,
+  buildRuntimeNodeUpdates,
+  createRuntimeContainerDataProvider
+} from "@srl-labs/clab-ui/session";
 import type { HostRuntimeContainer, HostRuntimeInterface } from "@srl-labs/clab-ui/host";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
 import {
@@ -107,11 +113,170 @@ function toRuntimeContainers(containers: RuntimeContainerPayload[]): HostRuntime
   }));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function toStringValue(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function resolveLinkStatusFromClasses(
+  classes: string | undefined,
+  fallback: unknown
+): "up" | "down" | "unknown" | undefined {
+  if (typeof classes === "string") {
+    if (classes.includes("link-up")) return "up";
+    if (classes.includes("link-down")) return "down";
+    if (classes.trim().length === 0) return "unknown";
+  }
+
+  if (fallback === "up" || fallback === "down" || fallback === "unknown") {
+    return fallback;
+  }
+
+  return undefined;
+}
+
+function applyRuntimeOverlay(
+  snapshot: TopologySnapshot,
+  runtimeContainers: HostRuntimeContainer[]
+): TopologySnapshot {
+  if (runtimeContainers.length === 0) {
+    return snapshot;
+  }
+
+  const edgeUpdates = buildRuntimeEdgeStatsUpdates(snapshot.edges, runtimeContainers, {
+    currentLabName: snapshot.labName,
+    topology: undefined
+  });
+  const nodeUpdates = buildRuntimeNodeUpdates(runtimeContainers, snapshot.labName);
+
+  if (edgeUpdates.length === 0 && nodeUpdates.length === 0) {
+    return snapshot;
+  }
+
+  const edgeUpdateMap = new Map(edgeUpdates.map((update) => [update.id, update]));
+  const nodeByLongName = new Map(nodeUpdates.map((update) => [update.containerLongName, update]));
+  const nodeByShortName = new Map(nodeUpdates.map((update) => [update.containerShortName, update]));
+
+  let edgesChanged = false;
+  const nextEdges = snapshot.edges.map((edge) => {
+    const update = edgeUpdateMap.get(edge.id);
+    if (!update) {
+      return edge;
+    }
+
+    const edgeData = (edge.data ?? {
+      sourceEndpoint: "",
+      targetEndpoint: ""
+    }) as TopologyEdgeData;
+    const oldExtraData = toRecord(edgeData.extraData);
+    const extraDataDelta = update.extraData ?? {};
+    const hasExtraDataChange = Object.entries(extraDataDelta).some(
+      ([key, value]) => oldExtraData[key] !== value
+    );
+    const classNameChanged = update.classes !== undefined && update.classes !== edge.className;
+    const nextLinkStatus = resolveLinkStatusFromClasses(update.classes, edgeData.linkStatus);
+    const linkStatusChanged = nextLinkStatus !== undefined && edgeData.linkStatus !== nextLinkStatus;
+
+    if (!hasExtraDataChange && !classNameChanged && !linkStatusChanged) {
+      return edge;
+    }
+
+    edgesChanged = true;
+    const nextEdgeData: TopologyEdgeData = {
+      ...edgeData,
+      extraData: {
+        ...oldExtraData,
+        ...extraDataDelta
+      },
+      ...(nextLinkStatus !== undefined ? { linkStatus: nextLinkStatus } : {})
+    };
+    return {
+      ...edge,
+      className: update.classes ?? edge.className,
+      data: nextEdgeData
+    };
+  });
+
+  let nodesChanged = false;
+  const nextNodes = snapshot.nodes.map((node) => {
+    if (node.type !== "topology-node") {
+      return node;
+    }
+
+    const nodeData = (node.data ?? {}) as TopologyNodeData;
+    const extraData = toRecord(nodeData.extraData);
+    const longNameCandidate = [nodeData.longname, extraData.longname].find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0
+    );
+    const matchedUpdate =
+      (longNameCandidate ? nodeByLongName.get(longNameCandidate) : undefined) ??
+      nodeByShortName.get(node.id) ??
+      nodeByShortName.get(toStringValue(nodeData.label));
+
+    if (!matchedUpdate) {
+      return node;
+    }
+
+    const nextState = matchedUpdate.state;
+    const nextStatus = matchedUpdate.status ?? "";
+    const nextIpv4 = matchedUpdate.mgmtIpv4Address ?? "";
+    const nextIpv6 = matchedUpdate.mgmtIpv6Address ?? "";
+    const stateChanged =
+      toStringValue(nodeData.state) !== nextState ||
+      toStringValue(extraData.state) !== nextState ||
+      toStringValue(extraData.status) !== nextStatus;
+    const ipChanged =
+      toStringValue(nodeData.mgmtIpv4Address) !== nextIpv4 ||
+      toStringValue(nodeData.mgmtIpv6Address) !== nextIpv6;
+
+    if (!stateChanged && !ipChanged) {
+      return node;
+    }
+
+    nodesChanged = true;
+    const nextNodeData: TopologyNodeData = {
+      ...nodeData,
+      state: nextState,
+      mgmtIpv4Address: nextIpv4,
+      mgmtIpv6Address: nextIpv6,
+      extraData: {
+        ...extraData,
+        state: nextState,
+        status: nextStatus,
+        mgmtIpv4Address: nextIpv4,
+        mgmtIpv6Address: nextIpv6
+      }
+    };
+    return {
+      ...node,
+      data: nextNodeData
+    };
+  });
+
+  if (!edgesChanged && !nodesChanged) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    edges: edgesChanged ? nextEdges : snapshot.edges,
+    nodes: nodesChanged ? nextNodes : snapshot.nodes
+  };
+}
+
 interface SnapshotRequest {
   sessionId?: string;
   topologyRef?: TopologyRef;
   mode?: "edit" | "view";
   deploymentState?: DeploymentState;
+  sourcePreference?: "api-file" | "running-lab-doc";
   runtimeContainers?: RuntimeContainerPayload[];
   externalChange?: boolean;
 }
@@ -172,14 +337,25 @@ async function attachDocumentRevision(
   client: ClabApiClient,
   token: string,
   topologyRef: TopologyRef,
-  snapshot: TopologySnapshot
+  snapshot: TopologySnapshot,
+  options: { force?: boolean } = {}
 ): Promise<TopologySnapshot> {
+  if (
+    !options.force &&
+    typeof snapshot.documentRevision === "string" &&
+    snapshot.documentRevision.trim().length > 0
+  ) {
+    return snapshot;
+  }
   const documentRevision = await client.getTopologyDocumentRevision(
     token,
     topologyRef.labName,
     topologyRef.yamlPath
   );
-  return documentRevision ? { ...snapshot, documentRevision } : snapshot;
+  if (documentRevision) {
+    snapshot.documentRevision = documentRevision;
+  }
+  return snapshot;
 }
 
 type EndpointResolver = (
@@ -230,6 +406,7 @@ export function registerTopologyProxy(
         topologyRef: canonicalTopologyRef,
         mode,
         deploymentState,
+        sourcePreference: request.body.sourcePreference === "running-lab-doc" ? "running-lab-doc" : "api-file",
         containerDataProvider
       });
 
@@ -289,10 +466,8 @@ export function registerTopologyProxy(
       try {
         const deploymentState = body.deploymentState ?? "undeployed";
         const mode = body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
-        const containerDataProvider = createRuntimeContainerDataProvider(
-          toRuntimeContainers(body.runtimeContainers ?? [])
-        );
-        session.host.updateContext({ mode, deploymentState, containerDataProvider });
+        const runtimeContainers = toRuntimeContainers(body.runtimeContainers ?? []);
+        session.host.updateContext({ mode, deploymentState });
 
         let snapshot: TopologySnapshot;
         if (body.externalChange) {
@@ -300,12 +475,17 @@ export function registerTopologyProxy(
         } else {
           snapshot = await session.host.getSnapshot();
         }
-        snapshot = await attachDocumentRevision(
-          client,
-          endpoint.token,
-          session.topologyRef,
-          snapshot
-        );
+
+        if (session.sourcePreference === "api-file") {
+          snapshot = await attachDocumentRevision(
+            client,
+            endpoint.token,
+            session.topologyRef,
+            snapshot,
+            { force: body.externalChange === true }
+          );
+        }
+        snapshot = applyRuntimeOverlay(snapshot, runtimeContainers);
 
         return reply.send({ snapshot });
       } catch (error) {
@@ -350,13 +530,15 @@ export function registerTopologyProxy(
         );
         if (
           (response.type === "topology-host:ack" || response.type === "topology-host:reject") &&
-          response.snapshot
+          response.snapshot &&
+          session.sourcePreference === "api-file"
         ) {
           response.snapshot = await attachDocumentRevision(
             client,
             endpoint.token,
             session.topologyRef,
-            response.snapshot
+            response.snapshot,
+            { force: true }
           );
         }
         return reply.send(response);

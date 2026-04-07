@@ -201,6 +201,36 @@ export class ClabApiClient {
     return (await res.json()) as TopologyEntry[];
   }
 
+  async getLabTopologyYaml(token: string, labName: string): Promise<string> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/topology/yaml`, token);
+    return await res.text();
+  }
+
+  async putLabTopologyYaml(token: string, labName: string, content: string): Promise<void> {
+    await this.request(
+      "PUT",
+      `/api/v1/labs/${enc(labName)}/topology/yaml`,
+      token,
+      content,
+      "text/plain"
+    );
+  }
+
+  async getLabTopologyAnnotations(token: string, labName: string): Promise<string> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/topology/annotations`, token);
+    return await res.text();
+  }
+
+  async putLabTopologyAnnotations(token: string, labName: string, content: string): Promise<void> {
+    await this.request(
+      "PUT",
+      `/api/v1/labs/${enc(labName)}/topology/annotations`,
+      token,
+      content,
+      "text/plain"
+    );
+  }
+
   async getFile(token: string, labName: string, filePath: string): Promise<string> {
     const res = await this.get(
       `/api/v1/labs/${enc(labName)}/topology/file?path=${encodeURIComponent(filePath)}`,

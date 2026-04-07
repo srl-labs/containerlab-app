@@ -65,6 +65,10 @@ test("runtimeContainersEqual detects stats-only changes", () => {
   const next = getRuntimeContainersForLab("demo", buildLabs("1500"));
 
   assert.equal(runtimeContainersEqual(previous, next), false);
+  assert.equal(
+    runtimeContainersEqual(previous, next, { includeInterfaceStats: false }),
+    true
+  );
 });
 
 test("runtimeContainersEqual treats identical stats as unchanged", () => {

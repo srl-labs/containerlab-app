@@ -9,6 +9,7 @@ import type { ClabApiClient } from "./clabApiClient.js";
 
 type ContainerDataProvider = ReturnType<typeof createRuntimeContainerDataProvider>;
 type DeploymentState = "deployed" | "undeployed" | "unknown";
+type TopologySourcePreference = "api-file" | "running-lab-doc";
 
 interface SessionRecord {
   baseUrl: string;
@@ -16,6 +17,7 @@ interface SessionRecord {
   host: TopologySessionCore;
   lastAccess: number;
   sessionId: string;
+  sourcePreference: TopologySourcePreference;
   token: string;
   topologyRef: TopologyRef;
 }
@@ -26,6 +28,7 @@ interface CreateSessionOptions {
   deploymentState: DeploymentState;
   endpointId: string;
   mode: "edit" | "view";
+  sourcePreference?: TopologySourcePreference;
   token: string;
   topologyRef: TopologyRef;
 }
@@ -73,7 +76,10 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
       const fs = new ClabApiFileSystemAdapter({
         client: options.client,
         token: options.token,
-        labName: options.topologyRef.labName
+        labName: options.topologyRef.labName,
+        sourcePreference: options.sourcePreference ?? "api-file",
+        yamlPath: options.topologyRef.yamlPath,
+        annotationsPath: options.topologyRef.annotationsPath
       });
 
       const host = new TopologySessionCore({
@@ -96,6 +102,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         host,
         lastAccess: Date.now(),
         sessionId,
+        sourcePreference: options.sourcePreference ?? "api-file",
         token: options.token,
         topologyRef: options.topologyRef
       };

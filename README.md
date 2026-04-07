@@ -81,15 +81,40 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 | Command | Description |
 | --- | --- |
 | `npm run dev` | Start backend + Vite frontend in development mode |
+| `npm run dev:local` | Start dev mode with strict local `../clab-ui/dist` resolution |
 | `npm run build` | Build client bundle and backend server |
 | `npm run build:server` | Build backend server only (`dist/server/index.cjs`) |
 | `npm run start` | Start the built production backend |
 | `npm run preview` | Preview the built Vite frontend |
 | `npm run typecheck` | Typecheck client and server TypeScript |
+| `npm run typecheck:local-ui` | Typecheck against local `../clab-ui/dist` declarations |
 | `npm run test:unit` | Run unit tests for `src/` and `server/` |
 | `npm run test:e2e` | Run Playwright E2E tests |
 | `npm run test:e2e:ui` | Run Playwright in UI mode |
 | `npm run test:e2e:debug` | Run Playwright in debug mode |
+
+---
+
+## Local `clab-ui` Mode
+
+By default this repo resolves `@srl-labs/clab-ui` from the published package after `npm install`.
+
+For local unpublished UI changes, build the sibling checkout first:
+
+```bash
+cd ../clab-ui
+npm install
+npm run build
+```
+
+Then start strict local mode:
+
+```bash
+cd ../containerlab-web
+npm run dev:local
+```
+
+`dev:local` fails fast if required files are missing from `../clab-ui/dist`.
 
 ---
 
@@ -101,6 +126,7 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 | `CLAB_API_URL` | `http://localhost:8080` | Default `clab-api-server` endpoint |
 | `VITE_DEV_URL` | `http://localhost:5173` | Vite dev server URL used by backend proxy |
 | `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Interface stats interval requested from API event stream |
+| `CLAB_UI_SOURCE` | unset | When set to `local`, Vite resolves `@srl-labs/clab-ui*` from `../clab-ui/dist` |
 | `NODE_ENV` | `development` / `production` | Controls dev proxy mode vs static asset serving |
 
 ---

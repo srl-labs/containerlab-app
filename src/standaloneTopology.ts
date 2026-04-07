@@ -19,6 +19,7 @@ import {
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
   isTopologyRunning,
+  normalizeStandaloneTopologyRef,
   normalizeLabName,
   normalizePathValue,
   topologyEntryLabName,
@@ -37,6 +38,7 @@ interface StandaloneTopologyManagerOptions {
 interface HostContextOptions {
   deploymentState?: DeploymentState;
   mode?: "edit" | "view";
+  sourcePreference?: "api-file" | "running-lab-doc";
 }
 
 export interface StandaloneTopologyManager {
@@ -72,6 +74,7 @@ export function createStandaloneTopologyManager(
   let currentFilePath: string | null = null;
   let currentSessionId: string | null = null;
   let currentTopologyRef: TopologyRef | null = null;
+  let currentSourcePreference: "api-file" | "running-lab-doc" = "api-file";
   let standaloneAuthenticated = false;
   const fileListCache = new Map<string, { entries: TopologyFileEntry[]; fetchedAt: number }>();
   const fileListInFlight = new Map<string, Promise<TopologyFileEntry[]>>();
@@ -321,6 +324,7 @@ export function createStandaloneTopologyManager(
     const sessionId = currentSessionId;
     currentSessionId = null;
     currentEndpointId = null;
+    currentSourcePreference = "api-file";
     closeTopologyEventStream();
     useTopoViewerStore.getState().setCustomIcons([]);
     await destroyTopologySession(sessionId, endpointId);
@@ -352,6 +356,7 @@ export function createStandaloneTopologyManager(
           topologyRef,
           mode,
           deploymentState,
+          sourcePreference: hostOptions.sourcePreference ?? "api-file",
           runtimeContainers
         })
       })
@@ -400,6 +405,7 @@ export function createStandaloneTopologyManager(
     currentTopologyRef = session.topologyRef;
     currentFilePath = session.topologyRef.yamlPath;
     currentEndpointId = session.endpointId;
+    currentSourcePreference = hostOptions.sourcePreference ?? "api-file";
     return currentSessionId;
   }
 
@@ -417,7 +423,12 @@ export function createStandaloneTopologyManager(
   function ensureTopologyEventStream(): void {
     const sessionId = currentSessionId?.trim() ?? "";
     const endpointId = currentEndpointId?.trim() ?? "";
-    if (!standaloneAuthenticated || sessionId.length === 0 || endpointId.length === 0) {
+    if (
+      !standaloneAuthenticated ||
+      sessionId.length === 0 ||
+      endpointId.length === 0 ||
+      currentSourcePreference === "running-lab-doc"
+    ) {
       closeTopologyEventStream();
       return;
     }
@@ -502,15 +513,23 @@ export function createStandaloneTopologyManager(
 
     const files = await listTopologyFilesForEndpoint(endpointId);
     const entry = findEntryByPath(files, topologyRef.yamlPath);
-    if (!entry?.topologyRef) {
+    const fallbackRunningLab =
+      !entry?.topologyRef &&
+      (isTopologyRunning(topologyRef, options.getLabs()) || loadOptions.deploymentState === "deployed");
+    if (!entry?.topologyRef && !fallbackRunningLab) {
       throw new Error(
         `No API-backed topology file found for "${topologyRef.yamlPath}". Standalone mode only opens topologies exposed by /files.`
       );
     }
-    const canonicalTopologyRef = entry.topologyRef;
-    currentEndpointId = entry.endpointId;
+    const canonicalTopologyRef = entry?.topologyRef
+      ? entry.topologyRef
+      : normalizeStandaloneTopologyRef(topologyRef, endpointId);
+    const canonicalEndpointId = entry?.endpointId ?? endpointId;
+    const sourcePreference = entry?.topologyRef ? "api-file" : "running-lab-doc";
+    currentEndpointId = canonicalEndpointId;
     currentTopologyRef = canonicalTopologyRef;
     currentFilePath = canonicalTopologyRef.yamlPath;
+    currentSourcePreference = sourcePreference;
     useTopoViewerStore.getState().setCustomIcons([]);
     const initialDeploymentState =
       loadOptions.deploymentState ??
@@ -518,8 +537,9 @@ export function createStandaloneTopologyManager(
     const initialMode = initialDeploymentState === "deployed" ? "view" : "edit";
     await ensureTopologySession(canonicalTopologyRef, {
       deploymentState: initialDeploymentState,
-      mode: initialMode
-    }, entry.endpointId);
+      mode: initialMode,
+      sourcePreference
+    }, canonicalEndpointId);
     ensureTopologyEventStream();
     syncHostContext({
       deploymentState: initialDeploymentState,
