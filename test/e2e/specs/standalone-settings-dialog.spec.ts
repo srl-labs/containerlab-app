@@ -14,6 +14,7 @@ const SEL_NAV_TERMINAL = '[data-testid="standalone-settings-nav-terminal"]';
 const SEL_NAV_ABOUT = '[data-testid="standalone-settings-nav-about"]';
 const SEL_SAVE_TERMINAL = '[data-testid="standalone-settings-save-terminal"]';
 const SEL_THEME_LIGHT = '[data-testid="standalone-settings-theme-light"]';
+const SEL_FONT_PRESET_15 = '[data-testid="standalone-settings-font-size-preset-15"]';
 
 test.describe("Standalone Settings Dialog", () => {
   test.beforeEach(async ({ topoViewerPage }) => {
@@ -40,11 +41,8 @@ test.describe("Standalone Settings Dialog", () => {
     const panel = page.locator(SEL_SETTINGS_PANEL);
     await expect(panel).toBeVisible();
     await expect(panel.getByText("Quick Settings")).toBeVisible();
-    await expect(panel.getByText("Endpoints")).toBeVisible();
-    await expect(panel.getByText("Configured Endpoints")).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Logout" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: /Manage .* Endpoint/ })).toBeVisible();
     await expect(panel.getByRole("button", { name: "General Settings" })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
     await expect(panel.getByRole("button", { name: "Inspect Labs" })).toHaveCount(0);
     await expect(panel.getByRole("button", { name: "About" })).toHaveCount(0);
   });
@@ -61,6 +59,8 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByRole("heading", { name: "Terminal" })).toBeVisible();
     await expect(dialog.getByLabel("SSH User Mapping JSON")).toBeVisible();
     await expect(dialog.getByLabel("Telnet Port")).toBeVisible();
+    await expect(dialog.getByLabel("Terminal Font Size")).toBeVisible();
+    await expect(dialog.locator(SEL_FONT_PRESET_15)).toBeVisible();
 
     await dialog.locator(SEL_NAV_ABOUT).click();
     await expect(dialog.getByRole("heading", { name: "About" })).toBeVisible();
@@ -74,6 +74,7 @@ test.describe("Standalone Settings Dialog", () => {
 
     const telnetField = dialog.getByLabel("Telnet Port");
     const sshMappingField = dialog.getByLabel("SSH User Mapping JSON");
+    const fontSizeField = dialog.getByLabel("Terminal Font Size");
     const saveButton = dialog.locator(SEL_SAVE_TERMINAL);
 
     await telnetField.fill("70000");
@@ -83,6 +84,11 @@ test.describe("Standalone Settings Dialog", () => {
     await telnetField.fill("5000");
     await sshMappingField.fill("{");
     await expect(dialog.getByText("SSH user mapping must be valid JSON.")).toBeVisible();
+    await expect(saveButton).toBeDisabled();
+
+    await sshMappingField.fill('{\n  "nokia_srlinux": "admin"\n}');
+    await fontSizeField.fill("30");
+    await expect(dialog.getByText("Terminal font size must be an integer between 11 and 18.")).toBeVisible();
     await expect(saveButton).toBeDisabled();
   });
 
@@ -98,6 +104,8 @@ test.describe("Standalone Settings Dialog", () => {
     await dialog.locator(SEL_NAV_TERMINAL).click();
     await dialog.getByLabel("SSH User Mapping JSON").fill('{\n  "custom_kind": "operator"\n}');
     await dialog.getByLabel("Telnet Port").fill("6001");
+    await dialog.locator(SEL_FONT_PRESET_15).click();
+    await expect(dialog.getByLabel("Terminal Font Size")).toHaveValue("15");
     await dialog.locator(SEL_SAVE_TERMINAL).click();
     await expect(dialog.locator(SEL_SAVE_TERMINAL)).toBeEnabled();
 
@@ -114,6 +122,7 @@ test.describe("Standalone Settings Dialog", () => {
 
     await reloadedDialog.locator(SEL_NAV_TERMINAL).click();
     await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");
+    await expect(reloadedDialog.getByLabel("Terminal Font Size")).toHaveValue("15");
     await expect(reloadedDialog.getByLabel("SSH User Mapping JSON")).toHaveValue(
       '{\n  "custom_kind": "operator"\n}'
     );

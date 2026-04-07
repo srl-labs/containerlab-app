@@ -1224,9 +1224,16 @@ function StandaloneApp() {
     void logout();
   }, [logout]);
 
-  const handleSaveTerminalPreferences = useCallback((next: TerminalPreferences) => {
+  const handleSaveTerminalPreferences = useCallback((
+    next: TerminalPreferences,
+    options?: {
+      notify?: boolean;
+    }
+  ) => {
     setTerminalPreferences(persistTerminalPreferences(next));
-    runtimeUiActions.notify("Terminal settings updated.", "success");
+    if (options?.notify !== false) {
+      runtimeUiActions.notify("Terminal settings updated.", "success");
+    }
   }, []);
 
   const handleSetEndpointSessionDuration = useCallback(
@@ -1283,7 +1290,10 @@ function StandaloneApp() {
       <StandaloneLabTabsMount />
       <StandaloneLabEmptyStateMount />
       <MuiThemeProvider>
-        <RuntimeTerminalWindows />
+        <RuntimeTerminalWindows
+          onSaveTerminalPreferences={handleSaveTerminalPreferences}
+          terminalPreferences={terminalPreferences}
+        />
         <RuntimeActionDialogs />
       </MuiThemeProvider>
       <SettingsOverlayMounted
@@ -1336,7 +1346,12 @@ function SettingsOverlayMounted(props: {
     endpointId: string,
     sessionDuration: EndpointSessionDuration
   ) => void;
-  onSaveTerminalPreferences: (next: TerminalPreferences) => void;
+  onSaveTerminalPreferences: (
+    next: TerminalPreferences,
+    options?: {
+      notify?: boolean;
+    }
+  ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
 }) {

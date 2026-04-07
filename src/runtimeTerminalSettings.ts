@@ -1,6 +1,7 @@
 export interface TerminalPreferences {
   sshUserMapping: Record<string, string>;
   telnetPort: number;
+  fontSize: number;
 }
 
 export const DEFAULT_TERMINAL_SSH_USER_MAPPING: Record<string, string> = {
@@ -13,6 +14,10 @@ export const DEFAULT_TERMINAL_SSH_USER_MAPPING: Record<string, string> = {
 };
 
 export const DEFAULT_TERMINAL_TELNET_PORT = 5000;
+export const DEFAULT_TERMINAL_FONT_SIZE = 13;
+export const MIN_TERMINAL_FONT_SIZE = 11;
+export const MAX_TERMINAL_FONT_SIZE = 18;
+export const TERMINAL_FONT_SIZE_PRESETS = [11, 13, 15, 18] as const;
 
 const TERMINAL_SETTINGS_STORAGE_KEY = "clab-standalone-terminal-settings";
 
@@ -48,17 +53,32 @@ function normalizeTelnetPort(value: unknown): number {
   return numeric;
 }
 
+export function clampTerminalFontSize(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_TERMINAL_FONT_SIZE;
+  }
+  const rounded = Math.round(value);
+  return Math.min(MAX_TERMINAL_FONT_SIZE, Math.max(MIN_TERMINAL_FONT_SIZE, rounded));
+}
+
+function normalizeFontSize(value: unknown): number {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return clampTerminalFontSize(numeric);
+}
+
 export function normalizeTerminalPreferences(value: unknown): TerminalPreferences {
   if (!isRecord(value)) {
     return {
       sshUserMapping: { ...DEFAULT_TERMINAL_SSH_USER_MAPPING },
-      telnetPort: DEFAULT_TERMINAL_TELNET_PORT
+      telnetPort: DEFAULT_TERMINAL_TELNET_PORT,
+      fontSize: DEFAULT_TERMINAL_FONT_SIZE
     };
   }
 
   return {
     sshUserMapping: normalizeSshUserMapping(value.sshUserMapping),
-    telnetPort: normalizeTelnetPort(value.telnetPort)
+    telnetPort: normalizeTelnetPort(value.telnetPort),
+    fontSize: normalizeFontSize(value.fontSize)
   };
 }
 

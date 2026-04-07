@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -33,7 +34,12 @@ import {
 
 import { subscribeEndpointUiAction, type EndpointUiAction } from "../endpointActions";
 import { fetchVersionCheck, fetchVersionInfo } from "../runtimeApi";
-import type { TerminalPreferences } from "../runtimeTerminalSettings";
+import {
+  MAX_TERMINAL_FONT_SIZE,
+  MIN_TERMINAL_FONT_SIZE,
+  TERMINAL_FONT_SIZE_PRESETS,
+  type TerminalPreferences
+} from "../runtimeTerminalSettings";
 import {
   type EndpointConfig,
   type EndpointSessionDuration
@@ -71,7 +77,12 @@ interface SettingsOverlayProps {
     endpointId: string,
     sessionDuration: EndpointSessionDuration
   ) => void;
-  onSaveTerminalPreferences: (next: TerminalPreferences) => void;
+  onSaveTerminalPreferences: (
+    next: TerminalPreferences,
+    options?: {
+      notify?: boolean;
+    }
+  ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
 }
@@ -84,7 +95,7 @@ type TerminalDraftResult =
     }
   | {
       error: string;
-      field: "ssh" | "telnet";
+      field: "ssh" | "telnet" | "fontSize";
     };
 
 const SETTINGS_SECTIONS: Array<{
@@ -108,7 +119,7 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "terminal",
     label: "Terminal",
-    description: "SSH mapping and telnet defaults",
+    description: "SSH mapping, telnet, and font defaults",
     icon: <TerminalIcon fontSize="small" />
   },
   {
@@ -163,7 +174,8 @@ function SectionCard(props: {
 
 function parseTerminalPreferencesDraft(
   sshUserMappingText: string,
-  telnetPortText: string
+  telnetPortText: string,
+  fontSizeText: string
 ): TerminalDraftResult {
   let parsed: unknown;
   try {
@@ -203,12 +215,25 @@ function parseTerminalPreferencesDraft(
     };
   }
 
+  const fontSize = Number(fontSizeText.trim());
+  if (
+    !Number.isInteger(fontSize) ||
+    fontSize < MIN_TERMINAL_FONT_SIZE ||
+    fontSize > MAX_TERMINAL_FONT_SIZE
+  ) {
+    return {
+      error: `Terminal font size must be an integer between ${MIN_TERMINAL_FONT_SIZE} and ${MAX_TERMINAL_FONT_SIZE}.`,
+      field: "fontSize"
+    };
+  }
+
   return {
     error: null,
     field: null,
     preferences: {
       sshUserMapping: normalizedMapping,
-      telnetPort
+      telnetPort,
+      fontSize
     }
   };
 }
@@ -233,6 +258,7 @@ export function SettingsOverlay({
   const [requestedEndpointAction, setRequestedEndpointAction] = useState<EndpointUiAction | null>(null);
   const [sshUserMappingText, setSshUserMappingText] = useState("");
   const [telnetPortText, setTelnetPortText] = useState("");
+  const [fontSizeText, setFontSizeText] = useState("");
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState("");
@@ -244,6 +270,7 @@ export function SettingsOverlay({
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
     setTelnetPortText(String(terminalPreferences.telnetPort));
+    setFontSizeText(String(terminalPreferences.fontSize));
   }, [terminalPreferences]);
 
   useEffect(() => {
@@ -293,8 +320,8 @@ export function SettingsOverlay({
   }, [activeSection, dialogOpen, primaryEndpoint?.id]);
 
   const terminalDraft = useMemo(
-    () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText),
-    [sshUserMappingText, telnetPortText]
+    () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText, fontSizeText),
+    [fontSizeText, sshUserMappingText, telnetPortText]
   );
 
   const handleTogglePanel = useCallback(() => setPanelOpen((prev) => !prev), []);
@@ -411,12 +438,12 @@ export function SettingsOverlay({
             <Box>
               <Typography variant="h6">Terminal</Typography>
               <Typography variant="body2" color="text.secondary">
-                Configure standalone defaults for SSH username resolution and telnet access.
+                Configure standalone defaults for SSH username resolution, telnet access, and terminal font sizing.
               </Typography>
             </Box>
             <SectionCard
               title="Terminal Defaults"
-              description="Configure standalone defaults for SSH username resolution and telnet access."
+              description="Configure standalone defaults for SSH username resolution, telnet access, and font sizing."
               tone="info"
             >
               <TextField
@@ -454,6 +481,44 @@ export function SettingsOverlay({
                 slotProps={{ htmlInput: { inputMode: "numeric", pattern: "[0-9]*" } }}
                 data-testid="standalone-settings-telnet-port"
               />
+              <TextField
+                label="Terminal Font Size"
+                value={fontSizeText}
+                onChange={(event) => setFontSizeText(event.target.value)}
+                fullWidth
+                error={terminalDraft.field === "fontSize"}
+                helperText={
+                  terminalDraft.field === "fontSize"
+                    ? terminalDraft.error
+                    : `Global xterm font size applied to open/new windows (${MIN_TERMINAL_FONT_SIZE}-${MAX_TERMINAL_FONT_SIZE}).`
+                }
+                slotProps={{
+                  htmlInput: {
+                    inputMode: "numeric",
+                    pattern: "[0-9]*",
+                    min: MIN_TERMINAL_FONT_SIZE,
+                    max: MAX_TERMINAL_FONT_SIZE
+                  }
+                }}
+                data-testid="standalone-settings-font-size"
+              />
+              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+                {TERMINAL_FONT_SIZE_PRESETS.map((preset) => (
+                  <Chip
+                    key={preset}
+                    size="small"
+                    label={`${preset}px`}
+                    onClick={() => setFontSizeText(String(preset))}
+                    variant={Number(fontSizeText.trim()) === preset ? "filled" : "outlined"}
+                    color={Number(fontSizeText.trim()) === preset ? "primary" : "default"}
+                    data-testid={`standalone-settings-font-size-preset-${preset}`}
+                  />
+                ))}
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Font size is global for all terminals. In terminal windows, use Actions or Alt+Up, Alt+Down,
+                Alt+0 for quick adjustment.
+              </Typography>
               {terminalDraft.error === null ? (
                 <Alert
                   severity="info"
@@ -592,7 +657,11 @@ export function SettingsOverlay({
             </Stack>
             <Divider />
             <Stack spacing={1.5}>
-              <Button variant="outlined" onClick={() => handleOpenDialog("general")}>
+              <Button
+                variant="outlined"
+                onClick={() => handleOpenDialog("general")}
+                data-testid="standalone-settings-open-dialog"
+              >
                 General Settings
               </Button>
               <Button
