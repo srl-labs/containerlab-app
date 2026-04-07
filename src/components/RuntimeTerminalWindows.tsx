@@ -342,12 +342,12 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
   ]);
 
   useEffect(() => {
-    if (!windowState.sessionId || websocketRef.current || xtermRef.current === null) {
+    if (!windowState.terminalSessionId || websocketRef.current || xtermRef.current === null) {
       return;
     }
 
     sessionClosedRef.current = false;
-    const socket = connectTerminalSessionWebSocket(windowState.sessionId, windowState.endpointId);
+    const socket = connectTerminalSessionWebSocket(windowState.terminalSessionId, windowState.endpointId);
     websocketRef.current = socket;
 
     socket.onmessage = (event) => {
@@ -424,11 +424,11 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
       socket.close();
       websocketRef.current = null;
     };
-  }, [windowState.endpointId, windowState.id, windowState.sessionId]);
+  }, [windowState.endpointId, windowState.id, windowState.terminalSessionId]);
 
   useEffect(() => {
     return () => {
-      const sessionId = windowState.sessionId;
+      const sessionId = windowState.terminalSessionId;
       const socket = websocketRef.current;
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "close" }));
@@ -438,7 +438,7 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
         void closeTerminalSession(sessionId, windowState.endpointId).catch(() => {});
       }
     };
-  }, [windowState.endpointId, windowState.sessionId]);
+  }, [windowState.endpointId, windowState.terminalSessionId]);
 
   const handleHeaderMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -517,8 +517,8 @@ function TerminalWindow({ windowState }: { windowState: RuntimeTerminalWindow })
       socket.send(JSON.stringify({ type: "close" }));
       socket.close();
     }
-    if (windowState.sessionId) {
-      void closeTerminalSession(windowState.sessionId, windowState.endpointId).catch(() => {});
+    if (windowState.terminalSessionId) {
+      void closeTerminalSession(windowState.terminalSessionId, windowState.endpointId).catch(() => {});
     }
     runtimeUiActions.closeTerminal(windowState.id);
   };

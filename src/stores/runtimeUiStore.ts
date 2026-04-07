@@ -28,7 +28,7 @@ export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
 
 export interface RuntimeTerminalWindow extends RuntimeTerminalRequest {
   id: string;
-  sessionId?: string;
+  terminalSessionId?: string;
   state: "creating" | "connecting" | "ready" | "exited" | "error";
   exitCode?: number | null;
   error?: string;
@@ -202,7 +202,7 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   setTerminalSession: (id, sessionId) =>
     set((state) => ({
       terminals: state.terminals.map((terminal) =>
-        terminal.id === id ? { ...terminal, sessionId } : terminal
+        terminal.id === id ? { ...terminal, terminalSessionId: sessionId } : terminal
       )
     })),
   setTerminalReady: (id) =>
