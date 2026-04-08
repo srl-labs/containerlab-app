@@ -259,6 +259,12 @@ export function EndpointManager({
     }
   }, [onReconnectEndpoint, reconnectEndpoint, reconnectPassword, reconnectUsername]);
 
+  const addSubmitDisabled =
+    busyKey !== null || !url.trim() || !username.trim() || !password.trim() || !addSessionDurationValid;
+
+  const reconnectSubmitDisabled =
+    busyKey !== null || !reconnectUsername.trim() || !reconnectPassword.trim();
+
   const handleRemove = useCallback(async () => {
     if (!removeEndpoint) {
       return;
@@ -292,6 +298,14 @@ export function EndpointManager({
       editUsername.trim() !== editEndpoint.username ||
       editSessionDuration.trim() !== editEndpoint.sessionDuration
     : false;
+
+  const editSubmitDisabled =
+    busyKey !== null ||
+    !editUrl.trim() ||
+    !editLabel.trim() ||
+    !editUsername.trim() ||
+    !editSessionDurationValid ||
+    !editHasChanges;
 
   const handleUpdateEndpoint = useCallback(async () => {
     if (
@@ -511,6 +525,13 @@ export function EndpointManager({
               label="API Endpoint"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || addSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleAddEndpoint();
+              }}
               fullWidth
               placeholder="http://localhost:8080"
               slotProps={{
@@ -528,6 +549,13 @@ export function EndpointManager({
               label="Label"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || addSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleAddEndpoint();
+              }}
               fullWidth
               placeholder="Optional friendly name"
               slotProps={{
@@ -545,6 +573,13 @@ export function EndpointManager({
               label="Username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || addSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleAddEndpoint();
+              }}
               fullWidth
               slotProps={{
                 inputLabel: { shrink: true },
@@ -562,6 +597,13 @@ export function EndpointManager({
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || addSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleAddEndpoint();
+              }}
               fullWidth
               slotProps={{
                 inputLabel: { shrink: true },
@@ -578,6 +620,13 @@ export function EndpointManager({
               label="Keep me signed in"
               value={sessionDuration}
               onChange={(event) => setSessionDuration(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || addSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleAddEndpoint();
+              }}
               fullWidth
               placeholder="24h"
               error={Boolean(sessionDuration.trim()) && !addSessionDurationValid}
@@ -595,13 +644,7 @@ export function EndpointManager({
           <Button
             variant="contained"
             onClick={handleAddEndpoint}
-            disabled={
-              busyKey !== null ||
-              !url.trim() ||
-              !username.trim() ||
-              !password.trim() ||
-              !addSessionDurationValid
-            }
+            disabled={addSubmitDisabled}
             sx={{
               alignSelf: "flex-start",
               textTransform: "none"
@@ -625,24 +668,52 @@ export function EndpointManager({
               label="Label"
               value={editLabel}
               onChange={(event) => setEditLabel(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || editSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleUpdateEndpoint();
+              }}
               fullWidth
             />
             <TextField
               label="API Endpoint"
               value={editUrl}
               onChange={(event) => setEditUrl(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || editSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleUpdateEndpoint();
+              }}
               fullWidth
             />
             <TextField
               label="Username"
               value={editUsername}
               onChange={(event) => setEditUsername(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || editSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleUpdateEndpoint();
+              }}
               fullWidth
             />
             <TextField
               label="Keep signed in"
               value={editSessionDuration}
               onChange={(event) => setEditSessionDuration(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || editSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleUpdateEndpoint();
+              }}
               fullWidth
               placeholder="24h"
               error={Boolean(editSessionDuration.trim()) && !editSessionDurationValid}
@@ -659,14 +730,7 @@ export function EndpointManager({
           <Button
             onClick={handleUpdateEndpoint}
             variant="contained"
-            disabled={
-              busyKey !== null ||
-              !editUrl.trim() ||
-              !editLabel.trim() ||
-              !editUsername.trim() ||
-              !editSessionDurationValid ||
-              !editHasChanges
-            }
+            disabled={editSubmitDisabled}
           >
             {editEndpoint ? (busyKey === `edit:${editEndpoint.id}` ? "Saving..." : "Save") : "Save"}
           </Button>
@@ -699,6 +763,13 @@ export function EndpointManager({
               label="Username"
               value={reconnectUsername}
               onChange={(event) => setReconnectUsername(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || reconnectSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleReconnect();
+              }}
               fullWidth
             />
             <TextField
@@ -706,6 +777,13 @@ export function EndpointManager({
               type="password"
               value={reconnectPassword}
               onChange={(event) => setReconnectPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || reconnectSubmitDisabled) {
+                  return;
+                }
+                event.preventDefault();
+                void handleReconnect();
+              }}
               fullWidth
             />
           </Stack>
@@ -715,11 +793,7 @@ export function EndpointManager({
           <Button
             onClick={handleReconnect}
             variant="contained"
-            disabled={
-              busyKey !== null ||
-              !reconnectUsername.trim() ||
-              !reconnectPassword.trim()
-            }
+            disabled={reconnectSubmitDisabled}
           >
             {reconnectEndpoint ? (busyKey === `reconnect:${reconnectEndpoint.id}` ? "Reconnecting..." : "Reconnect") : "Reconnect"}
           </Button>
