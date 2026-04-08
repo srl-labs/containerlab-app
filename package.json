@@ -39,6 +39,7 @@
     "monaco-editor": "^0.55.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "three": "^0.183.2",
     "ws": "^8.20.0",
     "yaml": "^2.8.2",
     "zustand": "^4.5.7"
@@ -48,6 +49,7 @@
     "@types/node": "^25.2.3",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.183.1",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.24",

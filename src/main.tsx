@@ -35,6 +35,7 @@ import { LoginPage } from "./components/LoginPage";
 import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 import { RuntimeTerminalWindows } from "./components/RuntimeTerminalWindows";
 import { SettingsOverlay } from "./components/SettingsOverlay";
+import { AttractorEmptyState } from "./components/AttractorEmptyState";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
   loadTerminalPreferences,
@@ -1065,46 +1066,7 @@ function StandaloneLabEmptyStateMount(): React.JSX.Element | null {
   }
 
   return createPortal(
-    <div
-      data-testid="standalone-empty-lab-state"
-      style={{
-        position: "absolute",
-        inset: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "var(--vscode-editor-background, #1e1e1e)",
-        color: "var(--vscode-editor-foreground, #d4d4d4)",
-        textAlign: "center",
-        paddingLeft: occlusion.left,
-        paddingRight: occlusion.right
-      }}
-    >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 12,
-          maxWidth: 460,
-          padding: "20px 24px"
-        }}
-      >
-        <img
-          src="/containerlab.svg"
-          alt="containerlab"
-          style={{
-            width: 120,
-            height: "auto",
-            opacity: 0.95
-          }}
-        />
-        <div style={{ fontSize: 18, fontWeight: 600 }}>No lab is open</div>
-        <div style={{ fontSize: 13, opacity: 0.82, lineHeight: 1.4 }}>
-          Open a lab from the explorer, or create a new `*.clab.yml` file to start.
-        </div>
-      </div>
-    </div>,
+    <AttractorEmptyState occlusionLeft={occlusion.left} occlusionRight={occlusion.right} />,
     host
   );
 }
