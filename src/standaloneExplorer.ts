@@ -11,6 +11,7 @@ import { dispatchEndpointUiAction } from "./endpointActions";
 import {
   buildPacketflixCapture,
   createTopologyFile,
+  deployLabFromUrl,
   createWiresharkVncSessions,
   type NetemFields
 } from "./runtimeApi";
@@ -18,6 +19,11 @@ import { deleteTopologyFileFlow, saveConfigsFlow } from "./components/RuntimeAct
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
+import {
+  getSessionHostnameOverride,
+  loadCapturePreferences,
+  setSessionHostnameOverride
+} from "./runtimeCaptureSettings";
 import type { LifecycleApiCallResult } from "./standaloneLifecycle";
 import type {
   DeploymentState,
@@ -31,6 +37,7 @@ import {
   SimpleExplorerProvider,
   buildStandaloneTopologyRefFromPath,
   extractEndpointIdFromTopologyId,
+  findLabStateForTopology,
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
   isTopologyRunning,
@@ -104,6 +111,115 @@ const HELP_LINKS = [
   { label: "Browse Labs on GitHub (srl-labs)", url: "https://github.com/srl-labs/" },
   { label: "Join our Discord server", url: "https://discord.gg/vAyddtaEV9" }
 ] as const;
+
+interface PopularLabRepo {
+  name: string;
+  description: string;
+  htmlUrl: string;
+  stars: number;
+}
+
+const FALLBACK_POPULAR_REPOS: PopularLabRepo[] = [
+  {
+    name: "srl-telemetry-lab",
+    htmlUrl: "https://github.com/srl-labs/srl-telemetry-lab",
+    description: "A lab demonstrating the telemetry stack with SR Linux.",
+    stars: 85
+  },
+  {
+    name: "netbox-nrx-clab",
+    htmlUrl: "https://github.com/srl-labs/netbox-nrx-clab",
+    description: "NetBox NRX Containerlab integration for network automation use cases.",
+    stars: 65
+  },
+  {
+    name: "sros-anysec-macsec-lab",
+    htmlUrl: "https://github.com/srl-labs/sros-anysec-macsec-lab",
+    description: "SR OS Anysec and MACsec lab with containerlab.",
+    stars: 42
+  },
+  {
+    name: "intent-based-ansible-lab",
+    htmlUrl: "https://github.com/srl-labs/intent-based-ansible-lab",
+    description: "Intent-based networking lab with Ansible and SR Linux.",
+    stars: 38
+  },
+  {
+    name: "multivendor-evpn-lab",
+    htmlUrl: "https://github.com/srl-labs/multivendor-evpn-lab",
+    description: "Multivendor EVPN lab with Nokia, Arista, and Cisco network operating systems.",
+    stars: 78
+  }
+];
+
+function normalizePopularRepos(value: unknown): PopularLabRepo[] {
+  if (typeof value !== "object" || value === null) {
+    return [];
+  }
+  const items = (value as { items?: unknown }).items;
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return items
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => ({
+      name: typeof entry.name === "string" ? entry.name : "",
+      htmlUrl: typeof entry.html_url === "string" ? entry.html_url : "",
+      description: typeof entry.description === "string" ? entry.description : "",
+      stars: typeof entry.stargazers_count === "number" ? entry.stargazers_count : 0
+    }))
+    .filter((entry) => entry.name.length > 0 && entry.htmlUrl.length > 0);
+}
+
+async function fetchPopularRepos(): Promise<PopularLabRepo[]> {
+  const url =
+    "https://api.github.com/search/repositories?q=topic:clab-topo+org:srl-labs+fork:true&sort=stars&order=desc";
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/vnd.github+json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`.trim());
+    }
+    const parsed = normalizePopularRepos(await response.json());
+    return parsed.length > 0 ? parsed : FALLBACK_POPULAR_REPOS;
+  } catch {
+    return FALLBACK_POPULAR_REPOS;
+  }
+}
+
+async function pickPopularRepo(promptTitle: string): Promise<string | undefined> {
+  const repos = (await fetchPopularRepos()).slice(0, 12);
+  if (repos.length === 0) {
+    runtimeUiActions.notify("No popular repositories are available right now.", "warning");
+    return undefined;
+  }
+
+  const optionsText = repos
+    .map(
+      (repo, index) =>
+        `${index + 1}. ${repo.name} (⭐ ${repo.stars})` +
+        `${repo.description ? ` — ${repo.description}` : ""}`
+    )
+    .join("\n");
+  const rawSelection = window.prompt(
+    `${promptTitle}:\n${optionsText}\n\nEnter number (1-${repos.length}).`,
+    "1"
+  );
+  if (!rawSelection) {
+    return undefined;
+  }
+
+  const selectedIndex = Number.parseInt(rawSelection, 10);
+  if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > repos.length) {
+    runtimeUiActions.notify("Invalid popular repository selection.", "error");
+    return undefined;
+  }
+
+  return repos[selectedIndex - 1].htmlUrl;
+}
 
 function filterTreeItems(items: ExplorerTreeItem[], filterText: string): ExplorerTreeItem[] {
   const query = filterText.trim().toLowerCase();
@@ -703,6 +819,191 @@ export function createStandaloneExplorerBridge(
       return [...byKey.values()];
     };
 
+    const runPacketflixCapture = async (): Promise<void> => {
+      if (!actionTopologyRef) {
+        postExplorerError("No canonical topology reference is available for this item.");
+        return;
+      }
+      const targets = resolveCaptureTargets();
+      if (targets.length === 0) {
+        postExplorerError("Capture requires a running interface item.");
+        return;
+      }
+
+      try {
+        const captureResponse = await buildPacketflixCapture({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef,
+          targets,
+          remoteHostname: getSessionHostnameOverride()
+        });
+
+        const captures = captureResponse.captures ?? [];
+        if (captures.length === 0) {
+          runtimeUiActions.notify("No packet capture targets were returned.", "warning");
+          return;
+        }
+
+        for (const capture of captures) {
+          const link = capture.packetflixUri?.trim();
+          if (!link) {
+            continue;
+          }
+          window.open(link, "_blank", "noopener,noreferrer");
+        }
+
+        runtimeUiActions.notify(
+          captures.length > 1
+            ? `Started ${captures.length} Edgeshark capture targets.`
+            : `Started Edgeshark capture for ${captures[0]?.containerName ?? "interface"}.`,
+          "success"
+        );
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const runWiresharkVncCapture = async (): Promise<void> => {
+      if (!actionTopologyRef) {
+        postExplorerError("No canonical topology reference is available for this item.");
+        return;
+      }
+      const targets = resolveCaptureTargets();
+      if (targets.length === 0) {
+        postExplorerError("Capture requires a running interface item.");
+        return;
+      }
+
+      try {
+        const theme = resolveStandaloneTheme();
+
+        const sessionsResponse = await createWiresharkVncSessions({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef,
+          targets,
+          theme
+        });
+
+        const sessions = sessionsResponse.sessions ?? [];
+        if (sessions.length === 0) {
+          runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
+          return;
+        }
+
+        for (const session of sessions) {
+          const params = new URLSearchParams({ sessionId: session.sessionId, theme });
+          if (actionEndpointId) {
+            params.set("endpointId", actionEndpointId);
+          }
+          if (session.showVolumeTip) {
+            params.set("showVolumeTip", "1");
+          }
+          const capturePageUrl = `/wireshark.html?${params.toString()}`;
+          window.open(capturePageUrl, "_blank", "noopener,noreferrer");
+        }
+
+        runtimeUiActions.notify(
+          sessions.length > 1
+            ? `Opened ${sessions.length} Wireshark VNC sessions.`
+            : "Opened Wireshark VNC session.",
+          "success"
+        );
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const runPreferredCapture = async (): Promise<void> => {
+      const preferredAction = loadCapturePreferences().preferredAction;
+      if (preferredAction === "edgeshark") {
+        await runPacketflixCapture();
+        return;
+      }
+      await runWiresharkVncCapture();
+    };
+
+    const deployFromUrlFlow = async (endpointId: string, sourceUrl: string): Promise<void> => {
+      const topologySourceUrl = sourceUrl.trim();
+      if (!topologySourceUrl) {
+        runtimeUiActions.notify("A repository or topology URL is required.", "error");
+        return;
+      }
+
+      const rawLabNameOverride = window.prompt(
+        "Optional lab name override (leave empty to use default)",
+        ""
+      );
+      if (rawLabNameOverride === null) {
+        return;
+      }
+      const labNameOverride = rawLabNameOverride.trim() || undefined;
+
+      try {
+        const response = await deployLabFromUrl({
+          endpointId,
+          topologySourceUrl,
+          labNameOverride
+        });
+        options.invalidateTopologyFileListCache(endpointId);
+        controller.scheduleSnapshot(0);
+        const labNames = response.labNames ?? [];
+        runtimeUiActions.notify(
+          labNames.length > 0
+            ? `Deployed ${labNames.join(", ")} from source URL.`
+            : "Deployment from source URL finished successfully.",
+          "success"
+        );
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const openSshToAllNodes = (): void => {
+      const topologyForSearch = {
+        yamlPath: actionTopologyRef?.yamlPath ?? "",
+        topologyId: actionTopologyRef?.topologyId,
+        labName: actionTopologyRef?.labName ?? item?.labName,
+        endpointId: actionEndpointId
+      };
+      const lab = findLabStateForTopology(topologyForSearch, options.getLabs());
+      if (!lab) {
+        postExplorerError("No running lab context is available for this action.");
+        return;
+      }
+
+      const topologyRef =
+        actionTopologyRef ??
+        buildStandaloneTopologyRefFromPath(
+          lab.topologyPath || `${lab.name}.clab.yml`,
+          lab.name,
+          lab.endpointId
+        );
+      const containers = [...lab.containers.values()].sort((left, right) =>
+        (left.nodeName || left.name).localeCompare(right.nodeName || right.name)
+      );
+      if (containers.length === 0) {
+        runtimeUiActions.notify(`No containers were found in lab "${lab.name}".`, "warning");
+        return;
+      }
+
+      for (const container of containers) {
+        const nodeName = container.nodeName || container.name;
+        runtimeUiActions.openTerminal({
+          endpointId: lab.endpointId,
+          topologyRef,
+          nodeName,
+          protocol: "ssh",
+          title: `SSH: ${nodeName}`
+        });
+      }
+      runtimeUiActions.notify(
+        containers.length > 1
+          ? `Opened SSH terminals for ${containers.length} nodes.`
+          : `Opened SSH terminal for ${containers[0]?.nodeName || containers[0]?.name}.`,
+        "success"
+      );
+    };
+
     switch (commandId) {
       case "containerlab.openLink": {
         const link = typeof args[0] === "string" ? args[0] : undefined;
@@ -793,11 +1094,53 @@ export function createStandaloneExplorerBridge(
         if (!endpointId) {
           return;
         }
-        const endpoint = findEndpointById(endpointId);
-        runtimeUiActions.notify(
-          `Clone Repository is not implemented in standalone mode yet${endpoint ? ` for ${endpoint.label}` : ""}.`,
-          "info"
+        const mode = window.prompt(
+          "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
+          "1"
         );
+        if (!mode) {
+          return;
+        }
+
+        if (mode.trim() === "2") {
+          const pickedUrl = await pickPopularRepo("Clone popular lab");
+          if (!pickedUrl) {
+            return;
+          }
+          await deployFromUrlFlow(endpointId, pickedUrl);
+          return;
+        }
+
+        if (mode.trim() !== "1") {
+          runtimeUiActions.notify("Invalid repository source selection.", "error");
+          return;
+        }
+
+        const sourceUrl = window.prompt(
+          "Repository or topology URL",
+          "https://github.com/srl-labs/srl-telemetry-lab"
+        );
+        if (!sourceUrl) {
+          return;
+        }
+        await deployFromUrlFlow(endpointId, sourceUrl);
+        return;
+      }
+      case "containerlab.lab.clonePopularRepo":
+      case "containerlab.lab.deployPopular": {
+        const endpointId = resolveEndpointForAction("deploy a popular lab", actionEndpointId);
+        if (!endpointId) {
+          return;
+        }
+        const sourceUrl = await pickPopularRepo(
+          commandId === "containerlab.lab.clonePopularRepo"
+            ? "Clone popular lab"
+            : "Deploy popular lab"
+        );
+        if (!sourceUrl) {
+          return;
+        }
+        await deployFromUrlFlow(endpointId, sourceUrl);
         return;
       }
       case "containerlab.inspectAll": {
@@ -816,13 +1159,23 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.lab.deploy":
+      case "containerlab.lab.deploy.cleanup":
       case "containerlab.lab.deploy.specificFile": {
         if (!actionTopologyRef) {
           postExplorerError("No canonical topology reference is available for this item.");
           return;
         }
+        const withCleanup = commandId === "containerlab.lab.deploy.cleanup";
+        if (
+          withCleanup &&
+          !window.confirm(
+            "Deploy (cleanup) may remove existing lab artifacts before deployment. Continue?"
+          )
+        ) {
+          return;
+        }
         try {
-          await options.invokeLifecycleApi("deploy", actionTopologyRef, false);
+          await options.invokeLifecycleApi("deploy", actionTopologyRef, withCleanup);
           options.invalidateTopologyFileListCache(actionEndpointId);
         } catch (error) {
           console.error("[Standalone] Deploy failed:", error);
@@ -889,6 +1242,10 @@ export function createStandaloneExplorerBridge(
           options.invalidateTopologyFileListCache(actionEndpointId);
           controller.scheduleSnapshot(0);
         }
+        return;
+      }
+      case "containerlab.lab.sshToAllNodes": {
+        openSshToAllNodes();
         return;
       }
       case "containerlab.treeView.runningLabs.hideNonOwnedLabs": {
@@ -999,97 +1356,34 @@ export function createStandaloneExplorerBridge(
         });
         return;
       }
+      case "containerlab.interface.capture": {
+        await runPreferredCapture();
+        return;
+      }
       case "containerlab.interface.captureWithEdgeshark": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        const targets = resolveCaptureTargets();
-        if (targets.length === 0) {
-          postExplorerError("Capture requires a running interface item.");
-          return;
-        }
-
-        try {
-          const captureResponse = await buildPacketflixCapture({
-            endpointId: actionEndpointId,
-            topologyRef: actionTopologyRef,
-            targets
-          });
-
-          const captures = captureResponse.captures ?? [];
-          if (captures.length === 0) {
-            runtimeUiActions.notify("No packet capture targets were returned.", "warning");
-            return;
-          }
-
-          for (const capture of captures) {
-            const link = capture.packetflixUri?.trim();
-            if (!link) {
-              continue;
-            }
-            window.open(link, "_blank", "noopener,noreferrer");
-          }
-
-          runtimeUiActions.notify(
-            captures.length > 1
-              ? `Started ${captures.length} Edgeshark capture targets.`
-              : `Started Edgeshark capture for ${captures[0]?.containerName ?? "interface"}.`,
-            "success"
-          );
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
+        await runPacketflixCapture();
         return;
       }
       case "containerlab.interface.captureWithEdgesharkVNC": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
+        await runWiresharkVncCapture();
+        return;
+      }
+      case "containerlab.set.sessionHostname": {
+        const currentHostname = getSessionHostnameOverride() ?? "";
+        const rawValue = window.prompt(
+          "Set session hostname override for packet capture (leave empty to clear)",
+          currentHostname
+        );
+        if (rawValue === null) {
           return;
         }
-        const targets = resolveCaptureTargets();
-        if (targets.length === 0) {
-          postExplorerError("Capture requires a running interface item.");
-          return;
-        }
-
-        try {
-          const theme = resolveStandaloneTheme();
-
-          const sessionsResponse = await createWiresharkVncSessions({
-            endpointId: actionEndpointId,
-            topologyRef: actionTopologyRef,
-            targets,
-            theme
-          });
-
-          const sessions = sessionsResponse.sessions ?? [];
-          if (sessions.length === 0) {
-            runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
-            return;
-          }
-
-          for (const session of sessions) {
-            const params = new URLSearchParams({ sessionId: session.sessionId, theme });
-            if (actionEndpointId) {
-              params.set("endpointId", actionEndpointId);
-            }
-            if (session.showVolumeTip) {
-              params.set("showVolumeTip", "1");
-            }
-            const capturePageUrl = `/wireshark.html?${params.toString()}`;
-            window.open(capturePageUrl, "_blank", "noopener,noreferrer");
-          }
-
-          runtimeUiActions.notify(
-            sessions.length > 1
-              ? `Opened ${sessions.length} Wireshark VNC sessions.`
-              : "Opened Wireshark VNC session.",
-            "success"
-          );
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
+        const nextValue = setSessionHostnameOverride(rawValue);
+        runtimeUiActions.notify(
+          nextValue
+            ? `Session hostname override set to "${nextValue}".`
+            : "Session hostname override cleared.",
+          "success"
+        );
         return;
       }
       case "containerlab.node.copyName": {
@@ -1162,7 +1456,7 @@ export function createStandaloneExplorerBridge(
     getSnapshotOptions() {
       return {
         hideNonOwnedLabs: !showNonOwnedLabs,
-        isLocalCaptureAllowed: false
+        isLocalCaptureAllowed: true
       };
     },
     onFilterTextChanged(filterText) {

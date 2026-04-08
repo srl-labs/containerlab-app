@@ -52,6 +52,14 @@ import {
   type TerminalPreferences
 } from "../runtimeTerminalSettings";
 import {
+  getSessionHostnameOverride,
+  loadCapturePreferences,
+  persistCapturePreferences,
+  setSessionHostnameOverride,
+  type CapturePreferences,
+  type CapturePreferredAction
+} from "../runtimeCaptureSettings";
+import {
   type EndpointConfig,
   type EndpointSessionDuration
 } from "../stores/endpointStore";
@@ -284,6 +292,12 @@ export function SettingsOverlay({
   const [captureActionLoading, setCaptureActionLoading] = useState<"install" | "uninstall" | null>(null);
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState<EdgeSharkStatusResponse | null>(null);
+  const [capturePreferences, setCapturePreferences] = useState<CapturePreferences>(() =>
+    loadCapturePreferences()
+  );
+  const [captureSessionHostname, setCaptureSessionHostname] = useState(
+    () => getSessionHostnameOverride() ?? ""
+  );
 
   const primaryEndpoint =
     endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
@@ -357,8 +371,34 @@ export function SettingsOverlay({
     if (!dialogOpen || activeSection !== "capture") {
       return;
     }
+    setCapturePreferences(loadCapturePreferences());
+    setCaptureSessionHostname(getSessionHostnameOverride() ?? "");
     void refreshCaptureStatus();
   }, [activeSection, dialogOpen, refreshCaptureStatus]);
+
+  const handlePreferredCaptureActionChange = useCallback((
+    _event: React.MouseEvent<HTMLElement>,
+    nextAction: CapturePreferredAction | null
+  ) => {
+    if (!nextAction) {
+      return;
+    }
+    const persisted = persistCapturePreferences({
+      ...capturePreferences,
+      preferredAction: nextAction
+    });
+    setCapturePreferences(persisted);
+  }, [capturePreferences]);
+
+  const applyCaptureSessionHostname = useCallback(() => {
+    const next = setSessionHostnameOverride(captureSessionHostname);
+    setCaptureSessionHostname(next ?? "");
+  }, [captureSessionHostname]);
+
+  const clearCaptureSessionHostname = useCallback(() => {
+    setSessionHostnameOverride(undefined);
+    setCaptureSessionHostname("");
+  }, []);
 
   const terminalDraft = useMemo(
     () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText, fontSizeText),
@@ -739,6 +779,66 @@ export function SettingsOverlay({
                 Capture defaults (image, pull policy, packetflix host/port) are controlled on the
                 API server via environment variables.
               </Typography>
+            </SectionCard>
+            <SectionCard
+              title="Capture Defaults"
+              description="Set the default action for generic capture commands and optional session hostname override."
+              tone="info"
+            >
+              <ToggleButtonGroup
+                exclusive
+                value={capturePreferences.preferredAction}
+                onChange={handlePreferredCaptureActionChange}
+                sx={{
+                  alignSelf: "flex-start",
+                  "& .MuiToggleButton-root": {
+                    px: 1.75,
+                    color: "text.primary",
+                    borderColor: "divider"
+                  },
+                  "& .MuiToggleButton-root.Mui-selected": {
+                    bgcolor: "action.selected",
+                    color: "text.primary",
+                    borderColor: "text.primary"
+                  },
+                  "& .MuiToggleButton-root.Mui-selected:hover": {
+                    bgcolor: "action.hover"
+                  }
+                }}
+              >
+                <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
+                  Wireshark VNC
+                </ToggleButton>
+                <ToggleButton value="edgeshark" data-testid="standalone-settings-capture-default-edgeshark">
+                  Edgeshark
+                </ToggleButton>
+              </ToggleButtonGroup>
+              <TextField
+                label="Session Hostname Override"
+                value={captureSessionHostname}
+                onChange={(event) => setCaptureSessionHostname(event.target.value)}
+                fullWidth
+                placeholder="IPv4, IPv6, or DNS hostname"
+                helperText="Used for packetflix URI generation in this browser session only."
+                data-testid="standalone-settings-capture-session-hostname"
+              />
+              <Stack direction="row" spacing={1.25} flexWrap="wrap">
+                <Button
+                  variant="outlined"
+                  onClick={applyCaptureSessionHostname}
+                  data-testid="standalone-settings-capture-session-hostname-apply"
+                >
+                  Apply Session Hostname
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  onClick={clearCaptureSessionHostname}
+                  data-testid="standalone-settings-capture-session-hostname-clear"
+                >
+                  Clear Override
+                </Button>
+              </Stack>
             </SectionCard>
           </Stack>
         );

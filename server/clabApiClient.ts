@@ -346,11 +346,14 @@ export class ClabApiClient {
   async deployLab(
     token: string,
     labName: string,
-    options: { path?: string; includeLogs?: boolean } = {}
+    options: { path?: string; includeLogs?: boolean; cleanup?: boolean } = {}
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.path) {
       params.set("path", options.path);
+    }
+    if (options.cleanup) {
+      params.set("cleanup", "true");
     }
     if (options.includeLogs) {
       params.set("includeLogs", "true");
@@ -365,6 +368,25 @@ export class ClabApiClient {
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
+  }
+
+  async deployLabFromUrl(
+    token: string,
+    payload: { topologySourceUrl: string; labNameOverride?: string }
+  ): Promise<InspectAllLabsResponse> {
+    const params = new URLSearchParams();
+    if (payload.labNameOverride) {
+      params.set("labNameOverride", payload.labNameOverride);
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({ topologySourceUrl: payload.topologySourceUrl }),
+      "application/json"
+    );
+    return (await res.json()) as InspectAllLabsResponse;
   }
 
   async destroyLab(
@@ -426,7 +448,7 @@ export class ClabApiClient {
     if (endpoint === "deploy" && options.path) {
       params.set("path", options.path);
     }
-    if ((endpoint === "destroy" || endpoint === "redeploy") && options.cleanup) {
+    if (options.cleanup) {
       params.set("cleanup", "true");
     }
 

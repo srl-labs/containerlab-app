@@ -166,6 +166,7 @@ export function registerLabProxy(
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
         const lifecycle = await client.deployLab(endpoint.token, target.labName, {
           path: target.yamlPath,
+          cleanup: request.body.cleanup === true,
           includeLogs: true
         });
         return reply.send({
@@ -194,7 +195,8 @@ export function registerLabProxy(
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
         const streamResponse = await client.openLifecycleStream(endpoint.token, "deploy", target.labName, {
-          path: target.yamlPath
+          path: target.yamlPath,
+          cleanup: request.body.cleanup === true
         });
         await forwardNdjsonStream(reply, streamResponse);
         return;

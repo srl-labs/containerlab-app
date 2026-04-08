@@ -73,6 +73,11 @@ interface CaptureWiresharkVncBody extends RuntimeTargetBody {
   theme?: string;
 }
 
+interface DeployFromUrlBody extends RuntimeTargetBody {
+  topologySourceUrl: string;
+  labNameOverride?: string;
+}
+
 interface CreateTopologyFileBody extends RuntimeTargetBody {
   content?: string;
   fileName: string;
@@ -417,6 +422,32 @@ export function registerRuntimeProxy(
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
         const lab = await client.inspectLab(endpoint.token, target.labName);
         return reply.send(lab);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: DeployFromUrlBody }>(
+    "/api/runtime/labs/deploy-from-url",
+    async (request: FastifyRequest<{ Body: DeployFromUrlBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const topologySourceUrl = normalizeOptionalString(request.body.topologySourceUrl);
+        if (!topologySourceUrl) {
+          throw new RequestError("Missing topologySourceUrl", 400);
+        }
+        const { client, endpoint } = resolved;
+        const deployed = await client.deployLabFromUrl(endpoint.token, {
+          topologySourceUrl,
+          labNameOverride: normalizeOptionalString(request.body.labNameOverride)
+        });
+        return reply.send({
+          success: true,
+          labNames: Object.keys(deployed).filter((name) => name.trim().length > 0)
+        });
       } catch (error) {
         return handleRouteError(reply, error);
       }

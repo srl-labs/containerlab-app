@@ -60,6 +60,7 @@ import {
 } from "./stores/labTabsStore";
 import { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 import {
+  buildPacketflixCapture,
   createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
@@ -71,6 +72,7 @@ import {
   uploadUiIcon
 } from "./runtimeApi";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
+import { getSessionHostnameOverride, loadCapturePreferences } from "./runtimeCaptureSettings";
 
 // Monaco workers setup
 const monacoGlobal = self as typeof self & {
@@ -450,7 +452,7 @@ function setupStandaloneUiHost(): void {
       return { endpointId, sessionId, topologyRef };
     };
 
-    const openCaptureVncForInterface = (nodeName: string, interfaceName: string): void => {
+    const openCaptureForInterface = (nodeName: string, interfaceName: string): void => {
       const target = getActiveTopologyTarget();
       if (!target) {
         return;
@@ -462,20 +464,39 @@ function setupStandaloneUiHost(): void {
 
       void (async () => {
         try {
-          const theme = resolveStandaloneTheme(currentTheme);
+          const capturePreferences = loadCapturePreferences();
+          if (capturePreferences.preferredAction === "edgeshark") {
+            const response = await buildPacketflixCapture({
+              ...target,
+              targets: [{ containerName: nodeName, interfaceName }],
+              remoteHostname: getSessionHostnameOverride()
+            });
+            const captures = response.captures ?? [];
+            if (captures.length === 0) {
+              runtimeUiActions.notify("No packet capture targets were returned.", "warning");
+              return;
+            }
+            for (const capture of captures) {
+              const link = capture.packetflixUri?.trim();
+              if (!link) {
+                continue;
+              }
+              window.open(link, "_blank", "noopener,noreferrer");
+            }
+            return;
+          }
 
+          const theme = resolveStandaloneTheme(currentTheme);
           const response = await createWiresharkVncSessions({
             ...target,
             targets: [{ containerName: nodeName, interfaceName }],
             theme
           });
-
           const sessions = response.sessions ?? [];
           if (sessions.length === 0) {
             runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
             return;
           }
-
           for (const session of sessions) {
             const params = new URLSearchParams({ sessionId: session.sessionId, theme });
             if (target.endpointId) {
@@ -571,7 +592,7 @@ function setupStandaloneUiHost(): void {
     if (msg.command === "clab-interface-capture") {
       const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
       const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
-      openCaptureVncForInterface(nodeName, interfaceName);
+      openCaptureForInterface(nodeName, interfaceName);
       return;
     }
 

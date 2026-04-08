@@ -155,6 +155,11 @@ export interface EdgeSharkStatusResponse {
   runtime: string;
 }
 
+export interface DeployLabFromUrlResponse {
+  success: boolean;
+  labNames: string[];
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -384,6 +389,18 @@ export async function uninstallEdgeShark(endpointId?: string): Promise<void> {
   await requestJson<{ success: boolean }>(
     "/api/runtime/capture/edgeshark/uninstall",
     withEndpointHeaders({ method: "POST" }, endpointId),
+    endpointId
+  );
+}
+
+export async function deployLabFromUrl(input: RuntimeTargetRequest & {
+  topologySourceUrl: string;
+  labNameOverride?: string;
+}): Promise<DeployLabFromUrlResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<DeployLabFromUrlResponse>(
+    "/api/runtime/labs/deploy-from-url",
+    asJsonBody(input, endpointId),
     endpointId
   );
 }
