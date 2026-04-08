@@ -40,6 +40,7 @@ import {
   topologyPathsLikelyMatch,
   topologyEntryLabName
 } from "./standaloneHostShared";
+import { resolveStandaloneTheme } from "./standaloneTheme";
 
 const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
 
@@ -1053,15 +1054,7 @@ export function createStandaloneExplorerBridge(
         }
 
         try {
-          let theme: string | undefined;
-          try {
-            const storedTheme = localStorage.getItem("clab-standalone-theme");
-            if (storedTheme === "light" || storedTheme === "dark") {
-              theme = storedTheme;
-            }
-          } catch {
-            // ignore localStorage read errors
-          }
+          const theme = resolveStandaloneTheme();
 
           const sessionsResponse = await createWiresharkVncSessions({
             endpointId: actionEndpointId,
@@ -1077,7 +1070,7 @@ export function createStandaloneExplorerBridge(
           }
 
           for (const session of sessions) {
-            const params = new URLSearchParams({ sessionId: session.sessionId });
+            const params = new URLSearchParams({ sessionId: session.sessionId, theme });
             if (actionEndpointId) {
               params.set("endpointId", actionEndpointId);
             }

@@ -1,7 +1,9 @@
 import { bootstrapWiresharkVncWebview } from "@srl-labs/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@srl-labs/clab-ui/host";
+import { applyThemeVars } from "@srl-labs/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
+import { parseStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 
 interface WiresharkVncInitialData {
   iframeUrl: string;
@@ -58,15 +60,22 @@ function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): 
   }).catch(() => {});
 }
 
-function parseQuery(): { endpointId?: string; sessionId?: string; showVolumeTip: boolean } {
+function parseQuery(): {
+  endpointId?: string;
+  sessionId?: string;
+  showVolumeTip: boolean;
+  theme?: "light" | "dark";
+} {
   const params = new URLSearchParams(window.location.search);
   const sessionId = params.get("sessionId")?.trim();
   const endpointId = params.get("endpointId")?.trim();
   const showVolumeTip = params.get("showVolumeTip") !== "0";
+  const theme = parseStandaloneTheme(params.get("theme")?.trim());
   return {
     sessionId: sessionId && sessionId.length > 0 ? sessionId : undefined,
     endpointId: endpointId && endpointId.length > 0 ? endpointId : undefined,
-    showVolumeTip
+    showVolumeTip,
+    theme
   };
 }
 
@@ -83,7 +92,11 @@ function renderFatalError(message: string): void {
 }
 
 async function main(): Promise<void> {
-  const { sessionId, endpointId, showVolumeTip } = parseQuery();
+  const { sessionId, endpointId, showVolumeTip, theme } = parseQuery();
+  const resolvedTheme = theme ?? resolveStandaloneTheme();
+  document.documentElement.classList.toggle("light", resolvedTheme === "light");
+  applyThemeVars(resolvedTheme);
+
   if (!sessionId) {
     renderFatalError("Missing capture session id.");
     return;

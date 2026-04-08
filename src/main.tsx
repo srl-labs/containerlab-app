@@ -57,6 +57,7 @@ import {
   resolveLabTab,
   useLabTabsStore
 } from "./stores/labTabsStore";
+import { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 import {
   createWiresharkVncSessions,
   deleteUiCustomNode,
@@ -174,11 +175,7 @@ function pickIconFile(): Promise<File | null> {
 let currentTheme: "light" | "dark" = "dark";
 
 function loadPersistedTheme(): "light" | "dark" {
-  try {
-    const raw = localStorage.getItem("clab-standalone-theme");
-    if (raw === "light") return "light";
-  } catch { /* ignore */ }
-  return "dark";
+  return readPersistedStandaloneTheme() ?? "dark";
 }
 
 function persistTheme(theme: "light" | "dark"): void {
@@ -464,15 +461,7 @@ function setupStandaloneUiHost(): void {
 
       void (async () => {
         try {
-          let theme: string | undefined;
-          try {
-            const storedTheme = localStorage.getItem("clab-standalone-theme");
-            if (storedTheme === "light" || storedTheme === "dark") {
-              theme = storedTheme;
-            }
-          } catch {
-            // ignore localStorage read errors
-          }
+          const theme = resolveStandaloneTheme(currentTheme);
 
           const response = await createWiresharkVncSessions({
             ...target,
@@ -487,7 +476,7 @@ function setupStandaloneUiHost(): void {
           }
 
           for (const session of sessions) {
-            const params = new URLSearchParams({ sessionId: session.sessionId });
+            const params = new URLSearchParams({ sessionId: session.sessionId, theme });
             if (target.endpointId) {
               params.set("endpointId", target.endpointId);
             }
