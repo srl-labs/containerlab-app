@@ -10,8 +10,15 @@ import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import { dispatchEndpointUiAction } from "./endpointActions";
 import {
   buildPacketflixCapture,
+  closeAllWiresharkVncSessions,
+  controlNodeLifecycle,
   createTopologyFile,
   deployLabFromUrl,
+  fetchNodeBrowserPorts,
+  generateDrawioGraph,
+  runFcliCommand,
+  runGottyShareAction,
+  runSshxShareAction,
   createWiresharkVncSessions,
   type NetemFields
 } from "./runtimeApi";
@@ -219,6 +226,59 @@ async function pickPopularRepo(promptTitle: string): Promise<string | undefined>
   }
 
   return repos[selectedIndex - 1].htmlUrl;
+}
+
+function triggerTextDownload(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function extractFirstHttpLink(value: string): string | undefined {
+  const match = value.match(/https?:\/\/[^\s"'<>]+/i);
+  const link = match?.[0]?.trim();
+  return link && link.length > 0 ? link : undefined;
+}
+
+function describeBrowserPort(port: number): string {
+  switch (port) {
+    case 22:
+      return "SSH";
+    case 23:
+      return "Telnet";
+    case 25:
+      return "SMTP";
+    case 53:
+      return "DNS";
+    case 80:
+      return "HTTP";
+    case 443:
+      return "HTTPS";
+    case 1880:
+      return "Node-RED";
+    case 3000:
+      return "Grafana";
+    case 5432:
+      return "PostgreSQL";
+    case 5601:
+      return "Kibana";
+    case 8080:
+      return "Web Server";
+    case 8443:
+      return "HTTPS (Alt)";
+    case 9000:
+      return "Web Server";
+    case 9090:
+      return "Prometheus";
+    case 9200:
+      return "Elasticsearch";
+    default:
+      return "";
+  }
 }
 
 function filterTreeItems(items: ExplorerTreeItem[], filterText: string): ExplorerTreeItem[] {
@@ -440,6 +500,8 @@ export function createStandaloneExplorerBridge(
   let explorerUiState: ExplorerUiState = {};
   const explorerSubscribers = new Set<(message: ExplorerIncomingMessage) => void>();
   const unhandledCommands = new Set<string>();
+  const sshxLinksByLab = new Map<string, string>();
+  const gottyLinksByLab = new Map<string, string>();
 
   function sendExplorerMessage(message: ExplorerIncomingMessage): void {
     const outgoing =
@@ -558,17 +620,47 @@ export function createStandaloneExplorerBridge(
       const pathHint = topologyEntry?.path ?? fallbackPathHint;
       const owner = getLabOwner(lab);
       const labLabel = owner ? `${lab.name} (${owner})` : lab.name;
+      const shareChildren: ExplorerTreeItem[] = [];
+      const normalizedLabKey = normalizeLabName(lab.name);
+      const sshxLink = (sshxLinksByLab.get(normalizedLabKey) ?? "").trim();
+      const gottyLink = (gottyLinksByLab.get(normalizedLabKey) ?? "").trim();
+      if (sshxLink) {
+        shareChildren.push({
+          id: `running-lab-share:sshx:${lab.endpointId}:${lab.name}`,
+          label: "Shared Terminal",
+          contextValue: "containerlabSSHXLink",
+          collapsibleState: TREE_ITEM_NONE,
+          endpointId: lab.endpointId,
+          labName: lab.name,
+          topologyRef,
+          link: sshxLink,
+          children: []
+        });
+      } else if (gottyLink) {
+        shareChildren.push({
+          id: `running-lab-share:gotty:${lab.endpointId}:${lab.name}`,
+          label: "Web Terminal",
+          contextValue: "containerlabGottyLink",
+          collapsibleState: TREE_ITEM_NONE,
+          endpointId: lab.endpointId,
+          labName: lab.name,
+          topologyRef,
+          link: gottyLink,
+          children: []
+        });
+      }
       const labItem: ExplorerTreeItem = {
         id: `running-lab:${lab.endpointId}:${lab.name}`,
         label: labLabel,
         description: pathHint || "No API topology file",
         tooltip: pathHint || `No API topology file available for running lab "${lab.name}"`,
         contextValue: "containerlabLabDeployed",
-        collapsibleState: containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
+        collapsibleState:
+          shareChildren.length > 0 || containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
         endpointId: lab.endpointId,
         labName: lab.name,
         topologyRef,
-        children: containers
+        children: [...shareChildren, ...containers]
       };
 
       if (topologyRef) {
@@ -781,6 +873,33 @@ export function createStandaloneExplorerBridge(
       actionTopologyRef?.labName ??
       item?.labName ??
       (typeof item?.label === "string" ? item.label : undefined);
+    const resolveActionTopologyRef = (): TopologyRef | undefined => {
+      if (actionTopologyRef) {
+        return actionTopologyRef;
+      }
+
+      const labNameHint = (item?.labName ?? targetLabel ?? "").trim();
+      if (!labNameHint) {
+        return undefined;
+      }
+
+      const normalizedLabNameHint = normalizeLabName(labNameHint);
+      for (const lab of options.getLabs().values()) {
+        if (actionEndpointId && lab.endpointId !== actionEndpointId) {
+          continue;
+        }
+        if (normalizeLabName(lab.name) !== normalizedLabNameHint) {
+          continue;
+        }
+        return buildStandaloneTopologyRefFromPath(
+          lab.topologyPath || `${lab.name}.clab.yml`,
+          lab.name,
+          lab.endpointId
+        );
+      }
+
+      return undefined;
+    };
     const resolveCaptureTargets = (): Array<{ containerName: string; interfaceName: string }> => {
       const byKey = new Map<string, { containerName: string; interfaceName: string }>();
 
@@ -1004,6 +1123,304 @@ export function createStandaloneExplorerBridge(
       );
     };
 
+    const shareLabKey = actionTopologyRef?.labName ?? item?.labName ?? "";
+    const resolveShareLabKey = (): string => {
+      const topologyRef = resolveActionTopologyRef();
+      return topologyRef?.labName ?? shareLabKey;
+    };
+
+    const openCommandOutputTerminal = (
+      title: string,
+      commandLabel: string,
+      output: string,
+      topologyRef?: TopologyRef
+    ): void => {
+      const content = output.trim();
+      runtimeUiActions.openTerminal({
+        endpointId: actionEndpointId,
+        sessionId: `cmd-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        topologyRef,
+        nodeName: commandLabel,
+        protocol: "output",
+        title,
+        initialOutput: content || "(no output)"
+      });
+    };
+
+    const resolveBrowserHost = (rawHost?: string): string => {
+      const trimmed = (rawHost ?? "").trim().replace(/^\[|\]$/g, "");
+      const lowered = trimmed.toLowerCase();
+      if (
+        trimmed &&
+        lowered !== "localhost" &&
+        lowered !== "127.0.0.1" &&
+        lowered !== "::1" &&
+        lowered !== "0.0.0.0" &&
+        lowered !== "::"
+      ) {
+        return trimmed;
+      }
+
+      const endpoint = findEndpointById(actionEndpointId);
+      if (endpoint) {
+        try {
+          return new URL(endpoint.url).hostname;
+        } catch {
+          // Ignore malformed endpoint URLs.
+        }
+      }
+
+      return trimmed || "localhost";
+    };
+
+    const runNodeLifecycle = async (
+      action: "start" | "stop" | "pause" | "unpause",
+      successLabel: string
+    ): Promise<void> => {
+      if (!actionTopologyRef || !item?.name) {
+        postExplorerError("Node action requires a running lab item.");
+        return;
+      }
+
+      try {
+        await controlNodeLifecycle({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef,
+          nodeName: item.name,
+          action
+        });
+        runtimeUiActions.notify(successLabel, "success");
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const openNodeBrowser = async (): Promise<void> => {
+      if (!actionTopologyRef || !item?.name) {
+        postExplorerError("Open Browser requires a running node item.");
+        return;
+      }
+
+      try {
+        const payload = await fetchNodeBrowserPorts({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef,
+          nodeName: item.name
+        });
+        const ports = payload.ports ?? [];
+        if (ports.length === 0) {
+          runtimeUiActions.notify(`No exposed ports were found for ${item.name}.`, "warning");
+          return;
+        }
+
+        const candidates = ports.map((port) => {
+          const host = resolveBrowserHost(port.hostIp);
+          const hostForUrl = host.includes(":") ? `[${host}]` : host;
+          const description = port.description || describeBrowserPort(port.containerPort);
+          return {
+            ...port,
+            description,
+            url: `http://${hostForUrl}:${port.hostPort}`
+          };
+        });
+
+        if (candidates.length === 1) {
+          window.open(candidates[0].url, "_blank", "noopener,noreferrer");
+          runtimeUiActions.notify(`Opened ${candidates[0].url}.`, "success");
+          return;
+        }
+
+        const optionText = candidates
+          .map(
+            (candidate, index) =>
+              `${index + 1}. ${candidate.hostPort}:${candidate.containerPort}/${candidate.protocol || "tcp"}` +
+              `${candidate.description ? ` — ${candidate.description}` : ""}`
+          )
+          .join("\n");
+
+        const rawSelection = window.prompt(
+          `Select a port to open:\n${optionText}\n\nEnter number (1-${candidates.length}).`,
+          "1"
+        );
+        if (!rawSelection) {
+          return;
+        }
+
+        const selectedIndex = Number.parseInt(rawSelection, 10);
+        if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > candidates.length) {
+          runtimeUiActions.notify("Invalid port selection.", "error");
+          return;
+        }
+
+        const target = candidates[selectedIndex - 1];
+        window.open(target.url, "_blank", "noopener,noreferrer");
+        runtimeUiActions.notify(`Opened ${target.url}.`, "success");
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const runShareAction = async (
+      kind: "sshx" | "gotty",
+      action: "attach" | "detach" | "reattach"
+    ): Promise<void> => {
+      const topologyRef = resolveActionTopologyRef();
+      if (!topologyRef) {
+        postExplorerError("Sharing actions require a running lab item.");
+        return;
+      }
+
+      try {
+        runtimeUiActions.notify(
+          `${kind.toUpperCase()} ${action} started. This may take a moment...`,
+          "info"
+        );
+
+        const payload =
+          kind === "sshx"
+            ? await runSshxShareAction({
+                endpointId: actionEndpointId,
+                topologyRef,
+                action
+              })
+            : await runGottyShareAction({
+                endpointId: actionEndpointId,
+                topologyRef,
+                action
+              });
+
+        const link = payload.link?.trim() || extractFirstHttpLink(payload.output ?? "") || "";
+        const labKey = normalizeLabName(topologyRef.labName || resolveShareLabKey());
+        if (labKey) {
+          const bucket = kind === "sshx" ? sshxLinksByLab : gottyLinksByLab;
+          if (action === "detach") {
+            bucket.delete(labKey);
+          } else if (link) {
+            bucket.set(labKey, link);
+          }
+        }
+        controller.scheduleSnapshot(0);
+
+        if (link && (action === "attach" || action === "reattach")) {
+          await navigator.clipboard.writeText(link).catch(() => {});
+          const shouldOpen = window.confirm(
+            `${kind.toUpperCase()} link copied to clipboard.\n\nOpen link now?`
+          );
+          if (shouldOpen) {
+            window.open(link, "_blank", "noopener,noreferrer");
+          }
+        }
+
+        if (!link && (action === "attach" || action === "reattach")) {
+          runtimeUiActions.notify(
+            `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
+            "warning"
+          );
+        }
+
+        runtimeUiActions.notify(payload.message || `${kind.toUpperCase()} ${action} completed.`, "success");
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const copyShareLink = async (kind: "sshx" | "gotty"): Promise<void> => {
+      const argLink = typeof args[0] === "string" ? args[0].trim() : "";
+      const bucket = kind === "sshx" ? sshxLinksByLab : gottyLinksByLab;
+      const storedLabKey = normalizeLabName(resolveShareLabKey());
+      const storedLink = storedLabKey ? bucket.get(storedLabKey) ?? "" : "";
+      const link = argLink || storedLink;
+      if (!link) {
+        runtimeUiActions.notify(
+          `No ${kind.toUpperCase()} link is currently available for this lab.`,
+          "warning"
+        );
+        return;
+      }
+
+      await navigator.clipboard.writeText(link).catch(() => {});
+      runtimeUiActions.notify(`${kind.toUpperCase()} link copied to clipboard.`, "success");
+    };
+
+    const runFcli = async (command: string): Promise<void> => {
+      const topologyRef = resolveActionTopologyRef();
+      if (!topologyRef) {
+        postExplorerError("fcli actions require a running lab item.");
+        return;
+      }
+
+      try {
+        runtimeUiActions.notify(
+          `Running fcli "${command}"... image pull may take a while.`,
+          "info"
+        );
+        const response = await runFcliCommand({
+          endpointId: actionEndpointId,
+          topologyRef,
+          command
+        });
+        const content = response.output?.trim() || "(no output)";
+        openCommandOutputTerminal(
+          `fcli: ${command}`,
+          `fcli ${command}`,
+          content,
+          topologyRef
+        );
+        if (/\bNo data\.\.\./i.test(content)) {
+          runtimeUiActions.notify(
+            `fcli "${command}" returned no data. Check lab state/filter and try a different command (for example sys-info).`,
+            "warning"
+          );
+        } else {
+          runtimeUiActions.notify(`fcli "${command}" finished. Output opened in terminal.`, "success");
+        }
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const runDrawio = async (layout: "horizontal" | "vertical" | "interactive"): Promise<void> => {
+      const topologyRef = resolveActionTopologyRef();
+      if (!topologyRef) {
+        postExplorerError("Graph actions require a lab item.");
+        return;
+      }
+
+      try {
+        runtimeUiActions.notify(`Generating draw.io (${layout})...`, "info");
+        const response = await generateDrawioGraph({
+          endpointId: actionEndpointId,
+          topologyRef,
+          layout
+        });
+
+        triggerTextDownload(
+          safeFilename(response.fileName || `${topologyRef.labName}.drawio`),
+          response.content,
+          "application/xml"
+        );
+
+        if (layout === "interactive") {
+          const output = [response.output?.trim(), response.message?.trim()]
+            .filter((value): value is string => Boolean(value && value.length > 0))
+            .join("\n\n");
+          openCommandOutputTerminal(
+            `draw.io interactive: ${topologyRef.labName}`,
+            "graph drawio -I",
+            output || "Interactive draw.io output is unavailable.",
+            topologyRef
+          );
+        }
+
+        runtimeUiActions.notify(
+          response.message || `Generated draw.io (${layout}) for ${topologyRef.labName}.`,
+          "success"
+        );
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
     switch (commandId) {
       case "containerlab.openLink": {
         const link = typeof args[0] === "string" ? args[0] : undefined;
@@ -1062,6 +1479,18 @@ export function createStandaloneExplorerBridge(
         const resolvedState = await options.resolveDeploymentState(actionTopologyRef);
         const deploymentState = resolvedState ?? itemState;
         await options.loadTopologyFile(actionTopologyRef, { deploymentState, endpointId: actionEndpointId });
+        return;
+      }
+      case "containerlab.lab.graph.drawio.horizontal": {
+        await runDrawio("horizontal");
+        return;
+      }
+      case "containerlab.lab.graph.drawio.vertical": {
+        await runDrawio("vertical");
+        return;
+      }
+      case "containerlab.lab.graph.drawio.interactive": {
+        await runDrawio("interactive");
         return;
       }
       case "containerlab.editor.topoViewerEditor": {
@@ -1248,6 +1677,106 @@ export function createStandaloneExplorerBridge(
         openSshToAllNodes();
         return;
       }
+      case "containerlab.lab.sshx.attach": {
+        await runShareAction("sshx", "attach");
+        return;
+      }
+      case "containerlab.lab.sshx.detach": {
+        await runShareAction("sshx", "detach");
+        return;
+      }
+      case "containerlab.lab.sshx.reattach": {
+        await runShareAction("sshx", "reattach");
+        return;
+      }
+      case "containerlab.lab.gotty.attach": {
+        await runShareAction("gotty", "attach");
+        return;
+      }
+      case "containerlab.lab.gotty.detach": {
+        await runShareAction("gotty", "detach");
+        return;
+      }
+      case "containerlab.lab.gotty.reattach": {
+        await runShareAction("gotty", "reattach");
+        return;
+      }
+      case "containerlab.lab.sshx.copyLink":
+      case "containerlab.lab.sshx.copylink": {
+        await copyShareLink("sshx");
+        return;
+      }
+      case "containerlab.lab.gotty.copyLink":
+      case "containerlab.lab.gotty.copylink": {
+        await copyShareLink("gotty");
+        return;
+      }
+      case "containerlab.lab.fcli.bgpPeers": {
+        await runFcli("bgp-peers");
+        return;
+      }
+      case "containerlab.lab.fcli.bgpRib": {
+        await runFcli("bgp-rib");
+        return;
+      }
+      case "containerlab.lab.fcli.ipv4Rib": {
+        await runFcli("ipv4-rib");
+        return;
+      }
+      case "containerlab.lab.fcli.lldp": {
+        await runFcli("lldp");
+        return;
+      }
+      case "containerlab.lab.fcli.mac": {
+        await runFcli("mac");
+        return;
+      }
+      case "containerlab.lab.fcli.ni": {
+        await runFcli("ni");
+        return;
+      }
+      case "containerlab.lab.fcli.subif": {
+        await runFcli("subif");
+        return;
+      }
+      case "containerlab.lab.fcli.sysInfo": {
+        await runFcli("sys-info");
+        return;
+      }
+      case "containerlab.lab.fcli.custom": {
+        const customCommand = window.prompt(
+          "Custom fcli command",
+          "bgp-peers"
+        );
+        if (!customCommand || customCommand.trim().length === 0) {
+          return;
+        }
+        await runFcli(customCommand.trim());
+        return;
+      }
+      case "containerlab.capture.killAllWiresharkVNC": {
+        const endpointId = resolveEndpointForAction(
+          "close all Wireshark VNC sessions",
+          actionEndpointId
+        );
+        if (!endpointId) {
+          return;
+        }
+        const confirmed = window.confirm(
+          "Close all active Wireshark VNC sessions for this endpoint?"
+        );
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          const response = await closeAllWiresharkVncSessions(endpointId);
+          runtimeUiActions.notify(response.message || "Closed Wireshark VNC sessions.", "success");
+        } catch (error) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
       case "containerlab.treeView.runningLabs.hideNonOwnedLabs": {
         showNonOwnedLabs = false;
         persistShowNonOwnedLabsSetting(false);
@@ -1275,6 +1804,38 @@ export function createStandaloneExplorerBridge(
           },
           `Saved config for ${item.label || item.name}.`
         );
+        return;
+      }
+      case "containerlab.node.start": {
+        await runNodeLifecycle(
+          "start",
+          `Started ${item?.label || item?.name || "node"}.`
+        );
+        return;
+      }
+      case "containerlab.node.stop": {
+        await runNodeLifecycle(
+          "stop",
+          `Stopped ${item?.label || item?.name || "node"}.`
+        );
+        return;
+      }
+      case "containerlab.node.pause": {
+        await runNodeLifecycle(
+          "pause",
+          `Paused ${item?.label || item?.name || "node"}.`
+        );
+        return;
+      }
+      case "containerlab.node.unpause": {
+        await runNodeLifecycle(
+          "unpause",
+          `Unpaused ${item?.label || item?.name || "node"}.`
+        );
+        return;
+      }
+      case "containerlab.node.openBrowser": {
+        await openNodeBrowser();
         return;
       }
       case "containerlab.node.ssh":

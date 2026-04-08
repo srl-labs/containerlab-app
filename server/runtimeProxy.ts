@@ -4,13 +4,16 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ClabApiClient } from "./clabApiClient.js";
 import type {
   InspectContainerInfo,
+  NodeLifecycleAction,
   NetemResetRequest,
   NetemSetRequest,
+  ShareToolAction,
   TerminalProtocol
 } from "./clabApiClient.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
 import { getEndpointIdFromRequest } from "./middleware.js";
 import {
+  deleteCaptureSessionsForEndpoint,
   deleteCaptureSessionEndpoint,
   getCaptureSessionEndpoint,
   setCaptureSessionEndpoint
@@ -56,6 +59,27 @@ interface NetemBody extends RuntimeTargetBody {
   loss?: number;
   rate?: number;
   corruption?: number;
+}
+
+interface NodeLifecycleBody extends RuntimeTargetBody {
+  nodeName: string;
+}
+
+interface NodeBrowserBody extends RuntimeTargetBody {
+  nodeName: string;
+}
+
+interface ShareActionBody extends RuntimeTargetBody {
+  port?: number;
+}
+
+interface FcliBody extends RuntimeTargetBody {
+  command: string;
+}
+
+interface DrawioBody extends RuntimeTargetBody {
+  layout?: "horizontal" | "vertical" | "interactive";
+  theme?: string;
 }
 
 interface CaptureTargetBody {
@@ -268,6 +292,91 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
 function normalizeOptionalInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
+function normalizeNodeLifecycleAction(value: unknown): NodeLifecycleAction | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  switch (value.trim().toLowerCase()) {
+    case "start":
+    case "stop":
+    case "pause":
+    case "unpause":
+      return value.trim().toLowerCase() as NodeLifecycleAction;
+    default:
+      return undefined;
+  }
+}
+
+function normalizeShareToolAction(value: unknown): ShareToolAction | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  switch (value.trim().toLowerCase()) {
+    case "attach":
+    case "detach":
+    case "reattach":
+      return value.trim().toLowerCase() as ShareToolAction;
+    default:
+      return undefined;
+  }
+}
+
+function endpointHostname(endpointUrl: string): string | undefined {
+  try {
+    return new URL(endpointUrl).hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeHostForEndpoint(host: string | undefined, endpointUrl: string): string | undefined {
+  const trimmed = host?.trim() ?? "";
+  const endpointHost = endpointHostname(endpointUrl);
+  if (!trimmed) {
+    return endpointHost;
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (
+    lowered === "host_ip" ||
+    lowered === "localhost" ||
+    lowered === "127.0.0.1" ||
+    lowered === "::1" ||
+    lowered === "0.0.0.0" ||
+    lowered === "::"
+  ) {
+    return endpointHost ?? trimmed;
+  }
+
+  return trimmed;
+}
+
+function rewriteShareLinkForEndpoint(link: string | undefined, endpointUrl: string): string | undefined {
+  const raw = link?.trim();
+  if (!raw) {
+    return undefined;
+  }
+
+  if (raw.includes("HOST_IP")) {
+    const endpointHost = endpointHostname(endpointUrl);
+    if (endpointHost) {
+      return raw.replaceAll("HOST_IP", endpointHost);
+    }
+  }
+
+  try {
+    const parsed = new URL(raw);
+    const normalizedHost = normalizeHostForEndpoint(parsed.hostname, endpointUrl);
+    if (!normalizedHost) {
+      return raw;
+    }
+    parsed.hostname = normalizedHost;
+    return parsed.toString();
+  } catch {
+    return raw;
+  }
 }
 
 function normalizeCaptureTargets(rawTargets: unknown): Array<{ containerName: string; interfaceName: string }> {
@@ -539,6 +648,187 @@ export function registerRuntimeProxy(
     }
   );
 
+  app.post<{ Params: { action: string }; Body: NodeLifecycleBody }>(
+    "/api/runtime/nodes/:action",
+    async (
+      request: FastifyRequest<{ Params: { action: string }; Body: NodeLifecycleBody }>,
+      reply: FastifyReply
+    ) => {
+      const action = normalizeNodeLifecycleAction(request.params.action);
+      if (!action) {
+        return reply.status(400).send({ error: "Invalid node lifecycle action." });
+      }
+
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+
+        await client.controlNodeLifecycle(
+          endpoint.token,
+          target.labName,
+          resolvedNode.container.name,
+          action
+        );
+
+        return reply.send({ success: true });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: NodeBrowserBody }>(
+    "/api/runtime/nodes/browser-ports",
+    async (request: FastifyRequest<{ Body: NodeBrowserBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const resolvedNode = await resolveNodeTarget(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.nodeName
+        );
+
+        const payload = await client.getNodeBrowserPorts(
+          endpoint.token,
+          target.labName,
+          resolvedNode.container.name
+        );
+
+        return reply.send({
+          ...payload,
+          ports: (payload.ports ?? []).map((port) => ({
+            ...port,
+            hostIp: normalizeHostForEndpoint(port.hostIp, endpoint.url)
+          }))
+        });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { action: string }; Body: ShareActionBody }>(
+    "/api/runtime/share/sshx/:action",
+    async (
+      request: FastifyRequest<{ Params: { action: string }; Body: ShareActionBody }>,
+      reply: FastifyReply
+    ) => {
+      const action = normalizeShareToolAction(request.params.action);
+      if (!action) {
+        return reply.status(400).send({ error: "Invalid SSHX action." });
+      }
+
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const payload = await client.runSshxShareAction(endpoint.token, target.labName, action);
+        return reply.send({
+          ...payload,
+          link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
+        });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Params: { action: string }; Body: ShareActionBody }>(
+    "/api/runtime/share/gotty/:action",
+    async (
+      request: FastifyRequest<{ Params: { action: string }; Body: ShareActionBody }>,
+      reply: FastifyReply
+    ) => {
+      const action = normalizeShareToolAction(request.params.action);
+      if (!action) {
+        return reply.status(400).send({ error: "Invalid GoTTY action." });
+      }
+
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const port = normalizeOptionalInteger(request.body.port);
+        if (port !== undefined && (port <= 0 || port > 65535)) {
+          throw new RequestError("Invalid gotty port value.", 400);
+        }
+        const payload = await client.runGottyShareAction(endpoint.token, target.labName, action, { port });
+        return reply.send({
+          ...payload,
+          link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
+        });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: FcliBody }>(
+    "/api/runtime/fcli",
+    async (request: FastifyRequest<{ Body: FcliBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const command = normalizeOptionalString(request.body.command);
+        if (!command) {
+          throw new RequestError("Missing fcli command.", 400);
+        }
+
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        return reply.send(await client.runFcliCommand(endpoint.token, target.labName, command));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: DrawioBody }>(
+    "/api/runtime/labs/graph/drawio",
+    async (request: FastifyRequest<{ Body: DrawioBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const rawLayout = normalizeOptionalString(request.body.layout)?.toLowerCase();
+        const layout = rawLayout ?? "horizontal";
+        if (layout !== "horizontal" && layout !== "vertical" && layout !== "interactive") {
+          throw new RequestError("Invalid drawio layout.", 400);
+        }
+
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        return reply.send(
+          await client.generateDrawioGraph(endpoint.token, target.labName, {
+            layout,
+            theme: normalizeOptionalString(request.body.theme)
+          })
+        );
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
   app.post<{ Body: TerminalBody }>(
     "/api/runtime/terminal-sessions",
     async (request: FastifyRequest<{ Body: TerminalBody }>, reply: FastifyReply) => {
@@ -798,6 +1088,22 @@ export function registerRuntimeProxy(
         for (const session of payload.sessions ?? []) {
           setCaptureSessionEndpoint(session.sessionId, endpoint.id);
         }
+        return reply.send(payload);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/runtime/capture/wireshark-vnc-sessions/close-all",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const payload = await resolved.client.deleteAllWiresharkVncSessions(resolved.endpoint.token);
+        deleteCaptureSessionsForEndpoint(resolved.endpoint.id);
         return reply.send(payload);
       } catch (error) {
         return handleRouteError(reply, error);

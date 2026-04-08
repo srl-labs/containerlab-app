@@ -160,6 +160,48 @@ export interface DeployLabFromUrlResponse {
   labNames: string[];
 }
 
+export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
+
+export interface NodeBrowserPort {
+  hostIp?: string;
+  hostPort: number;
+  containerPort: number;
+  protocol?: string;
+  description?: string;
+}
+
+export interface NodeBrowserPortsResponse {
+  nodeName: string;
+  containerName: string;
+  ports: NodeBrowserPort[];
+}
+
+export type ShareToolAction = "attach" | "detach" | "reattach";
+
+export interface ShareToolResponse {
+  message: string;
+  link?: string;
+  output?: string;
+}
+
+export interface FcliCommandResponse {
+  command: string;
+  output: string;
+}
+
+export interface DrawioGenerateResponse {
+  fileName: string;
+  content: string;
+  layout: string;
+  message?: string;
+  output?: string;
+}
+
+export interface CaptureCloseAllResponse {
+  message: string;
+  closed: number;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -353,6 +395,75 @@ export async function fetchNodeLogs(input: RuntimeTargetRequest & {
   );
 }
 
+export async function controlNodeLifecycle(input: RuntimeTargetRequest & {
+  nodeName: string;
+  action: NodeLifecycleAction;
+}): Promise<void> {
+  const endpointId = resolveTargetEndpointId(input);
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/nodes/${encodeURIComponent(input.action)}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function fetchNodeBrowserPorts(input: RuntimeTargetRequest & {
+  nodeName: string;
+}): Promise<NodeBrowserPortsResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<NodeBrowserPortsResponse>(
+    "/api/runtime/nodes/browser-ports",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function runSshxShareAction(input: RuntimeTargetRequest & {
+  action: ShareToolAction;
+}): Promise<ShareToolResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<ShareToolResponse>(
+    `/api/runtime/share/sshx/${encodeURIComponent(input.action)}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function runGottyShareAction(input: RuntimeTargetRequest & {
+  action: ShareToolAction;
+  port?: number;
+}): Promise<ShareToolResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<ShareToolResponse>(
+    `/api/runtime/share/gotty/${encodeURIComponent(input.action)}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function runFcliCommand(input: RuntimeTargetRequest & {
+  command: string;
+}): Promise<FcliCommandResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<FcliCommandResponse>(
+    "/api/runtime/fcli",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function generateDrawioGraph(input: RuntimeTargetRequest & {
+  layout: "horizontal" | "vertical" | "interactive";
+  theme?: string;
+}): Promise<DrawioGenerateResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<DrawioGenerateResponse>(
+    "/api/runtime/labs/graph/drawio",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
 export async function fetchVersionInfo(endpointId?: string): Promise<VersionResponse> {
   return await requestJson<VersionResponse>(
     "/api/runtime/version",
@@ -444,6 +555,16 @@ export async function closeWiresharkVncSession(sessionId: string, endpointId?: s
   await requestJson<{ success: boolean }>(
     `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}`,
     withEndpointHeaders({ method: "DELETE" }, endpointId),
+    endpointId
+  );
+}
+
+export async function closeAllWiresharkVncSessions(
+  endpointId?: string
+): Promise<CaptureCloseAllResponse> {
+  return await requestJson<CaptureCloseAllResponse>(
+    "/api/runtime/capture/wireshark-vnc-sessions/close-all",
+    withEndpointHeaders({ method: "POST" }, endpointId),
     endpointId
   );
 }

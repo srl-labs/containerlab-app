@@ -123,6 +123,10 @@ function decodeBase64ToBytes(value: string): Uint8Array {
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
+function normalizeTerminalOutput(value: string): string {
+  return value.replace(/\r?\n/g, "\r\n");
+}
+
 function statusColor(windowState: RuntimeTerminalWindow): "default" | "error" | "success" | "warning" {
   switch (windowState.state) {
     case "ready":
@@ -254,6 +258,7 @@ function TerminalWindow({
   });
   const actionsPopoverOpen = actionsAnchorElement !== null;
   const isTerminalFocused = focusedTerminalId === windowState.id && !windowState.minimized;
+  const isOutputTerminal = windowState.protocol === "output";
 
   const runtimeContainer = useMemo(
     () =>
@@ -284,19 +289,29 @@ function TerminalWindow({
     }
 
     const term = new Terminal({
-      cursorBlink: true,
+      cursorBlink: !isOutputTerminal,
       scrollback: 5000,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
       fontSize: terminalPreferences.fontSize,
+      disableStdin: isOutputTerminal,
       theme: resolveTerminalTheme(terminalRef.current)
     });
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
     requestAnimationFrame(() => fitAddon.fit());
-    term.write(`Opening ${windowState.protocol} terminal for ${windowState.nodeName}...\r\n`);
+    if (isOutputTerminal) {
+      const output = (windowState.initialOutput ?? "").trim();
+      term.write(output.length > 0 ? `${normalizeTerminalOutput(output)}\r\n` : "No output returned.\r\n");
+      runtimeUiActions.setTerminalReady(windowState.id);
+    } else {
+      term.write(`Opening ${windowState.protocol} terminal for ${windowState.nodeName}...\r\n`);
+    }
 
     const dataDisposable = term.onData((data) => {
+      if (isOutputTerminal) {
+        return;
+      }
       const socket = websocketRef.current;
       if (socket?.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "input", data }));
@@ -341,7 +356,9 @@ function TerminalWindow({
       resizeObserverRef.current = null;
     };
   }, [
+    isOutputTerminal,
     windowState.id,
+    windowState.initialOutput,
     windowState.nodeName,
     windowState.protocol
   ]);
@@ -396,13 +413,22 @@ function TerminalWindow({
     if (windowState.state !== "creating" || xtermRef.current === null) {
       return;
     }
+    if (isOutputTerminal) {
+      runtimeUiActions.setTerminalReady(windowState.id);
+      return;
+    }
+    const sessionProtocol = windowState.protocol;
+    if (sessionProtocol === "output") {
+      runtimeUiActions.setTerminalReady(windowState.id);
+      return;
+    }
 
     let cancelled = false;
     const sshUsername =
-      windowState.protocol === "ssh"
+      sessionProtocol === "ssh"
         ? resolveTerminalSshUsername(runtimeContainer?.kind, terminalPreferences)
         : undefined;
-    const telnetPort = windowState.protocol === "telnet" ? terminalPreferences.telnetPort : undefined;
+    const telnetPort = sessionProtocol === "telnet" ? terminalPreferences.telnetPort : undefined;
     const cols = xtermRef.current.cols || 120;
     const rows = xtermRef.current.rows || 36;
 
@@ -411,7 +437,7 @@ function TerminalWindow({
       sessionId: windowState.sessionId,
       topologyRef: windowState.topologyRef,
       nodeName: windowState.nodeName,
-      protocol: windowState.protocol,
+      protocol: sessionProtocol,
       cols,
       rows,
       sshUsername,
@@ -435,6 +461,7 @@ function TerminalWindow({
       cancelled = true;
     };
   }, [
+    isOutputTerminal,
     runtimeContainer?.kind,
     terminalPreferences.sshUserMapping,
     terminalPreferences.telnetPort,
@@ -884,7 +911,8 @@ function TerminalWindow({
               {windowState.title}
             </Typography>
             <Typography variant="caption" sx={{ opacity: 0.75 }} noWrap>
-              {runtimeContainer?.kind || "node"} • {windowState.nodeName}
+              {runtimeContainer?.kind || (isOutputTerminal ? "command-output" : "node")} •{" "}
+              {windowState.nodeName}
             </Typography>
           </Stack>
           <Chip

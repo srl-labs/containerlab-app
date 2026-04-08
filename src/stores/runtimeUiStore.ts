@@ -1,8 +1,14 @@
 import type { AlertColor } from "@mui/material/Alert";
 import { create } from "zustand";
 
-import type { NetemFields, RuntimeTargetRequest, TerminalProtocol } from "../runtimeApi";
+import type {
+  NetemFields,
+  RuntimeTargetRequest,
+  TerminalProtocol as ApiTerminalProtocol
+} from "../runtimeApi";
 import { extractEndpointIdFromTopologyId } from "../standaloneHostShared";
+
+export type RuntimeTerminalProtocol = ApiTerminalProtocol | "output";
 
 export interface RuntimeInspectRequest {
   mode: "all" | "lab";
@@ -21,9 +27,10 @@ export interface RuntimeNetemRequest extends RuntimeNodeRequest {
 }
 
 export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
-  protocol: TerminalProtocol;
+  protocol: RuntimeTerminalProtocol;
   sshUsername?: string;
   telnetPort?: number;
+  initialOutput?: string;
 }
 
 export interface RuntimeTerminalWindow extends RuntimeTerminalRequest {

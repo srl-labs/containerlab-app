@@ -201,6 +201,48 @@ export interface EdgeSharkStatusResponse {
   runtime: string;
 }
 
+export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
+
+export interface NodeBrowserPort {
+  hostIp?: string;
+  hostPort: number;
+  containerPort: number;
+  protocol?: string;
+  description?: string;
+}
+
+export interface NodeBrowserPortsResponse {
+  nodeName: string;
+  containerName: string;
+  ports: NodeBrowserPort[];
+}
+
+export type ShareToolAction = "attach" | "detach" | "reattach";
+
+export interface ShareToolResponse {
+  message: string;
+  link?: string;
+  output?: string;
+}
+
+export interface FcliCommandResponse {
+  command: string;
+  output: string;
+}
+
+export interface DrawioGenerateResponse {
+  fileName: string;
+  content: string;
+  layout: string;
+  message?: string;
+  output?: string;
+}
+
+export interface CaptureCloseAllResponse {
+  message: string;
+  closed: number;
+}
+
 type LifecycleEndpoint = "deploy" | "destroy" | "redeploy";
 
 export class ClabApiClient {
@@ -603,6 +645,99 @@ export class ClabApiClient {
     return (await res.json()) as LogsResponse;
   }
 
+  async controlNodeLifecycle(
+    token: string,
+    labName: string,
+    nodeName: string,
+    action: NodeLifecycleAction
+  ): Promise<void> {
+    await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/${enc(action)}`,
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+  }
+
+  async getNodeBrowserPorts(
+    token: string,
+    labName: string,
+    nodeName: string
+  ): Promise<NodeBrowserPortsResponse> {
+    const res = await this.get(
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/browser-ports`,
+      token
+    );
+    return (await res.json()) as NodeBrowserPortsResponse;
+  }
+
+  async runSshxShareAction(
+    token: string,
+    labName: string,
+    action: ShareToolAction
+  ): Promise<ShareToolResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/sshx/${enc(action)}`,
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+    return (await res.json()) as ShareToolResponse;
+  }
+
+  async runGottyShareAction(
+    token: string,
+    labName: string,
+    action: ShareToolAction,
+    options: { port?: number } = {}
+  ): Promise<ShareToolResponse> {
+    const params = new URLSearchParams();
+    if (typeof options.port === "number" && Number.isFinite(options.port)) {
+      params.set("port", String(options.port));
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/gotty/${enc(action)}${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+    return (await res.json()) as ShareToolResponse;
+  }
+
+  async runFcliCommand(
+    token: string,
+    labName: string,
+    command: string
+  ): Promise<FcliCommandResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/fcli`,
+      token,
+      JSON.stringify({ command }),
+      "application/json"
+    );
+    return (await res.json()) as FcliCommandResponse;
+  }
+
+  async generateDrawioGraph(
+    token: string,
+    labName: string,
+    input: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
+  ): Promise<DrawioGenerateResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/graph/drawio`,
+      token,
+      JSON.stringify(input),
+      "application/json"
+    );
+    return (await res.json()) as DrawioGenerateResponse;
+  }
+
   async getVersion(token: string): Promise<VersionResponse> {
     const res = await this.get("/api/v1/version", token);
     return (await res.json()) as VersionResponse;
@@ -675,6 +810,11 @@ export class ClabApiClient {
 
   async deleteWiresharkVncSession(token: string, sessionId: string): Promise<void> {
     await this.request("DELETE", `/api/v1/capture/wireshark-vnc-sessions/${enc(sessionId)}`, token);
+  }
+
+  async deleteAllWiresharkVncSessions(token: string): Promise<CaptureCloseAllResponse> {
+    const res = await this.request("DELETE", "/api/v1/capture/wireshark-vnc-sessions", token);
+    return (await res.json()) as CaptureCloseAllResponse;
   }
 
   async getCustomNodes(token: string): Promise<CustomNodesResponse> {

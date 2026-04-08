@@ -24,3 +24,16 @@ export function deleteCaptureSessionEndpoint(sessionId: string): void {
   }
   endpointByCaptureSession.delete(sessionKey);
 }
+
+export function deleteCaptureSessionsForEndpoint(endpointId: string): void {
+  const endpointKey = endpointId.trim();
+  if (!endpointKey) {
+    return;
+  }
+
+  for (const [sessionId, mappedEndpointId] of endpointByCaptureSession.entries()) {
+    if (mappedEndpointId === endpointKey) {
+      endpointByCaptureSession.delete(sessionId);
+    }
+  }
+}
