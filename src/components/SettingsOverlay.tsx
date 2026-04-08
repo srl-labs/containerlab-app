@@ -23,17 +23,28 @@ import Typography from "@mui/material/Typography";
 import type { Theme } from "@mui/material/styles";
 import {
   Close as CloseIcon,
+  Download as DownloadIcon,
   DarkMode as DarkModeIcon,
   DnsRounded as DnsRoundedIcon,
   InfoOutlined as InfoOutlinedIcon,
+  Link as LinkIcon,
   LightMode as LightModeIcon,
   Logout as LogoutIcon,
+  Refresh as RefreshIcon,
   Settings as SettingsIcon,
+  Upload as UploadIcon,
   Terminal as TerminalIcon
 } from "@mui/icons-material";
 
 import { subscribeEndpointUiAction, type EndpointUiAction } from "../endpointActions";
-import { fetchVersionCheck, fetchVersionInfo } from "../runtimeApi";
+import {
+  fetchEdgeSharkStatus,
+  fetchVersionCheck,
+  fetchVersionInfo,
+  installEdgeShark,
+  uninstallEdgeShark,
+  type EdgeSharkStatusResponse
+} from "../runtimeApi";
 import {
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
@@ -46,7 +57,7 @@ import {
 } from "../stores/endpointStore";
 import { EndpointManager } from "./EndpointManager";
 
-type SettingsSectionKey = "endpoints" | "general" | "terminal" | "about";
+type SettingsSectionKey = "endpoints" | "general" | "terminal" | "capture" | "about";
 
 interface SettingsOverlayProps {
   currentTheme: "light" | "dark";
@@ -121,6 +132,12 @@ const SETTINGS_SECTIONS: Array<{
     label: "Terminal",
     description: "SSH mapping, telnet, and font defaults",
     icon: <TerminalIcon fontSize="small" />
+  },
+  {
+    key: "capture",
+    label: "Capture",
+    description: "Edgeshark and packet capture helpers",
+    icon: <LinkIcon fontSize="small" />
   },
   {
     key: "about",
@@ -263,6 +280,10 @@ export function SettingsOverlay({
   const [versionError, setVersionError] = useState<string | null>(null);
   const [versionInfo, setVersionInfo] = useState("");
   const [versionCheck, setVersionCheck] = useState("");
+  const [captureStatusLoading, setCaptureStatusLoading] = useState(false);
+  const [captureActionLoading, setCaptureActionLoading] = useState<"install" | "uninstall" | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [captureStatus, setCaptureStatus] = useState<EdgeSharkStatusResponse | null>(null);
 
   const primaryEndpoint =
     endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
@@ -318,6 +339,26 @@ export function SettingsOverlay({
       cancelled = true;
     };
   }, [activeSection, dialogOpen, primaryEndpoint?.id]);
+
+  const refreshCaptureStatus = useCallback(async () => {
+    setCaptureStatusLoading(true);
+    setCaptureError(null);
+    try {
+      const status = await fetchEdgeSharkStatus(primaryEndpoint?.id);
+      setCaptureStatus(status);
+    } catch (error) {
+      setCaptureError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setCaptureStatusLoading(false);
+    }
+  }, [primaryEndpoint?.id]);
+
+  useEffect(() => {
+    if (!dialogOpen || activeSection !== "capture") {
+      return;
+    }
+    void refreshCaptureStatus();
+  }, [activeSection, dialogOpen, refreshCaptureStatus]);
 
   const terminalDraft = useMemo(
     () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText, fontSizeText),
@@ -596,6 +637,108 @@ export function SettingsOverlay({
                 slotProps={{ input: { readOnly: true } }}
                 data-testid="standalone-settings-version-check"
               />
+            </SectionCard>
+          </Stack>
+        );
+      case "capture":
+        return (
+          <Stack spacing={3}>
+            <Box>
+              <Typography variant="h6">Capture</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Manage Edgeshark availability for packet capture and Wireshark noVNC sessions.
+              </Typography>
+            </Box>
+            <SectionCard
+              title="Edgeshark"
+              description="Install or uninstall Edgeshark on the active endpoint host."
+              tone={captureStatus?.running ? "success" : "warning"}
+            >
+              {captureError ? (
+                <Alert
+                  severity="error"
+                  variant="outlined"
+                  sx={{
+                    color: "text.primary",
+                    borderColor: "error.main",
+                    bgcolor: "background.paper",
+                    "& .MuiAlert-icon": {
+                      color: "error.main"
+                    }
+                  }}
+                >
+                  {captureError}
+                </Alert>
+              ) : null}
+              <TextField
+                label="Status"
+                value={
+                  captureStatusLoading
+                    ? "Loading..."
+                    : captureStatus
+                      ? captureStatus.running
+                        ? `Running${captureStatus.version ? ` (${captureStatus.version})` : ""}`
+                        : "Not running"
+                      : "Unknown"
+                }
+                fullWidth
+                slotProps={{ input: { readOnly: true } }}
+                data-testid="standalone-settings-capture-status"
+              />
+              <Stack direction="row" spacing={1.25} flexWrap="wrap">
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={() => {
+                    void refreshCaptureStatus();
+                  }}
+                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  data-testid="standalone-settings-capture-refresh"
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={() => {
+                    setCaptureActionLoading("install");
+                    setCaptureError(null);
+                    void installEdgeShark(primaryEndpoint?.id)
+                      .then(() => refreshCaptureStatus())
+                      .catch((error) =>
+                        setCaptureError(error instanceof Error ? error.message : String(error))
+                      )
+                      .finally(() => setCaptureActionLoading(null));
+                  }}
+                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  data-testid="standalone-settings-capture-install"
+                >
+                  Install
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<UploadIcon />}
+                  onClick={() => {
+                    setCaptureActionLoading("uninstall");
+                    setCaptureError(null);
+                    void uninstallEdgeShark(primaryEndpoint?.id)
+                      .then(() => refreshCaptureStatus())
+                      .catch((error) =>
+                        setCaptureError(error instanceof Error ? error.message : String(error))
+                      )
+                      .finally(() => setCaptureActionLoading(null));
+                  }}
+                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  data-testid="standalone-settings-capture-uninstall"
+                >
+                  Uninstall
+                </Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                Capture defaults (image, pull policy, packetflix host/port) are controlled on the
+                API server via environment variables.
+              </Typography>
             </SectionCard>
           </Stack>
         );

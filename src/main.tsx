@@ -58,6 +58,7 @@ import {
   useLabTabsStore
 } from "./stores/labTabsStore";
 import {
+  createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
   fetchUiCustomNodes,
@@ -451,6 +452,56 @@ function setupStandaloneUiHost(): void {
       return { endpointId, sessionId, topologyRef };
     };
 
+    const openCaptureVncForInterface = (nodeName: string, interfaceName: string): void => {
+      const target = getActiveTopologyTarget();
+      if (!target) {
+        return;
+      }
+      if (!nodeName || !interfaceName) {
+        runtimeUiActions.notify("Missing capture target.", "error");
+        return;
+      }
+
+      void (async () => {
+        try {
+          let theme: string | undefined;
+          try {
+            const storedTheme = localStorage.getItem("clab-standalone-theme");
+            if (storedTheme === "light" || storedTheme === "dark") {
+              theme = storedTheme;
+            }
+          } catch {
+            // ignore localStorage read errors
+          }
+
+          const response = await createWiresharkVncSessions({
+            ...target,
+            targets: [{ containerName: nodeName, interfaceName }],
+            theme
+          });
+
+          const sessions = response.sessions ?? [];
+          if (sessions.length === 0) {
+            runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
+            return;
+          }
+
+          for (const session of sessions) {
+            const params = new URLSearchParams({ sessionId: session.sessionId });
+            if (target.endpointId) {
+              params.set("endpointId", target.endpointId);
+            }
+            if (session.showVolumeTip) {
+              params.set("showVolumeTip", "1");
+            }
+            window.open(`/wireshark.html?${params.toString()}`, "_blank", "noopener,noreferrer");
+          }
+        } catch (error: unknown) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+      })();
+    };
+
     if (msg.command === "reactTopoViewerLog" || msg.command === "topoViewerLog") {
       return;
     }
@@ -524,6 +575,13 @@ function setupStandaloneUiHost(): void {
         nodeName: msg.nodeName,
         title: `Logs: ${msg.nodeName}`
       });
+      return;
+    }
+
+    if (msg.command === "clab-interface-capture") {
+      const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+      const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+      openCaptureVncForInterface(nodeName, interfaceName);
       return;
     }
 

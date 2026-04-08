@@ -159,6 +159,48 @@ export interface TopologyDocEvent {
   revision: string;
 }
 
+export interface CaptureTarget {
+  containerName: string;
+  interfaceName: string;
+}
+
+export interface CapturePacketflixURI {
+  containerName: string;
+  interfaceNames: string[];
+  packetflixUri: string;
+}
+
+export interface CapturePacketflixResponse {
+  captures: CapturePacketflixURI[];
+}
+
+export interface CaptureWiresharkVncSession {
+  sessionId: string;
+  labName: string;
+  containerName: string;
+  interfaceNames: string[];
+  vncPath: string;
+  showVolumeTip: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface CaptureWiresharkVncCreateResponse {
+  sessions: CaptureWiresharkVncSession[];
+}
+
+export interface CaptureWiresharkVncReadyResponse {
+  ready: boolean;
+  url: string;
+}
+
+export interface EdgeSharkStatusResponse {
+  running: boolean;
+  version?: string;
+  packetflixPort: number;
+  runtime: string;
+}
+
 type LifecycleEndpoint = "deploy" | "destroy" | "redeploy";
 
 export class ClabApiClient {
@@ -547,6 +589,70 @@ export class ClabApiClient {
   async checkVersion(token: string): Promise<VersionCheckResponse> {
     const res = await this.get("/api/v1/version/check", token);
     return (await res.json()) as VersionCheckResponse;
+  }
+
+  async getEdgeSharkStatus(token: string): Promise<EdgeSharkStatusResponse> {
+    const res = await this.get("/api/v1/tools/edgeshark/status", token);
+    return (await res.json()) as EdgeSharkStatusResponse;
+  }
+
+  async installEdgeShark(token: string): Promise<void> {
+    await this.request("POST", "/api/v1/tools/edgeshark/install", token, JSON.stringify({}), "application/json");
+  }
+
+  async uninstallEdgeShark(token: string): Promise<void> {
+    await this.request(
+      "POST",
+      "/api/v1/tools/edgeshark/uninstall",
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+  }
+
+  async buildPacketflixCapture(
+    token: string,
+    labName: string,
+    payload: { targets: CaptureTarget[]; remoteHostname?: string }
+  ): Promise<CapturePacketflixResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/capture/packetflix`,
+      token,
+      JSON.stringify(payload),
+      "application/json"
+    );
+    return (await res.json()) as CapturePacketflixResponse;
+  }
+
+  async createWiresharkVncSessions(
+    token: string,
+    labName: string,
+    payload: { targets: CaptureTarget[]; theme?: string }
+  ): Promise<CaptureWiresharkVncCreateResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/capture/wireshark-vnc-sessions`,
+      token,
+      JSON.stringify(payload),
+      "application/json"
+    );
+    return (await res.json()) as CaptureWiresharkVncCreateResponse;
+  }
+
+  async getWiresharkVncSessionReady(
+    token: string,
+    sessionId: string
+  ): Promise<CaptureWiresharkVncReadyResponse> {
+    const res = await this.get(
+      `/api/v1/capture/wireshark-vnc-sessions/${enc(sessionId)}/ready`,
+      token
+    );
+    return (await res.json()) as CaptureWiresharkVncReadyResponse;
+  }
+
+  async deleteWiresharkVncSession(token: string, sessionId: string): Promise<void> {
+    await this.request("DELETE", `/api/v1/capture/wireshark-vnc-sessions/${enc(sessionId)}`, token);
   }
 
   async getCustomNodes(token: string): Promise<CustomNodesResponse> {

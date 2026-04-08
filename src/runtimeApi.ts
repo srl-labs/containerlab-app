@@ -113,6 +113,48 @@ export interface NetemShowResult {
   impairments: NetemShowResponse;
 }
 
+export interface CaptureTarget {
+  containerName: string;
+  interfaceName: string;
+}
+
+export interface CapturePacketflixURI {
+  containerName: string;
+  interfaceNames: string[];
+  packetflixUri: string;
+}
+
+export interface CapturePacketflixResponse {
+  captures: CapturePacketflixURI[];
+}
+
+export interface CaptureWiresharkVncSession {
+  sessionId: string;
+  labName: string;
+  containerName: string;
+  interfaceNames: string[];
+  vncPath: string;
+  showVolumeTip: boolean;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface CaptureWiresharkVncCreateResponse {
+  sessions: CaptureWiresharkVncSession[];
+}
+
+export interface CaptureWiresharkVncReadyResponse {
+  ready: boolean;
+  url: string;
+}
+
+export interface EdgeSharkStatusResponse {
+  running: boolean;
+  version?: string;
+  packetflixPort: number;
+  runtime: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -318,6 +360,73 @@ export async function fetchVersionCheck(endpointId?: string): Promise<VersionChe
   return await requestJson<VersionCheckResponse>(
     "/api/runtime/version/check",
     withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function fetchEdgeSharkStatus(endpointId?: string): Promise<EdgeSharkStatusResponse> {
+  return await requestJson<EdgeSharkStatusResponse>(
+    "/api/runtime/capture/edgeshark/status",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function installEdgeShark(endpointId?: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/capture/edgeshark/install",
+    withEndpointHeaders({ method: "POST" }, endpointId),
+    endpointId
+  );
+}
+
+export async function uninstallEdgeShark(endpointId?: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/capture/edgeshark/uninstall",
+    withEndpointHeaders({ method: "POST" }, endpointId),
+    endpointId
+  );
+}
+
+export async function buildPacketflixCapture(input: RuntimeTargetRequest & {
+  targets: CaptureTarget[];
+  remoteHostname?: string;
+}): Promise<CapturePacketflixResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<CapturePacketflixResponse>(
+    "/api/runtime/capture/packetflix",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function createWiresharkVncSessions(input: RuntimeTargetRequest & {
+  targets: CaptureTarget[];
+  theme?: string;
+}): Promise<CaptureWiresharkVncCreateResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<CaptureWiresharkVncCreateResponse>(
+    "/api/runtime/capture/wireshark-vnc-sessions",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function fetchWiresharkVncSessionReady(
+  sessionId: string,
+  endpointId?: string
+): Promise<CaptureWiresharkVncReadyResponse> {
+  return await requestJson<CaptureWiresharkVncReadyResponse>(
+    `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/ready`,
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function closeWiresharkVncSession(sessionId: string, endpointId?: string): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}`,
+    withEndpointHeaders({ method: "DELETE" }, endpointId),
     endpointId
   );
 }

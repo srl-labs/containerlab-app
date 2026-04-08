@@ -8,7 +8,12 @@ import type {
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
 import { dispatchEndpointUiAction } from "./endpointActions";
-import { type NetemFields, createTopologyFile } from "./runtimeApi";
+import {
+  buildPacketflixCapture,
+  createTopologyFile,
+  createWiresharkVncSessions,
+  type NetemFields
+} from "./runtimeApi";
 import { deleteTopologyFileFlow, saveConfigsFlow } from "./components/RuntimeActionDialogs";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
@@ -659,6 +664,43 @@ export function createStandaloneExplorerBridge(
       actionTopologyRef?.labName ??
       item?.labName ??
       (typeof item?.label === "string" ? item.label : undefined);
+    const resolveCaptureTargets = (): Array<{ containerName: string; interfaceName: string }> => {
+      const byKey = new Map<string, { containerName: string; interfaceName: string }>();
+
+      const pushCandidate = (candidate: unknown): void => {
+        if (!candidate || typeof candidate !== "object") {
+          return;
+        }
+        const containerName =
+          typeof (candidate as { containerName?: unknown }).containerName === "string"
+            ? (candidate as { containerName: string }).containerName.trim()
+            : "";
+        const interfaceName =
+          typeof (candidate as { name?: unknown }).name === "string"
+            ? (candidate as { name: string }).name.trim()
+            : "";
+        if (!containerName || !interfaceName) {
+          return;
+        }
+        byKey.set(`${containerName}::${interfaceName}`, { containerName, interfaceName });
+      };
+
+      for (const candidate of args) {
+        if (Array.isArray(candidate)) {
+          for (const nested of candidate) {
+            pushCandidate(nested);
+          }
+          continue;
+        }
+        pushCandidate(candidate);
+      }
+
+      if (byKey.size === 0 && item) {
+        pushCandidate(item);
+      }
+
+      return [...byKey.values()];
+    };
 
     switch (commandId) {
       case "containerlab.openLink": {
@@ -954,6 +996,107 @@ export function createStandaloneExplorerBridge(
           preferredInterfaceName: item.label || item.name,
           title: `Impairments: ${item.containerName}`
         });
+        return;
+      }
+      case "containerlab.interface.captureWithEdgeshark": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+        const targets = resolveCaptureTargets();
+        if (targets.length === 0) {
+          postExplorerError("Capture requires a running interface item.");
+          return;
+        }
+
+        try {
+          const captureResponse = await buildPacketflixCapture({
+            endpointId: actionEndpointId,
+            topologyRef: actionTopologyRef,
+            targets
+          });
+
+          const captures = captureResponse.captures ?? [];
+          if (captures.length === 0) {
+            runtimeUiActions.notify("No packet capture targets were returned.", "warning");
+            return;
+          }
+
+          for (const capture of captures) {
+            const link = capture.packetflixUri?.trim();
+            if (!link) {
+              continue;
+            }
+            window.open(link, "_blank", "noopener,noreferrer");
+          }
+
+          runtimeUiActions.notify(
+            captures.length > 1
+              ? `Started ${captures.length} Edgeshark capture targets.`
+              : `Started Edgeshark capture for ${captures[0]?.containerName ?? "interface"}.`,
+            "success"
+          );
+        } catch (error) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
+      case "containerlab.interface.captureWithEdgesharkVNC": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+        const targets = resolveCaptureTargets();
+        if (targets.length === 0) {
+          postExplorerError("Capture requires a running interface item.");
+          return;
+        }
+
+        try {
+          let theme: string | undefined;
+          try {
+            const storedTheme = localStorage.getItem("clab-standalone-theme");
+            if (storedTheme === "light" || storedTheme === "dark") {
+              theme = storedTheme;
+            }
+          } catch {
+            // ignore localStorage read errors
+          }
+
+          const sessionsResponse = await createWiresharkVncSessions({
+            endpointId: actionEndpointId,
+            topologyRef: actionTopologyRef,
+            targets,
+            theme
+          });
+
+          const sessions = sessionsResponse.sessions ?? [];
+          if (sessions.length === 0) {
+            runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
+            return;
+          }
+
+          for (const session of sessions) {
+            const params = new URLSearchParams({ sessionId: session.sessionId });
+            if (actionEndpointId) {
+              params.set("endpointId", actionEndpointId);
+            }
+            if (session.showVolumeTip) {
+              params.set("showVolumeTip", "1");
+            }
+            const capturePageUrl = `/wireshark.html?${params.toString()}`;
+            window.open(capturePageUrl, "_blank", "noopener,noreferrer");
+          }
+
+          runtimeUiActions.notify(
+            sessions.length > 1
+              ? `Opened ${sessions.length} Wireshark VNC sessions.`
+              : "Opened Wireshark VNC session.",
+            "success"
+          );
+        } catch (error) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
         return;
       }
       case "containerlab.node.copyName": {

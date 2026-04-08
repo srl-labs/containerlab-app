@@ -20,6 +20,7 @@ import {
   getSessionIdFromRequest,
   setSessionCookie
 } from "./middleware.js";
+import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.js";
 import { registerRuntimeProxy } from "./runtimeProxy.js";
 import { registerTerminalStreamProxy } from "./terminalStreamProxy.js";
 import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
@@ -172,6 +173,7 @@ async function start(): Promise<void> {
   registerFileProxy(app, resolveEndpoint);
   registerLabProxy(app, resolveEndpoint, topologySessions);
   registerRuntimeProxy(app, resolveEndpoint, listEndpoints, topologySessions);
+  registerCaptureVncStreamProxy(app, resolveEndpoint);
   registerTerminalStreamProxy(app, resolveEndpoint);
 
   app.get("/api/config", async (request, reply) => {

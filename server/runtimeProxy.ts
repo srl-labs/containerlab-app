@@ -11,6 +11,11 @@ import type {
 import type { EndpointEntry } from "./endpointSessionStore.js";
 import { getEndpointIdFromRequest } from "./middleware.js";
 import {
+  deleteCaptureSessionEndpoint,
+  getCaptureSessionEndpoint,
+  setCaptureSessionEndpoint
+} from "./captureSessionStore.js";
+import {
   buildStandaloneTopologyRef,
   extractEndpointIdFromTopologyId,
   resolveCanonicalStandaloneTopologyRef
@@ -51,6 +56,21 @@ interface NetemBody extends RuntimeTargetBody {
   loss?: number;
   rate?: number;
   corruption?: number;
+}
+
+interface CaptureTargetBody {
+  containerName: string;
+  interfaceName: string;
+}
+
+interface CapturePacketflixBody extends RuntimeTargetBody {
+  targets: CaptureTargetBody[];
+  remoteHostname?: string;
+}
+
+interface CaptureWiresharkVncBody extends RuntimeTargetBody {
+  targets: CaptureTargetBody[];
+  theme?: string;
 }
 
 interface CreateTopologyFileBody extends RuntimeTargetBody {
@@ -107,6 +127,32 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
 
 function resolveRequestedEndpointId(target?: RuntimeTargetBody): string | undefined {
   return target?.endpointId ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId);
+}
+
+function resolveEndpointForCaptureSession(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  resolveEndpoint: EndpointResolver,
+  sessionId: string
+): { client: ClabApiClient; endpoint: EndpointEntry } | null {
+  const explicitEndpointId = getEndpointIdFromRequest(request);
+  if (explicitEndpointId) {
+    const explicit = resolveEndpoint(request, reply, explicitEndpointId);
+    if (explicit) {
+      setCaptureSessionEndpoint(sessionId, explicit.endpoint.id);
+      return explicit;
+    }
+  }
+
+  const mappedEndpointId = getCaptureSessionEndpoint(sessionId);
+  if (mappedEndpointId) {
+    const mapped = resolveEndpoint(request, reply, mappedEndpointId);
+    if (mapped) {
+      return mapped;
+    }
+  }
+
+  return resolveEndpoint(request, reply);
 }
 
 async function resolveLabTarget(
@@ -217,6 +263,69 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
 function normalizeOptionalInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
+}
+
+function normalizeCaptureTargets(rawTargets: unknown): Array<{ containerName: string; interfaceName: string }> {
+  if (!Array.isArray(rawTargets)) {
+    return [];
+  }
+
+  const targets: Array<{ containerName: string; interfaceName: string }> = [];
+  for (const target of rawTargets) {
+    if (typeof target !== "object" || target === null) {
+      continue;
+    }
+    const containerName =
+      typeof (target as { containerName?: unknown }).containerName === "string"
+        ? (target as { containerName: string }).containerName.trim()
+        : "";
+    const interfaceName =
+      typeof (target as { interfaceName?: unknown }).interfaceName === "string"
+        ? (target as { interfaceName: string }).interfaceName.trim()
+        : "";
+    if (!containerName || !interfaceName) {
+      continue;
+    }
+    targets.push({ containerName, interfaceName });
+  }
+  return targets;
+}
+
+async function resolveCaptureTargets(
+  client: ClabApiClient,
+  token: string,
+  labName: string,
+  rawTargets: unknown
+): Promise<Array<{ containerName: string; interfaceName: string }>> {
+  const targets = normalizeCaptureTargets(rawTargets);
+  if (targets.length === 0) {
+    return targets;
+  }
+
+  const containers = await client.inspectLab(token, labName);
+  if (containers.length === 0) {
+    return targets;
+  }
+
+  return targets.map((target) => {
+    let bestMatch: InspectContainerInfo | null = null;
+    let bestScore = 0;
+    for (const container of containers) {
+      const score = scoreNodeMatch(labName, container.name, target.containerName);
+      if (score > bestScore) {
+        bestMatch = container;
+        bestScore = score;
+      }
+    }
+
+    if (!bestMatch || bestScore === 0) {
+      return target;
+    }
+    return {
+      containerName: bestMatch.name,
+      interfaceName: target.interfaceName
+    };
+  });
 }
 
 function stripTopologySuffix(name: string): string {
@@ -560,6 +669,226 @@ export function registerRuntimeProxy(
       }
     }
   );
+
+  app.get("/api/runtime/capture/edgeshark/status", async (request, reply) => {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      return reply.send(await resolved.client.getEdgeSharkStatus(resolved.endpoint.token));
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
+
+  app.post(
+    "/api/runtime/capture/edgeshark/install",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        await resolved.client.installEdgeShark(resolved.endpoint.token);
+        return reply.send({ success: true });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/runtime/capture/edgeshark/uninstall",
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        await resolved.client.uninstallEdgeShark(resolved.endpoint.token);
+        return reply.send({ success: true });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: CapturePacketflixBody }>(
+    "/api/runtime/capture/packetflix",
+    async (request: FastifyRequest<{ Body: CapturePacketflixBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const targets = await resolveCaptureTargets(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.targets
+        );
+        if (targets.length === 0) {
+          throw new RequestError("At least one capture target is required", 400);
+        }
+        const remoteHostname = normalizeOptionalString(request.body.remoteHostname);
+        const payload = await client.buildPacketflixCapture(endpoint.token, target.labName, {
+          targets,
+          remoteHostname
+        });
+        return reply.send(payload);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: CaptureWiresharkVncBody }>(
+    "/api/runtime/capture/wireshark-vnc-sessions",
+    async (request: FastifyRequest<{ Body: CaptureWiresharkVncBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const targets = await resolveCaptureTargets(
+          client,
+          endpoint.token,
+          target.labName,
+          request.body.targets
+        );
+        if (targets.length === 0) {
+          throw new RequestError("At least one capture target is required", 400);
+        }
+        const theme = normalizeOptionalString(request.body.theme);
+        const payload = await client.createWiresharkVncSessions(endpoint.token, target.labName, {
+          targets,
+          theme
+        });
+        for (const session of payload.sessions ?? []) {
+          setCaptureSessionEndpoint(session.sessionId, endpoint.id);
+        }
+        return reply.send(payload);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/runtime/capture/wireshark-vnc-sessions/:sessionId/ready",
+    async (request: FastifyRequest<{ Params: { sessionId: string } }>, reply: FastifyReply) => {
+      const resolved = resolveEndpointForCaptureSession(
+        request,
+        reply,
+        resolveEndpoint,
+        request.params.sessionId
+      );
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const payload = await resolved.client.getWiresharkVncSessionReady(
+          resolved.endpoint.token,
+          request.params.sessionId
+        );
+        return reply.send({
+          ...payload,
+          url: `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}/vnc/`
+        });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  const closeCaptureSession = async (
+    request: FastifyRequest<{ Params: { sessionId: string } }>,
+    reply: FastifyReply
+  ) => {
+    const resolved = resolveEndpointForCaptureSession(
+      request,
+      reply,
+      resolveEndpoint,
+      request.params.sessionId
+    );
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      await resolved.client.deleteWiresharkVncSession(resolved.endpoint.token, request.params.sessionId);
+      deleteCaptureSessionEndpoint(request.params.sessionId);
+      return reply.send({ success: true });
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  };
+
+  app.delete<{ Params: { sessionId: string } }>(
+    "/api/runtime/capture/wireshark-vnc-sessions/:sessionId",
+    closeCaptureSession
+  );
+
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/runtime/capture/wireshark-vnc-sessions/:sessionId/close",
+    closeCaptureSession
+  );
+
+  app.route<{ Params: { sessionId: string; "*": string } }>({
+    method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    url: "/api/runtime/capture/wireshark-vnc-sessions/:sessionId/vnc/*",
+    async handler(request, reply) {
+      const resolved = resolveEndpointForCaptureSession(
+        request,
+        reply,
+        resolveEndpoint,
+        request.params.sessionId
+      );
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const wildcard = request.params["*"] ?? "";
+        const suffix = wildcard.length > 0 ? `/${wildcard}` : "/";
+        const rawUrl = request.raw.url ?? "";
+        const queryIndex = rawUrl.indexOf("?");
+        const query = queryIndex >= 0 ? rawUrl.slice(queryIndex) : "";
+        const upstreamUrl =
+          `${resolved.client.getBaseUrl()}` +
+          `/api/v1/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}` +
+          `/vnc${suffix}${query}`;
+
+        const headers: Record<string, string> = {
+          Authorization: `Bearer ${resolved.endpoint.token}`
+        };
+        for (const [key, value] of Object.entries(request.headers)) {
+          if (typeof value !== "string") {
+            continue;
+          }
+          const lower = key.toLowerCase();
+          if (lower === "host" || lower === "authorization" || lower === "content-length") {
+            continue;
+          }
+          headers[key] = value;
+        }
+
+        const upstreamResponse = await fetch(upstreamUrl, {
+          method: request.method,
+          headers
+        });
+
+        reply.status(upstreamResponse.status);
+        for (const [key, value] of upstreamResponse.headers.entries()) {
+          const lower = key.toLowerCase();
+          if (lower === "transfer-encoding" || lower === "connection") {
+            continue;
+          }
+          reply.header(key, value);
+        }
+
+        const body = await upstreamResponse.arrayBuffer();
+        return reply.send(Buffer.from(body));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  });
 
   app.get("/api/runtime/version", async (request, reply) => {
     const resolved = resolveEndpoint(request, reply);
