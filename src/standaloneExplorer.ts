@@ -954,7 +954,7 @@ export function createStandaloneExplorerBridge(
           endpointId: actionEndpointId,
           topologyRef: actionTopologyRef,
           targets,
-          remoteHostname: getSessionHostnameOverride()
+          remoteHostname: getSessionHostnameOverride(actionEndpointId)
         });
 
         const captures = captureResponse.captures ?? [];
@@ -1033,7 +1033,7 @@ export function createStandaloneExplorerBridge(
     };
 
     const runPreferredCapture = async (): Promise<void> => {
-      const preferredAction = loadCapturePreferences().preferredAction;
+      const preferredAction = loadCapturePreferences(actionEndpointId).preferredAction;
       if (preferredAction === "edgeshark") {
         await runPacketflixCapture();
         return;
@@ -1930,19 +1930,20 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.set.sessionHostname": {
-        const currentHostname = getSessionHostnameOverride() ?? "";
+        const actionEndpointLabel = findEndpointById(actionEndpointId)?.label ?? actionEndpointId ?? "default";
+        const currentHostname = getSessionHostnameOverride(actionEndpointId) ?? "";
         const rawValue = window.prompt(
-          "Set session hostname override for packet capture (leave empty to clear)",
+          `Set session hostname override for packet capture on "${actionEndpointLabel}" (leave empty to clear)`,
           currentHostname
         );
         if (rawValue === null) {
           return;
         }
-        const nextValue = setSessionHostnameOverride(rawValue);
+        const nextValue = setSessionHostnameOverride(rawValue, actionEndpointId);
         runtimeUiActions.notify(
           nextValue
-            ? `Session hostname override set to "${nextValue}".`
-            : "Session hostname override cleared.",
+            ? `Session hostname override for "${actionEndpointLabel}" set to "${nextValue}".`
+            : `Session hostname override for "${actionEndpointLabel}" cleared.`,
           "success"
         );
         return;

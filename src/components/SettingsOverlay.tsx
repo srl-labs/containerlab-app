@@ -13,6 +13,7 @@ import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
@@ -295,18 +296,31 @@ export function SettingsOverlay({
   const [capturePreferences, setCapturePreferences] = useState<CapturePreferences>(() =>
     loadCapturePreferences()
   );
+  const [captureEndpointId, setCaptureEndpointId] = useState("");
   const [captureSessionHostname, setCaptureSessionHostname] = useState(
     () => getSessionHostnameOverride() ?? ""
   );
 
   const primaryEndpoint =
     endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
+  const captureEndpoint =
+    endpoints.find((endpoint) => endpoint.id === captureEndpointId) ?? null;
+  const captureEndpointLabel =
+    captureEndpoint?.label || captureEndpoint?.url || captureEndpoint?.id || "selected endpoint";
 
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
     setTelnetPortText(String(terminalPreferences.telnetPort));
     setFontSizeText(String(terminalPreferences.fontSize));
   }, [terminalPreferences]);
+
+  useEffect(() => {
+    const selectedStillExists = endpoints.some((endpoint) => endpoint.id === captureEndpointId);
+    if (selectedStillExists) {
+      return;
+    }
+    setCaptureEndpointId(primaryEndpoint?.id ?? "");
+  }, [captureEndpointId, endpoints, primaryEndpoint?.id]);
 
   useEffect(() => {
     const unsubscribe = subscribeEndpointUiAction((action) => {
@@ -355,26 +369,33 @@ export function SettingsOverlay({
   }, [activeSection, dialogOpen, primaryEndpoint?.id]);
 
   const refreshCaptureStatus = useCallback(async () => {
+    if (!captureEndpoint?.id) {
+      setCaptureStatus(null);
+      setCaptureError(null);
+      setCaptureStatusLoading(false);
+      return;
+    }
     setCaptureStatusLoading(true);
     setCaptureError(null);
+    setCaptureStatus(null);
     try {
-      const status = await fetchEdgeSharkStatus(primaryEndpoint?.id);
+      const status = await fetchEdgeSharkStatus(captureEndpoint.id);
       setCaptureStatus(status);
     } catch (error) {
       setCaptureError(error instanceof Error ? error.message : String(error));
     } finally {
       setCaptureStatusLoading(false);
     }
-  }, [primaryEndpoint?.id]);
+  }, [captureEndpoint?.id]);
 
   useEffect(() => {
     if (!dialogOpen || activeSection !== "capture") {
       return;
     }
-    setCapturePreferences(loadCapturePreferences());
-    setCaptureSessionHostname(getSessionHostnameOverride() ?? "");
+    setCapturePreferences(loadCapturePreferences(captureEndpoint?.id));
+    setCaptureSessionHostname(getSessionHostnameOverride(captureEndpoint?.id) ?? "");
     void refreshCaptureStatus();
-  }, [activeSection, dialogOpen, refreshCaptureStatus]);
+  }, [activeSection, captureEndpoint?.id, dialogOpen, refreshCaptureStatus]);
 
   const handlePreferredCaptureActionChange = useCallback((
     _event: React.MouseEvent<HTMLElement>,
@@ -386,19 +407,19 @@ export function SettingsOverlay({
     const persisted = persistCapturePreferences({
       ...capturePreferences,
       preferredAction: nextAction
-    });
+    }, captureEndpoint?.id);
     setCapturePreferences(persisted);
-  }, [capturePreferences]);
+  }, [captureEndpoint?.id, capturePreferences]);
 
   const applyCaptureSessionHostname = useCallback(() => {
-    const next = setSessionHostnameOverride(captureSessionHostname);
+    const next = setSessionHostnameOverride(captureSessionHostname, captureEndpoint?.id);
     setCaptureSessionHostname(next ?? "");
-  }, [captureSessionHostname]);
+  }, [captureEndpoint?.id, captureSessionHostname]);
 
   const clearCaptureSessionHostname = useCallback(() => {
-    setSessionHostnameOverride(undefined);
+    setSessionHostnameOverride(undefined, captureEndpoint?.id);
     setCaptureSessionHostname("");
-  }, []);
+  }, [captureEndpoint?.id]);
 
   const terminalDraft = useMemo(
     () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText, fontSizeText),
@@ -691,8 +712,8 @@ export function SettingsOverlay({
             </Box>
             <SectionCard
               title="Edgeshark"
-              description="Install or uninstall Edgeshark on the active endpoint host."
-              tone={captureStatus?.running ? "success" : "warning"}
+              description="Install or uninstall Edgeshark on the selected endpoint host."
+              tone={captureEndpoint && captureStatus?.running ? "success" : "warning"}
             >
               {captureError ? (
                 <Alert
@@ -711,15 +732,37 @@ export function SettingsOverlay({
                 </Alert>
               ) : null}
               <TextField
+                select
+                label="Endpoint"
+                value={captureEndpointId}
+                onChange={(event) => setCaptureEndpointId(event.target.value)}
+                fullWidth
+                disabled={endpoints.length === 0}
+                helperText="Capture status/actions and defaults are scoped to this endpoint."
+                data-testid="standalone-settings-capture-endpoint"
+              >
+                {endpoints.length === 0 ? (
+                  <MenuItem value="">No endpoints configured</MenuItem>
+                ) : (
+                  endpoints.map((endpoint) => (
+                    <MenuItem key={endpoint.id} value={endpoint.id}>
+                      {endpoint.label} ({endpoint.status})
+                    </MenuItem>
+                  ))
+                )}
+              </TextField>
+              <TextField
                 label="Status"
                 value={
-                  captureStatusLoading
-                    ? "Loading..."
+                  !captureEndpoint
+                    ? "No endpoint selected"
+                    : captureStatusLoading
+                      ? `Loading status for ${captureEndpointLabel}...`
                     : captureStatus
                       ? captureStatus.running
-                        ? `Running${captureStatus.version ? ` (${captureStatus.version})` : ""}`
-                        : "Not running"
-                      : "Unknown"
+                        ? `Running on ${captureEndpointLabel}${captureStatus.version ? ` (${captureStatus.version})` : ""}`
+                        : `Not running on ${captureEndpointLabel}`
+                      : `Unknown on ${captureEndpointLabel}`
                 }
                 fullWidth
                 slotProps={{ input: { readOnly: true } }}
@@ -732,7 +775,7 @@ export function SettingsOverlay({
                   onClick={() => {
                     void refreshCaptureStatus();
                   }}
-                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
                   data-testid="standalone-settings-capture-refresh"
                 >
                   Refresh
@@ -743,14 +786,14 @@ export function SettingsOverlay({
                   onClick={() => {
                     setCaptureActionLoading("install");
                     setCaptureError(null);
-                    void installEdgeShark(primaryEndpoint?.id)
+                    void installEdgeShark(captureEndpoint?.id)
                       .then(() => refreshCaptureStatus())
                       .catch((error) =>
                         setCaptureError(error instanceof Error ? error.message : String(error))
                       )
                       .finally(() => setCaptureActionLoading(null));
                   }}
-                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
                   data-testid="standalone-settings-capture-install"
                 >
                   Install
@@ -762,14 +805,14 @@ export function SettingsOverlay({
                   onClick={() => {
                     setCaptureActionLoading("uninstall");
                     setCaptureError(null);
-                    void uninstallEdgeShark(primaryEndpoint?.id)
+                    void uninstallEdgeShark(captureEndpoint?.id)
                       .then(() => refreshCaptureStatus())
                       .catch((error) =>
                         setCaptureError(error instanceof Error ? error.message : String(error))
                       )
                       .finally(() => setCaptureActionLoading(null));
                   }}
-                  disabled={captureStatusLoading || captureActionLoading !== null}
+                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
                   data-testid="standalone-settings-capture-uninstall"
                 >
                   Uninstall
@@ -782,13 +825,14 @@ export function SettingsOverlay({
             </SectionCard>
             <SectionCard
               title="Capture Defaults"
-              description="Set the default action for generic capture commands and optional session hostname override."
+              description="Set per-endpoint defaults for generic capture commands and optional session hostname override."
               tone="info"
             >
               <ToggleButtonGroup
                 exclusive
                 value={capturePreferences.preferredAction}
                 onChange={handlePreferredCaptureActionChange}
+                disabled={!captureEndpoint}
                 sx={{
                   alignSelf: "flex-start",
                   "& .MuiToggleButton-root": {
@@ -819,13 +863,14 @@ export function SettingsOverlay({
                 onChange={(event) => setCaptureSessionHostname(event.target.value)}
                 fullWidth
                 placeholder="IPv4, IPv6, or DNS hostname"
-                helperText="Used for packetflix URI generation in this browser session only."
+                helperText="Used for packetflix URI generation on the selected endpoint in this browser session only."
                 data-testid="standalone-settings-capture-session-hostname"
               />
               <Stack direction="row" spacing={1.25} flexWrap="wrap">
                 <Button
                   variant="outlined"
                   onClick={applyCaptureSessionHostname}
+                  disabled={!captureEndpoint}
                   data-testid="standalone-settings-capture-session-hostname-apply"
                 >
                   Apply Session Hostname
@@ -834,6 +879,7 @@ export function SettingsOverlay({
                   variant="outlined"
                   color="warning"
                   onClick={clearCaptureSessionHostname}
+                  disabled={!captureEndpoint}
                   data-testid="standalone-settings-capture-session-hostname-clear"
                 >
                   Clear Override

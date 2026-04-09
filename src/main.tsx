@@ -464,12 +464,12 @@ function setupStandaloneUiHost(): void {
 
       void (async () => {
         try {
-          const capturePreferences = loadCapturePreferences();
+          const capturePreferences = loadCapturePreferences(target.endpointId);
           if (capturePreferences.preferredAction === "edgeshark") {
             const response = await buildPacketflixCapture({
               ...target,
               targets: [{ containerName: nodeName, interfaceName }],
-              remoteHostname: getSessionHostnameOverride()
+              remoteHostname: getSessionHostnameOverride(target.endpointId)
             });
             const captures = response.captures ?? [];
             if (captures.length === 0) {
