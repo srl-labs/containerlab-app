@@ -20,6 +20,7 @@ import { applyThemeVars, MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
+  MSG_FIT_VIEWPORT,
   MSG_SVG_EXPORT_RESULT,
   parseSchemaData,
   type TopologyRef
@@ -278,6 +279,14 @@ function resolveLabTabFallbackEndpointId(): string | undefined {
   return topologyManager.getCurrentEndpointId() ?? getDefaultEndpointId();
 }
 
+function requestViewportFitFromHost(): void {
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: { type: MSG_FIT_VIEWPORT }
+    })
+  );
+}
+
 async function activateLabTabById(
   tabId: string,
   options: { deploymentState?: DeploymentState } = {}
@@ -315,6 +324,9 @@ async function openTopologyInTab(
   await activateLabTabById(openResult.tab.id, {
     deploymentState: options.deploymentState
   });
+  if (!openResult.alreadyOpen) {
+    requestViewportFitFromHost();
+  }
 }
 
 async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
