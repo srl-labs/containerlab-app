@@ -82,6 +82,9 @@ interface DrawioBody extends RuntimeTargetBody {
   theme?: string;
 }
 
+const POPULAR_REPOS_SEARCH_URL =
+  "https://api.github.com/search/repositories?q=topic:clab-topo+org:srl-labs+fork:true&sort=stars&order=desc";
+
 interface CaptureTargetBody {
   containerName: string;
   interfaceName: string;
@@ -98,6 +101,11 @@ interface CaptureWiresharkVncBody extends RuntimeTargetBody {
 }
 
 interface DeployFromUrlBody extends RuntimeTargetBody {
+  topologySourceUrl: string;
+  labNameOverride?: string;
+}
+
+interface ImportTopologyFromUrlBody extends RuntimeTargetBody {
   topologySourceUrl: string;
   labNameOverride?: string;
 }
@@ -537,6 +545,27 @@ export function registerRuntimeProxy(
     }
   );
 
+  app.get("/api/runtime/popular-repos", async (request, reply) => {
+    const endpoints = listEndpoints(request, reply);
+    if (endpoints.length === 0) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    try {
+      const response = await fetch(POPULAR_REPOS_SEARCH_URL, {
+        headers: {
+          Accept: "application/vnd.github+json"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch popular repositories: ${response.status} ${response.statusText}`);
+      }
+      return reply.send(await response.json());
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
+
   app.post<{ Body: DeployFromUrlBody }>(
     "/api/runtime/labs/deploy-from-url",
     async (request: FastifyRequest<{ Body: DeployFromUrlBody }>, reply: FastifyReply) => {
@@ -556,6 +585,36 @@ export function registerRuntimeProxy(
         return reply.send({
           success: true,
           labNames: Object.keys(deployed).filter((name) => name.trim().length > 0)
+        });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: ImportTopologyFromUrlBody }>(
+    "/api/runtime/topology-file/import-from-url",
+    async (request: FastifyRequest<{ Body: ImportTopologyFromUrlBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const topologySourceUrl = normalizeOptionalString(request.body.topologySourceUrl);
+        if (!topologySourceUrl) {
+          throw new RequestError("Missing topologySourceUrl", 400);
+        }
+
+        const { client, endpoint } = resolved;
+        const imported = await client.importTopologyFromUrl(endpoint.token, {
+          topologySourceUrl,
+          labNameOverride: normalizeOptionalString(request.body.labNameOverride)
+        });
+
+        return reply.send({
+          success: imported.success,
+          labName: imported.labName,
+          fileName: imported.fileName,
+          topologyRef: buildStandaloneTopologyRef(imported.topology, endpoint.id)
         });
       } catch (error) {
         return handleRouteError(reply, error);

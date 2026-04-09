@@ -131,6 +131,7 @@ export interface CloneRepoDialogResult {
   endpointId: string;
   labNameOverride?: string;
   sourceUrl: string;
+  target: CloneRepoDialogTarget;
 }
 
 export interface CloneRepoPopularOption {
@@ -139,12 +140,15 @@ export interface CloneRepoPopularOption {
   value: string;
 }
 
+export type CloneRepoDialogTarget = "deploy" | "undeployed";
+
 interface CloneRepoDialogRequest {
   confirmLabel?: string;
   defaultEndpointId?: string;
   defaultLabNameOverride?: string;
   defaultMode?: "url" | "popular";
   defaultSourceUrl?: string;
+  defaultTarget?: CloneRepoDialogTarget;
   endpointOptions: EndpointSelectionOption[];
   message?: string;
   popularOptions: CloneRepoPopularOption[];
@@ -157,6 +161,7 @@ interface ActiveCloneRepoDialogRequest {
   defaultLabNameOverride: string;
   defaultMode: "url" | "popular";
   defaultSourceUrl: string;
+  defaultTarget: CloneRepoDialogTarget;
   endpointOptions: EndpointSelectionOption[];
   message: string;
   popularOptions: CloneRepoPopularOption[];
@@ -330,13 +335,14 @@ function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): Activ
   return {
     title: request.title?.trim() || "Clone Repository",
     message: request.message?.trim() || "Select endpoint and repository source.",
-    confirmLabel: request.confirmLabel?.trim() || "Deploy",
+    confirmLabel: request.confirmLabel?.trim() || "Continue",
     endpointOptions,
     popularOptions,
     defaultEndpointId,
     defaultMode,
     defaultSourceUrl: request.defaultSourceUrl?.trim() || "https://github.com/srl-labs/srl-telemetry-lab",
-    defaultLabNameOverride: request.defaultLabNameOverride?.trim() || ""
+    defaultLabNameOverride: request.defaultLabNameOverride?.trim() || "",
+    defaultTarget: request.defaultTarget ?? "deploy"
   };
 }
 
@@ -407,6 +413,22 @@ export async function promptForCloneRepo(
   if (!sourceUrl) {
     return undefined;
   }
+  const modeSelection = window.prompt(
+    "Action:\n1. Deploy now\n2. Clone to undeployed labs\n\nEnter number (1-2).",
+    normalizedRequest.defaultTarget === "undeployed" ? "2" : "1"
+  );
+  if (!modeSelection) {
+    return undefined;
+  }
+  let target: CloneRepoDialogTarget;
+  if (modeSelection.trim() === "2") {
+    target = "undeployed";
+  } else if (modeSelection.trim() === "1") {
+    target = "deploy";
+  } else {
+    return undefined;
+  }
+
   const rawLabNameOverride = window.prompt(
     "Optional lab name override (leave empty to use default)",
     normalizedRequest.defaultLabNameOverride
@@ -415,7 +437,7 @@ export async function promptForCloneRepo(
     return undefined;
   }
   const labNameOverride = rawLabNameOverride.trim() || undefined;
-  return { endpointId, sourceUrl, labNameOverride };
+  return { endpointId, sourceUrl, labNameOverride, target };
 }
 
 function normalizeInspectGroups(
@@ -634,6 +656,7 @@ export function RuntimeActionDialogs() {
   const [cloneRepoDialog, setCloneRepoDialog] = useState<CloneRepoDialogState | null>(null);
   const [cloneRepoEndpointValue, setCloneRepoEndpointValue] = useState("");
   const [cloneRepoMode, setCloneRepoMode] = useState<"url" | "popular">("url");
+  const [cloneRepoTarget, setCloneRepoTarget] = useState<CloneRepoDialogTarget>("deploy");
   const [cloneRepoSourceUrlInput, setCloneRepoSourceUrlInput] = useState(
     "https://github.com/srl-labs/srl-telemetry-lab"
   );
@@ -823,6 +846,7 @@ export function RuntimeActionDialogs() {
     );
     setCloneRepoEndpointValue(cloneRepoDialog.request.defaultEndpointId);
     setCloneRepoMode(cloneRepoDialog.request.defaultMode);
+    setCloneRepoTarget(cloneRepoDialog.request.defaultTarget);
     setCloneRepoSourceUrlInput(cloneRepoDialog.request.defaultSourceUrl);
     setCloneRepoPopularValue(
       matchingPopular?.value ?? cloneRepoDialog.request.popularOptions[0]?.value ?? ""
@@ -1187,13 +1211,15 @@ export function RuntimeActionDialogs() {
     closeCloneRepoDialog({
       endpointId: cloneRepoEndpointValue,
       sourceUrl: cloneRepoResolvedSourceUrl,
-      labNameOverride: trimmedCloneRepoLabNameOverrideInput || undefined
+      labNameOverride: trimmedCloneRepoLabNameOverrideInput || undefined,
+      target: cloneRepoTarget
     });
   }, [
     cloneRepoCanSubmit,
     cloneRepoEndpointValue,
     cloneRepoResolvedSourceUrl,
     closeCloneRepoDialog,
+    cloneRepoTarget,
     trimmedCloneRepoLabNameOverrideInput
   ]);
 
@@ -1521,6 +1547,20 @@ export function RuntimeActionDialogs() {
                 >
                   Popular Lab
                 </MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <InputLabel id="clone-repo-target-label">Action</InputLabel>
+              <Select
+                labelId="clone-repo-target-label"
+                label="Action"
+                value={cloneRepoTarget}
+                onChange={(event) =>
+                  setCloneRepoTarget(event.target.value as CloneRepoDialogTarget)
+                }
+              >
+                <MenuItem value="deploy">Deploy now</MenuItem>
+                <MenuItem value="undeployed">Clone to undeployed labs</MenuItem>
               </Select>
             </FormControl>
             {cloneRepoMode === "popular" ? (

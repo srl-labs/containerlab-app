@@ -160,6 +160,13 @@ export interface DeployLabFromUrlResponse {
   labNames: string[];
 }
 
+export interface ImportTopologyFromUrlResponse {
+  success: boolean;
+  topologyRef: TopologyRef;
+  labName: string;
+  fileName: string;
+}
+
 export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
 
 export interface NodeBrowserPort {
@@ -584,6 +591,18 @@ export async function deployLabFromUrl(input: RuntimeTargetRequest & {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<DeployLabFromUrlResponse>(
     "/api/runtime/labs/deploy-from-url",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function importTopologyFromUrl(input: RuntimeTargetRequest & {
+  topologySourceUrl: string;
+  labNameOverride?: string;
+}): Promise<ImportTopologyFromUrlResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<ImportTopologyFromUrlResponse>(
+    "/api/runtime/topology-file/import-from-url",
     asJsonBody(input, endpointId),
     endpointId
   );

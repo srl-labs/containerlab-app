@@ -14,6 +14,7 @@ import {
   controlNodeLifecycle,
   createTopologyFile,
   deployLabFromUrl,
+  importTopologyFromUrl,
   fetchNodeBrowserPorts,
   generateDrawioGraph,
   runFcliCommand,
@@ -27,7 +28,8 @@ import {
   promptForCloneRepo,
   promptForCreateTopology,
   promptForEndpointSelection,
-  saveConfigsFlow
+  saveConfigsFlow,
+  type CloneRepoDialogTarget
 } from "./components/RuntimeActionDialogs";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
@@ -185,14 +187,8 @@ function normalizePopularRepos(value: unknown): PopularLabRepo[] {
 }
 
 async function fetchPopularRepos(): Promise<PopularLabRepo[]> {
-  const url =
-    "https://api.github.com/search/repositories?q=topic:clab-topo+org:srl-labs+fork:true&sort=stars&order=desc";
   try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/vnd.github+json"
-      }
-    });
+    const response = await fetch("/api/runtime/popular-repos", { credentials: "include" });
     if (!response.ok) {
       throw new Error(`${response.status} ${response.statusText}`.trim());
     }
@@ -1044,12 +1040,13 @@ export function createStandaloneExplorerBridge(
       await runWiresharkVncCapture();
     };
 
-    const deployFromUrlFlow = async (
+    const cloneFromUrlFlow = async (
       endpointId: string,
       sourceUrl: string,
-      deployOptions?: {
+      cloneOptions?: {
         labNameOverride?: string;
         skipLabNamePrompt?: boolean;
+        target?: CloneRepoDialogTarget;
       }
     ): Promise<void> => {
       const topologySourceUrl = sourceUrl.trim();
@@ -1057,10 +1054,11 @@ export function createStandaloneExplorerBridge(
         runtimeUiActions.notify("A repository or topology URL is required.", "error");
         return;
       }
+      const target = cloneOptions?.target ?? "deploy";
 
       let labNameOverride: string | undefined;
-      if (deployOptions?.skipLabNamePrompt) {
-        labNameOverride = deployOptions.labNameOverride?.trim() || undefined;
+      if (cloneOptions?.skipLabNamePrompt) {
+        labNameOverride = cloneOptions.labNameOverride?.trim() || undefined;
       } else {
         const rawLabNameOverride = window.prompt(
           "Optional lab name override (leave empty to use default)",
@@ -1073,6 +1071,25 @@ export function createStandaloneExplorerBridge(
       }
 
       try {
+        if (target === "undeployed") {
+          const response = await importTopologyFromUrl({
+            endpointId,
+            topologySourceUrl,
+            labNameOverride
+          });
+          options.invalidateTopologyFileListCache(endpointId);
+          controller.scheduleSnapshot(0);
+          runtimeUiActions.notify(
+            `Cloned ${response.labName} to undeployed labs.`,
+            "success"
+          );
+          await options.loadTopologyFile(response.topologyRef, {
+            deploymentState: "undeployed",
+            endpointId
+          });
+          return;
+        }
+
         const response = await deployLabFromUrl({
           endpointId,
           topologySourceUrl,
@@ -1557,8 +1574,8 @@ export function createStandaloneExplorerBridge(
         const popularRepos = (await fetchPopularRepos()).slice(0, 12);
         const cloneRepoInput = await promptForCloneRepo({
           title: "Clone Repository",
-          message: "Choose endpoint and repository source.",
-          confirmLabel: "Deploy",
+          message: "Choose endpoint, source, and target action.",
+          confirmLabel: "Continue",
           endpointOptions: connectedEndpoints.map((endpoint) => ({
             value: endpoint.id,
             label: endpoint.label,
@@ -1572,20 +1589,27 @@ export function createStandaloneExplorerBridge(
           defaultEndpointId:
             preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
           defaultMode: "url",
-          defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab"
+          defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab",
+          defaultTarget: "deploy"
         });
         if (!cloneRepoInput) {
           return;
         }
-        await deployFromUrlFlow(cloneRepoInput.endpointId, cloneRepoInput.sourceUrl, {
+        await cloneFromUrlFlow(cloneRepoInput.endpointId, cloneRepoInput.sourceUrl, {
           labNameOverride: cloneRepoInput.labNameOverride,
-          skipLabNamePrompt: true
+          skipLabNamePrompt: true,
+          target: cloneRepoInput.target
         });
         return;
       }
       case "containerlab.lab.clonePopularRepo":
       case "containerlab.lab.deployPopular": {
-        const endpointId = await resolveEndpointForAction("deploy a popular lab", actionEndpointId);
+        const endpointId = await resolveEndpointForAction(
+          commandId === "containerlab.lab.clonePopularRepo"
+            ? "clone a popular lab"
+            : "deploy a popular lab",
+          actionEndpointId
+        );
         if (!endpointId) {
           return;
         }
@@ -1597,7 +1621,9 @@ export function createStandaloneExplorerBridge(
         if (!sourceUrl) {
           return;
         }
-        await deployFromUrlFlow(endpointId, sourceUrl);
+        await cloneFromUrlFlow(endpointId, sourceUrl, {
+          target: commandId === "containerlab.lab.clonePopularRepo" ? "undeployed" : "deploy"
+        });
         return;
       }
       case "containerlab.inspectAll": {

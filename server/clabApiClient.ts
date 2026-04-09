@@ -243,6 +243,13 @@ export interface CaptureCloseAllResponse {
   closed: number;
 }
 
+export interface ImportTopologyFromUrlResponse {
+  success: boolean;
+  labName: string;
+  fileName: string;
+  topology: TopologyEntry;
+}
+
 type LifecycleEndpoint = "deploy" | "destroy" | "redeploy";
 
 export class ClabApiClient {
@@ -429,6 +436,25 @@ export class ClabApiClient {
       "application/json"
     );
     return (await res.json()) as InspectAllLabsResponse;
+  }
+
+  async importTopologyFromUrl(
+    token: string,
+    payload: { topologySourceUrl: string; labNameOverride?: string }
+  ): Promise<ImportTopologyFromUrlResponse> {
+    const params = new URLSearchParams();
+    if (payload.labNameOverride) {
+      params.set("labNameOverride", payload.labNameOverride);
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/topology/import-from-url${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({ topologySourceUrl: payload.topologySourceUrl }),
+      "application/json"
+    );
+    return (await res.json()) as ImportTopologyFromUrlResponse;
   }
 
   async destroyLab(
