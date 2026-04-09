@@ -206,6 +206,77 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function toStringValue(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return undefined;
+}
+
+function pickString(record: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = toStringValue(record[key]);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function normalizeInspectContainer(value: unknown): InspectContainerInfo {
+  const record = isRecord(value) ? value : {};
+  return {
+    name: pickString(record, "name"),
+    containerId: pickString(record, "containerId", "container_id", "id"),
+    image: pickString(record, "image"),
+    kind: pickString(record, "kind"),
+    state: pickString(record, "state"),
+    status: pickString(record, "status"),
+    ipv4Address: pickString(
+      record,
+      "ipv4Address",
+      "ipv4_address",
+      "IPv4Address",
+      "mgmtIpv4Address",
+      "mgmt_ipv4"
+    ),
+    ipv6Address: pickString(
+      record,
+      "ipv6Address",
+      "ipv6_address",
+      "IPv6Address",
+      "mgmtIpv6Address",
+      "mgmt_ipv6"
+    ),
+    labName: pickString(record, "labName", "lab_name"),
+    labPath: pickString(record, "labPath", "lab_path"),
+    absLabPath: pickString(record, "absLabPath", "abs_lab_path"),
+    group: pickString(record, "group"),
+    owner: pickString(record, "owner")
+  };
+}
+
+function normalizeInspectContainerList(value: unknown): InspectLabResponse {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((entry) => normalizeInspectContainer(entry));
+}
+
+function normalizeInspectAllLabsPayload(value: unknown): InspectAllLabsResponse {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const normalized: InspectAllLabsResponse = {};
+  for (const [labName, containers] of Object.entries(value)) {
+    normalized[labName] = normalizeInspectContainerList(containers);
+  }
+  return normalized;
+}
+
 function resolveEndpointId(target?: RuntimeTargetRequest | { endpointId?: string }): string | undefined {
   return target?.endpointId;
 }
@@ -296,20 +367,22 @@ function asJsonBody(body: unknown, endpointId?: string): RequestInit {
 }
 
 export async function inspectAllLabs(endpointId?: string): Promise<InspectAllLabsResponse> {
-  return await requestJson<InspectAllLabsResponse>(
+  const payload = await requestJson<unknown>(
     "/api/runtime/inspect/all",
     withEndpointHeaders({}, endpointId),
     endpointId
   );
+  return normalizeInspectAllLabsPayload(payload);
 }
 
 export async function inspectLab(target: RuntimeTargetRequest): Promise<InspectLabResponse> {
   const endpointId = resolveTargetEndpointId(target);
-  return await requestJson<InspectLabResponse>(
+  const payload = await requestJson<unknown>(
     "/api/runtime/inspect/lab",
     asJsonBody(target, endpointId),
     endpointId
   );
+  return normalizeInspectContainerList(payload);
 }
 
 export async function saveLabConfigs(input: RuntimeTargetRequest & {

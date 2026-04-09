@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -460,6 +461,29 @@ function filterInspectGroups(groups: InspectGroup[], query: string): InspectGrou
       })
     }))
     .filter((group) => group.containers.length > 0);
+}
+
+function inspectStateColor(state: string): "default" | "error" | "success" | "warning" {
+  const normalized = state.trim().toLowerCase();
+  if (!normalized) {
+    return "default";
+  }
+  if (
+    normalized.includes("exit") ||
+    normalized.includes("stop") ||
+    normalized.includes("dead") ||
+    normalized.includes("fail") ||
+    normalized.includes("down")
+  ) {
+    return "error";
+  }
+  if (normalized.includes("pause") || normalized.includes("restart")) {
+    return "warning";
+  }
+  if (normalized.includes("run") || normalized.includes("up") || normalized.includes("healthy")) {
+    return "success";
+  }
+  return "default";
 }
 
 function scoreNodeMatch(labName: string, container: ContainerState, requestedNodeName: string): number {
@@ -1214,7 +1238,14 @@ export function RuntimeActionDialogs() {
                         <TableRow key={`${group.labName}:${container.name}`}>
                           <TableCell>{container.name}</TableCell>
                           <TableCell>{container.kind}</TableCell>
-                          <TableCell>{container.state}</TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={container.state || "unknown"}
+                              color={inspectStateColor(container.state)}
+                              variant={container.state ? "filled" : "outlined"}
+                            />
+                          </TableCell>
                           <TableCell>{container.status}</TableCell>
                           <TableCell>{container.ipv4Address || "-"}</TableCell>
                           <TableCell>{container.ipv6Address || "-"}</TableCell>
