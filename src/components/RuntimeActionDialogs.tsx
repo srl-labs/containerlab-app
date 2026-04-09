@@ -7,7 +7,11 @@ import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
+import Select from "@mui/material/Select";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
@@ -50,6 +54,119 @@ interface InspectGroup {
   containers: InspectContainerInfo[];
 }
 
+interface TopologyFileNameDialogRequest {
+  defaultValue?: string;
+  message?: string;
+  title?: string;
+}
+
+interface ActiveTopologyFileNameDialogRequest {
+  defaultValue: string;
+  message: string;
+  title: string;
+}
+
+interface TopologyFileNameDialogState {
+  request: ActiveTopologyFileNameDialogRequest;
+  resolve: (value: string | undefined) => void;
+}
+
+export interface EndpointSelectionOption {
+  description?: string;
+  label: string;
+  value: string;
+}
+
+interface EndpointSelectionDialogRequest {
+  confirmLabel?: string;
+  message?: string;
+  options: EndpointSelectionOption[];
+  preferredValue?: string;
+  title?: string;
+}
+
+interface ActiveEndpointSelectionDialogRequest {
+  confirmLabel: string;
+  message: string;
+  options: EndpointSelectionOption[];
+  preferredValue: string;
+  title: string;
+}
+
+interface EndpointSelectionDialogState {
+  request: ActiveEndpointSelectionDialogRequest;
+  resolve: (value: string | undefined) => void;
+}
+
+export interface CreateTopologyDialogResult {
+  endpointId: string;
+  fileName: string;
+}
+
+interface CreateTopologyDialogRequest {
+  confirmLabel?: string;
+  defaultEndpointId?: string;
+  defaultFileName?: string;
+  endpointOptions: EndpointSelectionOption[];
+  message?: string;
+  title?: string;
+}
+
+interface ActiveCreateTopologyDialogRequest {
+  confirmLabel: string;
+  defaultEndpointId: string;
+  defaultFileName: string;
+  endpointOptions: EndpointSelectionOption[];
+  message: string;
+  title: string;
+}
+
+interface CreateTopologyDialogState {
+  request: ActiveCreateTopologyDialogRequest;
+  resolve: (value: CreateTopologyDialogResult | undefined) => void;
+}
+
+export interface CloneRepoDialogResult {
+  endpointId: string;
+  labNameOverride?: string;
+  sourceUrl: string;
+}
+
+export interface CloneRepoPopularOption {
+  description?: string;
+  label: string;
+  value: string;
+}
+
+interface CloneRepoDialogRequest {
+  confirmLabel?: string;
+  defaultEndpointId?: string;
+  defaultLabNameOverride?: string;
+  defaultMode?: "url" | "popular";
+  defaultSourceUrl?: string;
+  endpointOptions: EndpointSelectionOption[];
+  message?: string;
+  popularOptions: CloneRepoPopularOption[];
+  title?: string;
+}
+
+interface ActiveCloneRepoDialogRequest {
+  confirmLabel: string;
+  defaultEndpointId: string;
+  defaultLabNameOverride: string;
+  defaultMode: "url" | "popular";
+  defaultSourceUrl: string;
+  endpointOptions: EndpointSelectionOption[];
+  message: string;
+  popularOptions: CloneRepoPopularOption[];
+  title: string;
+}
+
+interface CloneRepoDialogState {
+  request: ActiveCloneRepoDialogRequest;
+  resolve: (value: CloneRepoDialogResult | undefined) => void;
+}
+
 const EMPTY_NETEM_FIELDS: NetemFields = {
   delay: "",
   jitter: "",
@@ -57,6 +174,248 @@ const EMPTY_NETEM_FIELDS: NetemFields = {
   rate: "",
   corruption: ""
 };
+const DEFAULT_TOPOLOGY_FILE_NAME = "new-lab.clab.yml";
+let requestTopologyFileNameFromDialog:
+  | ((request: ActiveTopologyFileNameDialogRequest) => Promise<string | undefined>)
+  | null = null;
+let requestEndpointSelectionFromDialog:
+  | ((request: ActiveEndpointSelectionDialogRequest) => Promise<string | undefined>)
+  | null = null;
+let requestCreateTopologyFromDialog:
+  | ((request: ActiveCreateTopologyDialogRequest) => Promise<CreateTopologyDialogResult | undefined>)
+  | null = null;
+let requestCloneRepoFromDialog:
+  | ((request: ActiveCloneRepoDialogRequest) => Promise<CloneRepoDialogResult | undefined>)
+  | null = null;
+
+function normalizeTopologyFileNameDialogRequest(
+  request?: TopologyFileNameDialogRequest
+): ActiveTopologyFileNameDialogRequest {
+  return {
+    title: request?.title?.trim() || "Create Topology File",
+    message: request?.message?.trim() || "Enter a file name for the new topology file.",
+    defaultValue: request?.defaultValue ?? DEFAULT_TOPOLOGY_FILE_NAME
+  };
+}
+
+export function promptForTopologyFileName(
+  request?: TopologyFileNameDialogRequest
+): Promise<string | undefined> {
+  const normalizedRequest = normalizeTopologyFileNameDialogRequest(request);
+  if (requestTopologyFileNameFromDialog) {
+    return requestTopologyFileNameFromDialog(normalizedRequest);
+  }
+  const fallbackValue = window.prompt("New topology file name", normalizedRequest.defaultValue);
+  const trimmedValue = fallbackValue?.trim();
+  return Promise.resolve(trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined);
+}
+
+function normalizeEndpointSelectionDialogRequest(
+  request: EndpointSelectionDialogRequest
+): ActiveEndpointSelectionDialogRequest {
+  const options = request.options.filter((option) => option.value.trim().length > 0);
+  const preferredValue =
+    request.preferredValue && options.some((option) => option.value === request.preferredValue)
+      ? request.preferredValue
+      : options[0]?.value ?? "";
+  return {
+    title: request.title?.trim() || "Select Endpoint",
+    message: request.message?.trim() || "Choose an endpoint to continue.",
+    confirmLabel: request.confirmLabel?.trim() || "Continue",
+    options,
+    preferredValue
+  };
+}
+
+export function promptForEndpointSelection(
+  request: EndpointSelectionDialogRequest
+): Promise<string | undefined> {
+  const normalizedRequest = normalizeEndpointSelectionDialogRequest(request);
+  if (normalizedRequest.options.length === 0 || !normalizedRequest.preferredValue) {
+    return Promise.resolve(undefined);
+  }
+  if (requestEndpointSelectionFromDialog) {
+    return requestEndpointSelectionFromDialog(normalizedRequest);
+  }
+
+  const optionsText = normalizedRequest.options
+    .map(
+      (option, index) =>
+        `${index + 1}. ${option.label}${option.description ? ` (${option.description})` : ""}`
+    )
+    .join("\n");
+  const defaultIndex = Math.max(
+    1,
+    normalizedRequest.options.findIndex((option) => option.value === normalizedRequest.preferredValue) + 1
+  );
+  const fallbackValue = window.prompt(
+    `${normalizedRequest.message}\n${optionsText}\n\nEnter number (1-${normalizedRequest.options.length}).`,
+    String(defaultIndex)
+  );
+  if (!fallbackValue) {
+    return Promise.resolve(undefined);
+  }
+  const selectedIndex = Number.parseInt(fallbackValue, 10);
+  if (
+    !Number.isFinite(selectedIndex) ||
+    selectedIndex < 1 ||
+    selectedIndex > normalizedRequest.options.length
+  ) {
+    return Promise.resolve(undefined);
+  }
+  return Promise.resolve(normalizedRequest.options[selectedIndex - 1].value);
+}
+
+function normalizeCreateTopologyDialogRequest(
+  request: CreateTopologyDialogRequest
+): ActiveCreateTopologyDialogRequest {
+  const endpointOptions = request.endpointOptions.filter((option) => option.value.trim().length > 0);
+  const defaultEndpointId =
+    request.defaultEndpointId &&
+    endpointOptions.some((option) => option.value === request.defaultEndpointId)
+      ? request.defaultEndpointId
+      : endpointOptions[0]?.value ?? "";
+  return {
+    title: request.title?.trim() || "Create Topology File",
+    message: request.message?.trim() || "Choose endpoint and file name for the new topology file.",
+    confirmLabel: request.confirmLabel?.trim() || "Create",
+    endpointOptions,
+    defaultEndpointId,
+    defaultFileName: request.defaultFileName ?? DEFAULT_TOPOLOGY_FILE_NAME
+  };
+}
+
+export async function promptForCreateTopology(
+  request: CreateTopologyDialogRequest
+): Promise<CreateTopologyDialogResult | undefined> {
+  const normalizedRequest = normalizeCreateTopologyDialogRequest(request);
+  if (normalizedRequest.endpointOptions.length === 0 || !normalizedRequest.defaultEndpointId) {
+    return undefined;
+  }
+  if (requestCreateTopologyFromDialog) {
+    return requestCreateTopologyFromDialog(normalizedRequest);
+  }
+
+  const endpointId = await promptForEndpointSelection({
+    title: "Select Endpoint",
+    message: normalizedRequest.message,
+    confirmLabel: "Use Endpoint",
+    options: normalizedRequest.endpointOptions,
+    preferredValue: normalizedRequest.defaultEndpointId
+  });
+  if (!endpointId) {
+    return undefined;
+  }
+  const fileName = await promptForTopologyFileName({
+    defaultValue: normalizedRequest.defaultFileName,
+    title: normalizedRequest.title,
+    message: "Enter a file name for the new topology file."
+  });
+  if (!fileName) {
+    return undefined;
+  }
+  return { endpointId, fileName };
+}
+
+function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): ActiveCloneRepoDialogRequest {
+  const endpointOptions = request.endpointOptions.filter((option) => option.value.trim().length > 0);
+  const popularOptions = request.popularOptions.filter((option) => option.value.trim().length > 0);
+  const defaultEndpointId =
+    request.defaultEndpointId &&
+    endpointOptions.some((option) => option.value === request.defaultEndpointId)
+      ? request.defaultEndpointId
+      : endpointOptions[0]?.value ?? "";
+  const defaultMode = request.defaultMode === "popular" && popularOptions.length > 0 ? "popular" : "url";
+  return {
+    title: request.title?.trim() || "Clone Repository",
+    message: request.message?.trim() || "Select endpoint and repository source.",
+    confirmLabel: request.confirmLabel?.trim() || "Deploy",
+    endpointOptions,
+    popularOptions,
+    defaultEndpointId,
+    defaultMode,
+    defaultSourceUrl: request.defaultSourceUrl?.trim() || "https://github.com/srl-labs/srl-telemetry-lab",
+    defaultLabNameOverride: request.defaultLabNameOverride?.trim() || ""
+  };
+}
+
+export async function promptForCloneRepo(
+  request: CloneRepoDialogRequest
+): Promise<CloneRepoDialogResult | undefined> {
+  const normalizedRequest = normalizeCloneRepoDialogRequest(request);
+  if (normalizedRequest.endpointOptions.length === 0 || !normalizedRequest.defaultEndpointId) {
+    return undefined;
+  }
+  if (requestCloneRepoFromDialog) {
+    return requestCloneRepoFromDialog(normalizedRequest);
+  }
+
+  const endpointId = await promptForEndpointSelection({
+    title: "Select Endpoint",
+    message: normalizedRequest.message,
+    confirmLabel: "Use Endpoint",
+    options: normalizedRequest.endpointOptions,
+    preferredValue: normalizedRequest.defaultEndpointId
+  });
+  if (!endpointId) {
+    return undefined;
+  }
+
+  const mode = window.prompt(
+    "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
+    normalizedRequest.defaultMode === "popular" ? "2" : "1"
+  );
+  if (!mode) {
+    return undefined;
+  }
+
+  let sourceUrl = "";
+  if (mode.trim() === "2") {
+    if (normalizedRequest.popularOptions.length === 0) {
+      return undefined;
+    }
+    const optionsText = normalizedRequest.popularOptions
+      .map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`)
+      .join("\n");
+    const rawSelection = window.prompt(
+      `Select popular repository:\n${optionsText}\n\nEnter number (1-${normalizedRequest.popularOptions.length}).`,
+      "1"
+    );
+    if (!rawSelection) {
+      return undefined;
+    }
+    const selectedIndex = Number.parseInt(rawSelection, 10);
+    if (
+      !Number.isFinite(selectedIndex) ||
+      selectedIndex < 1 ||
+      selectedIndex > normalizedRequest.popularOptions.length
+    ) {
+      return undefined;
+    }
+    sourceUrl = normalizedRequest.popularOptions[selectedIndex - 1].value;
+  } else if (mode.trim() === "1") {
+    const rawSourceUrl = window.prompt("Repository or topology URL", normalizedRequest.defaultSourceUrl);
+    if (!rawSourceUrl) {
+      return undefined;
+    }
+    sourceUrl = rawSourceUrl.trim();
+  } else {
+    return undefined;
+  }
+
+  if (!sourceUrl) {
+    return undefined;
+  }
+  const rawLabNameOverride = window.prompt(
+    "Optional lab name override (leave empty to use default)",
+    normalizedRequest.defaultLabNameOverride
+  );
+  if (rawLabNameOverride === null) {
+    return undefined;
+  }
+  const labNameOverride = rawLabNameOverride.trim() || undefined;
+  return { endpointId, sourceUrl, labNameOverride };
+}
 
 function normalizeInspectGroups(
   requestTitle: string,
@@ -241,6 +600,25 @@ export function RuntimeActionDialogs() {
   const [netemContainerName, setNetemContainerName] = useState("");
   const [netemFieldsByInterface, setNetemFieldsByInterface] = useState<Record<string, NetemFields>>({});
   const [netemPendingInterface, setNetemPendingInterface] = useState<string | null>(null);
+  const [topologyFileNameDialog, setTopologyFileNameDialog] = useState<TopologyFileNameDialogState | null>(null);
+  const [topologyFileNameInput, setTopologyFileNameInput] = useState(DEFAULT_TOPOLOGY_FILE_NAME);
+  const [endpointSelectionDialog, setEndpointSelectionDialog] = useState<EndpointSelectionDialogState | null>(null);
+  const [endpointSelectionValue, setEndpointSelectionValue] = useState("");
+  const [createTopologyDialog, setCreateTopologyDialog] = useState<CreateTopologyDialogState | null>(null);
+  const [createTopologyEndpointValue, setCreateTopologyEndpointValue] = useState("");
+  const [createTopologyFileNameInput, setCreateTopologyFileNameInput] = useState(DEFAULT_TOPOLOGY_FILE_NAME);
+  const [cloneRepoDialog, setCloneRepoDialog] = useState<CloneRepoDialogState | null>(null);
+  const [cloneRepoEndpointValue, setCloneRepoEndpointValue] = useState("");
+  const [cloneRepoMode, setCloneRepoMode] = useState<"url" | "popular">("url");
+  const [cloneRepoSourceUrlInput, setCloneRepoSourceUrlInput] = useState(
+    "https://github.com/srl-labs/srl-telemetry-lab"
+  );
+  const [cloneRepoPopularValue, setCloneRepoPopularValue] = useState("");
+  const [cloneRepoLabNameOverrideInput, setCloneRepoLabNameOverrideInput] = useState("");
+  const topologyFileNameDialogRef = useRef<TopologyFileNameDialogState | null>(null);
+  const endpointSelectionDialogRef = useRef<EndpointSelectionDialogState | null>(null);
+  const createTopologyDialogRef = useRef<CreateTopologyDialogState | null>(null);
+  const cloneRepoDialogRef = useRef<CloneRepoDialogState | null>(null);
 
   const filteredInspectGroups = useMemo(
     () => filterInspectGroups(inspectGroups, inspectFilter),
@@ -276,6 +654,157 @@ export function RuntimeActionDialogs() {
     () => sortedInterfaceNames(runtimeContainer),
     [runtimeContainer]
   );
+  const trimmedTopologyFileNameInput = topologyFileNameInput.trim();
+  const trimmedCreateTopologyFileNameInput = createTopologyFileNameInput.trim();
+  const trimmedCloneRepoSourceUrlInput = cloneRepoSourceUrlInput.trim();
+  const trimmedCloneRepoLabNameOverrideInput = cloneRepoLabNameOverrideInput.trim();
+  const endpointSelectionIsValid = useMemo(
+    () =>
+      endpointSelectionDialog
+        ? endpointSelectionDialog.request.options.some((option) => option.value === endpointSelectionValue)
+        : false,
+    [endpointSelectionDialog, endpointSelectionValue]
+  );
+  const createTopologyEndpointIsValid = useMemo(
+    () =>
+      createTopologyDialog
+        ? createTopologyDialog.request.endpointOptions.some(
+            (option) => option.value === createTopologyEndpointValue
+          )
+        : false,
+    [createTopologyDialog, createTopologyEndpointValue]
+  );
+  const cloneRepoEndpointIsValid = useMemo(
+    () =>
+      cloneRepoDialog
+        ? cloneRepoDialog.request.endpointOptions.some((option) => option.value === cloneRepoEndpointValue)
+        : false,
+    [cloneRepoDialog, cloneRepoEndpointValue]
+  );
+  const cloneRepoPopularIsValid = useMemo(
+    () =>
+      cloneRepoDialog
+        ? cloneRepoDialog.request.popularOptions.some((option) => option.value === cloneRepoPopularValue)
+        : false,
+    [cloneRepoDialog, cloneRepoPopularValue]
+  );
+  const cloneRepoResolvedSourceUrl =
+    cloneRepoMode === "popular"
+      ? cloneRepoPopularIsValid
+        ? cloneRepoPopularValue
+        : ""
+      : trimmedCloneRepoSourceUrlInput;
+  const cloneRepoCanSubmit = cloneRepoEndpointIsValid && cloneRepoResolvedSourceUrl.length > 0;
+
+  useEffect(() => {
+    topologyFileNameDialogRef.current = topologyFileNameDialog;
+  }, [topologyFileNameDialog]);
+
+  useEffect(() => {
+    endpointSelectionDialogRef.current = endpointSelectionDialog;
+  }, [endpointSelectionDialog]);
+
+  useEffect(() => {
+    createTopologyDialogRef.current = createTopologyDialog;
+  }, [createTopologyDialog]);
+
+  useEffect(() => {
+    cloneRepoDialogRef.current = cloneRepoDialog;
+  }, [cloneRepoDialog]);
+
+  useEffect(() => {
+    requestTopologyFileNameFromDialog = (request) =>
+      new Promise((resolve) => {
+        setTopologyFileNameDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      });
+    return () => {
+      requestTopologyFileNameFromDialog = null;
+      topologyFileNameDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    requestEndpointSelectionFromDialog = (request) =>
+      new Promise((resolve) => {
+        setEndpointSelectionDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      });
+    return () => {
+      requestEndpointSelectionFromDialog = null;
+      endpointSelectionDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    requestCreateTopologyFromDialog = (request) =>
+      new Promise((resolve) => {
+        setCreateTopologyDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      });
+    return () => {
+      requestCreateTopologyFromDialog = null;
+      createTopologyDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    requestCloneRepoFromDialog = (request) =>
+      new Promise((resolve) => {
+        setCloneRepoDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      });
+    return () => {
+      requestCloneRepoFromDialog = null;
+      cloneRepoDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!topologyFileNameDialog) {
+      return;
+    }
+    setTopologyFileNameInput(topologyFileNameDialog.request.defaultValue);
+  }, [topologyFileNameDialog]);
+
+  useEffect(() => {
+    if (!endpointSelectionDialog) {
+      return;
+    }
+    setEndpointSelectionValue(endpointSelectionDialog.request.preferredValue);
+  }, [endpointSelectionDialog]);
+
+  useEffect(() => {
+    if (!createTopologyDialog) {
+      return;
+    }
+    setCreateTopologyEndpointValue(createTopologyDialog.request.defaultEndpointId);
+    setCreateTopologyFileNameInput(createTopologyDialog.request.defaultFileName);
+  }, [createTopologyDialog]);
+
+  useEffect(() => {
+    if (!cloneRepoDialog) {
+      return;
+    }
+    const matchingPopular = cloneRepoDialog.request.popularOptions.find(
+      (option) => option.value === cloneRepoDialog.request.defaultSourceUrl
+    );
+    setCloneRepoEndpointValue(cloneRepoDialog.request.defaultEndpointId);
+    setCloneRepoMode(cloneRepoDialog.request.defaultMode);
+    setCloneRepoSourceUrlInput(cloneRepoDialog.request.defaultSourceUrl);
+    setCloneRepoPopularValue(
+      matchingPopular?.value ?? cloneRepoDialog.request.popularOptions[0]?.value ?? ""
+    );
+    setCloneRepoLabNameOverrideInput(cloneRepoDialog.request.defaultLabNameOverride);
+  }, [cloneRepoDialog]);
 
   useEffect(() => {
     if (!inspectRequest) {
@@ -557,6 +1086,93 @@ export function RuntimeActionDialogs() {
     }
   };
 
+  const closeTopologyFileNameDialog = useCallback((value: string | undefined): void => {
+    setTopologyFileNameDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitTopologyFileNameDialog = useCallback((): void => {
+    const value = trimmedTopologyFileNameInput;
+    if (!value) {
+      return;
+    }
+    closeTopologyFileNameDialog(value);
+  }, [closeTopologyFileNameDialog, trimmedTopologyFileNameInput]);
+
+  const closeEndpointSelectionDialog = useCallback((value: string | undefined): void => {
+    setEndpointSelectionDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitEndpointSelectionDialog = useCallback((): void => {
+    if (!endpointSelectionIsValid) {
+      return;
+    }
+    closeEndpointSelectionDialog(endpointSelectionValue);
+  }, [closeEndpointSelectionDialog, endpointSelectionIsValid, endpointSelectionValue]);
+
+  const closeCreateTopologyDialog = useCallback((value: CreateTopologyDialogResult | undefined): void => {
+    setCreateTopologyDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitCreateTopologyDialog = useCallback((): void => {
+    if (!createTopologyEndpointIsValid || !trimmedCreateTopologyFileNameInput) {
+      return;
+    }
+    closeCreateTopologyDialog({
+      endpointId: createTopologyEndpointValue,
+      fileName: trimmedCreateTopologyFileNameInput
+    });
+  }, [
+    closeCreateTopologyDialog,
+    createTopologyEndpointIsValid,
+    createTopologyEndpointValue,
+    trimmedCreateTopologyFileNameInput
+  ]);
+
+  const closeCloneRepoDialog = useCallback((value: CloneRepoDialogResult | undefined): void => {
+    setCloneRepoDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitCloneRepoDialog = useCallback((): void => {
+    if (!cloneRepoCanSubmit) {
+      return;
+    }
+    closeCloneRepoDialog({
+      endpointId: cloneRepoEndpointValue,
+      sourceUrl: cloneRepoResolvedSourceUrl,
+      labNameOverride: trimmedCloneRepoLabNameOverrideInput || undefined
+    });
+  }, [
+    cloneRepoCanSubmit,
+    cloneRepoEndpointValue,
+    cloneRepoResolvedSourceUrl,
+    closeCloneRepoDialog,
+    trimmedCloneRepoLabNameOverrideInput
+  ]);
+
   return (
     <>
       <Dialog open={inspectRequest !== null} onClose={closeInspect} maxWidth="lg" fullWidth>
@@ -817,6 +1433,283 @@ export function RuntimeActionDialogs() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={cloneRepoDialog !== null}
+        onClose={() => closeCloneRepoDialog(undefined)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{cloneRepoDialog?.request.title ?? "Clone Repository"}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {cloneRepoDialog?.request.message}
+            </Typography>
+            {(cloneRepoDialog?.request.endpointOptions.length ?? 0) > 1 ? (
+              <FormControl fullWidth size="small">
+                <InputLabel id="clone-repo-endpoint-label">Endpoint</InputLabel>
+                <Select
+                  labelId="clone-repo-endpoint-label"
+                  label="Endpoint"
+                  value={cloneRepoEndpointValue}
+                  onChange={(event) => setCloneRepoEndpointValue(String(event.target.value))}
+                >
+                  {(cloneRepoDialog?.request.endpointOptions ?? []).map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {option.label}
+                        </Typography>
+                        {option.description ? (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {option.description}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <Typography variant="body2">
+                Endpoint: {cloneRepoDialog?.request.endpointOptions[0]?.label ?? ""}
+              </Typography>
+            )}
+            <FormControl fullWidth size="small">
+              <InputLabel id="clone-repo-source-mode-label">Source</InputLabel>
+              <Select
+                labelId="clone-repo-source-mode-label"
+                label="Source"
+                value={cloneRepoMode}
+                onChange={(event) => setCloneRepoMode(event.target.value as "url" | "popular")}
+              >
+                <MenuItem value="url">Repository URL</MenuItem>
+                <MenuItem
+                  value="popular"
+                  disabled={(cloneRepoDialog?.request.popularOptions.length ?? 0) === 0}
+                >
+                  Popular Lab
+                </MenuItem>
+              </Select>
+            </FormControl>
+            {cloneRepoMode === "popular" ? (
+              <FormControl fullWidth size="small">
+                <InputLabel id="clone-repo-popular-label">Popular Lab</InputLabel>
+                <Select
+                  labelId="clone-repo-popular-label"
+                  label="Popular Lab"
+                  value={cloneRepoPopularValue}
+                  onChange={(event) => setCloneRepoPopularValue(String(event.target.value))}
+                >
+                  {(cloneRepoDialog?.request.popularOptions ?? []).map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {option.label}
+                        </Typography>
+                        {option.description ? (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {option.description}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <TextField
+                autoFocus
+                fullWidth
+                label="Repository or topology URL"
+                value={cloneRepoSourceUrlInput}
+                onChange={(event) => setCloneRepoSourceUrlInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    submitCloneRepoDialog();
+                  }
+                }}
+              />
+            )}
+            <TextField
+              fullWidth
+              label="Lab name override (optional)"
+              value={cloneRepoLabNameOverrideInput}
+              onChange={(event) => setCloneRepoLabNameOverrideInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitCloneRepoDialog();
+                }
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => closeCloneRepoDialog(undefined)}>Cancel</Button>
+          <Button variant="contained" onClick={submitCloneRepoDialog} disabled={!cloneRepoCanSubmit}>
+            {cloneRepoDialog?.request.confirmLabel ?? "Deploy"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={createTopologyDialog !== null}
+        onClose={() => closeCreateTopologyDialog(undefined)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{createTopologyDialog?.request.title ?? "Create Topology File"}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {createTopologyDialog?.request.message}
+            </Typography>
+            {(createTopologyDialog?.request.endpointOptions.length ?? 0) > 1 ? (
+              <FormControl fullWidth size="small">
+                <InputLabel id="create-topology-endpoint-label">Endpoint</InputLabel>
+                <Select
+                  labelId="create-topology-endpoint-label"
+                  label="Endpoint"
+                  value={createTopologyEndpointValue}
+                  onChange={(event) => setCreateTopologyEndpointValue(String(event.target.value))}
+                >
+                  {(createTopologyDialog?.request.endpointOptions ?? []).map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {option.label}
+                        </Typography>
+                        {option.description ? (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {option.description}
+                          </Typography>
+                        ) : null}
+                      </Stack>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : (
+              <Typography variant="body2">
+                Endpoint: {createTopologyDialog?.request.endpointOptions[0]?.label ?? ""}
+              </Typography>
+            )}
+            <TextField
+              autoFocus
+              fullWidth
+              label="Topology file name"
+              value={createTopologyFileNameInput}
+              onChange={(event) => setCreateTopologyFileNameInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitCreateTopologyDialog();
+                }
+              }}
+              helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => closeCreateTopologyDialog(undefined)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={submitCreateTopologyDialog}
+            disabled={!createTopologyEndpointIsValid || !trimmedCreateTopologyFileNameInput}
+          >
+            {createTopologyDialog?.request.confirmLabel ?? "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={topologyFileNameDialog !== null}
+        onClose={() => closeTopologyFileNameDialog(undefined)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{topologyFileNameDialog?.request.title ?? "Create Topology File"}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {topologyFileNameDialog?.request.message}
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Topology file name"
+              value={topologyFileNameInput}
+              onChange={(event) => setTopologyFileNameInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitTopologyFileNameDialog();
+                }
+              }}
+              helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => closeTopologyFileNameDialog(undefined)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={submitTopologyFileNameDialog}
+            disabled={!trimmedTopologyFileNameInput}
+          >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={endpointSelectionDialog !== null}
+        onClose={() => closeEndpointSelectionDialog(undefined)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{endpointSelectionDialog?.request.title ?? "Select Endpoint"}</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2} sx={{ pt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              {endpointSelectionDialog?.request.message}
+            </Typography>
+            <FormControl fullWidth size="small">
+              <InputLabel id="endpoint-selection-label">Endpoint</InputLabel>
+              <Select
+                labelId="endpoint-selection-label"
+                label="Endpoint"
+                value={endpointSelectionValue}
+                onChange={(event) => setEndpointSelectionValue(String(event.target.value))}
+              >
+                {(endpointSelectionDialog?.request.options ?? []).map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" noWrap>
+                        {option.label}
+                      </Typography>
+                      {option.description ? (
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {option.description}
+                        </Typography>
+                      ) : null}
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => closeEndpointSelectionDialog(undefined)}>Cancel</Button>
+          <Button variant="contained" onClick={submitEndpointSelectionDialog} disabled={!endpointSelectionIsValid}>
+            {endpointSelectionDialog?.request.confirmLabel ?? "Continue"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={snackbar.open}
         autoHideDuration={5000}
@@ -832,7 +1725,7 @@ export function RuntimeActionDialogs() {
 }
 
 export async function createTopologyFileFlow(): Promise<void> {
-  const rawFileName = window.prompt("New topology file name", "new-lab.clab.yml");
+  const rawFileName = await promptForTopologyFileName();
   if (!rawFileName) {
     return;
   }

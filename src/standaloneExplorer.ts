@@ -22,7 +22,13 @@ import {
   createWiresharkVncSessions,
   type NetemFields
 } from "./runtimeApi";
-import { deleteTopologyFileFlow, saveConfigsFlow } from "./components/RuntimeActionDialogs";
+import {
+  deleteTopologyFileFlow,
+  promptForCloneRepo,
+  promptForCreateTopology,
+  promptForEndpointSelection,
+  saveConfigsFlow
+} from "./components/RuntimeActionDialogs";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
@@ -828,10 +834,10 @@ export function createStandaloneExplorerBridge(
     const endpoints = options.getEndpoints();
     const findEndpointById = (endpointId?: string): EndpointConfig | undefined =>
       endpointId ? endpoints.find((entry) => entry.id === endpointId) : undefined;
-    const resolveEndpointForAction = (
+    const resolveEndpointForAction = async (
       actionDescription: string,
       preferredEndpointId?: string
-    ): string | null => {
+    ): Promise<string | null> => {
       const preferred = findEndpointById(preferredEndpointId);
       if (preferred?.status === "connected") {
         return preferred.id;
@@ -846,28 +852,25 @@ export function createStandaloneExplorerBridge(
         return connectedEndpoints[0].id;
       }
 
-      const optionsText = connectedEndpoints
-        .map((endpoint, index) => `${index + 1}. ${endpoint.label} (${endpoint.url})`)
-        .join("\n");
-      const rawSelection = window.prompt(
-        `Select endpoint for ${actionDescription}:\n${optionsText}\n\nEnter number (1-${connectedEndpoints.length}).`,
-        "1"
-      );
-      if (!rawSelection) {
+      const selectedEndpointId = await promptForEndpointSelection({
+        title: "Select Endpoint",
+        message: `Select endpoint for ${actionDescription}.`,
+        confirmLabel: "Use Endpoint",
+        options: connectedEndpoints.map((endpoint) => ({
+          value: endpoint.id,
+          label: endpoint.label,
+          description: endpoint.url
+        })),
+        preferredValue: connectedEndpoints[0]?.id
+      });
+      if (!selectedEndpointId) {
         return null;
       }
-
-      const selectedIndex = Number.parseInt(rawSelection, 10);
-      if (
-        !Number.isFinite(selectedIndex) ||
-        selectedIndex < 1 ||
-        selectedIndex > connectedEndpoints.length
-      ) {
+      if (!connectedEndpoints.some((endpoint) => endpoint.id === selectedEndpointId)) {
         runtimeUiActions.notify("Invalid endpoint selection.", "error");
         return null;
       }
-
-      return connectedEndpoints[selectedIndex - 1].id;
+      return selectedEndpointId;
     };
     const targetLabel =
       actionTopologyRef?.labName ??
@@ -1041,21 +1044,33 @@ export function createStandaloneExplorerBridge(
       await runWiresharkVncCapture();
     };
 
-    const deployFromUrlFlow = async (endpointId: string, sourceUrl: string): Promise<void> => {
+    const deployFromUrlFlow = async (
+      endpointId: string,
+      sourceUrl: string,
+      deployOptions?: {
+        labNameOverride?: string;
+        skipLabNamePrompt?: boolean;
+      }
+    ): Promise<void> => {
       const topologySourceUrl = sourceUrl.trim();
       if (!topologySourceUrl) {
         runtimeUiActions.notify("A repository or topology URL is required.", "error");
         return;
       }
 
-      const rawLabNameOverride = window.prompt(
-        "Optional lab name override (leave empty to use default)",
-        ""
-      );
-      if (rawLabNameOverride === null) {
-        return;
+      let labNameOverride: string | undefined;
+      if (deployOptions?.skipLabNamePrompt) {
+        labNameOverride = deployOptions.labNameOverride?.trim() || undefined;
+      } else {
+        const rawLabNameOverride = window.prompt(
+          "Optional lab name override (leave empty to use default)",
+          ""
+        );
+        if (rawLabNameOverride === null) {
+          return;
+        }
+        labNameOverride = rawLabNameOverride.trim() || undefined;
       }
-      const labNameOverride = rawLabNameOverride.trim() || undefined;
 
       try {
         const response = await deployLabFromUrl({
@@ -1494,15 +1509,29 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.editor.topoViewerEditor": {
-        const endpointId = resolveEndpointForAction("create a topology file", actionEndpointId);
-        if (!endpointId) {
+        const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+        if (connectedEndpoints.length === 0) {
+          postExplorerError("Connect an endpoint before trying to create a topology file.");
           return;
         }
-
-        const rawFileName = window.prompt("New topology file name", "new-lab.clab.yml");
-        if (!rawFileName) {
+        const preferredEndpoint = findEndpointById(actionEndpointId);
+        const createTopologyInput = await promptForCreateTopology({
+          title: "Create Topology File",
+          message: "Choose endpoint and file name for the new topology file.",
+          confirmLabel: "Create",
+          endpointOptions: connectedEndpoints.map((endpoint) => ({
+            value: endpoint.id,
+            label: endpoint.label,
+            description: endpoint.url
+          })),
+          defaultEndpointId:
+            preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
+          defaultFileName: "new-lab.clab.yml"
+        });
+        if (!createTopologyInput) {
           return;
         }
+        const { endpointId, fileName: rawFileName } = createTopologyInput;
 
         try {
           const created = await createTopologyFile({ endpointId, fileName: rawFileName });
@@ -1519,45 +1548,44 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.lab.cloneRepo": {
-        const endpointId = resolveEndpointForAction("clone a repository", actionEndpointId);
-        if (!endpointId) {
+        const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+        if (connectedEndpoints.length === 0) {
+          postExplorerError("Connect an endpoint before trying to clone a repository.");
           return;
         }
-        const mode = window.prompt(
-          "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
-          "1"
-        );
-        if (!mode) {
+        const preferredEndpoint = findEndpointById(actionEndpointId);
+        const popularRepos = (await fetchPopularRepos()).slice(0, 12);
+        const cloneRepoInput = await promptForCloneRepo({
+          title: "Clone Repository",
+          message: "Choose endpoint and repository source.",
+          confirmLabel: "Deploy",
+          endpointOptions: connectedEndpoints.map((endpoint) => ({
+            value: endpoint.id,
+            label: endpoint.label,
+            description: endpoint.url
+          })),
+          popularOptions: popularRepos.map((repo) => ({
+            value: repo.htmlUrl,
+            label: `${repo.name} (⭐ ${repo.stars})`,
+            description: repo.description
+          })),
+          defaultEndpointId:
+            preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
+          defaultMode: "url",
+          defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab"
+        });
+        if (!cloneRepoInput) {
           return;
         }
-
-        if (mode.trim() === "2") {
-          const pickedUrl = await pickPopularRepo("Clone popular lab");
-          if (!pickedUrl) {
-            return;
-          }
-          await deployFromUrlFlow(endpointId, pickedUrl);
-          return;
-        }
-
-        if (mode.trim() !== "1") {
-          runtimeUiActions.notify("Invalid repository source selection.", "error");
-          return;
-        }
-
-        const sourceUrl = window.prompt(
-          "Repository or topology URL",
-          "https://github.com/srl-labs/srl-telemetry-lab"
-        );
-        if (!sourceUrl) {
-          return;
-        }
-        await deployFromUrlFlow(endpointId, sourceUrl);
+        await deployFromUrlFlow(cloneRepoInput.endpointId, cloneRepoInput.sourceUrl, {
+          labNameOverride: cloneRepoInput.labNameOverride,
+          skipLabNamePrompt: true
+        });
         return;
       }
       case "containerlab.lab.clonePopularRepo":
       case "containerlab.lab.deployPopular": {
-        const endpointId = resolveEndpointForAction("deploy a popular lab", actionEndpointId);
+        const endpointId = await resolveEndpointForAction("deploy a popular lab", actionEndpointId);
         if (!endpointId) {
           return;
         }
@@ -1755,7 +1783,7 @@ export function createStandaloneExplorerBridge(
         return;
       }
       case "containerlab.capture.killAllWiresharkVNC": {
-        const endpointId = resolveEndpointForAction(
+        const endpointId = await resolveEndpointForAction(
           "close all Wireshark VNC sessions",
           actionEndpointId
         );
