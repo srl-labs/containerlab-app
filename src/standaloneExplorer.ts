@@ -1809,14 +1809,12 @@ export function createStandaloneExplorerBridge(
         showNonOwnedLabs = false;
         persistShowNonOwnedLabsSetting(false);
         controller.scheduleSnapshot(0);
-        runtimeUiActions.notify("Hiding non-owned labs.", "info");
         return;
       }
       case "containerlab.treeView.runningLabs.showNonOwnedLabs": {
         showNonOwnedLabs = true;
         persistShowNonOwnedLabsSetting(true);
         controller.scheduleSnapshot(0);
-        runtimeUiActions.notify("Showing non-owned labs.", "info");
         return;
       }
       case "containerlab.node.save": {
