@@ -83,7 +83,11 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 | `npm run dev` | Start backend + Vite frontend in development mode |
 | `npm run dev:local` | Start dev mode with strict local `../clab-ui/dist` resolution |
 | `npm run build` | Build client bundle and backend server |
-| `npm run build:server` | Build backend server only (`dist/server/index.cjs`) |
+| `npm run build:server` | Build backend server CLI only (`dist/server/cli.cjs`) |
+| `npm run build:desktop` | Build web artifacts plus Electron main/preload runtime |
+| `npm run desktop:dev` | Run Electron in dev mode (local backend + Vite renderer) |
+| `npm run desktop:start` | Start Electron from built runtime (`dist/electron/main.cjs`) |
+| `npm run desktop:package:linux` | Build Linux AppImage installer artifact |
 | `npm run start` | Start the built production backend |
 | `npm run preview` | Preview the built Vite frontend |
 | `npm run typecheck` | Typecheck client and server TypeScript |
@@ -154,6 +158,48 @@ npm run test:e2e
 ```
 
 The Playwright config starts `npm run dev` automatically and runs tests against the Vite frontend (`http://localhost:5173`).
+
+---
+
+## Electron Desktop (Linux-first MVP)
+
+The desktop runtime wraps this repo in Electron while reusing:
+
+- the existing Fastify backend APIs (`/auth`, `/api`, `/files`)
+- the existing Vite/React renderer
+
+### Run Desktop in Development
+
+```bash
+npm run desktop:dev
+```
+
+This starts Vite, launches Electron, and runs the backend on loopback (`127.0.0.1`) with an app-managed port.
+
+### Build Desktop Runtime
+
+```bash
+npm run build:desktop
+```
+
+### Package Linux Installer (AppImage)
+
+```bash
+npm run desktop:package:linux
+```
+
+Artifacts are written to `dist/desktop-packages/`.
+The Linux package uses `resources/desktop/icon.png` as the desktop launcher icon.
+
+### Ubuntu Install/Test Quickstart
+
+```bash
+cd dist/desktop-packages
+chmod +x *.AppImage
+./*.AppImage
+```
+
+Optional desktop integration (launcher entry + icon) can be done with AppImageLauncher.
 
 ---
 

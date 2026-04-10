@@ -5,22 +5,30 @@
   "description": "Standalone browser runtime for containerlab built on @srl-labs/clab-ui.",
   "license": "Apache-2.0",
   "type": "module",
+  "main": "dist/electron/main.cjs",
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development concurrently -k -n server,vite \"tsx watch server/index.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts --force'\"",
-    "dev:local": "node scripts/check-local-clab-ui.mjs && NODE_ENV=development CLAB_UI_SOURCE=local concurrently -k -n server,vite \"tsx watch --tsconfig tsconfig.server.local-ui.runtime.json server/index.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts --force'\"",
+    "dev": "NODE_ENV=development concurrently -k -n server,vite \"tsx watch server/cli.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts --force'\"",
+    "dev:local": "node scripts/check-local-clab-ui.mjs && NODE_ENV=development CLAB_UI_SOURCE=local concurrently -k -n server,vite \"tsx watch --tsconfig tsconfig.server.local-ui.runtime.json server/cli.ts\" \"sh -c 'until curl -sSf http://localhost:${PORT:-3000}/api/config >/dev/null 2>&1; do sleep 0.2; done; vite --config vite.config.ts --force'\"",
     "build": "vite build --config vite.config.ts && npm run build:server",
-    "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/server/index.cjs --sourcemap",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "build:server": "esbuild server/cli.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server/cli.cjs --sourcemap",
+    "build:desktop:main": "esbuild electron/main.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --outfile=dist/electron/main.cjs --sourcemap",
+    "build:desktop:preload": "esbuild electron/preload.ts --bundle --platform=node --format=cjs --target=node20 --external:electron --outfile=dist/electron/preload.cjs --sourcemap",
+    "build:desktop:runtime": "npm run build:desktop:main && npm run build:desktop:preload",
+    "build:desktop": "npm run build && npm run build:desktop:runtime",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "typecheck:local-ui": "node scripts/check-local-clab-ui.mjs && tsc -p tsconfig.local-ui.json --noEmit && tsc -p tsconfig.server.local-ui.json --noEmit",
     "test:unit": "node --import tsx --test src/**/*.test.ts server/**/*.test.ts",
     "test:e2e": "playwright test --config test/e2e/playwright.config.ts",
     "test:e2e:ui": "playwright test --config test/e2e/playwright.config.ts --ui",
     "test:e2e:debug": "playwright test --config test/e2e/playwright.config.ts --debug",
-    "start": "NODE_ENV=production node dist/server/index.cjs",
-    "preview": "vite preview --config vite.config.ts"
+    "start": "NODE_ENV=production node dist/server/cli.cjs",
+    "preview": "vite preview --config vite.config.ts",
+    "desktop:start": "NODE_ENV=production electron dist/electron/main.cjs",
+    "desktop:dev": "npm run build:desktop:runtime && NODE_ENV=development concurrently -k -n vite,electron \"vite --config vite.config.ts --force\" \"sh -c 'until curl -sSf ${VITE_DEV_URL:-http://localhost:5173} >/dev/null 2>&1; do sleep 0.2; done; electron dist/electron/main.cjs'\"",
+    "desktop:package:linux": "npm run build:desktop && electron-builder --linux AppImage"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -54,6 +62,8 @@
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.1.2",
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.12",
     "esbuild": "^0.27.3",
     "postcss": "^8.5.6",
     "postcss-cli": "^11.0.1",
@@ -61,5 +71,33 @@
     "tsx": "^4.19.4",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
+  },
+  "build": {
+    "appId": "dev.containerlab.containerlab-web",
+    "productName": "containerlab-web",
+    "files": [
+      "dist/client/**/*",
+      "dist/electron/**/*",
+      "package.json",
+      "resources/**/*",
+      "schema/**/*"
+    ],
+    "directories": {
+      "output": "dist/desktop-packages"
+    },
+    "linux": {
+      "category": "Network",
+      "icon": "resources/desktop/icon.png",
+      "desktop": {
+        "entry": {
+          "Categories": "Network;Development;",
+          "Comment": "Standalone containerlab desktop UI",
+          "Name": "containerlab-web"
+        }
+      },
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }
