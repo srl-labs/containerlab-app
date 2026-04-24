@@ -401,12 +401,12 @@ export function createStandaloneLifecycleManager(
       }
 
       if (event.type === "error") {
-        const errorMessage =
-          typeof event.error === "string" && event.error.trim().length > 0
-            ? event.error
-            : typeof event.message === "string" && event.message.trim().length > 0
-              ? event.message
-              : "Lifecycle command failed.";
+        let errorMessage = "Lifecycle command failed.";
+        if (typeof event.error === "string" && event.error.trim().length > 0) {
+          errorMessage = event.error;
+        } else if (typeof event.message === "string" && event.message.trim().length > 0) {
+          errorMessage = event.message;
+        }
         throw new Error(errorMessage);
       }
     };

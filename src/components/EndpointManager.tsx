@@ -109,6 +109,49 @@ async function fetchEndpointHealthMetrics(
   return (await response.json()) as EndpointHealthMetrics;
 }
 
+function endpointStatusColor(status: EndpointConfig["status"]): string {
+  const severity = endpointStatusSeverity(status);
+  if (severity === "success") {
+    return "success.main";
+  }
+  if (severity === "warning") {
+    return "warning.main";
+  }
+  if (severity === "error") {
+    return "error.main";
+  }
+  return "info.main";
+}
+
+function addEndpointButtonLabel(busyKey: string | null, mode: "initial" | "manage"): string {
+  if (busyKey === "add") {
+    return "Adding...";
+  }
+  return mode === "initial" ? "Add Endpoint" : "Add";
+}
+
+function endpointActionButtonLabel(
+  endpoint: EndpointConfig | null | undefined,
+  busyKey: string | null,
+  action: "edit" | "reconnect" | "remove"
+): string {
+  const defaultLabels = {
+    edit: "Save",
+    reconnect: "Reconnect",
+    remove: "Remove"
+  };
+  if (!endpoint) {
+    return defaultLabels[action];
+  }
+
+  const busyLabels = {
+    edit: "Saving...",
+    reconnect: "Reconnecting...",
+    remove: "Removing..."
+  };
+  return busyKey === `${action}:${endpoint.id}` ? busyLabels[action] : defaultLabels[action];
+}
+
 function EndpointHealthMetric(props: {
   detail: string;
   icon: React.ReactNode;
@@ -199,15 +242,7 @@ function EndpointHealthStats(props: {
 
 function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
   const { status } = props;
-  const severity = endpointStatusSeverity(status);
-  const color =
-    severity === "success"
-      ? "success.main"
-      : severity === "warning"
-        ? "warning.main"
-        : severity === "error"
-          ? "error.main"
-          : "info.main";
+  const color = endpointStatusColor(status);
 
   return (
     <Box
@@ -827,7 +862,7 @@ export function EndpointManager({
               textTransform: "none"
             }}
           >
-            {busyKey === "add" ? "Adding..." : mode === "initial" ? "Add Endpoint" : "Add"}
+            {addEndpointButtonLabel(busyKey, mode)}
           </Button>
         </Stack>
       </Paper>
@@ -909,7 +944,7 @@ export function EndpointManager({
             variant="contained"
             disabled={editSubmitDisabled}
           >
-            {editEndpoint ? (busyKey === `edit:${editEndpoint.id}` ? "Saving..." : "Save") : "Save"}
+            {endpointActionButtonLabel(editEndpoint, busyKey, "edit")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -972,7 +1007,7 @@ export function EndpointManager({
             variant="contained"
             disabled={reconnectSubmitDisabled}
           >
-            {reconnectEndpoint ? (busyKey === `reconnect:${reconnectEndpoint.id}` ? "Reconnecting..." : "Reconnect") : "Reconnect"}
+            {endpointActionButtonLabel(reconnectEndpoint, busyKey, "reconnect")}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1003,7 +1038,7 @@ export function EndpointManager({
             variant="contained"
             disabled={busyKey !== null}
           >
-            {removeEndpoint ? (busyKey === `remove:${removeEndpoint.id}` ? "Removing..." : "Remove") : "Remove"}
+            {endpointActionButtonLabel(removeEndpoint, busyKey, "remove")}
           </Button>
         </DialogActions>
       </Dialog>

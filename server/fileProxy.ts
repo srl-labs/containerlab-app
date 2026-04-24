@@ -2,9 +2,8 @@
  * File listing proxy - returns topology files in the format the Explorer expects.
  */
 
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
-import type { FastifyReply } from "fastify";
 import type { EndpointEntry } from "./endpointSessionStore.js";
 import { buildStandaloneTopologyRef } from "./topologyIdentity.js";
 

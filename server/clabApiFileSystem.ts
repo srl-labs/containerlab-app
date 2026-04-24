@@ -62,11 +62,13 @@ export class ClabApiFileSystemAdapter {
     this.labName = options.labName;
     this.sourcePreference = options.sourcePreference ?? "api-file";
     this.yamlPath = options.yamlPath ? normalizePath(options.yamlPath) : undefined;
-    this.annotationsPath = options.annotationsPath
-      ? normalizePath(options.annotationsPath)
-      : this.yamlPath
-        ? `${this.yamlPath}.annotations.json`
-        : undefined;
+    if (options.annotationsPath) {
+      this.annotationsPath = normalizePath(options.annotationsPath);
+    } else if (this.yamlPath) {
+      this.annotationsPath = `${this.yamlPath}.annotations.json`;
+    } else {
+      this.annotationsPath = undefined;
+    }
   }
 
   private matchesConfiguredPath(pathValue: string, configuredPath: string | undefined): boolean {

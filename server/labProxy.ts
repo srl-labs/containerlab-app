@@ -199,7 +199,6 @@ export function registerLabProxy(
           cleanup: request.body.cleanup === true
         });
         await forwardNdjsonStream(reply, streamResponse);
-        return;
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -252,7 +251,6 @@ export function registerLabProxy(
           cleanup: request.body.cleanup === true
         });
         await forwardNdjsonStream(reply, streamResponse);
-        return;
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -305,7 +303,6 @@ export function registerLabProxy(
           cleanup: request.body.cleanup === true
         });
         await forwardNdjsonStream(reply, streamResponse);
-        return;
       } catch (error) {
         return handleRouteError(reply, error);
       }

@@ -1,6 +1,6 @@
 import {
   TopologySessionCore,
-  createRuntimeContainerDataProvider,
+  type createRuntimeContainerDataProvider,
   type TopologyRef
 } from "@srl-labs/clab-ui/session";
 

@@ -1,8 +1,7 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
 
 import { buildWebSocketUrl } from "./clabApiClient.js";
-import type { FastifyReply } from "fastify";
 import type { EndpointEntry } from "./endpointSessionStore.js";
 
 type EndpointResolver = (

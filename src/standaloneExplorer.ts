@@ -95,6 +95,46 @@ function persistShowNonOwnedLabsSetting(nextValue: boolean): void {
 
 let showNonOwnedLabs = loadShowNonOwnedLabsSetting();
 
+function disconnectedEndpointLabel(status: EndpointConfig["status"]): string {
+  if (status === "saved") {
+    return "Saved endpoint — reconnect to restore the session";
+  }
+  if (status === "session_expired") {
+    return "Session expired — reconnect with your credentials";
+  }
+  return "Endpoint is offline — reconnect when it is reachable";
+}
+
+function deploymentStateFromContext(contextValue: string | undefined): DeploymentState | undefined {
+  if (contextValue?.includes("containerlabLabDeployed")) {
+    return "deployed";
+  }
+  if (contextValue?.includes("containerlabLabUndeployed")) {
+    return "undeployed";
+  }
+  return undefined;
+}
+
+function nodeAccessProtocol(commandId: string): "shell" | "ssh" | "telnet" {
+  if (commandId === "containerlab.node.attachShell") {
+    return "shell";
+  }
+  if (commandId === "containerlab.node.telnet") {
+    return "telnet";
+  }
+  return "ssh";
+}
+
+function nodeAccessTitlePrefix(protocol: "shell" | "ssh" | "telnet"): string {
+  if (protocol === "shell") {
+    return "Shell";
+  }
+  if (protocol === "telnet") {
+    return "Telnet";
+  }
+  return "SSH";
+}
+
 type ExplorerSnapshotMessage = Extract<ExplorerIncomingMessage, { command: "snapshot" }>;
 
 interface StandaloneExplorerBridgeOptions {
@@ -749,12 +789,7 @@ export function createStandaloneExplorerBridge(
 
     const endpointItems = endpoints.map((endpoint) => {
       if (!endpoint.connected) {
-        const placeholderLabel =
-          endpoint.status === "saved"
-            ? "Saved endpoint — reconnect to restore the session"
-            : endpoint.status === "session_expired"
-              ? "Session expired — reconnect with your credentials"
-              : "Endpoint is offline — reconnect when it is reachable";
+        const placeholderLabel = disconnectedEndpointLabel(endpoint.status);
         const placeholder: ExplorerTreeItem = {
           id: `endpoint-disconnected:${endpoint.id}`,
           label: placeholderLabel,
@@ -1549,12 +1584,7 @@ export function createStandaloneExplorerBridge(
           );
           return;
         }
-        const itemState =
-          item?.contextValue?.includes("containerlabLabDeployed")
-            ? "deployed"
-            : item?.contextValue?.includes("containerlabLabUndeployed")
-              ? "undeployed"
-              : undefined;
+        const itemState = deploymentStateFromContext(item?.contextValue);
         const resolvedState = await options.resolveDeploymentState(actionTopologyRef);
         const deploymentState = resolvedState ?? itemState;
         await options.loadTopologyFile(actionTopologyRef, { deploymentState, endpointId: actionEndpointId });
@@ -1961,13 +1991,8 @@ export function createStandaloneExplorerBridge(
           return;
         }
 
-        const protocol =
-          commandId === "containerlab.node.attachShell"
-            ? "shell"
-            : commandId === "containerlab.node.telnet"
-              ? "telnet"
-              : "ssh";
-        const titlePrefix = protocol === "shell" ? "Shell" : protocol === "telnet" ? "Telnet" : "SSH";
+        const protocol = nodeAccessProtocol(commandId);
+        const titlePrefix = nodeAccessTitlePrefix(protocol);
 
         runtimeUiActions.openTerminal({
           endpointId: actionEndpointId,
@@ -2115,7 +2140,7 @@ export function createStandaloneExplorerBridge(
       default: {
         if (!unhandledCommands.has(commandId)) {
           unhandledCommands.add(commandId);
-          console.info(`[Standalone] Command not implemented: ${commandId}`);
+          console.warn(`[Standalone] Command not implemented: ${commandId}`);
         }
       }
     }

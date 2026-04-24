@@ -118,6 +118,27 @@ type TerminalDraftResult =
       field: "ssh" | "telnet" | "fontSize";
     };
 
+function formatCaptureStatus(
+  hasEndpoint: boolean,
+  loading: boolean,
+  status: EdgeSharkStatusResponse | null,
+  endpointLabel: string
+): string {
+  if (!hasEndpoint) {
+    return "No endpoint selected";
+  }
+  if (loading) {
+    return `Loading status for ${endpointLabel}...`;
+  }
+  if (!status) {
+    return `Unknown on ${endpointLabel}`;
+  }
+  if (!status.running) {
+    return `Not running on ${endpointLabel}`;
+  }
+  return `Running on ${endpointLabel}${status.version ? ` (${status.version})` : ""}`;
+}
+
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSectionKey;
   label: string;
@@ -754,17 +775,7 @@ export function SettingsOverlay({
               </TextField>
               <TextField
                 label="Status"
-                value={
-                  !captureEndpoint
-                    ? "No endpoint selected"
-                    : captureStatusLoading
-                      ? `Loading status for ${captureEndpointLabel}...`
-                    : captureStatus
-                      ? captureStatus.running
-                        ? `Running on ${captureEndpointLabel}${captureStatus.version ? ` (${captureStatus.version})` : ""}`
-                        : `Not running on ${captureEndpointLabel}`
-                      : `Unknown on ${captureEndpointLabel}`
-                }
+                value={formatCaptureStatus(Boolean(captureEndpoint), captureStatusLoading, captureStatus, captureEndpointLabel)}
                 fullWidth
                 slotProps={{ input: { readOnly: true } }}
                 data-testid="standalone-settings-capture-status"

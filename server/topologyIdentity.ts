@@ -48,22 +48,26 @@ export function normalizeStandaloneTopologyRef(
   const labName = topologyRef.labName.trim();
   const source = topologyRef.source === "vscode" ? "vscode" : "standalone";
   const resolvedEndpointId = endpointId ?? extractEndpointIdFromTopologyId(topologyRef.topologyId);
+  let topologyId = topologyRef.topologyId;
+  if (source === "standalone") {
+    topologyId = resolvedEndpointId
+      ? buildEndpointScopedTopologyId(yamlPath, resolvedEndpointId)
+      : buildStandaloneTopologyId(yamlPath);
+  }
+
+  let annotationsPath = topologyRef.annotationsPath;
+  if (annotationsPath) {
+    annotationsPath = normalizeTopologyPath(annotationsPath);
+  } else if (source === "standalone") {
+    annotationsPath = `${yamlPath}.annotations.json`;
+  }
 
   return {
     ...topologyRef,
-    topologyId:
-      source === "standalone"
-        ? resolvedEndpointId
-          ? buildEndpointScopedTopologyId(yamlPath, resolvedEndpointId)
-          : buildStandaloneTopologyId(yamlPath)
-        : topologyRef.topologyId,
+    topologyId,
     labName,
     yamlPath,
-    annotationsPath: topologyRef.annotationsPath
-      ? normalizeTopologyPath(topologyRef.annotationsPath)
-      : source === "standalone"
-        ? `${yamlPath}.annotations.json`
-        : topologyRef.annotationsPath,
+    annotationsPath,
     source
   };
 }

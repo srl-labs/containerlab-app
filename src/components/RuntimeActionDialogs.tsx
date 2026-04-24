@@ -735,12 +735,10 @@ export function RuntimeActionDialogs() {
         : false,
     [cloneRepoDialog, cloneRepoPopularValue]
   );
-  const cloneRepoResolvedSourceUrl =
-    cloneRepoMode === "popular"
-      ? cloneRepoPopularIsValid
-        ? cloneRepoPopularValue
-        : ""
-      : trimmedCloneRepoSourceUrlInput;
+  let cloneRepoResolvedSourceUrl = trimmedCloneRepoSourceUrlInput;
+  if (cloneRepoMode === "popular") {
+    cloneRepoResolvedSourceUrl = cloneRepoPopularIsValid ? cloneRepoPopularValue : "";
+  }
   const cloneRepoCanSubmit = cloneRepoEndpointIsValid && cloneRepoResolvedSourceUrl.length > 0;
 
   useEffect(() => {
