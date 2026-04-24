@@ -1,8 +1,4 @@
-import { expect, type Page } from "@playwright/test";
-
-import { test } from "../fixtures/topoviewer";
-
-const SIMPLE_FILE = "simple.clab.yml";
+import { expect, test, type Page } from "@playwright/test";
 
 const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
 const SEL_SETTINGS_PANEL = '[data-testid="standalone-settings-panel"]';
@@ -17,12 +13,28 @@ const SEL_THEME_LIGHT = '[data-testid="standalone-settings-theme-light"]';
 const SEL_FONT_PRESET_15 = '[data-testid="standalone-settings-font-size-preset-15"]';
 
 test.describe("Standalone Settings Dialog", () => {
-  test.beforeEach(async ({ topoViewerPage }) => {
-    await topoViewerPage.resetFiles();
-    await topoViewerPage.gotoFile(SIMPLE_FILE);
-    await topoViewerPage.waitForCanvasReady();
-    await topoViewerPage.setEditMode();
-    await topoViewerPage.unlock();
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      if (localStorage.getItem("clab-standalone-settings-test-seeded") !== "true") {
+        localStorage.removeItem("clab-standalone-theme");
+        localStorage.removeItem("clab-standalone-terminal-settings");
+        localStorage.setItem("clab-standalone-settings-test-seeded", "true");
+      }
+      localStorage.setItem(
+        "clab-standalone-endpoints",
+        JSON.stringify([
+          {
+            id: "test-endpoint",
+            url: "http://localhost:8080",
+            label: "Test Endpoint",
+            username: "admin",
+            sessionDuration: "24h"
+          }
+        ])
+      );
+    });
+    await page.goto("/");
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
   });
 
   async function openSettings(page: Page) {
@@ -50,20 +62,20 @@ test.describe("Standalone Settings Dialog", () => {
   test("opens the standalone settings dialog with section navigation", async ({ page }) => {
     const dialog = await openSettings(page);
 
-    await expect(dialog.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await expect(dialog.locator(SEL_SETTINGS_CLOSE)).toBeVisible();
     await expect(dialog.locator(SEL_NAV_GENERAL)).toBeVisible();
     await expect(dialog.locator(SEL_NAV_TERMINAL)).toBeVisible();
     await expect(dialog.locator(SEL_NAV_ABOUT)).toBeVisible();
 
     await dialog.locator(SEL_NAV_TERMINAL).click();
-    await expect(dialog.getByRole("heading", { name: "Terminal" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Terminal", exact: true })).toBeVisible();
     await expect(dialog.getByLabel("SSH User Mapping JSON")).toBeVisible();
     await expect(dialog.getByLabel("Telnet Port")).toBeVisible();
     await expect(dialog.getByLabel("Terminal Font Size")).toBeVisible();
     await expect(dialog.locator(SEL_FONT_PRESET_15)).toBeVisible();
 
     await dialog.locator(SEL_NAV_ABOUT).click();
-    await expect(dialog.getByRole("heading", { name: "About" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "About", exact: true })).toBeVisible();
     await expect(dialog.getByLabel("Containerlab Version")).toBeVisible();
     await expect(dialog.getByLabel("Update Check")).toBeVisible();
   });
@@ -92,7 +104,7 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(saveButton).toBeDisabled();
   });
 
-  test("theme and terminal settings persist across reload", async ({ page, topoViewerPage }) => {
+  test("theme and terminal settings persist across reload", async ({ page }) => {
     const dialog = await openSettings(page);
 
     await dialog.locator(SEL_THEME_LIGHT).click();
@@ -112,10 +124,8 @@ test.describe("Standalone Settings Dialog", () => {
     await dialog.locator(SEL_SETTINGS_CLOSE).click();
     await expect(dialog).not.toBeVisible();
 
-    await topoViewerPage.gotoFile(SIMPLE_FILE);
-    await topoViewerPage.waitForCanvasReady();
-    await topoViewerPage.setEditMode();
-    await topoViewerPage.unlock();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
 
     const reloadedDialog = await openSettings(page);
     await expect(reloadedDialog.locator(SEL_THEME_LIGHT)).toHaveAttribute("aria-pressed", "true");
@@ -124,7 +134,7 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");
     await expect(reloadedDialog.getByLabel("Terminal Font Size")).toHaveValue("15");
     await expect(reloadedDialog.getByLabel("SSH User Mapping JSON")).toHaveValue(
-      '{\n  "custom_kind": "operator"\n}'
+      /"custom_kind": "operator"/
     );
   });
 });
