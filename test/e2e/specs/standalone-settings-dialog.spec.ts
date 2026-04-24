@@ -5,6 +5,7 @@ const SEL_SETTINGS_PANEL = '[data-testid="standalone-settings-panel"]';
 const SEL_OPEN_DIALOG = '[data-testid="standalone-settings-open-dialog"]';
 const SEL_SETTINGS_DIALOG = '[data-testid="standalone-settings-dialog"]';
 const SEL_SETTINGS_CLOSE = '[data-testid="standalone-settings-close"]';
+const SEL_NAV_ENDPOINTS = '[data-testid="standalone-settings-nav-endpoints"]';
 const SEL_NAV_GENERAL = '[data-testid="standalone-settings-nav-general"]';
 const SEL_NAV_TERMINAL = '[data-testid="standalone-settings-nav-terminal"]';
 const SEL_NAV_ABOUT = '[data-testid="standalone-settings-nav-about"]';
@@ -78,6 +79,94 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByRole("heading", { name: "About", exact: true })).toBeVisible();
     await expect(dialog.getByLabel("Containerlab Version")).toBeVisible();
     await expect(dialog.getByLabel("Update Check")).toBeVisible();
+  });
+
+  test("shows endpoint health stats when a connected endpoint is available", async ({ page }) => {
+    await page.addInitScript(() => {
+      class MockEventSource extends EventTarget {
+        onopen: ((event: Event) => void) | null = null;
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onerror: ((event: Event) => void) | null = null;
+        readyState = 0;
+        url: string;
+
+        constructor(url: string) {
+          super();
+          this.url = url;
+          window.setTimeout(() => {
+            this.readyState = 1;
+            this.onopen?.(new Event("open"));
+            this.dispatchEvent(new Event("open"));
+          }, 0);
+        }
+
+        close(): void {
+          this.readyState = 2;
+        }
+      }
+
+      window.EventSource = MockEventSource as unknown as typeof EventSource;
+    });
+    await page.route("**/auth/me**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          endpoints: [
+            {
+              id: "test-endpoint",
+              url: "http://localhost:8080",
+              label: "Test Endpoint",
+              username: "admin",
+              sessionDuration: "24h",
+              status: "connected",
+              connected: true
+            }
+          ]
+        })
+      });
+    });
+    await page.route("**/api/runtime/ui/custom-nodes**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ customNodes: [], defaultNode: "" })
+      });
+    });
+    await page.route("**/auth/endpoints/test-endpoint/metrics", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          serverInfo: {
+            version: "test",
+            uptime: "1m",
+            startTime: "2026-04-24T00:00:00Z"
+          },
+          metrics: {
+            cpu: { usagePercent: 12.4, numCPU: 8 },
+            mem: { usagePercent: 45.6, usedMem: 4_294_967_296, totalMem: 8_589_934_592 },
+            disk: {
+              path: "/",
+              usagePercent: 67.8,
+              usedDisk: 107_374_182_400,
+              totalDisk: 214_748_364_800
+            }
+          }
+        })
+      });
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
+
+    const dialog = await openSettings(page);
+    await dialog.locator(SEL_NAV_ENDPOINTS).click();
+    await expect(dialog.getByText("CPU")).toBeVisible();
+    await expect(dialog.getByText("Memory")).toBeVisible();
+    await expect(dialog.getByText("Disk")).toBeVisible();
+    await expect(dialog.getByText("8 cores")).toBeVisible();
   });
 
   test("invalid terminal settings stay blocked with inline validation", async ({ page }) => {

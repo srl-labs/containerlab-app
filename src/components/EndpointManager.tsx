@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -16,12 +17,20 @@ import {
   DeleteOutline as DeleteOutlineIcon,
   EditOutlined as EditOutlinedIcon,
   LockOutlined as LockOutlinedIcon,
+  Memory as MemoryIcon,
   PersonOutline as PersonOutlineIcon,
   Refresh as RefreshIcon,
   SettingsEthernet as SettingsEthernetIcon,
-  LabelOutlined as LabelOutlinedIcon
+  LabelOutlined as LabelOutlinedIcon,
+  Speed as SpeedIcon,
+  Storage as StorageIcon
 } from "@mui/icons-material";
 
+import {
+  formatEndpointHealthPercent,
+  formatEndpointHealthUsedTotal,
+  type EndpointHealthMetrics
+} from "../endpointHealth";
 import type { EndpointUiAction } from "../endpointActions";
 import {
   endpointStatusHint,
@@ -40,6 +49,7 @@ interface EndpointManagerProps {
   defaultApiUrl: string;
   endpoints: EndpointConfig[];
   externalError?: string | null;
+  healthStatsEnabled?: boolean;
   mode?: "initial" | "manage";
   onAddEndpoint: (input: {
     label?: string;
@@ -67,6 +77,124 @@ interface EndpointManagerProps {
     endpointId: string,
     sessionDuration: EndpointSessionDuration
   ) => void;
+}
+
+type EndpointHealthState =
+  | { status: "loading" }
+  | { status: "ready"; metrics: EndpointHealthMetrics }
+  | { status: "error"; message: string };
+
+async function readEndpointHealthError(response: Response): Promise<string> {
+  const payload = (await response.json().catch(() => ({}))) as { error?: unknown; message?: unknown };
+  if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+    return payload.error;
+  }
+  if (typeof payload.message === "string" && payload.message.trim().length > 0) {
+    return payload.message;
+  }
+  return `Health stats request failed (${response.status})`;
+}
+
+async function fetchEndpointHealthMetrics(
+  endpointId: string,
+  signal: AbortSignal
+): Promise<EndpointHealthMetrics> {
+  const response = await fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`, {
+    credentials: "include",
+    signal
+  });
+  if (!response.ok) {
+    throw new Error(await readEndpointHealthError(response));
+  }
+  return (await response.json()) as EndpointHealthMetrics;
+}
+
+function EndpointHealthMetric(props: {
+  detail: string;
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+      <Box sx={{ color: "text.secondary", display: "inline-flex", flexShrink: 0 }}>
+        {props.icon}
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+          {props.label}
+        </Typography>
+        <Typography variant="body2" fontWeight={600} noWrap>
+          {props.value}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+          {props.detail}
+        </Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+function EndpointHealthStats(props: {
+  endpoint: EndpointConfig;
+  state?: EndpointHealthState;
+}) {
+  const { endpoint, state } = props;
+
+  if (endpoint.status !== "connected") {
+    return (
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", pt: 0.5 }}>
+        Reconnect to view health stats.
+      </Typography>
+    );
+  }
+
+  if (!state || state.status === "loading") {
+    return (
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.5 }}>
+        <CircularProgress size={14} />
+        <Typography variant="caption" color="text.secondary">
+          Loading health stats...
+        </Typography>
+      </Stack>
+    );
+  }
+
+  if (state.status === "error") {
+    return (
+      <Typography variant="caption" color="warning.main" sx={{ display: "block", pt: 0.5 }}>
+        Health stats unavailable.
+      </Typography>
+    );
+  }
+
+  const { cpu, mem, disk } = state.metrics.metrics;
+  return (
+    <Box sx={{ pt: 1, mt: 0.5, borderTop: 1, borderColor: "divider" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <EndpointHealthMetric
+          icon={<SpeedIcon fontSize="small" />}
+          label="CPU"
+          value={formatEndpointHealthPercent(cpu?.usagePercent)}
+          detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
+        />
+        <EndpointHealthMetric
+          icon={<MemoryIcon fontSize="small" />}
+          label="Memory"
+          value={formatEndpointHealthPercent(mem?.usagePercent)}
+          detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
+        />
+        <EndpointHealthMetric
+          icon={<StorageIcon fontSize="small" />}
+          label="Disk"
+          value={formatEndpointHealthPercent(disk?.usagePercent)}
+          detail={`${formatEndpointHealthUsedTotal(disk?.usedDisk, disk?.totalDisk)}${
+            disk?.path ? ` on ${disk.path}` : ""
+          }`}
+        />
+      </Stack>
+    </Box>
+  );
 }
 
 function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
@@ -116,6 +244,7 @@ export function EndpointManager({
   defaultApiUrl,
   endpoints,
   externalError,
+  healthStatsEnabled = false,
   mode = "manage",
   onAddEndpoint,
   onReconnectEndpoint,
@@ -159,6 +288,12 @@ export function EndpointManager({
     () => [...endpoints].sort((left, right) => left.label.localeCompare(right.label)),
     [endpoints]
   );
+  const connectedEndpointIds = useMemo(
+    () => sortedEndpoints.filter((endpoint) => endpoint.status === "connected").map((endpoint) => endpoint.id),
+    [sortedEndpoints]
+  );
+  const connectedEndpointKey = connectedEndpointIds.join("|");
+  const [endpointHealth, setEndpointHealth] = useState<Record<string, EndpointHealthState>>({});
   const visibleError = error ?? externalError ?? null;
   const addSessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
 
@@ -207,6 +342,45 @@ export function EndpointManager({
       return next;
     });
   }, [sortedEndpoints]);
+
+  useEffect(() => {
+    if (!healthStatsEnabled || connectedEndpointIds.length === 0) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setEndpointHealth((current) => {
+      const next = { ...current };
+      for (const endpointId of connectedEndpointIds) {
+        next[endpointId] = { status: "loading" };
+      }
+      return next;
+    });
+
+    for (const endpointId of connectedEndpointIds) {
+      void fetchEndpointHealthMetrics(endpointId, controller.signal)
+        .then((metrics) => {
+          setEndpointHealth((current) => ({
+            ...current,
+            [endpointId]: { status: "ready", metrics }
+          }));
+        })
+        .catch((loadError) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+          setEndpointHealth((current) => ({
+            ...current,
+            [endpointId]: {
+              status: "error",
+              message: loadError instanceof Error ? loadError.message : "Failed to load endpoint health stats"
+            }
+          }));
+        });
+    }
+
+    return () => controller.abort();
+  }, [connectedEndpointIds, connectedEndpointKey, healthStatsEnabled]);
 
   const handleAddEndpoint = useCallback(async () => {
     if (
@@ -386,6 +560,9 @@ export function EndpointManager({
                     <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                       {endpointStatusHint(endpoint.status)}
                     </Typography>
+                    {healthStatsEnabled ? (
+                      <EndpointHealthStats endpoint={endpoint} state={endpointHealth[endpoint.id]} />
+                    ) : null}
                     <TextField
                       label="Keep signed in"
                       size="small"

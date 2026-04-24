@@ -223,6 +223,27 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
     return reply.send({ endpoints: await listEndpointInfos(session) });
   });
 
+  app.get<{ Params: { id: string } }>("/auth/endpoints/:id/metrics", async (request, reply) => {
+    const session = options.resolveSession(request, reply);
+    if (!session) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    const endpointId = request.params.id.trim();
+    const endpoint = session.endpoints.get(endpointId) ?? null;
+    if (!endpoint) {
+      return reply.status(404).send({ error: "Endpoint not found" });
+    }
+
+    try {
+      const client = new ClabApiClient({ baseUrl: endpoint.url });
+      return reply.send(await client.getHealthMetrics(endpoint.token));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load endpoint metrics";
+      return reply.status(authErrorStatusCode(error)).send({ error: message });
+    }
+  });
+
   app.delete<{ Params: { id: string } }>("/auth/endpoints/:id", async (request, reply) => {
     const session = options.resolveSession(request, reply);
     if (!session) {

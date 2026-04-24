@@ -469,6 +469,7 @@ export function SettingsOverlay({
             <EndpointManager
               defaultApiUrl={defaultApiUrl}
               endpoints={endpoints}
+              healthStatsEnabled={dialogOpen && activeSection === "endpoints"}
               onAddEndpoint={onAddEndpoint}
               onReconnectEndpoint={onReconnectEndpoint}
               onRemoveEndpoint={onRemoveEndpoint}

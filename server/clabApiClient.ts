@@ -95,6 +95,39 @@ export interface VersionCheckResponse {
   checkResult: string;
 }
 
+export interface HealthMetricsResponse {
+  serverInfo: {
+    version: string;
+    uptime: string;
+    startTime: string;
+  };
+  metrics: {
+    cpu?: {
+      usagePercent: number;
+      numCPU: number;
+      loadAvg1?: number;
+      loadAvg5?: number;
+      loadAvg15?: number;
+      processPercent?: number;
+    };
+    mem?: {
+      totalMem: number;
+      usedMem: number;
+      availableMem: number;
+      usagePercent: number;
+      processMemMB?: number;
+      processMemPct?: number;
+    };
+    disk?: {
+      path: string;
+      totalDisk: number;
+      usedDisk: number;
+      freeDisk: number;
+      usagePercent: number;
+    };
+  };
+}
+
 export type CustomNodeTemplate = Record<string, unknown>;
 
 export interface CustomNodesResponse {
@@ -290,6 +323,11 @@ export class ClabApiClient {
   async listTopologies(token: string): Promise<TopologyEntry[]> {
     const res = await this.get(`/api/v1/labs/topology/files`, token);
     return (await res.json()) as TopologyEntry[];
+  }
+
+  async getHealthMetrics(token: string): Promise<HealthMetricsResponse> {
+    const res = await this.get("/api/v1/health/metrics", token);
+    return (await res.json()) as HealthMetricsResponse;
   }
 
   async getLabTopologyYaml(token: string, labName: string): Promise<string> {
