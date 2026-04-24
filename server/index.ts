@@ -1,9 +1,8 @@
 import Fastify from "fastify";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyWebsocket from "@fastify/websocket";
-import path from "node:path";
 
 import { registerAuthRoutes } from "./auth.js";
 import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.js";
@@ -29,58 +28,15 @@ import { registerTopologyProxy } from "./topologyProxy.js";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
 import { ClabApiClient } from "./clabApiClient.js";
 
+const PORT = parseInt(process.env.PORT ?? "3000", 10);
+const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "http://localhost:8080";
+const VITE_DEV_URL = process.env.VITE_DEV_URL ?? "http://localhost:5173";
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 interface ResolvedEndpoint {
   client: ClabApiClient;
   endpoint: EndpointEntry;
   session: EndpointSession;
-}
-
-interface StandaloneServerConfig {
-  clientRoot: string;
-  defaultClabApiUrl: string;
-  host: string;
-  isDev: boolean;
-  logger: boolean;
-  logStartup: boolean;
-  port: number;
-  viteDevUrl: string;
-}
-
-export interface StartStandaloneServerOptions {
-  clientRoot?: string;
-  defaultClabApiUrl?: string;
-  host?: string;
-  logger?: boolean;
-  logStartup?: boolean;
-  nodeEnv?: "development" | "production";
-  port?: number;
-  viteDevUrl?: string;
-}
-
-export interface StandaloneServerContext {
-  app: FastifyInstance;
-  config: StandaloneServerConfig;
-}
-
-export interface StandaloneServerHandle {
-  app: FastifyInstance;
-  close: () => Promise<void>;
-  host: string;
-  origin: string;
-  port: number;
-}
-
-function parsePort(raw: number | string | undefined, fallback: number): number {
-  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
-    return Math.floor(raw);
-  }
-  if (typeof raw === "string" && raw.trim().length > 0) {
-    const parsed = Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed >= 0) {
-      return parsed;
-    }
-  }
-  return fallback;
 }
 
 function defaultEndpointLabel(url: string): string {
@@ -91,38 +47,12 @@ function defaultEndpointLabel(url: string): string {
   }
 }
 
-function resolveConfig(options: StartStandaloneServerOptions = {}): StandaloneServerConfig {
-  const resolvedNodeEnv = options.nodeEnv ?? process.env.NODE_ENV ?? "development";
-  const isDev = resolvedNodeEnv !== "production";
-
-  return {
-    host: options.host ?? process.env.HOST ?? "0.0.0.0",
-    port: parsePort(options.port ?? process.env.PORT, 3000),
-    defaultClabApiUrl: options.defaultClabApiUrl ?? process.env.CLAB_API_URL ?? "http://localhost:8080",
-    viteDevUrl: options.viteDevUrl ?? process.env.VITE_DEV_URL ?? "http://localhost:5173",
-    clientRoot: options.clientRoot ?? path.resolve(process.cwd(), "dist/client"),
-    isDev,
-    logger: options.logger ?? true,
-    logStartup: options.logStartup ?? true
-  };
-}
-
-function resolveListeningOrigin(host: string, port: number): string {
-  if (host === "0.0.0.0" || host === "::") {
-    return `http://127.0.0.1:${port}`;
-  }
-  return `http://${host}:${port}`;
-}
-
-export async function createStandaloneServer(
-  options: StartStandaloneServerOptions = {}
-): Promise<StandaloneServerContext> {
-  const config = resolveConfig(options);
-  const app = Fastify({ logger: config.logger });
+async function start(): Promise<void> {
+  const app = Fastify({ logger: true });
 
   await app.register(fastifyCookie);
   await app.register(fastifyCors, {
-    origin: config.isDev ? true : false,
+    origin: IS_DEV ? true : false,
     credentials: true
   });
   await app.register(fastifyWebsocket);
@@ -140,7 +70,7 @@ export async function createStandaloneServer(
     request: FastifyRequest,
     reply: FastifyReply
   ): EndpointSession | null => {
-    const legacy = getLegacySessionCookies(request, config.defaultClabApiUrl);
+    const legacy = getLegacySessionCookies(request, DEFAULT_CLAB_API_URL);
     if (!legacy) {
       return null;
     }
@@ -231,7 +161,7 @@ export async function createStandaloneServer(
   };
 
   registerAuthRoutes(app, {
-    defaultApiUrl: config.defaultClabApiUrl,
+    defaultApiUrl: DEFAULT_CLAB_API_URL,
     disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
     ensureSession,
     endpointSessions,
@@ -254,16 +184,16 @@ export async function createStandaloneServer(
       username: entry.username,
       sessionDuration: entry.sessionDuration
     }));
-    return reply.send({ endpoints, defaultClabApiUrl: config.defaultClabApiUrl });
+    return reply.send({ endpoints, defaultClabApiUrl: DEFAULT_CLAB_API_URL });
   });
 
-  if (config.isDev) {
+  if (IS_DEV) {
     app.route({
       method: ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"],
       url: "/*",
       handler: async (request, reply) => {
         try {
-          const url = `${config.viteDevUrl}${request.url}`;
+          const url = `${VITE_DEV_URL}${request.url}`;
           const headers: Record<string, string> = {};
           for (const [key, value] of Object.entries(request.headers)) {
             if (typeof value === "string") {
@@ -297,9 +227,11 @@ export async function createStandaloneServer(
     });
   } else {
     const fastifyStatic = await import("@fastify/static");
+    const path = await import("node:path");
+    const clientRoot = path.resolve(process.cwd(), "dist/client");
 
     await app.register(fastifyStatic.default, {
-      root: config.clientRoot,
+      root: clientRoot,
       prefix: "/"
     });
 
@@ -313,38 +245,15 @@ export async function createStandaloneServer(
     topologySessions.disposeAll();
   });
 
-  return { app, config };
-}
-
-export async function startStandaloneServer(
-  options: StartStandaloneServerOptions = {}
-): Promise<StandaloneServerHandle> {
-  const { app, config } = await createStandaloneServer(options);
-
-  await app.listen({ port: config.port, host: config.host });
-
-  const address = app.server.address();
-  const port =
-    typeof address === "object" && address !== null ? address.port : config.port;
-  const origin = resolveListeningOrigin(config.host, port);
-
-  if (config.logStartup) {
-    console.log(`Standalone app server running at ${origin}`);
-    console.log(`default clab-api-server URL: ${config.defaultClabApiUrl}`);
-    if (config.isDev) {
-      console.log(`Proxying frontend to: ${config.viteDevUrl}`);
-    }
+  await app.listen({ port: PORT, host: "0.0.0.0" });
+  console.log(`Standalone app server running at http://localhost:${PORT}`);
+  console.log(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
+  if (IS_DEV) {
+    console.log(`Proxying frontend to: ${VITE_DEV_URL}`);
   }
-
-  return {
-    app,
-    host: config.host,
-    port,
-    origin,
-    close: async () => {
-      if (app.server.listening) {
-        await app.close();
-      }
-    }
-  };
 }
+
+start().catch((error) => {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+});
