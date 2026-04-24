@@ -41,7 +41,7 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 - **Node.js** `>= 24` (see `.nvmrc`)
 - **npm**
 - A reachable **clab-api-server** (default: `http://localhost:8080`)
-- **GitHub token** for GitHub Packages access (`@srl-labs/clab-ui`)
+- **GitHub token** with GitHub Packages read access (`@srl-labs/clab-ui`)
 - (Optional) **Playwright Chromium** for E2E tests
 
 ---
@@ -51,7 +51,7 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 1. Export a GitHub token so npm can fetch the shared UI package:
 
    ```bash
-   export GITHUB_TOKEN=<your-token>
+   export GITHUB_TOKEN=$(gh auth token)
    ```
 
 2. Install dependencies:
@@ -92,6 +92,47 @@ A standalone browser host for [containerlab](https://containerlab.dev/) built on
 | `npm run test:e2e` | Run Playwright E2E tests |
 | `npm run test:e2e:ui` | Run Playwright in UI mode |
 | `npm run test:e2e:debug` | Run Playwright in debug mode |
+
+---
+
+## Container Image
+
+The published image runs the production Fastify server and serves the built
+frontend from the same process. It does not run `clab-api-server`; point
+`CLAB_API_URL` at a reachable API endpoint.
+
+Run the latest image from GHCR:
+
+```bash
+docker run --rm -p 3000:3000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e CLAB_API_URL=http://host.docker.internal:8080 \
+  ghcr.io/srl-labs/containerlab-web:latest
+```
+
+Open `http://localhost:3000`, then log in with your API credentials.
+
+Build the image locally:
+
+```bash
+GITHUB_TOKEN=$(gh auth token) \
+  docker build --secret id=github_token,env=GITHUB_TOKEN -t containerlab-web .
+```
+
+Run the local image:
+
+```bash
+docker run --rm -p 3000:3000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e CLAB_API_URL=http://host.docker.internal:8080 \
+  containerlab-web
+```
+
+For Docker Compose or Kubernetes, use the service DNS name instead:
+
+```bash
+CLAB_API_URL=http://clab-api-server:8080
+```
 
 ---
 
