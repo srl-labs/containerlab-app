@@ -11,20 +11,13 @@ import {
   buildEndpointId,
   createEndpointSessionStore
 } from "./endpointSessionStore.js";
-import { registerEventsProxy } from "./eventsProxy.js";
-import { registerFileProxy } from "./fileProxy.js";
-import { registerLabProxy } from "./labProxy.js";
 import {
   getEndpointIdFromRequest,
   getLegacySessionCookies,
   getSessionIdFromRequest,
   setSessionCookie
 } from "./middleware.js";
-import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.js";
-import { registerRuntimeProxy } from "./runtimeProxy.js";
-import { registerTerminalStreamProxy } from "./terminalStreamProxy.js";
-import { registerTopologyEventsProxy } from "./topologyEventsProxy.js";
-import { registerTopologyProxy } from "./topologyProxy.js";
+import { registerStandaloneProxies } from "./registerProxies.js";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.js";
 import { ClabApiClient } from "./clabApiClient.js";
 
@@ -167,14 +160,7 @@ async function start(): Promise<void> {
     endpointSessions,
     resolveSession
   });
-  registerEventsProxy(app, resolveEndpoint);
-  registerTopologyEventsProxy(app, resolveEndpoint, topologySessions);
-  registerTopologyProxy(app, resolveEndpoint, topologySessions);
-  registerFileProxy(app, resolveEndpoint);
-  registerLabProxy(app, resolveEndpoint, topologySessions);
-  registerRuntimeProxy(app, resolveEndpoint, listEndpoints, topologySessions);
-  registerCaptureVncStreamProxy(app, resolveEndpoint);
-  registerTerminalStreamProxy(app, resolveEndpoint);
+  registerStandaloneProxies(app, resolveEndpoint, listEndpoints, topologySessions);
 
   app.get("/api/config", async (request, reply) => {
     const endpoints = listEndpoints(request, reply).map((entry) => ({
@@ -246,10 +232,10 @@ async function start(): Promise<void> {
   });
 
   await app.listen({ port: PORT, host: "0.0.0.0" });
-  console.log(`Standalone app server running at http://localhost:${PORT}`);
-  console.log(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
+  app.log.info(`Standalone app server running at http://localhost:${PORT}`);
+  app.log.info(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
   if (IS_DEV) {
-    console.log(`Proxying frontend to: ${VITE_DEV_URL}`);
+    app.log.info(`Proxying frontend to: ${VITE_DEV_URL}`);
   }
 }
 

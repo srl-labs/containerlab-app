@@ -119,6 +119,57 @@ function runtimeInterfaceStatsEqual(
   return true;
 }
 
+function runtimeContainerMetadataEqual(
+  previous: HostRuntimeContainer,
+  next: HostRuntimeContainer
+): boolean {
+  return (
+    previous.nodeName === next.nodeName &&
+    previous.labName === next.labName &&
+    previous.state === next.state &&
+    previous.kind === next.kind &&
+    previous.image === next.image &&
+    previous.ipv4Address === next.ipv4Address &&
+    previous.ipv6Address === next.ipv6Address
+  );
+}
+
+function sortedRuntimeInterfaces(container: HostRuntimeContainer): HostRuntimeInterface[] {
+  return [...(container.interfaces ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function runtimeInterfaceEqual(
+  previous: HostRuntimeInterface,
+  next: HostRuntimeInterface,
+  includeStats: boolean
+): boolean {
+  const metadataEqual =
+    previous.name === next.name &&
+    previous.alias === next.alias &&
+    previous.state === next.state &&
+    previous.type === next.type &&
+    previous.mac === next.mac &&
+    previous.mtu === next.mtu &&
+    previous.ifIndex === next.ifIndex;
+  return metadataEqual && (!includeStats || runtimeInterfaceStatsEqual(previous.stats, next.stats));
+}
+
+function runtimeInterfacesEqual(
+  previous: HostRuntimeContainer,
+  next: HostRuntimeContainer,
+  includeStats: boolean
+): boolean {
+  const prevInterfaces = sortedRuntimeInterfaces(previous);
+  const nextInterfaces = sortedRuntimeInterfaces(next);
+  if (prevInterfaces.length !== nextInterfaces.length) {
+    return false;
+  }
+
+  return prevInterfaces.every((prevIface, index) =>
+    runtimeInterfaceEqual(prevIface, nextInterfaces[index], includeStats)
+  );
+}
+
 export function getRuntimeContainersForLab(
   labName: string | undefined,
   labs: Map<string, LabState>
@@ -154,44 +205,11 @@ export function runtimeContainersEqual(
   const byName = new Map(next.map((container) => [container.name, container]));
   for (const container of previous) {
     const candidate = byName.get(container.name);
-    if (!candidate) {
+    if (!candidate || !runtimeContainerMetadataEqual(container, candidate)) {
       return false;
     }
-    if (
-      candidate.nodeName !== container.nodeName ||
-      candidate.labName !== container.labName ||
-      candidate.state !== container.state ||
-      candidate.kind !== container.kind ||
-      candidate.image !== container.image ||
-      candidate.ipv4Address !== container.ipv4Address ||
-      candidate.ipv6Address !== container.ipv6Address
-    ) {
+    if (!runtimeInterfacesEqual(container, candidate, includeInterfaceStats)) {
       return false;
-    }
-
-    const prevInterfaces = [...(container.interfaces ?? [])].sort((a, b) => a.name.localeCompare(b.name));
-    const nextInterfaces = [...(candidate.interfaces ?? [])].sort((a, b) => a.name.localeCompare(b.name));
-    if (prevInterfaces.length !== nextInterfaces.length) {
-      return false;
-    }
-
-    for (let i = 0; i < prevInterfaces.length; i += 1) {
-      const prevIface = prevInterfaces[i];
-      const nextIface = nextInterfaces[i];
-      if (
-        prevIface.name !== nextIface.name ||
-        prevIface.alias !== nextIface.alias ||
-        prevIface.state !== nextIface.state ||
-        prevIface.type !== nextIface.type ||
-        prevIface.mac !== nextIface.mac ||
-        prevIface.mtu !== nextIface.mtu ||
-        prevIface.ifIndex !== nextIface.ifIndex
-      ) {
-        return false;
-      }
-      if (includeInterfaceStats && !runtimeInterfaceStatsEqual(prevIface.stats, nextIface.stats)) {
-        return false;
-      }
     }
   }
 

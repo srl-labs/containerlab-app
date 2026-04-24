@@ -1,18 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Divider from "@mui/material/Divider";
-import InputAdornment from "@mui/material/InputAdornment";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  InputAdornment,
+  Paper,
+  Stack,
+  TextField,
+  Typography
+} from "@mui/material";
 import {
   DeleteOutline as DeleteOutlineIcon,
   EditOutlined as EditOutlinedIcon,
@@ -152,6 +154,17 @@ function endpointActionButtonLabel(
   return busyKey === `${action}:${endpoint.id}` ? busyLabels[action] : defaultLabels[action];
 }
 
+function endpointAddDescription(mode: "initial" | "manage"): string {
+  if (mode === "initial") {
+    return "Authenticate against a clab-api-server to start or restore the standalone session.";
+  }
+  return "Add another clab-api-server and it will appear as its own explorer root.";
+}
+
+function showManagedEndpoints(mode: "initial" | "manage", endpointCount: number): boolean {
+  return mode === "manage" && endpointCount > 0;
+}
+
 function EndpointHealthMetric(props: {
   detail: string;
   icon: React.ReactNode;
@@ -175,6 +188,38 @@ function EndpointHealthMetric(props: {
         </Typography>
       </Box>
     </Stack>
+  );
+}
+
+function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
+  const { cpu, mem, disk } = props.metrics.metrics;
+  const diskDetail = `${formatEndpointHealthUsedTotal(disk?.usedDisk, disk?.totalDisk)}${
+    disk?.path ? ` on ${disk.path}` : ""
+  }`;
+
+  return (
+    <Box sx={{ pt: 1, mt: 0.5, borderTop: 1, borderColor: "divider" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+        <EndpointHealthMetric
+          icon={<SpeedIcon fontSize="small" />}
+          label="CPU"
+          value={formatEndpointHealthPercent(cpu?.usagePercent)}
+          detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
+        />
+        <EndpointHealthMetric
+          icon={<MemoryIcon fontSize="small" />}
+          label="Memory"
+          value={formatEndpointHealthPercent(mem?.usagePercent)}
+          detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
+        />
+        <EndpointHealthMetric
+          icon={<StorageIcon fontSize="small" />}
+          label="Disk"
+          value={formatEndpointHealthPercent(disk?.usagePercent)}
+          detail={diskDetail}
+        />
+      </Stack>
+    </Box>
   );
 }
 
@@ -211,33 +256,7 @@ function EndpointHealthStats(props: {
     );
   }
 
-  const { cpu, mem, disk } = state.metrics.metrics;
-  return (
-    <Box sx={{ pt: 1, mt: 0.5, borderTop: 1, borderColor: "divider" }}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-        <EndpointHealthMetric
-          icon={<SpeedIcon fontSize="small" />}
-          label="CPU"
-          value={formatEndpointHealthPercent(cpu?.usagePercent)}
-          detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
-        />
-        <EndpointHealthMetric
-          icon={<MemoryIcon fontSize="small" />}
-          label="Memory"
-          value={formatEndpointHealthPercent(mem?.usagePercent)}
-          detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
-        />
-        <EndpointHealthMetric
-          icon={<StorageIcon fontSize="small" />}
-          label="Disk"
-          value={formatEndpointHealthPercent(disk?.usagePercent)}
-          detail={`${formatEndpointHealthUsedTotal(disk?.usedDisk, disk?.totalDisk)}${
-            disk?.path ? ` on ${disk.path}` : ""
-          }`}
-        />
-      </Stack>
-    </Box>
-  );
+  return <EndpointHealthReady metrics={state.metrics} />;
 }
 
 function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
@@ -275,101 +294,171 @@ function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
   );
 }
 
-export function EndpointManager({
-  defaultApiUrl,
-  endpoints,
-  externalError,
-  healthStatsEnabled = false,
-  mode = "manage",
-  onAddEndpoint,
-  onReconnectEndpoint,
-  onRemoveEndpoint,
-  onUpdateEndpoint,
-  onRequestedActionHandled,
-  requestedAction,
-  onSetEndpointSessionDuration
-}: EndpointManagerProps) {
-  const [url, setUrl] = useState(defaultApiUrl);
-  const [label, setLabel] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [sessionDuration, setSessionDuration] = useState<EndpointSessionDuration>(
-    DEFAULT_ENDPOINT_SESSION_DURATION
+function endpointSessionDurationDraft(
+  drafts: Record<string, EndpointSessionDuration>,
+  endpoint: EndpointConfig
+): EndpointSessionDuration {
+  return drafts[endpoint.id] ?? endpoint.sessionDuration;
+}
+
+function endpointDurationHasChanges(
+  drafts: Record<string, EndpointSessionDuration>,
+  endpoint: EndpointConfig
+): boolean {
+  return endpointSessionDurationDraft(drafts, endpoint).trim() !== endpoint.sessionDuration;
+}
+
+function ManagedEndpointList(props: {
+  busyKey: string | null;
+  endpointHealth: Record<string, EndpointHealthState>;
+  endpoints: EndpointConfig[];
+  healthStatsEnabled: boolean;
+  onDraftChange: (endpointId: string, nextValue: EndpointSessionDuration) => void;
+  onEdit: (endpoint: EndpointConfig) => void;
+  onReconnect: (endpoint: EndpointConfig) => void;
+  onRemove: (endpoint: EndpointConfig) => void;
+  onSetEndpointSessionDuration?: (
+    endpointId: string,
+    sessionDuration: EndpointSessionDuration
+  ) => void;
+  sessionDurationDrafts: Record<string, EndpointSessionDuration>;
+}) {
+  return (
+    <Stack spacing={1.25}>
+      {props.endpoints.map((endpoint) => {
+        const durationDraft = endpointSessionDurationDraft(props.sessionDurationDrafts, endpoint);
+        const durationValid = isValidEndpointSessionDuration(durationDraft);
+        const saveDurationDisabled =
+          props.busyKey !== null ||
+          !props.onSetEndpointSessionDuration ||
+          !durationValid ||
+          !endpointDurationHasChanges(props.sessionDurationDrafts, endpoint);
+
+        return (
+          <Paper
+            key={endpoint.id}
+            variant="outlined"
+            sx={{
+              p: 1.5,
+              borderColor: "divider",
+              bgcolor: "background.paper"
+            }}
+          >
+            <Stack spacing={0.75}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                spacing={1}
+              >
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="subtitle2" fontWeight={600} noWrap>
+                      {endpoint.label}
+                    </Typography>
+                    <EndpointStatusPill status={endpoint.status} />
+                  </Stack>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{
+                      fontFamily: "monospace",
+                      fontSize: "0.75rem",
+                      display: "block"
+                    }}
+                    noWrap
+                  >
+                    {endpoint.url}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                    {endpointStatusHint(endpoint.status)}
+                  </Typography>
+                  {props.healthStatsEnabled ? (
+                    <EndpointHealthStats endpoint={endpoint} state={props.endpointHealth[endpoint.id]} />
+                  ) : null}
+                  <TextField
+                    label="Keep signed in"
+                    size="small"
+                    value={durationDraft}
+                    onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
+                    error={Boolean(durationDraft.trim()) && !durationValid}
+                    helperText={
+                      durationValid
+                        ? "Examples: 24h, 36h, 7d, 1h30m"
+                        : "Use values like 24h, 36h, 7d, or 1h30m"
+                    }
+                    placeholder="24h"
+                    disabled={props.busyKey !== null}
+                    sx={{ mt: 0.75 }}
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={saveDurationDisabled}
+                              onClick={() =>
+                                props.onSetEndpointSessionDuration?.(
+                                  endpoint.id,
+                                  durationDraft.trim()
+                                )
+                              }
+                              sx={{ minWidth: 0, textTransform: "none" }}
+                            >
+                              Save
+                            </Button>
+                          </InputAdornment>
+                        )
+                      }
+                    }}
+                  />
+                </Box>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => props.onEdit(endpoint)}
+                    disabled={props.busyKey !== null}
+                    sx={{ minWidth: 0, px: 1 }}
+                  >
+                    <EditOutlinedIcon fontSize="small" />
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => props.onReconnect(endpoint)}
+                    disabled={props.busyKey !== null}
+                    sx={{ minWidth: 0, px: 1 }}
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    onClick={() => props.onRemove(endpoint)}
+                    disabled={props.busyKey !== null}
+                    sx={{ minWidth: 0, px: 1 }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </Button>
+                </Stack>
+              </Stack>
+            </Stack>
+          </Paper>
+        );
+      })}
+    </Stack>
   );
-  const [endpointSessionDurationDrafts, setEndpointSessionDurationDrafts] = useState<
-    Record<string, EndpointSessionDuration>
-  >({});
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [reconnectEndpointId, setReconnectEndpointId] = useState<string | null>(null);
-  const [removeEndpointId, setRemoveEndpointId] = useState<string | null>(null);
-  const [editEndpointId, setEditEndpointId] = useState<string | null>(null);
-  const [editUrl, setEditUrl] = useState("");
-  const [editLabel, setEditLabel] = useState("");
-  const [editUsername, setEditUsername] = useState("");
-  const [editSessionDuration, setEditSessionDuration] = useState<EndpointSessionDuration>(
-    DEFAULT_ENDPOINT_SESSION_DURATION
-  );
-  const [reconnectUsername, setReconnectUsername] = useState("");
-  const [reconnectPassword, setReconnectPassword] = useState("");
+}
+
+function useEndpointSessionDurationDrafts(sortedEndpoints: EndpointConfig[]) {
+  const [drafts, setDrafts] = useState<Record<string, EndpointSessionDuration>>({});
 
   useEffect(() => {
-    if (!url.trim() && defaultApiUrl.trim()) {
-      setUrl(defaultApiUrl);
-    }
-  }, [defaultApiUrl, url]);
-
-  const sortedEndpoints = useMemo(
-    () => [...endpoints].sort((left, right) => left.label.localeCompare(right.label)),
-    [endpoints]
-  );
-  const connectedEndpointIds = useMemo(
-    () => sortedEndpoints.filter((endpoint) => endpoint.status === "connected").map((endpoint) => endpoint.id),
-    [sortedEndpoints]
-  );
-  const connectedEndpointKey = connectedEndpointIds.join("|");
-  const [endpointHealth, setEndpointHealth] = useState<Record<string, EndpointHealthState>>({});
-  const visibleError = error ?? externalError ?? null;
-  const addSessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
-
-  const reconnectEndpoint = useMemo(
-    () => sortedEndpoints.find((endpoint) => endpoint.id === reconnectEndpointId) ?? null,
-    [reconnectEndpointId, sortedEndpoints]
-  );
-
-  const removeEndpoint = useMemo(
-    () => sortedEndpoints.find((endpoint) => endpoint.id === removeEndpointId) ?? null,
-    [removeEndpointId, sortedEndpoints]
-  );
-  const editEndpoint = useMemo(
-    () => sortedEndpoints.find((endpoint) => endpoint.id === editEndpointId) ?? null,
-    [editEndpointId, sortedEndpoints]
-  );
-
-  useEffect(() => {
-    if (!requestedAction) {
-      return;
-    }
-
-    const endpoint = sortedEndpoints.find((entry) => entry.id === requestedAction.endpointId) ?? null;
-    if (!endpoint) {
-      onRequestedActionHandled?.();
-      return;
-    }
-
-    setError(null);
-    if (requestedAction.action === "reconnect") {
-      setReconnectEndpointId(endpoint.id);
-      setReconnectUsername(endpoint.username);
-      setReconnectPassword("");
-    } else {
-      setRemoveEndpointId(endpoint.id);
-    }
-    onRequestedActionHandled?.();
-  }, [onRequestedActionHandled, requestedAction, sortedEndpoints]);
-
-  useEffect(() => {
-    setEndpointSessionDurationDrafts((current) => {
+    setDrafts((current) => {
       const next: Record<string, EndpointSessionDuration> = {};
       for (const endpoint of sortedEndpoints) {
         next[endpoint.id] = current[endpoint.id] ?? endpoint.sessionDuration;
@@ -377,6 +466,23 @@ export function EndpointManager({
       return next;
     });
   }, [sortedEndpoints]);
+
+  const handleDraftChange = useCallback((endpointId: string, nextValue: EndpointSessionDuration) => {
+    setDrafts((current) => ({
+      ...current,
+      [endpointId]: nextValue
+    }));
+  }, []);
+
+  return { drafts, handleDraftChange };
+}
+
+function useEndpointHealthState(
+  connectedEndpointIds: string[],
+  connectedEndpointKey: string,
+  healthStatsEnabled: boolean
+): Record<string, EndpointHealthState> {
+  const [endpointHealth, setEndpointHealth] = useState<Record<string, EndpointHealthState>>({});
 
   useEffect(() => {
     if (!healthStatsEnabled || connectedEndpointIds.length === 0) {
@@ -417,13 +523,88 @@ export function EndpointManager({
     return () => controller.abort();
   }, [connectedEndpointIds, connectedEndpointKey, healthStatsEnabled]);
 
-  const handleAddEndpoint = useCallback(async () => {
-    if (
-      !url.trim() ||
-      !username.trim() ||
-      !password.trim() ||
-      !isValidEndpointSessionDuration(sessionDuration)
-    ) {
+  return endpointHealth;
+}
+
+function useRequestedEndpointActionDialog(input: {
+  onRequestedActionHandled?: () => void;
+  requestedAction?: EndpointUiAction | null;
+  setError: (message: string | null) => void;
+  setReconnectEndpointId: (endpointId: string | null) => void;
+  setReconnectPassword: (password: string) => void;
+  setReconnectUsername: (username: string) => void;
+  setRemoveEndpointId: (endpointId: string | null) => void;
+  sortedEndpoints: EndpointConfig[];
+}): void {
+  useEffect(() => {
+    const {
+      onRequestedActionHandled,
+      requestedAction,
+      setError,
+      setReconnectEndpointId,
+      setReconnectPassword,
+      setReconnectUsername,
+      setRemoveEndpointId,
+      sortedEndpoints
+    } = input;
+    if (!requestedAction) {
+      return;
+    }
+
+    const endpoint = sortedEndpoints.find((entry) => entry.id === requestedAction.endpointId) ?? null;
+    if (!endpoint) {
+      onRequestedActionHandled?.();
+      return;
+    }
+
+    setError(null);
+    if (requestedAction.action === "reconnect") {
+      setReconnectEndpointId(endpoint.id);
+      setReconnectUsername(endpoint.username);
+      setReconnectPassword("");
+    } else {
+      setRemoveEndpointId(endpoint.id);
+    }
+    onRequestedActionHandled?.();
+  }, [
+    input.onRequestedActionHandled,
+    input.requestedAction,
+    input.setError,
+    input.setReconnectEndpointId,
+    input.setReconnectPassword,
+    input.setReconnectUsername,
+    input.setRemoveEndpointId,
+    input.sortedEndpoints
+  ]);
+}
+
+function useAddEndpointForm(
+  defaultApiUrl: string,
+  busyKey: string | null,
+  onAddEndpoint: EndpointManagerProps["onAddEndpoint"],
+  setBusyKey: (busyKey: string | null) => void,
+  setError: (message: string | null) => void
+) {
+  const [url, setUrl] = useState(defaultApiUrl);
+  const [label, setLabel] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [sessionDuration, setSessionDuration] = useState<EndpointSessionDuration>(
+    DEFAULT_ENDPOINT_SESSION_DURATION
+  );
+
+  useEffect(() => {
+    if (!url.trim() && defaultApiUrl.trim()) {
+      setUrl(defaultApiUrl);
+    }
+  }, [defaultApiUrl, url]);
+
+  const sessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
+  const submitDisabled =
+    busyKey !== null || !url.trim() || !username.trim() || !password.trim() || !sessionDurationValid;
+
+  const submit = useCallback(async () => {
+    if (submitDisabled) {
       return;
     }
 
@@ -444,266 +625,279 @@ export function EndpointManager({
     } finally {
       setBusyKey(null);
     }
-  }, [label, onAddEndpoint, password, sessionDuration, url, username]);
+  }, [label, onAddEndpoint, password, sessionDuration, setBusyKey, setError, submitDisabled, url, username]);
 
-  const handleReconnect = useCallback(async () => {
-    if (!reconnectEndpoint || !reconnectUsername.trim() || !reconnectPassword.trim()) {
+  return {
+    label,
+    password,
+    sessionDuration,
+    sessionDurationValid,
+    setLabel,
+    setPassword,
+    setSessionDuration,
+    setUrl,
+    setUsername,
+    submit,
+    submitDisabled,
+    url,
+    username
+  };
+}
+
+function useReconnectEndpointDialog(
+  busyKey: string | null,
+  onReconnectEndpoint: EndpointManagerProps["onReconnectEndpoint"],
+  setBusyKey: (busyKey: string | null) => void,
+  setError: (message: string | null) => void,
+  sortedEndpoints: EndpointConfig[]
+) {
+  const [endpointId, setEndpointId] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const endpoint = useMemo(
+    () => sortedEndpoints.find((entry) => entry.id === endpointId) ?? null,
+    [endpointId, sortedEndpoints]
+  );
+  const submitDisabled = busyKey !== null || !username.trim() || !password.trim();
+
+  const open = useCallback((nextEndpoint: EndpointConfig) => {
+    setEndpointId(nextEndpoint.id);
+    setUsername(nextEndpoint.username);
+    setPassword("");
+    setError(null);
+  }, [setError]);
+
+  const submit = useCallback(async () => {
+    if (!endpoint || submitDisabled) {
       return;
     }
 
-    setBusyKey(`reconnect:${reconnectEndpoint.id}`);
+    setBusyKey(`reconnect:${endpoint.id}`);
     setError(null);
     try {
       await onReconnectEndpoint({
-        endpointId: reconnectEndpoint.id,
-        username: reconnectUsername.trim(),
-        password: reconnectPassword
+        endpointId: endpoint.id,
+        username: username.trim(),
+        password
       });
-      setReconnectEndpointId(null);
-      setReconnectPassword("");
+      setEndpointId(null);
+      setPassword("");
     } catch (reconnectError) {
       setError(reconnectError instanceof Error ? reconnectError.message : String(reconnectError));
     } finally {
       setBusyKey(null);
     }
-  }, [onReconnectEndpoint, reconnectEndpoint, reconnectPassword, reconnectUsername]);
+  }, [endpoint, onReconnectEndpoint, password, setBusyKey, setError, submitDisabled, username]);
 
-  const addSubmitDisabled =
-    busyKey !== null || !url.trim() || !username.trim() || !password.trim() || !addSessionDurationValid;
+  return { endpoint, open, password, setEndpointId, setPassword, setUsername, submit, submitDisabled, username };
+}
 
-  const reconnectSubmitDisabled =
-    busyKey !== null || !reconnectUsername.trim() || !reconnectPassword.trim();
+function useRemoveEndpointDialog(
+  busyKey: string | null,
+  onRemoveEndpoint: EndpointManagerProps["onRemoveEndpoint"],
+  setBusyKey: (busyKey: string | null) => void,
+  setError: (message: string | null) => void,
+  sortedEndpoints: EndpointConfig[]
+) {
+  const [endpointId, setEndpointId] = useState<string | null>(null);
+  const endpoint = useMemo(
+    () => sortedEndpoints.find((entry) => entry.id === endpointId) ?? null,
+    [endpointId, sortedEndpoints]
+  );
 
-  const handleRemove = useCallback(async () => {
-    if (!removeEndpoint) {
+  const open = useCallback((nextEndpoint: EndpointConfig) => {
+    setEndpointId(nextEndpoint.id);
+    setError(null);
+  }, [setError]);
+
+  const submit = useCallback(async () => {
+    if (!endpoint) {
       return;
     }
 
-    setBusyKey(`remove:${removeEndpoint.id}`);
+    setBusyKey(`remove:${endpoint.id}`);
     setError(null);
     try {
-      await onRemoveEndpoint(removeEndpoint.id);
-      setRemoveEndpointId(null);
+      await onRemoveEndpoint(endpoint.id);
+      setEndpointId(null);
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : String(removeError));
     } finally {
       setBusyKey(null);
     }
-  }, [onRemoveEndpoint, removeEndpoint]);
+  }, [endpoint, onRemoveEndpoint, setBusyKey, setError]);
 
-  const openEditEndpoint = useCallback((endpoint: EndpointConfig) => {
-    setEditEndpointId(endpoint.id);
-    setEditUrl(endpoint.url);
-    setEditLabel(endpoint.label);
-    setEditUsername(endpoint.username);
-    setEditSessionDuration(endpoint.sessionDuration);
-    setError(null);
-  }, []);
+  return { endpoint, open, setEndpointId, submitDisabled: busyKey !== null, submit };
+}
 
-  const editSessionDurationValid = isValidEndpointSessionDuration(editSessionDuration);
-  const editHasChanges = editEndpoint
-    ? editUrl.trim() !== editEndpoint.url ||
-      editLabel.trim() !== editEndpoint.label ||
-      editUsername.trim() !== editEndpoint.username ||
-      editSessionDuration.trim() !== editEndpoint.sessionDuration
+function useEditEndpointDialog(
+  busyKey: string | null,
+  onUpdateEndpoint: EndpointManagerProps["onUpdateEndpoint"],
+  setBusyKey: (busyKey: string | null) => void,
+  setError: (message: string | null) => void,
+  sortedEndpoints: EndpointConfig[]
+) {
+  const [endpointId, setEndpointId] = useState<string | null>(null);
+  const [url, setUrl] = useState("");
+  const [label, setLabel] = useState("");
+  const [username, setUsername] = useState("");
+  const [sessionDuration, setSessionDuration] = useState<EndpointSessionDuration>(
+    DEFAULT_ENDPOINT_SESSION_DURATION
+  );
+  const endpoint = useMemo(
+    () => sortedEndpoints.find((entry) => entry.id === endpointId) ?? null,
+    [endpointId, sortedEndpoints]
+  );
+  const sessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
+  const hasChanges = endpoint
+    ? url.trim() !== endpoint.url ||
+      label.trim() !== endpoint.label ||
+      username.trim() !== endpoint.username ||
+      sessionDuration.trim() !== endpoint.sessionDuration
     : false;
-
-  const editSubmitDisabled =
+  const submitDisabled =
     busyKey !== null ||
-    !editUrl.trim() ||
-    !editLabel.trim() ||
-    !editUsername.trim() ||
-    !editSessionDurationValid ||
-    !editHasChanges;
+    !url.trim() ||
+    !label.trim() ||
+    !username.trim() ||
+    !sessionDurationValid ||
+    !hasChanges;
 
-  const handleUpdateEndpoint = useCallback(async () => {
-    if (
-      !editEndpoint ||
-      !editUrl.trim() ||
-      !editLabel.trim() ||
-      !editUsername.trim() ||
-      !isValidEndpointSessionDuration(editSessionDuration)
-    ) {
+  const open = useCallback((nextEndpoint: EndpointConfig) => {
+    setEndpointId(nextEndpoint.id);
+    setUrl(nextEndpoint.url);
+    setLabel(nextEndpoint.label);
+    setUsername(nextEndpoint.username);
+    setSessionDuration(nextEndpoint.sessionDuration);
+    setError(null);
+  }, [setError]);
+
+  const submit = useCallback(async () => {
+    if (!endpoint || submitDisabled) {
       return;
     }
 
-    setBusyKey(`edit:${editEndpoint.id}`);
+    setBusyKey(`edit:${endpoint.id}`);
     setError(null);
     try {
       await onUpdateEndpoint({
-        endpointId: editEndpoint.id,
-        label: editLabel.trim(),
-        sessionDuration: editSessionDuration.trim(),
-        url: editUrl.trim(),
-        username: editUsername.trim()
+        endpointId: endpoint.id,
+        label: label.trim(),
+        sessionDuration: sessionDuration.trim(),
+        url: url.trim(),
+        username: username.trim()
       });
-      setEditEndpointId(null);
+      setEndpointId(null);
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : String(updateError));
     } finally {
       setBusyKey(null);
     }
-  }, [
-    editEndpoint,
-    editLabel,
-    editSessionDuration,
-    editUrl,
-    editUsername,
-    onUpdateEndpoint
-  ]);
+  }, [endpoint, label, onUpdateEndpoint, sessionDuration, setBusyKey, setError, submitDisabled, url, username]);
+
+  return {
+    endpoint,
+    label,
+    open,
+    sessionDuration,
+    sessionDurationValid,
+    setEndpointId,
+    setLabel,
+    setSessionDuration,
+    setUrl,
+    setUsername,
+    submit,
+    submitDisabled,
+    url,
+    username
+  };
+}
+
+export function EndpointManager({
+  defaultApiUrl,
+  endpoints,
+  externalError,
+  healthStatsEnabled = false,
+  mode = "manage",
+  onAddEndpoint,
+  onReconnectEndpoint,
+  onRemoveEndpoint,
+  onUpdateEndpoint,
+  onRequestedActionHandled,
+  requestedAction,
+  onSetEndpointSessionDuration
+}: EndpointManagerProps) {
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const sortedEndpoints = useMemo(
+    () => [...endpoints].sort((left, right) => left.label.localeCompare(right.label)),
+    [endpoints]
+  );
+  const connectedEndpointIds = useMemo(
+    () => sortedEndpoints.filter((endpoint) => endpoint.status === "connected").map((endpoint) => endpoint.id),
+    [sortedEndpoints]
+  );
+  const connectedEndpointKey = connectedEndpointIds.join("|");
+  const endpointHealth = useEndpointHealthState(
+    connectedEndpointIds,
+    connectedEndpointKey,
+    healthStatsEnabled
+  );
+  const {
+    drafts: endpointSessionDurationDrafts,
+    handleDraftChange: handleEndpointDurationDraftChange
+  } = useEndpointSessionDurationDrafts(sortedEndpoints);
+  const visibleError = error ?? externalError ?? null;
+  const addForm = useAddEndpointForm(defaultApiUrl, busyKey, onAddEndpoint, setBusyKey, setError);
+  const reconnectDialog = useReconnectEndpointDialog(
+    busyKey,
+    onReconnectEndpoint,
+    setBusyKey,
+    setError,
+    sortedEndpoints
+  );
+  const removeDialog = useRemoveEndpointDialog(
+    busyKey,
+    onRemoveEndpoint,
+    setBusyKey,
+    setError,
+    sortedEndpoints
+  );
+  const editDialog = useEditEndpointDialog(
+    busyKey,
+    onUpdateEndpoint,
+    setBusyKey,
+    setError,
+    sortedEndpoints
+  );
+
+  useRequestedEndpointActionDialog({
+    onRequestedActionHandled,
+    requestedAction,
+    setError,
+    setReconnectEndpointId: reconnectDialog.setEndpointId,
+    setReconnectPassword: reconnectDialog.setPassword,
+    setReconnectUsername: reconnectDialog.setUsername,
+    setRemoveEndpointId: removeDialog.setEndpointId,
+    sortedEndpoints
+  });
 
   return (
     <Stack spacing={2.5}>
-      {mode === "manage" && sortedEndpoints.length > 0 ? (
-        <Stack spacing={1.25}>
-          {sortedEndpoints.map((endpoint) => (
-            <Paper
-              key={endpoint.id}
-              variant="outlined"
-              sx={{
-                p: 1.5,
-                borderColor: "divider",
-                bgcolor: "background.paper"
-              }}
-            >
-              <Stack spacing={0.75}>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  spacing={1}
-                >
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="subtitle2" fontWeight={600} noWrap>
-                        {endpoint.label}
-                      </Typography>
-                      <EndpointStatusPill status={endpoint.status} />
-                    </Stack>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        fontFamily: "monospace",
-                        fontSize: "0.75rem",
-                        display: "block"
-                      }}
-                      noWrap
-                    >
-                      {endpoint.url}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                      {endpointStatusHint(endpoint.status)}
-                    </Typography>
-                    {healthStatsEnabled ? (
-                      <EndpointHealthStats endpoint={endpoint} state={endpointHealth[endpoint.id]} />
-                    ) : null}
-                    <TextField
-                      label="Keep signed in"
-                      size="small"
-                      value={
-                        endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration
-                      }
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setEndpointSessionDurationDrafts((current) => ({
-                          ...current,
-                          [endpoint.id]: nextValue
-                        }));
-                      }}
-                      error={Boolean(
-                        (endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration)
-                          .trim() &&
-                          !isValidEndpointSessionDuration(
-                            endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration
-                          )
-                      )}
-                      helperText={
-                        isValidEndpointSessionDuration(
-                          endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration
-                        )
-                          ? "Examples: 24h, 36h, 7d, 1h30m"
-                          : "Use values like 24h, 36h, 7d, or 1h30m"
-                      }
-                      placeholder="24h"
-                      disabled={busyKey !== null}
-                      sx={{ mt: 0.75 }}
-                      slotProps={{
-                        inputLabel: { shrink: true },
-                        input: {
-                          endAdornment: (
-                            <InputAdornment position="end">
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={
-                                  busyKey !== null ||
-                                  !onSetEndpointSessionDuration ||
-                                  !isValidEndpointSessionDuration(
-                                    endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration
-                                  ) ||
-                                  (endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration)
-                                    .trim() === endpoint.sessionDuration
-                                }
-                                onClick={() =>
-                                  onSetEndpointSessionDuration?.(
-                                    endpoint.id,
-                                    (endpointSessionDurationDrafts[endpoint.id] ?? endpoint.sessionDuration).trim()
-                                  )
-                                }
-                                sx={{ minWidth: 0, textTransform: "none" }}
-                              >
-                                Save
-                              </Button>
-                            </InputAdornment>
-                          )
-                        }
-                      }}
-                    />
-                  </Box>
-                  <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => openEditEndpoint(endpoint)}
-                      disabled={busyKey !== null}
-                      sx={{ minWidth: 0, px: 1 }}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => {
-                        setReconnectEndpointId(endpoint.id);
-                        setReconnectUsername(endpoint.username);
-                        setReconnectPassword("");
-                        setError(null);
-                      }}
-                      disabled={busyKey !== null}
-                      sx={{ minWidth: 0, px: 1 }}
-                    >
-                      <RefreshIcon fontSize="small" />
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      color="error"
-                      onClick={() => {
-                        setRemoveEndpointId(endpoint.id);
-                        setError(null);
-                      }}
-                      disabled={busyKey !== null}
-                      sx={{ minWidth: 0, px: 1 }}
-                    >
-                      <DeleteOutlineIcon fontSize="small" />
-                    </Button>
-                  </Stack>
-                </Stack>
-              </Stack>
-            </Paper>
-          ))}
-        </Stack>
+      {showManagedEndpoints(mode, sortedEndpoints.length) ? (
+        <ManagedEndpointList
+          busyKey={busyKey}
+          endpointHealth={endpointHealth}
+          endpoints={sortedEndpoints}
+          healthStatsEnabled={healthStatsEnabled}
+          onDraftChange={handleEndpointDurationDraftChange}
+          onEdit={editDialog.open}
+          onReconnect={reconnectDialog.open}
+          onRemove={removeDialog.open}
+          onSetEndpointSessionDuration={onSetEndpointSessionDuration}
+          sessionDurationDrafts={endpointSessionDurationDrafts}
+        />
       ) : null}
 
       <Paper
@@ -717,12 +911,10 @@ export function EndpointManager({
         <Stack spacing={2}>
           <Box>
             <Typography variant="subtitle1" fontWeight={600}>
-              {mode === "initial" ? "Add Endpoint" : "Add Endpoint"}
+              Add Endpoint
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {mode === "initial"
-                ? "Authenticate against a clab-api-server to start or restore the standalone session."
-                : "Add another clab-api-server and it will appear as its own explorer root."}
+              {endpointAddDescription(mode)}
             </Typography>
           </Box>
 
@@ -735,14 +927,14 @@ export function EndpointManager({
           <Stack spacing={1.5}>
             <TextField
               label="API Endpoint"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
+              value={addForm.url}
+              onChange={(event) => addForm.setUrl(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || addSubmitDisabled) {
+                if (event.key !== "Enter" || addForm.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleAddEndpoint();
+                void addForm.submit();
               }}
               fullWidth
               placeholder="http://localhost:8080"
@@ -759,14 +951,14 @@ export function EndpointManager({
             />
             <TextField
               label="Label"
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
+              value={addForm.label}
+              onChange={(event) => addForm.setLabel(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || addSubmitDisabled) {
+                if (event.key !== "Enter" || addForm.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleAddEndpoint();
+                void addForm.submit();
               }}
               fullWidth
               placeholder="Optional friendly name"
@@ -783,14 +975,14 @@ export function EndpointManager({
             />
             <TextField
               label="Username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              value={addForm.username}
+              onChange={(event) => addForm.setUsername(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || addSubmitDisabled) {
+                if (event.key !== "Enter" || addForm.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleAddEndpoint();
+                void addForm.submit();
               }}
               fullWidth
               slotProps={{
@@ -807,14 +999,14 @@ export function EndpointManager({
             <TextField
               label="Password"
               type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              value={addForm.password}
+              onChange={(event) => addForm.setPassword(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || addSubmitDisabled) {
+                if (event.key !== "Enter" || addForm.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleAddEndpoint();
+                void addForm.submit();
               }}
               fullWidth
               slotProps={{
@@ -830,20 +1022,20 @@ export function EndpointManager({
             />
             <TextField
               label="Keep me signed in"
-              value={sessionDuration}
-              onChange={(event) => setSessionDuration(event.target.value)}
+              value={addForm.sessionDuration}
+              onChange={(event) => addForm.setSessionDuration(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || addSubmitDisabled) {
+                if (event.key !== "Enter" || addForm.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleAddEndpoint();
+                void addForm.submit();
               }}
               fullWidth
               placeholder="24h"
-              error={Boolean(sessionDuration.trim()) && !addSessionDurationValid}
+              error={Boolean(addForm.sessionDuration.trim()) && !addForm.sessionDurationValid}
               helperText={
-                addSessionDurationValid
+                addForm.sessionDurationValid
                   ? "Examples: 24h, 36h, 7d, 1h30m"
                   : "Use values like 24h, 36h, 7d, or 1h30m"
               }
@@ -855,8 +1047,8 @@ export function EndpointManager({
 
           <Button
             variant="contained"
-            onClick={handleAddEndpoint}
-            disabled={addSubmitDisabled}
+            onClick={addForm.submit}
+            disabled={addForm.submitDisabled}
             sx={{
               alignSelf: "flex-start",
               textTransform: "none"
@@ -868,8 +1060,8 @@ export function EndpointManager({
       </Paper>
 
       <Dialog
-        open={Boolean(editEndpoint)}
-        onClose={() => setEditEndpointId(null)}
+        open={Boolean(editDialog.endpoint)}
+        onClose={() => editDialog.setEndpointId(null)}
         fullWidth
         maxWidth="sm"
       >
@@ -878,59 +1070,59 @@ export function EndpointManager({
           <Stack spacing={2}>
             <TextField
               label="Label"
-              value={editLabel}
-              onChange={(event) => setEditLabel(event.target.value)}
+              value={editDialog.label}
+              onChange={(event) => editDialog.setLabel(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || editSubmitDisabled) {
+                if (event.key !== "Enter" || editDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleUpdateEndpoint();
+                void editDialog.submit();
               }}
               fullWidth
             />
             <TextField
               label="API Endpoint"
-              value={editUrl}
-              onChange={(event) => setEditUrl(event.target.value)}
+              value={editDialog.url}
+              onChange={(event) => editDialog.setUrl(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || editSubmitDisabled) {
+                if (event.key !== "Enter" || editDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleUpdateEndpoint();
+                void editDialog.submit();
               }}
               fullWidth
             />
             <TextField
               label="Username"
-              value={editUsername}
-              onChange={(event) => setEditUsername(event.target.value)}
+              value={editDialog.username}
+              onChange={(event) => editDialog.setUsername(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || editSubmitDisabled) {
+                if (event.key !== "Enter" || editDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleUpdateEndpoint();
+                void editDialog.submit();
               }}
               fullWidth
             />
             <TextField
               label="Keep signed in"
-              value={editSessionDuration}
-              onChange={(event) => setEditSessionDuration(event.target.value)}
+              value={editDialog.sessionDuration}
+              onChange={(event) => editDialog.setSessionDuration(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || editSubmitDisabled) {
+                if (event.key !== "Enter" || editDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleUpdateEndpoint();
+                void editDialog.submit();
               }}
               fullWidth
               placeholder="24h"
-              error={Boolean(editSessionDuration.trim()) && !editSessionDurationValid}
+              error={Boolean(editDialog.sessionDuration.trim()) && !editDialog.sessionDurationValid}
               helperText={
-                editSessionDurationValid
+                editDialog.sessionDurationValid
                   ? "Examples: 24h, 36h, 7d, 1h30m"
                   : "Use values like 24h, 36h, 7d, or 1h30m"
               }
@@ -938,83 +1130,83 @@ export function EndpointManager({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditEndpointId(null)}>Cancel</Button>
+          <Button onClick={() => editDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={handleUpdateEndpoint}
+            onClick={editDialog.submit}
             variant="contained"
-            disabled={editSubmitDisabled}
+            disabled={editDialog.submitDisabled}
           >
-            {endpointActionButtonLabel(editEndpoint, busyKey, "edit")}
+            {endpointActionButtonLabel(editDialog.endpoint, busyKey, "edit")}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog
-        open={Boolean(reconnectEndpoint)}
-        onClose={() => setReconnectEndpointId(null)}
+        open={Boolean(reconnectDialog.endpoint)}
+        onClose={() => reconnectDialog.setEndpointId(null)}
         fullWidth
         maxWidth="sm"
       >
         <DialogTitle>Reconnect Endpoint</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
-            {reconnectEndpoint ? (
+            {reconnectDialog.endpoint ? (
               <>
                 <Typography variant="body2" color="text.secondary">
-                  {`Reconnect "${reconnectEndpoint.label}" to restore access for this endpoint.`}
+                  {`Reconnect "${reconnectDialog.endpoint.label}" to restore access for this endpoint.`}
                 </Typography>
-                <Alert severity={endpointStatusSeverity(reconnectEndpoint.status)} variant="outlined">
-                  {endpointStatusHint(reconnectEndpoint.status)}
+                <Alert severity={endpointStatusSeverity(reconnectDialog.endpoint.status)} variant="outlined">
+                  {endpointStatusHint(reconnectDialog.endpoint.status)}
                 </Alert>
                 <Typography variant="body2" color="text.secondary">
-                  Keep signed in: {endpointSessionDurationLabel(reconnectEndpoint.sessionDuration)}
+                  Keep signed in: {endpointSessionDurationLabel(reconnectDialog.endpoint.sessionDuration)}
                 </Typography>
               </>
             ) : null}
             <TextField
               label="Username"
-              value={reconnectUsername}
-              onChange={(event) => setReconnectUsername(event.target.value)}
+              value={reconnectDialog.username}
+              onChange={(event) => reconnectDialog.setUsername(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || reconnectSubmitDisabled) {
+                if (event.key !== "Enter" || reconnectDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleReconnect();
+                void reconnectDialog.submit();
               }}
               fullWidth
             />
             <TextField
               label="Password"
               type="password"
-              value={reconnectPassword}
-              onChange={(event) => setReconnectPassword(event.target.value)}
+              value={reconnectDialog.password}
+              onChange={(event) => reconnectDialog.setPassword(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key !== "Enter" || reconnectSubmitDisabled) {
+                if (event.key !== "Enter" || reconnectDialog.submitDisabled) {
                   return;
                 }
                 event.preventDefault();
-                void handleReconnect();
+                void reconnectDialog.submit();
               }}
               fullWidth
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReconnectEndpointId(null)}>Cancel</Button>
+          <Button onClick={() => reconnectDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={handleReconnect}
+            onClick={reconnectDialog.submit}
             variant="contained"
-            disabled={reconnectSubmitDisabled}
+            disabled={reconnectDialog.submitDisabled}
           >
-            {endpointActionButtonLabel(reconnectEndpoint, busyKey, "reconnect")}
+            {endpointActionButtonLabel(reconnectDialog.endpoint, busyKey, "reconnect")}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog
-        open={Boolean(removeEndpoint)}
-        onClose={() => setRemoveEndpointId(null)}
+        open={Boolean(removeDialog.endpoint)}
+        onClose={() => removeDialog.setEndpointId(null)}
         fullWidth
         maxWidth="xs"
       >
@@ -1022,7 +1214,7 @@ export function EndpointManager({
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              {`Remove "${removeEndpoint?.label ?? "endpoint"}" from this standalone session?`}
+              {`Remove "${removeDialog.endpoint?.label ?? "endpoint"}" from this standalone session?`}
             </Typography>
             <Divider />
             <Typography variant="body2">
@@ -1031,14 +1223,14 @@ export function EndpointManager({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRemoveEndpointId(null)}>Cancel</Button>
+          <Button onClick={() => removeDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={handleRemove}
+            onClick={removeDialog.submit}
             color="error"
             variant="contained"
-            disabled={busyKey !== null}
+            disabled={removeDialog.submitDisabled}
           >
-            {endpointActionButtonLabel(removeEndpoint, busyKey, "remove")}
+            {endpointActionButtonLabel(removeDialog.endpoint, busyKey, "remove")}
           </Button>
         </DialogActions>
       </Dialog>

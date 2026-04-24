@@ -364,6 +364,97 @@ type EndpointResolver = (
   endpointId?: string
 ) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
+function modeForDeploymentState(
+  mode: "edit" | "view" | undefined,
+  deploymentState: DeploymentState
+): "edit" | "view" {
+  return mode ?? (deploymentState === "deployed" ? "view" : "edit");
+}
+
+function topologyErrorStatusCode(error: unknown): number {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === "Missing sessionId or command") {
+    return 400;
+  }
+  return isMissingTopologyError(error) ? 404 : 500;
+}
+
+async function snapshotForRequest(
+  body: SnapshotRequest,
+  client: ClabApiClient,
+  endpoint: EndpointEntry,
+  sessions: StandaloneTopologySessionManager
+): Promise<TopologySnapshot> {
+  const sessionId = body.sessionId?.trim() ?? "";
+  const fallbackDeploymentState = body.deploymentState ?? "unknown";
+  if (!sessionId) {
+    return createEmptySnapshot(modeForDeploymentState(body.mode, fallbackDeploymentState), fallbackDeploymentState);
+  }
+
+  const session = sessions.getSession(sessionId, endpoint.id);
+  if (!session) {
+    throw new Error("Topology session not found");
+  }
+
+  const deploymentState = body.deploymentState ?? "undeployed";
+  const mode = modeForDeploymentState(body.mode, deploymentState);
+  session.host.updateContext({ mode, deploymentState });
+
+  const rawSnapshot = body.externalChange
+    ? await session.host.onExternalChange()
+    : await session.host.getSnapshot();
+  const snapshot = session.sourcePreference === "api-file"
+    ? await attachDocumentRevision(client, endpoint.token, session.topologyRef, rawSnapshot, {
+        force: body.externalChange === true
+      })
+    : rawSnapshot;
+
+  return applyRuntimeOverlay(snapshot, toRuntimeContainers(body.runtimeContainers ?? []));
+}
+
+async function responseForCommandRequest(
+  body: CommandRequest,
+  client: ClabApiClient,
+  endpoint: EndpointEntry,
+  sessions: StandaloneTopologySessionManager
+): Promise<TopologyHostResponseMessage> {
+  const sessionId = body.sessionId?.trim() ?? "";
+  if (!sessionId || !body.command) {
+    throw new Error("Missing sessionId or command");
+  }
+
+  const session = sessions.getSession(sessionId, endpoint.id);
+  if (!session) {
+    throw new Error("Topology session not found");
+  }
+
+  const deploymentState = body.deploymentState ?? "undeployed";
+  const mode = modeForDeploymentState(body.mode, deploymentState);
+  const containerDataProvider = createRuntimeContainerDataProvider(
+    toRuntimeContainers(body.runtimeContainers ?? [])
+  );
+  session.host.updateContext({ mode, deploymentState, containerDataProvider });
+
+  const response: TopologyHostResponseMessage = await session.host.applyCommand(
+    body.command,
+    body.baseRevision
+  );
+  if (
+    (response.type === "topology-host:ack" || response.type === "topology-host:reject") &&
+    response.snapshot &&
+    session.sourcePreference === "api-file"
+  ) {
+    response.snapshot = await attachDocumentRevision(
+      client,
+      endpoint.token,
+      session.topologyRef,
+      response.snapshot,
+      { force: true }
+    );
+  }
+  return response;
+}
+
 export function registerTopologyProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
@@ -448,45 +539,8 @@ export function registerTopologyProxy(
       }
       const { client, endpoint } = resolved;
 
-      const body = request.body;
-      const sessionId = body.sessionId?.trim() ?? "";
-      if (!sessionId) {
-        const deploymentState = body.deploymentState ?? "unknown";
-        const mode = body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
-        return reply.send({
-          snapshot: createEmptySnapshot(mode, deploymentState)
-        });
-      }
-
-      const session = sessions.getSession(sessionId, endpoint.id);
-      if (!session) {
-        return reply.status(404).send({ error: "Topology session not found" });
-      }
-
       try {
-        const deploymentState = body.deploymentState ?? "undeployed";
-        const mode = body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
-        const runtimeContainers = toRuntimeContainers(body.runtimeContainers ?? []);
-        session.host.updateContext({ mode, deploymentState });
-
-        let snapshot: TopologySnapshot;
-        if (body.externalChange) {
-          snapshot = await session.host.onExternalChange();
-        } else {
-          snapshot = await session.host.getSnapshot();
-        }
-
-        if (session.sourcePreference === "api-file") {
-          snapshot = await attachDocumentRevision(
-            client,
-            endpoint.token,
-            session.topologyRef,
-            snapshot,
-            { force: body.externalChange === true }
-          );
-        }
-        snapshot = applyRuntimeOverlay(snapshot, runtimeContainers);
-
+        const snapshot = await snapshotForRequest(request.body, client, endpoint, sessions);
         return reply.send({ snapshot });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -505,46 +559,12 @@ export function registerTopologyProxy(
       }
       const { client, endpoint } = resolved;
 
-      const body = request.body;
-      const sessionId = body.sessionId?.trim() ?? "";
-      if (!sessionId || !body.command) {
-        return reply.status(400).send({ error: "Missing sessionId or command" });
-      }
-
-      const session = sessions.getSession(sessionId, endpoint.id);
-      if (!session) {
-        return reply.status(404).send({ error: "Topology session not found" });
-      }
-
       try {
-        const deploymentState = body.deploymentState ?? "undeployed";
-        const mode = body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
-        const containerDataProvider = createRuntimeContainerDataProvider(
-          toRuntimeContainers(body.runtimeContainers ?? [])
-        );
-        session.host.updateContext({ mode, deploymentState, containerDataProvider });
-
-        const response: TopologyHostResponseMessage = await session.host.applyCommand(
-          body.command,
-          body.baseRevision
-        );
-        if (
-          (response.type === "topology-host:ack" || response.type === "topology-host:reject") &&
-          response.snapshot &&
-          session.sourcePreference === "api-file"
-        ) {
-          response.snapshot = await attachDocumentRevision(
-            client,
-            endpoint.token,
-            session.topologyRef,
-            response.snapshot,
-            { force: true }
-          );
-        }
+        const response = await responseForCommandRequest(request.body, client, endpoint, sessions);
         return reply.send(response);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const statusCode = isMissingTopologyError(error) ? 404 : 500;
+        const statusCode = topologyErrorStatusCode(error);
         return reply.status(statusCode).send({
           type: "topology-host:error",
           error: message

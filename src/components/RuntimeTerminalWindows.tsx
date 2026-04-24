@@ -1,15 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
-import Paper from "@mui/material/Paper";
-import Popover from "@mui/material/Popover";
-import Slider from "@mui/material/Slider";
-import Stack from "@mui/material/Stack";
-import Tooltip from "@mui/material/Tooltip";
-import Typography from "@mui/material/Typography";
+import {
+  Box,
+  Button,
+  Chip,
+  Divider,
+  IconButton,
+  Paper,
+  Popover,
+  Slider,
+  Stack,
+  Tooltip,
+  Typography
+} from "@mui/material";
 import {
   CleaningServices as ClearIcon,
   Close as CloseIcon,
@@ -121,6 +123,67 @@ function findRuntimeContainer(
 function decodeBase64ToBytes(value: string): Uint8Array {
   const raw = window.atob(value);
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
+}
+
+type TerminalSocketPayload = {
+  data?: string;
+  encoding?: string;
+  error?: string;
+  exitCode?: number | null;
+  type?: string;
+};
+
+function sendTerminalResize(socket: WebSocket, terminal: Terminal | null): void {
+  if (socket.readyState !== WebSocket.OPEN || !terminal) {
+    return;
+  }
+  socket.send(
+    JSON.stringify({
+      type: "resize",
+      cols: terminal.cols,
+      rows: terminal.rows
+    })
+  );
+}
+
+function handleTerminalSocketPayload(input: {
+  fitAddon: FitAddon | null;
+  payload: TerminalSocketPayload;
+  socket: WebSocket;
+  terminal: Terminal | null;
+  windowId: string;
+}): void {
+  const { fitAddon, payload, socket, terminal, windowId } = input;
+  switch (payload.type) {
+    case "ready":
+      runtimeUiActions.setTerminalReady(windowId);
+      fitAddon?.fit();
+      sendTerminalResize(socket, terminal);
+      break;
+    case "output":
+      if (payload.data && payload.encoding === "base64" && terminal) {
+        terminal.write(decodeBase64ToBytes(payload.data));
+      }
+      break;
+    case "exit": {
+      const errorMessage = typeof payload.error === "string" ? payload.error : undefined;
+      terminal?.write(
+        `\r\n[session ended${payload.exitCode !== undefined ? `: ${payload.exitCode}` : ""}]${
+          errorMessage ? ` ${errorMessage}` : ""
+        }\r\n`
+      );
+      runtimeUiActions.setTerminalExited(windowId, payload.exitCode, errorMessage);
+      break;
+    }
+    case "error":
+      if (payload.error) {
+        terminal?.write(`\r\n[error] ${payload.error}\r\n`);
+        runtimeUiActions.setTerminalError(windowId, payload.error);
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 function normalizeTerminalOutput(value: string): string {
@@ -485,51 +548,13 @@ function TerminalWindow({
 
     socket.onmessage = (event) => {
       try {
-        const payload = JSON.parse(String(event.data)) as {
-          type?: string;
-          data?: string;
-          encoding?: string;
-          exitCode?: number | null;
-          error?: string;
-        };
-        switch (payload.type) {
-          case "ready":
-            runtimeUiActions.setTerminalReady(windowState.id);
-            fitAddonRef.current?.fit();
-            if (socket.readyState === WebSocket.OPEN && xtermRef.current) {
-              socket.send(
-                JSON.stringify({
-                  type: "resize",
-                  cols: xtermRef.current.cols,
-                  rows: xtermRef.current.rows
-                })
-              );
-            }
-            break;
-          case "output":
-            if (payload.data && payload.encoding === "base64" && xtermRef.current) {
-              xtermRef.current.write(decodeBase64ToBytes(payload.data));
-            }
-            break;
-          case "exit": {
-            const errorMessage = typeof payload.error === "string" ? payload.error : undefined;
-            xtermRef.current?.write(
-              `\r\n[session ended${payload.exitCode !== undefined ? `: ${payload.exitCode}` : ""}]${
-                errorMessage ? ` ${errorMessage}` : ""
-              }\r\n`
-            );
-            runtimeUiActions.setTerminalExited(windowState.id, payload.exitCode, errorMessage);
-            break;
-          }
-          case "error":
-            if (payload.error) {
-              xtermRef.current?.write(`\r\n[error] ${payload.error}\r\n`);
-              runtimeUiActions.setTerminalError(windowState.id, payload.error);
-            }
-            break;
-          default:
-            break;
-        }
+        handleTerminalSocketPayload({
+          fitAddon: fitAddonRef.current,
+          payload: JSON.parse(String(event.data)) as TerminalSocketPayload,
+          socket,
+          terminal: xtermRef.current,
+          windowId: windowState.id
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         runtimeUiActions.setTerminalError(windowState.id, message);

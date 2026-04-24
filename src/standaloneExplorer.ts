@@ -34,7 +34,7 @@ import {
   type CloneRepoDialogTarget
 } from "./components/RuntimeActionDialogs";
 import type { EndpointConfig } from "./stores/endpointStore";
-import type { LabState } from "./stores/labStore";
+import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
 import {
   getSessionHostnameOverride,
@@ -76,6 +76,9 @@ const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.openFolderInNewWindow"
 ] as const;
 
+type ShareActionKind = "sshx" | "gotty";
+type ShareLifecycleAction = "attach" | "detach" | "reattach";
+
 function loadShowNonOwnedLabsSetting(): boolean {
   try {
     const raw = localStorage.getItem(SHOW_NON_OWNED_LABS_STORAGE_KEY);
@@ -94,6 +97,382 @@ function persistShowNonOwnedLabsSetting(nextValue: boolean): void {
 }
 
 let showNonOwnedLabs = loadShowNonOwnedLabsSetting();
+
+function topologyRefForRunningLab(
+  lab: LabState,
+  topologyEntry?: TopologyFileEntry
+): TopologyRef | undefined {
+  if (topologyEntry?.topologyRef) {
+    return topologyEntry.topologyRef;
+  }
+  return lab.topologyPath
+    ? buildStandaloneTopologyRefFromPath(lab.topologyPath, lab.name, lab.endpointId)
+    : undefined;
+}
+
+function groupTopologyFilesByEndpoint(files: TopologyFileEntry[]): Map<string, TopologyFileEntry[]> {
+  const filesByEndpoint = new Map<string, TopologyFileEntry[]>();
+  for (const file of files) {
+    const bucket = filesByEndpoint.get(file.endpointId) ?? [];
+    bucket.push(file);
+    filesByEndpoint.set(file.endpointId, bucket);
+  }
+  return filesByEndpoint;
+}
+
+function findEndpointConfig(
+  endpoints: EndpointConfig[],
+  endpointId?: string
+): EndpointConfig | undefined {
+  return endpointId ? endpoints.find((entry) => entry.id === endpointId) : undefined;
+}
+
+function resolveExplorerActionTopologyRef(input: {
+  actionEndpointId?: string;
+  actionTopologyRef?: TopologyRef;
+  item?: ExplorerTreeItem;
+  labs: Map<string, LabState>;
+  targetLabel?: string;
+}): TopologyRef | undefined {
+  const { actionEndpointId, actionTopologyRef, item, labs, targetLabel } = input;
+  if (actionTopologyRef) {
+    return actionTopologyRef;
+  }
+
+  const labNameHint = (item?.labName ?? targetLabel ?? "").trim();
+  if (!labNameHint) {
+    return undefined;
+  }
+
+  const normalizedLabNameHint = normalizeLabName(labNameHint);
+  for (const lab of labs.values()) {
+    if (actionEndpointId && lab.endpointId !== actionEndpointId) {
+      continue;
+    }
+    if (normalizeLabName(lab.name) !== normalizedLabNameHint) {
+      continue;
+    }
+    return buildStandaloneTopologyRefFromPath(
+      lab.topologyPath || `${lab.name}.clab.yml`,
+      lab.name,
+      lab.endpointId
+    );
+  }
+
+  return undefined;
+}
+
+function resolveExplorerActionEndpointId(
+  item: ExplorerTreeItem | undefined,
+  topologyRef: TopologyRef | undefined
+): string | undefined {
+  if (item?.endpointId) {
+    return item.endpointId;
+  }
+  return extractEndpointIdFromTopologyId(topologyRef?.topologyId);
+}
+
+function resolveExplorerTargetLabel(
+  item: ExplorerTreeItem | undefined,
+  topologyRef: TopologyRef | undefined
+): string | undefined {
+  if (topologyRef?.labName) {
+    return topologyRef.labName;
+  }
+  if (item?.labName) {
+    return item.labName;
+  }
+  return typeof item?.label === "string" ? item.label : undefined;
+}
+
+async function resolveEndpointForExplorerAction(input: {
+  actionDescription: string;
+  endpoints: EndpointConfig[];
+  postError: (message: string) => void;
+  preferredEndpointId?: string;
+}): Promise<string | null> {
+  const { actionDescription, endpoints, postError, preferredEndpointId } = input;
+  const preferred = findEndpointConfig(endpoints, preferredEndpointId);
+  if (preferred?.status === "connected") {
+    return preferred.id;
+  }
+
+  const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+  if (connectedEndpoints.length === 0) {
+    postError(`Connect an endpoint before trying to ${actionDescription}.`);
+    return null;
+  }
+  if (connectedEndpoints.length === 1) {
+    return connectedEndpoints[0].id;
+  }
+
+  const selectedEndpointId = await promptForEndpointSelection({
+    title: "Select Endpoint",
+    message: `Select endpoint for ${actionDescription}.`,
+    confirmLabel: "Use Endpoint",
+    options: connectedEndpoints.map((endpoint) => ({
+      value: endpoint.id,
+      label: endpoint.label,
+      description: endpoint.url
+    })),
+    preferredValue: connectedEndpoints[0]?.id
+  });
+  if (!selectedEndpointId) {
+    return null;
+  }
+  if (!connectedEndpoints.some((endpoint) => endpoint.id === selectedEndpointId)) {
+    runtimeUiActions.notify("Invalid endpoint selection.", "error");
+    return null;
+  }
+  return selectedEndpointId;
+}
+
+function buildRunningInterfaceItem(input: {
+  container: ContainerState;
+  iface: InterfaceState;
+  lab: LabState;
+  topologyRef?: TopologyRef;
+}): ExplorerTreeItem {
+  const { container, iface, lab, topologyRef } = input;
+  const state = iface.state.toLowerCase();
+  const hasAlias = Boolean(iface.alias);
+  const label = hasAlias ? iface.alias : iface.name;
+  const stateText = state ? state.toUpperCase() : "";
+  const description = hasAlias
+    ? `${stateText || "UNKNOWN"} (${iface.name})`
+    : stateText || iface.type || undefined;
+
+  return {
+    id: `running-interface:${lab.endpointId}:${container.name}:${iface.name}`,
+    label,
+    description,
+    tooltip: buildInterfaceTooltip({
+      name: iface.name,
+      alias: iface.alias,
+      state: iface.state,
+      type: iface.type,
+      mac: iface.mac,
+      mtu: iface.mtu,
+      rxBps: iface.rxBps,
+      txBps: iface.txBps
+    }),
+    contextValue: getInterfaceContextValue(state),
+    collapsibleState: TREE_ITEM_NONE,
+    cID: container.containerId,
+    containerName: container.name,
+    endpointId: lab.endpointId,
+    labName: lab.name,
+    mac: iface.mac,
+    name: iface.name,
+    topologyRef,
+    children: []
+  };
+}
+
+function buildRunningInterfaceItems(
+  lab: LabState,
+  container: ContainerState,
+  topologyRef?: TopologyRef
+): ExplorerTreeItem[] {
+  return [...container.interfaces.values()]
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .filter((iface) => {
+      const state = iface.state.toLowerCase();
+      return iface.name !== "lo" && state !== "unknown";
+    })
+    .map((iface) => buildRunningInterfaceItem({ container, iface, lab, topologyRef }));
+}
+
+function buildRunningContainerItem(
+  lab: LabState,
+  container: ContainerState,
+  topologyRef?: TopologyRef
+): ExplorerTreeItem {
+  const interfaces = buildRunningInterfaceItems(lab, container, topologyRef);
+  return {
+    id: `running-container:${lab.endpointId}:${container.name}`,
+    label: container.nodeName || container.name,
+    description: container.status || container.state,
+    tooltip: buildContainerTooltip({
+      name: container.name,
+      state: container.state,
+      status: container.status,
+      kind: container.kind,
+      image: container.image,
+      id: container.containerId,
+      ipv4: container.ipv4Address,
+      ipv6: container.ipv6Address
+    }),
+    contextValue: "containerlabContainer",
+    endpointId: lab.endpointId,
+    state: container.state,
+    status: container.status,
+    labName: lab.name,
+    name: container.name,
+    cID: container.containerId,
+    kind: container.kind,
+    image: container.image,
+    topologyRef,
+    v4Address: container.ipv4Address,
+    v6Address: container.ipv6Address,
+    collapsibleState: interfaces.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
+    children: interfaces
+  };
+}
+
+function buildRunningShareItems(
+  lab: LabState,
+  topologyRef: TopologyRef | undefined,
+  sshxLink: string,
+  gottyLink: string
+): ExplorerTreeItem[] {
+  const shareLink = sshxLink || gottyLink;
+  if (!shareLink) {
+    return [];
+  }
+  const kind = sshxLink ? "sshx" : "gotty";
+  return [{
+    id: `running-lab-share:${kind}:${lab.endpointId}:${lab.name}`,
+    label: kind === "sshx" ? "Shared Terminal" : "Web Terminal",
+    contextValue: kind === "sshx" ? "containerlabSSHXLink" : "containerlabGottyLink",
+    collapsibleState: TREE_ITEM_NONE,
+    endpointId: lab.endpointId,
+    labName: lab.name,
+    topologyRef,
+    link: shareLink,
+    children: []
+  }];
+}
+
+function runningLabPathHint(lab: LabState, topologyEntry?: TopologyFileEntry): string | undefined {
+  const fallbackPathHint =
+    lab.topologyPath || (lab.containers.values().next().value?.labPath as string | undefined);
+  return topologyEntry?.path ?? fallbackPathHint;
+}
+
+function buildRunningLabItem(input: {
+  containers: ExplorerTreeItem[];
+  lab: LabState;
+  pathHint?: string;
+  shareChildren: ExplorerTreeItem[];
+  topologyRef?: TopologyRef;
+}): ExplorerTreeItem {
+  const { containers, lab, pathHint, shareChildren, topologyRef } = input;
+  const owner = getLabOwner(lab);
+  const labLabel = owner ? `${lab.name} (${owner})` : lab.name;
+  const labItem: ExplorerTreeItem = {
+    id: `running-lab:${lab.endpointId}:${lab.name}`,
+    label: labLabel,
+    description: pathHint || "No API topology file",
+    tooltip: pathHint || `No API topology file available for running lab "${lab.name}"`,
+    contextValue:
+      topologyRef && isStandaloneFavorite({ endpointId: lab.endpointId, topologyRef })
+        ? "containerlabLabDeployedFavorite"
+        : "containerlabLabDeployed",
+    collapsibleState:
+      shareChildren.length > 0 || containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
+    endpointId: lab.endpointId,
+    labName: lab.name,
+    topologyRef,
+    children: [...shareChildren, ...containers]
+  };
+
+  if (topologyRef) {
+    labItem.command = {
+      command: "containerlab.lab.graph.topoViewer",
+      title: "Open TopoViewer",
+      arguments: [labItem]
+    };
+  }
+
+  return labItem;
+}
+
+function sortedRunningContainers(lab: LabState): ContainerState[] {
+  return [...lab.containers.values()].sort((left, right) =>
+    (left.nodeName || left.name).localeCompare(right.nodeName || right.name)
+  );
+}
+
+function topologyRefForNodeActions(
+  lab: LabState,
+  actionTopologyRef?: TopologyRef
+): TopologyRef {
+  return actionTopologyRef ??
+    buildStandaloneTopologyRefFromPath(
+      lab.topologyPath || `${lab.name}.clab.yml`,
+      lab.name,
+      lab.endpointId
+    );
+}
+
+function sshOpenedNotification(containers: ContainerState[]): string {
+  if (containers.length > 1) {
+    return `Opened SSH terminals for ${containers.length} nodes.`;
+  }
+  return `Opened SSH terminal for ${containers[0]?.nodeName || containers[0]?.name}.`;
+}
+
+async function runLabShareAction(input: {
+  action: ShareLifecycleAction;
+  endpointId?: string;
+  kind: ShareActionKind;
+  topologyRef: TopologyRef;
+}) {
+  const { action, endpointId, kind, topologyRef } = input;
+  if (kind === "sshx") {
+    return runSshxShareAction({ endpointId, topologyRef, action });
+  }
+  return runGottyShareAction({ endpointId, topologyRef, action });
+}
+
+function persistShareLink(input: {
+  action: ShareLifecycleAction;
+  bucket: Map<string, string>;
+  labKey: string;
+  link: string;
+}): void {
+  const { action, bucket, labKey, link } = input;
+  if (!labKey) {
+    return;
+  }
+  if (action === "detach") {
+    bucket.delete(labKey);
+    return;
+  }
+  if (link) {
+    bucket.set(labKey, link);
+  }
+}
+
+function shareActionCanOpenLink(action: ShareLifecycleAction): boolean {
+  return action === "attach" || action === "reattach";
+}
+
+async function handleShareActionLink(
+  kind: ShareActionKind,
+  action: ShareLifecycleAction,
+  link: string
+): Promise<void> {
+  if (!shareActionCanOpenLink(action)) {
+    return;
+  }
+  if (!link) {
+    runtimeUiActions.notify(
+      `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
+      "warning"
+    );
+    return;
+  }
+
+  await navigator.clipboard.writeText(link).catch(() => {});
+  const shouldOpen = window.confirm(
+    `${kind.toUpperCase()} link copied to clipboard.\n\nOpen link now?`
+  );
+  if (shouldOpen) {
+    window.open(link, "_blank", "noopener,noreferrer");
+  }
+}
 
 function disconnectedEndpointLabel(status: EndpointConfig["status"]): string {
   if (status === "saved") {
@@ -297,40 +676,24 @@ function extractFirstHttpLink(value: string): string | undefined {
 }
 
 function describeBrowserPort(port: number): string {
-  switch (port) {
-    case 22:
-      return "SSH";
-    case 23:
-      return "Telnet";
-    case 25:
-      return "SMTP";
-    case 53:
-      return "DNS";
-    case 80:
-      return "HTTP";
-    case 443:
-      return "HTTPS";
-    case 1880:
-      return "Node-RED";
-    case 3000:
-      return "Grafana";
-    case 5432:
-      return "PostgreSQL";
-    case 5601:
-      return "Kibana";
-    case 8080:
-      return "Web Server";
-    case 8443:
-      return "HTTPS (Alt)";
-    case 9000:
-      return "Web Server";
-    case 9090:
-      return "Prometheus";
-    case 9200:
-      return "Elasticsearch";
-    default:
-      return "";
-  }
+  const descriptions: Record<number, string> = {
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    443: "HTTPS",
+    1880: "Node-RED",
+    3000: "Grafana",
+    5432: "PostgreSQL",
+    5601: "Kibana",
+    8080: "Web Server",
+    8443: "HTTPS (Alt)",
+    9000: "Web Server",
+    9090: "Prometheus",
+    9200: "Elasticsearch"
+  };
+  return descriptions[port] ?? "";
 }
 
 function filterTreeItems(items: ExplorerTreeItem[], filterText: string): ExplorerTreeItem[] {
@@ -571,12 +934,7 @@ export function createStandaloneExplorerBridge(
     const labs = options.getLabs();
     const endpoints = options.getEndpoints();
     const endpointsById = new Map(endpoints.map((endpoint) => [endpoint.id, endpoint]));
-    const filesByEndpoint = new Map<string, TopologyFileEntry[]>();
-    for (const file of files) {
-      const bucket = filesByEndpoint.get(file.endpointId) ?? [];
-      bucket.push(file);
-      filesByEndpoint.set(file.endpointId, bucket);
-    }
+    const filesByEndpoint = groupTopologyFilesByEndpoint(files);
 
     const labItemsByEndpoint = new Map<string, ExplorerTreeItem[]>();
     for (const lab of labs.values()) {
@@ -586,145 +944,23 @@ export function createStandaloneExplorerBridge(
 
       const endpointFiles = filesByEndpoint.get(lab.endpointId) ?? [];
       const topologyEntry = findTopologyEntryForRunningLab(lab, endpointFiles);
-      const topologyRef =
-        topologyEntry?.topologyRef ??
-        (lab.topologyPath
-          ? buildStandaloneTopologyRefFromPath(lab.topologyPath, lab.name, lab.endpointId)
-          : undefined);
-      const containers: ExplorerTreeItem[] = [];
+      const topologyRef = topologyRefForRunningLab(lab, topologyEntry);
+      const containers = [...lab.containers.values()].map((container) =>
+        buildRunningContainerItem(lab, container, topologyRef)
+      );
 
-      for (const [, container] of lab.containers) {
-        const interfaces = [...container.interfaces.values()]
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .filter((iface) => {
-            const state = iface.state.toLowerCase();
-            return iface.name !== "lo" && state !== "unknown";
-          })
-          .map((iface) => {
-            const state = iface.state.toLowerCase();
-            const hasAlias = Boolean(iface.alias);
-            const label = hasAlias ? iface.alias : iface.name;
-            const stateText = state ? state.toUpperCase() : "";
-            const description = hasAlias
-              ? `${stateText || "UNKNOWN"} (${iface.name})`
-              : stateText || iface.type || undefined;
-
-            return {
-              id: `running-interface:${lab.endpointId}:${container.name}:${iface.name}`,
-              label,
-              description,
-              tooltip: buildInterfaceTooltip({
-                name: iface.name,
-                alias: iface.alias,
-                state: iface.state,
-                type: iface.type,
-                mac: iface.mac,
-                mtu: iface.mtu,
-                rxBps: iface.rxBps,
-                txBps: iface.txBps
-              }),
-              contextValue: getInterfaceContextValue(state),
-              collapsibleState: TREE_ITEM_NONE,
-              cID: container.containerId,
-              containerName: container.name,
-              endpointId: lab.endpointId,
-              labName: lab.name,
-              mac: iface.mac,
-              name: iface.name,
-              topologyRef,
-              children: []
-            } satisfies ExplorerTreeItem;
-          });
-
-        containers.push({
-          id: `running-container:${lab.endpointId}:${container.name}`,
-          label: container.nodeName || container.name,
-          description: container.status || container.state,
-          tooltip: buildContainerTooltip({
-            name: container.name,
-            state: container.state,
-            status: container.status,
-            kind: container.kind,
-            image: container.image,
-            id: container.containerId,
-            ipv4: container.ipv4Address,
-            ipv6: container.ipv6Address
-          }),
-          contextValue: "containerlabContainer",
-          endpointId: lab.endpointId,
-          state: container.state,
-          status: container.status,
-          labName: lab.name,
-          name: container.name,
-          cID: container.containerId,
-          kind: container.kind,
-          image: container.image,
-          topologyRef,
-          v4Address: container.ipv4Address,
-          v6Address: container.ipv6Address,
-          collapsibleState: interfaces.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
-          children: interfaces
-        });
-      }
-
-      const fallbackPathHint =
-        lab.topologyPath || (lab.containers.values().next().value?.labPath as string | undefined);
-      const pathHint = topologyEntry?.path ?? fallbackPathHint;
-      const owner = getLabOwner(lab);
-      const labLabel = owner ? `${lab.name} (${owner})` : lab.name;
-      const shareChildren: ExplorerTreeItem[] = [];
+      const pathHint = runningLabPathHint(lab, topologyEntry);
       const normalizedLabKey = normalizeLabName(lab.name);
       const sshxLink = (sshxLinksByLab.get(normalizedLabKey) ?? "").trim();
       const gottyLink = (gottyLinksByLab.get(normalizedLabKey) ?? "").trim();
-      if (sshxLink) {
-        shareChildren.push({
-          id: `running-lab-share:sshx:${lab.endpointId}:${lab.name}`,
-          label: "Shared Terminal",
-          contextValue: "containerlabSSHXLink",
-          collapsibleState: TREE_ITEM_NONE,
-          endpointId: lab.endpointId,
-          labName: lab.name,
-          topologyRef,
-          link: sshxLink,
-          children: []
-        });
-      } else if (gottyLink) {
-        shareChildren.push({
-          id: `running-lab-share:gotty:${lab.endpointId}:${lab.name}`,
-          label: "Web Terminal",
-          contextValue: "containerlabGottyLink",
-          collapsibleState: TREE_ITEM_NONE,
-          endpointId: lab.endpointId,
-          labName: lab.name,
-          topologyRef,
-          link: gottyLink,
-          children: []
-        });
-      }
-      const labItem: ExplorerTreeItem = {
-        id: `running-lab:${lab.endpointId}:${lab.name}`,
-        label: labLabel,
-        description: pathHint || "No API topology file",
-        tooltip: pathHint || `No API topology file available for running lab "${lab.name}"`,
-        contextValue:
-          topologyRef && isStandaloneFavorite({ endpointId: lab.endpointId, topologyRef })
-            ? "containerlabLabDeployedFavorite"
-            : "containerlabLabDeployed",
-        collapsibleState:
-          shareChildren.length > 0 || containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
-        endpointId: lab.endpointId,
-        labName: lab.name,
-        topologyRef,
-        children: [...shareChildren, ...containers]
-      };
-
-      if (topologyRef) {
-        labItem.command = {
-          command: "containerlab.lab.graph.topoViewer",
-          title: "Open TopoViewer",
-          arguments: [labItem]
-        };
-      }
+      const shareChildren = buildRunningShareItems(lab, topologyRef, sshxLink, gottyLink);
+      const labItem = buildRunningLabItem({
+        containers,
+        lab,
+        pathHint,
+        shareChildren,
+        topologyRef
+      });
 
       const bucket = labItemsByEndpoint.get(lab.endpointId) ?? [];
       bucket.push(labItem);
@@ -877,81 +1113,26 @@ export function createStandaloneExplorerBridge(
     const requestedTopologyRef = firstArgAsTopologyRef(args);
     const item = firstArgAsTreeItem(args);
     const actionTopologyRef = requestedTopologyRef ?? (await options.resolveTopologyRef(args));
-    const actionEndpointId =
-      item?.endpointId ??
-      extractEndpointIdFromTopologyId(actionTopologyRef?.topologyId);
+    const actionEndpointId = resolveExplorerActionEndpointId(item, actionTopologyRef);
     const endpoints = options.getEndpoints();
-    const findEndpointById = (endpointId?: string): EndpointConfig | undefined =>
-      endpointId ? endpoints.find((entry) => entry.id === endpointId) : undefined;
     const resolveEndpointForAction = async (
       actionDescription: string,
       preferredEndpointId?: string
-    ): Promise<string | null> => {
-      const preferred = findEndpointById(preferredEndpointId);
-      if (preferred?.status === "connected") {
-        return preferred.id;
-      }
-
-      const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
-      if (connectedEndpoints.length === 0) {
-        postExplorerError(`Connect an endpoint before trying to ${actionDescription}.`);
-        return null;
-      }
-      if (connectedEndpoints.length === 1) {
-        return connectedEndpoints[0].id;
-      }
-
-      const selectedEndpointId = await promptForEndpointSelection({
-        title: "Select Endpoint",
-        message: `Select endpoint for ${actionDescription}.`,
-        confirmLabel: "Use Endpoint",
-        options: connectedEndpoints.map((endpoint) => ({
-          value: endpoint.id,
-          label: endpoint.label,
-          description: endpoint.url
-        })),
-        preferredValue: connectedEndpoints[0]?.id
+    ): Promise<string | null> => resolveEndpointForExplorerAction({
+      actionDescription,
+      endpoints,
+      postError: postExplorerError,
+      preferredEndpointId
+    });
+    const targetLabel = resolveExplorerTargetLabel(item, actionTopologyRef);
+    const resolveActionTopologyRef = (): TopologyRef | undefined =>
+      resolveExplorerActionTopologyRef({
+        actionEndpointId,
+        actionTopologyRef,
+        item,
+        labs: options.getLabs(),
+        targetLabel
       });
-      if (!selectedEndpointId) {
-        return null;
-      }
-      if (!connectedEndpoints.some((endpoint) => endpoint.id === selectedEndpointId)) {
-        runtimeUiActions.notify("Invalid endpoint selection.", "error");
-        return null;
-      }
-      return selectedEndpointId;
-    };
-    const targetLabel =
-      actionTopologyRef?.labName ??
-      item?.labName ??
-      (typeof item?.label === "string" ? item.label : undefined);
-    const resolveActionTopologyRef = (): TopologyRef | undefined => {
-      if (actionTopologyRef) {
-        return actionTopologyRef;
-      }
-
-      const labNameHint = (item?.labName ?? targetLabel ?? "").trim();
-      if (!labNameHint) {
-        return undefined;
-      }
-
-      const normalizedLabNameHint = normalizeLabName(labNameHint);
-      for (const lab of options.getLabs().values()) {
-        if (actionEndpointId && lab.endpointId !== actionEndpointId) {
-          continue;
-        }
-        if (normalizeLabName(lab.name) !== normalizedLabNameHint) {
-          continue;
-        }
-        return buildStandaloneTopologyRefFromPath(
-          lab.topologyPath || `${lab.name}.clab.yml`,
-          lab.name,
-          lab.endpointId
-        );
-      }
-
-      return undefined;
-    };
     const resolveCaptureTargets = (): Array<{ containerName: string; interfaceName: string }> => {
       const byKey = new Map<string, { containerName: string; interfaceName: string }>();
 
@@ -1163,28 +1344,19 @@ export function createStandaloneExplorerBridge(
     };
 
     const openSshToAllNodes = (): void => {
-      const topologyForSearch = {
+      const lab = findLabStateForTopology({
         yamlPath: actionTopologyRef?.yamlPath ?? "",
         topologyId: actionTopologyRef?.topologyId,
         labName: actionTopologyRef?.labName ?? item?.labName,
         endpointId: actionEndpointId
-      };
-      const lab = findLabStateForTopology(topologyForSearch, options.getLabs());
+      }, options.getLabs());
       if (!lab) {
         postExplorerError("No running lab context is available for this action.");
         return;
       }
 
-      const topologyRef =
-        actionTopologyRef ??
-        buildStandaloneTopologyRefFromPath(
-          lab.topologyPath || `${lab.name}.clab.yml`,
-          lab.name,
-          lab.endpointId
-        );
-      const containers = [...lab.containers.values()].sort((left, right) =>
-        (left.nodeName || left.name).localeCompare(right.nodeName || right.name)
-      );
+      const topologyRef = topologyRefForNodeActions(lab, actionTopologyRef);
+      const containers = sortedRunningContainers(lab);
       if (containers.length === 0) {
         runtimeUiActions.notify(`No containers were found in lab "${lab.name}".`, "warning");
         return;
@@ -1198,14 +1370,9 @@ export function createStandaloneExplorerBridge(
           nodeName,
           protocol: "ssh",
           title: `SSH: ${nodeName}`
-        });
+          });
       }
-      runtimeUiActions.notify(
-        containers.length > 1
-          ? `Opened SSH terminals for ${containers.length} nodes.`
-          : `Opened SSH terminal for ${containers[0]?.nodeName || containers[0]?.name}.`,
-        "success"
-      );
+      runtimeUiActions.notify(sshOpenedNotification(containers), "success");
     };
 
     const shareLabKey = actionTopologyRef?.labName ?? item?.labName ?? "";
@@ -1246,7 +1413,7 @@ export function createStandaloneExplorerBridge(
         return trimmed;
       }
 
-      const endpoint = findEndpointById(actionEndpointId);
+      const endpoint = findEndpointConfig(endpoints, actionEndpointId);
       if (endpoint) {
         try {
           return new URL(endpoint.url).hostname;
@@ -1346,8 +1513,8 @@ export function createStandaloneExplorerBridge(
     };
 
     const runShareAction = async (
-      kind: "sshx" | "gotty",
-      action: "attach" | "detach" | "reattach"
+      kind: ShareActionKind,
+      action: ShareLifecycleAction
     ): Promise<void> => {
       const topologyRef = resolveActionTopologyRef();
       if (!topologyRef) {
@@ -1359,50 +1526,21 @@ export function createStandaloneExplorerBridge(
         runtimeUiActions.notify(
           `${kind.toUpperCase()} ${action} started. This may take a moment...`,
           "info"
-        );
+          );
 
-        const payload =
-          kind === "sshx"
-            ? await runSshxShareAction({
-                endpointId: actionEndpointId,
-                topologyRef,
-                action
-              })
-            : await runGottyShareAction({
-                endpointId: actionEndpointId,
-                topologyRef,
-                action
-              });
-
+        const payload = await runLabShareAction({
+          action,
+          endpointId: actionEndpointId,
+          kind,
+          topologyRef
+        });
         const link = payload.link?.trim() || extractFirstHttpLink(payload.output ?? "") || "";
         const labKey = normalizeLabName(topologyRef.labName || resolveShareLabKey());
-        if (labKey) {
-          const bucket = kind === "sshx" ? sshxLinksByLab : gottyLinksByLab;
-          if (action === "detach") {
-            bucket.delete(labKey);
-          } else if (link) {
-            bucket.set(labKey, link);
-          }
-        }
+        const bucket = kind === "sshx" ? sshxLinksByLab : gottyLinksByLab;
+        persistShareLink({ action, bucket, labKey, link });
         controller.scheduleSnapshot(0);
 
-        if (link && (action === "attach" || action === "reattach")) {
-          await navigator.clipboard.writeText(link).catch(() => {});
-          const shouldOpen = window.confirm(
-            `${kind.toUpperCase()} link copied to clipboard.\n\nOpen link now?`
-          );
-          if (shouldOpen) {
-            window.open(link, "_blank", "noopener,noreferrer");
-          }
-        }
-
-        if (!link && (action === "attach" || action === "reattach")) {
-          runtimeUiActions.notify(
-            `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
-            "warning"
-          );
-        }
-
+        await handleShareActionLink(kind, action, link);
         runtimeUiActions.notify(payload.message || `${kind.toUpperCase()} ${action} completed.`, "success");
       } catch (error) {
         runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
@@ -1506,504 +1644,366 @@ export function createStandaloneExplorerBridge(
       }
     };
 
-    switch (commandId) {
-      case "containerlab.openLink": {
-        const link = typeof args[0] === "string" ? args[0] : undefined;
-        if (link) {
-          window.open(link, "_blank", "noopener,noreferrer");
-        }
-        return;
+    const requireTopologyRef = (message = "No canonical topology reference is available for this item."): TopologyRef | undefined => {
+      if (!actionTopologyRef) {
+        postExplorerError(message);
+        return undefined;
       }
-      case "containerlab.endpoint.reconnect": {
-        if (!actionEndpointId) {
-          postExplorerError("No endpoint is associated with this item.");
-          return;
-        }
-        dispatchEndpointUiAction({ action: "reconnect", endpointId: actionEndpointId });
-        return;
-      }
-      case "containerlab.endpoint.remove": {
-        if (!actionEndpointId) {
-          postExplorerError("No endpoint is associated with this item.");
-          return;
-        }
-        dispatchEndpointUiAction({ action: "remove", endpointId: actionEndpointId });
-        return;
-      }
-      case "containerlab.endpoint.copyUrl": {
-        if (!actionEndpointId) {
-          postExplorerError("No endpoint is associated with this item.");
-          return;
-        }
-        const endpoint = findEndpointById(actionEndpointId);
-        if (!endpoint) {
-          postExplorerError("Endpoint metadata is not available.");
-          return;
-        }
-        await navigator.clipboard.writeText(endpoint.url).catch(() => {});
-        runtimeUiActions.notify(`Copied endpoint URL for ${endpoint.label}.`, "success");
-        return;
-      }
-      case "containerlab.install.edgeshark": {
-        const endpointId = await resolveEndpointForAction("install EdgeShark", actionEndpointId);
-        if (!endpointId) {
-          return;
-        }
-        try {
-          await installEdgeShark(endpointId);
-          runtimeUiActions.notify("Installed EdgeShark.", "success");
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
-        return;
-      }
-      case "containerlab.uninstall.edgeshark": {
-        const endpointId = await resolveEndpointForAction("uninstall EdgeShark", actionEndpointId);
-        if (!endpointId) {
-          return;
-        }
-        if (!window.confirm("Uninstall EdgeShark on this endpoint?")) {
-          return;
-        }
-        try {
-          await uninstallEdgeShark(endpointId);
-          runtimeUiActions.notify("Uninstalled EdgeShark.", "success");
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
-        return;
-      }
-      case "containerlab.lab.graph.topoViewer":
-      case "containerlab.lab.openFile":
-      case "containerlab.editor.topoViewerEditor.open": {
-        if (!actionTopologyRef) {
-          postExplorerError(
-            targetLabel
-              ? `No canonical topology reference is available for running lab "${targetLabel}".`
-              : "No canonical topology reference is available for this item."
-          );
-          return;
-        }
-        const itemState = deploymentStateFromContext(item?.contextValue);
-        const resolvedState = await options.resolveDeploymentState(actionTopologyRef);
-        const deploymentState = resolvedState ?? itemState;
-        await options.loadTopologyFile(actionTopologyRef, { deploymentState, endpointId: actionEndpointId });
-        return;
-      }
-      case "containerlab.lab.graph.drawio.horizontal": {
-        await runDrawio("horizontal");
-        return;
-      }
-      case "containerlab.lab.graph.drawio.vertical": {
-        await runDrawio("vertical");
-        return;
-      }
-      case "containerlab.lab.graph.drawio.interactive": {
-        await runDrawio("interactive");
-        return;
-      }
-      case "containerlab.editor.topoViewerEditor": {
-        const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
-        if (connectedEndpoints.length === 0) {
-          postExplorerError("Connect an endpoint before trying to create a topology file.");
-          return;
-        }
-        const preferredEndpoint = findEndpointById(actionEndpointId);
-        const createTopologyInput = await promptForCreateTopology({
-          title: "Create Topology File",
-          message: "Choose endpoint and file name for the new topology file.",
-          confirmLabel: "Create",
-          endpointOptions: connectedEndpoints.map((endpoint) => ({
-            value: endpoint.id,
-            label: endpoint.label,
-            description: endpoint.url
-          })),
-          defaultEndpointId:
-            preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
-          defaultFileName: "new-lab.clab.yml"
-        });
-        if (!createTopologyInput) {
-          return;
-        }
-        const { endpointId, fileName: rawFileName } = createTopologyInput;
+      return actionTopologyRef;
+    };
 
-        try {
-          const created = await createTopologyFile({ endpointId, fileName: rawFileName });
-          options.invalidateTopologyFileListCache(endpointId);
-          controller.scheduleSnapshot(0);
-          runtimeUiActions.notify(`Created topology file "${rawFileName}".`, "success");
-          await options.loadTopologyFile(created.topologyRef, {
-            deploymentState: "undeployed",
-            endpointId
-          });
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
+    const runEndpointEdgeSharkAction = async (action: "install" | "uninstall"): Promise<void> => {
+      const endpointId = await resolveEndpointForAction(`${action} EdgeShark`, actionEndpointId);
+      if (!endpointId) {
         return;
       }
-      case "containerlab.lab.cloneRepo": {
-        const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
-        if (connectedEndpoints.length === 0) {
-          postExplorerError("Connect an endpoint before trying to clone a repository.");
-          return;
-        }
-        const preferredEndpoint = findEndpointById(actionEndpointId);
-        const popularRepos = (await fetchPopularRepos()).slice(0, 12);
-        const cloneRepoInput = await promptForCloneRepo({
-          title: "Clone Repository",
-          message: "Choose endpoint, source, and target action.",
-          confirmLabel: "Continue",
-          endpointOptions: connectedEndpoints.map((endpoint) => ({
-            value: endpoint.id,
-            label: endpoint.label,
-            description: endpoint.url
-          })),
-          popularOptions: popularRepos.map((repo) => ({
-            value: repo.htmlUrl,
-            label: `${repo.name} (⭐ ${repo.stars})`,
-            description: repo.description
-          })),
-          defaultEndpointId:
-            preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
-          defaultMode: "url",
-          defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab",
-          defaultTarget: "deploy"
+      if (action === "uninstall" && !window.confirm("Uninstall EdgeShark on this endpoint?")) {
+        return;
+      }
+      try {
+        await (action === "install" ? installEdgeShark(endpointId) : uninstallEdgeShark(endpointId));
+        runtimeUiActions.notify(`${action === "install" ? "Installed" : "Uninstalled"} EdgeShark.`, "success");
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const openTopologyFile = async (): Promise<void> => {
+      const topologyRef = requireTopologyRef(
+        targetLabel
+          ? `No canonical topology reference is available for running lab "${targetLabel}".`
+          : "No canonical topology reference is available for this item."
+      );
+      if (!topologyRef) {
+        return;
+      }
+      const itemState = deploymentStateFromContext(item?.contextValue);
+      const resolvedState = await options.resolveDeploymentState(topologyRef);
+      await options.loadTopologyFile(topologyRef, {
+        deploymentState: resolvedState ?? itemState,
+        endpointId: actionEndpointId
+      });
+    };
+
+    const createTopologyFileFlow = async (): Promise<void> => {
+      const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+      if (connectedEndpoints.length === 0) {
+        postExplorerError("Connect an endpoint before trying to create a topology file.");
+        return;
+      }
+      const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
+      const createTopologyInput = await promptForCreateTopology({
+        title: "Create Topology File",
+        message: "Choose endpoint and file name for the new topology file.",
+        confirmLabel: "Create",
+        endpointOptions: connectedEndpoints.map((endpoint) => ({
+          value: endpoint.id,
+          label: endpoint.label,
+          description: endpoint.url
+        })),
+        defaultEndpointId:
+          preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
+        defaultFileName: "new-lab.clab.yml"
+      });
+      if (!createTopologyInput) {
+        return;
+      }
+      try {
+        const created = await createTopologyFile({
+          endpointId: createTopologyInput.endpointId,
+          fileName: createTopologyInput.fileName
         });
-        if (!cloneRepoInput) {
-          return;
-        }
+        options.invalidateTopologyFileListCache(createTopologyInput.endpointId);
+        controller.scheduleSnapshot(0);
+        runtimeUiActions.notify(`Created topology file "${createTopologyInput.fileName}".`, "success");
+        await options.loadTopologyFile(created.topologyRef, {
+          deploymentState: "undeployed",
+          endpointId: createTopologyInput.endpointId
+        });
+      } catch (error) {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    };
+
+    const cloneRepositoryFlow = async (): Promise<void> => {
+      const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+      if (connectedEndpoints.length === 0) {
+        postExplorerError("Connect an endpoint before trying to clone a repository.");
+        return;
+      }
+      const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
+      const popularRepos = (await fetchPopularRepos()).slice(0, 12);
+      const cloneRepoInput = await promptForCloneRepo({
+        title: "Clone Repository",
+        message: "Choose endpoint, source, and target action.",
+        confirmLabel: "Continue",
+        endpointOptions: connectedEndpoints.map((endpoint) => ({
+          value: endpoint.id,
+          label: endpoint.label,
+          description: endpoint.url
+        })),
+        popularOptions: popularRepos.map((repo) => ({
+          value: repo.htmlUrl,
+          label: `${repo.name} (⭐ ${repo.stars})`,
+          description: repo.description
+        })),
+        defaultEndpointId:
+          preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
+        defaultMode: "url",
+        defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab",
+        defaultTarget: "deploy"
+      });
+      if (cloneRepoInput) {
         await cloneFromUrlFlow(cloneRepoInput.endpointId, cloneRepoInput.sourceUrl, {
           labNameOverride: cloneRepoInput.labNameOverride,
           skipLabNamePrompt: true,
           target: cloneRepoInput.target
         });
-        return;
       }
-      case "containerlab.lab.clonePopularRepo":
-      case "containerlab.lab.deployPopular": {
-        const endpointId = await resolveEndpointForAction(
-          commandId === "containerlab.lab.clonePopularRepo"
-            ? "clone a popular lab"
-            : "deploy a popular lab",
-          actionEndpointId
-        );
-        if (!endpointId) {
-          return;
-        }
-        const sourceUrl = await pickPopularRepo(
-          commandId === "containerlab.lab.clonePopularRepo"
-            ? "Clone popular lab"
-            : "Deploy popular lab"
-        );
-        if (!sourceUrl) {
-          return;
-        }
-        await cloneFromUrlFlow(endpointId, sourceUrl, {
-          target: commandId === "containerlab.lab.clonePopularRepo" ? "undeployed" : "deploy"
-        });
-        return;
-      }
-      case "containerlab.inspectAll": {
-        runtimeUiActions.openInspectAll();
-        return;
-      }
-      case "containerlab.inspectOneLab": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        runtimeUiActions.openInspectLab(
-          { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
-          `Inspect: ${targetLabel ?? actionTopologyRef.labName}`
-        );
-        return;
-      }
-      case "containerlab.lab.deploy":
-      case "containerlab.lab.deploy.cleanup":
-      case "containerlab.lab.deploy.specificFile": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        const withCleanup = commandId === "containerlab.lab.deploy.cleanup";
-        if (
-          withCleanup &&
-          !window.confirm(
-            "Deploy (cleanup) may remove existing lab artifacts before deployment. Continue?"
-          )
-        ) {
-          return;
-        }
-        try {
-          await options.invokeLifecycleApi("deploy", actionTopologyRef, withCleanup);
-          options.invalidateTopologyFileListCache(actionEndpointId);
-        } catch (error) {
-          console.error("[Standalone] Deploy failed:", error);
-        }
-        return;
-      }
-      case "containerlab.lab.destroy":
-      case "containerlab.lab.destroy.cleanup": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        try {
-          await options.invokeLifecycleApi(
-            "destroy",
-            actionTopologyRef,
-            commandId === "containerlab.lab.destroy.cleanup"
-          );
-          options.invalidateTopologyFileListCache(actionEndpointId);
-        } catch (error) {
-          console.error("[Standalone] Destroy failed:", error);
-        }
-        return;
-      }
-      case "containerlab.lab.redeploy":
-      case "containerlab.lab.redeploy.cleanup": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        try {
-          await options.invokeLifecycleApi(
-            "redeploy",
-            actionTopologyRef,
-            commandId === "containerlab.lab.redeploy.cleanup"
-          );
-          options.invalidateTopologyFileListCache(actionEndpointId);
-        } catch (error) {
-          console.error("[Standalone] Redeploy failed:", error);
-        }
-        return;
-      }
-      case "containerlab.lab.save": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        await saveConfigsFlow(
-          { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
-          `Saved configs for ${actionTopologyRef.labName}.`
-        );
-        return;
-      }
-      case "containerlab.lab.delete": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        const deleted = await deleteTopologyFileFlow({
-          endpointId: actionEndpointId,
-          topologyRef: actionTopologyRef
-        });
-        if (deleted) {
-          options.invalidateTopologyFileListCache(actionEndpointId);
-          controller.scheduleSnapshot(0);
-        }
-        return;
-      }
-      case "containerlab.lab.toggleFavorite": {
-        if (!actionTopologyRef) {
-          postExplorerError("No canonical topology reference is available for this item.");
-          return;
-        }
-        const nextFavorite = toggleStandaloneFavorite({
-          endpointId: actionEndpointId,
-          topologyRef: actionTopologyRef
-        });
-        controller.scheduleSnapshot(0);
-        runtimeUiActions.notify(
-          nextFavorite ? "Added lab to favorites." : "Removed lab from favorites.",
-          "success"
-        );
-        return;
-      }
-      case "containerlab.lab.sshToAllNodes": {
-        openSshToAllNodes();
-        return;
-      }
-      case "containerlab.lab.sshx.attach": {
-        await runShareAction("sshx", "attach");
-        return;
-      }
-      case "containerlab.lab.sshx.detach": {
-        await runShareAction("sshx", "detach");
-        return;
-      }
-      case "containerlab.lab.sshx.reattach": {
-        await runShareAction("sshx", "reattach");
-        return;
-      }
-      case "containerlab.lab.gotty.attach": {
-        await runShareAction("gotty", "attach");
-        return;
-      }
-      case "containerlab.lab.gotty.detach": {
-        await runShareAction("gotty", "detach");
-        return;
-      }
-      case "containerlab.lab.gotty.reattach": {
-        await runShareAction("gotty", "reattach");
-        return;
-      }
-      case "containerlab.lab.sshx.copyLink":
-      case "containerlab.lab.sshx.copylink": {
-        await copyShareLink("sshx");
-        return;
-      }
-      case "containerlab.lab.gotty.copyLink":
-      case "containerlab.lab.gotty.copylink": {
-        await copyShareLink("gotty");
-        return;
-      }
-      case "containerlab.lab.fcli.bgpPeers": {
-        await runFcli("bgp-peers");
-        return;
-      }
-      case "containerlab.lab.fcli.bgpRib": {
-        await runFcli("bgp-rib");
-        return;
-      }
-      case "containerlab.lab.fcli.ipv4Rib": {
-        await runFcli("ipv4-rib");
-        return;
-      }
-      case "containerlab.lab.fcli.lldp": {
-        await runFcli("lldp");
-        return;
-      }
-      case "containerlab.lab.fcli.mac": {
-        await runFcli("mac");
-        return;
-      }
-      case "containerlab.lab.fcli.ni": {
-        await runFcli("ni");
-        return;
-      }
-      case "containerlab.lab.fcli.subif": {
-        await runFcli("subif");
-        return;
-      }
-      case "containerlab.lab.fcli.sysInfo": {
-        await runFcli("sys-info");
-        return;
-      }
-      case "containerlab.lab.fcli.custom": {
-        const customCommand = window.prompt(
-          "Custom fcli command",
-          "bgp-peers"
-        );
-        if (!customCommand || customCommand.trim().length === 0) {
-          return;
-        }
-        await runFcli(customCommand.trim());
-        return;
-      }
-      case "containerlab.capture.killAllWiresharkVNC": {
-        const endpointId = await resolveEndpointForAction(
-          "close all Wireshark VNC sessions",
-          actionEndpointId
-        );
-        if (!endpointId) {
-          return;
-        }
-        const confirmed = window.confirm(
-          "Close all active Wireshark VNC sessions for this endpoint?"
-        );
-        if (!confirmed) {
-          return;
-        }
+    };
 
-        try {
-          const response = await closeAllWiresharkVncSessions(endpointId);
-          runtimeUiActions.notify(response.message || "Closed Wireshark VNC sessions.", "success");
-        } catch (error) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
+    const clonePopularFlow = async (target: CloneRepoDialogTarget): Promise<void> => {
+      const endpointId = await resolveEndpointForAction(
+        target === "undeployed" ? "clone a popular lab" : "deploy a popular lab",
+        actionEndpointId
+      );
+      const sourceUrl = endpointId
+        ? await pickPopularRepo(target === "undeployed" ? "Clone popular lab" : "Deploy popular lab")
+        : undefined;
+      if (endpointId && sourceUrl) {
+        await cloneFromUrlFlow(endpointId, sourceUrl, { target });
+      }
+    };
+
+    const runLabLifecycle = async (
+      endpoint: "deploy" | "destroy" | "redeploy",
+      cleanup: boolean
+    ): Promise<void> => {
+      const topologyRef = requireTopologyRef();
+      if (!topologyRef) {
         return;
       }
-      case "containerlab.treeView.runningLabs.hideNonOwnedLabs": {
+      try {
+        await options.invokeLifecycleApi(endpoint, topologyRef, cleanup);
+        options.invalidateTopologyFileListCache(actionEndpointId);
+      } catch (error) {
+        console.error(`[Standalone] ${endpoint} failed:`, error);
+      }
+    };
+
+    const deleteTopologyFlow = async (): Promise<void> => {
+      const topologyRef = requireTopologyRef();
+      if (!topologyRef) {
+        return;
+      }
+      const deleted = await deleteTopologyFileFlow({ endpointId: actionEndpointId, topologyRef });
+      if (deleted) {
+        options.invalidateTopologyFileListCache(actionEndpointId);
+        controller.scheduleSnapshot(0);
+      }
+    };
+
+    const toggleFavoriteFlow = (): void => {
+      const topologyRef = requireTopologyRef();
+      if (!topologyRef) {
+        return;
+      }
+      const nextFavorite = toggleStandaloneFavorite({ endpointId: actionEndpointId, topologyRef });
+      controller.scheduleSnapshot(0);
+      runtimeUiActions.notify(nextFavorite ? "Added lab to favorites." : "Removed lab from favorites.", "success");
+    };
+
+    const openNodeAccessTerminal = (): void => {
+      if (!actionTopologyRef || !item?.name) {
+        postExplorerError("Node access requires a running lab item.");
+        return;
+      }
+      const protocol = nodeAccessProtocol(commandId);
+      runtimeUiActions.openTerminal({
+        endpointId: actionEndpointId,
+        topologyRef: actionTopologyRef,
+        nodeName: item.name,
+        protocol,
+        title: `${nodeAccessTitlePrefix(protocol)}: ${item.label || item.name}`
+      });
+    };
+
+    const openInterfaceImpairments = (): void => {
+      if (!actionTopologyRef || !item?.containerName) {
+        postExplorerError("Interface impairments require a running interface item.");
+        return;
+      }
+      const fieldByCommand: Record<string, keyof NetemFields> = {
+        "containerlab.interface.setDelay": "delay",
+        "containerlab.interface.setJitter": "jitter",
+        "containerlab.interface.setLoss": "loss",
+        "containerlab.interface.setRate": "rate",
+        "containerlab.interface.setCorruption": "corruption"
+      };
+      runtimeUiActions.openNetem({
+        endpointId: actionEndpointId,
+        topologyRef: actionTopologyRef,
+        nodeName: item.containerName,
+        preferredField: fieldByCommand[commandId],
+        preferredInterfaceName: item.label || item.name,
+        title: `Impairments: ${item.containerName}`
+      });
+    };
+
+    const setSessionHostnameFlow = (): void => {
+      const actionEndpointLabel =
+        findEndpointConfig(endpoints, actionEndpointId)?.label ?? actionEndpointId ?? "default";
+      const currentHostname = getSessionHostnameOverride(actionEndpointId) ?? "";
+      const rawValue = window.prompt(
+        `Set session hostname override for packet capture on "${actionEndpointLabel}" (leave empty to clear)`,
+        currentHostname
+      );
+      if (rawValue === null) {
+        return;
+      }
+      const nextValue = setSessionHostnameOverride(rawValue, actionEndpointId);
+      runtimeUiActions.notify(
+        nextValue
+          ? `Session hostname override for "${actionEndpointLabel}" set to "${nextValue}".`
+          : `Session hostname override for "${actionEndpointLabel}" cleared.`,
+        "success"
+      );
+    };
+
+    const copyText = async (value: string | undefined): Promise<void> => {
+      if (value) {
+        await navigator.clipboard.writeText(value).catch(() => {});
+      }
+    };
+
+    const commandHandlers: Record<string, () => Promise<void> | void> = {
+      "containerlab.openLink": () => {
+        const link = typeof args[0] === "string" ? args[0] : undefined;
+        if (link) {
+          window.open(link, "_blank", "noopener,noreferrer");
+        }
+      },
+      "containerlab.endpoint.reconnect": () => actionEndpointId
+        ? dispatchEndpointUiAction({ action: "reconnect", endpointId: actionEndpointId })
+        : postExplorerError("No endpoint is associated with this item."),
+      "containerlab.endpoint.remove": () => actionEndpointId
+        ? dispatchEndpointUiAction({ action: "remove", endpointId: actionEndpointId })
+        : postExplorerError("No endpoint is associated with this item."),
+      "containerlab.endpoint.copyUrl": async () => {
+        const endpoint = findEndpointConfig(endpoints, actionEndpointId);
+        if (!actionEndpointId || !endpoint) {
+          postExplorerError(actionEndpointId ? "Endpoint metadata is not available." : "No endpoint is associated with this item.");
+          return;
+        }
+        await navigator.clipboard.writeText(endpoint.url).catch(() => {});
+        runtimeUiActions.notify(`Copied endpoint URL for ${endpoint.label}.`, "success");
+      },
+      "containerlab.install.edgeshark": () => runEndpointEdgeSharkAction("install"),
+      "containerlab.uninstall.edgeshark": () => runEndpointEdgeSharkAction("uninstall"),
+      "containerlab.lab.graph.topoViewer": openTopologyFile,
+      "containerlab.lab.openFile": openTopologyFile,
+      "containerlab.editor.topoViewerEditor.open": openTopologyFile,
+      "containerlab.lab.graph.drawio.horizontal": () => runDrawio("horizontal"),
+      "containerlab.lab.graph.drawio.vertical": () => runDrawio("vertical"),
+      "containerlab.lab.graph.drawio.interactive": () => runDrawio("interactive"),
+      "containerlab.editor.topoViewerEditor": createTopologyFileFlow,
+      "containerlab.lab.cloneRepo": cloneRepositoryFlow,
+      "containerlab.lab.clonePopularRepo": () => clonePopularFlow("undeployed"),
+      "containerlab.lab.deployPopular": () => clonePopularFlow("deploy"),
+      "containerlab.inspectAll": runtimeUiActions.openInspectAll,
+      "containerlab.inspectOneLab": () => {
+        const topologyRef = requireTopologyRef();
+        if (topologyRef) {
+          runtimeUiActions.openInspectLab(
+            { endpointId: actionEndpointId, topologyRef },
+            `Inspect: ${targetLabel ?? topologyRef.labName}`
+          );
+        }
+      },
+      "containerlab.lab.deploy": () => runLabLifecycle("deploy", false),
+      "containerlab.lab.deploy.specificFile": () => runLabLifecycle("deploy", false),
+      "containerlab.lab.deploy.cleanup": async () => {
+        if (window.confirm("Deploy (cleanup) may remove existing lab artifacts before deployment. Continue?")) {
+          await runLabLifecycle("deploy", true);
+        }
+      },
+      "containerlab.lab.destroy": () => runLabLifecycle("destroy", false),
+      "containerlab.lab.destroy.cleanup": () => runLabLifecycle("destroy", true),
+      "containerlab.lab.redeploy": () => runLabLifecycle("redeploy", false),
+      "containerlab.lab.redeploy.cleanup": () => runLabLifecycle("redeploy", true),
+      "containerlab.lab.save": async () => {
+        const topologyRef = requireTopologyRef();
+        if (topologyRef) {
+          await saveConfigsFlow({ endpointId: actionEndpointId, topologyRef }, `Saved configs for ${topologyRef.labName}.`);
+        }
+      },
+      "containerlab.lab.delete": deleteTopologyFlow,
+      "containerlab.lab.toggleFavorite": toggleFavoriteFlow,
+      "containerlab.lab.sshToAllNodes": openSshToAllNodes,
+      "containerlab.lab.sshx.attach": () => runShareAction("sshx", "attach"),
+      "containerlab.lab.sshx.detach": () => runShareAction("sshx", "detach"),
+      "containerlab.lab.sshx.reattach": () => runShareAction("sshx", "reattach"),
+      "containerlab.lab.gotty.attach": () => runShareAction("gotty", "attach"),
+      "containerlab.lab.gotty.detach": () => runShareAction("gotty", "detach"),
+      "containerlab.lab.gotty.reattach": () => runShareAction("gotty", "reattach"),
+      "containerlab.lab.sshx.copyLink": () => copyShareLink("sshx"),
+      "containerlab.lab.sshx.copylink": () => copyShareLink("sshx"),
+      "containerlab.lab.gotty.copyLink": () => copyShareLink("gotty"),
+      "containerlab.lab.gotty.copylink": () => copyShareLink("gotty"),
+      "containerlab.lab.fcli.bgpPeers": () => runFcli("bgp-peers"),
+      "containerlab.lab.fcli.bgpRib": () => runFcli("bgp-rib"),
+      "containerlab.lab.fcli.ipv4Rib": () => runFcli("ipv4-rib"),
+      "containerlab.lab.fcli.lldp": () => runFcli("lldp"),
+      "containerlab.lab.fcli.mac": () => runFcli("mac"),
+      "containerlab.lab.fcli.ni": () => runFcli("ni"),
+      "containerlab.lab.fcli.subif": () => runFcli("subif"),
+      "containerlab.lab.fcli.sysInfo": () => runFcli("sys-info"),
+      "containerlab.lab.fcli.custom": async () => {
+        const customCommand = window.prompt("Custom fcli command", "bgp-peers");
+        if (customCommand?.trim()) {
+          await runFcli(customCommand.trim());
+        }
+      },
+      "containerlab.capture.killAllWiresharkVNC": async () => {
+        const endpointId = await resolveEndpointForAction("close all Wireshark VNC sessions", actionEndpointId);
+        if (endpointId && window.confirm("Close all active Wireshark VNC sessions for this endpoint?")) {
+          try {
+            const response = await closeAllWiresharkVncSessions(endpointId);
+            runtimeUiActions.notify(response.message || "Closed Wireshark VNC sessions.", "success");
+          } catch (error) {
+            runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+          }
+        }
+      },
+      "containerlab.treeView.runningLabs.hideNonOwnedLabs": () => {
         showNonOwnedLabs = false;
         persistShowNonOwnedLabsSetting(false);
         controller.scheduleSnapshot(0);
-        return;
-      }
-      case "containerlab.treeView.runningLabs.showNonOwnedLabs": {
+      },
+      "containerlab.treeView.runningLabs.showNonOwnedLabs": () => {
         showNonOwnedLabs = true;
         persistShowNonOwnedLabsSetting(true);
         controller.scheduleSnapshot(0);
-        return;
-      }
-      case "containerlab.node.save": {
+      },
+      "containerlab.node.save": async () => {
         if (!actionTopologyRef || !item?.name) {
           postExplorerError("Node save requires a running lab item.");
           return;
         }
         await saveConfigsFlow(
-          {
-            endpointId: actionEndpointId,
-            topologyRef: actionTopologyRef,
-            nodeName: item.name
-          },
+          { endpointId: actionEndpointId, topologyRef: actionTopologyRef, nodeName: item.name },
           `Saved config for ${item.label || item.name}.`
         );
-        return;
-      }
-      case "containerlab.node.start": {
-        await runNodeLifecycle(
-          "start",
-          `Started ${item?.label || item?.name || "node"}.`
-        );
-        return;
-      }
-      case "containerlab.node.stop": {
-        await runNodeLifecycle(
-          "stop",
-          `Stopped ${item?.label || item?.name || "node"}.`
-        );
-        return;
-      }
-      case "containerlab.node.pause": {
-        await runNodeLifecycle(
-          "pause",
-          `Paused ${item?.label || item?.name || "node"}.`
-        );
-        return;
-      }
-      case "containerlab.node.unpause": {
-        await runNodeLifecycle(
-          "unpause",
-          `Unpaused ${item?.label || item?.name || "node"}.`
-        );
-        return;
-      }
-      case "containerlab.node.openBrowser": {
-        await openNodeBrowser();
-        return;
-      }
-      case "containerlab.node.ssh":
-      case "containerlab.node.attachShell":
-      case "containerlab.node.telnet": {
-        if (!actionTopologyRef || !item?.name) {
-          postExplorerError("Node access requires a running lab item.");
-          return;
-        }
-
-        const protocol = nodeAccessProtocol(commandId);
-        const titlePrefix = nodeAccessTitlePrefix(protocol);
-
-        runtimeUiActions.openTerminal({
-          endpointId: actionEndpointId,
-          topologyRef: actionTopologyRef,
-          nodeName: item.name,
-          protocol,
-          title: `${titlePrefix}: ${item.label || item.name}`
-        });
-        return;
-      }
-      case "containerlab.node.showLogs": {
+      },
+      "containerlab.node.start": () => runNodeLifecycle("start", `Started ${item?.label || item?.name || "node"}.`),
+      "containerlab.node.stop": () => runNodeLifecycle("stop", `Stopped ${item?.label || item?.name || "node"}.`),
+      "containerlab.node.pause": () => runNodeLifecycle("pause", `Paused ${item?.label || item?.name || "node"}.`),
+      "containerlab.node.unpause": () => runNodeLifecycle("unpause", `Unpaused ${item?.label || item?.name || "node"}.`),
+      "containerlab.node.openBrowser": openNodeBrowser,
+      "containerlab.node.ssh": openNodeAccessTerminal,
+      "containerlab.node.attachShell": openNodeAccessTerminal,
+      "containerlab.node.telnet": openNodeAccessTerminal,
+      "containerlab.node.showLogs": () => {
         if (!actionTopologyRef || !item?.name) {
           postExplorerError("Node logs require a running lab item.");
           return;
@@ -2014,9 +2014,8 @@ export function createStandaloneExplorerBridge(
           nodeName: item.name,
           title: `Logs: ${item.label || item.name}`
         });
-        return;
-      }
-      case "containerlab.node.manageImpairments": {
+      },
+      "containerlab.node.manageImpairments": () => {
         if (!actionTopologyRef || !item?.name) {
           postExplorerError("Impairments require a running lab item.");
           return;
@@ -2027,122 +2026,35 @@ export function createStandaloneExplorerBridge(
           nodeName: item.name,
           title: `Impairments: ${item.label || item.name}`
         });
-        return;
-      }
-      case "containerlab.interface.setDelay":
-      case "containerlab.interface.setJitter":
-      case "containerlab.interface.setLoss":
-      case "containerlab.interface.setRate":
-      case "containerlab.interface.setCorruption": {
-        if (!actionTopologyRef || !item?.containerName) {
-          postExplorerError("Interface impairments require a running interface item.");
-          return;
-        }
+      },
+      "containerlab.interface.setDelay": openInterfaceImpairments,
+      "containerlab.interface.setJitter": openInterfaceImpairments,
+      "containerlab.interface.setLoss": openInterfaceImpairments,
+      "containerlab.interface.setRate": openInterfaceImpairments,
+      "containerlab.interface.setCorruption": openInterfaceImpairments,
+      "containerlab.interface.capture": runPreferredCapture,
+      "containerlab.interface.captureWithEdgeshark": runPacketflixCapture,
+      "containerlab.interface.captureWithEdgesharkVNC": runWiresharkVncCapture,
+      "containerlab.set.sessionHostname": setSessionHostnameFlow,
+      "containerlab.node.copyName": () => copyText(item?.name || item?.label),
+      "containerlab.node.copyID": () => copyText(item?.cID),
+      "containerlab.node.copyKind": () => copyText(item?.kind),
+      "containerlab.node.copyImage": () => copyText(item?.image),
+      "containerlab.node.copyIPv4Address": () => copyText(item?.v4Address),
+      "containerlab.node.copyIPv6Address": () => copyText(item?.v6Address),
+      "containerlab.interface.copyMACAddress": () => copyText(item?.mac),
+      "containerlab.lab.copyPath": async () => copyText(actionTopologyRef?.yamlPath ?? (await options.resolveApiTopologyPath(args)))
+    };
 
-        const fieldByCommand: Record<string, keyof NetemFields> = {
-          "containerlab.interface.setDelay": "delay",
-          "containerlab.interface.setJitter": "jitter",
-          "containerlab.interface.setLoss": "loss",
-          "containerlab.interface.setRate": "rate",
-          "containerlab.interface.setCorruption": "corruption"
-        };
+    const handler = commandHandlers[commandId];
+    if (handler) {
+      await handler();
+      return;
+    }
 
-        runtimeUiActions.openNetem({
-          endpointId: actionEndpointId,
-          topologyRef: actionTopologyRef,
-          nodeName: item.containerName,
-          preferredField: fieldByCommand[commandId],
-          preferredInterfaceName: item.label || item.name,
-          title: `Impairments: ${item.containerName}`
-        });
-        return;
-      }
-      case "containerlab.interface.capture": {
-        await runPreferredCapture();
-        return;
-      }
-      case "containerlab.interface.captureWithEdgeshark": {
-        await runPacketflixCapture();
-        return;
-      }
-      case "containerlab.interface.captureWithEdgesharkVNC": {
-        await runWiresharkVncCapture();
-        return;
-      }
-      case "containerlab.set.sessionHostname": {
-        const actionEndpointLabel = findEndpointById(actionEndpointId)?.label ?? actionEndpointId ?? "default";
-        const currentHostname = getSessionHostnameOverride(actionEndpointId) ?? "";
-        const rawValue = window.prompt(
-          `Set session hostname override for packet capture on "${actionEndpointLabel}" (leave empty to clear)`,
-          currentHostname
-        );
-        if (rawValue === null) {
-          return;
-        }
-        const nextValue = setSessionHostnameOverride(rawValue, actionEndpointId);
-        runtimeUiActions.notify(
-          nextValue
-            ? `Session hostname override for "${actionEndpointLabel}" set to "${nextValue}".`
-            : `Session hostname override for "${actionEndpointLabel}" cleared.`,
-          "success"
-        );
-        return;
-      }
-      case "containerlab.node.copyName": {
-        if (item) {
-          await navigator.clipboard.writeText(item.name || item.label || "").catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.node.copyID": {
-        if (item?.cID) {
-          await navigator.clipboard.writeText(item.cID).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.node.copyKind": {
-        if (item?.kind) {
-          await navigator.clipboard.writeText(item.kind).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.node.copyImage": {
-        if (item?.image) {
-          await navigator.clipboard.writeText(item.image).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.node.copyIPv4Address": {
-        if (item?.v4Address) {
-          await navigator.clipboard.writeText(item.v4Address).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.node.copyIPv6Address": {
-        if (item?.v6Address) {
-          await navigator.clipboard.writeText(item.v6Address).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.interface.copyMACAddress": {
-        if (item?.mac) {
-          await navigator.clipboard.writeText(item.mac).catch(() => {});
-        }
-        return;
-      }
-      case "containerlab.lab.copyPath": {
-        const apiLabPath = actionTopologyRef?.yamlPath ?? (await options.resolveApiTopologyPath(args));
-        if (apiLabPath) {
-          await navigator.clipboard.writeText(apiLabPath).catch(() => {});
-        }
-        return;
-      }
-      default: {
-        if (!unhandledCommands.has(commandId)) {
-          unhandledCommands.add(commandId);
-          console.warn(`[Standalone] Command not implemented: ${commandId}`);
-        }
-      }
+    if (!unhandledCommands.has(commandId)) {
+      unhandledCommands.add(commandId);
+      console.warn(`[Standalone] Command not implemented: ${commandId}`);
     }
   }
 

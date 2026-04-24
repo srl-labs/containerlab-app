@@ -11,6 +11,8 @@ type EndpointResolver = (
   endpointId?: string
 ) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
 
+type ResolvedCaptureEndpoint = NonNullable<ReturnType<EndpointResolver>>;
+
 function isValidCloseCode(code: number): boolean {
   return (
     Number.isInteger(code) &&
@@ -40,6 +42,52 @@ function requestQueryString(request: FastifyRequest): string {
   return queryIndex >= 0 ? rawUrl.slice(queryIndex) : "";
 }
 
+function resolveCaptureEndpoint(
+  request: FastifyRequest<{ Querystring: { endpointId?: string } }>,
+  sessionId: string,
+  resolveEndpoint: EndpointResolver
+): ResolvedCaptureEndpoint | null {
+  const requestedEndpointId = request.query.endpointId?.trim() || undefined;
+  const mappedEndpointId = getCaptureSessionEndpoint(sessionId);
+  const preferredEndpointId = mappedEndpointId ?? requestedEndpointId;
+  const candidateIds = [
+    preferredEndpointId,
+    requestedEndpointId,
+    mappedEndpointId,
+    undefined
+  ].filter((value, index, values) => index === values.indexOf(value));
+
+  for (const candidateId of candidateIds) {
+    const resolved = resolveEndpoint(request, {} as FastifyReply, candidateId);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+function requestedWebSocketProtocols(request: FastifyRequest): string[] {
+  const requestedProtocolHeader = request.headers["sec-websocket-protocol"];
+  if (typeof requestedProtocolHeader !== "string") {
+    return [];
+  }
+  return requestedProtocolHeader
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function createUpstreamSocket(
+  upstreamUrl: string,
+  protocols: string[],
+  headers: Record<string, string>
+): WebSocket {
+  const options = { headers, perMessageDeflate: false };
+  return protocols.length > 0
+    ? new WebSocket(upstreamUrl, protocols, options)
+    : new WebSocket(upstreamUrl, options);
+}
+
 export function registerCaptureVncStreamProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver
@@ -57,34 +105,12 @@ export function registerCaptureVncStreamProxy(
       request: CaptureWsRequest
     ) => {
       const sessionId = request.params.sessionId.trim();
-      const requestedEndpointId = request.query.endpointId?.trim() || undefined;
-      const mappedEndpointId = getCaptureSessionEndpoint(sessionId);
-      const preferredEndpointId = mappedEndpointId ?? requestedEndpointId;
-
-      let resolved = resolveEndpoint(request, {} as FastifyReply, preferredEndpointId);
-      if (!resolved && requestedEndpointId && requestedEndpointId !== preferredEndpointId) {
-        resolved = resolveEndpoint(request, {} as FastifyReply, requestedEndpointId);
-      }
-      if (!resolved && mappedEndpointId && mappedEndpointId !== preferredEndpointId) {
-        resolved = resolveEndpoint(request, {} as FastifyReply, mappedEndpointId);
-      }
-      if (!resolved) {
-        resolved = resolveEndpoint(request, {} as FastifyReply);
-      }
+      const resolved = resolveCaptureEndpoint(request, sessionId, resolveEndpoint);
       if (!resolved) {
         closeSocket(socket, 1008, "Not authenticated");
         return;
       }
       setCaptureSessionEndpoint(sessionId, resolved.endpoint.id);
-
-      const requestedProtocolHeader = request.headers["sec-websocket-protocol"];
-      const requestedProtocols =
-        typeof requestedProtocolHeader === "string"
-          ? requestedProtocolHeader
-              .split(",")
-              .map((value) => value.trim())
-              .filter((value) => value.length > 0)
-          : [];
 
       const suffix = suffixResolver(request);
       const query = requestQueryString(request);
@@ -103,16 +129,7 @@ export function registerCaptureVncStreamProxy(
         upstreamHeaders.Origin = origin;
       }
 
-      const upstream =
-        requestedProtocols.length > 0
-          ? new WebSocket(upstreamUrl, requestedProtocols, {
-              headers: upstreamHeaders,
-              perMessageDeflate: false
-            })
-          : new WebSocket(upstreamUrl, {
-              headers: upstreamHeaders,
-              perMessageDeflate: false
-            });
+      const upstream = createUpstreamSocket(upstreamUrl, requestedWebSocketProtocols(request), upstreamHeaders);
 
       const forwardUpstreamError = (error: Error): void => {
         app.log.warn({ err: error, sessionId }, "capture vnc upstream websocket error");

@@ -1,6 +1,6 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
-import type { LabState } from "./stores/labStore";
+import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";
 
 export const TREE_ITEM_NONE = 0;
 export const TREE_ITEM_COLLAPSED = 1;
@@ -212,73 +212,70 @@ export function firstArgAsTopologyRef(args: unknown[]): TopologyRef | undefined 
   return undefined;
 }
 
+type TopologyLookupRef = (
+  Pick<TopologyRef, "yamlPath"> &
+  Partial<Pick<TopologyRef, "topologyId">> &
+  Partial<Pick<TopologyRef, "labName">> &
+  { endpointId?: string }
+) | undefined;
+
+function labMatchesEndpoint(lab: LabState, endpointId: string | undefined): boolean {
+  return !endpointId || lab.endpointId === endpointId;
+}
+
+function uniqueLabByName(
+  labs: Iterable<LabState>,
+  labName: string | undefined,
+  endpointId?: string
+): LabState | undefined {
+  const normalizedLabName = normalizeLabName(labName);
+  if (!normalizedLabName) {
+    return undefined;
+  }
+  const matches = [...labs].filter(
+    (lab) => labMatchesEndpoint(lab, endpointId) && normalizeLabName(lab.name) === normalizedLabName
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function labMatchesTopologyPath(lab: LabState, normalizedPath: string): boolean {
+  if (topologyPathsLikelyMatch(lab.topologyPath, normalizedPath)) {
+    return true;
+  }
+  return [...lab.containers.values()].some((container) =>
+    topologyPathsLikelyMatch(container.labPath, normalizedPath)
+  );
+}
+
+function labsMatchingTopologyPath(
+  labs: Map<string, LabState>,
+  normalizedPath: string,
+  endpointId?: string
+): LabState[] {
+  return [...labs.values()].filter(
+    (lab) => labMatchesEndpoint(lab, endpointId) && labMatchesTopologyPath(lab, normalizedPath)
+  );
+}
+
 export function findLabStateForTopology(
-  topologyRef: (
-    Pick<TopologyRef, "yamlPath"> &
-    Partial<Pick<TopologyRef, "topologyId">> &
-    Partial<Pick<TopologyRef, "labName">> &
-    { endpointId?: string }
-  ) | undefined,
+  topologyRef: TopologyLookupRef,
   labs: Map<string, LabState>
 ): LabState | undefined {
   const endpointId = topologyRef?.endpointId ?? extractEndpointIdFromTopologyId(topologyRef?.topologyId);
   const normalizedPath = topologyRef?.yamlPath ? normalizePathValue(topologyRef.yamlPath) : "";
   if (!normalizedPath) {
-    const normalizedLabName = normalizeLabName(topologyRef?.labName);
-    if (!normalizedLabName) {
-      return undefined;
-    }
-    const byName = [...labs.values()].filter(
-      (lab) =>
-        (!endpointId || lab.endpointId === endpointId) &&
-        normalizeLabName(lab.name) === normalizedLabName
-    );
-    return byName.length === 1 ? byName[0] : undefined;
+    return uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
   }
 
-  const byPath: LabState[] = [];
-  for (const lab of labs.values()) {
-    if (endpointId && lab.endpointId !== endpointId) {
-      continue;
-    }
-    if (topologyPathsLikelyMatch(lab.topologyPath, normalizedPath)) {
-      byPath.push(lab);
-      continue;
-    }
-    for (const container of lab.containers.values()) {
-      if (topologyPathsLikelyMatch(container.labPath, normalizedPath)) {
-        byPath.push(lab);
-        break;
-      }
-    }
-  }
-
+  const byPath = labsMatchingTopologyPath(labs, normalizedPath, endpointId);
   if (byPath.length === 1) {
     return byPath[0];
   }
   if (byPath.length > 1) {
-    const normalizedLabName = normalizeLabName(topologyRef?.labName);
-    if (!normalizedLabName) {
-      return undefined;
-    }
-    const byName = byPath.filter((lab) => normalizeLabName(lab.name) === normalizedLabName);
-    return byName.length === 1 ? byName[0] : undefined;
+    return uniqueLabByName(byPath, topologyRef?.labName);
   }
 
-  const normalizedLabName = normalizeLabName(topologyRef?.labName);
-  if (!normalizedLabName) {
-    return undefined;
-  }
-  const byName = [...labs.values()].filter(
-    (lab) =>
-      (!endpointId || lab.endpointId === endpointId) &&
-      normalizeLabName(lab.name) === normalizedLabName
-  );
-  if (byName.length === 1) {
-    return byName[0];
-  }
-
-  return undefined;
+  return uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
 }
 
 export function isTopologyRunning(
@@ -291,6 +288,69 @@ export function isTopologyRunning(
   labs: Map<string, LabState>
 ): boolean {
   return findLabStateForTopology(topologyRef, labs) !== undefined;
+}
+
+function labMetadataEqual(previous: LabState, next: LabState): boolean {
+  return (
+    previous.endpointId === next.endpointId &&
+    previous.owner === next.owner &&
+    previous.topologyPath === next.topologyPath &&
+    previous.containers.size === next.containers.size
+  );
+}
+
+function containerMetadataEqual(previous: ContainerState, next: ContainerState): boolean {
+  return (
+    previous.endpointId === next.endpointId &&
+    previous.nodeName === next.nodeName &&
+    previous.kind === next.kind &&
+    previous.image === next.image &&
+    previous.state === next.state &&
+    previous.status === next.status &&
+    previous.ipv4Address === next.ipv4Address &&
+    previous.ipv6Address === next.ipv6Address &&
+    previous.labPath === next.labPath &&
+    previous.interfaces.size === next.interfaces.size
+  );
+}
+
+function interfaceStateEqual(previous: InterfaceState, next: InterfaceState): boolean {
+  return (
+    previous.alias === next.alias &&
+    previous.state === next.state &&
+    previous.type === next.type &&
+    previous.mac === next.mac &&
+    previous.mtu === next.mtu &&
+    previous.ifIndex === next.ifIndex &&
+    previous.netemDelay === next.netemDelay &&
+    previous.netemJitter === next.netemJitter &&
+    previous.netemLoss === next.netemLoss &&
+    previous.netemRate === next.netemRate &&
+    previous.netemCorruption === next.netemCorruption
+  );
+}
+
+function containerInterfacesEqual(previous: ContainerState, next: ContainerState): boolean {
+  for (const [ifaceName, previousIface] of previous.interfaces.entries()) {
+    const nextIface = next.interfaces.get(ifaceName);
+    if (!nextIface || !interfaceStateEqual(previousIface, nextIface)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function labContainersEqual(previous: LabState, next: LabState): boolean {
+  for (const [containerName, previousContainer] of previous.containers.entries()) {
+    const nextContainer = next.containers.get(containerName);
+    if (!nextContainer || !containerMetadataEqual(previousContainer, nextContainer)) {
+      return false;
+    }
+    if (!containerInterfacesEqual(previousContainer, nextContainer)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function labsEqualForExplorer(
@@ -306,56 +366,11 @@ export function labsEqualForExplorer(
     if (!nextLab) {
       return false;
     }
-    if (
-      previousLab.endpointId !== nextLab.endpointId ||
-      previousLab.owner !== nextLab.owner ||
-      previousLab.topologyPath !== nextLab.topologyPath ||
-      previousLab.containers.size !== nextLab.containers.size
-    ) {
+    if (!labMetadataEqual(previousLab, nextLab)) {
       return false;
     }
-
-    for (const [containerName, previousContainer] of previousLab.containers.entries()) {
-      const nextContainer = nextLab.containers.get(containerName);
-      if (!nextContainer) {
-        return false;
-      }
-      if (
-        previousContainer.endpointId !== nextContainer.endpointId ||
-        previousContainer.nodeName !== nextContainer.nodeName ||
-        previousContainer.kind !== nextContainer.kind ||
-        previousContainer.image !== nextContainer.image ||
-        previousContainer.state !== nextContainer.state ||
-        previousContainer.status !== nextContainer.status ||
-        previousContainer.ipv4Address !== nextContainer.ipv4Address ||
-        previousContainer.ipv6Address !== nextContainer.ipv6Address ||
-        previousContainer.labPath !== nextContainer.labPath ||
-        previousContainer.interfaces.size !== nextContainer.interfaces.size
-      ) {
-        return false;
-      }
-
-      for (const [ifaceName, previousIface] of previousContainer.interfaces.entries()) {
-        const nextIface = nextContainer.interfaces.get(ifaceName);
-        if (!nextIface) {
-          return false;
-        }
-        if (
-          previousIface.alias !== nextIface.alias ||
-          previousIface.state !== nextIface.state ||
-          previousIface.type !== nextIface.type ||
-          previousIface.mac !== nextIface.mac ||
-          previousIface.mtu !== nextIface.mtu ||
-          previousIface.ifIndex !== nextIface.ifIndex ||
-          previousIface.netemDelay !== nextIface.netemDelay ||
-          previousIface.netemJitter !== nextIface.netemJitter ||
-          previousIface.netemLoss !== nextIface.netemLoss ||
-          previousIface.netemRate !== nextIface.netemRate ||
-          previousIface.netemCorruption !== nextIface.netemCorruption
-        ) {
-          return false;
-        }
-      }
+    if (!labContainersEqual(previousLab, nextLab)) {
+      return false;
     }
   }
 

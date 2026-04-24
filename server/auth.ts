@@ -94,7 +94,7 @@ function toPublicInfo(
 async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInfo> {
   const client = new ClabApiClient({ baseUrl: entry.url });
   try {
-    await client.listTopologies(entry.token);
+    await client.getVersion(entry.token);
     return toPublicInfo(entry, "connected");
   } catch (error) {
     if (
@@ -125,6 +125,7 @@ function authErrorStatusCode(error: unknown): number {
   if (
     error instanceof Error &&
     (error.message === "Invalid API endpoint URL" ||
+      error.message === "Endpoint URL is required to reconnect" ||
       error.message === "Invalid session duration. Use values like 12h, 36h, 7d, or 1h30m")
   ) {
     return 400;
@@ -178,6 +179,38 @@ async function authenticateEndpoint(body: AddEndpointBody, defaultApiUrl: string
     username,
     sessionDuration
   };
+}
+
+async function reconnectEndpoint(
+  endpointId: string,
+  body: ReconnectEndpointBody,
+  session: EndpointSession,
+  options: AuthRouteOptions
+): Promise<EndpointEntry> {
+  const existing = session.endpoints.get(endpointId) ?? null;
+  const rawUrl = existing?.url ?? body.url;
+  const normalizedUrl = rawUrl ? normalizeApiUrl(rawUrl) : null;
+  if (!normalizedUrl) {
+    throw new Error("Endpoint URL is required to reconnect");
+  }
+
+  const sessionDuration = resolveEndpointSessionDuration(body.sessionDuration ?? existing?.sessionDuration);
+  const result = await new ClabApiClient({ baseUrl: normalizedUrl }).login(
+    body.username.trim(),
+    body.password,
+    sessionDuration
+  );
+  const updated: EndpointEntry = {
+    id: endpointId || existing?.id || buildEndpointId(),
+    url: normalizedUrl,
+    label: defaultEndpointLabel(normalizedUrl, body.label ?? existing?.label),
+    token: result.token,
+    username: body.username.trim(),
+    sessionDuration
+  };
+  options.disposeEndpointSessions(endpointId);
+  options.endpointSessions.upsertEndpoint(session.sessionId, updated);
+  return updated;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptions): void {
@@ -276,32 +309,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
 
       try {
         const session = options.ensureSession(request, reply);
-        const existing = session.endpoints.get(endpointId) ?? null;
-        const rawUrl = existing?.url ?? request.body.url;
-        const normalizedUrl = rawUrl ? normalizeApiUrl(rawUrl) : null;
-        if (!normalizedUrl) {
-          return reply.status(400).send({ error: "Endpoint URL is required to reconnect" });
-        }
-
-        const client = new ClabApiClient({ baseUrl: normalizedUrl });
-        const sessionDuration = resolveEndpointSessionDuration(
-          request.body.sessionDuration ?? existing?.sessionDuration
-        );
-        const result = await client.login(
-          request.body.username.trim(),
-          request.body.password,
-          sessionDuration
-        );
-        const updated: EndpointEntry = {
-          id: endpointId || existing?.id || buildEndpointId(),
-          url: normalizedUrl,
-          label: defaultEndpointLabel(normalizedUrl, request.body.label ?? existing?.label),
-          token: result.token,
-          username: request.body.username.trim(),
-          sessionDuration
-        };
-        options.disposeEndpointSessions(endpointId);
-        options.endpointSessions.upsertEndpoint(session.sessionId, updated);
+        const updated = await reconnectEndpoint(endpointId, request.body, session, options);
         clearLegacySessionCookies(reply);
         return reply.send(toPublicInfo(updated, "connected"));
       } catch (error) {

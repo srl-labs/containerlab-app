@@ -1,29 +1,31 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import FormControl from "@mui/material/FormControl";
-import InputLabel from "@mui/material/InputLabel";
-import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
-import Select from "@mui/material/Select";
-import Snackbar from "@mui/material/Snackbar";
-import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Snackbar,
+  Stack,
+  Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
+} from "@mui/material";
 
 import {
   createTopologyFile,
@@ -326,24 +328,84 @@ export async function promptForCreateTopology(
 function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): ActiveCloneRepoDialogRequest {
   const endpointOptions = request.endpointOptions.filter((option) => option.value.trim().length > 0);
   const popularOptions = request.popularOptions.filter((option) => option.value.trim().length > 0);
-  const defaultEndpointId =
-    request.defaultEndpointId &&
-    endpointOptions.some((option) => option.value === request.defaultEndpointId)
-      ? request.defaultEndpointId
-      : endpointOptions[0]?.value ?? "";
-  const defaultMode = request.defaultMode === "popular" && popularOptions.length > 0 ? "popular" : "url";
   return {
     title: request.title?.trim() || "Clone Repository",
     message: request.message?.trim() || "Select endpoint and repository source.",
     confirmLabel: request.confirmLabel?.trim() || "Continue",
     endpointOptions,
     popularOptions,
-    defaultEndpointId,
-    defaultMode,
+    defaultEndpointId: resolveDefaultEndpointId(request.defaultEndpointId, endpointOptions),
+    defaultMode: resolveCloneRepoDefaultMode(request.defaultMode, popularOptions),
     defaultSourceUrl: request.defaultSourceUrl?.trim() || "https://github.com/srl-labs/srl-telemetry-lab",
     defaultLabNameOverride: request.defaultLabNameOverride?.trim() || "",
     defaultTarget: request.defaultTarget ?? "deploy"
   };
+}
+
+function resolveDefaultEndpointId(
+  requestedEndpointId: string | undefined,
+  endpointOptions: EndpointSelectionOption[]
+): string {
+  if (requestedEndpointId && endpointOptions.some((option) => option.value === requestedEndpointId)) {
+    return requestedEndpointId;
+  }
+  return endpointOptions[0]?.value ?? "";
+}
+
+function resolveCloneRepoDefaultMode(
+  requestedMode: "url" | "popular" | undefined,
+  popularOptions: EndpointSelectionOption[]
+): "url" | "popular" {
+  return requestedMode === "popular" && popularOptions.length > 0 ? "popular" : "url";
+}
+
+async function promptForCloneRepoSourceUrl(
+  request: ActiveCloneRepoDialogRequest
+): Promise<string | undefined> {
+  const mode = window.prompt(
+    "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
+    request.defaultMode === "popular" ? "2" : "1"
+  );
+  if (!mode) {
+    return undefined;
+  }
+
+  if (mode.trim() === "1") {
+    const rawSourceUrl = window.prompt("Repository or topology URL", request.defaultSourceUrl);
+    return rawSourceUrl?.trim() || undefined;
+  }
+  if (mode.trim() !== "2" || request.popularOptions.length === 0) {
+    return undefined;
+  }
+
+  const optionsText = request.popularOptions
+    .map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`)
+    .join("\n");
+  const rawSelection = window.prompt(
+    `Select popular repository:\n${optionsText}\n\nEnter number (1-${request.popularOptions.length}).`,
+    "1"
+  );
+  const selectedIndex = rawSelection ? Number.parseInt(rawSelection, 10) : 0;
+  if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > request.popularOptions.length) {
+    return undefined;
+  }
+  return request.popularOptions[selectedIndex - 1].value;
+}
+
+function promptForCloneRepoTarget(
+  request: ActiveCloneRepoDialogRequest
+): CloneRepoDialogTarget | undefined {
+  const modeSelection = window.prompt(
+    "Action:\n1. Deploy now\n2. Clone to undeployed labs\n\nEnter number (1-2).",
+    request.defaultTarget === "undeployed" ? "2" : "1"
+  );
+  if (modeSelection?.trim() === "2") {
+    return "undeployed";
+  }
+  if (modeSelection?.trim() === "1") {
+    return "deploy";
+  }
+  return undefined;
 }
 
 export async function promptForCloneRepo(
@@ -368,64 +430,12 @@ export async function promptForCloneRepo(
     return undefined;
   }
 
-  const mode = window.prompt(
-    "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
-    normalizedRequest.defaultMode === "popular" ? "2" : "1"
-  );
-  if (!mode) {
-    return undefined;
-  }
-
-  let sourceUrl = "";
-  if (mode.trim() === "2") {
-    if (normalizedRequest.popularOptions.length === 0) {
-      return undefined;
-    }
-    const optionsText = normalizedRequest.popularOptions
-      .map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`)
-      .join("\n");
-    const rawSelection = window.prompt(
-      `Select popular repository:\n${optionsText}\n\nEnter number (1-${normalizedRequest.popularOptions.length}).`,
-      "1"
-    );
-    if (!rawSelection) {
-      return undefined;
-    }
-    const selectedIndex = Number.parseInt(rawSelection, 10);
-    if (
-      !Number.isFinite(selectedIndex) ||
-      selectedIndex < 1 ||
-      selectedIndex > normalizedRequest.popularOptions.length
-    ) {
-      return undefined;
-    }
-    sourceUrl = normalizedRequest.popularOptions[selectedIndex - 1].value;
-  } else if (mode.trim() === "1") {
-    const rawSourceUrl = window.prompt("Repository or topology URL", normalizedRequest.defaultSourceUrl);
-    if (!rawSourceUrl) {
-      return undefined;
-    }
-    sourceUrl = rawSourceUrl.trim();
-  } else {
-    return undefined;
-  }
-
+  const sourceUrl = await promptForCloneRepoSourceUrl(normalizedRequest);
   if (!sourceUrl) {
     return undefined;
   }
-  const modeSelection = window.prompt(
-    "Action:\n1. Deploy now\n2. Clone to undeployed labs\n\nEnter number (1-2).",
-    normalizedRequest.defaultTarget === "undeployed" ? "2" : "1"
-  );
-  if (!modeSelection) {
-    return undefined;
-  }
-  let target: CloneRepoDialogTarget;
-  if (modeSelection.trim() === "2") {
-    target = "undeployed";
-  } else if (modeSelection.trim() === "1") {
-    target = "deploy";
-  } else {
+  const target = promptForCloneRepoTarget(normalizedRequest);
+  if (!target) {
     return undefined;
   }
 
@@ -608,6 +618,680 @@ function countLogLines(content: string): number {
     return 0;
   }
   return content.split(/\r?\n/).length;
+}
+
+function InspectDialogView(props: {
+  closeInspect: () => void;
+  filteredInspectGroups: InspectGroup[];
+  inspectError: string | null;
+  inspectFilter: string;
+  inspectLoading: boolean;
+  inspectRequest: ReturnType<typeof useRuntimeUiStore.getState>["inspectRequest"];
+  setInspectFilter: (value: string) => void;
+}) {
+  return (
+    <Dialog open={props.inspectRequest !== null} onClose={props.closeInspect} maxWidth="lg" fullWidth>
+      <DialogTitle>{props.inspectRequest?.title ?? "Inspect"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          <TextField
+            label="Filter"
+            value={props.inspectFilter}
+            onChange={(event) => props.setInspectFilter(event.target.value)}
+            size="small"
+            fullWidth
+          />
+          {props.inspectLoading ? <Typography>Loading inspect data...</Typography> : null}
+          {props.inspectError ? <Alert severity="error">{props.inspectError}</Alert> : null}
+          {!props.inspectLoading && !props.inspectError && props.filteredInspectGroups.length === 0 ? (
+            <Alert severity="info">No matching running lab data.</Alert>
+          ) : null}
+          {props.filteredInspectGroups.map((group) => (
+            <Box key={group.labName}>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                {group.labName}
+              </Typography>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Kind</TableCell>
+                      <TableCell>State</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>IPv4</TableCell>
+                      <TableCell>IPv6</TableCell>
+                      <TableCell>Owner</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {group.containers.map((container) => (
+                      <TableRow key={`${group.labName}:${container.name}`}>
+                        <TableCell>{container.name}</TableCell>
+                        <TableCell>{container.kind}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={container.state || "unknown"}
+                            color={inspectStateColor(container.state)}
+                            variant={container.state ? "filled" : "outlined"}
+                          />
+                        </TableCell>
+                        <TableCell>{container.status}</TableCell>
+                        <TableCell>{container.ipv4Address || "-"}</TableCell>
+                        <TableCell>{container.ipv6Address || "-"}</TableCell>
+                        <TableCell>{container.owner || "-"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          ))}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.closeInspect}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function LogsDialogView(props: {
+  closeLogs: () => void;
+  exportLogs: () => void;
+  fetchLogs: (tailValue: string, showLoading: boolean) => Promise<void>;
+  filteredLogsContent: string;
+  logsError: string | null;
+  logsFilter: string;
+  logsFollow: boolean;
+  logsLoading: boolean;
+  logsPaperRef: React.RefObject<HTMLDivElement | null>;
+  logsRequest: ReturnType<typeof useRuntimeUiStore.getState>["logsRequest"];
+  logsTail: string;
+  setLogsFilter: (value: string) => void;
+  setLogsFollow: (value: boolean) => void;
+  setLogsTail: (value: string) => void;
+  totalLogLines: number;
+  visibleLogLines: number;
+}) {
+  const logLineSummary = props.logsFilter.trim()
+    ? `Showing ${props.visibleLogLines}/${props.totalLogLines} lines`
+    : `${props.totalLogLines} lines`;
+
+  return (
+    <Dialog open={props.logsRequest !== null} onClose={props.closeLogs} maxWidth="lg" fullWidth>
+      <DialogTitle>{props.logsRequest?.title ?? "Node Logs"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+            <TextField
+              label="Tail"
+              value={props.logsTail}
+              onChange={(event) => props.setLogsTail(event.target.value)}
+              size="small"
+              sx={{ maxWidth: 200 }}
+            />
+            <TextField
+              label="Find"
+              value={props.logsFilter}
+              onChange={(event) => props.setLogsFilter(event.target.value)}
+              size="small"
+              sx={{ minWidth: 240 }}
+            />
+            <Button
+              variant="outlined"
+              onClick={() => void props.fetchLogs(props.logsTail, true)}
+              disabled={props.logsLoading}
+            >
+              Refresh
+            </Button>
+            <Button variant="outlined" onClick={props.exportLogs} disabled={!props.filteredLogsContent}>
+              Export
+            </Button>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={props.logsFollow}
+                  onChange={(event) => props.setLogsFollow(event.target.checked)}
+                />
+              }
+              label="Follow"
+            />
+          </Stack>
+          {props.logsLoading ? <Typography>Loading logs...</Typography> : null}
+          {props.logsError ? <Alert severity="error">{props.logsError}</Alert> : null}
+          <Typography variant="body2" sx={{ opacity: 0.8 }}>
+            {logLineSummary}
+          </Typography>
+          <Paper
+            ref={props.logsPaperRef}
+            variant="outlined"
+            sx={{
+              bgcolor: "background.default",
+              maxHeight: 480,
+              overflow: "auto",
+              p: 2
+            }}
+          >
+            <Typography
+              component="pre"
+              sx={{
+                fontFamily: "monospace",
+                fontSize: "0.8rem",
+                margin: 0,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word"
+              }}
+            >
+              {props.filteredLogsContent || (props.logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
+            </Typography>
+          </Paper>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.closeLogs}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function VersionDialogView(props: {
+  versionCheck: string;
+  versionError: string | null;
+  versionInfo: string;
+  versionLoading: boolean;
+  versionOpen: boolean;
+}) {
+  return (
+    <Dialog
+      open={props.versionOpen}
+      onClose={runtimeUiActions.closeVersion}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle>Version Information</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          {props.versionLoading ? <Typography>Loading version details...</Typography> : null}
+          {props.versionError ? <Alert severity="error">{props.versionError}</Alert> : null}
+          {props.versionInfo ? (
+            <TextField
+              label="Containerlab Version"
+              value={props.versionInfo}
+              fullWidth
+              multiline
+              minRows={6}
+              slotProps={{ input: { readOnly: true } }}
+            />
+          ) : null}
+          {props.versionCheck ? (
+            <TextField
+              label="Update Check"
+              value={props.versionCheck}
+              fullWidth
+              multiline
+              minRows={3}
+              slotProps={{ input: { readOnly: true } }}
+            />
+          ) : null}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={runtimeUiActions.closeVersion}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function NetemDialogView(props: {
+  applyNetem: (interfaceName: string) => Promise<void>;
+  clearNetem: (interfaceName: string) => Promise<void>;
+  closeNetem: () => void;
+  netemContainerName: string;
+  netemError: string | null;
+  netemFieldsByInterface: Record<string, NetemFields>;
+  netemLoading: boolean;
+  netemPendingInterface: string | null;
+  netemRequest: ReturnType<typeof useRuntimeUiStore.getState>["netemRequest"];
+  setNetemFieldsByInterface: React.Dispatch<React.SetStateAction<Record<string, NetemFields>>>;
+}) {
+  const interfaceNames = Object.keys(props.netemFieldsByInterface);
+
+  return (
+    <Dialog open={props.netemRequest !== null} onClose={props.closeNetem} maxWidth="lg" fullWidth>
+      <DialogTitle>{props.netemRequest?.title ?? "Manage Impairments"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          {props.netemLoading ? <Typography>Loading impairment state...</Typography> : null}
+          {props.netemError ? <Alert severity="error">{props.netemError}</Alert> : null}
+          {props.netemContainerName ? (
+            <Typography variant="body2" sx={{ opacity: 0.8 }}>
+              Container: {props.netemContainerName}
+            </Typography>
+          ) : null}
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Interface</TableCell>
+                  <TableCell>Delay</TableCell>
+                  <TableCell>Jitter</TableCell>
+                  <TableCell>Loss</TableCell>
+                  <TableCell>Rate</TableCell>
+                  <TableCell>Corruption</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {interfaceNames.map((interfaceName) => {
+                  const fields = normalizeNetemFields(props.netemFieldsByInterface[interfaceName]);
+                  return (
+                    <TableRow key={interfaceName}>
+                      <TableCell>{interfaceName}</TableCell>
+                      {(["delay", "jitter", "loss", "rate", "corruption"] as Array<keyof NetemFields>).map((fieldKey) => (
+                        <TableCell key={`${interfaceName}:${fieldKey}`}>
+                          <TextField
+                            size="small"
+                            value={fields[fieldKey]}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              props.setNetemFieldsByInterface((current) => ({
+                                ...current,
+                                [interfaceName]: {
+                                  ...normalizeNetemFields(current[interfaceName]),
+                                  [fieldKey]: value
+                                }
+                              }));
+                            }}
+                          />
+                        </TableCell>
+                      ))}
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => void props.applyNetem(interfaceName)}
+                            disabled={props.netemPendingInterface === interfaceName}
+                          >
+                            Apply
+                          </Button>
+                          <Button
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            onClick={() => void props.clearNetem(interfaceName)}
+                            disabled={props.netemPendingInterface === interfaceName}
+                          >
+                            Reset
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {!props.netemLoading && interfaceNames.length === 0 ? (
+            <Alert severity="info">No runtime interface data is available for this node.</Alert>
+          ) : null}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={props.closeNetem}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function EndpointOptionMenuItem(props: { option: EndpointSelectionOption }) {
+  return (
+    <MenuItem key={props.option.value} value={props.option.value}>
+      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+        <Typography variant="body2" noWrap>
+          {props.option.label}
+        </Typography>
+        {props.option.description ? (
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {props.option.description}
+          </Typography>
+        ) : null}
+      </Stack>
+    </MenuItem>
+  );
+}
+
+function EndpointOptionSelect(props: {
+  labelId: string;
+  label: string;
+  onChange: (value: string) => void;
+  options: EndpointSelectionOption[];
+  value: string;
+}) {
+  return (
+    <FormControl fullWidth size="small">
+      <InputLabel id={props.labelId}>{props.label}</InputLabel>
+      <Select
+        labelId={props.labelId}
+        label={props.label}
+        value={props.value}
+        onChange={(event) => props.onChange(String(event.target.value))}
+      >
+        {props.options.map((option) => (
+          <EndpointOptionMenuItem key={option.value} option={option} />
+        ))}
+      </Select>
+    </FormControl>
+  );
+}
+
+function CloneRepoEndpointField(props: {
+  endpointOptions: EndpointSelectionOption[];
+  setValue: (value: string) => void;
+  value: string;
+}) {
+  if (props.endpointOptions.length <= 1) {
+    return (
+      <Typography variant="body2">
+        Endpoint: {props.endpointOptions[0]?.label ?? ""}
+      </Typography>
+    );
+  }
+  return (
+    <EndpointOptionSelect
+      labelId="clone-repo-endpoint-label"
+      label="Endpoint"
+      options={props.endpointOptions}
+      value={props.value}
+      onChange={props.setValue}
+    />
+  );
+}
+
+function CloneRepoSourceField(props: {
+  mode: "url" | "popular";
+  popularOptions: EndpointSelectionOption[];
+  popularValue: string;
+  setPopularValue: (value: string) => void;
+  setSourceUrlInput: (value: string) => void;
+  sourceUrlInput: string;
+  submitCloneRepoDialog: () => void;
+}) {
+  if (props.mode === "popular") {
+    return (
+      <EndpointOptionSelect
+        labelId="clone-repo-popular-label"
+        label="Popular Lab"
+        options={props.popularOptions}
+        value={props.popularValue}
+        onChange={props.setPopularValue}
+      />
+    );
+  }
+  return (
+    <TextField
+      autoFocus
+      fullWidth
+      label="Repository or topology URL"
+      value={props.sourceUrlInput}
+      onChange={(event) => props.setSourceUrlInput(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          props.submitCloneRepoDialog();
+        }
+      }}
+    />
+  );
+}
+
+function CloneRepoDialogView(props: {
+  cloneRepoCanSubmit: boolean;
+  cloneRepoDialog: CloneRepoDialogState | null;
+  cloneRepoEndpointValue: string;
+  cloneRepoLabNameOverrideInput: string;
+  cloneRepoMode: "url" | "popular";
+  cloneRepoPopularValue: string;
+  cloneRepoSourceUrlInput: string;
+  cloneRepoTarget: CloneRepoDialogTarget;
+  closeCloneRepoDialog: (value: CloneRepoDialogResult | undefined) => void;
+  setCloneRepoEndpointValue: (value: string) => void;
+  setCloneRepoLabNameOverrideInput: (value: string) => void;
+  setCloneRepoMode: (value: "url" | "popular") => void;
+  setCloneRepoPopularValue: (value: string) => void;
+  setCloneRepoSourceUrlInput: (value: string) => void;
+  setCloneRepoTarget: (value: CloneRepoDialogTarget) => void;
+  submitCloneRepoDialog: () => void;
+}) {
+  const request = props.cloneRepoDialog?.request;
+  return (
+    <Dialog open={props.cloneRepoDialog !== null} onClose={() => props.closeCloneRepoDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request?.title ?? "Clone Repository"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {request?.message}
+          </Typography>
+          <CloneRepoEndpointField
+            endpointOptions={request?.endpointOptions ?? []}
+            value={props.cloneRepoEndpointValue}
+            setValue={props.setCloneRepoEndpointValue}
+          />
+          <FormControl fullWidth size="small">
+            <InputLabel id="clone-repo-source-mode-label">Source</InputLabel>
+            <Select
+              labelId="clone-repo-source-mode-label"
+              label="Source"
+              value={props.cloneRepoMode}
+              onChange={(event) => props.setCloneRepoMode(event.target.value as "url" | "popular")}
+            >
+              <MenuItem value="url">Repository URL</MenuItem>
+              <MenuItem value="popular" disabled={(request?.popularOptions.length ?? 0) === 0}>
+                Popular Lab
+              </MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth size="small">
+            <InputLabel id="clone-repo-target-label">Action</InputLabel>
+            <Select
+              labelId="clone-repo-target-label"
+              label="Action"
+              value={props.cloneRepoTarget}
+              onChange={(event) => props.setCloneRepoTarget(event.target.value as CloneRepoDialogTarget)}
+            >
+              <MenuItem value="deploy">Deploy now</MenuItem>
+              <MenuItem value="undeployed">Clone to undeployed labs</MenuItem>
+            </Select>
+          </FormControl>
+          <CloneRepoSourceField
+            mode={props.cloneRepoMode}
+            popularOptions={request?.popularOptions ?? []}
+            popularValue={props.cloneRepoPopularValue}
+            setPopularValue={props.setCloneRepoPopularValue}
+            setSourceUrlInput={props.setCloneRepoSourceUrlInput}
+            sourceUrlInput={props.cloneRepoSourceUrlInput}
+            submitCloneRepoDialog={props.submitCloneRepoDialog}
+          />
+          <TextField
+            fullWidth
+            label="Lab name override (optional)"
+            value={props.cloneRepoLabNameOverrideInput}
+            onChange={(event) => props.setCloneRepoLabNameOverrideInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                props.submitCloneRepoDialog();
+              }
+            }}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeCloneRepoDialog(undefined)}>Cancel</Button>
+        <Button variant="contained" onClick={props.submitCloneRepoDialog} disabled={!props.cloneRepoCanSubmit}>
+          {request?.confirmLabel ?? "Deploy"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function CreateTopologyDialogView(props: {
+  closeCreateTopologyDialog: (value: CreateTopologyDialogResult | undefined) => void;
+  createTopologyDialog: CreateTopologyDialogState | null;
+  createTopologyEndpointIsValid: boolean;
+  createTopologyEndpointValue: string;
+  createTopologyFileNameInput: string;
+  setCreateTopologyEndpointValue: (value: string) => void;
+  setCreateTopologyFileNameInput: (value: string) => void;
+  submitCreateTopologyDialog: () => void;
+  trimmedCreateTopologyFileNameInput: string;
+}) {
+  const request = props.createTopologyDialog?.request;
+  return (
+    <Dialog open={props.createTopologyDialog !== null} onClose={() => props.closeCreateTopologyDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {request?.message}
+          </Typography>
+          <CloneRepoEndpointField
+            endpointOptions={request?.endpointOptions ?? []}
+            value={props.createTopologyEndpointValue}
+            setValue={props.setCreateTopologyEndpointValue}
+          />
+          <TextField
+            autoFocus
+            fullWidth
+            label="Topology file name"
+            value={props.createTopologyFileNameInput}
+            onChange={(event) => props.setCreateTopologyFileNameInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                props.submitCreateTopologyDialog();
+              }
+            }}
+            helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeCreateTopologyDialog(undefined)}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={props.submitCreateTopologyDialog}
+          disabled={!props.createTopologyEndpointIsValid || !props.trimmedCreateTopologyFileNameInput}
+        >
+          {request?.confirmLabel ?? "Create"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function TopologyFileNameDialogView(props: {
+  closeTopologyFileNameDialog: (value: string | undefined) => void;
+  setTopologyFileNameInput: (value: string) => void;
+  submitTopologyFileNameDialog: () => void;
+  topologyFileNameDialog: TopologyFileNameDialogState | null;
+  topologyFileNameInput: string;
+  trimmedTopologyFileNameInput: string;
+}) {
+  const request = props.topologyFileNameDialog?.request;
+  return (
+    <Dialog open={props.topologyFileNameDialog !== null} onClose={() => props.closeTopologyFileNameDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {request?.message}
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Topology file name"
+            value={props.topologyFileNameInput}
+            onChange={(event) => props.setTopologyFileNameInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                props.submitTopologyFileNameDialog();
+              }
+            }}
+            helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeTopologyFileNameDialog(undefined)}>Cancel</Button>
+        <Button
+          variant="contained"
+          onClick={props.submitTopologyFileNameDialog}
+          disabled={!props.trimmedTopologyFileNameInput}
+        >
+          Create
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function EndpointSelectionDialogView(props: {
+  closeEndpointSelectionDialog: (value: string | undefined) => void;
+  endpointSelectionDialog: EndpointSelectionDialogState | null;
+  endpointSelectionIsValid: boolean;
+  endpointSelectionValue: string;
+  setEndpointSelectionValue: (value: string) => void;
+  submitEndpointSelectionDialog: () => void;
+}) {
+  const request = props.endpointSelectionDialog?.request;
+  return (
+    <Dialog open={props.endpointSelectionDialog !== null} onClose={() => props.closeEndpointSelectionDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request?.title ?? "Select Endpoint"}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            {request?.message}
+          </Typography>
+          <EndpointOptionSelect
+            labelId="endpoint-selection-label"
+            label="Endpoint"
+            options={request?.options ?? []}
+            value={props.endpointSelectionValue}
+            onChange={props.setEndpointSelectionValue}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeEndpointSelectionDialog(undefined)}>Cancel</Button>
+        <Button variant="contained" onClick={props.submitEndpointSelectionDialog} disabled={!props.endpointSelectionIsValid}>
+          {request?.confirmLabel ?? "Continue"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function RuntimeSnackbarView(props: {
+  closeSnackbar: () => void;
+  snackbar: ReturnType<typeof useRuntimeUiStore.getState>["snackbar"];
+}) {
+  return (
+    <Snackbar
+      open={props.snackbar.open}
+      autoHideDuration={5000}
+      onClose={props.closeSnackbar}
+      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+    >
+      <Alert onClose={props.closeSnackbar} severity={props.snackbar.severity} variant="filled">
+        {props.snackbar.message}
+      </Alert>
+    </Snackbar>
+  );
 }
 
 export function RuntimeActionDialogs() {
@@ -1223,572 +1907,106 @@ export function RuntimeActionDialogs() {
 
   return (
     <>
-      <Dialog open={inspectRequest !== null} onClose={closeInspect} maxWidth="lg" fullWidth>
-        <DialogTitle>{inspectRequest?.title ?? "Inspect"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <TextField
-              label="Filter"
-              value={inspectFilter}
-              onChange={(event) => setInspectFilter(event.target.value)}
-              size="small"
-              fullWidth
-            />
-            {inspectLoading ? <Typography>Loading inspect data...</Typography> : null}
-            {inspectError ? <Alert severity="error">{inspectError}</Alert> : null}
-            {!inspectLoading && !inspectError && filteredInspectGroups.length === 0 ? (
-              <Alert severity="info">No matching running lab data.</Alert>
-            ) : null}
-            {filteredInspectGroups.map((group) => (
-              <Box key={group.labName}>
-                <Typography variant="h6" sx={{ mb: 1 }}>
-                  {group.labName}
-                </Typography>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Name</TableCell>
-                        <TableCell>Kind</TableCell>
-                        <TableCell>State</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>IPv4</TableCell>
-                        <TableCell>IPv6</TableCell>
-                        <TableCell>Owner</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {group.containers.map((container) => (
-                        <TableRow key={`${group.labName}:${container.name}`}>
-                          <TableCell>{container.name}</TableCell>
-                          <TableCell>{container.kind}</TableCell>
-                          <TableCell>
-                            <Chip
-                              size="small"
-                              label={container.state || "unknown"}
-                              color={inspectStateColor(container.state)}
-                              variant={container.state ? "filled" : "outlined"}
-                            />
-                          </TableCell>
-                          <TableCell>{container.status}</TableCell>
-                          <TableCell>{container.ipv4Address || "-"}</TableCell>
-                          <TableCell>{container.ipv6Address || "-"}</TableCell>
-                          <TableCell>{container.owner || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Box>
-            ))}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeInspect}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <InspectDialogView
+        closeInspect={closeInspect}
+        filteredInspectGroups={filteredInspectGroups}
+        inspectError={inspectError}
+        inspectFilter={inspectFilter}
+        inspectLoading={inspectLoading}
+        inspectRequest={inspectRequest}
+        setInspectFilter={setInspectFilter}
+      />
 
-      <Dialog open={logsRequest !== null} onClose={closeLogs} maxWidth="lg" fullWidth>
-        <DialogTitle>{logsRequest?.title ?? "Node Logs"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
-              <TextField
-                label="Tail"
-                value={logsTail}
-                onChange={(event) => setLogsTail(event.target.value)}
-                size="small"
-                sx={{ maxWidth: 200 }}
-              />
-              <TextField
-                label="Find"
-                value={logsFilter}
-                onChange={(event) => setLogsFilter(event.target.value)}
-                size="small"
-                sx={{ minWidth: 240 }}
-              />
-              <Button variant="outlined" onClick={() => void fetchLogs(logsTail, true)} disabled={logsLoading}>
-                Refresh
-              </Button>
-              <Button variant="outlined" onClick={exportLogs} disabled={!filteredLogsContent}>
-                Export
-              </Button>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={logsFollow}
-                    onChange={(event) => setLogsFollow(event.target.checked)}
-                  />
-                }
-                label="Follow"
-              />
-            </Stack>
-            {logsLoading ? <Typography>Loading logs...</Typography> : null}
-            {logsError ? <Alert severity="error">{logsError}</Alert> : null}
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              {logsFilter.trim()
-                ? `Showing ${visibleLogLines}/${totalLogLines} lines`
-                : `${totalLogLines} lines`}
-            </Typography>
-            <Paper
-              ref={logsPaperRef}
-              variant="outlined"
-              sx={{
-                bgcolor: "background.default",
-                maxHeight: 480,
-                overflow: "auto",
-                p: 2
-              }}
-            >
-              <Typography
-                component="pre"
-                sx={{
-                  fontFamily: "monospace",
-                  fontSize: "0.8rem",
-                  margin: 0,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word"
-                }}
-              >
-                {filteredLogsContent || (logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
-              </Typography>
-            </Paper>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeLogs}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <LogsDialogView
+        closeLogs={closeLogs}
+        exportLogs={exportLogs}
+        fetchLogs={fetchLogs}
+        filteredLogsContent={filteredLogsContent}
+        logsError={logsError}
+        logsFilter={logsFilter}
+        logsFollow={logsFollow}
+        logsLoading={logsLoading}
+        logsPaperRef={logsPaperRef}
+        logsRequest={logsRequest}
+        logsTail={logsTail}
+        setLogsFilter={setLogsFilter}
+        setLogsFollow={setLogsFollow}
+        setLogsTail={setLogsTail}
+        totalLogLines={totalLogLines}
+        visibleLogLines={visibleLogLines}
+      />
 
-      <Dialog
-        open={netemRequest !== null}
-        onClose={closeNetem}
-        maxWidth="lg"
-        fullWidth
-      >
-        <DialogTitle>{netemRequest?.title ?? "Manage Impairments"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {netemLoading ? <Typography>Loading impairment state...</Typography> : null}
-            {netemError ? <Alert severity="error">{netemError}</Alert> : null}
-            {netemContainerName ? (
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                Container: {netemContainerName}
-              </Typography>
-            ) : null}
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Interface</TableCell>
-                    <TableCell>Delay</TableCell>
-                    <TableCell>Jitter</TableCell>
-                    <TableCell>Loss</TableCell>
-                    <TableCell>Rate</TableCell>
-                    <TableCell>Corruption</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {Object.keys(netemFieldsByInterface).map((interfaceName) => {
-                    const fields = normalizeNetemFields(netemFieldsByInterface[interfaceName]);
-                    return (
-                      <TableRow key={interfaceName}>
-                        <TableCell>{interfaceName}</TableCell>
-                        {(["delay", "jitter", "loss", "rate", "corruption"] as Array<keyof NetemFields>).map((fieldKey) => (
-                          <TableCell key={`${interfaceName}:${fieldKey}`}>
-                            <TextField
-                              size="small"
-                              value={fields[fieldKey]}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                setNetemFieldsByInterface((current) => ({
-                                  ...current,
-                                  [interfaceName]: {
-                                    ...normalizeNetemFields(current[interfaceName]),
-                                    [fieldKey]: value
-                                  }
-                                }));
-                              }}
-                            />
-                          </TableCell>
-                        ))}
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => void applyNetem(interfaceName)}
-                              disabled={netemPendingInterface === interfaceName}
-                            >
-                              Apply
-                            </Button>
-                            <Button
-                              size="small"
-                              color="warning"
-                              variant="outlined"
-                              onClick={() => void clearNetem(interfaceName)}
-                              disabled={netemPendingInterface === interfaceName}
-                            >
-                              Reset
-                            </Button>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            {!netemLoading && Object.keys(netemFieldsByInterface).length === 0 ? (
-              <Alert severity="info">No runtime interface data is available for this node.</Alert>
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeNetem}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <NetemDialogView
+        applyNetem={applyNetem}
+        clearNetem={clearNetem}
+        closeNetem={closeNetem}
+        netemContainerName={netemContainerName}
+        netemError={netemError}
+        netemFieldsByInterface={netemFieldsByInterface}
+        netemLoading={netemLoading}
+        netemPendingInterface={netemPendingInterface}
+        netemRequest={netemRequest}
+        setNetemFieldsByInterface={setNetemFieldsByInterface}
+      />
 
-      <Dialog
-        open={versionOpen}
-        onClose={runtimeUiActions.closeVersion}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>Version Information</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {versionLoading ? <Typography>Loading version details...</Typography> : null}
-            {versionError ? <Alert severity="error">{versionError}</Alert> : null}
-            {versionInfo ? (
-              <TextField
-                label="Containerlab Version"
-                value={versionInfo}
-                fullWidth
-                multiline
-                minRows={6}
-                slotProps={{ input: { readOnly: true } }}
-              />
-            ) : null}
-            {versionCheck ? (
-              <TextField
-                label="Update Check"
-                value={versionCheck}
-                fullWidth
-                multiline
-                minRows={3}
-                slotProps={{ input: { readOnly: true } }}
-              />
-            ) : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={runtimeUiActions.closeVersion}>Close</Button>
-        </DialogActions>
-      </Dialog>
+      <VersionDialogView
+        versionCheck={versionCheck}
+        versionError={versionError}
+        versionInfo={versionInfo}
+        versionLoading={versionLoading}
+        versionOpen={versionOpen}
+      />
 
-      <Dialog
-        open={cloneRepoDialog !== null}
-        onClose={() => closeCloneRepoDialog(undefined)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{cloneRepoDialog?.request.title ?? "Clone Repository"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {cloneRepoDialog?.request.message}
-            </Typography>
-            {(cloneRepoDialog?.request.endpointOptions.length ?? 0) > 1 ? (
-              <FormControl fullWidth size="small">
-                <InputLabel id="clone-repo-endpoint-label">Endpoint</InputLabel>
-                <Select
-                  labelId="clone-repo-endpoint-label"
-                  label="Endpoint"
-                  value={cloneRepoEndpointValue}
-                  onChange={(event) => setCloneRepoEndpointValue(String(event.target.value))}
-                >
-                  {(cloneRepoDialog?.request.endpointOptions ?? []).map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>
-                          {option.label}
-                        </Typography>
-                        {option.description ? (
-                          <Typography variant="caption" color="text.secondary" noWrap>
-                            {option.description}
-                          </Typography>
-                        ) : null}
-                      </Stack>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <Typography variant="body2">
-                Endpoint: {cloneRepoDialog?.request.endpointOptions[0]?.label ?? ""}
-              </Typography>
-            )}
-            <FormControl fullWidth size="small">
-              <InputLabel id="clone-repo-source-mode-label">Source</InputLabel>
-              <Select
-                labelId="clone-repo-source-mode-label"
-                label="Source"
-                value={cloneRepoMode}
-                onChange={(event) => setCloneRepoMode(event.target.value as "url" | "popular")}
-              >
-                <MenuItem value="url">Repository URL</MenuItem>
-                <MenuItem
-                  value="popular"
-                  disabled={(cloneRepoDialog?.request.popularOptions.length ?? 0) === 0}
-                >
-                  Popular Lab
-                </MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth size="small">
-              <InputLabel id="clone-repo-target-label">Action</InputLabel>
-              <Select
-                labelId="clone-repo-target-label"
-                label="Action"
-                value={cloneRepoTarget}
-                onChange={(event) =>
-                  setCloneRepoTarget(event.target.value as CloneRepoDialogTarget)
-                }
-              >
-                <MenuItem value="deploy">Deploy now</MenuItem>
-                <MenuItem value="undeployed">Clone to undeployed labs</MenuItem>
-              </Select>
-            </FormControl>
-            {cloneRepoMode === "popular" ? (
-              <FormControl fullWidth size="small">
-                <InputLabel id="clone-repo-popular-label">Popular Lab</InputLabel>
-                <Select
-                  labelId="clone-repo-popular-label"
-                  label="Popular Lab"
-                  value={cloneRepoPopularValue}
-                  onChange={(event) => setCloneRepoPopularValue(String(event.target.value))}
-                >
-                  {(cloneRepoDialog?.request.popularOptions ?? []).map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>
-                          {option.label}
-                        </Typography>
-                        {option.description ? (
-                          <Typography variant="caption" color="text.secondary" noWrap>
-                            {option.description}
-                          </Typography>
-                        ) : null}
-                      </Stack>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <TextField
-                autoFocus
-                fullWidth
-                label="Repository or topology URL"
-                value={cloneRepoSourceUrlInput}
-                onChange={(event) => setCloneRepoSourceUrlInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    submitCloneRepoDialog();
-                  }
-                }}
-              />
-            )}
-            <TextField
-              fullWidth
-              label="Lab name override (optional)"
-              value={cloneRepoLabNameOverrideInput}
-              onChange={(event) => setCloneRepoLabNameOverrideInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  submitCloneRepoDialog();
-                }
-              }}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => closeCloneRepoDialog(undefined)}>Cancel</Button>
-          <Button variant="contained" onClick={submitCloneRepoDialog} disabled={!cloneRepoCanSubmit}>
-            {cloneRepoDialog?.request.confirmLabel ?? "Deploy"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CloneRepoDialogView
+        cloneRepoCanSubmit={cloneRepoCanSubmit}
+        cloneRepoDialog={cloneRepoDialog}
+        cloneRepoEndpointValue={cloneRepoEndpointValue}
+        cloneRepoLabNameOverrideInput={cloneRepoLabNameOverrideInput}
+        cloneRepoMode={cloneRepoMode}
+        cloneRepoPopularValue={cloneRepoPopularValue}
+        cloneRepoSourceUrlInput={cloneRepoSourceUrlInput}
+        cloneRepoTarget={cloneRepoTarget}
+        closeCloneRepoDialog={closeCloneRepoDialog}
+        setCloneRepoEndpointValue={setCloneRepoEndpointValue}
+        setCloneRepoLabNameOverrideInput={setCloneRepoLabNameOverrideInput}
+        setCloneRepoMode={setCloneRepoMode}
+        setCloneRepoPopularValue={setCloneRepoPopularValue}
+        setCloneRepoSourceUrlInput={setCloneRepoSourceUrlInput}
+        setCloneRepoTarget={setCloneRepoTarget}
+        submitCloneRepoDialog={submitCloneRepoDialog}
+      />
 
-      <Dialog
-        open={createTopologyDialog !== null}
-        onClose={() => closeCreateTopologyDialog(undefined)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{createTopologyDialog?.request.title ?? "Create Topology File"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {createTopologyDialog?.request.message}
-            </Typography>
-            {(createTopologyDialog?.request.endpointOptions.length ?? 0) > 1 ? (
-              <FormControl fullWidth size="small">
-                <InputLabel id="create-topology-endpoint-label">Endpoint</InputLabel>
-                <Select
-                  labelId="create-topology-endpoint-label"
-                  label="Endpoint"
-                  value={createTopologyEndpointValue}
-                  onChange={(event) => setCreateTopologyEndpointValue(String(event.target.value))}
-                >
-                  {(createTopologyDialog?.request.endpointOptions ?? []).map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>
-                          {option.label}
-                        </Typography>
-                        {option.description ? (
-                          <Typography variant="caption" color="text.secondary" noWrap>
-                            {option.description}
-                          </Typography>
-                        ) : null}
-                      </Stack>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-              <Typography variant="body2">
-                Endpoint: {createTopologyDialog?.request.endpointOptions[0]?.label ?? ""}
-              </Typography>
-            )}
-            <TextField
-              autoFocus
-              fullWidth
-              label="Topology file name"
-              value={createTopologyFileNameInput}
-              onChange={(event) => setCreateTopologyFileNameInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  submitCreateTopologyDialog();
-                }
-              }}
-              helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => closeCreateTopologyDialog(undefined)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={submitCreateTopologyDialog}
-            disabled={!createTopologyEndpointIsValid || !trimmedCreateTopologyFileNameInput}
-          >
-            {createTopologyDialog?.request.confirmLabel ?? "Create"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <CreateTopologyDialogView
+        closeCreateTopologyDialog={closeCreateTopologyDialog}
+        createTopologyDialog={createTopologyDialog}
+        createTopologyEndpointIsValid={createTopologyEndpointIsValid}
+        createTopologyEndpointValue={createTopologyEndpointValue}
+        createTopologyFileNameInput={createTopologyFileNameInput}
+        setCreateTopologyEndpointValue={setCreateTopologyEndpointValue}
+        setCreateTopologyFileNameInput={setCreateTopologyFileNameInput}
+        submitCreateTopologyDialog={submitCreateTopologyDialog}
+        trimmedCreateTopologyFileNameInput={trimmedCreateTopologyFileNameInput}
+      />
 
-      <Dialog
-        open={topologyFileNameDialog !== null}
-        onClose={() => closeTopologyFileNameDialog(undefined)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{topologyFileNameDialog?.request.title ?? "Create Topology File"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {topologyFileNameDialog?.request.message}
-            </Typography>
-            <TextField
-              autoFocus
-              fullWidth
-              label="Topology file name"
-              value={topologyFileNameInput}
-              onChange={(event) => setTopologyFileNameInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  submitTopologyFileNameDialog();
-                }
-              }}
-              helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => closeTopologyFileNameDialog(undefined)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={submitTopologyFileNameDialog}
-            disabled={!trimmedTopologyFileNameInput}
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <TopologyFileNameDialogView
+        closeTopologyFileNameDialog={closeTopologyFileNameDialog}
+        setTopologyFileNameInput={setTopologyFileNameInput}
+        submitTopologyFileNameDialog={submitTopologyFileNameDialog}
+        topologyFileNameDialog={topologyFileNameDialog}
+        topologyFileNameInput={topologyFileNameInput}
+        trimmedTopologyFileNameInput={trimmedTopologyFileNameInput}
+      />
 
-      <Dialog
-        open={endpointSelectionDialog !== null}
-        onClose={() => closeEndpointSelectionDialog(undefined)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>{endpointSelectionDialog?.request.title ?? "Select Endpoint"}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              {endpointSelectionDialog?.request.message}
-            </Typography>
-            <FormControl fullWidth size="small">
-              <InputLabel id="endpoint-selection-label">Endpoint</InputLabel>
-              <Select
-                labelId="endpoint-selection-label"
-                label="Endpoint"
-                value={endpointSelectionValue}
-                onChange={(event) => setEndpointSelectionValue(String(event.target.value))}
-              >
-                {(endpointSelectionDialog?.request.options ?? []).map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    <Stack spacing={0.25} sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" noWrap>
-                        {option.label}
-                      </Typography>
-                      {option.description ? (
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {option.description}
-                        </Typography>
-                      ) : null}
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => closeEndpointSelectionDialog(undefined)}>Cancel</Button>
-          <Button variant="contained" onClick={submitEndpointSelectionDialog} disabled={!endpointSelectionIsValid}>
-            {endpointSelectionDialog?.request.confirmLabel ?? "Continue"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EndpointSelectionDialogView
+        closeEndpointSelectionDialog={closeEndpointSelectionDialog}
+        endpointSelectionDialog={endpointSelectionDialog}
+        endpointSelectionIsValid={endpointSelectionIsValid}
+        endpointSelectionValue={endpointSelectionValue}
+        setEndpointSelectionValue={setEndpointSelectionValue}
+        submitEndpointSelectionDialog={submitEndpointSelectionDialog}
+      />
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={5000}
-        onClose={closeSnackbar}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-      >
-        <Alert onClose={closeSnackbar} severity={snackbar.severity} variant="filled">
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+      <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} />
     </>
   );
 }

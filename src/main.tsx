@@ -4,77 +4,78 @@
  * Modeled on dev/main.tsx but connects to the real clab-api-server
  * through the Fastify backend instead of using mock data.
  */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createRoot, type Root as ReactRoot } from "react-dom/client";
-import { createPortal } from "react-dom";
-import { App, useTopoViewerStore } from "@srl-labs/clab-ui";
 import "@srl-labs/clab-ui/styles/global.css";
 import * as EditorWorkerModule from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worker?worker";
-
 import {
-  createApiClabUiHost,
-  createClabUiRuntime
-} from "@srl-labs/clab-ui/host";
-import { applyThemeVars, MuiThemeProvider } from "@srl-labs/clab-ui/theme";
-import {
+  App,
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
   MSG_SVG_EXPORT_RESULT,
+  MuiThemeProvider,
+  applyThemeVars,
+  createApiClabUiHost,
+  createClabUiRuntime,
+  createPortal,
+  createRoot,
   parseSchemaData,
-  type TopologySnapshot,
-  type TopologyRef
-} from "@srl-labs/clab-ui/session";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTopoViewerStore,
+  type ReactRoot,
+  type TopologyRef,
+  type TopologySnapshot
+} from "./mainUiDependencies";
 
 import clabSchema from "../schema/clab.schema.json";
-import { useLabStore } from "./stores/labStore";
-import { useEndpointStore, type EndpointSessionDuration } from "./stores/endpointStore";
-import { useAuth } from "./hooks/useAuth";
-import { useEventStream } from "./hooks/useEventStream";
-import { LabTabsBar } from "./components/LabTabsBar";
-import { LoginPage } from "./components/LoginPage";
-import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
-import { RuntimeTerminalWindows } from "./components/RuntimeTerminalWindows";
-import { SettingsOverlay } from "./components/SettingsOverlay";
-import { AttractorEmptyState } from "./components/AttractorEmptyState";
-import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
-  loadTerminalPreferences,
-  persistTerminalPreferences,
-  type TerminalPreferences
-} from "./runtimeTerminalSettings";
-import { createStandaloneExplorerBridge } from "./standaloneExplorer";
-import {
+  AttractorEmptyState,
+  LabTabsBar,
+  LoginPage,
+  RuntimeActionDialogs,
+  RuntimeTerminalWindows,
+  SettingsOverlay,
   createStandaloneLifecycleManager,
-  isStandaloneLifecycleCommand
-} from "./standaloneLifecycle";
-import {
-  type DeploymentState,
+  createStandaloneTopologyManager,
   extractEndpointIdFromTopologyId,
+  isStandaloneLifecycleCommand,
   labsEqualForExplorer,
-  normalizePathValue
-} from "./standaloneHostShared";
-import { createStandaloneTopologyManager } from "./standaloneTopology";
-import {
-  resolveLabTab,
-  useLabTabsStore
-} from "./stores/labTabsStore";
-import { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
+  normalizePathValue,
+  resolveStandaloneStartupScreen,
+  useAuth,
+  useEndpointStore,
+  useEventStream,
+  useLabStore,
+  type DeploymentState,
+  type EndpointSessionDuration
+} from "./mainRuntimeDependencies";
 import {
   buildPacketflixCapture,
+  createStandaloneExplorerBridge,
   createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
   fetchUiCustomNodes,
   fetchUiIcons,
+  getSessionHostnameOverride,
+  loadCapturePreferences,
+  loadTerminalPreferences,
+  persistTerminalPreferences,
+  readPersistedStandaloneTheme,
   reconcileUiIcons,
+  resolveLabTab,
+  resolveStandaloneTheme,
+  runtimeUiActions,
   saveUiCustomNode,
   setDefaultUiCustomNode,
-  uploadUiIcon
-} from "./runtimeApi";
-import { runtimeUiActions } from "./stores/runtimeUiStore";
-import { getSessionHostnameOverride, loadCapturePreferences } from "./runtimeCaptureSettings";
+  uploadUiIcon,
+  useLabTabsStore,
+  type TerminalPreferences
+} from "./mainApiDependencies";
 
 // Monaco workers setup
 const monacoGlobal = self as typeof self & {
@@ -442,117 +443,323 @@ const explorerBridge = createStandaloneExplorerBridge({
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
 
+type VscodeMessage = {
+  baseName?: string;
+  command?: string;
+  dashboardJson?: string;
+  data?: unknown;
+  type?: string;
+  fileLine?: string;
+  iconName?: string;
+  interfaceName?: string;
+  level?: string;
+  message?: string;
+  name?: string;
+  nodeName?: string;
+  panelYaml?: string;
+  requestId?: string;
+  svgContent?: string;
+  usedIcons?: unknown;
+};
+
+function getActiveTopologyTarget() {
+  const topologyRef = topologyManager.getCurrentTopologyRef();
+  if (!topologyRef) {
+    runtimeUiActions.notify("No active topology session is available.", "error");
+    return null;
+  }
+  const endpointId = topologyManager.getCurrentEndpointId() ?? undefined;
+  const sessionId = topologyManager.getCurrentSessionId() ?? undefined;
+  return { endpointId, sessionId, topologyRef };
+}
+
+function openPacketflixCaptures(links: Array<{ packetflixUri?: string }>): void {
+  if (links.length === 0) {
+    runtimeUiActions.notify("No packet capture targets were returned.", "warning");
+    return;
+  }
+  for (const capture of links) {
+    const link = capture.packetflixUri?.trim();
+    if (link) {
+      window.open(link, "_blank", "noopener,noreferrer");
+    }
+  }
+}
+
+function openWiresharkVncSessions(
+  sessions: Array<{ sessionId: string; showVolumeTip?: boolean }>,
+  targetEndpointId: string | undefined,
+  theme: "light" | "dark"
+): void {
+  if (sessions.length === 0) {
+    runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
+    return;
+  }
+  for (const session of sessions) {
+    const params = new URLSearchParams({ sessionId: session.sessionId, theme });
+    if (targetEndpointId) {
+      params.set("endpointId", targetEndpointId);
+    }
+    if (session.showVolumeTip) {
+      params.set("showVolumeTip", "1");
+    }
+    window.open(`/wireshark.html?${params.toString()}`, "_blank", "noopener,noreferrer");
+  }
+}
+
+function openCaptureForInterface(nodeName: string, interfaceName: string): void {
+  const target = getActiveTopologyTarget();
+  if (!target) {
+    return;
+  }
+  if (!nodeName || !interfaceName) {
+    runtimeUiActions.notify("Missing capture target.", "error");
+    return;
+  }
+
+  void (async () => {
+    try {
+      const capturePreferences = loadCapturePreferences(target.endpointId);
+      if (capturePreferences.preferredAction === "edgeshark") {
+        const response = await buildPacketflixCapture({
+          ...target,
+          targets: [{ containerName: nodeName, interfaceName }],
+          remoteHostname: getSessionHostnameOverride(target.endpointId)
+        });
+        openPacketflixCaptures(response.captures ?? []);
+        return;
+      }
+
+      const theme = resolveStandaloneTheme(currentTheme);
+      const response = await createWiresharkVncSessions({
+        ...target,
+        targets: [{ containerName: nodeName, interfaceName }],
+        theme
+      });
+      openWiresharkVncSessions(response.sessions ?? [], target.endpointId, theme);
+    } catch (error: unknown) {
+      runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+  })();
+}
+
+function triggerDownload(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleGrafanaBundleExport(msg: VscodeMessage): void {
+  const baseName = typeof msg.baseName === "string" ? msg.baseName.trim() || "topology" : "topology";
+  const svgContent = typeof msg.svgContent === "string" ? msg.svgContent : "";
+  const dashboardJson = typeof msg.dashboardJson === "string" ? msg.dashboardJson : "";
+  const panelYaml = typeof msg.panelYaml === "string" ? msg.panelYaml : "";
+  if (svgContent) {
+    triggerDownload(`${baseName}.svg`, svgContent, "image/svg+xml");
+  }
+  if (dashboardJson) {
+    triggerDownload(`${baseName}.grafana.json`, dashboardJson, "application/json");
+  }
+  if (panelYaml) {
+    triggerDownload(`${baseName}.flow_panel.yaml`, panelYaml, "application/yaml");
+  }
+  const files = [
+    svgContent ? `${baseName}.svg` : null,
+    dashboardJson ? `${baseName}.grafana.json` : null,
+    panelYaml ? `${baseName}.flow_panel.yaml` : null
+  ].filter((value): value is string => value !== null);
+  window.dispatchEvent(
+    new MessageEvent("message", {
+      data: {
+        type: MSG_SVG_EXPORT_RESULT,
+        requestId: msg.requestId ?? "",
+        success: true,
+        files
+      }
+    })
+  );
+}
+
+function handleNodeTerminalCommand(msg: VscodeMessage): void {
+  const target = getActiveTopologyTarget();
+  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+    return;
+  }
+  runtimeUiActions.openTerminal({
+    ...target,
+    protocol: msg.command === "clab-node-attach-shell" ? "shell" : "ssh",
+    nodeName: msg.nodeName,
+    title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`
+  });
+}
+
+function handleNodeLogsCommand(msg: VscodeMessage): void {
+  const target = getActiveTopologyTarget();
+  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+    return;
+  }
+  runtimeUiActions.openLogs({
+    ...target,
+    nodeName: msg.nodeName,
+    title: `Logs: ${msg.nodeName}`
+  });
+}
+
+function handleLinkImpairmentCommand(msg: VscodeMessage): void {
+  const target = getActiveTopologyTarget();
+  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+    return;
+  }
+  runtimeUiActions.openNetem({
+    ...target,
+    nodeName: msg.nodeName,
+    preferredInterfaceName: typeof msg.interfaceName === "string" ? msg.interfaceName : undefined,
+    title: `Impairments: ${msg.nodeName}`
+  });
+}
+
+function handleSaveCustomNodeCommand(msg: VscodeMessage): void {
+  const { command: _command, ...payload } = msg;
+  void saveUiCustomNode(payload as Record<string, unknown>, getEndpointIdForEditorContext()).then((response) => {
+    applyCustomNodeError(null);
+    applyCustomNodes(response.customNodes, response.defaultNode);
+  }).catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    applyCustomNodeError(errorMessage);
+    runtimeUiActions.notify(errorMessage, "error");
+  });
+}
+
+function handleDeleteCustomNodeCommand(msg: VscodeMessage): void {
+  const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
+  if (!nodeName) {
+    applyCustomNodeError("Missing custom node name.");
+    return;
+  }
+  void deleteUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
+    applyCustomNodeError(null);
+    applyCustomNodes(response.customNodes, response.defaultNode);
+  }).catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    applyCustomNodeError(errorMessage);
+    runtimeUiActions.notify(errorMessage, "error");
+  });
+}
+
+function handleSetDefaultCustomNodeCommand(msg: VscodeMessage): void {
+  const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
+  if (!nodeName) {
+    applyCustomNodeError("Missing custom node name.");
+    return;
+  }
+  void setDefaultUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
+    applyCustomNodeError(null);
+    applyCustomNodes(response.customNodes, response.defaultNode);
+  }).catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    applyCustomNodeError(errorMessage);
+    runtimeUiActions.notify(errorMessage, "error");
+  });
+}
+
+function handleIconUploadCommand(): void {
+  void (async () => {
+    try {
+      const file = await pickIconFile();
+      if (!file) {
+        return;
+      }
+      await uploadUiIcon(file, getEndpointIdForEditorContext());
+      await refreshCustomIconsForCurrentTopology();
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      runtimeUiActions.notify(errorMessage, "error");
+    }
+  })();
+}
+
+function handleIconDeleteCommand(msg: VscodeMessage): void {
+  const iconName = typeof msg.iconName === "string" ? msg.iconName.trim() : "";
+  if (!iconName) {
+    runtimeUiActions.notify("Missing icon name.", "error");
+    return;
+  }
+  void deleteUiIcon(iconName, getEndpointIdForEditorContext())
+    .then(() => refreshCustomIconsForCurrentTopology())
+    .catch((error: unknown) => {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      runtimeUiActions.notify(errorMessage, "error");
+    });
+}
+
+function handleIconReconcileCommand(msg: VscodeMessage): void {
+  const topologyRef = topologyManager.getCurrentTopologyRef();
+  if (!topologyRef) {
+    return;
+  }
+  const usedIcons = Array.isArray(msg.usedIcons)
+    ? msg.usedIcons.filter((value): value is string => typeof value === "string")
+    : [];
+  void reconcileUiIcons({
+    endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
+    sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+    topologyRef,
+    usedIcons
+  }).catch((error: unknown) => {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error("[Standalone] icon reconcile failed:", errorMessage);
+  });
+}
+
+type StandaloneMessageHandler = (msg: VscodeMessage) => void;
+
+const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
+  [EXPORT_COMMANDS.EXPORT_SVG_GRAFANA_BUNDLE]: handleGrafanaBundleExport,
+  "clab-node-connect-ssh": handleNodeTerminalCommand,
+  "clab-node-attach-shell": handleNodeTerminalCommand,
+  "clab-node-view-logs": handleNodeLogsCommand,
+  "clab-interface-capture": (msg) => {
+    const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+    const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+    openCaptureForInterface(nodeName, interfaceName);
+  },
+  "clab-link-impairment": handleLinkImpairmentCommand,
+  "topo-toggle-split-view": () => runtimeUiActions.notify(
+    "Split view is not available in standalone mode yet.",
+    "info"
+  ),
+  "save-custom-node": handleSaveCustomNodeCommand,
+  "delete-custom-node": handleDeleteCustomNodeCommand,
+  "set-default-custom-node": handleSetDefaultCustomNodeCommand,
+  "icon-list": () => {
+    void refreshCustomIconsForCurrentTopology().catch(() => {
+      applyCustomIcons([]);
+    });
+  },
+  "icon-upload": handleIconUploadCommand,
+  "icon-delete": handleIconDeleteCommand,
+  "icon-reconcile": handleIconReconcileCommand
+};
+
+const IGNORED_STANDALONE_MESSAGE_COMMANDS = new Set([
+  "reactTopoViewerLog",
+  "topoViewerLog"
+]);
+
 // Standalone host bridge - explicit UI host with API-backed topology transport.
 function setupStandaloneUiHost(): void {
-  type VscodeMessage = {
-    baseName?: string;
-    command?: string;
-    dashboardJson?: string;
-    data?: unknown;
-    type?: string;
-    fileLine?: string;
-    iconName?: string;
-    interfaceName?: string;
-    level?: string;
-    message?: string;
-    name?: string;
-    nodeName?: string;
-    panelYaml?: string;
-    requestId?: string;
-    svgContent?: string;
-    usedIcons?: unknown;
-  };
-
   const warnedCommands = new Set<string>();
-
-  const triggerDownload = (filename: string, content: string, mimeType: string): void => {
-    const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
 
   const postMessage = (message: unknown) => {
     const msg = message as VscodeMessage | undefined;
 
     if (!msg?.command) return;
 
-    const getActiveTopologyTarget = () => {
-      const topologyRef = topologyManager.getCurrentTopologyRef();
-      if (!topologyRef) {
-        runtimeUiActions.notify("No active topology session is available.", "error");
-        return null;
-      }
-      const endpointId = topologyManager.getCurrentEndpointId() ?? undefined;
-      const sessionId = topologyManager.getCurrentSessionId() ?? undefined;
-      return { endpointId, sessionId, topologyRef };
-    };
-
-    const openCaptureForInterface = (nodeName: string, interfaceName: string): void => {
-      const target = getActiveTopologyTarget();
-      if (!target) {
-        return;
-      }
-      if (!nodeName || !interfaceName) {
-        runtimeUiActions.notify("Missing capture target.", "error");
-        return;
-      }
-
-      void (async () => {
-        try {
-          const capturePreferences = loadCapturePreferences(target.endpointId);
-          if (capturePreferences.preferredAction === "edgeshark") {
-            const response = await buildPacketflixCapture({
-              ...target,
-              targets: [{ containerName: nodeName, interfaceName }],
-              remoteHostname: getSessionHostnameOverride(target.endpointId)
-            });
-            const captures = response.captures ?? [];
-            if (captures.length === 0) {
-              runtimeUiActions.notify("No packet capture targets were returned.", "warning");
-              return;
-            }
-            for (const capture of captures) {
-              const link = capture.packetflixUri?.trim();
-              if (!link) {
-                continue;
-              }
-              window.open(link, "_blank", "noopener,noreferrer");
-            }
-            return;
-          }
-
-          const theme = resolveStandaloneTheme(currentTheme);
-          const response = await createWiresharkVncSessions({
-            ...target,
-            targets: [{ containerName: nodeName, interfaceName }],
-            theme
-          });
-          const sessions = response.sessions ?? [];
-          if (sessions.length === 0) {
-            runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
-            return;
-          }
-          for (const session of sessions) {
-            const params = new URLSearchParams({ sessionId: session.sessionId, theme });
-            if (target.endpointId) {
-              params.set("endpointId", target.endpointId);
-            }
-            if (session.showVolumeTip) {
-              params.set("showVolumeTip", "1");
-            }
-            window.open(`/wireshark.html?${params.toString()}`, "_blank", "noopener,noreferrer");
-          }
-        } catch (error: unknown) {
-          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-        }
-      })();
-    };
-
-    if (msg.command === "reactTopoViewerLog" || msg.command === "topoViewerLog") {
+    if (IGNORED_STANDALONE_MESSAGE_COMMANDS.has(msg.command)) {
       return;
     }
 
@@ -569,201 +776,9 @@ function setupStandaloneUiHost(): void {
       return;
     }
 
-    if (msg.command === EXPORT_COMMANDS.EXPORT_SVG_GRAFANA_BUNDLE) {
-      const baseName = typeof msg.baseName === "string" ? msg.baseName.trim() || "topology" : "topology";
-      const svgContent = typeof msg.svgContent === "string" ? msg.svgContent : "";
-      const dashboardJson = typeof msg.dashboardJson === "string" ? msg.dashboardJson : "";
-      const panelYaml = typeof msg.panelYaml === "string" ? msg.panelYaml : "";
-      if (svgContent) {
-        triggerDownload(`${baseName}.svg`, svgContent, "image/svg+xml");
-      }
-      if (dashboardJson) {
-        triggerDownload(`${baseName}.grafana.json`, dashboardJson, "application/json");
-      }
-      if (panelYaml) {
-        triggerDownload(`${baseName}.flow_panel.yaml`, panelYaml, "application/yaml");
-      }
-      const files = [
-        svgContent ? `${baseName}.svg` : null,
-        dashboardJson ? `${baseName}.grafana.json` : null,
-        panelYaml ? `${baseName}.flow_panel.yaml` : null
-      ].filter((value): value is string => value !== null);
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            type: MSG_SVG_EXPORT_RESULT,
-            requestId: msg.requestId ?? "",
-            success: true,
-            files
-          }
-        })
-      );
-      return;
-    }
-
-    if (msg.command === "clab-node-connect-ssh" || msg.command === "clab-node-attach-shell") {
-      const target = getActiveTopologyTarget();
-      if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
-        return;
-      }
-      runtimeUiActions.openTerminal({
-        ...target,
-        protocol: msg.command === "clab-node-attach-shell" ? "shell" : "ssh",
-        nodeName: msg.nodeName,
-        title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`
-      });
-      return;
-    }
-
-    if (msg.command === "clab-node-view-logs") {
-      const target = getActiveTopologyTarget();
-      if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
-        return;
-      }
-      runtimeUiActions.openLogs({
-        ...target,
-        nodeName: msg.nodeName,
-        title: `Logs: ${msg.nodeName}`
-      });
-      return;
-    }
-
-    if (msg.command === "clab-interface-capture") {
-      const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
-      const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
-      openCaptureForInterface(nodeName, interfaceName);
-      return;
-    }
-
-    if (msg.command === "clab-link-impairment") {
-      const target = getActiveTopologyTarget();
-      if (
-        !target ||
-        typeof msg.nodeName !== "string" ||
-        msg.nodeName.trim().length === 0
-      ) {
-        return;
-      }
-      runtimeUiActions.openNetem({
-        ...target,
-        nodeName: msg.nodeName,
-        preferredInterfaceName:
-          typeof msg.interfaceName === "string" ? msg.interfaceName : undefined,
-        title: `Impairments: ${msg.nodeName}`
-      });
-      return;
-    }
-
-    if (msg.command === "topo-toggle-split-view") {
-      runtimeUiActions.notify(
-        "Split view is not available in standalone mode yet.",
-        "info"
-      );
-      return;
-    }
-
-    if (msg.command === "save-custom-node") {
-      const { command: _command, ...payload } = msg;
-      void saveUiCustomNode(payload as Record<string, unknown>, getEndpointIdForEditorContext()).then((response) => {
-        applyCustomNodeError(null);
-        applyCustomNodes(response.customNodes, response.defaultNode);
-      }).catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        applyCustomNodeError(errorMessage);
-        runtimeUiActions.notify(errorMessage, "error");
-      });
-      return;
-    }
-
-    if (msg.command === "delete-custom-node") {
-      const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
-      if (!nodeName) {
-        applyCustomNodeError("Missing custom node name.");
-        return;
-      }
-      void deleteUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
-        applyCustomNodeError(null);
-        applyCustomNodes(response.customNodes, response.defaultNode);
-      }).catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        applyCustomNodeError(errorMessage);
-        runtimeUiActions.notify(errorMessage, "error");
-      });
-      return;
-    }
-
-    if (msg.command === "set-default-custom-node") {
-      const nodeName = typeof msg.name === "string" ? msg.name.trim() : "";
-      if (!nodeName) {
-        applyCustomNodeError("Missing custom node name.");
-        return;
-      }
-      void setDefaultUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
-        applyCustomNodeError(null);
-        applyCustomNodes(response.customNodes, response.defaultNode);
-      }).catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        applyCustomNodeError(errorMessage);
-        runtimeUiActions.notify(errorMessage, "error");
-      });
-      return;
-    }
-
-    if (msg.command === "icon-list") {
-      void refreshCustomIconsForCurrentTopology().catch(() => {
-        applyCustomIcons([]);
-      });
-      return;
-    }
-
-    if (msg.command === "icon-upload") {
-      void (async () => {
-        try {
-          const file = await pickIconFile();
-          if (!file) {
-            return;
-          }
-          await uploadUiIcon(file, getEndpointIdForEditorContext());
-          await refreshCustomIconsForCurrentTopology();
-        } catch (error: unknown) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          runtimeUiActions.notify(errorMessage, "error");
-        }
-      })();
-      return;
-    }
-
-    if (msg.command === "icon-delete") {
-      const iconName = typeof msg.iconName === "string" ? msg.iconName.trim() : "";
-      if (!iconName) {
-        runtimeUiActions.notify("Missing icon name.", "error");
-        return;
-      }
-      void deleteUiIcon(iconName, getEndpointIdForEditorContext()).then(() => refreshCustomIconsForCurrentTopology()).catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        runtimeUiActions.notify(errorMessage, "error");
-      });
-      return;
-    }
-
-    if (msg.command === "icon-reconcile") {
-      const target = topologyManager.getCurrentTopologyRef()
-        ? {
-            endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
-            sessionId: topologyManager.getCurrentSessionId() ?? undefined,
-            topologyRef: topologyManager.getCurrentTopologyRef() ?? undefined
-          }
-        : null;
-      if (!target) {
-        return;
-      }
-      const usedIcons = Array.isArray(msg.usedIcons)
-        ? msg.usedIcons.filter((value): value is string => typeof value === "string")
-        : [];
-      void reconcileUiIcons({ ...target, usedIcons }).catch((error: unknown) => {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error("[Standalone] icon reconcile failed:", errorMessage);
-      });
+    const handler = STANDALONE_MESSAGE_HANDLERS[msg.command];
+    if (handler) {
+      handler(msg);
       return;
     }
 
@@ -939,7 +954,7 @@ function useLabTabsPortalHost(): HTMLDivElement | null {
   return host;
 }
 
-function StandaloneLabTabsMount(): React.JSX.Element | null {
+function StandaloneLabTabsMount() {
   const host = useLabTabsPortalHost();
   const tabs = useLabTabsStore((state) => state.tabs);
   const activeTabId = useLabTabsStore((state) => state.activeTabId);
@@ -1133,7 +1148,7 @@ function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; ri
   return occlusion;
 }
 
-function StandaloneLabEmptyStateMount(): React.JSX.Element | null {
+function StandaloneLabEmptyStateMount() {
   const host = useLabEmptyStatePortalHost();
   const tabs = useLabTabsStore((state) => state.tabs);
   const occlusion = useEmptyStateOcclusion(host);

@@ -1,26 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Divider from "@mui/material/Divider";
-import IconButton from "@mui/material/IconButton";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
-import Tooltip from "@mui/material/Tooltip";
-import Typography from "@mui/material/Typography";
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  List,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography
+} from "@mui/material";
 import type { Theme } from "@mui/material/styles";
 import {
   Close as CloseIcon,
@@ -285,6 +287,221 @@ function parseTerminalPreferencesDraft(
   };
 }
 
+function primarySettingsEndpoint(endpoints: EndpointConfig[]): EndpointConfig | null {
+  return endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
+}
+
+function captureSettingsEndpoint(
+  endpoints: EndpointConfig[],
+  captureEndpointId: string
+): EndpointConfig | null {
+  return endpoints.find((endpoint) => endpoint.id === captureEndpointId) ?? null;
+}
+
+function captureSettingsEndpointLabel(endpoint: EndpointConfig | null): string {
+  return endpoint?.label || endpoint?.url || endpoint?.id || "selected endpoint";
+}
+
+function CaptureSettingsSection(props: {
+  applyCaptureSessionHostname: () => void;
+  captureActionLoading: "install" | "uninstall" | null;
+  captureEndpoint: EndpointConfig | null;
+  captureEndpointId: string;
+  captureEndpointLabel: string;
+  captureError: string | null;
+  capturePreferences: CapturePreferences;
+  captureSessionHostname: string;
+  captureStatus: EdgeSharkStatusResponse | null;
+  captureStatusLoading: boolean;
+  clearCaptureSessionHostname: () => void;
+  endpoints: EndpointConfig[];
+  handlePreferredCaptureActionChange: (
+    event: React.MouseEvent<HTMLElement>,
+    nextAction: CapturePreferredAction | null
+  ) => void;
+  refreshCaptureStatus: () => Promise<void>;
+  setCaptureActionLoading: (action: "install" | "uninstall" | null) => void;
+  setCaptureEndpointId: (endpointId: string) => void;
+  setCaptureError: (message: string | null) => void;
+  setCaptureSessionHostname: (hostname: string) => void;
+}) {
+  const runCaptureAction = (action: "install" | "uninstall") => {
+    props.setCaptureActionLoading(action);
+    props.setCaptureError(null);
+    const operation = action === "install" ? installEdgeShark : uninstallEdgeShark;
+    void operation(props.captureEndpoint?.id)
+      .then(() => props.refreshCaptureStatus())
+      .catch((error) =>
+        props.setCaptureError(error instanceof Error ? error.message : String(error))
+      )
+      .finally(() => props.setCaptureActionLoading(null));
+  };
+
+  return (
+    <Stack spacing={3}>
+      <Box>
+        <Typography variant="h6">Capture</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Manage Edgeshark availability for packet capture and Wireshark noVNC sessions.
+        </Typography>
+      </Box>
+      <SectionCard
+        title="Edgeshark"
+        description="Install or uninstall Edgeshark on the selected endpoint host."
+        tone={props.captureEndpoint && props.captureStatus?.running ? "success" : "warning"}
+      >
+        {props.captureError ? (
+          <Alert
+            severity="error"
+            variant="outlined"
+            sx={{
+              color: "text.primary",
+              borderColor: "error.main",
+              bgcolor: "background.paper",
+              "& .MuiAlert-icon": {
+                color: "error.main"
+              }
+            }}
+          >
+            {props.captureError}
+          </Alert>
+        ) : null}
+        <TextField
+          select
+          label="Endpoint"
+          value={props.captureEndpointId}
+          onChange={(event) => props.setCaptureEndpointId(event.target.value)}
+          fullWidth
+          disabled={props.endpoints.length === 0}
+          helperText="Capture status/actions and defaults are scoped to this endpoint."
+          data-testid="standalone-settings-capture-endpoint"
+        >
+          {props.endpoints.length === 0 ? (
+            <MenuItem value="">No endpoints configured</MenuItem>
+          ) : (
+            props.endpoints.map((endpoint) => (
+              <MenuItem key={endpoint.id} value={endpoint.id}>
+                {endpoint.label} ({endpoint.status})
+              </MenuItem>
+            ))
+          )}
+        </TextField>
+        <TextField
+          label="Status"
+          value={formatCaptureStatus(
+            Boolean(props.captureEndpoint),
+            props.captureStatusLoading,
+            props.captureStatus,
+            props.captureEndpointLabel
+          )}
+          fullWidth
+          slotProps={{ input: { readOnly: true } }}
+          data-testid="standalone-settings-capture-status"
+        />
+        <Stack direction="row" spacing={1.25} flexWrap="wrap">
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              void props.refreshCaptureStatus();
+            }}
+            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            data-testid="standalone-settings-capture-refresh"
+          >
+            Refresh
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={() => runCaptureAction("install")}
+            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            data-testid="standalone-settings-capture-install"
+          >
+            Install
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<UploadIcon />}
+            onClick={() => runCaptureAction("uninstall")}
+            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            data-testid="standalone-settings-capture-uninstall"
+          >
+            Uninstall
+          </Button>
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          Capture defaults (image, pull policy, packetflix host/port) are controlled on the
+          API server via environment variables.
+        </Typography>
+      </SectionCard>
+      <SectionCard
+        title="Capture Defaults"
+        description="Set per-endpoint defaults for generic capture commands and optional session hostname override."
+        tone="info"
+      >
+        <ToggleButtonGroup
+          exclusive
+          value={props.capturePreferences.preferredAction}
+          onChange={props.handlePreferredCaptureActionChange}
+          disabled={!props.captureEndpoint}
+          sx={{
+            alignSelf: "flex-start",
+            "& .MuiToggleButton-root": {
+              px: 1.75,
+              color: "text.primary",
+              borderColor: "divider"
+            },
+            "& .MuiToggleButton-root.Mui-selected": {
+              bgcolor: "action.selected",
+              color: "text.primary",
+              borderColor: "text.primary"
+            },
+            "& .MuiToggleButton-root.Mui-selected:hover": {
+              bgcolor: "action.hover"
+            }
+          }}
+        >
+          <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
+            Wireshark VNC
+          </ToggleButton>
+          <ToggleButton value="edgeshark" data-testid="standalone-settings-capture-default-edgeshark">
+            Edgeshark
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <TextField
+          label="Session Hostname Override"
+          value={props.captureSessionHostname}
+          onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
+          fullWidth
+          placeholder="IPv4, IPv6, or DNS hostname"
+          helperText="Used for packetflix URI generation on the selected endpoint in this browser session only."
+          data-testid="standalone-settings-capture-session-hostname"
+        />
+        <Stack direction="row" spacing={1.25} flexWrap="wrap">
+          <Button
+            variant="outlined"
+            onClick={props.applyCaptureSessionHostname}
+            disabled={!props.captureEndpoint}
+            data-testid="standalone-settings-capture-session-hostname-apply"
+          >
+            Apply Session Hostname
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            onClick={props.clearCaptureSessionHostname}
+            disabled={!props.captureEndpoint}
+            data-testid="standalone-settings-capture-session-hostname-clear"
+          >
+            Clear Override
+          </Button>
+        </Stack>
+      </SectionCard>
+    </Stack>
+  );
+}
+
 export function SettingsOverlay({
   currentTheme,
   defaultApiUrl,
@@ -322,12 +539,9 @@ export function SettingsOverlay({
     () => getSessionHostnameOverride() ?? ""
   );
 
-  const primaryEndpoint =
-    endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
-  const captureEndpoint =
-    endpoints.find((endpoint) => endpoint.id === captureEndpointId) ?? null;
-  const captureEndpointLabel =
-    captureEndpoint?.label || captureEndpoint?.url || captureEndpoint?.id || "selected endpoint";
+  const primaryEndpoint = primarySettingsEndpoint(endpoints);
+  const captureEndpoint = captureSettingsEndpoint(endpoints, captureEndpointId);
+  const captureEndpointLabel = captureSettingsEndpointLabel(captureEndpoint);
 
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
@@ -725,180 +939,26 @@ export function SettingsOverlay({
         );
       case "capture":
         return (
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="h6">Capture</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage Edgeshark availability for packet capture and Wireshark noVNC sessions.
-              </Typography>
-            </Box>
-            <SectionCard
-              title="Edgeshark"
-              description="Install or uninstall Edgeshark on the selected endpoint host."
-              tone={captureEndpoint && captureStatus?.running ? "success" : "warning"}
-            >
-              {captureError ? (
-                <Alert
-                  severity="error"
-                  variant="outlined"
-                  sx={{
-                    color: "text.primary",
-                    borderColor: "error.main",
-                    bgcolor: "background.paper",
-                    "& .MuiAlert-icon": {
-                      color: "error.main"
-                    }
-                  }}
-                >
-                  {captureError}
-                </Alert>
-              ) : null}
-              <TextField
-                select
-                label="Endpoint"
-                value={captureEndpointId}
-                onChange={(event) => setCaptureEndpointId(event.target.value)}
-                fullWidth
-                disabled={endpoints.length === 0}
-                helperText="Capture status/actions and defaults are scoped to this endpoint."
-                data-testid="standalone-settings-capture-endpoint"
-              >
-                {endpoints.length === 0 ? (
-                  <MenuItem value="">No endpoints configured</MenuItem>
-                ) : (
-                  endpoints.map((endpoint) => (
-                    <MenuItem key={endpoint.id} value={endpoint.id}>
-                      {endpoint.label} ({endpoint.status})
-                    </MenuItem>
-                  ))
-                )}
-              </TextField>
-              <TextField
-                label="Status"
-                value={formatCaptureStatus(Boolean(captureEndpoint), captureStatusLoading, captureStatus, captureEndpointLabel)}
-                fullWidth
-                slotProps={{ input: { readOnly: true } }}
-                data-testid="standalone-settings-capture-status"
-              />
-              <Stack direction="row" spacing={1.25} flexWrap="wrap">
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  onClick={() => {
-                    void refreshCaptureStatus();
-                  }}
-                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
-                  data-testid="standalone-settings-capture-refresh"
-                >
-                  Refresh
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={() => {
-                    setCaptureActionLoading("install");
-                    setCaptureError(null);
-                    void installEdgeShark(captureEndpoint?.id)
-                      .then(() => refreshCaptureStatus())
-                      .catch((error) =>
-                        setCaptureError(error instanceof Error ? error.message : String(error))
-                      )
-                      .finally(() => setCaptureActionLoading(null));
-                  }}
-                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
-                  data-testid="standalone-settings-capture-install"
-                >
-                  Install
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<UploadIcon />}
-                  onClick={() => {
-                    setCaptureActionLoading("uninstall");
-                    setCaptureError(null);
-                    void uninstallEdgeShark(captureEndpoint?.id)
-                      .then(() => refreshCaptureStatus())
-                      .catch((error) =>
-                        setCaptureError(error instanceof Error ? error.message : String(error))
-                      )
-                      .finally(() => setCaptureActionLoading(null));
-                  }}
-                  disabled={!captureEndpoint || captureStatusLoading || captureActionLoading !== null}
-                  data-testid="standalone-settings-capture-uninstall"
-                >
-                  Uninstall
-                </Button>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Capture defaults (image, pull policy, packetflix host/port) are controlled on the
-                API server via environment variables.
-              </Typography>
-            </SectionCard>
-            <SectionCard
-              title="Capture Defaults"
-              description="Set per-endpoint defaults for generic capture commands and optional session hostname override."
-              tone="info"
-            >
-              <ToggleButtonGroup
-                exclusive
-                value={capturePreferences.preferredAction}
-                onChange={handlePreferredCaptureActionChange}
-                disabled={!captureEndpoint}
-                sx={{
-                  alignSelf: "flex-start",
-                  "& .MuiToggleButton-root": {
-                    px: 1.75,
-                    color: "text.primary",
-                    borderColor: "divider"
-                  },
-                  "& .MuiToggleButton-root.Mui-selected": {
-                    bgcolor: "action.selected",
-                    color: "text.primary",
-                    borderColor: "text.primary"
-                  },
-                  "& .MuiToggleButton-root.Mui-selected:hover": {
-                    bgcolor: "action.hover"
-                  }
-                }}
-              >
-                <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
-                  Wireshark VNC
-                </ToggleButton>
-                <ToggleButton value="edgeshark" data-testid="standalone-settings-capture-default-edgeshark">
-                  Edgeshark
-                </ToggleButton>
-              </ToggleButtonGroup>
-              <TextField
-                label="Session Hostname Override"
-                value={captureSessionHostname}
-                onChange={(event) => setCaptureSessionHostname(event.target.value)}
-                fullWidth
-                placeholder="IPv4, IPv6, or DNS hostname"
-                helperText="Used for packetflix URI generation on the selected endpoint in this browser session only."
-                data-testid="standalone-settings-capture-session-hostname"
-              />
-              <Stack direction="row" spacing={1.25} flexWrap="wrap">
-                <Button
-                  variant="outlined"
-                  onClick={applyCaptureSessionHostname}
-                  disabled={!captureEndpoint}
-                  data-testid="standalone-settings-capture-session-hostname-apply"
-                >
-                  Apply Session Hostname
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  onClick={clearCaptureSessionHostname}
-                  disabled={!captureEndpoint}
-                  data-testid="standalone-settings-capture-session-hostname-clear"
-                >
-                  Clear Override
-                </Button>
-              </Stack>
-            </SectionCard>
-          </Stack>
+          <CaptureSettingsSection
+            applyCaptureSessionHostname={applyCaptureSessionHostname}
+            captureActionLoading={captureActionLoading}
+            captureEndpoint={captureEndpoint}
+            captureEndpointId={captureEndpointId}
+            captureEndpointLabel={captureEndpointLabel}
+            captureError={captureError}
+            capturePreferences={capturePreferences}
+            captureSessionHostname={captureSessionHostname}
+            captureStatus={captureStatus}
+            captureStatusLoading={captureStatusLoading}
+            clearCaptureSessionHostname={clearCaptureSessionHostname}
+            endpoints={endpoints}
+            handlePreferredCaptureActionChange={handlePreferredCaptureActionChange}
+            refreshCaptureStatus={refreshCaptureStatus}
+            setCaptureActionLoading={setCaptureActionLoading}
+            setCaptureEndpointId={setCaptureEndpointId}
+            setCaptureError={setCaptureError}
+            setCaptureSessionHostname={setCaptureSessionHostname}
+          />
         );
       default:
         return null;

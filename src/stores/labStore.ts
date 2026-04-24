@@ -202,55 +202,230 @@ function extractContainerState(
   };
 }
 
+type MutableInterfaceField = Exclude<keyof InterfaceState, "name">;
+
+const INTERFACE_ATTRIBUTE_FIELDS: Array<[MutableInterfaceField, string]> = [
+  ["alias", "alias"],
+  ["state", "state"],
+  ["type", "type"],
+  ["mac", "mac"],
+  ["mtu", "mtu"],
+  ["ifIndex", "index"],
+  ["rxBps", "rx_bps"],
+  ["txBps", "tx_bps"],
+  ["rxPps", "rx_pps"],
+  ["txPps", "tx_pps"],
+  ["rxBytes", "rx_bytes"],
+  ["txBytes", "tx_bytes"],
+  ["rxPackets", "rx_packets"],
+  ["txPackets", "tx_packets"],
+  ["statsIntervalSeconds", "interval_seconds"],
+  ["netemDelay", "netem_delay"],
+  ["netemJitter", "netem_jitter"],
+  ["netemLoss", "netem_loss"],
+  ["netemRate", "netem_rate"],
+  ["netemCorruption", "netem_corruption"]
+];
+
+function shouldDeleteInterface(interfaceName: string, action: string): boolean {
+  return interfaceName.startsWith("clab-") || action === "delete";
+}
+
+function baseInterfaceState(interfaceName: string, existing: InterfaceState | undefined): InterfaceState {
+  return {
+    name: interfaceName,
+    alias: existing?.alias ?? "",
+    state: existing?.state ?? "",
+    type: existing?.type ?? "",
+    mac: existing?.mac ?? "",
+    mtu: existing?.mtu ?? ""
+  };
+}
+
+function applyInterfaceAttributes(
+  next: InterfaceState,
+  attrs: Record<string, EventAttributeValue>
+): void {
+  for (const [field, attr] of INTERFACE_ATTRIBUTE_FIELDS) {
+    const value = getAttrString(attrs, attr);
+    if (value !== undefined) {
+      next[field] = value;
+    }
+  }
+}
+
+function preserveInterfaceMetadata(next: InterfaceState, existing: InterfaceState | undefined): void {
+  if (!existing) {
+    return;
+  }
+  for (const field of ["alias", "type", "mac", "mtu"] as const) {
+    next[field] = existing[field];
+  }
+}
+
 function upsertInterface(
   container: ContainerState,
   attrs: Record<string, EventAttributeValue>,
   action: string
 ): void {
   const interfaceName = getAttrString(attrs, "ifname", "interface") ?? "";
-  if (!interfaceName) return;
-  if (interfaceName.startsWith("clab-")) {
-    container.interfaces.delete(interfaceName);
+  if (!interfaceName) {
     return;
   }
-  if (action === "delete") {
+  if (shouldDeleteInterface(interfaceName, action)) {
     container.interfaces.delete(interfaceName);
     return;
   }
 
   const existing = container.interfaces.get(interfaceName);
-  const next: InterfaceState = {
-    name: interfaceName,
-    alias: getAttrString(attrs, "alias") ?? existing?.alias ?? "",
-    state: getAttrString(attrs, "state") ?? existing?.state ?? "",
-    type: getAttrString(attrs, "type") ?? existing?.type ?? "",
-    mac: getAttrString(attrs, "mac") ?? existing?.mac ?? "",
-    mtu: getAttrString(attrs, "mtu") ?? existing?.mtu ?? "",
-    ifIndex: getAttrString(attrs, "index") ?? existing?.ifIndex,
-    rxBps: getAttrString(attrs, "rx_bps") ?? existing?.rxBps,
-    txBps: getAttrString(attrs, "tx_bps") ?? existing?.txBps,
-    rxPps: getAttrString(attrs, "rx_pps") ?? existing?.rxPps,
-    txPps: getAttrString(attrs, "tx_pps") ?? existing?.txPps,
-    rxBytes: getAttrString(attrs, "rx_bytes") ?? existing?.rxBytes,
-    txBytes: getAttrString(attrs, "tx_bytes") ?? existing?.txBytes,
-    rxPackets: getAttrString(attrs, "rx_packets") ?? existing?.rxPackets,
-    txPackets: getAttrString(attrs, "tx_packets") ?? existing?.txPackets,
-    statsIntervalSeconds: getAttrString(attrs, "interval_seconds") ?? existing?.statsIntervalSeconds,
-    netemDelay: getAttrString(attrs, "netem_delay") ?? existing?.netemDelay,
-    netemJitter: getAttrString(attrs, "netem_jitter") ?? existing?.netemJitter,
-    netemLoss: getAttrString(attrs, "netem_loss") ?? existing?.netemLoss,
-    netemRate: getAttrString(attrs, "netem_rate") ?? existing?.netemRate,
-    netemCorruption: getAttrString(attrs, "netem_corruption") ?? existing?.netemCorruption
-  };
-
+  const next = baseInterfaceState(interfaceName, existing);
+  applyInterfaceAttributes(next, attrs);
   if (action === "stats") {
-    next.alias = existing?.alias ?? next.alias;
-    next.type = existing?.type ?? next.type;
-    next.mac = existing?.mac ?? next.mac;
-    next.mtu = existing?.mtu ?? next.mtu;
+    preserveInterfaceMetadata(next, existing);
   }
 
   container.interfaces.set(interfaceName, next);
+}
+
+interface EventLabContext {
+  attrs: Record<string, EventAttributeValue>;
+  containerName: string;
+  endpointLabs: Map<string, LabState>;
+  lab: LabState;
+  labKey: string;
+}
+
+function resolveExistingLabEntry(
+  labs: Map<string, LabState>,
+  labPath: string,
+  labName: string,
+  containerName: string,
+  preferredLabKey: string | null
+): { key: string; lab: LabState } | null {
+  return (
+    findExistingLabEntry(labs, labPath) ??
+    (containerName ? findLabEntryByContainerName(labs, containerName) : null) ??
+    (!preferredLabKey && labName ? findLabEntryByName(labs, labName) : null)
+  );
+}
+
+function cloneOrCreateLab(
+  endpointId: string,
+  attrs: Record<string, EventAttributeValue>,
+  labName: string,
+  labPath: string,
+  existingLab: LabState | undefined
+): LabState {
+  if (!existingLab) {
+    return {
+      endpointId,
+      name: labName,
+      owner: getAttrString(attrs, "clab-owner", "owner") ?? "",
+      topologyPath: labPath,
+      containers: new Map()
+    };
+  }
+  return {
+    endpointId,
+    name: labName || existingLab.name,
+    owner: existingLab.owner,
+    topologyPath: labPath || existingLab.topologyPath,
+    containers: new Map(existingLab.containers)
+  };
+}
+
+function resolveEventLabContext(
+  endpointId: string,
+  event: EventData,
+  previousLabs: Map<string, LabState> | undefined
+): EventLabContext | null {
+  const attrs = event.attributes;
+  const labName = getAttrString(attrs, "lab", "containerlab") ?? "";
+  const labPath = getAttrString(attrs, "lab-path", "clab-topo-file") ?? "";
+  const containerName =
+    getAttrString(attrs, "name", "container-name", "container") ??
+    getEventString(event, "actor_name", "actorName") ??
+    "";
+  const preferredLabKey = resolveLabStoreKey(labPath);
+  const endpointLabs = new Map(previousLabs ?? new Map());
+  const existingEntry = resolveExistingLabEntry(endpointLabs, labPath, labName, containerName, preferredLabKey);
+  const labKey = preferredLabKey ?? existingEntry?.key ?? null;
+  if (!labKey || !containerName) {
+    return null;
+  }
+  if (existingEntry && preferredLabKey && existingEntry.key !== preferredLabKey) {
+    endpointLabs.delete(existingEntry.key);
+  }
+  return {
+    attrs,
+    containerName,
+    endpointLabs,
+    lab: cloneOrCreateLab(endpointId, attrs, labName, labPath, existingEntry?.lab),
+    labKey
+  };
+}
+
+function applyContainerEvent(
+  context: EventLabContext,
+  endpointId: string,
+  action: string
+): void {
+  const { attrs, containerName, endpointLabs, lab, labKey } = context;
+  if (action === "destroy" || action === "die" || action === "kill") {
+    lab.containers.delete(containerName);
+    if (lab.containers.size === 0) {
+      endpointLabs.delete(labKey);
+    } else {
+      endpointLabs.set(labKey, lab);
+    }
+    return;
+  }
+
+  const incoming = extractContainerState(endpointId, attrs);
+  const existing = lab.containers.get(containerName);
+  const container: ContainerState = {
+    ...(existing ?? incoming),
+    ...incoming,
+    endpointId,
+    interfaces: new Map(existing?.interfaces ?? incoming.interfaces)
+  };
+  lab.owner = incoming.owner || lab.owner;
+  lab.topologyPath = incoming.labPath || lab.topologyPath;
+  lab.name = incoming.labName || lab.name;
+  lab.containers.set(containerName, container);
+  endpointLabs.set(labKey, lab);
+}
+
+function applyInterfaceEvent(
+  context: EventLabContext,
+  endpointId: string,
+  action: string
+): void {
+  const { attrs, containerName, endpointLabs, lab, labKey } = context;
+  const existing = lab.containers.get(containerName);
+  const placeholder = extractContainerState(endpointId, attrs);
+  const container: ContainerState = existing
+    ? { ...existing, endpointId, interfaces: new Map(existing.interfaces) }
+    : placeholder;
+  upsertInterface(container, attrs, action);
+  lab.containers.set(containerName, container);
+  lab.topologyPath = placeholder.labPath || lab.topologyPath;
+  lab.name = placeholder.labName || lab.name;
+  endpointLabs.set(labKey, lab);
+}
+
+function applyLabEventContext(
+  context: EventLabContext,
+  endpointId: string,
+  event: EventData
+): void {
+  if (event.type === "container") {
+    applyContainerEvent(context, endpointId, event.action);
+    return;
+  }
+  if (event.type === "interface" || event.type === "interface-stats") {
+    applyInterfaceEvent(context, endpointId, event.action);
+  }
 }
 
 function mergeLabsByEndpoint(
@@ -278,101 +453,16 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
     }),
 
   processEvent: (endpointId, event) => {
-    const attrs = event.attributes;
-    const labName = getAttrString(attrs, "lab", "containerlab") ?? "";
-    const labPath = getAttrString(attrs, "lab-path", "clab-topo-file") ?? "";
-    const preferredLabKey = resolveLabStoreKey(labPath);
-    const containerName =
-      getAttrString(attrs, "name", "container-name", "container") ??
-      getEventString(event, "actor_name", "actorName") ??
-      "";
-
     const previousLabsByEndpoint = get().labsByEndpoint;
-    const endpointLabs = new Map(previousLabsByEndpoint.get(endpointId) ?? new Map());
-    let existingEntry = findExistingLabEntry(endpointLabs, labPath);
-    if (!existingEntry && containerName) {
-      existingEntry = findLabEntryByContainerName(endpointLabs, containerName);
-    }
-    if (!existingEntry && !preferredLabKey && labName) {
-      existingEntry = findLabEntryByName(endpointLabs, labName);
-    }
-    const labKey = preferredLabKey ?? existingEntry?.key ?? null;
-    if (!labKey) {
+    const context = resolveEventLabContext(endpointId, event, previousLabsByEndpoint.get(endpointId));
+    if (!context) {
       return;
     }
-
-    const existingLab = existingEntry?.lab;
-    if (existingEntry && preferredLabKey && existingEntry.key !== preferredLabKey) {
-      endpointLabs.delete(existingEntry.key);
-    }
-    const lab: LabState = existingLab
-      ? {
-          endpointId,
-          name: labName || existingLab.name,
-          owner: existingLab.owner,
-          topologyPath: labPath || existingLab.topologyPath,
-          containers: new Map(existingLab.containers)
-        }
-      : {
-          endpointId,
-          name: labName,
-          owner: getAttrString(attrs, "clab-owner", "owner") ?? "",
-          topologyPath: labPath,
-          containers: new Map()
-        };
-
-    if (!containerName) return;
-    const action = event.action;
-
-    if (event.type === "container") {
-      if (action === "destroy" || action === "die" || action === "kill") {
-        lab.containers.delete(containerName);
-        if (lab.containers.size === 0) {
-          endpointLabs.delete(labKey);
-        } else {
-          endpointLabs.set(labKey, lab);
-        }
-      } else {
-        const incoming = extractContainerState(endpointId, attrs);
-        const existing = lab.containers.get(containerName);
-        const container: ContainerState = {
-          ...(existing ?? incoming),
-          ...incoming,
-          endpointId,
-          interfaces: new Map(existing?.interfaces ?? incoming.interfaces)
-        };
-        if (incoming.owner) {
-          lab.owner = incoming.owner;
-        }
-        if (incoming.labPath) {
-          lab.topologyPath = incoming.labPath;
-        }
-        if (incoming.labName) {
-          lab.name = incoming.labName;
-        }
-        lab.containers.set(containerName, container);
-        endpointLabs.set(labKey, lab);
-      }
-    } else if (event.type === "interface" || event.type === "interface-stats") {
-      const existing = lab.containers.get(containerName);
-      const placeholder = extractContainerState(endpointId, attrs);
-      const container: ContainerState = existing
-        ? { ...existing, endpointId, interfaces: new Map(existing.interfaces) }
-        : placeholder;
-      upsertInterface(container, attrs, action);
-      lab.containers.set(containerName, container);
-      if (placeholder.labPath) {
-        lab.topologyPath = placeholder.labPath;
-      }
-      if (placeholder.labName) {
-        lab.name = placeholder.labName;
-      }
-      endpointLabs.set(labKey, lab);
-    }
+    applyLabEventContext(context, endpointId, event);
 
     set((state) => {
       const labsByEndpoint = new Map(state.labsByEndpoint);
-      labsByEndpoint.set(endpointId, endpointLabs);
+      labsByEndpoint.set(endpointId, context.endpointLabs);
       return {
         labsByEndpoint,
         labs: mergeLabsByEndpoint(labsByEndpoint)

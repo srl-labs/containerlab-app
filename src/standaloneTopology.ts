@@ -15,6 +15,7 @@ import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointS
 import {
   extractEndpointIdFromTopologyId,
   type DeploymentState,
+  type ExplorerTreeItem,
   type TopologyDocEventMessage,
   type TopologyFileEntry,
   firstArgAsTopologyRef,
@@ -181,63 +182,82 @@ export function createStandaloneTopologyManager(
     return withOwnerSuffix?.[1]?.trim() || trimmed;
   }
 
+  function topologyCandidateFiles(
+    files: TopologyFileEntry[],
+    topologyRef: TopologyRef | undefined,
+    item: ExplorerTreeItem | undefined
+  ): TopologyFileEntry[] {
+    const requestedEndpointId = item?.endpointId ?? resolveTopologyEndpointId(topologyRef);
+    return requestedEndpointId
+      ? files.filter((entry) => entry.endpointId === requestedEndpointId)
+      : files;
+  }
+
+  function topologyPathHints(
+    topologyRef: TopologyRef | undefined,
+    item: ExplorerTreeItem | undefined
+  ): string[] {
+    return [
+      topologyRef?.yamlPath,
+      typeof item?.description === "string" ? item.description : undefined,
+      typeof item?.tooltip === "string" ? item.tooltip : undefined
+    ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  }
+
+  function uniquePathMatches(
+    files: TopologyFileEntry[],
+    pathHints: string[]
+  ): { exact: TopologyFileEntry | undefined; aggregate: TopologyFileEntry[] } {
+    const aggregate: TopologyFileEntry[] = [];
+    for (const pathHint of pathHints) {
+      const matches = findEntriesByPathHint(files, pathHint);
+      if (matches.length === 1) {
+        return { exact: matches[0], aggregate };
+      }
+      for (const match of matches) {
+        if (!aggregate.some((entry) => entry.path === match.path)) {
+          aggregate.push(match);
+        }
+      }
+    }
+    return { exact: undefined, aggregate };
+  }
+
+  function resolveEntryFromNameAndPathMatches(
+    files: TopologyFileEntry[],
+    labNameHint: string | undefined,
+    pathMatches: TopologyFileEntry[]
+  ): TopologyFileEntry | undefined {
+    const nameMatches = findEntriesByLabName(files, labNameHint);
+    if (nameMatches.length === 1) {
+      return nameMatches[0];
+    }
+    if (nameMatches.length > 1 && pathMatches.length > 0) {
+      const intersection = nameMatches.filter((entry) =>
+        pathMatches.some((candidate) => candidate.path === entry.path)
+      );
+      return intersection.length === 1 ? intersection[0] : undefined;
+    }
+    return pathMatches.length === 1 ? pathMatches[0] : undefined;
+  }
+
   function resolveTopologyEntryFromArgs(
     files: TopologyFileEntry[],
     args: unknown[]
   ): TopologyFileEntry | undefined {
     const requestedTopologyRef = firstArgAsTopologyRef(args);
     const item = firstArgAsTreeItem(args);
-    const requestedEndpointId =
-      item?.endpointId ?? resolveTopologyEndpointId(requestedTopologyRef);
-    const candidateFiles = requestedEndpointId
-      ? files.filter((entry) => entry.endpointId === requestedEndpointId)
-      : files;
-    const pathHints = new Set<string>();
-    if (requestedTopologyRef?.yamlPath) {
-      pathHints.add(requestedTopologyRef.yamlPath);
-    }
-    if (typeof item?.description === "string") {
-      pathHints.add(item.description);
-    }
-    if (typeof item?.tooltip === "string") {
-      pathHints.add(item.tooltip);
-    }
-
-    const aggregatedPathMatches: TopologyFileEntry[] = [];
-    for (const pathHint of pathHints) {
-      const matches = findEntriesByPathHint(candidateFiles, pathHint);
-      if (matches.length === 1) {
-        return matches[0];
-      }
-      for (const match of matches) {
-        if (!aggregatedPathMatches.some((entry) => entry.path === match.path)) {
-          aggregatedPathMatches.push(match);
-        }
-      }
+    const candidateFiles = topologyCandidateFiles(files, requestedTopologyRef, item);
+    const { exact, aggregate } = uniquePathMatches(candidateFiles, topologyPathHints(requestedTopologyRef, item));
+    if (exact) {
+      return exact;
     }
 
     const labNameHint =
       requestedTopologyRef?.labName ??
       item?.labName ??
       extractLabNameFromLabel(item?.label);
-    const nameMatches = findEntriesByLabName(candidateFiles, labNameHint);
-    if (nameMatches.length === 1) {
-      return nameMatches[0];
-    }
-    if (nameMatches.length > 1 && aggregatedPathMatches.length > 0) {
-      const intersection = nameMatches.filter((entry) =>
-        aggregatedPathMatches.some((candidate) => candidate.path === entry.path)
-      );
-      if (intersection.length === 1) {
-        return intersection[0];
-      }
-    }
-
-    if (aggregatedPathMatches.length === 1) {
-      return aggregatedPathMatches[0];
-    }
-
-    return undefined;
+    return resolveEntryFromNameAndPathMatches(candidateFiles, labNameHint, aggregate);
   }
 
   function withEndpointHeaders(endpointId: string | undefined, init: RequestInit = {}): RequestInit {
@@ -533,15 +553,17 @@ export function createStandaloneTopologyManager(
     return undefined;
   }
 
-  async function loadTopologyFile(
-    topologyRef: TopologyRef,
-    loadOptions: { deploymentState?: DeploymentState; endpointId?: string } = {}
-  ): Promise<void> {
-    const endpointId = resolveTopologyEndpointId(topologyRef, loadOptions.endpointId);
-    if (!endpointId) {
-      throw new Error("No endpoint is available for this topology.");
-    }
+  interface LoadTopologyTarget {
+    canonicalEndpointId: string;
+    canonicalTopologyRef: TopologyRef;
+    sourcePreference: "api-file" | "running-lab-doc";
+  }
 
+  async function resolveLoadTopologyTarget(
+    topologyRef: TopologyRef,
+    endpointId: string,
+    loadOptions: { deploymentState?: DeploymentState; endpointId?: string }
+  ): Promise<LoadTopologyTarget> {
     const files = await listTopologyFilesForEndpoint(endpointId);
     const entry = findEntryByPath(files, topologyRef.yamlPath);
     const fallbackRunningLab =
@@ -552,11 +574,49 @@ export function createStandaloneTopologyManager(
         `No API-backed topology file found for "${topologyRef.yamlPath}". Standalone mode only opens topologies exposed by /files.`
       );
     }
-    const canonicalTopologyRef = entry?.topologyRef
-      ? entry.topologyRef
-      : normalizeStandaloneTopologyRef(topologyRef, endpointId);
-    const canonicalEndpointId = entry?.endpointId ?? endpointId;
-    const sourcePreference = entry?.topologyRef ? "api-file" : "running-lab-doc";
+    return {
+      canonicalTopologyRef: entry?.topologyRef ?? normalizeStandaloneTopologyRef(topologyRef, endpointId),
+      canonicalEndpointId: entry?.endpointId ?? endpointId,
+      sourcePreference: entry?.topologyRef ? "api-file" : "running-lab-doc"
+    };
+  }
+
+  async function loadCustomIconsForTopology(topologyRef: TopologyRef): Promise<void> {
+    try {
+      const iconList = await fetchUiIcons({
+        endpointId: currentEndpointId ?? undefined,
+        sessionId: currentSessionId ?? undefined,
+        topologyRef
+      });
+      useTopoViewerStore.getState().setCustomIcons(iconList.icons);
+    } catch {
+      useTopoViewerStore.getState().setCustomIcons([]);
+    }
+  }
+
+  async function resolveLoadedTopologyState(
+    topologyRef: TopologyRef,
+    snapshotState: DeploymentState,
+    requestedState: DeploymentState | undefined
+  ): Promise<DeploymentState> {
+    const stateFromApi = await resolveDeploymentState(topologyRef);
+    const stateFromRunningLabs = isTopologyRunning(topologyRef, options.getLabs())
+      ? "deployed"
+      : undefined;
+    return requestedState ?? stateFromApi ?? stateFromRunningLabs ?? snapshotState;
+  }
+
+  async function loadTopologyFile(
+    topologyRef: TopologyRef,
+    loadOptions: { deploymentState?: DeploymentState; endpointId?: string } = {}
+  ): Promise<void> {
+    const endpointId = resolveTopologyEndpointId(topologyRef, loadOptions.endpointId);
+    if (!endpointId) {
+      throw new Error("No endpoint is available for this topology.");
+    }
+
+    const { canonicalTopologyRef, canonicalEndpointId, sourcePreference } =
+      await resolveLoadTopologyTarget(topologyRef, endpointId, loadOptions);
     useTopoViewerStore.getState().setCustomIcons([]);
     const initialDeploymentState =
       loadOptions.deploymentState ??
@@ -572,27 +632,14 @@ export function createStandaloneTopologyManager(
       deploymentState: initialDeploymentState,
       mode: initialMode
     });
-    try {
-      const iconList = await fetchUiIcons({
-        endpointId: currentEndpointId ?? undefined,
-        sessionId: currentSessionId ?? undefined,
-        topologyRef: canonicalTopologyRef
-      });
-      useTopoViewerStore.getState().setCustomIcons(iconList.icons);
-    } catch {
-      useTopoViewerStore.getState().setCustomIcons([]);
-    }
+    await loadCustomIconsForTopology(canonicalTopologyRef);
     const snapshot = await refreshTopologySnapshot({}, options.getSessionClient());
 
-    const stateFromApi = await resolveDeploymentState(canonicalTopologyRef);
-    const stateFromRunningLabs = isTopologyRunning(canonicalTopologyRef, options.getLabs())
-      ? "deployed"
-      : undefined;
-    const resolvedState =
-      loadOptions.deploymentState ??
-      stateFromApi ??
-      stateFromRunningLabs ??
-      snapshot.deploymentState;
+    const resolvedState = await resolveLoadedTopologyState(
+      canonicalTopologyRef,
+      snapshot.deploymentState,
+      loadOptions.deploymentState
+    );
     const resolvedMode = resolvedState === "deployed" ? "view" : "edit";
 
     if (snapshot.deploymentState !== resolvedState || snapshot.mode !== resolvedMode) {

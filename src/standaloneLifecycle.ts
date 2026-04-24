@@ -456,6 +456,84 @@ export function createStandaloneLifecycleManager(
     options.scheduleTopologySnapshotRefresh(0);
   }
 
+  function createActiveLifecycleRequest(
+    config: LifecycleCommandConfig,
+    topologyRef: TopologyRef,
+    execution: {
+      signal: AbortSignal;
+      isCurrent(): boolean;
+      isCancelled(): boolean;
+    }
+  ): ActiveLifecycleRequest {
+    return {
+      commandType: config.commandType,
+      sessionId: options.getCurrentSessionId() ?? undefined,
+      signal: execution.signal,
+      topologyRef,
+      isCurrent: execution.isCurrent,
+      isCancelled: execution.isCancelled
+    };
+  }
+
+  function postLifecycleStart(config: LifecycleCommandConfig, label: string): void {
+    postLifecycleLogMessage(
+      config.commandType,
+      `Starting ${config.label} for "${label}"...`,
+      "stdout"
+    );
+    if (config.endpoint === "deploy" && config.cleanup) {
+      postLifecycleLogMessage(
+        config.commandType,
+        "Cleanup is not supported by deploy API; running a standard deploy.",
+        "stdout"
+      );
+    }
+  }
+
+  async function invokeConfiguredLifecycleStream(
+    config: LifecycleCommandConfig,
+    request: ActiveLifecycleRequest
+  ): Promise<{ message?: string }> {
+    postLifecycleLogMessage(config.commandType, `Sending ${config.label} request to API...`, "stdout");
+    return await invokeLifecycleApiStream(config.endpoint, request.topologyRef, config.cleanup, {
+      sessionId: request.sessionId,
+      signal: request.signal,
+      onLog: (line, stream) => {
+        postLifecycleLogMessage(config.commandType, line, stream);
+      }
+    });
+  }
+
+  function handleLifecycleTimeout(
+    config: LifecycleCommandConfig,
+    topologyRef: TopologyRef,
+    label: string,
+    expectedRunning: boolean
+  ): void {
+    if (config.commandType === "destroy") {
+      options.removeLabFromRuntimeStore(topologyRef);
+      options.invalidateTopologyFileListCache();
+      options.scheduleExplorerSnapshot(0);
+    }
+    postLifecycleStatusMessage(
+      config.commandType,
+      "error",
+      `Timed out waiting for topology "${label}" to become ${expectedRunning ? "deployed" : "undeployed"}.`
+    );
+  }
+
+  function completeLifecycleSuccess(config: LifecycleCommandConfig, topologyRef: TopologyRef): void {
+    if (config.commandType === "destroy") {
+      options.removeLabFromRuntimeStore(topologyRef);
+    }
+
+    options.invalidateTopologyFileListCache();
+    options.scheduleExplorerSnapshot(0);
+    syncActiveTopologyAfterLifecycle(config.commandType, topologyRef);
+    postLifecycleLogMessage(config.commandType, `${config.label} completed.`, "stdout");
+    postLifecycleStatusMessage(config.commandType, "success");
+  }
+
   async function executeStandaloneLifecycleCommand(
     command: ExtensionLifecycleCommand,
     execution: {
@@ -474,45 +552,12 @@ export function createStandaloneLifecycleManager(
       );
       return;
     }
-    const sessionId = options.getCurrentSessionId() ?? undefined;
     const label = currentTopologyRef.labName || currentTopologyRef.yamlPath;
-
-    const request: ActiveLifecycleRequest = {
-      commandType: config.commandType,
-      sessionId,
-      signal: execution.signal,
-      topologyRef: currentTopologyRef,
-      isCurrent: execution.isCurrent,
-      isCancelled: execution.isCancelled
-    };
-
-    postLifecycleLogMessage(
-      config.commandType,
-      `Starting ${config.label} for "${label}"...`,
-      "stdout"
-    );
-    if (config.endpoint === "deploy" && config.cleanup) {
-      postLifecycleLogMessage(
-        config.commandType,
-        "Cleanup is not supported by deploy API; running a standard deploy.",
-        "stdout"
-      );
-    }
+    const request = createActiveLifecycleRequest(config, currentTopologyRef, execution);
+    postLifecycleStart(config, label);
 
     try {
-      postLifecycleLogMessage(config.commandType, `Sending ${config.label} request to API...`, "stdout");
-      const lifecycleResponse = await invokeLifecycleApiStream(
-        config.endpoint,
-        currentTopologyRef,
-        config.cleanup,
-        {
-          sessionId,
-        signal: request.signal,
-        onLog: (line, stream) => {
-          postLifecycleLogMessage(config.commandType, line, stream);
-        }
-        }
-      );
+      const lifecycleResponse = await invokeConfiguredLifecycleStream(config, request);
       if (!request.isCurrent() || request.isCancelled()) {
         return;
       }
@@ -535,28 +580,11 @@ export function createStandaloneLifecycleManager(
         return;
       }
       if (!reachedExpectedState) {
-        if (config.commandType === "destroy") {
-          options.removeLabFromRuntimeStore(currentTopologyRef);
-          options.invalidateTopologyFileListCache();
-          options.scheduleExplorerSnapshot(0);
-        }
-        postLifecycleStatusMessage(
-          config.commandType,
-          "error",
-          `Timed out waiting for topology "${label}" to become ${expectedRunning ? "deployed" : "undeployed"}.`
-        );
+        handleLifecycleTimeout(config, currentTopologyRef, label, expectedRunning);
         return;
       }
 
-      if (config.commandType === "destroy") {
-        options.removeLabFromRuntimeStore(currentTopologyRef);
-      }
-
-      options.invalidateTopologyFileListCache();
-      options.scheduleExplorerSnapshot(0);
-      syncActiveTopologyAfterLifecycle(config.commandType, currentTopologyRef);
-      postLifecycleLogMessage(config.commandType, `${config.label} completed.`, "stdout");
-      postLifecycleStatusMessage(config.commandType, "success");
+      completeLifecycleSuccess(config, currentTopologyRef);
     } catch (error) {
       if (!request.isCurrent() || request.isCancelled() || isAbortError(error)) {
         return;
