@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = (process.env.CI ?? "").length > 0;
+const useLocalClabUi = process.env.CLAB_UI_SOURCE === "local";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
@@ -47,7 +48,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run dev",
+    command: useLocalClabUi ? "npm run dev:local" : "npm run dev",
     url: "http://localhost:5173",
     reuseExistingServer: !isCI,
     timeout: isCI ? 180000 : 120000,
