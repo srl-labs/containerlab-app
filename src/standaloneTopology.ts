@@ -11,6 +11,7 @@ import { fetchUiIcons } from "./runtimeApi";
 import { getRuntimeContainersForTopology, runtimeContainersEqual } from "./runtimeData";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
+import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
 import {
   extractEndpointIdFromTopologyId,
   type DeploymentState,
@@ -264,6 +265,12 @@ export function createStandaloneTopologyManager(
   }
 
   async function listTopologyFilesForEndpoint(endpointId: string): Promise<TopologyFileEntry[]> {
+    if (!isConnectedEndpointId(options.getEndpoints(), endpointId)) {
+      fileListCache.delete(endpointId);
+      fileListInFlight.delete(endpointId);
+      return [];
+    }
+
     const cached = fileListCache.get(endpointId);
     const now = Date.now();
     if (cached && now - cached.fetchedAt < FILE_LIST_CACHE_TTL_MS) {
@@ -290,7 +297,7 @@ export function createStandaloneTopologyManager(
   }
 
   async function listTopologyFiles(): Promise<TopologyFileEntry[]> {
-    const endpoints = options.getEndpoints();
+    const endpoints = connectedEndpoints(options.getEndpoints());
     if (endpoints.length === 0) {
       return [];
     }

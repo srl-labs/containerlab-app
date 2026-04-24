@@ -23,6 +23,7 @@ import {
   MSG_FIT_VIEWPORT,
   MSG_SVG_EXPORT_RESULT,
   parseSchemaData,
+  type TopologySnapshot,
   type TopologyRef
 } from "@srl-labs/clab-ui/session";
 
@@ -217,6 +218,32 @@ function getConnectedEndpointIdForUiAssets(): string | undefined {
 
 function getEndpointIdForEditorContext(): string | undefined {
   return topologyManager.getCurrentEndpointId() ?? getConnectedEndpointIdForUiAssets();
+}
+
+function hasActiveConnectedTopologySession(): boolean {
+  return Boolean(
+    getConnectedEndpointIdForUiAssets() &&
+    topologyManager.getCurrentSessionId() &&
+    topologyManager.getCurrentTopologyRef()
+  );
+}
+
+function createEmptyTopologySnapshot(): TopologySnapshot {
+  return {
+    revision: 0,
+    nodes: [],
+    edges: [],
+    annotations: {},
+    yamlFileName: "",
+    annotationsFileName: "",
+    yamlContent: "",
+    annotationsContent: "{}",
+    labName: "",
+    mode: "edit",
+    deploymentState: "undeployed",
+    canUndo: false,
+    canRedo: false
+  };
 }
 
 function removeLabFromRuntimeStore(topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">): void {
@@ -746,16 +773,33 @@ function setupStandaloneUiHost(): void {
     }
   };
 
+  const apiHost = createApiClabUiHost({
+    explorer: explorerBridge.explorer,
+    postMessage,
+    targetWindow: window,
+    meta: {
+      isDevMock: true,
+      disableDevMockTraffic: true
+    }
+  });
+  const requestSnapshot: typeof apiHost.topology.requestSnapshot = async (
+    context,
+    requestOptions
+  ) => {
+    if (!hasActiveConnectedTopologySession()) {
+      return createEmptyTopologySnapshot();
+    }
+    return apiHost.topology.requestSnapshot(context, requestOptions);
+  };
+
   standaloneRuntime = createClabUiRuntime({
-    host: createApiClabUiHost({
-      explorer: explorerBridge.explorer,
-      postMessage,
-      targetWindow: window,
-      meta: {
-        isDevMock: true,
-        disableDevMockTraffic: true
+    host: {
+      ...apiHost,
+      topology: {
+        ...apiHost.topology,
+        requestSnapshot
       }
-    })
+    }
   });
 }
 
@@ -1209,11 +1253,11 @@ function StandaloneApp() {
   }, [endpointList]);
 
   useEffect(() => {
-    topologyManager.setAuthenticated(hasEndpointSession);
+    topologyManager.setAuthenticated(hasConnectedEndpoint);
     return () => {
       topologyManager.closeEventStream();
     };
-  }, [hasEndpointSession]);
+  }, [hasConnectedEndpoint]);
 
   useEffect(() => {
     scheduleExplorerSnapshot(0);

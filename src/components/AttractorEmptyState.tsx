@@ -386,12 +386,14 @@ export function AttractorEmptyState({
     // Animation loop
     // =====================================================================
     let animId = 0;
-    const clock = new THREE.Clock();
+    const timer = new THREE.Timer();
+    timer.connect(document);
 
-    const animate = () => {
+    const animate = (timestamp?: number) => {
       animId = requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      const elapsed = clock.elapsedTime;
+      timer.update(timestamp);
+      const delta = timer.getDelta();
+      const elapsed = timer.getElapsed();
 
       // Spin the model
       if (model) {
@@ -492,6 +494,7 @@ export function AttractorEmptyState({
       disposed = true;
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
+      timer.dispose();
       container.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", releasePointer);
