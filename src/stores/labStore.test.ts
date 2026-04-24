@@ -161,6 +161,53 @@ test("interface events without lab-path are matched to an existing lab via conta
   assert.equal(iface.state, "up");
 });
 
+test("renamed interface events remove stale entries with the same index", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl-renamed",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl-renamed",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "eth1",
+      state: "up",
+      index: "42"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl-renamed",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "e1-1",
+      alias: "ethernet-1/1",
+      state: "up",
+      ifindex: "42"
+    }
+  });
+
+  const interfaces = firstLab()?.containers.get("clab-demo-srl-renamed")?.interfaces;
+  assert.ok(interfaces);
+  assert.equal(interfaces.has("eth1"), false);
+  assert.equal(interfaces.has("e1-1"), true);
+  assert.equal(interfaces.get("e1-1")?.label, "ethernet-1/1");
+});
+
 test("interface stats can resolve container name from actor_name when attributes.name is absent", () => {
   const store = useLabStore.getState();
 

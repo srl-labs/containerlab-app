@@ -1,7 +1,8 @@
 import type {
   HostRuntimeContainer,
   HostRuntimeInterface,
-  HostRuntimeInterfaceStats
+  HostRuntimeInterfaceStats,
+  HostRuntimeNetemState
 } from "@srl-labs/clab-ui/host";
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { InterfaceState, LabState } from "./stores/labStore";
@@ -85,13 +86,25 @@ function toRuntimeInterface(iface: InterfaceState): HostRuntimeInterface {
   return {
     name: iface.name,
     alias: iface.alias,
+    label: iface.label,
     mac: iface.mac,
     mtu: toFiniteNumber(iface.mtu) ?? 0,
     state: iface.state,
     type: iface.type,
     ifIndex: toFiniteNumber(iface.ifIndex),
-    stats: toRuntimeInterfaceStats(iface)
+    stats: toRuntimeInterfaceStats(iface),
+    netemState: toRuntimeInterfaceNetemState(iface)
   };
+}
+
+function toRuntimeInterfaceNetemState(iface: InterfaceState): HostRuntimeNetemState | undefined {
+  const netemState: HostRuntimeNetemState = {};
+  if (iface.netemDelay !== undefined) netemState.delay = iface.netemDelay;
+  if (iface.netemJitter !== undefined) netemState.jitter = iface.netemJitter;
+  if (iface.netemLoss !== undefined) netemState.loss = iface.netemLoss;
+  if (iface.netemRate !== undefined) netemState.rate = iface.netemRate;
+  if (iface.netemCorruption !== undefined) netemState.corruption = iface.netemCorruption;
+  return Object.keys(netemState).length > 0 ? netemState : undefined;
 }
 
 function runtimeInterfaceStatsEqual(
@@ -117,6 +130,19 @@ function runtimeInterfaceStatsEqual(
   }
 
   return true;
+}
+
+function runtimeInterfaceNetemEqual(
+  previous: HostRuntimeNetemState | undefined,
+  next: HostRuntimeNetemState | undefined
+): boolean {
+  return (
+    previous?.delay === next?.delay &&
+    previous?.jitter === next?.jitter &&
+    previous?.loss === next?.loss &&
+    previous?.rate === next?.rate &&
+    previous?.corruption === next?.corruption
+  );
 }
 
 function runtimeContainerMetadataEqual(
@@ -146,11 +172,13 @@ function runtimeInterfaceEqual(
   const metadataEqual =
     previous.name === next.name &&
     previous.alias === next.alias &&
+    previous.label === next.label &&
     previous.state === next.state &&
     previous.type === next.type &&
     previous.mac === next.mac &&
     previous.mtu === next.mtu &&
-    previous.ifIndex === next.ifIndex;
+    previous.ifIndex === next.ifIndex &&
+    runtimeInterfaceNetemEqual(previous.netemState, next.netemState);
   return metadataEqual && (!includeStats || runtimeInterfaceStatsEqual(previous.stats, next.stats));
 }
 

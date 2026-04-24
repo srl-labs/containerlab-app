@@ -22,6 +22,7 @@ export interface ContainerState {
 export interface InterfaceState {
   name: string;
   alias: string;
+  label: string;
   state: string;
   type: string;
   mac: string;
@@ -210,7 +211,6 @@ const INTERFACE_ATTRIBUTE_FIELDS: Array<[MutableInterfaceField, string]> = [
   ["type", "type"],
   ["mac", "mac"],
   ["mtu", "mtu"],
-  ["ifIndex", "index"],
   ["rxBps", "rx_bps"],
   ["txBps", "tx_bps"],
   ["rxPps", "rx_pps"],
@@ -235,6 +235,7 @@ function baseInterfaceState(interfaceName: string, existing: InterfaceState | un
   return {
     name: interfaceName,
     alias: existing?.alias ?? "",
+    label: existing?.label ?? interfaceName,
     state: existing?.state ?? "",
     type: existing?.type ?? "",
     mac: existing?.mac ?? "",
@@ -252,14 +253,38 @@ function applyInterfaceAttributes(
       next[field] = value;
     }
   }
+  const ifIndex = getAttrString(attrs, "index", "ifindex");
+  if (ifIndex !== undefined) {
+    next.ifIndex = ifIndex;
+  }
+  next.label = next.alias || next.name;
 }
 
 function preserveInterfaceMetadata(next: InterfaceState, existing: InterfaceState | undefined): void {
   if (!existing) {
     return;
   }
-  for (const field of ["alias", "type", "mac", "mtu"] as const) {
+  for (const field of ["alias", "label", "type", "mac", "mtu"] as const) {
     next[field] = existing[field];
+  }
+}
+
+function removeInterfaceRecordsWithSameIndex(
+  interfaces: Map<string, InterfaceState>,
+  incomingName: string,
+  incomingIfIndex: string | undefined
+): void {
+  if (incomingIfIndex === undefined || incomingIfIndex.trim().length === 0) {
+    return;
+  }
+
+  for (const [existingName, existing] of interfaces.entries()) {
+    if (existingName === incomingName) {
+      continue;
+    }
+    if (existing.ifIndex === incomingIfIndex) {
+      interfaces.delete(existingName);
+    }
   }
 }
 
@@ -284,6 +309,7 @@ function upsertInterface(
     preserveInterfaceMetadata(next, existing);
   }
 
+  removeInterfaceRecordsWithSameIndex(container.interfaces, interfaceName, next.ifIndex);
   container.interfaces.set(interfaceName, next);
 }
 

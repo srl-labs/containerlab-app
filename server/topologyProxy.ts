@@ -55,12 +55,20 @@ interface RuntimeInterfaceStatsPayload {
 interface RuntimeInterfacePayload {
   name: string;
   alias: string;
+  label?: string;
   mac: string;
   mtu: number;
   state: string;
   type: string;
   ifIndex?: number;
   stats?: RuntimeInterfaceStatsPayload;
+  netemState?: {
+    delay?: string;
+    jitter?: string;
+    loss?: string;
+    rate?: string;
+    corruption?: string;
+  };
 }
 
 function toFiniteNumber(value: number | string | undefined): number | undefined {
@@ -78,6 +86,7 @@ function toRuntimeInterface(iface: RuntimeInterfacePayload): HostRuntimeInterfac
   return {
     name: iface.name ?? "",
     alias: iface.alias ?? "",
+    label: iface.label,
     mac: iface.mac ?? "",
     mtu: toFiniteNumber(iface.mtu) ?? 0,
     state: iface.state ?? "",
@@ -95,6 +104,15 @@ function toRuntimeInterface(iface: RuntimeInterfacePayload): HostRuntimeInterfac
           txPackets: toFiniteNumber(iface.stats.txPackets),
           statsIntervalSeconds: toFiniteNumber(iface.stats.statsIntervalSeconds)
         }
+      : undefined,
+    netemState: iface.netemState
+      ? {
+          delay: iface.netemState.delay,
+          jitter: iface.netemState.jitter,
+          loss: iface.netemState.loss,
+          rate: iface.netemState.rate,
+          corruption: iface.netemState.corruption
+      }
       : undefined
   };
 }

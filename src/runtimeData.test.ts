@@ -31,6 +31,7 @@ function buildContainer(rxBps: string): ContainerState {
         {
           name: "e1-1",
           alias: "ethernet-1/1",
+          label: "ethernet-1/1",
           state: "up",
           type: "veth",
           mac: "02:42:ac:11:00:01",
@@ -38,7 +39,8 @@ function buildContainer(rxBps: string): ContainerState {
           ifIndex: "12",
           rxBps,
           txBps: "2000",
-          statsIntervalSeconds: "1"
+          statsIntervalSeconds: "1",
+          netemDelay: "10ms"
         }
       ]
     ])
@@ -76,6 +78,14 @@ test("runtimeContainersEqual treats identical stats as unchanged", () => {
   const next = getRuntimeContainersForLab("demo", buildLabs("1000"));
 
   assert.equal(runtimeContainersEqual(previous, next), true);
+});
+
+test("runtime containers include interface label and netem state", () => {
+  const [container] = getRuntimeContainersForLab("demo", buildLabs("1000"));
+  const [iface] = container?.interfaces ?? [];
+
+  assert.equal(iface?.label, "ethernet-1/1");
+  assert.equal(iface?.netemState?.delay, "10ms");
 });
 
 test("getRuntimeContainersForTopology prefers exact topology path over lab name", () => {
