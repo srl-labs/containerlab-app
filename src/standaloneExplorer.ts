@@ -17,10 +17,12 @@ import {
   importTopologyFromUrl,
   fetchNodeBrowserPorts,
   generateDrawioGraph,
+  installEdgeShark,
   runFcliCommand,
   runGottyShareAction,
   runSshxShareAction,
   createWiresharkVncSessions,
+  uninstallEdgeShark,
   type NetemFields
 } from "./runtimeApi";
 import {
@@ -63,8 +65,16 @@ import {
   topologyEntryLabName
 } from "./standaloneHostShared";
 import { resolveStandaloneTheme } from "./standaloneTheme";
+import {
+  isStandaloneFavorite,
+  toggleStandaloneFavorite
+} from "./standaloneFavorites";
 
 const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
+const STANDALONE_HIDDEN_COMMAND_IDS = [
+  "containerlab.lab.addToWorkspace",
+  "containerlab.lab.openFolderInNewWindow"
+] as const;
 
 function loadShowNonOwnedLabsSetting(): boolean {
   try {
@@ -656,7 +666,10 @@ export function createStandaloneExplorerBridge(
         label: labLabel,
         description: pathHint || "No API topology file",
         tooltip: pathHint || `No API topology file available for running lab "${lab.name}"`,
-        contextValue: "containerlabLabDeployed",
+        contextValue:
+          topologyRef && isStandaloneFavorite({ endpointId: lab.endpointId, topologyRef })
+            ? "containerlabLabDeployedFavorite"
+            : "containerlabLabDeployed",
         collapsibleState:
           shareChildren.length > 0 || containers.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
         endpointId: lab.endpointId,
@@ -701,7 +714,12 @@ export function createStandaloneExplorerBridge(
             label: file.filename || safeFilename(file.path),
             description: file.path,
             tooltip: file.path,
-            contextValue: "containerlabLabUndeployed",
+            contextValue: isStandaloneFavorite({
+              endpointId: file.endpointId,
+              topologyRef: file.topologyRef
+            })
+              ? "containerlabLabUndeployedFavorite"
+              : "containerlabLabUndeployed",
             collapsibleState: TREE_ITEM_NONE,
             endpointId: file.endpointId,
             labName,
@@ -1491,6 +1509,35 @@ export function createStandaloneExplorerBridge(
         runtimeUiActions.notify(`Copied endpoint URL for ${endpoint.label}.`, "success");
         return;
       }
+      case "containerlab.install.edgeshark": {
+        const endpointId = await resolveEndpointForAction("install EdgeShark", actionEndpointId);
+        if (!endpointId) {
+          return;
+        }
+        try {
+          await installEdgeShark(endpointId);
+          runtimeUiActions.notify("Installed EdgeShark.", "success");
+        } catch (error) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
+      case "containerlab.uninstall.edgeshark": {
+        const endpointId = await resolveEndpointForAction("uninstall EdgeShark", actionEndpointId);
+        if (!endpointId) {
+          return;
+        }
+        if (!window.confirm("Uninstall EdgeShark on this endpoint?")) {
+          return;
+        }
+        try {
+          await uninstallEdgeShark(endpointId);
+          runtimeUiActions.notify("Uninstalled EdgeShark.", "success");
+        } catch (error) {
+          runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        }
+        return;
+      }
       case "containerlab.lab.graph.topoViewer":
       case "containerlab.lab.openFile":
       case "containerlab.editor.topoViewerEditor.open": {
@@ -1503,9 +1550,9 @@ export function createStandaloneExplorerBridge(
           return;
         }
         const itemState =
-          item?.contextValue === "containerlabLabDeployed"
+          item?.contextValue?.includes("containerlabLabDeployed")
             ? "deployed"
-            : item?.contextValue === "containerlabLabUndeployed"
+            : item?.contextValue?.includes("containerlabLabUndeployed")
               ? "undeployed"
               : undefined;
         const resolvedState = await options.resolveDeploymentState(actionTopologyRef);
@@ -1725,6 +1772,22 @@ export function createStandaloneExplorerBridge(
           options.invalidateTopologyFileListCache(actionEndpointId);
           controller.scheduleSnapshot(0);
         }
+        return;
+      }
+      case "containerlab.lab.toggleFavorite": {
+        if (!actionTopologyRef) {
+          postExplorerError("No canonical topology reference is available for this item.");
+          return;
+        }
+        const nextFavorite = toggleStandaloneFavorite({
+          endpointId: actionEndpointId,
+          topologyRef: actionTopologyRef
+        });
+        controller.scheduleSnapshot(0);
+        runtimeUiActions.notify(
+          nextFavorite ? "Added lab to favorites." : "Removed lab from favorites.",
+          "success"
+        );
         return;
       }
       case "containerlab.lab.sshToAllNodes": {
@@ -2070,7 +2133,8 @@ export function createStandaloneExplorerBridge(
     getSnapshotOptions() {
       return {
         hideNonOwnedLabs: !showNonOwnedLabs,
-        isLocalCaptureAllowed: true
+        isLocalCaptureAllowed: true,
+        hiddenCommandIds: STANDALONE_HIDDEN_COMMAND_IDS
       };
     },
     onFilterTextChanged(filterText) {

@@ -8,6 +8,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localClabUiRoot = path.resolve(__dirname, "../clab-ui");
 const localClabUiDistRoot = path.join(localClabUiRoot, "dist");
 const useLocalClabUi = process.env.CLAB_UI_SOURCE === "local";
+const apiServerPort = process.env.PORT ?? "3000";
+const apiServerTarget = `http://localhost:${apiServerPort}`;
 
 if (useLocalClabUi && !fs.existsSync(path.join(localClabUiDistRoot, "index.js"))) {
   throw new Error(
@@ -97,14 +99,14 @@ export default defineConfig({
     },
     proxy: {
       "/auth": {
-        target: "http://localhost:3000"
+        target: apiServerTarget
       },
       "/api": {
-        target: "http://localhost:3000",
+        target: apiServerTarget,
         ws: true
       },
       "/files": {
-        target: "http://localhost:3000"
+        target: apiServerTarget
       }
     }
   },
