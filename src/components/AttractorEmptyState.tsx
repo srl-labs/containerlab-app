@@ -5,7 +5,7 @@
  * enhanced lighting, reflections, and floating particles that orbit
  * and interact with the spinning flask.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
@@ -24,6 +24,7 @@ export function AttractorEmptyState({
 }: AttractorEmptyStateProps) {
   const threeContainerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
 
   useEffect(() => {
     const container = threeContainerRef.current;
@@ -43,7 +44,18 @@ export function AttractorEmptyState({
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1000);
     camera.position.set(0, 0, 5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch (error) {
+      console.warn("[containerlab-web] WebGL unavailable for empty-state animation", error);
+      setWebglUnavailable(true);
+      if (portalHost) {
+        portalHost.style.pointerEvents = previousPortalPointerEvents ?? "none";
+      }
+      return;
+    }
+    setWebglUnavailable(false);
     renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -304,8 +316,12 @@ export function AttractorEmptyState({
     window.addEventListener("pointerup", releasePointer);
     window.addEventListener("pointercancel", releasePointer);
 
+    let disposed = false;
     const loader = new GLTFLoader();
     loader.load("/model.gltf", (gltf) => {
+      if (disposed) {
+        return;
+      }
       model = gltf.scene;
 
       let meshIndex = 0;
@@ -473,6 +489,7 @@ export function AttractorEmptyState({
     animate();
 
     cleanupRef.current = () => {
+      disposed = true;
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
       container.removeEventListener("pointerdown", onPointerDown);
@@ -485,7 +502,9 @@ export function AttractorEmptyState({
       burstGeometry.dispose();
       burstMaterial.dispose();
       renderer.dispose();
-      container.removeChild(renderer.domElement);
+      if (renderer.domElement.parentElement === container) {
+        container.removeChild(renderer.domElement);
+      }
     };
 
     return () => {
@@ -526,8 +545,34 @@ export function AttractorEmptyState({
         {/* Three.js canvas */}
         <div
           ref={threeContainerRef}
-          style={{ width: 320, height: 320 }}
+          style={{
+            width: 320,
+            height: 320,
+            display: webglUnavailable ? "none" : "block"
+          }}
         />
+        {webglUnavailable ? (
+          <div
+            aria-hidden="true"
+            style={{
+              width: 160,
+              height: 160,
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              border: "1px solid rgba(142, 200, 232, 0.35)",
+              boxShadow: "0 0 36px rgba(0, 201, 255, 0.18)",
+              background:
+                "radial-gradient(circle at 50% 38%, rgba(0, 201, 255, 0.28), rgba(0, 201, 255, 0.08) 42%, rgba(0, 0, 0, 0) 72%)",
+              color: "rgba(212, 244, 255, 0.86)",
+              fontSize: 56,
+              fontWeight: 700,
+              letterSpacing: 0
+            }}
+          >
+            cl
+          </div>
+        ) : null}
         <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4 }}>No lab is open</div>
         <div style={{ fontSize: 13, opacity: 0.82, lineHeight: 1.4 }}>
           Open a lab from the explorer, or create a new <code>*.clab.yml</code> file to start.
