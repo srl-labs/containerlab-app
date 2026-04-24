@@ -198,28 +198,26 @@ function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
   }`;
 
   return (
-    <Box sx={{ pt: 1, mt: 0.5, borderTop: 1, borderColor: "divider" }}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-        <EndpointHealthMetric
-          icon={<SpeedIcon fontSize="small" />}
-          label="CPU"
-          value={formatEndpointHealthPercent(cpu?.usagePercent)}
-          detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
-        />
-        <EndpointHealthMetric
-          icon={<MemoryIcon fontSize="small" />}
-          label="Memory"
-          value={formatEndpointHealthPercent(mem?.usagePercent)}
-          detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
-        />
-        <EndpointHealthMetric
-          icon={<StorageIcon fontSize="small" />}
-          label="Disk"
-          value={formatEndpointHealthPercent(disk?.usagePercent)}
-          detail={diskDetail}
-        />
-      </Stack>
-    </Box>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+      <EndpointHealthMetric
+        icon={<SpeedIcon fontSize="small" />}
+        label="CPU"
+        value={formatEndpointHealthPercent(cpu?.usagePercent)}
+        detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
+      />
+      <EndpointHealthMetric
+        icon={<MemoryIcon fontSize="small" />}
+        label="Memory"
+        value={formatEndpointHealthPercent(mem?.usagePercent)}
+        detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
+      />
+      <EndpointHealthMetric
+        icon={<StorageIcon fontSize="small" />}
+        label="Disk"
+        value={formatEndpointHealthPercent(disk?.usagePercent)}
+        detail={diskDetail}
+      />
+    </Stack>
   );
 }
 
@@ -231,7 +229,7 @@ function EndpointHealthStats(props: {
 
   if (endpoint.status !== "connected") {
     return (
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", pt: 0.5 }}>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
         Reconnect to view health stats.
       </Typography>
     );
@@ -239,7 +237,7 @@ function EndpointHealthStats(props: {
 
   if (!state || state.status === "loading") {
     return (
-      <Stack direction="row" spacing={1} alignItems="center" sx={{ pt: 0.5 }}>
+      <Stack direction="row" spacing={1} alignItems="center">
         <CircularProgress size={14} />
         <Typography variant="caption" color="text.secondary">
           Loading health stats...
@@ -250,7 +248,7 @@ function EndpointHealthStats(props: {
 
   if (state.status === "error") {
     return (
-      <Typography variant="caption" color="warning.main" sx={{ display: "block", pt: 0.5 }}>
+      <Typography variant="caption" color="warning.main" sx={{ display: "block" }}>
         Health stats unavailable.
       </Typography>
     );
@@ -339,16 +337,16 @@ function ManagedEndpointList(props: {
             key={endpoint.id}
             variant="outlined"
             sx={{
-              p: 1.5,
+              p: 1.75,
               borderColor: "divider",
               bgcolor: "background.paper"
             }}
           >
-            <Stack spacing={0.75}>
+            <Stack spacing={1.25} divider={<Divider flexItem />}>
               <Stack
                 direction="row"
                 justifyContent="space-between"
-                alignItems="center"
+                alignItems="flex-start"
                 spacing={1}
               >
                 <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -373,47 +371,6 @@ function ManagedEndpointList(props: {
                   <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
                     {endpointStatusHint(endpoint.status)}
                   </Typography>
-                  {props.healthStatsEnabled ? (
-                    <EndpointHealthStats endpoint={endpoint} state={props.endpointHealth[endpoint.id]} />
-                  ) : null}
-                  <TextField
-                    label="Keep signed in"
-                    size="small"
-                    value={durationDraft}
-                    onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
-                    error={Boolean(durationDraft.trim()) && !durationValid}
-                    helperText={
-                      durationValid
-                        ? "Examples: 24h, 36h, 7d, 1h30m"
-                        : "Use values like 24h, 36h, 7d, or 1h30m"
-                    }
-                    placeholder="24h"
-                    disabled={props.busyKey !== null}
-                    sx={{ mt: 0.75 }}
-                    slotProps={{
-                      inputLabel: { shrink: true },
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={saveDurationDisabled}
-                              onClick={() =>
-                                props.onSetEndpointSessionDuration?.(
-                                  endpoint.id,
-                                  durationDraft.trim()
-                                )
-                              }
-                              sx={{ minWidth: 0, textTransform: "none" }}
-                            >
-                              Save
-                            </Button>
-                          </InputAdornment>
-                        )
-                      }
-                    }}
-                  />
                 </Box>
                 <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
                   <Button
@@ -445,6 +402,46 @@ function ManagedEndpointList(props: {
                     <DeleteOutlineIcon fontSize="small" />
                   </Button>
                 </Stack>
+              </Stack>
+              {props.healthStatsEnabled ? (
+                <EndpointHealthStats endpoint={endpoint} state={props.endpointHealth[endpoint.id]} />
+              ) : null}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "stretch", sm: "flex-start" }}
+              >
+                <TextField
+                  label="Keep signed in"
+                  size="small"
+                  value={durationDraft}
+                  onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
+                  error={Boolean(durationDraft.trim()) && !durationValid}
+                  helperText={
+                    durationValid
+                      ? "Examples: 24h, 36h, 7d, 1h30m"
+                      : "Use values like 24h, 36h, 7d, or 1h30m"
+                  }
+                  placeholder="24h"
+                  disabled={props.busyKey !== null}
+                  sx={{ flex: 1 }}
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+                <Button
+                  variant="outlined"
+                  disabled={saveDurationDisabled}
+                  onClick={() =>
+                    props.onSetEndpointSessionDuration?.(endpoint.id, durationDraft.trim())
+                  }
+                  sx={{
+                    textTransform: "none",
+                    height: 40,
+                    px: 2.5,
+                    alignSelf: { xs: "stretch", sm: "flex-start" }
+                  }}
+                >
+                  Save
+                </Button>
               </Stack>
             </Stack>
           </Paper>
