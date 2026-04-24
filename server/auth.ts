@@ -322,23 +322,28 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
   app.patch<{ Body: UpdateEndpointPreferencesBody; Params: { id: string } }>(
     "/auth/endpoints/:id/preferences",
     async (request, reply) => {
-      const session = options.resolveSession(request, reply);
-      if (!session) {
-        return reply.status(401).send({ error: "Not authenticated" });
-      }
+      try {
+        const session = options.resolveSession(request, reply);
+        if (!session) {
+          return reply.status(401).send({ error: "Not authenticated" });
+        }
 
-      const endpointId = request.params.id.trim();
-      const existing = session.endpoints.get(endpointId) ?? null;
-      if (!existing) {
-        return reply.status(404).send({ error: "Endpoint not found" });
-      }
+        const endpointId = request.params.id.trim();
+        const existing = session.endpoints.get(endpointId) ?? null;
+        if (!existing) {
+          return reply.status(404).send({ error: "Endpoint not found" });
+        }
 
-      const updated: EndpointEntry = {
-        ...existing,
-        sessionDuration: resolveEndpointSessionDuration(request.body.sessionDuration)
-      };
-      options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-      return reply.send(toPublicInfo(updated, "connected"));
+        const updated: EndpointEntry = {
+          ...existing,
+          sessionDuration: resolveEndpointSessionDuration(request.body.sessionDuration)
+        };
+        options.endpointSessions.upsertEndpoint(session.sessionId, updated);
+        return reply.send(toPublicInfo(updated, "connected"));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to update endpoint preferences";
+        return reply.status(authErrorStatusCode(error)).send({ error: message });
+      }
     }
   );
 
