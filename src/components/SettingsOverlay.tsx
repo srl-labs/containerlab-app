@@ -24,20 +24,18 @@ import {
   Typography
 } from "@mui/material";
 import type { Theme } from "@mui/material/styles";
-import {
-  Close as CloseIcon,
-  Download as DownloadIcon,
-  DarkMode as DarkModeIcon,
-  DnsRounded as DnsRoundedIcon,
-  InfoOutlined as InfoOutlinedIcon,
-  Link as LinkIcon,
-  LightMode as LightModeIcon,
-  Logout as LogoutIcon,
-  Refresh as RefreshIcon,
-  Settings as SettingsIcon,
-  Upload as UploadIcon,
-  Terminal as TerminalIcon
-} from "@mui/icons-material";
+import CloseIcon from "@mui/icons-material/Close";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
+import DnsRoundedIcon from "@mui/icons-material/DnsRounded";
+import DownloadIcon from "@mui/icons-material/Download";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import LinkIcon from "@mui/icons-material/Link";
+import LogoutIcon from "@mui/icons-material/Logout";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SettingsIcon from "@mui/icons-material/Settings";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import UploadIcon from "@mui/icons-material/Upload";
 
 import { subscribeEndpointUiAction, type EndpointUiAction } from "../endpointActions";
 import {

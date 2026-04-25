@@ -50,19 +50,45 @@ const clabUiLocalAliases = useLocalClabUi
     }))
   : [];
 
+const localClabUiWarmupFiles = useLocalClabUi
+  ? [
+      "../clab-ui/dist/index.js",
+      "../clab-ui/dist/host/index.js",
+      "../clab-ui/dist/session/index.js",
+      "../clab-ui/dist/theme/index.js",
+      "../clab-ui/dist/styles/global.css",
+      "../clab-ui/dist/chunks/*.js"
+    ]
+  : [];
+
+const localClabUiOptimizedDependencies = useLocalClabUi
+  ? Array.from(localClabUiEntrypoints.keys()).filter(
+      (specifier) => !specifier.endsWith(".css")
+    )
+  : [];
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      include: /\.(?:jsx|tsx)$/
+    })
+  ],
   root: __dirname,
   publicDir: path.resolve(__dirname, "resources"),
   resolve: {
-    alias: clabUiLocalAliases,
+    alias: [
+      {
+        find: /^monaco-editor$/,
+        replacement: path.resolve(__dirname, "src/monacoCore.ts")
+      },
+      ...clabUiLocalAliases
+    ],
     dedupe: [
       "react",
       "react-dom",
       "@emotion/cache",
       "@emotion/react",
       "@emotion/styled",
-      "@mui/icons-material",
       "@mui/material",
       "@mui/private-theming",
       "@mui/styled-engine",
@@ -77,12 +103,17 @@ export default defineConfig({
       "@emotion/cache",
       "@emotion/react",
       "@emotion/styled",
-      "@mui/icons-material",
       "@mui/material",
       "@mui/private-theming",
       "@mui/styled-engine",
       "@mui/system",
-      "@mui/utils"
+      "@mui/utils",
+      "@xterm/addon-fit",
+      "@xterm/xterm",
+      "@xyflow/react",
+      "three",
+      "zustand",
+      ...localClabUiOptimizedDependencies
     ]
   },
   css: {
@@ -91,6 +122,16 @@ export default defineConfig({
   server: {
     port: 5173,
     open: false,
+    warmup: {
+      clientFiles: [
+        "./src/main.tsx",
+        "./src/standaloneApp.tsx",
+        "./src/mainUiDependencies.ts",
+        "./src/mainRuntimeDependencies.ts",
+        "./src/mainApiDependencies.ts",
+        ...localClabUiWarmupFiles
+      ]
+    },
     fs: {
       allow: [
         __dirname,

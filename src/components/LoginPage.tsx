@@ -6,10 +6,8 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import {
-  LockOutlined as LockOutlinedIcon,
-  SettingsEthernet as SettingsEthernetIcon
-} from "@mui/icons-material";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import InputAdornment from "@mui/material/InputAdornment";
 import {
   endpointStatusHint,

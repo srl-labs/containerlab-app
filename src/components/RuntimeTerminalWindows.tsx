@@ -12,17 +12,15 @@ import {
   Tooltip,
   Typography
 } from "@mui/material";
-import {
-  CleaningServices as ClearIcon,
-  Close as CloseIcon,
-  ContentCopy as CopyIcon,
-  Download as DownloadIcon,
-  Minimize as MinimizeIcon,
-  OpenInFull as RestoreIcon,
-  RestartAlt as ResetIcon,
-  Subject as ExportLogIcon,
-  Tune as ActionsIcon
-} from "@mui/icons-material";
+import ActionsIcon from "@mui/icons-material/Tune";
+import ClearIcon from "@mui/icons-material/CleaningServices";
+import CloseIcon from "@mui/icons-material/Close";
+import CopyIcon from "@mui/icons-material/ContentCopy";
+import DownloadIcon from "@mui/icons-material/Download";
+import ExportLogIcon from "@mui/icons-material/Subject";
+import MinimizeIcon from "@mui/icons-material/Minimize";
+import ResetIcon from "@mui/icons-material/RestartAlt";
+import RestoreIcon from "@mui/icons-material/OpenInFull";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";

@@ -15,18 +15,16 @@ import {
   TextField,
   Typography
 } from "@mui/material";
-import {
-  DeleteOutline as DeleteOutlineIcon,
-  EditOutlined as EditOutlinedIcon,
-  LockOutlined as LockOutlinedIcon,
-  Memory as MemoryIcon,
-  PersonOutline as PersonOutlineIcon,
-  Refresh as RefreshIcon,
-  SettingsEthernet as SettingsEthernetIcon,
-  LabelOutlined as LabelOutlinedIcon,
-  Speed as SpeedIcon,
-  Storage as StorageIcon
-} from "@mui/icons-material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import MemoryIcon from "@mui/icons-material/Memory";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
+import SpeedIcon from "@mui/icons-material/Speed";
+import StorageIcon from "@mui/icons-material/Storage";
 
 import {
   formatEndpointHealthPercent,
