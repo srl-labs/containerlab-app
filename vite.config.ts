@@ -27,6 +27,14 @@ const localClabUiEntrypoints = new Map([
   ["@srl-labs/clab-ui/session", path.join(localClabUiDistRoot, "session/index.js")],
   ["@srl-labs/clab-ui/theme", path.join(localClabUiDistRoot, "theme/index.js")],
   ["@srl-labs/clab-ui/explorer", path.join(localClabUiDistRoot, "explorer/index.js")],
+  [
+    "@srl-labs/clab-ui/image-manager",
+    path.join(localClabUiDistRoot, "image-manager/index.js")
+  ],
+  [
+    "@srl-labs/clab-ui/image-manager/catalog",
+    path.join(localClabUiDistRoot, "image-manager/catalog.js")
+  ],
   ["@srl-labs/clab-ui/inspect", path.join(localClabUiDistRoot, "inspect/index.js")],
   ["@srl-labs/clab-ui/welcome", path.join(localClabUiDistRoot, "welcome/index.js")],
   [
@@ -61,6 +69,7 @@ const localClabUiWarmupFiles = useLocalClabUi
       "../clab-ui/dist/session/index.js",
       "../clab-ui/dist/theme/index.js",
       "../clab-ui/dist/styles/global.css",
+      "../clab-ui/dist/image-manager/index.js",
       "../clab-ui/dist/chunks/*.js"
     ]
   : [];

@@ -4,6 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ClabApiClient } from "./clabApiClient.js";
 import type {
   InspectContainerInfo,
+  RuntimeImageActionResponse,
+  RuntimeImagesResponse,
   NodeLifecycleAction,
   NetemResetRequest,
   NetemSetRequest,
@@ -103,6 +105,15 @@ interface CaptureWiresharkVncBody extends RuntimeTargetBody {
 interface DeployFromUrlBody extends RuntimeTargetBody {
   topologySourceUrl: string;
   labNameOverride?: string;
+}
+
+interface RuntimeImagePullBody extends RuntimeTargetBody {
+  image?: string;
+}
+
+interface RuntimeImageRemoveBody extends RuntimeTargetBody {
+  reference?: string;
+  force?: boolean;
 }
 
 interface ImportTopologyFromUrlBody extends RuntimeTargetBody {
@@ -565,6 +576,65 @@ export function registerRuntimeProxy(
       return handleRouteError(reply, error);
     }
   });
+
+  app.get("/api/runtime/images", async (request, reply) => {
+    const resolved = resolveEndpoint(request, reply, getEndpointIdFromRequest(request));
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      const response: RuntimeImagesResponse = await resolved.client.listRuntimeImages(
+        resolved.endpoint.token
+      );
+      return reply.send(response);
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
+
+  app.post<{ Body: RuntimeImagePullBody }>(
+    "/api/runtime/images/pull",
+    async (request: FastifyRequest<{ Body: RuntimeImagePullBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const image = normalizeOptionalString(request.body.image);
+        if (!image) {
+          throw new RequestError("Missing image reference", 400);
+        }
+        const response: RuntimeImageActionResponse = await resolved.client.pullRuntimeImage(
+          resolved.endpoint.token,
+          image
+        );
+        return reply.send(response);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: RuntimeImageRemoveBody }>(
+    "/api/runtime/images/remove",
+    async (request: FastifyRequest<{ Body: RuntimeImageRemoveBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const reference = normalizeOptionalString(request.body.reference);
+        if (!reference) {
+          throw new RequestError("Missing image reference", 400);
+        }
+        const response: RuntimeImageActionResponse = await resolved.client.removeRuntimeImage(
+          resolved.endpoint.token,
+          reference,
+          request.body.force === true
+        );
+        return reply.send(response);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
 
   app.post<{ Body: DeployFromUrlBody }>(
     "/api/runtime/labs/deploy-from-url",

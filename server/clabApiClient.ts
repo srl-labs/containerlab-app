@@ -234,6 +234,29 @@ export interface EdgeSharkStatusResponse {
   runtime: string;
 }
 
+export interface RuntimeImageSummary {
+  id: string;
+  shortId?: string;
+  repoTags: string[];
+  repoDigests: string[];
+  created?: number;
+  createdAt?: string;
+  size?: number | string;
+  virtualSize?: number | string;
+}
+
+export interface RuntimeImagesResponse {
+  runtime: string;
+  images: RuntimeImageSummary[];
+}
+
+export interface RuntimeImageActionResponse {
+  success: boolean;
+  image?: string;
+  message?: string;
+  output?: string;
+}
+
 export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
 
 export interface NodeBrowserPort {
@@ -815,6 +838,35 @@ export class ClabApiClient {
   async getEdgeSharkStatus(token: string): Promise<EdgeSharkStatusResponse> {
     const res = await this.get("/api/v1/tools/edgeshark/status", token);
     return (await res.json()) as EdgeSharkStatusResponse;
+  }
+
+  async listRuntimeImages(token: string): Promise<RuntimeImagesResponse> {
+    const res = await this.get("/api/v1/images", token);
+    return (await res.json()) as RuntimeImagesResponse;
+  }
+
+  async pullRuntimeImage(token: string, image: string): Promise<RuntimeImageActionResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/images/pull",
+      token,
+      JSON.stringify({ image }),
+      "application/json"
+    );
+    return (await res.json()) as RuntimeImageActionResponse;
+  }
+
+  async removeRuntimeImage(
+    token: string,
+    reference: string,
+    force = false
+  ): Promise<RuntimeImageActionResponse> {
+    const res = await this.request(
+      "DELETE",
+      `/api/v1/images?reference=${encodeURIComponent(reference)}&force=${String(force)}`,
+      token
+    );
+    return (await res.json()) as RuntimeImageActionResponse;
   }
 
   async installEdgeShark(token: string): Promise<void> {

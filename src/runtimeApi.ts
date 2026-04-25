@@ -155,6 +155,29 @@ export interface EdgeSharkStatusResponse {
   runtime: string;
 }
 
+export interface RuntimeImageSummary {
+  id: string;
+  shortId?: string;
+  repoTags: string[];
+  repoDigests: string[];
+  created?: number;
+  createdAt?: string;
+  size?: number | string;
+  virtualSize?: number | string;
+}
+
+export interface RuntimeImagesResponse {
+  runtime: string;
+  images: RuntimeImageSummary[];
+}
+
+export interface RuntimeImageActionResponse {
+  success: boolean;
+  image?: string;
+  message?: string;
+  output?: string;
+}
+
 export interface DeployLabFromUrlResponse {
   success: boolean;
   labNames: string[];
@@ -564,6 +587,37 @@ export async function fetchEdgeSharkStatus(endpointId?: string): Promise<EdgeSha
   return await requestJson<EdgeSharkStatusResponse>(
     "/api/runtime/capture/edgeshark/status",
     withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function fetchRuntimeImages(endpointId?: string): Promise<RuntimeImagesResponse> {
+  return await requestJson<RuntimeImagesResponse>(
+    "/api/runtime/images",
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function pullRuntimeImage(input: RuntimeTargetRequest & {
+  image: string;
+}): Promise<RuntimeImageActionResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<RuntimeImageActionResponse>(
+    "/api/runtime/images/pull",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function removeRuntimeImage(input: RuntimeTargetRequest & {
+  reference: string;
+  force?: boolean;
+}): Promise<RuntimeImageActionResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<RuntimeImageActionResponse>(
+    "/api/runtime/images/remove",
+    asJsonBody(input, endpointId),
     endpointId
   );
 }

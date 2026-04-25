@@ -57,16 +57,19 @@ interface RuntimeUiState {
   inspectRequest: RuntimeInspectRequest | null;
   logsRequest: RuntimeNodeRequest | null;
   netemRequest: RuntimeNetemRequest | null;
+  imageManagerOpen: boolean;
   terminals: RuntimeTerminalWindow[];
   versionOpen: boolean;
   snackbar: SnackbarState;
   closeInspect: () => void;
   closeLogs: () => void;
+  closeImageManager: () => void;
   closeNetem: () => void;
   closeSnackbar: () => void;
   closeTerminal: (id: string) => void;
   focusTerminal: (id: string) => void;
   openInspect: (request: RuntimeInspectRequest) => void;
+  openImageManager: () => void;
   openLogs: (request: RuntimeNodeRequest) => void;
   openNetem: (request: RuntimeNetemRequest) => void;
   openTerminal: (request: RuntimeTerminalRequest) => string;
@@ -130,11 +133,14 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   inspectRequest: null,
   logsRequest: null,
   netemRequest: null,
+  imageManagerOpen: false,
   terminals: [],
   versionOpen: false,
   snackbar: defaultSnackbar,
   openInspect: (request) => set({ inspectRequest: request }),
   closeInspect: () => set({ inspectRequest: null }),
+  openImageManager: () => set({ imageManagerOpen: true }),
+  closeImageManager: () => set({ imageManagerOpen: false }),
   openLogs: (request) => set({ logsRequest: request }),
   closeLogs: () => set({ logsRequest: null }),
   openNetem: (request) => set({ netemRequest: request }),
@@ -269,6 +275,7 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 
 export const runtimeUiActions = {
   closeInspect: () => useRuntimeUiStore.getState().closeInspect(),
+  closeImageManager: () => useRuntimeUiStore.getState().closeImageManager(),
   closeLogs: () => useRuntimeUiStore.getState().closeLogs(),
   closeNetem: () => useRuntimeUiStore.getState().closeNetem(),
   closeTerminal: (id: string) => useRuntimeUiStore.getState().closeTerminal(id),
@@ -287,6 +294,7 @@ export const runtimeUiActions = {
       target,
       title
     }),
+  openImageManager: () => useRuntimeUiStore.getState().openImageManager(),
   openLogs: (request: RuntimeNodeRequest) => useRuntimeUiStore.getState().openLogs(request),
   openNetem: (request: RuntimeNetemRequest) => useRuntimeUiStore.getState().openNetem(request),
   openTerminal: (request: RuntimeTerminalRequest) => useRuntimeUiStore.getState().openTerminal(request),

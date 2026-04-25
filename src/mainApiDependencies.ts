@@ -14,12 +14,15 @@ export {
   createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
+  fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  pullRuntimeImage,
   reconcileUiIcons,
+  removeRuntimeImage,
   saveUiCustomNode,
   setDefaultUiCustomNode,
   uploadUiIcon
 } from "./runtimeApi";
-export { runtimeUiActions } from "./stores/runtimeUiStore";
+export { runtimeUiActions, useRuntimeUiStore } from "./stores/runtimeUiStore";
 export { getSessionHostnameOverride, loadCapturePreferences } from "./runtimeCaptureSettings";

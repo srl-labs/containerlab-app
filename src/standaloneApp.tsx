@@ -10,6 +10,7 @@ import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worke
 import { lazy, Suspense } from "react";
 import {
   App,
+  ContainerlabImageManagerDialog,
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
@@ -27,6 +28,11 @@ import {
   useRef,
   useState,
   useTopoViewerStore,
+  collectKindImageReferencesFromCustomTemplates,
+  collectKindImageReferencesFromYaml,
+  type ContainerImageSummary,
+  type ImageActionResult,
+  type KindImageReference,
   type ReactRoot,
   type TopologyRef,
   type TopologySnapshot
@@ -60,17 +66,21 @@ import {
   createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
+  fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  pullRuntimeImage,
   getSessionHostnameOverride,
   loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
   readPersistedStandaloneTheme,
   reconcileUiIcons,
+  removeRuntimeImage,
   resolveLabTab,
   resolveStandaloneTheme,
   runtimeUiActions,
+  useRuntimeUiStore,
   saveUiCustomNode,
   setDefaultUiCustomNode,
   uploadUiIcon,
@@ -114,6 +124,69 @@ const initialData = {
   defaultNode: "",
   customIcons: []
 };
+
+function runningLabImageReferences(endpointId?: string): KindImageReference[] {
+  const labs = endpointId
+    ? useLabStore.getState().getLabsForEndpoint(endpointId)
+    : useLabStore.getState().getAllLabs();
+  const references: KindImageReference[] = [];
+  for (const lab of labs.values()) {
+    for (const container of lab.containers.values()) {
+      if (!container.kind || !container.image) {
+        continue;
+      }
+      references.push({
+        kind: container.kind,
+        image: container.image,
+        source: "running-lab",
+        label: `${lab.name} ${container.nodeName || container.name}`,
+        endpointId: container.endpointId,
+        path: lab.topologyPath,
+        nodeName: container.nodeName
+      });
+    }
+  }
+  return references;
+}
+
+async function activeTopologyImageReferences(endpointId?: string): Promise<KindImageReference[]> {
+  if (!standaloneRuntime) {
+    return [];
+  }
+  const context = standaloneRuntime.session.getContext();
+  const contextEndpointId = extractEndpointIdFromTopologyId(context.topologyRef?.topologyId);
+  if (endpointId && contextEndpointId && endpointId !== contextEndpointId) {
+    return [];
+  }
+  try {
+    const snapshot = await standaloneRuntime.session.requestSnapshot();
+    if (!snapshot.yamlContent.trim()) {
+      return [];
+    }
+    return collectKindImageReferencesFromYaml(snapshot.yamlContent, {
+      endpointId: contextEndpointId ?? endpointId,
+      label: snapshot.labName || snapshot.yamlFileName,
+      path: context.topologyRef?.yamlPath
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function standaloneImageReferences(endpointId?: string): Promise<KindImageReference[]> {
+  const [activeRefs, customNodes] = await Promise.all([
+    activeTopologyImageReferences(endpointId),
+    fetchUiCustomNodes(endpointId).catch(() => ({ customNodes: [] }))
+  ]);
+  return [
+    ...activeRefs,
+    ...runningLabImageReferences(endpointId),
+    ...collectKindImageReferencesFromCustomTemplates(customNodes.customNodes, {
+      endpointId,
+      label: "Custom"
+    })
+  ];
+}
 
 function applyCustomNodes(
   customNodes: ReturnType<typeof useTopoViewerStore.getState>["customNodes"],
@@ -796,6 +869,28 @@ function setupStandaloneUiHost(): void {
 
   const apiHost = createApiClabUiHost({
     explorer: explorerBridge.explorer,
+    images: {
+      async listImages(options): Promise<ContainerImageSummary[]> {
+        const response = await fetchRuntimeImages(options?.endpointId);
+        return response.images;
+      },
+      async listImageReferences(options): Promise<KindImageReference[]> {
+        return standaloneImageReferences(options?.endpointId);
+      },
+      async pullImage(request): Promise<ImageActionResult> {
+        return pullRuntimeImage({
+          endpointId: request.endpointId,
+          image: request.image
+        });
+      },
+      async removeImage(request): Promise<ImageActionResult> {
+        return removeRuntimeImage({
+          endpointId: request.endpointId,
+          reference: request.reference,
+          force: request.force
+        });
+      }
+    },
     postMessage,
     targetWindow: window,
     meta: {
@@ -1212,6 +1307,8 @@ function StandaloneApp() {
   const [terminalPreferences, setTerminalPreferences] = useState<TerminalPreferences>(() =>
     loadTerminalPreferences()
   );
+  const imageManagerOpen = useRuntimeUiStore((state) => state.imageManagerOpen);
+  const closeImageManager = useRuntimeUiStore((state) => state.closeImageManager);
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -1437,6 +1534,16 @@ function StandaloneApp() {
           terminalPreferences={terminalPreferences}
         />
         <RuntimeActionDialogs />
+        <ContainerlabImageManagerDialog
+          open={imageManagerOpen}
+          runtime={standaloneRuntime!}
+          onClose={closeImageManager}
+          endpointOptions={endpointList.map((endpoint) => ({
+            id: endpoint.id,
+            label: endpoint.label
+          }))}
+          initialEndpointId={endpointList.find((endpoint) => endpoint.status === "connected")?.id}
+        />
       </MuiThemeProvider>
       <SettingsOverlayMounted
         currentTheme={theme}

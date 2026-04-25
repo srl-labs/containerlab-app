@@ -1992,6 +1992,7 @@ export function createStandaloneExplorerBridge(
       "containerlab.lab.cloneRepo": cloneRepositoryFlow,
       "containerlab.lab.clonePopularRepo": () => clonePopularFlow("undeployed"),
       "containerlab.lab.deployPopular": () => clonePopularFlow("deploy"),
+      "containerlab.images.manage": runtimeUiActions.openImageManager,
       "containerlab.inspectAll": runtimeUiActions.openInspectAll,
       "containerlab.inspectOneLab": () => {
         const topologyRef = requireTopologyRef();
