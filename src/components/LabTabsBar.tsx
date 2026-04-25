@@ -17,6 +17,7 @@ const INACTIVE_BG = "var(--vscode-tab-inactiveBackground, #2d2d2d)";
 const INACTIVE_FG = "var(--vscode-tab-inactiveForeground, rgba(255, 255, 255, 0.72))";
 const HOVER_BG = "var(--vscode-tab-hoverBackground, #2a2d2e)";
 const ACTIVE_BORDER = "var(--vscode-tab-activeBorderTop, #007fd4)";
+const TAB_BAR_HEIGHT = 45;
 
 function endpointBadgeLabel(endpointId: string, endpointLabels: ReadonlyMap<string, string>): string {
   return endpointLabels.get(endpointId) ?? endpointId;
@@ -42,7 +43,8 @@ export function LabTabsBar({
         display: "flex",
         alignItems: "stretch",
         width: "100%",
-        height: 34,
+        height: TAB_BAR_HEIGHT,
+        boxSizing: "border-box",
         borderBottom: `1px solid ${BASE_BORDER_COLOR}`,
         overflowX: "auto",
         overflowY: "hidden",
