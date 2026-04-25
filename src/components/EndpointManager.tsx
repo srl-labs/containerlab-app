@@ -30,6 +30,7 @@ import UploadIcon from "@mui/icons-material/Upload";
 
 import { ENDPOINT_EXPORT_FILENAME } from "../endpointTransfer";
 import {
+  fetchEndpointHealthMetrics,
   formatEndpointHealthPercent,
   formatEndpointHealthUsedTotal,
   type EndpointHealthMetrics
@@ -89,31 +90,6 @@ type EndpointHealthState =
   | { status: "loading" }
   | { status: "ready"; metrics: EndpointHealthMetrics }
   | { status: "error"; message: string };
-
-async function readEndpointHealthError(response: Response): Promise<string> {
-  const payload = (await response.json().catch(() => ({}))) as { error?: unknown; message?: unknown };
-  if (typeof payload.error === "string" && payload.error.trim().length > 0) {
-    return payload.error;
-  }
-  if (typeof payload.message === "string" && payload.message.trim().length > 0) {
-    return payload.message;
-  }
-  return `Health stats request failed (${response.status})`;
-}
-
-async function fetchEndpointHealthMetrics(
-  endpointId: string,
-  signal: AbortSignal
-): Promise<EndpointHealthMetrics> {
-  const response = await fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`, {
-    credentials: "include",
-    signal
-  });
-  if (!response.ok) {
-    throw new Error(await readEndpointHealthError(response));
-  }
-  return (await response.json()) as EndpointHealthMetrics;
-}
 
 function readEndpointImportFile(): Promise<File | null> {
   return new Promise((resolve) => {

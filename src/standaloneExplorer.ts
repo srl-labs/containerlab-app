@@ -9,6 +9,11 @@ import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
 import { dispatchEndpointUiAction } from "./endpointActions";
 import {
+  fetchEndpointHealthMetrics,
+  formatEndpointHealthTooltip,
+  type EndpointHealthMetrics
+} from "./endpointHealth";
+import {
   buildPacketflixCapture,
   closeAllWiresharkVncSessions,
   controlNodeLifecycle,
@@ -71,6 +76,7 @@ import {
 } from "./standaloneFavorites";
 
 const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
+const ENDPOINT_HEALTH_CACHE_TTL_MS = 30_000;
 const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.addToWorkspace",
   "containerlab.lab.openFolderInNewWindow"
@@ -78,6 +84,10 @@ const STANDALONE_HIDDEN_COMMAND_IDS = [
 
 type ShareActionKind = "sshx" | "gotty";
 type ShareLifecycleAction = "attach" | "detach" | "reattach";
+type EndpointHealthCacheEntry =
+  | { status: "loading"; fetchedAt: number }
+  | { status: "ready"; metrics: EndpointHealthMetrics; fetchedAt: number }
+  | { status: "error"; fetchedAt: number };
 
 function loadShowNonOwnedLabsSetting(): boolean {
   try {
@@ -860,20 +870,36 @@ function findTopologyEntryForRunningLab(
 function buildEndpointRootItem(
   endpoint: EndpointConfig,
   idPrefix: string,
-  children: ExplorerTreeItem[]
+  children: ExplorerTreeItem[],
+  healthState?: EndpointHealthCacheEntry
 ): ExplorerTreeItem {
   const endpointUrl = endpoint.url.replace(/^https?:\/\//i, "");
+  const baseTooltip = `${endpoint.url}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
+  const healthTooltip = endpointHealthTooltip(healthState);
   return {
     id: `${idPrefix}:${endpoint.id}`,
     label: endpoint.label,
     description: endpointUrl,
-    tooltip: `${endpoint.url}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`,
+    tooltip: healthTooltip ? `${baseTooltip}\n\n${healthTooltip}` : baseTooltip,
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
     state: endpoint.status,
     collapsibleState: children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
     children
   };
+}
+
+function endpointHealthTooltip(state: EndpointHealthCacheEntry | undefined): string | undefined {
+  if (!state) {
+    return undefined;
+  }
+  if (state.status === "loading") {
+    return "Health: loading...";
+  }
+  if (state.status === "error") {
+    return "Health: unavailable";
+  }
+  return `Health\n${formatEndpointHealthTooltip(state.metrics)}`;
 }
 
 function buildEndpointSectionItem(
@@ -917,6 +943,8 @@ export function createStandaloneExplorerBridge(
   const unhandledCommands = new Set<string>();
   const sshxLinksByLab = new Map<string, string>();
   const gottyLinksByLab = new Map<string, string>();
+  const endpointHealthCache = new Map<string, EndpointHealthCacheEntry>();
+  let scheduleHealthSnapshotRefresh = (_delay?: number): void => {};
 
   function sendExplorerMessage(message: ExplorerIncomingMessage): void {
     const outgoing =
@@ -928,6 +956,58 @@ export function createStandaloneExplorerBridge(
 
   function postExplorerError(message: string): void {
     sendExplorerMessage({ command: "error", message });
+  }
+
+  function pruneEndpointHealthCache(endpoints: EndpointConfig[]): void {
+    const connectedEndpointIds = new Set(
+      endpoints.filter((endpoint) => endpoint.connected).map((endpoint) => endpoint.id)
+    );
+    for (const endpointId of endpointHealthCache.keys()) {
+      if (!connectedEndpointIds.has(endpointId)) {
+        endpointHealthCache.delete(endpointId);
+      }
+    }
+  }
+
+  function startEndpointHealthRefresh(endpointId: string): EndpointHealthCacheEntry {
+    void fetchEndpointHealthMetrics(endpointId)
+      .then((metrics) => {
+        endpointHealthCache.set(endpointId, {
+          status: "ready",
+          metrics,
+          fetchedAt: Date.now()
+        });
+        scheduleHealthSnapshotRefresh(0);
+      })
+      .catch(() => {
+        endpointHealthCache.set(endpointId, {
+          status: "error",
+          fetchedAt: Date.now()
+        });
+        scheduleHealthSnapshotRefresh(0);
+      });
+    const loadingState: EndpointHealthCacheEntry = {
+      status: "loading",
+      fetchedAt: Date.now()
+    };
+    endpointHealthCache.set(endpointId, loadingState);
+    return loadingState;
+  }
+
+  function endpointHealthStateForTooltip(endpoint: EndpointConfig): EndpointHealthCacheEntry | undefined {
+    if (!endpoint.connected) {
+      endpointHealthCache.delete(endpoint.id);
+      return undefined;
+    }
+
+    const current = endpointHealthCache.get(endpoint.id);
+    if (current?.status === "loading") {
+      return current;
+    }
+    if (current && Date.now() - current.fetchedAt < ENDPOINT_HEALTH_CACHE_TTL_MS) {
+      return current;
+    }
+    return startEndpointHealthRefresh(endpoint.id);
   }
 
   function collectRunningLabItemsByEndpoint(files: TopologyFileEntry[]): Map<string, ExplorerTreeItem[]> {
@@ -1020,6 +1100,7 @@ export function createStandaloneExplorerBridge(
     files: TopologyFileEntry[]
   ): ExplorerTreeItem[] {
     const endpoints = options.getEndpoints();
+    pruneEndpointHealthCache(endpoints);
     const runningByEndpoint = collectRunningLabItemsByEndpoint(files);
     const localByEndpoint = collectLocalLabItemsByEndpoint(files);
 
@@ -1036,13 +1117,14 @@ export function createStandaloneExplorerBridge(
         };
         return buildEndpointRootItem(endpoint, "endpoint", [placeholder]);
       }
+      const healthState = endpointHealthStateForTooltip(endpoint);
       const runningItems = filterTreeItems(runningByEndpoint.get(endpoint.id) ?? [], filterText);
       const localItems = filterTreeItems(localByEndpoint.get(endpoint.id) ?? [], filterText);
       const groups = [
         buildEndpointSectionItem(endpoint.id, "running", runningItems),
         buildEndpointSectionItem(endpoint.id, "local", localItems)
       ];
-      return buildEndpointRootItem(endpoint, "endpoint", filterTreeItems(groups, filterText));
+      return buildEndpointRootItem(endpoint, "endpoint", filterTreeItems(groups, filterText), healthState);
     });
 
     return filterTreeItems(endpointItems, filterText);
@@ -2081,6 +2163,7 @@ export function createStandaloneExplorerBridge(
       explorerUiState = state ?? {};
     }
   });
+  scheduleHealthSnapshotRefresh = (delay) => controller.scheduleSnapshot(delay);
 
   return {
     explorer: {

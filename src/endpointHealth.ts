@@ -31,6 +31,31 @@ export interface EndpointHealthMetrics {
   };
 }
 
+async function readEndpointHealthError(response: Response): Promise<string> {
+  const payload = (await response.json().catch(() => ({}))) as { error?: unknown; message?: unknown };
+  if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+    return payload.error;
+  }
+  if (typeof payload.message === "string" && payload.message.trim().length > 0) {
+    return payload.message;
+  }
+  return `Health stats request failed (${response.status})`;
+}
+
+export async function fetchEndpointHealthMetrics(
+  endpointId: string,
+  signal?: AbortSignal
+): Promise<EndpointHealthMetrics> {
+  const response = await fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`, {
+    credentials: "include",
+    signal
+  });
+  if (!response.ok) {
+    throw new Error(await readEndpointHealthError(response));
+  }
+  return (await response.json()) as EndpointHealthMetrics;
+}
+
 export function formatEndpointHealthPercent(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return "n/a";
@@ -63,3 +88,17 @@ export function formatEndpointHealthUsedTotal(
   return `${formatEndpointHealthBytes(used)} / ${formatEndpointHealthBytes(total)}`;
 }
 
+export function formatEndpointHealthTooltip(metrics: EndpointHealthMetrics): string {
+  const { cpu, mem, disk } = metrics.metrics;
+  const cpuDetail = cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a";
+  const memoryDetail = formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem);
+  const diskDetail = `${formatEndpointHealthUsedTotal(disk?.usedDisk, disk?.totalDisk)}${
+    disk?.path ? ` on ${disk.path}` : ""
+  }`;
+
+  return [
+    `CPU: ${formatEndpointHealthPercent(cpu?.usagePercent)} (${cpuDetail})`,
+    `Memory: ${formatEndpointHealthPercent(mem?.usagePercent)} (${memoryDetail})`,
+    `Disk: ${formatEndpointHealthPercent(disk?.usagePercent)} (${diskDetail})`
+  ].join("\n");
+}

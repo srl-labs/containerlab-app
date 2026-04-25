@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatEndpointHealthTooltip,
   formatEndpointHealthBytes,
   formatEndpointHealthPercent,
   formatEndpointHealthUsedTotal
@@ -32,3 +33,53 @@ test("formatEndpointHealthUsedTotal combines used and total values", () => {
   );
 });
 
+test("formatEndpointHealthTooltip includes cpu memory and disk details", () => {
+  assert.equal(
+    formatEndpointHealthTooltip({
+      serverInfo: {
+        version: "test",
+        uptime: "1m",
+        startTime: "2026-04-24T00:00:00Z"
+      },
+      metrics: {
+        cpu: { usagePercent: 12.4, numCPU: 8 },
+        mem: {
+          usagePercent: 45.6,
+          usedMem: 4 * 1024 * 1024 * 1024,
+          totalMem: 8 * 1024 * 1024 * 1024,
+          availableMem: 4 * 1024 * 1024 * 1024
+        },
+        disk: {
+          path: "/",
+          usagePercent: 67.8,
+          usedDisk: 100 * 1024 * 1024 * 1024,
+          totalDisk: 200 * 1024 * 1024 * 1024,
+          freeDisk: 100 * 1024 * 1024 * 1024
+        }
+      }
+    }),
+    [
+      "CPU: 12% (8 cores)",
+      "Memory: 46% (4.0 GiB / 8.0 GiB)",
+      "Disk: 68% (100 GiB / 200 GiB on /)"
+    ].join("\n")
+  );
+});
+
+test("formatEndpointHealthTooltip handles missing metric groups", () => {
+  assert.equal(
+    formatEndpointHealthTooltip({
+      serverInfo: {
+        version: "test",
+        uptime: "1m",
+        startTime: "2026-04-24T00:00:00Z"
+      },
+      metrics: {}
+    }),
+    [
+      "CPU: n/a (cores n/a)",
+      "Memory: n/a (n/a / n/a)",
+      "Disk: n/a (n/a / n/a)"
+    ].join("\n")
+  );
+});
