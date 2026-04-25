@@ -65,7 +65,7 @@ async function createTestContext(t: TestContext): Promise<TestAppContext> {
   globalThis.fetch = fetchMock.fetch;
 
   const app = await createStandaloneApp({
-    defaultClabApiUrl: "http://default-api.test:8080",
+    defaultClabApiUrl: "https://default-api.test:8080",
     isDev: true,
     logger: false,
     viteDevUrl: "http://vite.test"
@@ -149,14 +149,14 @@ test("GET /api/config returns empty endpoints without a session", async (t) => {
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
     endpoints: [],
-    defaultClabApiUrl: "http://default-api.test:8080"
+    defaultClabApiUrl: "https://default-api.test:8080"
   });
   assert.equal(fetchMock.calls.length, 0);
 });
 
 test("POST /auth/login normalizes endpoint URL, forwards credentials, and hides tokens", async (t) => {
   const context = await createTestContext(t);
-  context.fetchMock.on("POST", "http://api.example.test/login", (call) => {
+  context.fetchMock.on("POST", "https://api.example.test/login", (call) => {
     assert.deepEqual(JSON.parse(call.body ?? "{}"), {
       username: "alice",
       password: "secret",
@@ -182,10 +182,10 @@ test("POST /auth/login normalizes endpoint URL, forwards credentials, and hides 
   assert.deepEqual(response.json(), {
     success: true,
     username: "alice",
-    clabApiUrl: "http://api.example.test",
+    clabApiUrl: "https://api.example.test",
     endpoint: {
       id: response.json<{ endpoint: { id: string } }>().endpoint.id,
-      url: "http://api.example.test",
+      url: "https://api.example.test",
       label: "Primary API",
       username: "alice",
       sessionDuration: "7d",

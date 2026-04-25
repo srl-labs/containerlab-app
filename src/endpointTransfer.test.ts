@@ -38,7 +38,7 @@ test("serializeEndpointProfiles exports only safe profile fields", () => {
   assert.equal(payload.version, ENDPOINT_EXPORT_VERSION);
   assert.deepEqual(payload.endpoints, [
     {
-      url: "http://api.example.test",
+      url: "https://api.example.test",
       label: "Primary API",
       username: "admin",
       sessionDuration: "7d"
@@ -64,7 +64,7 @@ test("parseEndpointProfiles validates import document shape and normalizes URLs"
 
   assert.deepEqual(profiles, [
     {
-      url: "http://api.example.test",
+      url: "https://api.example.test",
       label: "Primary API",
       username: "admin",
       sessionDuration: "24h"
@@ -133,4 +133,3 @@ test("parseEndpointProfiles rejects malformed files without partial results", ()
     /invalid sessionDuration/
   );
 });
-

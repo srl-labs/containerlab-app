@@ -3,6 +3,7 @@ import WebSocket, { type RawData } from "ws";
 
 import { buildWebSocketUrl } from "./clabApiClient.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
+import { apiTlsWebSocketOptions } from "./upstreamTls.js";
 
 type EndpointResolver = (
   request: FastifyRequest,
@@ -54,7 +55,8 @@ export function registerTerminalStreamProxy(
         {
           headers: {
             Authorization: `Bearer ${endpoint.token}`
-          }
+          },
+          ...apiTlsWebSocketOptions()
         }
       );
 

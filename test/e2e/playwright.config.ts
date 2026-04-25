@@ -29,7 +29,8 @@ export default defineConfig({
   timeout: 90000,
   reporter: [["list"], ["html", { open: "never", outputFolder: "../../playwright-report" }]],
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL: "https://localhost:5173",
+    ignoreHTTPSErrors: true,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -49,7 +50,8 @@ export default defineConfig({
   ],
   webServer: {
     command: useLocalClabUi ? "npm run dev:local" : "npm run dev",
-    url: "http://localhost:5173",
+    ignoreHTTPSErrors: true,
+    url: "https://localhost:5173",
     reuseExistingServer: !isCI,
     timeout: isCI ? 180000 : 120000,
     cwd: "../../" // Run from project root

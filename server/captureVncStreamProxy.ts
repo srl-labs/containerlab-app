@@ -4,6 +4,7 @@ import WebSocket, { type RawData } from "ws";
 import { buildWebSocketUrl } from "./clabApiClient.js";
 import { getCaptureSessionEndpoint, setCaptureSessionEndpoint } from "./captureSessionStore.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
+import { apiTlsWebSocketOptions } from "./upstreamTls.js";
 
 type EndpointResolver = (
   request: FastifyRequest,
@@ -82,7 +83,7 @@ function createUpstreamSocket(
   protocols: string[],
   headers: Record<string, string>
 ): WebSocket {
-  const options = { headers, perMessageDeflate: false };
+  const options = { headers, perMessageDeflate: false, ...apiTlsWebSocketOptions() };
   return protocols.length > 0
     ? new WebSocket(upstreamUrl, protocols, options)
     : new WebSocket(upstreamUrl, options);

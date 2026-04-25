@@ -11,7 +11,7 @@ import {
 function makeEntry(overrides: Partial<EndpointEntry> = {}): EndpointEntry {
   return {
     id: buildEndpointId(),
-    url: "http://localhost:8080",
+    url: "https://localhost:8080",
     label: "server-a",
     token: "token-a",
     username: "alice",
@@ -54,14 +54,14 @@ test("session store keeps distinct endpoint entries even when URLs are identical
         id: first.id,
         label: "server-a",
         sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
-        url: "http://localhost:8080",
+        url: "https://localhost:8080",
         username: "alice"
       },
       {
         id: second.id,
         label: "server-b",
         sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
-        url: "http://localhost:8080",
+        url: "https://localhost:8080",
         username: "bob"
       }
     ]

@@ -16,10 +16,11 @@ export function getSessionIdFromRequest(request: FastifyRequest): string | null 
   return sessionId && sessionId.length > 0 ? sessionId : null;
 }
 
-export function setSessionCookie(reply: FastifyReply, sessionId: string): void {
+export function setSessionCookie(reply: FastifyReply, sessionId: string, secure: boolean): void {
   void reply.setCookie(SESSION_COOKIE_NAME, sessionId, {
     httpOnly: true,
     sameSite: "strict",
+    secure,
     path: "/",
     maxAge: SESSION_COOKIE_MAX_AGE_SECONDS
   });
@@ -33,7 +34,7 @@ export function normalizeApiUrl(raw: string): string | null {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return null;
 
-  const withProtocol = /^[a-z][a-z0-9+\-.]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
+  const withProtocol = /^[a-z][a-z0-9+\-.]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
     const parsed = new URL(withProtocol);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {

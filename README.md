@@ -37,11 +37,11 @@ Run the published `containerlab-web` image:
 ```bash
 docker run --rm -p 3000:3000 \
   --add-host=host.docker.internal:host-gateway \
-  -e CLAB_API_URL=http://host.docker.internal:8080 \
+  -e CLAB_API_URL=https://host.docker.internal:8080 \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
-Open `http://localhost:3000`, then log in with your API credentials and endpoint.
+Open `https://localhost:3000`, then log in with your API credentials and endpoint. The default local certificate is self-signed, so your browser may ask you to accept it.
 
 `CLAB_API_URL` must be reachable from inside the `containerlab-web` container. The example above uses `host.docker.internal` plus Docker's host gateway mapping so the container can reach an API server running on the Docker host.
 
@@ -54,7 +54,7 @@ For temporary local trials, Containerlab's `containerlab tools api-server start`
 For normal usage with the published image:
 
 - Docker or another container runtime
-- A reachable `clab-api-server` endpoint, commonly `http://localhost:8080` on the host
+- A reachable `clab-api-server` endpoint, commonly `https://localhost:8080` on the host
 - Linux user credentials accepted by `clab-api-server`
 
 Node.js and npm are only needed when developing, testing, or building from source.
@@ -66,8 +66,13 @@ Node.js and npm are only needed when developing, testing, or building from sourc
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3000` | Web UI server port |
-| `CLAB_API_URL` | `http://localhost:8080` | Default `clab-api-server` endpoint shown to the UI |
-| `VITE_DEV_URL` | `http://localhost:5173` | Vite dev server URL used in development |
+| `CLAB_API_URL` | `https://localhost:8080` | Default `clab-api-server` endpoint shown to the UI |
+| `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates; default allows self-signed API endpoints |
+| `WEB_TLS_ENABLE` | `true` | Serve `containerlab-web` over HTTPS |
+| `WEB_TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed web certificate when cert/key files are unset |
+| `WEB_TLS_CERT_FILE` | unset | Path to a web TLS certificate |
+| `WEB_TLS_KEY_FILE` | unset | Path to a web TLS private key |
+| `VITE_DEV_URL` | `https://localhost:5173` | Vite dev server URL used in development |
 | `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Interface stats interval requested from the API event stream |
 | `CLAB_UI_SOURCE` | unset | When set to `local`, Vite resolves `@srl-labs/clab-ui*` from `../clab-ui/dist` |
 | `NODE_ENV` | `development` / `production` | Controls dev proxy mode vs static asset serving |
@@ -82,7 +87,7 @@ Use the development workflow when contributing to this repository or building a 
 
 ### Source Setup
 
-This project requires Node.js `>= 24` and npm. Installing or building from source also requires a GitHub token with GitHub Packages read access because `@srl-labs/clab-ui` is published through GitHub Packages.
+This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Installing or building from source also requires a GitHub token with GitHub Packages read access because `@srl-labs/clab-ui` is published through GitHub Packages.
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
@@ -90,7 +95,7 @@ npm install
 npm run dev
 ```
 
-The dev server starts the local web server and Vite frontend. Open `http://localhost:3000`, then log in against your running `clab-api-server`.
+The dev server starts the local web server and Vite frontend over HTTPS. Open `https://localhost:3000`, then log in against your running `clab-api-server`.
 
 Useful contributor commands:
 
@@ -148,7 +153,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The Playwright config starts `npm run dev` automatically and runs tests against the Vite frontend at `http://localhost:5173`.
+The Playwright config starts `npm run dev` automatically and runs tests against the Vite frontend at `https://localhost:5173`.
 
 ---
 

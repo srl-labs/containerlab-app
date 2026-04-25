@@ -7,6 +7,7 @@ import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
 import fastifyWebsocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
+import type { ServerOptions as HttpsServerOptions } from "node:https";
 
 import { registerAuthRoutes } from "./auth.js";
 import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.js";
@@ -33,6 +34,7 @@ interface ResolvedEndpoint {
 
 export interface CreateStandaloneAppOptions {
   defaultClabApiUrl?: string;
+  https?: HttpsServerOptions;
   isDev?: boolean;
   logger?: boolean;
   viteDevUrl?: string;
@@ -44,6 +46,17 @@ function defaultEndpointLabel(url: string): string {
   } catch {
     return url;
   }
+}
+
+function isSecureRequest(request: FastifyRequest): boolean {
+  if (request.protocol === "https") {
+    return true;
+  }
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  if (typeof forwardedProto === "string") {
+    return forwardedProto.split(",").some((value) => value.trim().toLowerCase() === "https");
+  }
+  return false;
 }
 
 function isValidCloseCode(code: number): boolean {
@@ -94,7 +107,9 @@ function proxyViteDevWebSocket(
 ): void {
   const protocols = requestWebSocketProtocols(request);
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
-  const upstreamOptions = origin ? { headers: { Origin: origin } } : undefined;
+  const upstreamOptions = origin
+    ? { headers: { Origin: origin }, rejectUnauthorized: false }
+    : { rejectUnauthorized: false };
   const upstreamUrl = buildViteDevWebSocketUrl(viteDevUrl, request);
   const upstream = protocols.length > 0
     ? new WebSocket(upstreamUrl, protocols, upstreamOptions)
@@ -136,10 +151,12 @@ function proxyViteDevWebSocket(
 export async function createStandaloneApp(
   options: CreateStandaloneAppOptions = {}
 ): Promise<FastifyInstance> {
-  const defaultClabApiUrl = options.defaultClabApiUrl ?? "http://localhost:8080";
+  const defaultClabApiUrl = options.defaultClabApiUrl ?? "https://localhost:8080";
   const isDev = options.isDev ?? process.env.NODE_ENV !== "production";
-  const viteDevUrl = options.viteDevUrl ?? "http://localhost:5173";
-  const app = Fastify({ logger: options.logger ?? true });
+  const viteDevUrl = options.viteDevUrl ?? "https://localhost:5173";
+  const app: FastifyInstance = options.https
+    ? (Fastify({ logger: options.logger ?? true, https: options.https }) as FastifyInstance)
+    : (Fastify({ logger: options.logger ?? true }) as FastifyInstance);
 
   await app.register(fastifyCookie);
   await app.register(fastifyCors, {
@@ -151,9 +168,13 @@ export async function createStandaloneApp(
   const endpointSessions = createEndpointSessionStore();
   const topologySessions = createStandaloneTopologySessionManager();
 
-  const maybeSetSessionCookie = (reply: FastifyReply, sessionId: string): void => {
+  const maybeSetSessionCookie = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    sessionId: string
+  ): void => {
     if (typeof (reply as Partial<FastifyReply>).setCookie === "function") {
-      setSessionCookie(reply, sessionId);
+      setSessionCookie(reply, sessionId, isSecureRequest(request));
     }
   };
 
@@ -176,7 +197,7 @@ export async function createStandaloneApp(
 
     const sessionId = existingSessionId ?? globalThis.crypto.randomUUID();
     if (!existingSessionId) {
-      maybeSetSessionCookie(reply, sessionId);
+      maybeSetSessionCookie(request, reply, sessionId);
     }
 
     const migratedEntry: EndpointEntry = {
@@ -216,7 +237,7 @@ export async function createStandaloneApp(
 
     const sessionId = getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
     if (!getSessionIdFromRequest(request)) {
-      maybeSetSessionCookie(reply, sessionId);
+      maybeSetSessionCookie(request, reply, sessionId);
     }
     return endpointSessions.replaceSession(sessionId, []);
   };

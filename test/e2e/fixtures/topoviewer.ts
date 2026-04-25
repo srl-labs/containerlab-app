@@ -533,7 +533,7 @@ interface TopoViewerPage {
  * Extended test fixture with TopoViewer helpers
  */
 // Base URL for API requests (must be absolute since page hasn't navigated yet)
-const API_BASE_URL = "http://localhost:5173";
+const API_BASE_URL = "https://localhost:5173";
 
 export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
   topoViewerPage: async ({ page }, use, testInfo: TestInfo) => {

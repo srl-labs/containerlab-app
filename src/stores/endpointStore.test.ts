@@ -58,7 +58,7 @@ test("setSessionDuration updates the endpoint and persists it", () => {
   const store = useEndpointStore.getState();
   store.addEndpoint({
     id: "endpoint-1",
-    url: "http://localhost:8080",
+    url: "https://localhost:8080",
     label: "server-a",
     username: "alice",
     sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -83,7 +83,7 @@ test("hydratePersisted defaults missing sessionDuration to 24h", () => {
     JSON.stringify([
       {
         id: "endpoint-1",
-        url: "http://localhost:8080",
+        url: "https://localhost:8080",
         label: "server-a",
         username: "alice"
       }
@@ -103,7 +103,7 @@ test("importProfiles merges by URL and username while preserving connection stat
   const store = useEndpointStore.getState();
   store.addEndpoint({
     id: "endpoint-connected",
-    url: "http://api.example.test",
+    url: "https://api.example.test",
     label: "Old API",
     username: "admin",
     sessionDuration: "24h",
@@ -134,7 +134,7 @@ test("importProfiles merges by URL and username while preserving connection stat
       sessionDuration: "24h"
     },
     {
-      url: "http://new.example.test/",
+      url: "https://new.example.test/",
       label: "New API Renamed",
       username: "operator",
       sessionDuration: "36h"
@@ -157,7 +157,7 @@ test("importProfiles merges by URL and username while preserving connection stat
   assert.equal(connected?.connected, true);
 
   const imported = Array.from(endpoints.values()).find(
-    (endpoint) => endpoint.url === "http://new.example.test"
+    (endpoint) => endpoint.url === "https://new.example.test"
   );
   assert.ok(imported);
   assert.equal(imported.label, "New API Renamed");

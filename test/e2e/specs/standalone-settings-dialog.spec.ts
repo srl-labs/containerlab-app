@@ -28,7 +28,7 @@ test.describe("Standalone Settings Dialog", () => {
         JSON.stringify([
           {
             id: "test-endpoint",
-            url: "http://localhost:8080",
+            url: "https://localhost:8080",
             label: "Test Endpoint",
             username: "admin",
             sessionDuration: "24h"
@@ -118,7 +118,7 @@ test.describe("Standalone Settings Dialog", () => {
           endpoints: [
             {
               id: "test-endpoint",
-              url: "http://localhost:8080",
+              url: "https://localhost:8080",
               label: "Test Endpoint",
               username: "admin",
               sessionDuration: "24h",
@@ -192,7 +192,7 @@ test.describe("Standalone Settings Dialog", () => {
       version: 1,
       endpoints: [
         {
-          url: "http://localhost:8080",
+          url: "https://localhost:8080",
           label: "Test Endpoint",
           username: "admin",
           sessionDuration: "24h"

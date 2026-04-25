@@ -8,7 +8,7 @@ test.describe("Standalone startup", () => {
       page.getByText("Connect one or more `clab-api-server` endpoints", { exact: false })
     ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Add Endpoint" })).toBeVisible();
-    await expect(page.getByLabel("API Endpoint")).toHaveValue("http://localhost:8080");
+    await expect(page.getByLabel("API Endpoint")).toHaveValue("https://localhost:8080");
     await expect(page.getByLabel("Label")).toBeVisible();
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
@@ -50,7 +50,7 @@ test.describe("Standalone startup", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          defaultClabApiUrl: "http://localhost:8080",
+          defaultClabApiUrl: "https://localhost:8080",
           endpoints: []
         })
       });
@@ -64,7 +64,7 @@ test.describe("Standalone startup", () => {
     });
     await page.route("**/auth/endpoints/add", async (route) => {
       expect(route.request().postDataJSON()).toEqual({
-        url: "http://localhost:8080",
+        url: "https://localhost:8080",
         label: "Test Endpoint",
         username: "admin",
         password: "secret",
@@ -75,7 +75,7 @@ test.describe("Standalone startup", () => {
         contentType: "application/json",
         body: JSON.stringify({
           id: "endpoint-e2e",
-          url: "http://localhost:8080",
+          url: "https://localhost:8080",
           label: "Test Endpoint",
           username: "admin",
           sessionDuration: "36h",
@@ -113,7 +113,7 @@ test.describe("Standalone startup", () => {
     expect(JSON.parse(persisted ?? "[]")).toEqual([
       {
         id: "endpoint-e2e",
-        url: "http://localhost:8080",
+        url: "https://localhost:8080",
         label: "Test Endpoint",
         username: "admin",
         sessionDuration: "36h"
@@ -131,7 +131,7 @@ test.describe("Standalone startup", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          defaultClabApiUrl: "http://localhost:8080",
+          defaultClabApiUrl: "https://localhost:8080",
           endpoints: []
         })
       });
@@ -175,7 +175,7 @@ test.describe("Standalone startup", () => {
     expect(JSON.parse(persisted ?? "[]")).toEqual([
       {
         id: expect.any(String),
-        url: "http://api.imported.test",
+        url: "https://api.imported.test",
         label: "Imported API",
         username: "operator",
         sessionDuration: "7d"

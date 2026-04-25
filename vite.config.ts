@@ -4,12 +4,16 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseBooleanEnv } from "./server/env";
+import { resolveWebTlsConfig } from "./server/tlsConfig";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localClabUiRoot = path.resolve(__dirname, "../clab-ui");
 const localClabUiDistRoot = path.join(localClabUiRoot, "dist");
 const useLocalClabUi = process.env.CLAB_UI_SOURCE === "local";
 const apiServerPort = process.env.PORT ?? "3000";
-const apiServerTarget = `http://localhost:${apiServerPort}`;
+const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
+const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
 
 if (useLocalClabUi && !fs.existsSync(path.join(localClabUiDistRoot, "index.js"))) {
   throw new Error(
@@ -67,97 +71,105 @@ const localClabUiOptimizedDependencies = useLocalClabUi
     )
   : [];
 
-export default defineConfig({
-  plugins: [
-    react({
-      include: /\.(?:jsx|tsx)$/
-    })
-  ],
-  root: __dirname,
-  publicDir: path.resolve(__dirname, "resources"),
-  resolve: {
-    alias: [
-      {
-        find: /^monaco-editor$/,
-        replacement: path.resolve(__dirname, "src/monacoCore.ts")
-      },
-      ...clabUiLocalAliases
+export default defineConfig(({ command }) => {
+  const webTls = command === "serve" ? resolveWebTlsConfig() : undefined;
+
+  return {
+    plugins: [
+      react({
+        include: /\.(?:jsx|tsx)$/
+      })
     ],
-    dedupe: [
-      "react",
-      "react-dom",
-      "@emotion/cache",
-      "@emotion/react",
-      "@emotion/styled",
-      "@mui/material",
-      "@mui/private-theming",
-      "@mui/styled-engine",
-      "@mui/system",
-      "@mui/utils"
-    ]
-  },
-  optimizeDeps: {
-    include: [
-      "react",
-      "react-dom",
-      "@emotion/cache",
-      "@emotion/react",
-      "@emotion/styled",
-      "@mui/material",
-      "@mui/private-theming",
-      "@mui/styled-engine",
-      "@mui/system",
-      "@mui/utils",
-      "@xterm/addon-fit",
-      "@xterm/xterm",
-      "@xyflow/react",
-      "three",
-      "zustand",
-      ...localClabUiOptimizedDependencies
-    ]
-  },
-  css: {
-    postcss: path.resolve(__dirname, "postcss.config.cjs")
-  },
-  server: {
-    port: 5173,
-    open: false,
-    warmup: {
-      clientFiles: [
-        "./src/main.tsx",
-        "./src/standaloneApp.tsx",
-        "./src/mainUiDependencies.ts",
-        "./src/mainRuntimeDependencies.ts",
-        "./src/mainApiDependencies.ts",
-        ...localClabUiWarmupFiles
+    root: __dirname,
+    publicDir: path.resolve(__dirname, "resources"),
+    resolve: {
+      alias: [
+        {
+          find: /^monaco-editor$/,
+          replacement: path.resolve(__dirname, "src/monacoCore.ts")
+        },
+        ...clabUiLocalAliases
+      ],
+      dedupe: [
+        "react",
+        "react-dom",
+        "@emotion/cache",
+        "@emotion/react",
+        "@emotion/styled",
+        "@mui/material",
+        "@mui/private-theming",
+        "@mui/styled-engine",
+        "@mui/system",
+        "@mui/utils"
       ]
     },
-    fs: {
-      allow: [
-        __dirname,
-        path.resolve(__dirname, "../clab-ui")
+    optimizeDeps: {
+      include: [
+        "react",
+        "react-dom",
+        "@emotion/cache",
+        "@emotion/react",
+        "@emotion/styled",
+        "@mui/material",
+        "@mui/private-theming",
+        "@mui/styled-engine",
+        "@mui/system",
+        "@mui/utils",
+        "@xterm/addon-fit",
+        "@xterm/xterm",
+        "@xyflow/react",
+        "three",
+        "zustand",
+        ...localClabUiOptimizedDependencies
       ]
     },
-    proxy: {
-      "/auth": {
-        target: apiServerTarget
+    css: {
+      postcss: path.resolve(__dirname, "postcss.config.cjs")
+    },
+    server: {
+      port: 5173,
+      open: false,
+      https: webTls?.https,
+      warmup: {
+        clientFiles: [
+          "./src/main.tsx",
+          "./src/standaloneApp.tsx",
+          "./src/mainUiDependencies.ts",
+          "./src/mainRuntimeDependencies.ts",
+          "./src/mainApiDependencies.ts",
+          ...localClabUiWarmupFiles
+        ]
       },
-      "/api": {
-        target: apiServerTarget,
-        ws: true
+      fs: {
+        allow: [
+          __dirname,
+          path.resolve(__dirname, "../clab-ui")
+        ]
       },
-      "/files": {
-        target: apiServerTarget
+      proxy: {
+        "/auth": {
+          target: apiServerTarget,
+          secure: false
+        },
+        "/api": {
+          target: apiServerTarget,
+          secure: false,
+          ws: true
+        },
+        "/files": {
+          target: apiServerTarget,
+          secure: false
+        }
+      }
+    },
+    build: {
+      outDir: path.resolve(__dirname, "dist/client"),
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, "index.html"),
+          wireshark: path.resolve(__dirname, "wireshark.html")
+        }
       }
     }
-  },
-  build: {
-    outDir: path.resolve(__dirname, "dist/client"),
-    rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, "index.html"),
-        wireshark: path.resolve(__dirname, "wireshark.html")
-      }
-    }
-  }
+  };
 });

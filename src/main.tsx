@@ -361,7 +361,7 @@ function BootstrapLoginPage(props: {
             <span style={loginStyles.label}>API Endpoint</span>
             <input
               aria-label="API Endpoint"
-              placeholder="http://localhost:8080"
+              placeholder="https://localhost:8080"
               style={loginStyles.input}
               value={url}
               onChange={(event) => setUrl(event.target.value)}

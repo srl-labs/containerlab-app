@@ -1069,7 +1069,7 @@ export function EndpointManager({
                 void addForm.submit();
               }}
               fullWidth
-              placeholder="http://localhost:8080"
+              placeholder="https://localhost:8080"
               slotProps={{
                 inputLabel: { shrink: true },
                 input: {
