@@ -121,4 +121,67 @@ test.describe("Standalone startup", () => {
     ]);
     expect(persisted).not.toContain("secret");
   });
+
+  test("imports endpoint profiles before login", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.clear();
+    });
+    await page.route("**/api/config", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          defaultClabApiUrl: "http://localhost:8080",
+          endpoints: []
+        })
+      });
+    });
+    await page.route("**/auth/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ authenticated: false, endpoints: [] })
+      });
+    });
+
+    await page.goto("/");
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.locator('[data-testid="standalone-endpoints-import"]').click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles({
+      name: "endpoints.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify({
+          kind: "containerlab-web.endpoints",
+          version: 1,
+          endpoints: [
+            {
+              url: "api.imported.test/",
+              label: "Imported API",
+              username: "operator",
+              sessionDuration: "7d"
+            }
+          ]
+        })
+      )
+    });
+
+    await expect(page.locator('[data-testid="standalone-settings-button"]')).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-endpoints")))
+      .not.toBeNull();
+    const persisted = await page.evaluate(() => localStorage.getItem("clab-standalone-endpoints"));
+    expect(JSON.parse(persisted ?? "[]")).toEqual([
+      {
+        id: expect.any(String),
+        url: "http://api.imported.test",
+        label: "Imported API",
+        username: "operator",
+        sessionDuration: "7d"
+      }
+    ]);
+    expect(persisted).not.toContain("password");
+    expect(persisted).not.toContain("token");
+  });
 });

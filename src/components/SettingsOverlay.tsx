@@ -62,6 +62,7 @@ import {
 } from "../runtimeCaptureSettings";
 import {
   type EndpointConfig,
+  type EndpointImportResult,
   type EndpointSessionDuration
 } from "../stores/endpointStore";
 import { EndpointManager } from "./EndpointManager";
@@ -79,6 +80,8 @@ interface SettingsOverlayProps {
     url: string;
     username: string;
   }) => Promise<void>;
+  onExportEndpoints: () => string;
+  onImportEndpoints: (content: string) => EndpointImportResult | Promise<EndpointImportResult>;
   onLogout: () => void;
   onReconnectEndpoint: (input: {
     endpointId: string;
@@ -505,6 +508,8 @@ export function SettingsOverlay({
   defaultApiUrl,
   endpoints,
   onAddEndpoint,
+  onExportEndpoints,
+  onImportEndpoints,
   onLogout,
   onReconnectEndpoint,
   onRemoveEndpoint,
@@ -704,6 +709,8 @@ export function SettingsOverlay({
               endpoints={endpoints}
               healthStatsEnabled={dialogOpen && activeSection === "endpoints"}
               onAddEndpoint={onAddEndpoint}
+              onExportEndpoints={onExportEndpoints}
+              onImportEndpoints={onImportEndpoints}
               onReconnectEndpoint={onReconnectEndpoint}
               onRemoveEndpoint={onRemoveEndpoint}
               onUpdateEndpoint={onUpdateEndpoint}

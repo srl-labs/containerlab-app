@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo } from "react";
 
+import {
+  parseEndpointProfiles,
+  serializeEndpointProfiles,
+  type EndpointImportResult
+} from "../endpointTransfer";
 import { useAuthStore } from "../stores/authStore";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -94,6 +99,7 @@ export function useEndpointAuth() {
   const clearEndpoints = useEndpointStore((state) => state.clear);
   const forgetEndpointFromStore = useEndpointStore((state) => state.forgetEndpoint);
   const hydratePersisted = useEndpointStore((state) => state.hydratePersisted);
+  const importProfiles = useEndpointStore((state) => state.importProfiles);
   const markAllSaved = useEndpointStore((state) => state.markAllSaved);
   const removeEndpointFromStore = useEndpointStore((state) => state.removeEndpoint);
   const setEndpoints = useEndpointStore((state) => state.setEndpoints);
@@ -359,6 +365,19 @@ export function useEndpointAuth() {
     [addEndpointToStore, clearError, setError]
   );
 
+  const exportEndpoints = useCallback((): string => {
+    return serializeEndpointProfiles(useEndpointStore.getState().endpoints.values());
+  }, []);
+
+  const importEndpoints = useCallback(
+    (content: string): EndpointImportResult => {
+      clearError();
+      const result = importProfiles(parseEndpointProfiles(content));
+      return result;
+    },
+    [clearError, importProfiles]
+  );
+
   const logout = useCallback(async () => {
     clearError();
     await fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
@@ -379,9 +398,11 @@ export function useEndpointAuth() {
     endpointList,
     endpoints,
     error,
+    exportEndpoints,
     forgetAllEndpoints,
     hasConnectedEndpoint: endpointList.some((ep) => ep.status === "connected"),
     hasEndpointSession: endpointList.some((ep) => ep.status !== "saved"),
+    importEndpoints,
     isAuthenticated: endpointList.some((ep) => ep.status !== "saved"),
     loading,
     logout,

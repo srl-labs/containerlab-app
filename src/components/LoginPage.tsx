@@ -19,6 +19,7 @@ import {
 import {
   endpointSessionDurationLabel,
   type EndpointConfig,
+  type EndpointImportResult,
   type EndpointSessionDuration
 } from "../stores/endpointStore";
 import { EndpointManager } from "./EndpointManager";
@@ -34,6 +35,8 @@ interface LoginPageProps {
     url: string;
     username: string;
   }) => Promise<void>;
+  onExportEndpoints: () => string;
+  onImportEndpoints: (content: string) => EndpointImportResult | Promise<EndpointImportResult>;
   onReconnectEndpoint: (input: {
     endpointId: string;
     password: string;
@@ -174,6 +177,8 @@ export function LoginPage({
   endpoints,
   error,
   onAddEndpoint,
+  onExportEndpoints,
+  onImportEndpoints,
   onReconnectEndpoint,
   onRemoveEndpoint,
   onUpdateEndpoint
@@ -260,6 +265,8 @@ export function LoginPage({
               externalError={error}
               mode={hasPersistedEndpoints ? "manage" : "initial"}
               onAddEndpoint={onAddEndpoint}
+              onExportEndpoints={onExportEndpoints}
+              onImportEndpoints={onImportEndpoints}
               onReconnectEndpoint={onReconnectEndpoint}
               onRemoveEndpoint={onRemoveEndpoint}
               onUpdateEndpoint={onUpdateEndpoint}

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+
 import { expect, test, type Page } from "@playwright/test";
 
 const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
@@ -167,6 +169,67 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByText("Memory")).toBeVisible();
     await expect(dialog.getByText("Disk")).toBeVisible();
     await expect(dialog.getByText("8 cores")).toBeVisible();
+  });
+
+  test("exports and imports endpoint profiles from settings", async ({ page }) => {
+    const dialog = await openSettings(page);
+    await dialog.locator(SEL_NAV_ENDPOINTS).click();
+
+    const downloadPromise = page.waitForEvent("download");
+    await dialog.locator('[data-testid="standalone-endpoints-export"]').click();
+    const download = await downloadPromise;
+    const downloadPath = await download.path();
+    expect(download.suggestedFilename()).toBe("containerlab-web-endpoints.json");
+    expect(downloadPath).toBeTruthy();
+    const exported = await fs.readFile(downloadPath ?? "", "utf8");
+    const payload = JSON.parse(exported) as {
+      endpoints: Array<Record<string, unknown>>;
+      kind: string;
+      version: number;
+    };
+    expect(payload).toEqual({
+      kind: "containerlab-web.endpoints",
+      version: 1,
+      endpoints: [
+        {
+          url: "http://localhost:8080",
+          label: "Test Endpoint",
+          username: "admin",
+          sessionDuration: "24h"
+        }
+      ]
+    });
+    expect(exported).not.toContain("password");
+    expect(exported).not.toContain("token");
+    expect(exported).not.toContain("connected");
+
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await dialog.locator('[data-testid="standalone-endpoints-import"]').click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles({
+      name: "endpoints.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(
+        JSON.stringify({
+          kind: "containerlab-web.endpoints",
+          version: 1,
+          endpoints: [
+            {
+              url: "localhost:8080/",
+              label: "Imported Endpoint",
+              username: "admin",
+              sessionDuration: "7d"
+            }
+          ]
+        })
+      )
+    });
+
+    await expect(dialog.getByText("Imported 1 endpoint profile", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("Imported Endpoint")).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-endpoints")))
+      .toContain("Imported Endpoint");
   });
 
   test("invalid terminal settings stay blocked with inline validation", async ({ page }) => {

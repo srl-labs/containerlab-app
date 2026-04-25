@@ -1,27 +1,30 @@
 import { create } from "zustand";
 
+import {
+  DEFAULT_ENDPOINT_SESSION_DURATION,
+  endpointProfileKey,
+  isValidEndpointSessionDuration,
+  normalizeEndpointProfile,
+  normalizeEndpointSessionDuration,
+  type EndpointImportResult,
+  type EndpointProfile,
+  type EndpointSessionDuration
+} from "../endpointTransfer";
+
 const STORAGE_KEY = "clab-standalone-endpoints";
 
 export type EndpointStatus = "connected" | "session_expired" | "offline" | "saved";
-export type EndpointSessionDuration = string;
-
-const ENDPOINT_SESSION_DURATION_PATTERN =
-  /^(?:(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))|(?:\d+(?:\.\d+)?(?:d|w)))+$/i;
-
-export const DEFAULT_ENDPOINT_SESSION_DURATION: EndpointSessionDuration = "24h";
-
-export function normalizeEndpointSessionDuration(value: unknown): EndpointSessionDuration {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : DEFAULT_ENDPOINT_SESSION_DURATION;
-}
+export {
+  DEFAULT_ENDPOINT_SESSION_DURATION,
+  isValidEndpointSessionDuration,
+  normalizeEndpointSessionDuration,
+  type EndpointImportResult,
+  type EndpointProfile,
+  type EndpointSessionDuration
+} from "../endpointTransfer";
 
 export function endpointSessionDurationLabel(duration: EndpointSessionDuration): string {
   return normalizeEndpointSessionDuration(duration);
-}
-
-export function isValidEndpointSessionDuration(value: string): boolean {
-  return ENDPOINT_SESSION_DURATION_PATTERN.test(value.trim());
 }
 
 export interface EndpointConfig {
@@ -48,6 +51,7 @@ interface EndpointStoreState {
   clear: () => void;
   forgetEndpoint: (id: string) => void;
   hydratePersisted: () => void;
+  importProfiles: (profiles: EndpointProfile[]) => EndpointImportResult;
   removeEndpoint: (id: string) => void;
   markAllSaved: () => void;
   setEndpoints: (endpoints: EndpointConfig[]) => void;
@@ -57,6 +61,11 @@ interface EndpointStoreState {
 
 function isConnectedStatus(status: EndpointStatus): boolean {
   return status === "connected";
+}
+
+function buildBrowserEndpointId(): string {
+  const randomId = globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
+  return `endpoint-${randomId.replace(/-/g, "").slice(0, 12)}`;
 }
 
 function persistEndpoints(endpoints: Map<string, EndpointConfig>): void {
@@ -101,6 +110,98 @@ function loadPersistedEndpoints(): EndpointConfig[] {
   } catch {
     return [];
   }
+}
+
+function endpointProfileChanged(endpoint: EndpointConfig, profile: EndpointProfile): boolean {
+  return (
+    endpoint.url !== profile.url ||
+    endpoint.label !== profile.label ||
+    endpoint.username !== profile.username ||
+    endpoint.sessionDuration !== profile.sessionDuration
+  );
+}
+
+function createImportedEndpoint(profile: EndpointProfile): EndpointConfig {
+  return {
+    id: buildBrowserEndpointId(),
+    url: profile.url,
+    label: profile.label,
+    username: profile.username,
+    sessionDuration: profile.sessionDuration,
+    status: "saved",
+    connected: false
+  };
+}
+
+function uniqueImportProfiles(profiles: EndpointProfile[]): {
+  duplicates: number;
+  profiles: EndpointProfile[];
+} {
+  const byKey = new Map<string, EndpointProfile>();
+  let duplicates = 0;
+  for (const profile of profiles) {
+    const key = endpointProfileKey(profile);
+    if (byKey.has(key)) {
+      duplicates += 1;
+    }
+    byKey.set(key, profile);
+  }
+  return {
+    duplicates,
+    profiles: Array.from(byKey.values())
+  };
+}
+
+function importEndpointProfiles(
+  currentEndpoints: Map<string, EndpointConfig>,
+  profiles: EndpointProfile[]
+): { endpoints: Map<string, EndpointConfig>; result: EndpointImportResult } {
+  const normalizedProfiles = profiles.map((profile, index) => normalizeEndpointProfile(profile, index));
+  const deduped = uniqueImportProfiles(normalizedProfiles);
+  const endpoints = new Map(currentEndpoints);
+  const existingByProfileKey = new Map<string, EndpointConfig>();
+  for (const endpoint of endpoints.values()) {
+    const key = endpointProfileKey(endpoint);
+    if (!existingByProfileKey.has(key)) {
+      existingByProfileKey.set(key, endpoint);
+    }
+  }
+
+  const result: EndpointImportResult = {
+    added: 0,
+    duplicates: deduped.duplicates,
+    total: normalizedProfiles.length,
+    unchanged: 0,
+    updated: 0
+  };
+
+  for (const profile of deduped.profiles) {
+    const key = endpointProfileKey(profile);
+    const existing = existingByProfileKey.get(key);
+    if (!existing) {
+      const endpoint = createImportedEndpoint(profile);
+      endpoints.set(endpoint.id, endpoint);
+      existingByProfileKey.set(key, endpoint);
+      result.added += 1;
+      continue;
+    }
+
+    if (!endpointProfileChanged(existing, profile)) {
+      result.unchanged += 1;
+      continue;
+    }
+
+    endpoints.set(existing.id, {
+      ...existing,
+      url: profile.url,
+      label: profile.label,
+      username: profile.username,
+      sessionDuration: profile.sessionDuration
+    });
+    result.updated += 1;
+  }
+
+  return { endpoints, result };
 }
 
 export const useEndpointStore = create<EndpointStoreState>((set) => ({
@@ -174,6 +275,15 @@ export const useEndpointStore = create<EndpointStoreState>((set) => ({
         endpoints
       };
     }),
+
+  importProfiles: (profiles) => {
+    const merged = importEndpointProfiles(useEndpointStore.getState().endpoints, profiles);
+    set(() => {
+      persistEndpoints(merged.endpoints);
+      return { endpoints: merged.endpoints };
+    });
+    return merged.result;
+  },
 
   markAllSaved: () =>
     set((state) => {

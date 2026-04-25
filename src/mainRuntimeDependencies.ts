@@ -1,5 +1,9 @@
 export { useLabStore } from "./stores/labStore";
-export { useEndpointStore, type EndpointSessionDuration } from "./stores/endpointStore";
+export {
+  useEndpointStore,
+  type EndpointImportResult,
+  type EndpointSessionDuration
+} from "./stores/endpointStore";
 export { useAuth } from "./hooks/useAuth";
 export { useEventStream } from "./hooks/useEventStream";
 export { LabTabsBar } from "./components/LabTabsBar";

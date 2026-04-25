@@ -14,6 +14,10 @@ import React, {
 } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import {
+  ENDPOINT_EXPORT_FILENAME,
+  type EndpointImportResult
+} from "./endpointTransfer";
 import { useAuth } from "./hooks/useAuth";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
@@ -117,6 +121,22 @@ const loginStyles = {
     margin: "0 0 16px",
     padding: "8px 10px"
   },
+  success: {
+    border: "1px solid #73c991",
+    borderRadius: 4,
+    color: "#b7e1c1",
+    fontSize: 13,
+    lineHeight: 1.4,
+    margin: "0 0 16px",
+    padding: "8px 10px"
+  },
+  actions: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    justifyContent: "flex-end",
+    marginBottom: 18
+  },
   button: {
     alignSelf: "start",
     background: "#0e639c",
@@ -129,11 +149,68 @@ const loginStyles = {
     minHeight: 38,
     padding: "0 16px"
   },
+  secondaryButton: {
+    background: "transparent",
+    border: "1px solid #4a4a4a",
+    borderRadius: 4,
+    color: "#cccccc",
+    cursor: "pointer",
+    font: "inherit",
+    fontWeight: 600,
+    minHeight: 34,
+    padding: "0 12px"
+  },
   buttonDisabled: {
     cursor: "not-allowed",
     opacity: 0.48
   }
 } satisfies Record<string, CSSProperties>;
+
+function pickEndpointImportFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+
+    let settled = false;
+    const cleanup = (file: File | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.removeEventListener("change", handleChange);
+      input.removeEventListener("cancel", handleCancel);
+      input.remove();
+      resolve(file);
+    };
+    const handleChange = () => cleanup(input.files?.[0] ?? null);
+    const handleCancel = () => cleanup(null);
+
+    input.addEventListener("change", handleChange, { once: true });
+    input.addEventListener("cancel", handleCancel, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function downloadEndpointExport(content: string): void {
+  const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = ENDPOINT_EXPORT_FILENAME;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatEndpointImportResult(result: EndpointImportResult): string {
+  if (result.total === 0) {
+    return "No endpoint profiles were found in the import file.";
+  }
+  return `Imported ${result.total} endpoint ${result.total === 1 ? "profile" : "profiles"}.`;
+}
 
 function BootstrapLoginPage(props: {
   defaultApiUrl: string;
@@ -145,8 +222,10 @@ function BootstrapLoginPage(props: {
     url: string;
     username: string;
   }) => Promise<void>;
+  onExportEndpoints: () => string;
+  onImportEndpoints: (content: string) => EndpointImportResult;
 }) {
-  const { defaultApiUrl, error, onAddEndpoint } = props;
+  const { defaultApiUrl, error, onAddEndpoint, onExportEndpoints, onImportEndpoints } = props;
   const [url, setUrl] = useState(defaultApiUrl);
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
@@ -155,7 +234,9 @@ function BootstrapLoginPage(props: {
     DEFAULT_ENDPOINT_SESSION_DURATION
   );
   const [busy, setBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!url.trim() && defaultApiUrl.trim()) {
@@ -165,7 +246,7 @@ function BootstrapLoginPage(props: {
 
   const sessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
   const submitDisabled =
-    busy || !url.trim() || !username.trim() || !password.trim() || !sessionDurationValid;
+    busy || importBusy || !url.trim() || !username.trim() || !password.trim() || !sessionDurationValid;
   const visibleError = localError ?? error;
 
   const submit = useCallback(async () => {
@@ -175,6 +256,7 @@ function BootstrapLoginPage(props: {
 
     setBusy(true);
     setLocalError(null);
+    setNotice(null);
     try {
       void preloadStandaloneRuntime();
       await onAddEndpoint({
@@ -191,6 +273,38 @@ function BootstrapLoginPage(props: {
     }
   }, [label, onAddEndpoint, password, sessionDuration, submitDisabled, url, username]);
 
+  const handleImportEndpoints = useCallback(async () => {
+    if (importBusy) {
+      return;
+    }
+
+    setImportBusy(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      const file = await pickEndpointImportFile();
+      if (!file) {
+        return;
+      }
+      void preloadStandaloneRuntime();
+      setNotice(formatEndpointImportResult(onImportEndpoints(await file.text())));
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportBusy(false);
+    }
+  }, [importBusy, onImportEndpoints]);
+
+  const handleExportEndpoints = useCallback(() => {
+    setLocalError(null);
+    setNotice(null);
+    try {
+      downloadEndpointExport(onExportEndpoints());
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : String(error));
+    }
+  }, [onExportEndpoints]);
+
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void submit();
@@ -206,10 +320,39 @@ function BootstrapLoginPage(props: {
         <p style={{ ...loginStyles.helper, marginBottom: 18 }}>
           Authenticate against a clab-api-server to start or restore the standalone session.
         </p>
+        <div style={loginStyles.actions}>
+          <button
+            data-testid="standalone-endpoints-import"
+            disabled={importBusy}
+            onClick={() => {
+              void handleImportEndpoints();
+            }}
+            style={{
+              ...loginStyles.secondaryButton,
+              ...(importBusy ? loginStyles.buttonDisabled : {})
+            }}
+            type="button"
+          >
+            {importBusy ? "Importing..." : "Import"}
+          </button>
+          <button
+            data-testid="standalone-endpoints-export"
+            onClick={handleExportEndpoints}
+            style={loginStyles.secondaryButton}
+            type="button"
+          >
+            Export
+          </button>
+        </div>
 
         {visibleError ? (
           <div role="alert" style={loginStyles.error}>
             {visibleError}
+          </div>
+        ) : null}
+        {notice ? (
+          <div role="status" style={loginStyles.success}>
+            {notice}
           </div>
         ) : null}
 
@@ -310,6 +453,8 @@ function BootstrapApp() {
     defaultApiUrl,
     endpointList,
     error,
+    exportEndpoints,
+    importEndpoints,
     loading,
     refreshConfig
   } = useAuth();
@@ -388,6 +533,8 @@ function BootstrapApp() {
       defaultApiUrl={defaultApiUrl}
       error={error}
       onAddEndpoint={handleAddEndpoint}
+      onExportEndpoints={exportEndpoints}
+      onImportEndpoints={importEndpoints}
     />
   );
 }

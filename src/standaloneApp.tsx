@@ -51,6 +51,7 @@ import {
   useEventStream,
   useLabStore,
   type DeploymentState,
+  type EndpointImportResult,
   type EndpointSessionDuration
 } from "./mainRuntimeDependencies";
 import {
@@ -1195,8 +1196,10 @@ function StandaloneApp() {
     defaultApiUrl,
     endpointList,
     error,
+    exportEndpoints,
     hasConnectedEndpoint,
     hasEndpointSession,
+    importEndpoints,
     loading,
     logout,
     reconnectEndpoint,
@@ -1316,6 +1319,19 @@ function StandaloneApp() {
     [addEndpoint, refreshConfig]
   );
 
+  const handleExportEndpoints = useCallback(() => {
+    return exportEndpoints();
+  }, [exportEndpoints]);
+
+  const handleImportEndpoints = useCallback(
+    (content: string): EndpointImportResult => {
+      const result = importEndpoints(content);
+      scheduleExplorerSnapshot(0);
+      return result;
+    },
+    [importEndpoints]
+  );
+
   const handleReconnectEndpoint = useCallback(
     async (input: { endpointId: string; password: string; username: string }) => {
       await reconnectEndpoint(input);
@@ -1400,6 +1416,8 @@ function StandaloneApp() {
           endpoints={endpointList}
           error={error}
           onAddEndpoint={handleAddEndpoint}
+          onExportEndpoints={handleExportEndpoints}
+          onImportEndpoints={handleImportEndpoints}
           onReconnectEndpoint={handleReconnectEndpoint}
           onRemoveEndpoint={handleRemoveEndpoint}
           onUpdateEndpoint={handleUpdateEndpoint}
@@ -1425,6 +1443,8 @@ function StandaloneApp() {
         defaultApiUrl={defaultApiUrl}
         endpoints={endpointList}
         onAddEndpoint={handleAddEndpoint}
+        onExportEndpoints={handleExportEndpoints}
+        onImportEndpoints={handleImportEndpoints}
         onThemeChange={handleThemeChange}
         onLogout={handleLogout}
         onReconnectEndpoint={handleReconnectEndpoint}
@@ -1452,6 +1472,8 @@ function SettingsOverlayMounted(props: {
     url: string;
     username: string;
   }) => Promise<void>;
+  onExportEndpoints: () => string;
+  onImportEndpoints: (content: string) => EndpointImportResult;
   onLogout: () => void;
   onReconnectEndpoint: (input: {
     endpointId: string;
@@ -1489,6 +1511,8 @@ function SettingsOverlayMounted(props: {
         defaultApiUrl={props.defaultApiUrl}
         endpoints={props.endpoints}
         onAddEndpoint={props.onAddEndpoint}
+        onExportEndpoints={props.onExportEndpoints}
+        onImportEndpoints={props.onImportEndpoints}
         onThemeChange={props.onThemeChange}
         onLogout={props.onLogout}
         onReconnectEndpoint={props.onReconnectEndpoint}

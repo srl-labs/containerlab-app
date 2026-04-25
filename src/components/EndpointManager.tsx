@@ -16,6 +16,7 @@ import {
   Typography
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DownloadIcon from "@mui/icons-material/Download";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
@@ -25,7 +26,9 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import SpeedIcon from "@mui/icons-material/Speed";
 import StorageIcon from "@mui/icons-material/Storage";
+import UploadIcon from "@mui/icons-material/Upload";
 
+import { ENDPOINT_EXPORT_FILENAME } from "../endpointTransfer";
 import {
   formatEndpointHealthPercent,
   formatEndpointHealthUsedTotal,
@@ -42,6 +45,7 @@ import {
   endpointSessionDurationLabel,
   isValidEndpointSessionDuration,
   type EndpointConfig,
+  type EndpointImportResult,
   type EndpointSessionDuration
 } from "../stores/endpointStore";
 
@@ -58,6 +62,8 @@ interface EndpointManagerProps {
     url: string;
     username: string;
   }) => Promise<void>;
+  onExportEndpoints?: () => string;
+  onImportEndpoints?: (content: string) => EndpointImportResult | Promise<EndpointImportResult>;
   onReconnectEndpoint: (input: {
     endpointId: string;
     password: string;
@@ -107,6 +113,62 @@ async function fetchEndpointHealthMetrics(
     throw new Error(await readEndpointHealthError(response));
   }
   return (await response.json()) as EndpointHealthMetrics;
+}
+
+function readEndpointImportFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+
+    let settled = false;
+    const cleanup = (file: File | null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.removeEventListener("change", handleChange);
+      input.removeEventListener("cancel", handleCancel);
+      input.remove();
+      resolve(file);
+    };
+    const handleChange = () => cleanup(input.files?.[0] ?? null);
+    const handleCancel = () => cleanup(null);
+
+    input.addEventListener("change", handleChange, { once: true });
+    input.addEventListener("cancel", handleCancel, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function downloadEndpointExport(content: string): void {
+  const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = ENDPOINT_EXPORT_FILENAME;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function formatEndpointImportResult(result: EndpointImportResult): string {
+  if (result.total === 0) {
+    return "No endpoint profiles were found in the import file.";
+  }
+
+  const parts = [
+    result.added ? `${result.added} added` : null,
+    result.updated ? `${result.updated} updated` : null,
+    result.unchanged ? `${result.unchanged} unchanged` : null,
+    result.duplicates ? `${result.duplicates} duplicate ${result.duplicates === 1 ? "entry" : "entries"} merged` : null
+  ].filter((value): value is string => value !== null);
+
+  return `Imported ${result.total} endpoint ${result.total === 1 ? "profile" : "profiles"}${
+    parts.length > 0 ? `: ${parts.join(", ")}` : ""
+  }.`;
 }
 
 function endpointStatusColor(status: EndpointConfig["status"]): string {
@@ -815,6 +877,8 @@ export function EndpointManager({
   healthStatsEnabled = false,
   mode = "manage",
   onAddEndpoint,
+  onExportEndpoints,
+  onImportEndpoints,
   onReconnectEndpoint,
   onRemoveEndpoint,
   onUpdateEndpoint,
@@ -824,6 +888,7 @@ export function EndpointManager({
 }: EndpointManagerProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const sortedEndpoints = useMemo(
     () => [...endpoints].sort((left, right) => left.label.localeCompare(right.label)),
@@ -878,8 +943,75 @@ export function EndpointManager({
     sortedEndpoints
   });
 
+  const handleExportEndpoints = useCallback(() => {
+    if (!onExportEndpoints) {
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    try {
+      downloadEndpointExport(onExportEndpoints());
+      setNotice(`Exported ${sortedEndpoints.length} endpoint ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : String(exportError));
+    }
+  }, [onExportEndpoints, sortedEndpoints.length]);
+
+  const handleImportEndpoints = useCallback(async () => {
+    if (!onImportEndpoints || busyKey !== null) {
+      return;
+    }
+
+    setBusyKey("import");
+    setError(null);
+    setNotice(null);
+    try {
+      const file = await readEndpointImportFile();
+      if (!file) {
+        return;
+      }
+      const result = await onImportEndpoints(await file.text());
+      setNotice(formatEndpointImportResult(result));
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : String(importError));
+    } finally {
+      setBusyKey(null);
+    }
+  }, [busyKey, onImportEndpoints]);
+
   return (
     <Stack spacing={2.5}>
+      {onImportEndpoints || onExportEndpoints ? (
+        <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
+          {onImportEndpoints ? (
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => {
+                void handleImportEndpoints();
+              }}
+              disabled={busyKey !== null}
+              data-testid="standalone-endpoints-import"
+              sx={{ textTransform: "none" }}
+            >
+              {busyKey === "import" ? "Importing..." : "Import"}
+            </Button>
+          ) : null}
+          {onExportEndpoints ? (
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleExportEndpoints}
+              disabled={busyKey !== null || sortedEndpoints.length === 0}
+              data-testid="standalone-endpoints-export"
+              sx={{ textTransform: "none" }}
+            >
+              Export
+            </Button>
+          ) : null}
+        </Stack>
+      ) : null}
+
       {showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
           busyKey={busyKey}
@@ -916,6 +1048,11 @@ export function EndpointManager({
           {visibleError ? (
             <Alert severity="error" variant="outlined">
               {visibleError}
+            </Alert>
+          ) : null}
+          {notice ? (
+            <Alert severity="success" variant="outlined">
+              {notice}
             </Alert>
           ) : null}
 
