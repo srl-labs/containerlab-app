@@ -164,7 +164,7 @@ This repository owns:
 - the standalone browser host for the shared `@srl-labs/clab-ui` experience
 - the web server used by the production image and development workflow
 - standalone unit and Playwright E2E test suites
-- static resources and the bundled schema used by the standalone app
+- static resources used by the standalone app
 
 `@srl-labs/clab-ui` remains the shared package consumed by both this repo and `vscode-containerlab`.
 

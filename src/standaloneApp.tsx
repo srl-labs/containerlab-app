@@ -21,7 +21,6 @@ import {
   createClabUiRuntime,
   createPortal,
   createRoot,
-  parseSchemaData,
   useCallback,
   useEffect,
   useMemo,
@@ -38,7 +37,6 @@ import {
   type TopologySnapshot
 } from "./mainUiDependencies";
 
-import clabSchema from "../schema/clab.schema.json";
 import {
   LabTabsBar,
   LoginPage,
@@ -113,12 +111,8 @@ if (!monacoGlobal.MonacoEnvironment) {
   };
 }
 
-// Schema data
-const schemaData = parseSchemaData(clabSchema as Record<string, unknown>);
-
 // Initial data for the App
 const initialData = {
-  schemaData,
   dockerImages: [] as string[],
   customNodes: [],
   defaultNode: "",
@@ -930,7 +924,6 @@ let reactRoot: ReactRoot | null = standaloneWindowState.__clabStandaloneReactRoo
 
 function renderApp(): void {
   (window as unknown as Record<string, unknown>).__INITIAL_DATA__ = initialData;
-  (window as unknown as Record<string, unknown>).__SCHEMA_DATA__ = initialData.schemaData;
   (window as unknown as Record<string, unknown>).__DOCKER_IMAGES__ = initialData.dockerImages;
 
   const container = document.getElementById("root");
