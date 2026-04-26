@@ -571,7 +571,11 @@ export function registerTopologyProxy(
   app.post<{ Body: CommandRequest }>(
     "/api/topology/command",
     async (request: FastifyRequest<{ Body: CommandRequest }>, reply: FastifyReply) => {
-      const resolved = resolveEndpoint(request, reply);
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+      );
       if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
