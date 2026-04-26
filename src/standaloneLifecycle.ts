@@ -21,11 +21,6 @@ const LIFECYCLE_STATE_WAIT_POLL_MS = 750;
 const LIFECYCLE_TIMESTAMP_LEVEL_PATTERN =
   /^(?:\d{2}:\d{2}:\d{2}|\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (INFO|WARN|ERRO|ERROR|FATAL|PANIC)\b/;
 
-export interface LifecycleApiCallResult {
-  logs: string[];
-  message?: string;
-}
-
 interface LifecycleStreamEvent {
   type?: unknown;
   line?: unknown;
@@ -65,13 +60,12 @@ interface StandaloneLifecycleManagerOptions {
 
 export interface StandaloneLifecycleManager {
   cancel(): boolean;
-  invokeLifecycleApi(
+  run(command: ExtensionLifecycleCommand): Promise<void>;
+  runTarget(
     endpoint: LifecycleCommandEndpoint,
     topologyRef: TopologyRef,
-    cleanup: boolean,
-    options?: { sessionId?: string; signal?: AbortSignal }
-  ): Promise<LifecycleApiCallResult>;
-  run(command: ExtensionLifecycleCommand): Promise<void>;
+    cleanup: boolean
+  ): Promise<void>;
 }
 
 const LIFECYCLE_COMMAND_CONFIG: Record<ExtensionLifecycleCommand, LifecycleCommandConfig> = {
@@ -277,6 +271,23 @@ function getLifecycleTypeFromProcessingMode(): LifecycleCommandType {
   return useTopoViewerStore.getState().processingMode === "destroy" ? "destroy" : "deploy";
 }
 
+function lifecycleCommandForTarget(
+  endpoint: LifecycleCommandEndpoint,
+  cleanup: boolean
+): ExtensionLifecycleCommand {
+  if (endpoint === "deploy") {
+    return cleanup ? "deployLabCleanup" : "deployLab";
+  }
+  if (endpoint === "destroy") {
+    return cleanup ? "destroyLabCleanup" : "destroyLab";
+  }
+  return cleanup ? "redeployLabCleanup" : "redeployLab";
+}
+
+function processingModeForLifecycle(commandType: LifecycleCommandType): "deploy" | "destroy" {
+  return commandType === "destroy" ? "destroy" : "deploy";
+}
+
 export function createStandaloneLifecycleManager(
   options: StandaloneLifecycleManagerOptions
 ): StandaloneLifecycleManager {
@@ -292,45 +303,6 @@ export function createStandaloneLifecycleManager(
       );
     }
   });
-
-  async function invokeLifecycleApi(
-    endpoint: LifecycleCommandEndpoint,
-    topologyRef: TopologyRef,
-    cleanup: boolean,
-    invokeOptions: { sessionId?: string; signal?: AbortSignal } = {}
-  ): Promise<LifecycleApiCallResult> {
-    const payload: { cleanup?: boolean; sessionId?: string; topologyRef: TopologyRef } = {
-      topologyRef
-    };
-    if (cleanup) {
-      payload.cleanup = true;
-    }
-    if (invokeOptions.sessionId) {
-      payload.sessionId = invokeOptions.sessionId;
-    }
-
-    const response = await fetch(standaloneServerUrl(`/api/lab/${endpoint}`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload),
-      signal: invokeOptions.signal
-    });
-
-    if (!response.ok) {
-      throw new Error(await readLifecycleError(response));
-    }
-
-    const body = (await response.json().catch(() => undefined)) as
-      | { logs?: unknown; message?: unknown }
-      | undefined;
-    const logs = Array.isArray(body?.logs)
-      ? body.logs.filter((line): line is string => typeof line === "string")
-      : [];
-    const message = typeof body?.message === "string" ? body.message : undefined;
-
-    return { logs, message };
-  }
 
   async function invokeLifecycleApiStream(
     endpoint: LifecycleCommandEndpoint,
@@ -464,11 +436,12 @@ export function createStandaloneLifecycleManager(
       signal: AbortSignal;
       isCurrent(): boolean;
       isCancelled(): boolean;
-    }
+    },
+    sessionId?: string
   ): ActiveLifecycleRequest {
     return {
       commandType: config.commandType,
-      sessionId: options.getCurrentSessionId() ?? undefined,
+      sessionId,
       signal: execution.signal,
       topologyRef,
       isCurrent: execution.isCurrent,
@@ -535,26 +508,18 @@ export function createStandaloneLifecycleManager(
     postLifecycleStatusMessage(config.commandType, "success");
   }
 
-  async function executeStandaloneLifecycleCommand(
-    command: ExtensionLifecycleCommand,
+  async function executeLifecycleCommand(
+    config: LifecycleCommandConfig,
+    topologyRef: TopologyRef,
+    sessionId: string | undefined,
     execution: {
       signal: AbortSignal;
       isCurrent(): boolean;
       isCancelled(): boolean;
     }
   ): Promise<void> {
-    const config = LIFECYCLE_COMMAND_CONFIG[command];
-    const currentTopologyRef = options.getCurrentTopologyRef();
-    if (!currentTopologyRef) {
-      postLifecycleStatusMessage(
-        getLifecycleTypeFromProcessingMode(),
-        "error",
-        "No active topology selected for lifecycle command."
-      );
-      return;
-    }
-    const label = currentTopologyRef.labName || currentTopologyRef.yamlPath;
-    const request = createActiveLifecycleRequest(config, currentTopologyRef, execution);
+    const label = topologyRef.labName || topologyRef.yamlPath;
+    const request = createActiveLifecycleRequest(config, topologyRef, execution, sessionId);
     postLifecycleStart(config, label);
 
     try {
@@ -581,11 +546,11 @@ export function createStandaloneLifecycleManager(
         return;
       }
       if (!reachedExpectedState) {
-        handleLifecycleTimeout(config, currentTopologyRef, label, expectedRunning);
+        handleLifecycleTimeout(config, topologyRef, label, expectedRunning);
         return;
       }
 
-      completeLifecycleSuccess(config, currentTopologyRef);
+      completeLifecycleSuccess(config, topologyRef);
     } catch (error) {
       if (!request.isCurrent() || request.isCancelled() || isAbortError(error)) {
         return;
@@ -593,6 +558,33 @@ export function createStandaloneLifecycleManager(
       const message = error instanceof Error ? error.message : String(error);
       postLifecycleStatusMessage(config.commandType, "error", message);
     }
+  }
+
+  async function executeStandaloneLifecycleCommand(
+    command: ExtensionLifecycleCommand,
+    execution: {
+      signal: AbortSignal;
+      isCurrent(): boolean;
+      isCancelled(): boolean;
+    }
+  ): Promise<void> {
+    const config = LIFECYCLE_COMMAND_CONFIG[command];
+    const currentTopologyRef = options.getCurrentTopologyRef();
+    if (!currentTopologyRef) {
+      postLifecycleStatusMessage(
+        getLifecycleTypeFromProcessingMode(),
+        "error",
+        "No active topology selected for lifecycle command."
+      );
+      return;
+    }
+
+    await executeLifecycleCommand(
+      config,
+      currentTopologyRef,
+      options.getCurrentSessionId() ?? undefined,
+      execution
+    );
   }
 
   return {
@@ -607,10 +599,20 @@ export function createStandaloneLifecycleManager(
       }
       return true;
     },
-    invokeLifecycleApi,
     async run(command) {
       await lifecycleController.run(command, (execution) =>
         executeStandaloneLifecycleCommand(command, execution)
+      );
+    },
+    async runTarget(endpoint, topologyRef, cleanup) {
+      const command = lifecycleCommandForTarget(endpoint, cleanup);
+      const config = LIFECYCLE_COMMAND_CONFIG[command];
+      useTopoViewerStore.getState().setProcessing(
+        true,
+        processingModeForLifecycle(config.commandType)
+      );
+      await lifecycleController.run(command, (execution) =>
+        executeLifecycleCommand(config, topologyRef, undefined, execution)
       );
     }
   };

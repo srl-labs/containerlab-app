@@ -46,7 +46,6 @@ import {
   loadCapturePreferences,
   setSessionHostnameOverride
 } from "./runtimeCaptureSettings";
-import type { LifecycleApiCallResult } from "./standaloneLifecycle";
 import type {
   DeploymentState,
   ExplorerTreeItem,
@@ -531,12 +530,11 @@ interface StandaloneExplorerBridgeOptions {
   getEndpoints: () => EndpointConfig[];
   getLabs: () => Map<string, LabState>;
   invalidateTopologyFileListCache: (endpointId?: string) => void;
-  invokeLifecycleApi: (
+  runLifecycle: (
     endpoint: LifecycleCommandEndpoint,
     topologyRef: TopologyRef,
-    cleanup: boolean,
-    options?: { sessionId?: string; signal?: AbortSignal }
-  ) => Promise<LifecycleApiCallResult>;
+    cleanup: boolean
+  ) => Promise<void>;
   listTopologyFiles: () => Promise<TopologyFileEntry[]>;
   loadTopologyFile: (
     topologyRef: TopologyRef,
@@ -1866,8 +1864,7 @@ export function createStandaloneExplorerBridge(
         return;
       }
       try {
-        await options.invokeLifecycleApi(endpoint, topologyRef, cleanup);
-        options.invalidateTopologyFileListCache(actionEndpointId);
+        await options.runLifecycle(endpoint, topologyRef, cleanup);
       } catch (error) {
         console.error(`[Standalone] ${endpoint} failed:`, error);
       }

@@ -535,7 +535,6 @@ const explorerBridge = createStandaloneExplorerBridge({
   getEndpoints: getConfiguredEndpoints,
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache: topologyManager.invalidateTopologyFileListCache,
-  invokeLifecycleApi: lifecycleManager.invokeLifecycleApi,
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
   removeEndpoint: async (endpointId) => {
@@ -544,7 +543,8 @@ const explorerBridge = createStandaloneExplorerBridge({
   },
   resolveApiTopologyPath: topologyManager.resolveApiTopologyPath,
   resolveDeploymentState: topologyManager.resolveDeploymentState,
-  resolveTopologyRef: topologyManager.resolveTopologyRef
+  resolveTopologyRef: topologyManager.resolveTopologyRef,
+  runLifecycle: lifecycleManager.runTarget
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
