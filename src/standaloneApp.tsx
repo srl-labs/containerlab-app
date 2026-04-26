@@ -7,6 +7,7 @@
 import "@srl-labs/clab-ui/styles/global.css";
 import * as EditorWorkerModule from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import * as YamlWorkerModule from "./monacoYaml.worker?worker";
 import { lazy, Suspense } from "react";
 import {
   App,
@@ -129,12 +130,16 @@ const monacoGlobal = self as typeof self & {
 };
 const EditorWorker = (EditorWorkerModule as { default: new () => Worker }).default;
 const JsonWorker = (JsonWorkerModule as { default: new () => Worker }).default;
+const YamlWorker = (YamlWorkerModule as { default: new () => Worker }).default;
 
 if (!monacoGlobal.MonacoEnvironment) {
   monacoGlobal.MonacoEnvironment = {
     getWorker: (_workerId: string, label: string) => {
       if (label === "json") {
         return new JsonWorker();
+      }
+      if (label === "yaml") {
+        return new YamlWorker();
       }
       return new EditorWorker();
     }
