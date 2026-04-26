@@ -28,8 +28,6 @@ import {
 } from "@mui/material";
 
 import {
-  createTopologyFile,
-  deleteTopologyFile,
   fetchNetem,
   fetchNodeLogs,
   fetchVersionCheck,
@@ -39,7 +37,6 @@ import {
   netemFieldsFromShowResponse,
   normalizeNetemFields,
   resetNetem,
-  saveLabConfigs,
   setNetem,
   type InspectContainerInfo,
   type InspectLabResponse,
@@ -51,22 +48,25 @@ import { findLabStateForTopology } from "../standaloneHostShared";
 import type { ContainerState, LabState } from "../stores/labStore";
 import { useLabStore } from "../stores/labStore";
 import { runtimeUiActions, useRuntimeUiStore } from "../stores/runtimeUiStore";
+import {
+  DEFAULT_TOPOLOGY_FILE_NAME,
+  setCloneRepoDialogRequester,
+  setCreateTopologyDialogRequester,
+  setEndpointSelectionDialogRequester,
+  setTopologyFileNameDialogRequester,
+  type ActiveCloneRepoDialogRequest,
+  type ActiveCreateTopologyDialogRequest,
+  type ActiveEndpointSelectionDialogRequest,
+  type ActiveTopologyFileNameDialogRequest,
+  type CloneRepoDialogResult,
+  type CloneRepoDialogTarget,
+  type CreateTopologyDialogResult,
+  type EndpointSelectionOption
+} from "../runtimeActionFlows";
 
 interface InspectGroup {
   labName: string;
   containers: InspectContainerInfo[];
-}
-
-interface TopologyFileNameDialogRequest {
-  defaultValue?: string;
-  message?: string;
-  title?: string;
-}
-
-interface ActiveTopologyFileNameDialogRequest {
-  defaultValue: string;
-  message: string;
-  title: string;
 }
 
 interface TopologyFileNameDialogState {
@@ -74,100 +74,14 @@ interface TopologyFileNameDialogState {
   resolve: (value: string | undefined) => void;
 }
 
-export interface EndpointSelectionOption {
-  description?: string;
-  label: string;
-  value: string;
-}
-
-interface EndpointSelectionDialogRequest {
-  confirmLabel?: string;
-  message?: string;
-  options: EndpointSelectionOption[];
-  preferredValue?: string;
-  title?: string;
-}
-
-interface ActiveEndpointSelectionDialogRequest {
-  confirmLabel: string;
-  message: string;
-  options: EndpointSelectionOption[];
-  preferredValue: string;
-  title: string;
-}
-
 interface EndpointSelectionDialogState {
   request: ActiveEndpointSelectionDialogRequest;
   resolve: (value: string | undefined) => void;
 }
 
-export interface CreateTopologyDialogResult {
-  endpointId: string;
-  fileName: string;
-}
-
-interface CreateTopologyDialogRequest {
-  confirmLabel?: string;
-  defaultEndpointId?: string;
-  defaultFileName?: string;
-  endpointOptions: EndpointSelectionOption[];
-  message?: string;
-  title?: string;
-}
-
-interface ActiveCreateTopologyDialogRequest {
-  confirmLabel: string;
-  defaultEndpointId: string;
-  defaultFileName: string;
-  endpointOptions: EndpointSelectionOption[];
-  message: string;
-  title: string;
-}
-
 interface CreateTopologyDialogState {
   request: ActiveCreateTopologyDialogRequest;
   resolve: (value: CreateTopologyDialogResult | undefined) => void;
-}
-
-export interface CloneRepoDialogResult {
-  endpointId: string;
-  labNameOverride?: string;
-  sourceUrl: string;
-  target: CloneRepoDialogTarget;
-}
-
-export interface CloneRepoPopularOption {
-  description?: string;
-  label: string;
-  value: string;
-}
-
-export type CloneRepoDialogTarget = "deploy" | "undeployed";
-
-interface CloneRepoDialogRequest {
-  confirmLabel?: string;
-  defaultEndpointId?: string;
-  defaultLabNameOverride?: string;
-  defaultMode?: "url" | "popular";
-  defaultSourceUrl?: string;
-  defaultTarget?: CloneRepoDialogTarget;
-  endpointOptions: EndpointSelectionOption[];
-  message?: string;
-  popularOptions: CloneRepoPopularOption[];
-  title?: string;
-}
-
-interface ActiveCloneRepoDialogRequest {
-  confirmLabel: string;
-  defaultEndpointId: string;
-  defaultLabNameOverride: string;
-  defaultMode: "url" | "popular";
-  defaultSourceUrl: string;
-  defaultTarget: CloneRepoDialogTarget;
-  endpointOptions: EndpointSelectionOption[];
-  message: string;
-  popularOptions: CloneRepoPopularOption[];
-  title: string;
 }
 
 interface CloneRepoDialogState {
@@ -182,273 +96,6 @@ const EMPTY_NETEM_FIELDS: NetemFields = {
   rate: "",
   corruption: ""
 };
-const DEFAULT_TOPOLOGY_FILE_NAME = "new-lab.clab.yml";
-let requestTopologyFileNameFromDialog:
-  | ((request: ActiveTopologyFileNameDialogRequest) => Promise<string | undefined>)
-  | null = null;
-let requestEndpointSelectionFromDialog:
-  | ((request: ActiveEndpointSelectionDialogRequest) => Promise<string | undefined>)
-  | null = null;
-let requestCreateTopologyFromDialog:
-  | ((request: ActiveCreateTopologyDialogRequest) => Promise<CreateTopologyDialogResult | undefined>)
-  | null = null;
-let requestCloneRepoFromDialog:
-  | ((request: ActiveCloneRepoDialogRequest) => Promise<CloneRepoDialogResult | undefined>)
-  | null = null;
-
-function normalizeTopologyFileNameDialogRequest(
-  request?: TopologyFileNameDialogRequest
-): ActiveTopologyFileNameDialogRequest {
-  return {
-    title: request?.title?.trim() || "Create Topology File",
-    message: request?.message?.trim() || "Enter a file name for the new topology file.",
-    defaultValue: request?.defaultValue ?? DEFAULT_TOPOLOGY_FILE_NAME
-  };
-}
-
-export function promptForTopologyFileName(
-  request?: TopologyFileNameDialogRequest
-): Promise<string | undefined> {
-  const normalizedRequest = normalizeTopologyFileNameDialogRequest(request);
-  if (requestTopologyFileNameFromDialog) {
-    return requestTopologyFileNameFromDialog(normalizedRequest);
-  }
-  const fallbackValue = window.prompt("New topology file name", normalizedRequest.defaultValue);
-  const trimmedValue = fallbackValue?.trim();
-  return Promise.resolve(trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined);
-}
-
-function normalizeEndpointSelectionDialogRequest(
-  request: EndpointSelectionDialogRequest
-): ActiveEndpointSelectionDialogRequest {
-  const options = request.options.filter((option) => option.value.trim().length > 0);
-  const preferredValue =
-    request.preferredValue && options.some((option) => option.value === request.preferredValue)
-      ? request.preferredValue
-      : options[0]?.value ?? "";
-  return {
-    title: request.title?.trim() || "Select Endpoint",
-    message: request.message?.trim() || "Choose an endpoint to continue.",
-    confirmLabel: request.confirmLabel?.trim() || "Continue",
-    options,
-    preferredValue
-  };
-}
-
-export function promptForEndpointSelection(
-  request: EndpointSelectionDialogRequest
-): Promise<string | undefined> {
-  const normalizedRequest = normalizeEndpointSelectionDialogRequest(request);
-  if (normalizedRequest.options.length === 0 || !normalizedRequest.preferredValue) {
-    return Promise.resolve(undefined);
-  }
-  if (requestEndpointSelectionFromDialog) {
-    return requestEndpointSelectionFromDialog(normalizedRequest);
-  }
-
-  const optionsText = normalizedRequest.options
-    .map(
-      (option, index) =>
-        `${index + 1}. ${option.label}${option.description ? ` (${option.description})` : ""}`
-    )
-    .join("\n");
-  const defaultIndex = Math.max(
-    1,
-    normalizedRequest.options.findIndex((option) => option.value === normalizedRequest.preferredValue) + 1
-  );
-  const fallbackValue = window.prompt(
-    `${normalizedRequest.message}\n${optionsText}\n\nEnter number (1-${normalizedRequest.options.length}).`,
-    String(defaultIndex)
-  );
-  if (!fallbackValue) {
-    return Promise.resolve(undefined);
-  }
-  const selectedIndex = Number.parseInt(fallbackValue, 10);
-  if (
-    !Number.isFinite(selectedIndex) ||
-    selectedIndex < 1 ||
-    selectedIndex > normalizedRequest.options.length
-  ) {
-    return Promise.resolve(undefined);
-  }
-  return Promise.resolve(normalizedRequest.options[selectedIndex - 1].value);
-}
-
-function normalizeCreateTopologyDialogRequest(
-  request: CreateTopologyDialogRequest
-): ActiveCreateTopologyDialogRequest {
-  const endpointOptions = request.endpointOptions.filter((option) => option.value.trim().length > 0);
-  const defaultEndpointId =
-    request.defaultEndpointId &&
-    endpointOptions.some((option) => option.value === request.defaultEndpointId)
-      ? request.defaultEndpointId
-      : endpointOptions[0]?.value ?? "";
-  return {
-    title: request.title?.trim() || "Create Topology File",
-    message: request.message?.trim() || "Choose endpoint and file name for the new topology file.",
-    confirmLabel: request.confirmLabel?.trim() || "Create",
-    endpointOptions,
-    defaultEndpointId,
-    defaultFileName: request.defaultFileName ?? DEFAULT_TOPOLOGY_FILE_NAME
-  };
-}
-
-export async function promptForCreateTopology(
-  request: CreateTopologyDialogRequest
-): Promise<CreateTopologyDialogResult | undefined> {
-  const normalizedRequest = normalizeCreateTopologyDialogRequest(request);
-  if (normalizedRequest.endpointOptions.length === 0 || !normalizedRequest.defaultEndpointId) {
-    return undefined;
-  }
-  if (requestCreateTopologyFromDialog) {
-    return requestCreateTopologyFromDialog(normalizedRequest);
-  }
-
-  const endpointId = await promptForEndpointSelection({
-    title: "Select Endpoint",
-    message: normalizedRequest.message,
-    confirmLabel: "Use Endpoint",
-    options: normalizedRequest.endpointOptions,
-    preferredValue: normalizedRequest.defaultEndpointId
-  });
-  if (!endpointId) {
-    return undefined;
-  }
-  const fileName = await promptForTopologyFileName({
-    defaultValue: normalizedRequest.defaultFileName,
-    title: normalizedRequest.title,
-    message: "Enter a file name for the new topology file."
-  });
-  if (!fileName) {
-    return undefined;
-  }
-  return { endpointId, fileName };
-}
-
-function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): ActiveCloneRepoDialogRequest {
-  const endpointOptions = request.endpointOptions.filter((option) => option.value.trim().length > 0);
-  const popularOptions = request.popularOptions.filter((option) => option.value.trim().length > 0);
-  return {
-    title: request.title?.trim() || "Clone Repository",
-    message: request.message?.trim() || "Select endpoint and repository source.",
-    confirmLabel: request.confirmLabel?.trim() || "Continue",
-    endpointOptions,
-    popularOptions,
-    defaultEndpointId: resolveDefaultEndpointId(request.defaultEndpointId, endpointOptions),
-    defaultMode: resolveCloneRepoDefaultMode(request.defaultMode, popularOptions),
-    defaultSourceUrl: request.defaultSourceUrl?.trim() || "https://github.com/srl-labs/srl-telemetry-lab",
-    defaultLabNameOverride: request.defaultLabNameOverride?.trim() || "",
-    defaultTarget: request.defaultTarget ?? "deploy"
-  };
-}
-
-function resolveDefaultEndpointId(
-  requestedEndpointId: string | undefined,
-  endpointOptions: EndpointSelectionOption[]
-): string {
-  if (requestedEndpointId && endpointOptions.some((option) => option.value === requestedEndpointId)) {
-    return requestedEndpointId;
-  }
-  return endpointOptions[0]?.value ?? "";
-}
-
-function resolveCloneRepoDefaultMode(
-  requestedMode: "url" | "popular" | undefined,
-  popularOptions: EndpointSelectionOption[]
-): "url" | "popular" {
-  return requestedMode === "popular" && popularOptions.length > 0 ? "popular" : "url";
-}
-
-async function promptForCloneRepoSourceUrl(
-  request: ActiveCloneRepoDialogRequest
-): Promise<string | undefined> {
-  const mode = window.prompt(
-    "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
-    request.defaultMode === "popular" ? "2" : "1"
-  );
-  if (!mode) {
-    return undefined;
-  }
-
-  if (mode.trim() === "1") {
-    const rawSourceUrl = window.prompt("Repository or topology URL", request.defaultSourceUrl);
-    return rawSourceUrl?.trim() || undefined;
-  }
-  if (mode.trim() !== "2" || request.popularOptions.length === 0) {
-    return undefined;
-  }
-
-  const optionsText = request.popularOptions
-    .map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`)
-    .join("\n");
-  const rawSelection = window.prompt(
-    `Select popular repository:\n${optionsText}\n\nEnter number (1-${request.popularOptions.length}).`,
-    "1"
-  );
-  const selectedIndex = rawSelection ? Number.parseInt(rawSelection, 10) : 0;
-  if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > request.popularOptions.length) {
-    return undefined;
-  }
-  return request.popularOptions[selectedIndex - 1].value;
-}
-
-function promptForCloneRepoTarget(
-  request: ActiveCloneRepoDialogRequest
-): CloneRepoDialogTarget | undefined {
-  const modeSelection = window.prompt(
-    "Action:\n1. Deploy now\n2. Clone to undeployed labs\n\nEnter number (1-2).",
-    request.defaultTarget === "undeployed" ? "2" : "1"
-  );
-  if (modeSelection?.trim() === "2") {
-    return "undeployed";
-  }
-  if (modeSelection?.trim() === "1") {
-    return "deploy";
-  }
-  return undefined;
-}
-
-export async function promptForCloneRepo(
-  request: CloneRepoDialogRequest
-): Promise<CloneRepoDialogResult | undefined> {
-  const normalizedRequest = normalizeCloneRepoDialogRequest(request);
-  if (normalizedRequest.endpointOptions.length === 0 || !normalizedRequest.defaultEndpointId) {
-    return undefined;
-  }
-  if (requestCloneRepoFromDialog) {
-    return requestCloneRepoFromDialog(normalizedRequest);
-  }
-
-  const endpointId = await promptForEndpointSelection({
-    title: "Select Endpoint",
-    message: normalizedRequest.message,
-    confirmLabel: "Use Endpoint",
-    options: normalizedRequest.endpointOptions,
-    preferredValue: normalizedRequest.defaultEndpointId
-  });
-  if (!endpointId) {
-    return undefined;
-  }
-
-  const sourceUrl = await promptForCloneRepoSourceUrl(normalizedRequest);
-  if (!sourceUrl) {
-    return undefined;
-  }
-  const target = promptForCloneRepoTarget(normalizedRequest);
-  if (!target) {
-    return undefined;
-  }
-
-  const rawLabNameOverride = window.prompt(
-    "Optional lab name override (leave empty to use default)",
-    normalizedRequest.defaultLabNameOverride
-  );
-  if (rawLabNameOverride === null) {
-    return undefined;
-  }
-  const labNameOverride = rawLabNameOverride.trim() || undefined;
-  return { endpointId, sourceUrl, labNameOverride, target };
-}
 
 function normalizeInspectGroups(
   requestTitle: string,
@@ -1442,57 +1089,61 @@ export function RuntimeActionDialogs() {
   }, [cloneRepoDialog]);
 
   useEffect(() => {
-    requestTopologyFileNameFromDialog = (request) =>
+    const cleanup = setTopologyFileNameDialogRequester((request) =>
       new Promise((resolve) => {
         setTopologyFileNameDialog((current) => {
           current?.resolve(undefined);
           return { request, resolve };
         });
-      });
+      })
+    );
     return () => {
-      requestTopologyFileNameFromDialog = null;
+      cleanup();
       topologyFileNameDialogRef.current?.resolve(undefined);
     };
   }, []);
 
   useEffect(() => {
-    requestEndpointSelectionFromDialog = (request) =>
+    const cleanup = setEndpointSelectionDialogRequester((request) =>
       new Promise((resolve) => {
         setEndpointSelectionDialog((current) => {
           current?.resolve(undefined);
           return { request, resolve };
         });
-      });
+      })
+    );
     return () => {
-      requestEndpointSelectionFromDialog = null;
+      cleanup();
       endpointSelectionDialogRef.current?.resolve(undefined);
     };
   }, []);
 
   useEffect(() => {
-    requestCreateTopologyFromDialog = (request) =>
+    const cleanup = setCreateTopologyDialogRequester((request) =>
       new Promise((resolve) => {
         setCreateTopologyDialog((current) => {
           current?.resolve(undefined);
           return { request, resolve };
         });
-      });
+      })
+    );
     return () => {
-      requestCreateTopologyFromDialog = null;
+      cleanup();
       createTopologyDialogRef.current?.resolve(undefined);
     };
   }, []);
 
   useEffect(() => {
-    requestCloneRepoFromDialog = (request) =>
+    const cleanup = setCloneRepoDialogRequester((request) =>
       new Promise((resolve) => {
         setCloneRepoDialog((current) => {
           current?.resolve(undefined);
           return { request, resolve };
         });
-      });
+      })
+    );
     return () => {
-      requestCloneRepoFromDialog = null;
+      cleanup();
       cloneRepoDialogRef.current?.resolve(undefined);
     };
   }, []);
@@ -1907,160 +1558,122 @@ export function RuntimeActionDialogs() {
 
   return (
     <>
-      <InspectDialogView
-        closeInspect={closeInspect}
-        filteredInspectGroups={filteredInspectGroups}
-        inspectError={inspectError}
-        inspectFilter={inspectFilter}
-        inspectLoading={inspectLoading}
-        inspectRequest={inspectRequest}
-        setInspectFilter={setInspectFilter}
-      />
+      {inspectRequest ? (
+        <InspectDialogView
+          closeInspect={closeInspect}
+          filteredInspectGroups={filteredInspectGroups}
+          inspectError={inspectError}
+          inspectFilter={inspectFilter}
+          inspectLoading={inspectLoading}
+          inspectRequest={inspectRequest}
+          setInspectFilter={setInspectFilter}
+        />
+      ) : null}
 
-      <LogsDialogView
-        closeLogs={closeLogs}
-        exportLogs={exportLogs}
-        fetchLogs={fetchLogs}
-        filteredLogsContent={filteredLogsContent}
-        logsError={logsError}
-        logsFilter={logsFilter}
-        logsFollow={logsFollow}
-        logsLoading={logsLoading}
-        logsPaperRef={logsPaperRef}
-        logsRequest={logsRequest}
-        logsTail={logsTail}
-        setLogsFilter={setLogsFilter}
-        setLogsFollow={setLogsFollow}
-        setLogsTail={setLogsTail}
-        totalLogLines={totalLogLines}
-        visibleLogLines={visibleLogLines}
-      />
+      {logsRequest ? (
+        <LogsDialogView
+          closeLogs={closeLogs}
+          exportLogs={exportLogs}
+          fetchLogs={fetchLogs}
+          filteredLogsContent={filteredLogsContent}
+          logsError={logsError}
+          logsFilter={logsFilter}
+          logsFollow={logsFollow}
+          logsLoading={logsLoading}
+          logsPaperRef={logsPaperRef}
+          logsRequest={logsRequest}
+          logsTail={logsTail}
+          setLogsFilter={setLogsFilter}
+          setLogsFollow={setLogsFollow}
+          setLogsTail={setLogsTail}
+          totalLogLines={totalLogLines}
+          visibleLogLines={visibleLogLines}
+        />
+      ) : null}
 
-      <NetemDialogView
-        applyNetem={applyNetem}
-        clearNetem={clearNetem}
-        closeNetem={closeNetem}
-        netemContainerName={netemContainerName}
-        netemError={netemError}
-        netemFieldsByInterface={netemFieldsByInterface}
-        netemLoading={netemLoading}
-        netemPendingInterface={netemPendingInterface}
-        netemRequest={netemRequest}
-        setNetemFieldsByInterface={setNetemFieldsByInterface}
-      />
+      {netemRequest ? (
+        <NetemDialogView
+          applyNetem={applyNetem}
+          clearNetem={clearNetem}
+          closeNetem={closeNetem}
+          netemContainerName={netemContainerName}
+          netemError={netemError}
+          netemFieldsByInterface={netemFieldsByInterface}
+          netemLoading={netemLoading}
+          netemPendingInterface={netemPendingInterface}
+          netemRequest={netemRequest}
+          setNetemFieldsByInterface={setNetemFieldsByInterface}
+        />
+      ) : null}
 
-      <VersionDialogView
-        versionCheck={versionCheck}
-        versionError={versionError}
-        versionInfo={versionInfo}
-        versionLoading={versionLoading}
-        versionOpen={versionOpen}
-      />
+      {versionOpen ? (
+        <VersionDialogView
+          versionCheck={versionCheck}
+          versionError={versionError}
+          versionInfo={versionInfo}
+          versionLoading={versionLoading}
+          versionOpen={versionOpen}
+        />
+      ) : null}
 
-      <CloneRepoDialogView
-        cloneRepoCanSubmit={cloneRepoCanSubmit}
-        cloneRepoDialog={cloneRepoDialog}
-        cloneRepoEndpointValue={cloneRepoEndpointValue}
-        cloneRepoLabNameOverrideInput={cloneRepoLabNameOverrideInput}
-        cloneRepoMode={cloneRepoMode}
-        cloneRepoPopularValue={cloneRepoPopularValue}
-        cloneRepoSourceUrlInput={cloneRepoSourceUrlInput}
-        cloneRepoTarget={cloneRepoTarget}
-        closeCloneRepoDialog={closeCloneRepoDialog}
-        setCloneRepoEndpointValue={setCloneRepoEndpointValue}
-        setCloneRepoLabNameOverrideInput={setCloneRepoLabNameOverrideInput}
-        setCloneRepoMode={setCloneRepoMode}
-        setCloneRepoPopularValue={setCloneRepoPopularValue}
-        setCloneRepoSourceUrlInput={setCloneRepoSourceUrlInput}
-        setCloneRepoTarget={setCloneRepoTarget}
-        submitCloneRepoDialog={submitCloneRepoDialog}
-      />
+      {cloneRepoDialog ? (
+        <CloneRepoDialogView
+          cloneRepoCanSubmit={cloneRepoCanSubmit}
+          cloneRepoDialog={cloneRepoDialog}
+          cloneRepoEndpointValue={cloneRepoEndpointValue}
+          cloneRepoLabNameOverrideInput={cloneRepoLabNameOverrideInput}
+          cloneRepoMode={cloneRepoMode}
+          cloneRepoPopularValue={cloneRepoPopularValue}
+          cloneRepoSourceUrlInput={cloneRepoSourceUrlInput}
+          cloneRepoTarget={cloneRepoTarget}
+          closeCloneRepoDialog={closeCloneRepoDialog}
+          setCloneRepoEndpointValue={setCloneRepoEndpointValue}
+          setCloneRepoLabNameOverrideInput={setCloneRepoLabNameOverrideInput}
+          setCloneRepoMode={setCloneRepoMode}
+          setCloneRepoPopularValue={setCloneRepoPopularValue}
+          setCloneRepoSourceUrlInput={setCloneRepoSourceUrlInput}
+          setCloneRepoTarget={setCloneRepoTarget}
+          submitCloneRepoDialog={submitCloneRepoDialog}
+        />
+      ) : null}
 
-      <CreateTopologyDialogView
-        closeCreateTopologyDialog={closeCreateTopologyDialog}
-        createTopologyDialog={createTopologyDialog}
-        createTopologyEndpointIsValid={createTopologyEndpointIsValid}
-        createTopologyEndpointValue={createTopologyEndpointValue}
-        createTopologyFileNameInput={createTopologyFileNameInput}
-        setCreateTopologyEndpointValue={setCreateTopologyEndpointValue}
-        setCreateTopologyFileNameInput={setCreateTopologyFileNameInput}
-        submitCreateTopologyDialog={submitCreateTopologyDialog}
-        trimmedCreateTopologyFileNameInput={trimmedCreateTopologyFileNameInput}
-      />
+      {createTopologyDialog ? (
+        <CreateTopologyDialogView
+          closeCreateTopologyDialog={closeCreateTopologyDialog}
+          createTopologyDialog={createTopologyDialog}
+          createTopologyEndpointIsValid={createTopologyEndpointIsValid}
+          createTopologyEndpointValue={createTopologyEndpointValue}
+          createTopologyFileNameInput={createTopologyFileNameInput}
+          setCreateTopologyEndpointValue={setCreateTopologyEndpointValue}
+          setCreateTopologyFileNameInput={setCreateTopologyFileNameInput}
+          submitCreateTopologyDialog={submitCreateTopologyDialog}
+          trimmedCreateTopologyFileNameInput={trimmedCreateTopologyFileNameInput}
+        />
+      ) : null}
 
-      <TopologyFileNameDialogView
-        closeTopologyFileNameDialog={closeTopologyFileNameDialog}
-        setTopologyFileNameInput={setTopologyFileNameInput}
-        submitTopologyFileNameDialog={submitTopologyFileNameDialog}
-        topologyFileNameDialog={topologyFileNameDialog}
-        topologyFileNameInput={topologyFileNameInput}
-        trimmedTopologyFileNameInput={trimmedTopologyFileNameInput}
-      />
+      {topologyFileNameDialog ? (
+        <TopologyFileNameDialogView
+          closeTopologyFileNameDialog={closeTopologyFileNameDialog}
+          setTopologyFileNameInput={setTopologyFileNameInput}
+          submitTopologyFileNameDialog={submitTopologyFileNameDialog}
+          topologyFileNameDialog={topologyFileNameDialog}
+          topologyFileNameInput={topologyFileNameInput}
+          trimmedTopologyFileNameInput={trimmedTopologyFileNameInput}
+        />
+      ) : null}
 
-      <EndpointSelectionDialogView
-        closeEndpointSelectionDialog={closeEndpointSelectionDialog}
-        endpointSelectionDialog={endpointSelectionDialog}
-        endpointSelectionIsValid={endpointSelectionIsValid}
-        endpointSelectionValue={endpointSelectionValue}
-        setEndpointSelectionValue={setEndpointSelectionValue}
-        submitEndpointSelectionDialog={submitEndpointSelectionDialog}
-      />
+      {endpointSelectionDialog ? (
+        <EndpointSelectionDialogView
+          closeEndpointSelectionDialog={closeEndpointSelectionDialog}
+          endpointSelectionDialog={endpointSelectionDialog}
+          endpointSelectionIsValid={endpointSelectionIsValid}
+          endpointSelectionValue={endpointSelectionValue}
+          setEndpointSelectionValue={setEndpointSelectionValue}
+          submitEndpointSelectionDialog={submitEndpointSelectionDialog}
+        />
+      ) : null}
 
-      <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} />
+      {snackbar ? <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} /> : null}
     </>
   );
-}
-
-export async function createTopologyFileFlow(): Promise<void> {
-  const rawFileName = await promptForTopologyFileName();
-  if (!rawFileName) {
-    return;
-  }
-
-  try {
-    const created = await createTopologyFile({ fileName: rawFileName });
-    runtimeUiActions.notify(`Created topology file "${rawFileName}".`, "success");
-    runtimeUiActions.openInspectLab({ topologyRef: created.topologyRef }, `New Topology: ${rawFileName}`);
-  } catch (error) {
-    runtimeUiActions.notify(
-      error instanceof Error ? error.message : String(error),
-      "error"
-    );
-  }
-}
-
-export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Promise<boolean> {
-  const fileLabel = target.topologyRef?.yamlPath ?? "this topology file";
-  if (!window.confirm(`Delete ${fileLabel}?`)) {
-    return false;
-  }
-
-  try {
-    await deleteTopologyFile(target);
-    runtimeUiActions.notify(`Deleted ${fileLabel}.`, "success");
-    return true;
-  } catch (error) {
-    runtimeUiActions.notify(
-      error instanceof Error ? error.message : String(error),
-      "error"
-    );
-    return false;
-  }
-}
-
-export async function saveConfigsFlow(target: {
-  endpointId?: string;
-  sessionId?: string;
-  topologyRef?: RuntimeTargetRequest["topologyRef"];
-  nodeName?: string;
-}, successLabel: string): Promise<void> {
-  try {
-    const response = await saveLabConfigs(target);
-    runtimeUiActions.notify(response.message || successLabel, "success");
-  } catch (error) {
-    runtimeUiActions.notify(
-      error instanceof Error ? error.message : String(error),
-      "error"
-    );
-  }
 }

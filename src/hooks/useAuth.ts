@@ -107,10 +107,12 @@ export function useEndpointAuth() {
 
   const defaultApiUrl = useAuthStore((state) => state.defaultApiUrl);
   const error = useAuthStore((state) => state.error);
+  const initialized = useAuthStore((state) => state.initialized);
   const loading = useAuthStore((state) => state.loading);
   const clearError = useAuthStore((state) => state.clearError);
   const setDefaultApiUrl = useAuthStore((state) => state.setDefaultApiUrl);
   const setError = useAuthStore((state) => state.setError);
+  const setInitialized = useAuthStore((state) => state.setInitialized);
   const setLoading = useAuthStore((state) => state.setLoading);
 
   const endpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
@@ -141,6 +143,10 @@ export function useEndpointAuth() {
   }, [setEndpoints]);
 
   useEffect(() => {
+    if (initialized) {
+      return;
+    }
+
     hydratePersisted();
     setLoading(true);
 
@@ -172,6 +178,7 @@ export function useEndpointAuth() {
         markAllSaved();
         clearError();
       } finally {
+        setInitialized(true);
         setLoading(false);
       }
     })();
@@ -179,10 +186,12 @@ export function useEndpointAuth() {
     clearEndpoints,
     clearError,
     hydratePersisted,
+    initialized,
     markAllSaved,
     refreshConfig,
     setEndpoints,
     setError,
+    setInitialized,
     setLoading
   ]);
 

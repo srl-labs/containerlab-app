@@ -10,7 +10,6 @@ import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worke
 import { lazy, Suspense } from "react";
 import {
   App,
-  ContainerlabImageManagerDialog,
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
@@ -27,11 +26,6 @@ import {
   useRef,
   useState,
   useTopoViewerStore,
-  collectKindImageReferencesFromCustomTemplates,
-  collectKindImageReferencesFromYaml,
-  type ContainerImageSummary,
-  type ImageActionResult,
-  type KindImageReference,
   type ReactRoot,
   type TopologyRef,
   type TopologySnapshot
@@ -39,10 +33,6 @@ import {
 
 import {
   LabTabsBar,
-  LoginPage,
-  RuntimeActionDialogs,
-  RuntimeTerminalWindows,
-  SettingsOverlay,
   createStandaloneLifecycleManager,
   createStandaloneTopologyManager,
   extractEndpointIdFromTopologyId,
@@ -85,10 +75,50 @@ import {
   useLabTabsStore,
   type TerminalPreferences
 } from "./mainApiDependencies";
+import type * as ImageManagerExports from "@srl-labs/clab-ui/image-manager";
+import type {
+  ContainerImageSummary,
+  ImageActionResult,
+  KindImageReference
+} from "@srl-labs/clab-ui/image-manager";
+
+type ImageManagerModule = typeof ImageManagerExports;
+
+let imageManagerModulePromise: Promise<ImageManagerModule> | null = null;
+
+function loadImageManagerModule(): Promise<ImageManagerModule> {
+  imageManagerModulePromise ??= import("@srl-labs/clab-ui/image-manager");
+  return imageManagerModulePromise;
+}
 
 const LazyAttractorEmptyState = lazy(async () => {
   const module = await import("./components/AttractorEmptyState");
   return { default: module.AttractorEmptyState };
+});
+
+const LazyLoginPage = lazy(async () => {
+  const module = await import("./components/LoginPage");
+  return { default: module.LoginPage };
+});
+
+const LazyRuntimeTerminalWindows = lazy(async () => {
+  const module = await import("./components/RuntimeTerminalWindows");
+  return { default: module.RuntimeTerminalWindows };
+});
+
+const LazyRuntimeActionDialogs = lazy(async () => {
+  const module = await import("./components/RuntimeActionDialogs");
+  return { default: module.RuntimeActionDialogs };
+});
+
+const LazySettingsOverlay = lazy(async () => {
+  const module = await import("./components/SettingsOverlay");
+  return { default: module.SettingsOverlay };
+});
+
+const LazyContainerlabImageManagerDialog = lazy(async () => {
+  const module = await loadImageManagerModule();
+  return { default: module.ContainerlabImageManagerDialog };
 });
 
 // Monaco workers setup
@@ -157,6 +187,7 @@ async function activeTopologyImageReferences(endpointId?: string): Promise<KindI
     if (!snapshot.yamlContent.trim()) {
       return [];
     }
+    const { collectKindImageReferencesFromYaml } = await loadImageManagerModule();
     return collectKindImageReferencesFromYaml(snapshot.yamlContent, {
       endpointId: contextEndpointId ?? endpointId,
       label: snapshot.labName || snapshot.yamlFileName,
@@ -168,14 +199,15 @@ async function activeTopologyImageReferences(endpointId?: string): Promise<KindI
 }
 
 async function standaloneImageReferences(endpointId?: string): Promise<KindImageReference[]> {
-  const [activeRefs, customNodes] = await Promise.all([
+  const [activeRefs, customNodes, imageManagerModule] = await Promise.all([
     activeTopologyImageReferences(endpointId),
-    fetchUiCustomNodes(endpointId).catch(() => ({ customNodes: [] }))
+    fetchUiCustomNodes(endpointId).catch(() => ({ customNodes: [] })),
+    loadImageManagerModule()
   ]);
   return [
     ...activeRefs,
     ...runningLabImageReferences(endpointId),
-    ...collectKindImageReferencesFromCustomTemplates(customNodes.customNodes, {
+    ...imageManagerModule.collectKindImageReferencesFromCustomTemplates(customNodes.customNodes, {
       endpointId,
       label: "Custom"
     })
@@ -267,6 +299,7 @@ currentTheme = loadPersistedTheme();
 
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
+const RUNTIME_CHROME_DEFER_MS = 1000;
 function getConfiguredEndpoints() {
   return Array.from(useEndpointStore.getState().endpoints.values());
 }
@@ -1242,6 +1275,53 @@ function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; ri
   return occlusion;
 }
 
+function useDeferredRuntimeChrome(): boolean {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let observer: MutationObserver | null = null;
+    let frameId: number | null = null;
+    let timerId: number | null = null;
+    const scheduleReady = () => {
+      if (frameId !== null || timerId !== null) {
+        return;
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        timerId = window.setTimeout(() => {
+          timerId = null;
+          setReady(true);
+        }, RUNTIME_CHROME_DEFER_MS);
+      });
+    };
+    const scheduleAfterTopoViewerMount = () => {
+      if (document.querySelector("[data-testid='topoviewer-app']")) {
+        observer?.disconnect();
+        observer = null;
+        scheduleReady();
+      }
+    };
+
+    scheduleAfterTopoViewerMount();
+    if (frameId === null && timerId === null) {
+      observer = new MutationObserver(scheduleAfterTopoViewerMount);
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      observer?.disconnect();
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, []);
+
+  return ready;
+}
+
 function StandaloneLabEmptyStateMount() {
   const host = useLabEmptyStatePortalHost();
   const tabs = useLabTabsStore((state) => state.tabs);
@@ -1302,6 +1382,8 @@ function StandaloneApp() {
   );
   const imageManagerOpen = useRuntimeUiStore((state) => state.imageManagerOpen);
   const closeImageManager = useRuntimeUiStore((state) => state.closeImageManager);
+  const terminalCount = useRuntimeUiStore((state) => state.terminals.length);
+  const runtimeChromeReady = useDeferredRuntimeChrome();
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -1501,17 +1583,19 @@ function StandaloneApp() {
   if (startupScreen === "login") {
     return (
       <MuiThemeProvider>
-        <LoginPage
-          defaultApiUrl={defaultApiUrl}
-          endpoints={endpointList}
-          error={error}
-          onAddEndpoint={handleAddEndpoint}
-          onExportEndpoints={handleExportEndpoints}
-          onImportEndpoints={handleImportEndpoints}
-          onReconnectEndpoint={handleReconnectEndpoint}
-          onRemoveEndpoint={handleRemoveEndpoint}
-          onUpdateEndpoint={handleUpdateEndpoint}
-        />
+        <Suspense fallback={null}>
+          <LazyLoginPage
+            defaultApiUrl={defaultApiUrl}
+            endpoints={endpointList}
+            error={error}
+            onAddEndpoint={handleAddEndpoint}
+            onExportEndpoints={handleExportEndpoints}
+            onImportEndpoints={handleImportEndpoints}
+            onReconnectEndpoint={handleReconnectEndpoint}
+            onRemoveEndpoint={handleRemoveEndpoint}
+            onUpdateEndpoint={handleUpdateEndpoint}
+          />
+        </Suspense>
       </MuiThemeProvider>
     );
   }
@@ -1521,39 +1605,53 @@ function StandaloneApp() {
       <App initialData={initialData} runtime={standaloneRuntime!} />
       <StandaloneLabTabsMount />
       <StandaloneLabEmptyStateMount />
-      <MuiThemeProvider>
-        <RuntimeTerminalWindows
-          onSaveTerminalPreferences={handleSaveTerminalPreferences}
-          terminalPreferences={terminalPreferences}
-        />
-        <RuntimeActionDialogs />
-        <ContainerlabImageManagerDialog
-          open={imageManagerOpen}
-          runtime={standaloneRuntime!}
-          onClose={closeImageManager}
-          endpointOptions={endpointList.map((endpoint) => ({
-            id: endpoint.id,
-            label: endpoint.label
-          }))}
-          initialEndpointId={endpointList.find((endpoint) => endpoint.status === "connected")?.id}
-        />
-      </MuiThemeProvider>
-      <SettingsOverlayMounted
-        currentTheme={theme}
-        defaultApiUrl={defaultApiUrl}
-        endpoints={endpointList}
-        onAddEndpoint={handleAddEndpoint}
-        onExportEndpoints={handleExportEndpoints}
-        onImportEndpoints={handleImportEndpoints}
-        onThemeChange={handleThemeChange}
-        onLogout={handleLogout}
-        onReconnectEndpoint={handleReconnectEndpoint}
-        onRemoveEndpoint={handleRemoveEndpoint}
-        onUpdateEndpoint={handleUpdateEndpoint}
-        onSetEndpointSessionDuration={handleSetEndpointSessionDuration}
-        onSaveTerminalPreferences={handleSaveTerminalPreferences}
-        terminalPreferences={terminalPreferences}
-      />
+      {runtimeChromeReady ? (
+        <>
+          <MuiThemeProvider>
+            {terminalCount > 0 ? (
+              <Suspense fallback={null}>
+                <LazyRuntimeTerminalWindows
+                  onSaveTerminalPreferences={handleSaveTerminalPreferences}
+                  terminalPreferences={terminalPreferences}
+                />
+              </Suspense>
+            ) : null}
+            <Suspense fallback={null}>
+              <LazyRuntimeActionDialogs />
+            </Suspense>
+            {imageManagerOpen ? (
+              <Suspense fallback={null}>
+                <LazyContainerlabImageManagerDialog
+                  open={imageManagerOpen}
+                  runtime={standaloneRuntime!}
+                  onClose={closeImageManager}
+                  endpointOptions={endpointList.map((endpoint) => ({
+                    id: endpoint.id,
+                    label: endpoint.label
+                  }))}
+                  initialEndpointId={endpointList.find((endpoint) => endpoint.status === "connected")?.id}
+                />
+              </Suspense>
+            ) : null}
+          </MuiThemeProvider>
+          <SettingsOverlayMounted
+            currentTheme={theme}
+            defaultApiUrl={defaultApiUrl}
+            endpoints={endpointList}
+            onAddEndpoint={handleAddEndpoint}
+            onExportEndpoints={handleExportEndpoints}
+            onImportEndpoints={handleImportEndpoints}
+            onThemeChange={handleThemeChange}
+            onLogout={handleLogout}
+            onReconnectEndpoint={handleReconnectEndpoint}
+            onRemoveEndpoint={handleRemoveEndpoint}
+            onUpdateEndpoint={handleUpdateEndpoint}
+            onSetEndpointSessionDuration={handleSetEndpointSessionDuration}
+            onSaveTerminalPreferences={handleSaveTerminalPreferences}
+            terminalPreferences={terminalPreferences}
+          />
+        </>
+      ) : null}
     </>
   );
 }
@@ -1606,22 +1704,24 @@ function SettingsOverlayMounted(props: {
 
   return createPortal(
     <MuiThemeProvider>
-      <SettingsOverlay
-        currentTheme={props.currentTheme}
-        defaultApiUrl={props.defaultApiUrl}
-        endpoints={props.endpoints}
-        onAddEndpoint={props.onAddEndpoint}
-        onExportEndpoints={props.onExportEndpoints}
-        onImportEndpoints={props.onImportEndpoints}
-        onThemeChange={props.onThemeChange}
-        onLogout={props.onLogout}
-        onReconnectEndpoint={props.onReconnectEndpoint}
-        onRemoveEndpoint={props.onRemoveEndpoint}
-        onUpdateEndpoint={props.onUpdateEndpoint}
-        onSetEndpointSessionDuration={props.onSetEndpointSessionDuration}
-        onSaveTerminalPreferences={props.onSaveTerminalPreferences}
-        terminalPreferences={props.terminalPreferences}
-      />
+      <Suspense fallback={null}>
+        <LazySettingsOverlay
+          currentTheme={props.currentTheme}
+          defaultApiUrl={props.defaultApiUrl}
+          endpoints={props.endpoints}
+          onAddEndpoint={props.onAddEndpoint}
+          onExportEndpoints={props.onExportEndpoints}
+          onImportEndpoints={props.onImportEndpoints}
+          onThemeChange={props.onThemeChange}
+          onLogout={props.onLogout}
+          onReconnectEndpoint={props.onReconnectEndpoint}
+          onRemoveEndpoint={props.onRemoveEndpoint}
+          onUpdateEndpoint={props.onUpdateEndpoint}
+          onSetEndpointSessionDuration={props.onSetEndpointSessionDuration}
+          onSaveTerminalPreferences={props.onSaveTerminalPreferences}
+          terminalPreferences={props.terminalPreferences}
+        />
+      </Suspense>
     </MuiThemeProvider>,
     overlayContainer
   );

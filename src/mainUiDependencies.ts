@@ -8,14 +8,6 @@ import {
 } from "@srl-labs/clab-ui/host";
 import { applyThemeVars, MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import {
-  ContainerlabImageManagerDialog,
-  collectKindImageReferencesFromCustomTemplates,
-  collectKindImageReferencesFromYaml,
-  type ContainerImageSummary,
-  type ImageActionResult,
-  type KindImageReference
-} from "@srl-labs/clab-ui/image-manager";
-import {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
@@ -27,7 +19,6 @@ import {
 
 export {
   App,
-  ContainerlabImageManagerDialog,
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_FIT_VIEWPORT,
@@ -45,11 +36,6 @@ export {
   useRef,
   useState,
   useTopoViewerStore,
-  collectKindImageReferencesFromCustomTemplates,
-  collectKindImageReferencesFromYaml,
-  type ContainerImageSummary,
-  type ImageActionResult,
-  type KindImageReference,
   type ReactRoot,
   type TopologyRef,
   type TopologySnapshot

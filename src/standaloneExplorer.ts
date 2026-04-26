@@ -37,7 +37,7 @@ import {
   promptForEndpointSelection,
   saveConfigsFlow,
   type CloneRepoDialogTarget
-} from "./components/RuntimeActionDialogs";
+} from "./runtimeActionFlows";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
