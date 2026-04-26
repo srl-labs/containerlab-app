@@ -65,6 +65,7 @@ import {
   type EndpointImportResult,
   type EndpointSessionDuration
 } from "../stores/endpointStore";
+import { AboutSettingsContent } from "./AboutSettingsContent";
 import { EndpointManager } from "./EndpointManager";
 
 type SettingsSectionKey = "endpoints" | "general" | "terminal" | "capture" | "about";
@@ -893,54 +894,12 @@ export function SettingsOverlay({
         );
       case "about":
         return (
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="h6">About</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Runtime version details and standalone diagnostics entrypoints.
-              </Typography>
-            </Box>
-            <SectionCard
-              title="Version & Updates"
-              description="Version details and update status are shown directly here."
-              tone="info"
-            >
-              {versionError ? (
-                <Alert
-                  severity="error"
-                  variant="outlined"
-                  sx={{
-                    color: "text.primary",
-                    borderColor: "error.main",
-                    bgcolor: "background.paper",
-                    "& .MuiAlert-icon": {
-                      color: "error.main"
-                    }
-                  }}
-                >
-                  {versionError}
-                </Alert>
-              ) : null}
-              <TextField
-                label="Containerlab Version"
-                value={versionLoading ? "Loading..." : versionInfo}
-                fullWidth
-                multiline
-                minRows={4}
-                slotProps={{ input: { readOnly: true } }}
-                data-testid="standalone-settings-version-info"
-              />
-              <TextField
-                label="Update Check"
-                value={versionLoading ? "Loading..." : versionCheck}
-                fullWidth
-                multiline
-                minRows={4}
-                slotProps={{ input: { readOnly: true } }}
-                data-testid="standalone-settings-version-check"
-              />
-            </SectionCard>
-          </Stack>
+          <AboutSettingsContent
+            versionCheck={versionCheck}
+            versionError={versionError}
+            versionInfo={versionInfo}
+            versionLoading={versionLoading}
+          />
         );
       case "capture":
         return (

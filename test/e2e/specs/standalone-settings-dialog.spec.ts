@@ -79,6 +79,11 @@ test.describe("Standalone Settings Dialog", () => {
 
     await dialog.locator(SEL_NAV_ABOUT).click();
     await expect(dialog.getByRole("heading", { name: "About", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "TopoViewer", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Documentation", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Source Code", exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole("link", { name: /vscode-containerlab/ })).toHaveCount(0);
     await expect(dialog.getByLabel("Containerlab Version")).toBeVisible();
     await expect(dialog.getByLabel("Update Check")).toBeVisible();
   });
