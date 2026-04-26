@@ -12,6 +12,7 @@ import { getRuntimeContainersForTopology, runtimeContainersEqual } from "./runti
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
+import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
   extractEndpointIdFromTopologyId,
   type DeploymentState,
@@ -493,10 +494,10 @@ export function createStandaloneTopologyManager(
     }
 
     closeTopologyEventStream();
-    const url = new URL("/api/topology/events", window.location.origin);
+    const url = new URL(standaloneServerUrl("/api/topology/events"));
     url.searchParams.set("sessionId", sessionId);
     url.searchParams.set("endpointId", endpointId);
-    const source = new EventSource(url);
+    const source = new EventSource(url, { withCredentials: true });
     topologyEventSource = source;
     topologyEventStreamEndpointId = endpointId;
     topologyEventStreamSessionId = sessionId;

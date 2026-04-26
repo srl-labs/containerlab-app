@@ -601,7 +601,12 @@ export class ClabApiClient {
       headers["Content-Type"] = contentType;
     }
 
-    const res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, { method, headers, body });
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, { method, headers, body });
+    } catch (error) {
+      throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
       const err: HttpError = new Error(`${method} ${path} failed (${res.status}): ${text}`);
@@ -1140,6 +1145,16 @@ function toStringArray(value: unknown): string[] | undefined {
   }
   const lines = value.filter((line): line is string => typeof line === "string");
   return lines.length > 0 ? lines : [];
+}
+
+function upstreamNetworkErrorMessage(baseUrl: string, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error ? error.cause : undefined;
+  const causeMessage =
+    cause instanceof Error && cause.message.trim().length > 0 && cause.message !== message
+      ? `: ${cause.message}`
+      : "";
+  return `Unable to connect to clab-api-server at ${baseUrl}: ${message}${causeMessage}`;
 }
 
 function normalizeLifecycleActionResult(payload: unknown): LifecycleActionResult {

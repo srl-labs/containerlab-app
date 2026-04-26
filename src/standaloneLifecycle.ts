@@ -8,6 +8,7 @@ import {
   type TopologyRef
 } from "@srl-labs/clab-ui/session";
 
+import { standaloneServerUrl } from "./standaloneServerOrigin";
 import type {
   DeploymentState,
   LifecycleCommandEndpoint,
@@ -201,7 +202,7 @@ async function queryLabRunningState(target: {
   if (target.sessionId) {
     payload.sessionId = target.sessionId;
   }
-  const response = await fetch("/api/lab/status", {
+  const response = await fetch(standaloneServerUrl("/api/lab/status"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -308,7 +309,7 @@ export function createStandaloneLifecycleManager(
       payload.sessionId = invokeOptions.sessionId;
     }
 
-    const response = await fetch(`/api/lab/${endpoint}`, {
+    const response = await fetch(standaloneServerUrl(`/api/lab/${endpoint}`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -351,7 +352,7 @@ export function createStandaloneLifecycleManager(
       payload.sessionId = invokeOptions.sessionId;
     }
 
-    const response = await fetch(`/api/lab/${endpoint}/stream`, {
+    const response = await fetch(standaloneServerUrl(`/api/lab/${endpoint}/stream`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

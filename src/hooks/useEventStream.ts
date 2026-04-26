@@ -5,6 +5,7 @@ import {
   type EndpointConfig
 } from "../stores/endpointStore";
 import { useLabStore, type EventData } from "../stores/labStore";
+import { standaloneServerUrl } from "../standaloneServerOrigin";
 
 export function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
   const processEvent = useLabStore((state) => state.processEvent);
@@ -36,9 +37,9 @@ export function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void 
         continue;
       }
 
-      const url = new URL("/api/events", window.location.origin);
+      const url = new URL(standaloneServerUrl("/api/events"));
       url.searchParams.set("endpointId", endpoint.id);
-      const source = new EventSource(url);
+      const source = new EventSource(url, { withCredentials: true });
       sourcesRef.current.set(endpoint.id, source);
 
       source.onopen = () => {

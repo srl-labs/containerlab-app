@@ -89,6 +89,9 @@ export default defineConfig(({ command }) => {
         include: /\.(?:jsx|tsx)$/
       })
     ],
+    define: {
+      "import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN": JSON.stringify(apiServerTarget)
+    },
     root: __dirname,
     publicDir: path.resolve(__dirname, "resources"),
     resolve: {

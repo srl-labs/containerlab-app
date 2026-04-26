@@ -8,6 +8,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ClabApiClient } from "./clabApiClient.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
+import { streamResponseHeaders } from "./streamResponseHeaders.js";
 
 type EndpointResolver = (
   request: FastifyRequest,
@@ -31,12 +32,12 @@ export function registerEventsProxy(app: FastifyInstance, resolveEndpoint: Endpo
     const { client, endpoint } = resolved;
 
     // Set SSE headers
-    reply.raw.writeHead(200, {
+    reply.raw.writeHead(200, streamResponseHeaders(request, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
       "X-Accel-Buffering": "no"
-    });
+    }));
 
     // Send initial SSE comment to establish connection
     reply.raw.write(":ok\n\n");

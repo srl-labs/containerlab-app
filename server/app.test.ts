@@ -97,6 +97,30 @@ function textResponse(payload: string, status = 200): Response {
   return new Response(payload, { status });
 }
 
+function ndjsonResponse(payload: string): Response {
+  return new Response(payload, {
+    headers: { "content-type": "application/x-ndjson; charset=utf-8" }
+  });
+}
+
+function failingNdjsonResponse(firstChunk: string, errorMessage: string): Response {
+  const encoder = new TextEncoder();
+  let readCount = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      readCount += 1;
+      if (readCount === 1) {
+        controller.enqueue(encoder.encode(firstChunk));
+        return;
+      }
+      controller.error(new Error(errorMessage));
+    }
+  });
+  return new Response(stream, {
+    headers: { "content-type": "application/x-ndjson; charset=utf-8" }
+  });
+}
+
 function extractSessionCookie(
   response: { headers: Record<string, number | string | string[] | undefined> }
 ): string {
@@ -138,6 +162,40 @@ async function loginEndpoint(
   return {
     cookie: cookie ?? extractSessionCookie(response),
     endpointId: payload.endpoint.id
+  };
+}
+
+function mockLoginAndTopology(context: TestAppContext): void {
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/topology/files", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    return jsonResponse([
+      {
+        labName: "demo",
+        yamlFileName: "labs/demo.clab.yml",
+        annotationsFileName: "labs/demo.clab.yml.annotations.json",
+        hasAnnotations: true,
+        deploymentState: "undeployed"
+      }
+    ]);
+  });
+}
+
+function demoTopologyRef(endpointId: string): {
+  topologyId: string;
+  labName: string;
+  yamlPath: string;
+  annotationsPath: string;
+  source: "standalone";
+} {
+  return {
+    topologyId: `standalone:${endpointId}::labs/demo.clab.yml`,
+    labName: "demo",
+    yamlPath: "labs/demo.clab.yml",
+    annotationsPath: "labs/demo.clab.yml.annotations.json",
+    source: "standalone"
   };
 }
 
@@ -388,6 +446,154 @@ test("/files proxies topology entries with bearer auth and Explorer topology ref
       }
     }
   ]);
+});
+
+test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "log", line: "deploying", stream: "stdout" })}\n${JSON.stringify({ type: "done", message: "deployed" })}\n`;
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    assert.equal(call.headers.get("content-type"), "application/json");
+    assert.equal(call.body, "{}");
+    assert.equal(call.url.searchParams.get("stream"), "true");
+    assert.equal(call.url.searchParams.get("path"), "labs/demo.clab.yml");
+    return ndjsonResponse(upstreamBody);
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/deploy/stream",
+    headers: {
+      cookie,
+      origin: "https://localhost:5173"
+    },
+    payload: { topologyRef: demoTopologyRef(endpointId) }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.match(response.headers["content-type"] as string, /application\/x-ndjson/);
+  assert.equal(response.headers["access-control-allow-origin"], "https://localhost:5173");
+  assert.equal(response.headers["access-control-allow-credentials"], "true");
+  assert.equal(response.body, upstreamBody);
+});
+
+test("/api/events includes CORS headers for direct Vite dev EventSource", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on("GET", /^http:\/\/api\.example\.test\/api\/v1\/events\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    assert.equal(call.url.searchParams.get("initialState"), "true");
+    assert.equal(call.url.searchParams.get("interfaceStats"), "true");
+    return ndjsonResponse(`${JSON.stringify({ event: "ready" })}\n`);
+  });
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/events?endpointId=${endpointId}`,
+    headers: {
+      cookie,
+      origin: "https://localhost:5173"
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.match(response.headers["content-type"] as string, /text\/event-stream/);
+  assert.equal(response.headers["access-control-allow-origin"], "https://localhost:5173");
+  assert.equal(response.headers["access-control-allow-credentials"], "true");
+  assert.match(response.body, /^:ok\n\nid: 1\ndata: {"event":"ready"}\n\n$/);
+});
+
+test("/api/lab/destroy/stream forwards DELETE lifecycle request with cleanup", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "destroyed" })}\n`;
+  context.fetchMock.on("DELETE", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    assert.equal(call.headers.get("content-type"), null);
+    assert.equal(call.body, undefined);
+    assert.equal(call.url.searchParams.get("stream"), "true");
+    assert.equal(call.url.searchParams.get("cleanup"), "true");
+    return ndjsonResponse(upstreamBody);
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/destroy/stream",
+    headers: { cookie },
+    payload: {
+      cleanup: true,
+      topologyRef: demoTopologyRef(endpointId)
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
+test("/api/lab/redeploy/stream forwards PUT lifecycle request", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "redeployed" })}\n`;
+  context.fetchMock.on("PUT", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    assert.equal(call.headers.get("content-type"), "application/json");
+    assert.equal(call.body, "{}");
+    assert.equal(call.url.searchParams.get("stream"), "true");
+    return ndjsonResponse(upstreamBody);
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/redeploy/stream",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
+test("/api/lab/deploy/stream converts upstream stream errors to NDJSON errors", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const firstChunk = `${JSON.stringify({ type: "log", line: "starting", stream: "stdout" })}\n`;
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/, () => {
+    return failingNdjsonResponse(firstChunk, "upstream stream reset");
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/deploy/stream",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.match(response.headers["content-type"] as string, /application\/x-ndjson/);
+  assert.match(response.body, /^{"type":"log","line":"starting","stream":"stdout"}\n/);
+  assert.match(response.body, /{"type":"error","error":"upstream stream reset"}\n$/);
 });
 
 test("/api/runtime/inspect/all scopes duplicate lab names across endpoints", async (t) => {

@@ -12,6 +12,7 @@ import {
   resolveCanonicalStandaloneTopologyRef
 } from "./topologyIdentity.js";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
+import { streamResponseHeaders } from "./streamResponseHeaders.js";
 
 interface LabTarget {
   endpointId?: string;
@@ -46,19 +47,41 @@ class RequestError extends Error {
   }
 }
 
-async function forwardNdjsonStream(reply: FastifyReply, response: Response): Promise<void> {
-  reply.raw.writeHead(200, {
+function lifecycleStreamErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  const message = String(error).trim();
+  return message.length > 0 ? message : "Lifecycle stream interrupted.";
+}
+
+function writeNdjsonLifecycleError(reply: FastifyReply, error: unknown): void {
+  if (reply.raw.destroyed || reply.raw.writableEnded) {
+    return;
+  }
+  reply.raw.write(
+    `${JSON.stringify({
+      type: "error",
+      error: lifecycleStreamErrorMessage(error)
+    })}\n`
+  );
+}
+
+async function forwardNdjsonStream(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  response: Response
+): Promise<void> {
+  reply.raw.writeHead(200, streamResponseHeaders(request, {
     "Content-Type": "application/x-ndjson; charset=utf-8",
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
     "X-Accel-Buffering": "no",
     "X-Content-Type-Options": "nosniff"
-  });
+  }));
 
   if (!response.body) {
-    reply.raw.write(
-      `${JSON.stringify({ type: "error", error: "Lifecycle stream has no response body" })}\n`
-    );
+    writeNdjsonLifecycleError(reply, new Error("Lifecycle stream has no response body"));
     reply.raw.end();
     return;
   }
@@ -74,11 +97,12 @@ async function forwardNdjsonStream(reply: FastifyReply, response: Response): Pro
         reply.raw.write(Buffer.from(value));
       }
     }
+  } catch (error) {
+    writeNdjsonLifecycleError(reply, error);
   } finally {
     reader.cancel().catch(() => {});
+    reply.raw.end();
   }
-
-  reply.raw.end();
 }
 
 async function resolveLabTarget(
@@ -198,7 +222,7 @@ export function registerLabProxy(
           path: target.yamlPath,
           cleanup: request.body.cleanup === true
         });
-        await forwardNdjsonStream(reply, streamResponse);
+        await forwardNdjsonStream(request, reply, streamResponse);
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -250,7 +274,7 @@ export function registerLabProxy(
         const streamResponse = await client.openLifecycleStream(endpoint.token, "destroy", target.labName, {
           cleanup: request.body.cleanup === true
         });
-        await forwardNdjsonStream(reply, streamResponse);
+        await forwardNdjsonStream(request, reply, streamResponse);
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -302,7 +326,7 @@ export function registerLabProxy(
         const streamResponse = await client.openLifecycleStream(endpoint.token, "redeploy", target.labName, {
           cleanup: request.body.cleanup === true
         });
-        await forwardNdjsonStream(reply, streamResponse);
+        await forwardNdjsonStream(request, reply, streamResponse);
       } catch (error) {
         return handleRouteError(reply, error);
       }

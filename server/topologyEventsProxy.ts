@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 import type { ClabApiClient } from "./clabApiClient.js";
 import type { EndpointEntry } from "./endpointSessionStore.js";
+import { streamResponseHeaders } from "./streamResponseHeaders.js";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
 
 type EndpointResolver = (
@@ -76,12 +77,12 @@ export function registerTopologyEventsProxy(
         return reply.status(404).send({ error: "Topology session not found" });
       }
 
-      reply.raw.writeHead(200, {
+      reply.raw.writeHead(200, streamResponseHeaders(request, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no"
-      });
+      }));
       reply.raw.write(":ok\n\n");
 
       let aborted = false;
