@@ -165,6 +165,33 @@ async function setEditorValue(
   );
 }
 
+async function editorValue(page: Page): Promise<string> {
+  return page.evaluate(() => window.__clabMonacoDebug?.model.getValue() ?? "");
+}
+
+async function triggerSuggest(page: Page): Promise<void> {
+  await page.evaluate(() => window.__clabMonacoDebug?.triggerSuggest());
+}
+
+async function dispatchEditorPaste(page: Page, text: string): Promise<void> {
+  await page.evaluate((pasteText) => {
+    const debug = window.__clabMonacoDebug;
+    const domNode = debug?.editor.getDomNode();
+    if (!debug || !domNode) throw new Error("Monaco debug API is not available");
+
+    const data = new DataTransfer();
+    data.setData("text/plain", pasteText);
+    const event = new ClipboardEvent("paste", {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: data
+    });
+
+    debug.editor.focus();
+    domNode.dispatchEvent(event);
+  }, text);
+}
+
 async function selectEditorRange(
   page: Page,
   range: {
@@ -245,9 +272,34 @@ test.describe("standalone Monaco YAML editor", () => {
       );
 
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nok", 4, 16);
-    await page.evaluate(() => window.__clabMonacoDebug?.triggerSuggest());
+    await triggerSuggest(page);
     await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
     await expect(page.locator(".suggest-widget")).toContainText("nokia_srlinux");
+
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "Tab should indent instead of accepting the regular suggestion widget"
+      })
+      .not.toContain("nokia_srlinux");
+
+    await page.keyboard.press("Escape");
+    await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nok", 4, 16);
+    await triggerSuggest(page);
+    await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
+    await page.keyboard.press("Enter");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "Enter should accept the selected regular suggestion"
+      })
+      .toContain("kind: nokia_srlinux");
+
+    await page.keyboard.press("Escape");
+    await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: ", 4, 13);
+    await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".suggest-widget")).toContainText("6wind_vsr");
 
     await page.keyboard.press("Escape");
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: ", 4, 13);
@@ -267,5 +319,104 @@ test.describe("standalone Monaco YAML editor", () => {
     await expect(page.locator(".monaco-hover")).toContainText("Allowed values");
 
     expect(consoleErrors.filter((entry) => entry.includes("Missing requestHandler"))).toEqual([]);
+  });
+
+  test("does not fall back to root suggestions in nested node config", async ({ page }) => {
+    await mockStandaloneApi(page);
+    await openYamlEditor(page);
+
+    const directNodeBody = [
+      "topology:",
+      "  nodes:",
+      "    srl1:",
+      "      kind: nokia_srlinux",
+      "      type: ixrd1",
+      "      image: ghcr.io/nokia/srlinux:latest",
+      "    client1:",
+      "      kind: linux",
+      "      image: ghcr.io/srl-labs/network-multitool:latest",
+      "      type: iasd                  ",
+      "    asdasd:",
+      "      "
+    ].join("\n");
+
+    await setEditorValue(page, directNodeBody, 12, 7);
+    await triggerSuggest(page);
+    await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
+    await expect(page.locator(".suggest-widget")).toContainText("kind");
+    await expect(page.locator(".suggest-widget")).not.toContainText("topology");
+
+    const nestedUnknown = [
+      "topology:",
+      "  nodes:",
+      "    asdasd:",
+      "      below asdad:",
+      "        "
+    ].join("\n");
+
+    await page.keyboard.press("Escape");
+    await setEditorValue(page, nestedUnknown, 5, 9);
+    await triggerSuggest(page);
+    await expect(page.locator(".suggest-widget")).not.toContainText("topology");
+  });
+
+  test("preserves pasted indentation and undoes a paste as one edit", async ({ page }) => {
+    await mockStandaloneApi(page);
+    await openYamlEditor(page);
+
+    const base = "name: demo\ntopology:\n  nodes:\n";
+    const pasted = "    leaf1:\n      kind: nokia_srlinux\n      image: ghcr.io/nokia/srlinux\n";
+    await setEditorValue(page, base, 4, 1);
+    await dispatchEditorPaste(page, pasted);
+
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "paste should preserve the clipboard indentation exactly"
+      })
+      .toBe(base + pasted);
+
+    await page.keyboard.press(process.platform === "darwin" ? "Meta+Z" : "Control+Z");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "one undo should remove the complete pasted block"
+      })
+      .toBe(base);
+  });
+
+  test("does not open empty suggestions for free-form YAML values", async ({ page }) => {
+    await mockStandaloneApi(page);
+    await openYamlEditor(page);
+
+    await setEditorValue(page, "name:", 1, 6);
+    await page.keyboard.press("Space");
+    await page.keyboard.type("atest");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "typing a free-form topology name should update the model"
+      })
+      .toBe("name: atest");
+    await expect(page.locator(".suggest-widget")).toBeHidden({ timeout: 1000 });
+
+    const text = [
+      "name: atest",
+      "",
+      "topology:",
+      "  nodes:",
+      "    client2:",
+      "      kind: 6wind_vsr",
+      "      image:"
+    ].join("\n");
+    await setEditorValue(page, text, 7, 13);
+    await page.keyboard.press("Space");
+    await expect
+      .poll(async () => editorValue(page), {
+        timeout: 5000,
+        message: "typing a space after image: should update the model"
+      })
+      .toBe(`${text} `);
+    await expect(page.locator(".suggest-widget")).toBeHidden({ timeout: 1000 });
   });
 });

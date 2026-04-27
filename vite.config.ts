@@ -45,6 +45,19 @@ const localClabUiEntrypoints = new Map([
     "@srl-labs/clab-ui/wireshark-vnc",
     path.join(localClabUiDistRoot, "wireshark-vnc/index.js")
   ],
+  ["@srl-labs/clab-ui/monaco/core", path.join(localClabUiDistRoot, "monaco/core.js")],
+  [
+    "@srl-labs/clab-ui/monaco/editor-worker",
+    path.join(localClabUiDistRoot, "monaco/editor-worker.js")
+  ],
+  [
+    "@srl-labs/clab-ui/monaco/json-worker",
+    path.join(localClabUiDistRoot, "monaco/json-worker.js")
+  ],
+  [
+    "@srl-labs/clab-ui/monaco/yaml-worker",
+    path.join(localClabUiDistRoot, "monaco/yaml-worker.js")
+  ],
   [
     "@srl-labs/clab-ui/styles/global.css",
     path.join(localClabUiDistRoot, "styles/global.css")
@@ -61,6 +74,22 @@ const clabUiLocalAliases = useLocalClabUi
       replacement
     }))
   : [];
+const clabUiLocalWorkerAliases = useLocalClabUi
+  ? [
+      {
+        find: /^@srl-labs\/clab-ui\/monaco\/editor-worker\?worker$/,
+        replacement: `${path.join(localClabUiDistRoot, "monaco/editor-worker.js")}?worker`
+      },
+      {
+        find: /^@srl-labs\/clab-ui\/monaco\/json-worker\?worker$/,
+        replacement: `${path.join(localClabUiDistRoot, "monaco/json-worker.js")}?worker`
+      },
+      {
+        find: /^@srl-labs\/clab-ui\/monaco\/yaml-worker\?worker$/,
+        replacement: `${path.join(localClabUiDistRoot, "monaco/yaml-worker.js")}?worker`
+      }
+    ]
+  : [];
 
 const localClabUiWarmupFiles = useLocalClabUi
   ? [
@@ -69,6 +98,10 @@ const localClabUiWarmupFiles = useLocalClabUi
       "../clab-ui/dist/session/index.js",
       "../clab-ui/dist/theme/index.js",
       "../clab-ui/dist/styles/global.css",
+      "../clab-ui/dist/monaco/core.js",
+      "../clab-ui/dist/monaco/editor-worker.js",
+      "../clab-ui/dist/monaco/json-worker.js",
+      "../clab-ui/dist/monaco/yaml-worker.js",
       "../clab-ui/dist/image-manager/index.js",
       "../clab-ui/dist/chunks/*.js"
     ]
@@ -79,6 +112,9 @@ const localClabUiOptimizedDependencies = useLocalClabUi
       (specifier) => !specifier.endsWith(".css")
     )
   : [];
+const monacoCoreAliasTarget = useLocalClabUi
+  ? path.join(localClabUiDistRoot, "monaco/core.js")
+  : "@srl-labs/clab-ui/monaco/core";
 
 export default defineConfig(({ command }) => {
   const webTls = command === "serve" ? resolveWebTlsConfig() : undefined;
@@ -98,8 +134,9 @@ export default defineConfig(({ command }) => {
       alias: [
         {
           find: /^monaco-editor$/,
-          replacement: path.resolve(__dirname, "src/monacoCore.ts")
+          replacement: monacoCoreAliasTarget
         },
+        ...clabUiLocalWorkerAliases,
         ...clabUiLocalAliases
       ],
       dedupe: [

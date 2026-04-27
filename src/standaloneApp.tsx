@@ -5,9 +5,9 @@
  * through the Fastify backend instead of using mock data.
  */
 import "@srl-labs/clab-ui/styles/global.css";
-import * as EditorWorkerModule from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import * as JsonWorkerModule from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import * as YamlWorkerModule from "./monacoYaml.worker?worker";
+import * as EditorWorkerModule from "@srl-labs/clab-ui/monaco/editor-worker?worker";
+import * as JsonWorkerModule from "@srl-labs/clab-ui/monaco/json-worker?worker";
+import * as YamlWorkerModule from "@srl-labs/clab-ui/monaco/yaml-worker?worker";
 import { lazy, Suspense } from "react";
 import {
   App,
