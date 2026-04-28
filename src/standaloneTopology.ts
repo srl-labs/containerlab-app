@@ -17,14 +17,17 @@ import {
   extractEndpointIdFromTopologyId,
   type DeploymentState,
   type ExplorerTreeItem,
+  type LoadTopologyTarget,
   type TopologyDocEventMessage,
   type TopologyFileEntry,
+  type TopologySourcePreference,
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
+  findTopologyFileEntryByPath,
   isTopologyRunning,
-  normalizeStandaloneTopologyRef,
   normalizeLabName,
   normalizePathValue,
+  resolveStandaloneLoadTopologyTarget,
   topologyEntryLabName,
   topologyPathsLikelyMatch
 } from "./standaloneHostShared";
@@ -41,7 +44,7 @@ interface StandaloneTopologyManagerOptions {
 interface HostContextOptions {
   deploymentState?: DeploymentState;
   mode?: "edit" | "view";
-  sourcePreference?: "api-file" | "running-lab-doc";
+  sourcePreference?: TopologySourcePreference;
 }
 
 export interface StandaloneTopologyManager {
@@ -78,7 +81,7 @@ export function createStandaloneTopologyManager(
   let currentFilePath: string | null = null;
   let currentSessionId: string | null = null;
   let currentTopologyRef: TopologyRef | null = null;
-  let currentSourcePreference: "api-file" | "running-lab-doc" = "api-file";
+  let currentSourcePreference: TopologySourcePreference = "api-file";
   let standaloneAuthenticated = false;
   const fileListCache = new Map<string, { entries: TopologyFileEntry[]; fetchedAt: number }>();
   const fileListInFlight = new Map<string, Promise<TopologyFileEntry[]>>();
@@ -135,11 +138,6 @@ export function createStandaloneTopologyManager(
       return value;
     }
     return undefined;
-  }
-
-  function findEntryByPath(files: TopologyFileEntry[], pathValue: string): TopologyFileEntry | undefined {
-    const normalized = normalizePathValue(pathValue);
-    return files.find((entry) => normalizePathValue(entry.path) === normalized);
   }
 
   function findEntriesByPathHint(
@@ -543,7 +541,7 @@ export function createStandaloneTopologyManager(
   async function resolveDeploymentState(topologyRef: TopologyRef): Promise<DeploymentState | undefined> {
     const endpointId = resolveTopologyEndpointId(topologyRef);
     const files = endpointId ? await listTopologyFilesForEndpoint(endpointId) : await listTopologyFiles();
-    const exact = findEntryByPath(files, topologyRef.yamlPath);
+    const exact = findTopologyFileEntryByPath(files, topologyRef.yamlPath);
     const fileState = normalizeDeploymentState(exact?.deploymentState);
     if (isTopologyRunning(topologyRef, options.getLabs())) {
       return "deployed";
@@ -554,32 +552,26 @@ export function createStandaloneTopologyManager(
     return undefined;
   }
 
-  interface LoadTopologyTarget {
-    canonicalEndpointId: string;
-    canonicalTopologyRef: TopologyRef;
-    sourcePreference: "api-file" | "running-lab-doc";
-  }
-
   async function resolveLoadTopologyTarget(
     topologyRef: TopologyRef,
     endpointId: string,
     loadOptions: { deploymentState?: DeploymentState; endpointId?: string }
   ): Promise<LoadTopologyTarget> {
     const files = await listTopologyFilesForEndpoint(endpointId);
-    const entry = findEntryByPath(files, topologyRef.yamlPath);
-    const fallbackRunningLab =
-      !entry?.topologyRef &&
-      (isTopologyRunning(topologyRef, options.getLabs()) || loadOptions.deploymentState === "deployed");
-    if (!entry?.topologyRef && !fallbackRunningLab) {
+    const target = resolveStandaloneLoadTopologyTarget({
+      topologyRef,
+      endpointId,
+      deploymentState: loadOptions.deploymentState,
+      endpoints: options.getEndpoints(),
+      files,
+      labs: options.getLabs()
+    });
+    if (!target) {
       throw new Error(
         `No API-backed topology file found for "${topologyRef.yamlPath}". Standalone mode only opens topologies exposed by /files.`
       );
     }
-    return {
-      canonicalTopologyRef: entry?.topologyRef ?? normalizeStandaloneTopologyRef(topologyRef, endpointId),
-      canonicalEndpointId: entry?.endpointId ?? endpointId,
-      sourcePreference: entry?.topologyRef ? "api-file" : "running-lab-doc"
-    };
+    return target;
   }
 
   async function loadCustomIconsForTopology(topologyRef: TopologyRef): Promise<void> {

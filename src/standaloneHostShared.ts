@@ -1,5 +1,6 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
+import type { EndpointConfig } from "./stores/endpointStore";
 import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";
 
 export const TREE_ITEM_NONE = 0;
@@ -10,6 +11,7 @@ export type DeploymentState = "deployed" | "undeployed" | "unknown";
 export type LifecycleCommandType = "deploy" | "destroy" | "redeploy";
 export type LifecycleCommandStream = "stdout" | "stderr";
 export type LifecycleCommandEndpoint = "deploy" | "destroy" | "redeploy";
+export type TopologySourcePreference = "api-file" | "running-lab-doc";
 
 export interface ExplorerTreeItem {
   id?: string;
@@ -46,6 +48,21 @@ export interface TopologyFileEntry {
   topologyRef: TopologyRef;
 }
 
+export interface LoadTopologyTarget {
+  canonicalEndpointId: string;
+  canonicalTopologyRef: TopologyRef;
+  sourcePreference: TopologySourcePreference;
+}
+
+export interface ResolveLoadTopologyTargetInput {
+  deploymentState?: DeploymentState;
+  endpointId: string;
+  endpoints: EndpointConfig[];
+  files: TopologyFileEntry[];
+  labs: Map<string, LabState>;
+  topologyRef: TopologyRef;
+}
+
 export interface TopologyDocEventMessage {
   type: "topology-doc";
   labName: string;
@@ -79,6 +96,27 @@ export function normalizePathValue(pathValue: string): string {
 
 export function normalizeLabName(labName: string | undefined): string {
   return (labName ?? "").trim().toLowerCase();
+}
+
+export function getLabOwner(lab: LabState | undefined): string {
+  if (!lab) {
+    return "";
+  }
+  if (lab.owner.trim().length > 0) {
+    return lab.owner.trim();
+  }
+  return lab.containers.values().next().value?.owner?.trim() ?? "";
+}
+
+export function isNonOwnedLabForEndpoint(
+  lab: LabState | undefined,
+  endpointUsername: string | undefined
+): boolean {
+  const owner = getLabOwner(lab);
+  if (!owner || !endpointUsername) {
+    return false;
+  }
+  return normalizeLabName(owner) !== normalizeLabName(endpointUsername);
 }
 
 function hasPathBoundarySuffix(pathValue: string, suffix: string): boolean {
@@ -194,6 +232,14 @@ export function buildStandaloneTopologyRefFromPath(
   }, endpointId);
 }
 
+export function findTopologyFileEntryByPath(
+  files: TopologyFileEntry[],
+  pathValue: string
+): TopologyFileEntry | undefined {
+  const normalized = normalizePathValue(pathValue);
+  return files.find((entry) => normalizePathValue(entry.path) === normalized);
+}
+
 export function firstArgAsTreeItem(args: unknown[]): ExplorerTreeItem | undefined {
   const first = args[0];
   if (!first || typeof first !== "object") return undefined;
@@ -288,6 +334,53 @@ export function isTopologyRunning(
   labs: Map<string, LabState>
 ): boolean {
   return findLabStateForTopology(topologyRef, labs) !== undefined;
+}
+
+function buildRunningDocLoadTarget(topologyRef: TopologyRef, endpointId: string): LoadTopologyTarget {
+  return {
+    canonicalTopologyRef: normalizeStandaloneTopologyRef(topologyRef, endpointId),
+    canonicalEndpointId: endpointId,
+    sourcePreference: "running-lab-doc"
+  };
+}
+
+function buildApiFileLoadTarget(entry: TopologyFileEntry): LoadTopologyTarget {
+  return {
+    canonicalTopologyRef: entry.topologyRef,
+    canonicalEndpointId: entry.endpointId,
+    sourcePreference: "api-file"
+  };
+}
+
+export function resolveStandaloneLoadTopologyTarget(
+  input: ResolveLoadTopologyTargetInput
+): LoadTopologyTarget | undefined {
+  const { deploymentState, endpointId, endpoints, files, labs, topologyRef } = input;
+  const runtimeLab = findLabStateForTopology(
+    {
+      topologyId: topologyRef.topologyId,
+      yamlPath: topologyRef.yamlPath,
+      labName: topologyRef.labName,
+      endpointId
+    },
+    labs
+  );
+  const endpointUsername = endpoints.find((endpoint) => endpoint.id === endpointId)?.username;
+
+  if (runtimeLab && isNonOwnedLabForEndpoint(runtimeLab, endpointUsername)) {
+    return buildRunningDocLoadTarget(topologyRef, endpointId);
+  }
+
+  const entry = findTopologyFileEntryByPath(files, topologyRef.yamlPath);
+  if (entry?.topologyRef) {
+    return buildApiFileLoadTarget(entry);
+  }
+
+  if (runtimeLab === undefined && deploymentState !== "deployed") {
+    return undefined;
+  }
+
+  return buildRunningDocLoadTarget(topologyRef, endpointId);
 }
 
 function labMetadataEqual(previous: LabState, next: LabState): boolean {

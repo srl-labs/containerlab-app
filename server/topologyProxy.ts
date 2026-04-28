@@ -25,6 +25,7 @@ import type { HostRuntimeContainer, HostRuntimeInterface } from "@srl-labs/clab-
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.js";
 import {
   extractEndpointIdFromTopologyId,
+  normalizeStandaloneTopologyRef,
   resolveCanonicalStandaloneTopologyRef
 } from "./topologyIdentity.js";
 
@@ -496,12 +497,15 @@ export function registerTopologyProxy(
       }
 
       const { client, endpoint } = resolved;
-      const canonicalTopologyRef = await resolveCanonicalStandaloneTopologyRef(
-        client,
-        endpoint.token,
-        topologyRef,
-        endpoint.id
-      );
+      const sourcePreference = request.body.sourcePreference === "running-lab-doc" ? "running-lab-doc" : "api-file";
+      const canonicalTopologyRef = sourcePreference === "running-lab-doc"
+        ? normalizeStandaloneTopologyRef(topologyRef, endpoint.id)
+        : await resolveCanonicalStandaloneTopologyRef(
+            client,
+            endpoint.token,
+            topologyRef,
+            endpoint.id
+          );
       const deploymentState = request.body.deploymentState ?? "undeployed";
       const mode = request.body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
       const containerDataProvider = createRuntimeContainerDataProvider(
@@ -515,7 +519,7 @@ export function registerTopologyProxy(
         topologyRef: canonicalTopologyRef,
         mode,
         deploymentState,
-        sourcePreference: request.body.sourcePreference === "running-lab-doc" ? "running-lab-doc" : "api-file",
+        sourcePreference,
         containerDataProvider
       });
 

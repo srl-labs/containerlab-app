@@ -61,6 +61,8 @@ import {
   findLabStateForTopology,
   firstArgAsTopologyRef,
   firstArgAsTreeItem,
+  getLabOwner,
+  isNonOwnedLabForEndpoint,
   isTopologyRunning,
   normalizeLabName,
   normalizePathValue,
@@ -787,13 +789,6 @@ function getInterfaceContextValue(state: string): string {
   return state.toLowerCase() === "up" ? "containerlabInterfaceUp" : "containerlabInterfaceDown";
 }
 
-function getLabOwner(lab: LabState): string {
-  if (lab.owner.trim().length > 0) {
-    return lab.owner.trim();
-  }
-  return lab.containers.values().next().value?.owner?.trim() ?? "";
-}
-
 function shouldShowRunningLab(
   lab: LabState,
   endpointsById: ReadonlyMap<string, EndpointConfig>
@@ -1021,7 +1016,10 @@ export function createStandaloneExplorerBridge(
       }
 
       const endpointFiles = filesByEndpoint.get(lab.endpointId) ?? [];
-      const topologyEntry = findTopologyEntryForRunningLab(lab, endpointFiles);
+      const endpointUsername = endpointsById.get(lab.endpointId)?.username;
+      const topologyEntry = isNonOwnedLabForEndpoint(lab, endpointUsername)
+        ? undefined
+        : findTopologyEntryForRunningLab(lab, endpointFiles);
       const topologyRef = topologyRefForRunningLab(lab, topologyEntry);
       const containers = [...lab.containers.values()].map((container) =>
         buildRunningContainerItem(lab, container, topologyRef)

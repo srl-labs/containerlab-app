@@ -3,6 +3,7 @@ import test from "node:test";
 
 import Fastify from "fastify";
 
+import type { ClabApiClient } from "./clabApiClient";
 import type { EndpointEntry } from "./endpointSessionStore";
 import { registerTopologyProxy } from "./topologyProxy";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager";
@@ -107,5 +108,81 @@ test("/api/topology/command resolves endpoint from topologyRef", async (t) => {
     protocolVersion: 1,
     requestId: "",
     revision: 2
+  });
+});
+
+test("/api/topology/sessions preserves running-lab-doc topology ref", async (t) => {
+  const app = Fastify({ logger: false });
+  t.after(async () => {
+    await app.close();
+  });
+
+  const endpoint: EndpointEntry = {
+    id: "endpoint-remote",
+    url: "http://remote.test",
+    label: "Remote",
+    token: "secret-token",
+    username: "test",
+    sessionDuration: "24h"
+  };
+  const topologyRef = {
+    topologyId: `standalone:${endpoint.id}::/home/alice/.clab/demo/demo.clab.yml`,
+    labName: "demo",
+    yamlPath: "/home/alice/.clab/demo/demo.clab.yml",
+    annotationsPath: "/home/alice/.clab/demo/demo.clab.yml.annotations.json",
+    source: "standalone" as const
+  };
+  let capturedOptions: Parameters<StandaloneTopologySessionManager["createSession"]>[0] | undefined;
+
+  const sessions = {
+    createSession(options: Parameters<StandaloneTopologySessionManager["createSession"]>[0]) {
+      capturedOptions = options;
+      return {
+        sessionId: "session-running-doc",
+        topologyRef: options.topologyRef
+      };
+    },
+    disposeAll() {},
+    disposeSessionsForEndpoint() {},
+    disposeSession() {
+      return false;
+    },
+    disposeSessionsForToken() {},
+    getSession() {
+      return null;
+    }
+  } as unknown as StandaloneTopologySessionManager;
+  const client = {
+    listTopologies: async () => {
+      throw new Error("listTopologies should not be called for running-lab-doc sessions");
+    }
+  } as Pick<ClabApiClient, "listTopologies"> as ClabApiClient;
+
+  registerTopologyProxy(
+    app,
+    () => ({
+      client,
+      endpoint
+    }),
+    sessions
+  );
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/topology/sessions",
+    payload: {
+      topologyRef,
+      mode: "view",
+      deploymentState: "deployed",
+      sourcePreference: "running-lab-doc",
+      runtimeContainers: []
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(capturedOptions?.sourcePreference, "running-lab-doc");
+  assert.deepEqual(response.json(), {
+    sessionId: "session-running-doc",
+    topologyRef
   });
 });
