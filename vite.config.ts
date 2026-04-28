@@ -11,7 +11,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const localClabUiRoot = path.resolve(__dirname, "../clab-ui");
 const localClabUiDistRoot = path.join(localClabUiRoot, "dist");
 const useLocalClabUi = process.env.CLAB_UI_SOURCE === "local";
-const apiServerPort = process.env.PORT ?? "3000";
+const apiServerPort = process.env.PORT ?? "3001";
 const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
 const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
 
@@ -70,47 +70,47 @@ function escapeRegex(literal: string): string {
 
 const clabUiLocalAliases = useLocalClabUi
   ? Array.from(localClabUiEntrypoints.entries()).map(([find, replacement]) => ({
-      find: new RegExp(`^${escapeRegex(find)}$`),
-      replacement
-    }))
+    find: new RegExp(`^${escapeRegex(find)}$`),
+    replacement
+  }))
   : [];
 const clabUiLocalWorkerAliases = useLocalClabUi
   ? [
-      {
-        find: /^@srl-labs\/clab-ui\/monaco\/editor-worker\?worker$/,
-        replacement: `${path.join(localClabUiDistRoot, "monaco/editor-worker.js")}?worker`
-      },
-      {
-        find: /^@srl-labs\/clab-ui\/monaco\/json-worker\?worker$/,
-        replacement: `${path.join(localClabUiDistRoot, "monaco/json-worker.js")}?worker`
-      },
-      {
-        find: /^@srl-labs\/clab-ui\/monaco\/yaml-worker\?worker$/,
-        replacement: `${path.join(localClabUiDistRoot, "monaco/yaml-worker.js")}?worker`
-      }
-    ]
+    {
+      find: /^@srl-labs\/clab-ui\/monaco\/editor-worker\?worker$/,
+      replacement: `${path.join(localClabUiDistRoot, "monaco/editor-worker.js")}?worker`
+    },
+    {
+      find: /^@srl-labs\/clab-ui\/monaco\/json-worker\?worker$/,
+      replacement: `${path.join(localClabUiDistRoot, "monaco/json-worker.js")}?worker`
+    },
+    {
+      find: /^@srl-labs\/clab-ui\/monaco\/yaml-worker\?worker$/,
+      replacement: `${path.join(localClabUiDistRoot, "monaco/yaml-worker.js")}?worker`
+    }
+  ]
   : [];
 
 const localClabUiWarmupFiles = useLocalClabUi
   ? [
-      "../clab-ui/dist/index.js",
-      "../clab-ui/dist/host/index.js",
-      "../clab-ui/dist/session/index.js",
-      "../clab-ui/dist/theme/index.js",
-      "../clab-ui/dist/styles/global.css",
-      "../clab-ui/dist/monaco/core.js",
-      "../clab-ui/dist/monaco/editor-worker.js",
-      "../clab-ui/dist/monaco/json-worker.js",
-      "../clab-ui/dist/monaco/yaml-worker.js",
-      "../clab-ui/dist/image-manager/index.js",
-      "../clab-ui/dist/chunks/*.js"
-    ]
+    "../clab-ui/dist/index.js",
+    "../clab-ui/dist/host/index.js",
+    "../clab-ui/dist/session/index.js",
+    "../clab-ui/dist/theme/index.js",
+    "../clab-ui/dist/styles/global.css",
+    "../clab-ui/dist/monaco/core.js",
+    "../clab-ui/dist/monaco/editor-worker.js",
+    "../clab-ui/dist/monaco/json-worker.js",
+    "../clab-ui/dist/monaco/yaml-worker.js",
+    "../clab-ui/dist/image-manager/index.js",
+    "../clab-ui/dist/chunks/*.js"
+  ]
   : [];
 
 const localClabUiOptimizedDependencies = useLocalClabUi
   ? Array.from(localClabUiEntrypoints.keys()).filter(
-      (specifier) => !specifier.endsWith(".css")
-    )
+    (specifier) => !specifier.endsWith(".css")
+  )
   : [];
 const monacoCoreAliasTarget = useLocalClabUi
   ? path.join(localClabUiDistRoot, "monaco/core.js")

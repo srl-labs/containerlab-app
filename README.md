@@ -35,13 +35,13 @@ sudo systemctl status clab-api-server
 Run the published `containerlab-web` image:
 
 ```bash
-docker run --rm -p 3000:3000 \
+docker run --rm -p 3001:3001 \
   --add-host=host.docker.internal:host-gateway \
   -e CLAB_API_URL=https://host.docker.internal:8080 \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
-Open `https://localhost:3000`, then log in with your API credentials and endpoint. The default local certificate is self-signed, so your browser may ask you to accept it.
+Open `https://localhost:3001`, then log in with your API credentials and endpoint. The default local certificate is self-signed, so your browser may ask you to accept it.
 
 `CLAB_API_URL` must be reachable from inside the `containerlab-web` container. The example above uses `host.docker.internal` plus Docker's host gateway mapping so the container can reach an API server running on the Docker host.
 
@@ -65,7 +65,7 @@ Node.js and npm are only needed when developing, testing, or building from sourc
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `PORT` | `3000` | Web UI server port |
+| `PORT` | `3001` | Web UI server port |
 | `CLAB_API_URL` | `https://localhost:8080` | Default `clab-api-server` endpoint shown to the UI |
 | `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates; default allows self-signed API endpoints |
 | `WEB_TLS_ENABLE` | `true` | Serve `containerlab-web` over HTTPS |
@@ -95,7 +95,7 @@ npm install
 npm run dev
 ```
 
-The dev server starts the local web server and Vite frontend over HTTPS. Open `https://localhost:3000`, then log in against your running `clab-api-server`.
+The dev server starts the local web server and Vite frontend over HTTPS. Open `https://localhost:3001`, then log in against your running `clab-api-server`.
 
 Useful contributor commands:
 

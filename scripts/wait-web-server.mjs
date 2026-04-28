@@ -1,4 +1,4 @@
-const port = process.env.PORT || "3000";
+const port = process.env.PORT || "3001";
 const tlsEnabled = !["0", "false", "no", "off"].includes(
   (process.env.WEB_TLS_ENABLE || "true").trim().toLowerCase()
 );

@@ -2,7 +2,7 @@ import { createStandaloneApp } from "./app.js";
 import { configureApiTlsVerification } from "./upstreamTls.js";
 import { resolveWebTlsConfig } from "./tlsConfig.js";
 
-const PORT = parseInt(process.env.PORT ?? "3000", 10);
+const PORT = parseInt(process.env.PORT ?? "3001", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8080";
 const VITE_DEV_URL = process.env.VITE_DEV_URL ?? "https://localhost:5173";
 const IS_DEV = process.env.NODE_ENV !== "production";

@@ -19,7 +19,7 @@ RUN npm prune --omit=dev
 FROM node:24-alpine AS runtime
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3001
 
 WORKDIR /app
 
@@ -31,9 +31,9 @@ COPY --from=build --chown=node:node /app/dist ./dist
 
 USER node
 
-EXPOSE 3000
+EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; const tls = !['0','false','no','off'].includes(String(process.env.WEB_TLS_ENABLE || 'true').toLowerCase()); fetch((tls ? 'https' : 'http') + '://127.0.0.1:' + (process.env.PORT || '3000') + '/api/config').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
+  CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; const tls = !['0','false','no','off'].includes(String(process.env.WEB_TLS_ENABLE || 'true').toLowerCase()); fetch((tls ? 'https' : 'http') + '://127.0.0.1:' + (process.env.PORT || '3001') + '/api/config').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
 
 CMD ["node", "dist/server/index.cjs"]
