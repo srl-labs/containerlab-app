@@ -107,11 +107,9 @@ const localClabUiWarmupFiles = useLocalClabUi
   ]
   : [];
 
-const localClabUiOptimizedDependencies = useLocalClabUi
-  ? Array.from(localClabUiEntrypoints.keys()).filter(
-    (specifier) => !specifier.endsWith(".css")
-  )
-  : [];
+const localClabUiDependencySpecifiers = Array.from(localClabUiEntrypoints.keys()).filter(
+  (specifier) => !specifier.endsWith(".css")
+);
 const monacoCoreAliasTarget = useLocalClabUi
   ? path.join(localClabUiDistRoot, "monaco/core.js")
   : "@srl-labs/clab-ui/monaco/core";
@@ -168,9 +166,9 @@ export default defineConfig(({ command }) => {
         "@xterm/xterm",
         "@xyflow/react",
         "three",
-        "zustand",
-        ...localClabUiOptimizedDependencies
-      ]
+        "zustand"
+      ],
+      exclude: useLocalClabUi ? localClabUiDependencySpecifiers : []
     },
     css: {
       postcss: path.resolve(__dirname, "postcss.config.cjs")
