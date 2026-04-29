@@ -3,7 +3,8 @@ import test from "node:test";
 import {
   getRuntimeContainersForLab,
   getRuntimeContainersForTopology,
-  runtimeContainersEqual
+  runtimeContainersEqual,
+  runtimeContainersTopologyEqual
 } from "./runtimeData";
 import { buildStandaloneTopologyRefFromPath } from "./standaloneHostShared";
 import type { ContainerState, LabState } from "./stores/labStore";
@@ -71,6 +72,7 @@ test("runtimeContainersEqual detects stats-only changes", () => {
     runtimeContainersEqual(previous, next, { includeInterfaceStats: false }),
     true
   );
+  assert.equal(runtimeContainersTopologyEqual(previous, next), true);
 });
 
 test("runtimeContainersEqual treats identical stats as unchanged", () => {

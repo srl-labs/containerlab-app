@@ -243,3 +243,10 @@ export function runtimeContainersEqual(
 
   return true;
 }
+
+export function runtimeContainersTopologyEqual(
+  previous: HostRuntimeContainer[],
+  next: HostRuntimeContainer[]
+): boolean {
+  return runtimeContainersEqual(previous, next, { includeInterfaceStats: false });
+}

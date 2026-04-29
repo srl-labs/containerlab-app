@@ -1,6 +1,11 @@
 import { useTopoViewerStore } from "@srl-labs/clab-ui";
-import { createTopologySyncController } from "@srl-labs/clab-ui/host";
 import {
+  createTopologySyncController,
+  type HostRuntimeContainer
+} from "@srl-labs/clab-ui/host";
+import {
+  applyRuntimeEdgeStatsToGraph,
+  clearTopologyGraph,
   refreshTopologySnapshot,
   setHostContext,
   type TopologySessionClient,
@@ -8,7 +13,11 @@ import {
 } from "@srl-labs/clab-ui/session";
 
 import { fetchUiIcons } from "./runtimeApi";
-import { getRuntimeContainersForTopology, runtimeContainersEqual } from "./runtimeData";
+import {
+  getRuntimeContainersForTopology,
+  runtimeContainersEqual,
+  runtimeContainersTopologyEqual
+} from "./runtimeData";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
@@ -73,6 +82,7 @@ export interface StandaloneTopologyManager {
 }
 
 const FILE_LIST_CACHE_TTL_MS = 1500;
+const RUNTIME_STATS_GRAPH_UPDATE_INTERVAL_MS = 1000;
 
 export function createStandaloneTopologyManager(
   options: StandaloneTopologyManagerOptions
@@ -88,6 +98,8 @@ export function createStandaloneTopologyManager(
   let topologyEventSource: EventSource | null = null;
   let topologyEventStreamEndpointId: string | null = null;
   let topologyEventStreamSessionId: string | null = null;
+  let pendingRuntimeStatsContainers: HostRuntimeContainer[] | null = null;
+  let runtimeStatsGraphUpdateTimer: number | null = null;
 
   const topologySyncController = createTopologySyncController({
     debounceMs: options.debounceMs,
@@ -131,6 +143,40 @@ export function createStandaloneTopologyManager(
     topologyEventSource = null;
     topologyEventStreamEndpointId = null;
     topologyEventStreamSessionId = null;
+  }
+
+  function clearPendingRuntimeStatsGraphUpdate(): void {
+    if (runtimeStatsGraphUpdateTimer !== null) {
+      window.clearTimeout(runtimeStatsGraphUpdateTimer);
+      runtimeStatsGraphUpdateTimer = null;
+    }
+    pendingRuntimeStatsContainers = null;
+  }
+
+  function flushRuntimeStatsGraphUpdate(): void {
+    const containers = pendingRuntimeStatsContainers;
+    pendingRuntimeStatsContainers = null;
+    runtimeStatsGraphUpdateTimer = null;
+
+    if (!currentTopologyRef || !containers) {
+      return;
+    }
+
+    syncHostContext({ deploymentState: "deployed" });
+    applyRuntimeEdgeStatsToGraph(containers, {
+      currentLabName: currentTopologyRef.labName
+    });
+  }
+
+  function scheduleRuntimeStatsGraphUpdate(containers: HostRuntimeContainer[]): void {
+    pendingRuntimeStatsContainers = containers;
+    if (runtimeStatsGraphUpdateTimer !== null) {
+      return;
+    }
+    runtimeStatsGraphUpdateTimer = window.setTimeout(
+      flushRuntimeStatsGraphUpdate,
+      RUNTIME_STATS_GRAPH_UPDATE_INTERVAL_MS
+    );
   }
 
   function normalizeDeploymentState(value: string | undefined): DeploymentState | undefined {
@@ -352,6 +398,7 @@ export function createStandaloneTopologyManager(
     currentSessionId = null;
     currentEndpointId = null;
     currentSourcePreference = "api-file";
+    clearPendingRuntimeStatsGraphUpdate();
     closeTopologyEventStream();
     useTopoViewerStore.getState().setCustomIcons([]);
     await destroyTopologySession(sessionId, endpointId);
@@ -361,6 +408,8 @@ export function createStandaloneTopologyManager(
     currentTopologyRef = null;
     currentFilePath = null;
     currentSourcePreference = "api-file";
+    clearPendingRuntimeStatsGraphUpdate();
+    clearTopologyGraph();
     await disposeCurrentSession();
     setHostContext(
       {
@@ -663,11 +712,17 @@ export function createStandaloneTopologyManager(
     const isDeployed = isTopologyRunning(currentTopologyRef, nextLabs);
     const previousRuntimeContainers = getRuntimeContainersForTopology(currentTopologyRef, previousLabs);
     const nextRuntimeContainers = getRuntimeContainersForTopology(currentTopologyRef, nextLabs);
-    const runtimeChanged = !runtimeContainersEqual(previousRuntimeContainers, nextRuntimeContainers);
+    const runtimeTopologyChanged = !runtimeContainersTopologyEqual(previousRuntimeContainers, nextRuntimeContainers);
 
-    if (wasDeployed !== isDeployed || (isDeployed && runtimeChanged)) {
+    if (wasDeployed !== isDeployed || (isDeployed && runtimeTopologyChanged)) {
+      clearPendingRuntimeStatsGraphUpdate();
       syncHostContext({ deploymentState: isDeployed ? "deployed" : "undeployed" });
       topologySyncController.schedule();
+      return;
+    }
+
+    if (isDeployed && !runtimeContainersEqual(previousRuntimeContainers, nextRuntimeContainers)) {
+      scheduleRuntimeStatsGraphUpdate(nextRuntimeContainers);
     }
   }
 

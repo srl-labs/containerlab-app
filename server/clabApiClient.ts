@@ -10,6 +10,10 @@ export interface ClabApiClientOptions {
   baseUrl: string;
 }
 
+interface StreamRequestOptions {
+  signal?: AbortSignal;
+}
+
 export interface LoginResponse {
   token: string;
 }
@@ -591,7 +595,8 @@ export class ClabApiClient {
     token: string,
     endpoint: LifecycleEndpoint,
     labName: string,
-    options: { path?: string; cleanup?: boolean } = {}
+    options: { path?: string; cleanup?: boolean } = {},
+    requestOptions: StreamRequestOptions = {}
   ): Promise<Response> {
     const params = new URLSearchParams();
     params.set("stream", "true");
@@ -627,7 +632,12 @@ export class ClabApiClient {
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, { method, headers, body });
+      res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, {
+        method,
+        headers,
+        body,
+        signal: requestOptions.signal
+      });
     } catch (error) {
       throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
     }
@@ -1080,7 +1090,8 @@ export class ClabApiClient {
    */
   async openEventStream(
     token: string,
-    options: { initialState?: boolean; interfaceStats?: boolean; interfaceStatsInterval?: string } = {}
+    options: { initialState?: boolean; interfaceStats?: boolean; interfaceStatsInterval?: string } = {},
+    requestOptions: StreamRequestOptions = {}
   ): Promise<Response> {
     const params = new URLSearchParams();
     if (options.initialState !== undefined) {
@@ -1095,7 +1106,8 @@ export class ClabApiClient {
     const qs = params.toString();
     const url = `${this.baseUrl}/api/v1/events${qs ? `?${qs}` : ""}`;
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: requestOptions.signal
     });
     if (!res.ok) {
       throw new Error(`Failed to open event stream: ${res.status} ${res.statusText}`);
@@ -1106,13 +1118,15 @@ export class ClabApiClient {
   async openTopologyEventStream(
     token: string,
     labName: string,
-    filePath: string
+    filePath: string,
+    requestOptions: StreamRequestOptions = {}
   ): Promise<Response> {
     const url =
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/events` +
       `?path=${encodeURIComponent(filePath)}`;
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: requestOptions.signal
     });
     if (!res.ok) {
       throw new Error(`Failed to open topology event stream: ${res.status} ${res.statusText}`);

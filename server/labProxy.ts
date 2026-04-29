@@ -34,6 +34,12 @@ interface ResolvedLabTarget {
 
 const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
 type LabNodeLifecycleEndpoint = (typeof LAB_NODE_LIFECYCLE_ENDPOINTS)[number];
+type LifecycleStreamEndpoint = "deploy" | "destroy" | "redeploy" | LabNodeLifecycleEndpoint;
+
+interface LifecycleStreamOptions {
+  cleanup?: boolean;
+  path?: string;
+}
 
 type EndpointResolver = (
   request: FastifyRequest,
@@ -73,7 +79,8 @@ function writeNdjsonLifecycleError(reply: FastifyReply, error: unknown): void {
 async function forwardNdjsonStream(
   request: FastifyRequest,
   reply: FastifyReply,
-  response: Response
+  response: Response,
+  isAborted: () => boolean
 ): Promise<void> {
   reply.raw.writeHead(200, streamResponseHeaders(request, {
     "Content-Type": "application/x-ndjson; charset=utf-8",
@@ -91,20 +98,24 @@ async function forwardNdjsonStream(
 
   const reader = response.body.getReader();
   try {
-    while (true) {
+    while (!isAborted()) {
       const { done, value } = await reader.read();
       if (done) {
         break;
       }
-      if (value) {
+      if (value && !isAborted() && !reply.raw.destroyed && !reply.raw.writableEnded) {
         reply.raw.write(Buffer.from(value));
       }
     }
   } catch (error) {
-    writeNdjsonLifecycleError(reply, error);
+    if (!isAborted()) {
+      writeNdjsonLifecycleError(reply, error);
+    }
   } finally {
     reader.cancel().catch(() => {});
-    reply.raw.end();
+    if (!isAborted() && !reply.raw.writableEnded) {
+      reply.raw.end();
+    }
   }
 }
 
@@ -150,6 +161,37 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
     return reply.status(error.statusCode).send({ error: message });
   }
   return reply.status(500).send({ error: message });
+}
+
+async function openAndForwardLifecycleStream(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  client: ClabApiClient,
+  token: string,
+  action: LifecycleStreamEndpoint,
+  labName: string,
+  options: LifecycleStreamOptions = {}
+): Promise<FastifyReply | void> {
+  let aborted = false;
+  const abortController = new AbortController();
+  const abort = (): void => {
+    aborted = true;
+    abortController.abort();
+  };
+
+  reply.raw.on("close", abort);
+  try {
+    const streamResponse = await client.openLifecycleStream(token, action, labName, options, {
+      signal: abortController.signal
+    });
+    await forwardNdjsonStream(request, reply, streamResponse, () => aborted);
+  } catch (error) {
+    if (!aborted) {
+      return handleRouteError(reply, error);
+    }
+  } finally {
+    reply.raw.off("close", abort);
+  }
 }
 
 export function registerLabProxy(
@@ -199,8 +241,14 @@ export function registerLabProxy(
         try {
           const { client, endpoint } = resolved;
           const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-          const streamResponse = await client.openLifecycleStream(endpoint.token, action, target.labName);
-          await forwardNdjsonStream(request, reply, streamResponse);
+          return await openAndForwardLifecycleStream(
+            request,
+            reply,
+            client,
+            endpoint.token,
+            action,
+            target.labName
+          );
         } catch (error) {
           return handleRouteError(reply, error);
         }
@@ -272,11 +320,18 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const streamResponse = await client.openLifecycleStream(endpoint.token, "deploy", target.labName, {
-          path: target.yamlPath,
-          cleanup: request.body.cleanup === true
-        });
-        await forwardNdjsonStream(request, reply, streamResponse);
+        return await openAndForwardLifecycleStream(
+          request,
+          reply,
+          client,
+          endpoint.token,
+          "deploy",
+          target.labName,
+          {
+            path: target.yamlPath,
+            cleanup: request.body.cleanup === true
+          }
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -325,10 +380,17 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const streamResponse = await client.openLifecycleStream(endpoint.token, "destroy", target.labName, {
-          cleanup: request.body.cleanup === true
-        });
-        await forwardNdjsonStream(request, reply, streamResponse);
+        return await openAndForwardLifecycleStream(
+          request,
+          reply,
+          client,
+          endpoint.token,
+          "destroy",
+          target.labName,
+          {
+            cleanup: request.body.cleanup === true
+          }
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -377,10 +439,17 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const streamResponse = await client.openLifecycleStream(endpoint.token, "redeploy", target.labName, {
-          cleanup: request.body.cleanup === true
-        });
-        await forwardNdjsonStream(request, reply, streamResponse);
+        return await openAndForwardLifecycleStream(
+          request,
+          reply,
+          client,
+          endpoint.token,
+          "redeploy",
+          target.labName,
+          {
+            cleanup: request.body.cleanup === true
+          }
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }

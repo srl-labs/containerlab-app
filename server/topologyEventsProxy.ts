@@ -25,29 +25,31 @@ async function forwardTopologyEvents(
   let buffer = "";
   let eventId = 0;
 
-  while (!isAborted()) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (isAborted()) {
+  try {
+    while (!isAborted()) {
+      const { done, value } = await reader.read();
+      if (done) {
         break;
       }
-      const trimmed = line.trim();
-      if (trimmed) {
-        eventId += 1;
-        reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (isAborted()) {
+          break;
+        }
+        const trimmed = line.trim();
+        if (trimmed) {
+          eventId += 1;
+          reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
+        }
       }
     }
+  } finally {
+    reader.cancel().catch(() => {});
   }
-
-  reader.cancel().catch(() => {});
 }
 
 export function registerTopologyEventsProxy(
@@ -86,15 +88,19 @@ export function registerTopologyEventsProxy(
       reply.raw.write(":ok\n\n");
 
       let aborted = false;
-      request.raw.on("close", () => {
+      const abortController = new AbortController();
+      const abort = (): void => {
         aborted = true;
-      });
+        abortController.abort();
+      };
+      reply.raw.on("close", abort);
 
       try {
         const response = await client.openTopologyEventStream(
           endpoint.token,
           session.topologyRef.labName,
-          session.topologyRef.yamlPath
+          session.topologyRef.yamlPath,
+          { signal: abortController.signal }
         );
         if (!response.body) {
           reply.raw.write("event: error\ndata: No topology event stream body\n\n");
@@ -108,10 +114,11 @@ export function registerTopologyEventsProxy(
           const message = error instanceof Error ? error.message : "Topology event stream error";
           writeTopologyEventError(reply, message);
         }
-      }
-
-      if (!aborted) {
-        reply.raw.end();
+      } finally {
+        reply.raw.off("close", abort);
+        if (!aborted && !reply.raw.writableEnded) {
+          reply.raw.end();
+        }
       }
     }
   );

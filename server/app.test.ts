@@ -7,10 +7,33 @@ interface FetchCall {
   body: string | undefined;
   headers: Headers;
   method: string;
+  signal: AbortSignal | null;
   url: URL;
 }
 
 type FetchHandler = (call: FetchCall) => Response | Promise<Response>;
+type FetchInput = Parameters<typeof fetch>[0];
+type FetchInit = Parameters<typeof fetch>[1];
+
+function isRequestObject(input: FetchInput): input is Request {
+  return typeof input !== "string" && !(input instanceof URL);
+}
+
+function fetchInputUrl(input: FetchInput): URL {
+  return new URL(isRequestObject(input) ? input.url : input);
+}
+
+function fetchInputMethod(input: FetchInput, init: FetchInit): string {
+  return (init?.method ?? (isRequestObject(input) ? input.method : "GET")).toUpperCase();
+}
+
+function fetchInputHeaders(input: FetchInput, init: FetchInit): Headers {
+  return new Headers(init?.headers ?? (isRequestObject(input) ? input.headers : undefined));
+}
+
+function fetchInputSignal(input: FetchInput, init: FetchInit): AbortSignal | null {
+  return init?.signal ?? (isRequestObject(input) ? input.signal : null);
+}
 
 class FetchMock {
   readonly calls: FetchCall[] = [];
@@ -34,15 +57,12 @@ class FetchMock {
   }
 
   fetch: typeof fetch = async (input, init) => {
-    const url = new URL(typeof input === "string" || input instanceof URL ? input : input.url);
-    const method = (init?.method ?? (typeof input === "string" || input instanceof URL ? "GET" : input.method))
-      .toUpperCase();
-    const headers = new Headers(init?.headers ?? (typeof input === "string" || input instanceof URL ? undefined : input.headers));
     const call: FetchCall = {
       body: bodyToString(init?.body),
-      headers,
-      method,
-      url
+      headers: fetchInputHeaders(input, init),
+      method: fetchInputMethod(input, init),
+      signal: fetchInputSignal(input, init),
+      url: fetchInputUrl(input)
     };
     this.calls.push(call);
 
@@ -457,6 +477,7 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
 
   const upstreamBody = `${JSON.stringify({ type: "log", line: "deploying", stream: "stdout" })}\n${JSON.stringify({ type: "done", message: "deployed" })}\n`;
   context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     assert.equal(call.headers.get("authorization"), "Bearer secret-token");
     assert.equal(call.headers.get("content-type"), "application/json");
     assert.equal(call.body, "{}");
@@ -491,6 +512,7 @@ test("/api/lab/start/stream forwards lab node lifecycle NDJSON", async (t) => {
 
   const upstreamBody = `${JSON.stringify({ type: "done", message: "started" })}\n`;
   context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/start\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     assert.equal(call.headers.get("authorization"), "Bearer secret-token");
     assert.equal(call.headers.get("content-type"), "application/json");
     assert.equal(call.body, "{}");
@@ -515,6 +537,7 @@ test("/api/events includes CORS headers for direct Vite dev EventSource", async 
     return jsonResponse({ token: "secret-token" });
   });
   context.fetchMock.on("GET", /^http:\/\/api\.example\.test\/api\/v1\/events\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     assert.equal(call.headers.get("authorization"), "Bearer secret-token");
     assert.equal(call.url.searchParams.get("initialState"), "true");
     assert.equal(call.url.searchParams.get("interfaceStats"), "true");
@@ -549,6 +572,7 @@ test("/api/lab/destroy/stream forwards DELETE lifecycle request with cleanup", a
 
   const upstreamBody = `${JSON.stringify({ type: "done", message: "destroyed" })}\n`;
   context.fetchMock.on("DELETE", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     assert.equal(call.headers.get("authorization"), "Bearer secret-token");
     assert.equal(call.headers.get("content-type"), null);
     assert.equal(call.body, undefined);
@@ -580,6 +604,7 @@ test("/api/lab/redeploy/stream forwards PUT lifecycle request", async (t) => {
 
   const upstreamBody = `${JSON.stringify({ type: "done", message: "redeployed" })}\n`;
   context.fetchMock.on("PUT", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     assert.equal(call.headers.get("authorization"), "Bearer secret-token");
     assert.equal(call.headers.get("content-type"), "application/json");
     assert.equal(call.body, "{}");
@@ -606,7 +631,8 @@ test("/api/lab/deploy/stream converts upstream stream errors to NDJSON errors", 
   });
 
   const firstChunk = `${JSON.stringify({ type: "log", line: "starting", stream: "stdout" })}\n`;
-  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/, () => {
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/, (call) => {
+    assert.ok(call.signal instanceof AbortSignal);
     return failingNdjsonResponse(firstChunk, "upstream stream reset");
   });
 

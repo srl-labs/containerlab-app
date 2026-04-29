@@ -42,18 +42,22 @@ export function registerEventsProxy(app: FastifyInstance, resolveEndpoint: Endpo
     // Send initial SSE comment to establish connection
     reply.raw.write(":ok\n\n");
 
-    let eventId = 0;
     let aborted = false;
+    const abortController = new AbortController();
 
-    request.raw.on("close", () => {
+    const abort = (): void => {
       aborted = true;
-    });
+      abortController.abort();
+    };
+    reply.raw.on("close", abort);
 
     try {
       const response = await client.openEventStream(endpoint.token, {
         initialState: true,
         interfaceStats: true,
         interfaceStatsInterval: resolveInterfaceStatsInterval()
+      }, {
+        signal: abortController.signal
       });
 
       if (!response.body) {
@@ -65,35 +69,39 @@ export function registerEventsProxy(app: FastifyInstance, resolveEndpoint: Endpo
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let eventId = 0;
 
-      while (!aborted) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      try {
+        while (!aborted) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
 
-        for (const line of lines) {
-          if (aborted) break;
-          const trimmed = line.trim();
-          if (!trimmed) continue;
+          for (const line of lines) {
+            if (aborted) break;
+            const trimmed = line.trim();
+            if (!trimmed) continue;
 
-          eventId++;
-          reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
+            eventId++;
+            reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
+          }
         }
+      } finally {
+        reader.cancel().catch(() => {});
       }
-
-      reader.cancel().catch(() => {});
     } catch (error) {
       if (!aborted) {
         const message = error instanceof Error ? error.message : "Event stream error";
         reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
       }
-    }
-
-    if (!aborted) {
-      reply.raw.end();
+    } finally {
+      reply.raw.off("close", abort);
+      if (!aborted && !reply.raw.writableEnded) {
+        reply.raw.end();
+      }
     }
   });
 }
