@@ -593,16 +593,16 @@ function NetemDialogView(props: {
   );
 }
 
-function EndpointOptionMenuItem(props: { option: EndpointSelectionOption }) {
+function renderEndpointOptionMenuItem(option: EndpointSelectionOption) {
   return (
-    <MenuItem key={props.option.value} value={props.option.value}>
+    <MenuItem key={option.value} value={option.value}>
       <Stack spacing={0.25} sx={{ minWidth: 0 }}>
         <Typography variant="body2" noWrap>
-          {props.option.label}
+          {option.label}
         </Typography>
-        {props.option.description ? (
+        {option.description ? (
           <Typography variant="caption" color="text.secondary" noWrap>
-            {props.option.description}
+            {option.description}
           </Typography>
         ) : null}
       </Stack>
@@ -626,9 +626,7 @@ function EndpointOptionSelect(props: {
         value={props.value}
         onChange={(event) => props.onChange(String(event.target.value))}
       >
-        {props.options.map((option) => (
-          <EndpointOptionMenuItem key={option.value} option={option} />
-        ))}
+        {props.options.map(renderEndpointOptionMenuItem)}
       </Select>
     </FormControl>
   );
