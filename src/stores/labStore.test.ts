@@ -281,3 +281,92 @@ test("processEvent keeps duplicate lab names separate when topology paths differ
     ["/labs/demo-a.clab.yml", "/labs/demo-b.clab.yml"]
   );
 });
+
+test("processEvent creates a lab from pathless lifecycle events and migrates to path when available", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "clab-node-name": "srl1",
+      state: "running"
+    }
+  });
+
+  assert.equal(useLabStore.getState().labsByEndpoint.get(ENDPOINT_ID)?.has("name:demo"), true);
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "e1-1",
+      state: "up"
+    }
+  });
+
+  const endpointLabs = useLabStore.getState().labsByEndpoint.get(ENDPOINT_ID);
+  assert.equal(endpointLabs?.has("name:demo"), false);
+  assert.equal(endpointLabs?.has("path:/labs/demo.clab.yml"), true);
+  assert.ok(endpointLabs?.get("path:/labs/demo.clab.yml")?.containers.get("clab-demo-srl1"));
+});
+
+test("processEvent marks die events as stopped until a removal event arrives", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      "clab-node-name": "srl1",
+      state: "running"
+    }
+  });
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "e1-1",
+      state: "up"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "die",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo"
+    }
+  });
+
+  let container = firstLab()?.containers.get("clab-demo-srl1");
+  assert.ok(container);
+  assert.equal(container.state, "exited");
+  assert.equal(container.status, "Exited");
+  assert.equal(container.interfaces.get("e1-1")?.state, "down");
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "destroy",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo"
+    }
+  });
+
+  container = firstLab()?.containers.get("clab-demo-srl1");
+  assert.equal(container, undefined);
+  assert.equal(useLabStore.getState().labs.size, 0);
+});

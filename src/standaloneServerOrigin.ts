@@ -1,9 +1,13 @@
 function configuredStandaloneServerOrigin(): string {
-  return import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN ?? "";
+  const env = (import.meta as ImportMeta & {
+    env?: { VITE_CLAB_STANDALONE_SERVER_ORIGIN?: string };
+  }).env;
+  return env?.VITE_CLAB_STANDALONE_SERVER_ORIGIN ?? "";
 }
 
 function shouldUseConfiguredStandaloneServerOrigin(): boolean {
-  return import.meta.env.DEV;
+  const env = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env;
+  return env?.DEV ?? false;
 }
 
 function normalizeOrigin(value: string): string | null {

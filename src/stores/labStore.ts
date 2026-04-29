@@ -116,6 +116,11 @@ function resolveLabStoreKey(labPath: string | undefined): string | null {
   return normalizedPath ? `path:${normalizedPath}` : null;
 }
 
+function resolveNamedLabStoreKey(labName: string | undefined): string | null {
+  const normalizedName = normalizeLabStoreName(labName);
+  return normalizedName ? `name:${normalizedName}` : null;
+}
+
 function findExistingLabEntry(
   labs: Map<string, LabState>,
   labPath: string | undefined
@@ -181,10 +186,60 @@ function findLabEntryByName(
   return matches[0] ?? null;
 }
 
+function fallbackContainerState(action: string): string {
+  switch (action.trim().toLowerCase()) {
+    case "pause":
+      return "paused";
+    case "die":
+    case "stop":
+    case "kill":
+      return "exited";
+    case "create":
+      return "created";
+    default:
+      return "running";
+  }
+}
+
+function fallbackContainerStatus(state: string): string {
+  switch (state) {
+    case "exited":
+      return "Exited";
+    case "paused":
+      return "Paused";
+    default:
+      return "";
+  }
+}
+
+function isRunningContainerState(state: string): boolean {
+  const normalized = state.trim().toLowerCase();
+  return normalized.includes("running") || normalized.includes("healthy");
+}
+
+function interfacesForContainerState(
+  existing: ContainerState | undefined,
+  incoming: ContainerState
+): Map<string, InterfaceState> {
+  const interfaces = new Map(existing?.interfaces ?? incoming.interfaces);
+  if (interfaces.size === 0 || isRunningContainerState(incoming.state)) {
+    return interfaces;
+  }
+
+  for (const [name, iface] of interfaces.entries()) {
+    interfaces.set(name, { ...iface, state: "down" });
+  }
+  return interfaces;
+}
+
 function extractContainerState(
   endpointId: string,
-  attrs: Record<string, EventAttributeValue>
+  attrs: Record<string, EventAttributeValue>,
+  action = ""
 ): ContainerState {
+  const fallbackState = fallbackContainerState(action);
+  const fallbackStatus = fallbackContainerStatus(fallbackState);
+
   return {
     endpointId,
     name: getAttrString(attrs, "name") ?? "",
@@ -195,8 +250,8 @@ function extractContainerState(
     nodeName: getAttrString(attrs, "clab-node-name") ?? "",
     kind: getAttrString(attrs, "clab-node-kind") ?? "",
     image: getAttrString(attrs, "image") ?? "",
-    state: getAttrString(attrs, "state") ?? "running",
-    status: getAttrString(attrs, "status") ?? "",
+    state: getAttrString(attrs, "state") ?? fallbackState,
+    status: getAttrString(attrs, "status") ?? fallbackStatus,
     ipv4Address: getAttrString(attrs, "ipv4-address", "mgmt_ipv4") ?? "N/A",
     ipv6Address: getAttrString(attrs, "ipv6-address", "mgmt_ipv6") ?? "N/A",
     interfaces: new Map()
@@ -375,7 +430,7 @@ function resolveEventLabContext(
   const preferredLabKey = resolveLabStoreKey(labPath);
   const endpointLabs = new Map(previousLabs ?? new Map());
   const existingEntry = resolveExistingLabEntry(endpointLabs, labPath, labName, containerName, preferredLabKey);
-  const labKey = preferredLabKey ?? existingEntry?.key ?? null;
+  const labKey = preferredLabKey ?? existingEntry?.key ?? resolveNamedLabStoreKey(labName);
   if (!labKey || !containerName) {
     return null;
   }
@@ -397,7 +452,7 @@ function applyContainerEvent(
   action: string
 ): void {
   const { attrs, containerName, endpointLabs, lab, labKey } = context;
-  if (action === "destroy" || action === "die" || action === "kill") {
+  if (action === "destroy" || action === "delete" || action === "remove") {
     lab.containers.delete(containerName);
     if (lab.containers.size === 0) {
       endpointLabs.delete(labKey);
@@ -407,13 +462,13 @@ function applyContainerEvent(
     return;
   }
 
-  const incoming = extractContainerState(endpointId, attrs);
+  const incoming = extractContainerState(endpointId, attrs, action);
   const existing = lab.containers.get(containerName);
   const container: ContainerState = {
     ...(existing ?? incoming),
     ...incoming,
     endpointId,
-    interfaces: new Map(existing?.interfaces ?? incoming.interfaces)
+    interfaces: interfacesForContainerState(existing, incoming)
   };
   lab.owner = incoming.owner || lab.owner;
   lab.topologyPath = incoming.labPath || lab.topologyPath;
@@ -429,7 +484,7 @@ function applyInterfaceEvent(
 ): void {
   const { attrs, containerName, endpointLabs, lab, labKey } = context;
   const existing = lab.containers.get(containerName);
-  const placeholder = extractContainerState(endpointId, attrs);
+  const placeholder = extractContainerState(endpointId, attrs, action);
   const container: ContainerState = existing
     ? { ...existing, endpointId, interfaces: new Map(existing.interfaces) }
     : placeholder;

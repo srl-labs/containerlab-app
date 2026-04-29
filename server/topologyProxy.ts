@@ -161,6 +161,39 @@ function resolveLinkStatusFromClasses(
   return undefined;
 }
 
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function classFromRuntimeState(state: string): "link-up" | "link-down" | undefined {
+  if (!state) {
+    return undefined;
+  }
+  return state === "up" ? "link-up" : "link-down";
+}
+
+function deriveRuntimeEdgeClass(
+  edgeData: TopologyEdgeData,
+  extraData: Record<string, unknown>
+): "link-up" | "link-down" | undefined {
+  const sourceState = stringValue(extraData.clabSourceInterfaceState);
+  const targetState = stringValue(extraData.clabTargetInterfaceState);
+  if (sourceState && targetState) {
+    return sourceState === "up" && targetState === "up" ? "link-up" : "link-down";
+  }
+
+  const sourceEndpoint = stringValue(edgeData.sourceEndpoint);
+  const targetEndpoint = stringValue(edgeData.targetEndpoint);
+  if (sourceState && !targetEndpoint) {
+    return classFromRuntimeState(sourceState);
+  }
+  if (targetState && !sourceEndpoint) {
+    return classFromRuntimeState(targetState);
+  }
+
+  return undefined;
+}
+
 function applyRuntimeOverlay(
   snapshot: TopologySnapshot,
   runtimeContainers: HostRuntimeContainer[]
@@ -199,8 +232,9 @@ function applyRuntimeOverlay(
     const hasExtraDataChange = Object.entries(extraDataDelta).some(
       ([key, value]) => oldExtraData[key] !== value
     );
-    const classNameChanged = update.classes !== undefined && update.classes !== edge.className;
-    const nextLinkStatus = resolveLinkStatusFromClasses(update.classes, edgeData.linkStatus);
+    const nextClassName = update.classes ?? deriveRuntimeEdgeClass(edgeData, extraDataDelta);
+    const classNameChanged = nextClassName !== undefined && nextClassName !== edge.className;
+    const nextLinkStatus = resolveLinkStatusFromClasses(nextClassName, edgeData.linkStatus);
     const linkStatusChanged = nextLinkStatus !== undefined && edgeData.linkStatus !== nextLinkStatus;
 
     if (!hasExtraDataChange && !classNameChanged && !linkStatusChanged) {
@@ -218,7 +252,7 @@ function applyRuntimeOverlay(
     };
     return {
       ...edge,
-      className: update.classes ?? edge.className,
+      className: nextClassName ?? edge.className,
       data: nextEdgeData
     };
   });
@@ -417,7 +451,9 @@ async function snapshotForRequest(
 
   const deploymentState = body.deploymentState ?? "undeployed";
   const mode = modeForDeploymentState(body.mode, deploymentState);
-  session.host.updateContext({ mode, deploymentState });
+  const runtimeContainers = toRuntimeContainers(body.runtimeContainers ?? []);
+  const containerDataProvider = createRuntimeContainerDataProvider(runtimeContainers);
+  session.host.updateContext({ mode, deploymentState, containerDataProvider });
 
   const rawSnapshot = body.externalChange
     ? await session.host.onExternalChange()
@@ -428,7 +464,7 @@ async function snapshotForRequest(
       })
     : rawSnapshot;
 
-  return applyRuntimeOverlay(snapshot, toRuntimeContainers(body.runtimeContainers ?? []));
+  return applyRuntimeOverlay(snapshot, runtimeContainers);
 }
 
 async function responseForCommandRequest(

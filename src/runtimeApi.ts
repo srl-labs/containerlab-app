@@ -5,6 +5,7 @@ import type {
 } from "@srl-labs/clab-ui/session";
 
 import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
+import { standaloneServerUrl } from "./standaloneServerOrigin";
 import { useEndpointStore } from "./stores/endpointStore";
 import { useLabStore } from "./stores/labStore";
 
@@ -355,6 +356,15 @@ function markEndpointUnavailable(endpointId: string | undefined, status: "offlin
   useEndpointStore.getState().setStatus(endpointId, status);
 }
 
+const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i;
+
+export function resolveRuntimeRequestUrl(
+  input: string,
+  toStandaloneServerUrl: (path: string) => string = standaloneServerUrl
+): string {
+  return ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(input) ? input : toStandaloneServerUrl(input);
+}
+
 async function requestJson<T>(
   input: string,
   init?: RequestInit,
@@ -362,7 +372,7 @@ async function requestJson<T>(
 ): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(input, {
+    response = await fetch(resolveRuntimeRequestUrl(input), {
       credentials: "include",
       ...init
     });
