@@ -190,7 +190,7 @@ export interface ImportTopologyFromUrlResponse {
   fileName: string;
 }
 
-export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
+export type NodeLifecycleAction = "start" | "stop" | "restart" | "pause" | "unpause";
 
 export interface NodeBrowserPort {
   hostIp?: string;

@@ -11,6 +11,7 @@ export {
 export { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 export {
   buildPacketflixCapture,
+  controlNodeLifecycle,
   createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,

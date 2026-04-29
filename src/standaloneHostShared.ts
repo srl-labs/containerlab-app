@@ -8,9 +8,9 @@ export const TREE_ITEM_COLLAPSED = 1;
 const ENDPOINT_TOPOLOGY_ID_SEPARATOR = "::";
 
 export type DeploymentState = "deployed" | "undeployed" | "unknown";
-export type LifecycleCommandType = "deploy" | "destroy" | "redeploy";
+export type LifecycleCommandType = "deploy" | "destroy" | "redeploy" | "start" | "stop" | "restart";
 export type LifecycleCommandStream = "stdout" | "stderr";
-export type LifecycleCommandEndpoint = "deploy" | "destroy" | "redeploy";
+export type LifecycleCommandEndpoint = "deploy" | "destroy" | "redeploy" | "start" | "stop" | "restart";
 export type TopologySourcePreference = "api-file" | "running-lab-doc";
 
 export interface ExplorerTreeItem {

@@ -320,6 +320,7 @@ function normalizeNodeLifecycleAction(value: unknown): NodeLifecycleAction | und
   switch (value.trim().toLowerCase()) {
     case "start":
     case "stop":
+    case "restart":
     case "pause":
     case "unpause":
       return value.trim().toLowerCase() as NodeLifecycleAction;

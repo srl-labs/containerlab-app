@@ -257,7 +257,7 @@ export interface RuntimeImageActionResponse {
   output?: string;
 }
 
-export type NodeLifecycleAction = "start" | "stop" | "pause" | "unpause";
+export type NodeLifecycleAction = "start" | "stop" | "restart" | "pause" | "unpause";
 
 export interface NodeBrowserPort {
   hostIp?: string;
@@ -306,7 +306,7 @@ export interface ImportTopologyFromUrlResponse {
   topology: TopologyEntry;
 }
 
-type LifecycleEndpoint = "deploy" | "destroy" | "redeploy";
+type LifecycleEndpoint = "deploy" | "destroy" | "redeploy" | "start" | "stop" | "restart";
 
 export class ClabApiClient {
   private readonly baseUrl: string;
@@ -565,6 +565,28 @@ export class ClabApiClient {
     return normalizeLifecycleActionResult(payload);
   }
 
+  async controlLabLifecycle(
+    token: string,
+    labName: string,
+    action: Extract<LifecycleEndpoint, "start" | "stop" | "restart">,
+    options: { includeLogs?: boolean } = {}
+  ): Promise<LifecycleActionResult> {
+    const params = new URLSearchParams();
+    if (options.includeLogs) {
+      params.set("includeLogs", "true");
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/${enc(action)}${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({}),
+      "application/json"
+    );
+    const payload = (await res.json()) as unknown;
+    return normalizeLifecycleActionResult(payload);
+  }
+
   async openLifecycleStream(
     token: string,
     endpoint: LifecycleEndpoint,
@@ -594,6 +616,8 @@ export class ClabApiClient {
     } else if (endpoint === "redeploy") {
       method = "PUT";
       path = `/api/v1/labs/${enc(labName)}`;
+    } else if (endpoint === "start" || endpoint === "stop" || endpoint === "restart") {
+      path = `/api/v1/labs/${enc(labName)}/${enc(endpoint)}`;
     }
 
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };

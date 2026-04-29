@@ -16,6 +16,13 @@ import type {
   LifecycleCommandType
 } from "./standaloneHostShared";
 
+type StandaloneLifecycleCommand =
+  | ExtensionLifecycleCommand
+  | "startLab"
+  | "stopLab"
+  | "restartLab";
+type UiProcessingMode = "deploy" | "destroy" | "start" | "stop" | "restart";
+
 const LIFECYCLE_STATE_WAIT_TIMEOUT_MS = 120_000;
 const LIFECYCLE_STATE_WAIT_POLL_MS = 750;
 const LIFECYCLE_TIMESTAMP_LEVEL_PATTERN =
@@ -60,7 +67,7 @@ interface StandaloneLifecycleManagerOptions {
 
 export interface StandaloneLifecycleManager {
   cancel(): boolean;
-  run(command: ExtensionLifecycleCommand): Promise<void>;
+  run(command: StandaloneLifecycleCommand): Promise<void>;
   runTarget(
     endpoint: LifecycleCommandEndpoint,
     topologyRef: TopologyRef,
@@ -68,7 +75,7 @@ export interface StandaloneLifecycleManager {
   ): Promise<void>;
 }
 
-const LIFECYCLE_COMMAND_CONFIG: Record<ExtensionLifecycleCommand, LifecycleCommandConfig> = {
+const LIFECYCLE_COMMAND_CONFIG: Record<StandaloneLifecycleCommand, LifecycleCommandConfig> = {
   deployLab: {
     commandType: "deploy",
     endpoint: "deploy",
@@ -104,10 +111,28 @@ const LIFECYCLE_COMMAND_CONFIG: Record<ExtensionLifecycleCommand, LifecycleComma
     endpoint: "redeploy",
     cleanup: true,
     label: "redeploy (cleanup)"
+  },
+  startLab: {
+    commandType: "start",
+    endpoint: "start",
+    cleanup: false,
+    label: "start"
+  },
+  stopLab: {
+    commandType: "stop",
+    endpoint: "stop",
+    cleanup: false,
+    label: "stop"
+  },
+  restartLab: {
+    commandType: "restart",
+    endpoint: "restart",
+    cleanup: false,
+    label: "restart"
   }
 };
 
-export function isStandaloneLifecycleCommand(command: string): command is ExtensionLifecycleCommand {
+export function isStandaloneLifecycleCommand(command: string): command is StandaloneLifecycleCommand {
   return Object.prototype.hasOwnProperty.call(LIFECYCLE_COMMAND_CONFIG, command);
 }
 
@@ -268,30 +293,67 @@ function isAbortError(error: unknown): boolean {
 }
 
 function getLifecycleTypeFromProcessingMode(): LifecycleCommandType {
-  return useTopoViewerStore.getState().processingMode === "destroy" ? "destroy" : "deploy";
+  const processingMode = String(useTopoViewerStore.getState().processingMode ?? "");
+  switch (processingMode) {
+    case "destroy":
+    case "redeploy":
+    case "start":
+    case "stop":
+    case "restart":
+      return processingMode;
+    case "deploy":
+    default:
+      return "deploy";
+  }
 }
 
 function lifecycleCommandForTarget(
   endpoint: LifecycleCommandEndpoint,
   cleanup: boolean
-): ExtensionLifecycleCommand {
+): StandaloneLifecycleCommand {
   if (endpoint === "deploy") {
     return cleanup ? "deployLabCleanup" : "deployLab";
   }
   if (endpoint === "destroy") {
     return cleanup ? "destroyLabCleanup" : "destroyLab";
   }
+  if (endpoint === "redeploy") {
+    return cleanup ? "redeployLabCleanup" : "redeployLab";
+  }
+  if (endpoint === "start") {
+    return "startLab";
+  }
+  if (endpoint === "stop") {
+    return "stopLab";
+  }
+  if (endpoint === "restart") {
+    return "restartLab";
+  }
   return cleanup ? "redeployLabCleanup" : "redeployLab";
 }
 
-function processingModeForLifecycle(commandType: LifecycleCommandType): "deploy" | "destroy" {
-  return commandType === "destroy" ? "destroy" : "deploy";
+function processingModeForLifecycle(commandType: LifecycleCommandType): UiProcessingMode {
+  if (commandType === "destroy") {
+    return "destroy";
+  }
+  if (commandType === "start" || commandType === "stop" || commandType === "restart") {
+    return commandType;
+  }
+  return "deploy";
+}
+
+function shouldWaitForLabRunningState(commandType: LifecycleCommandType): boolean {
+  return commandType === "deploy" || commandType === "destroy" || commandType === "redeploy";
+}
+
+function expectedRunningState(commandType: LifecycleCommandType): boolean {
+  return commandType !== "destroy";
 }
 
 export function createStandaloneLifecycleManager(
   options: StandaloneLifecycleManagerOptions
 ): StandaloneLifecycleManager {
-  const lifecycleController = createLifecycleCommandController<ExtensionLifecycleCommand>({
+  const lifecycleController = createLifecycleCommandController<StandaloneLifecycleCommand>({
     isAbortError,
     onCancel(action) {
       const config = LIFECYCLE_COMMAND_CONFIG[action];
@@ -535,7 +597,12 @@ export function createStandaloneLifecycleManager(
         );
       }
 
-      const expectedRunning = config.commandType !== "destroy";
+      if (!shouldWaitForLabRunningState(config.commandType)) {
+        completeLifecycleSuccess(config, topologyRef);
+        return;
+      }
+
+      const expectedRunning = expectedRunningState(config.commandType);
       postLifecycleLogMessage(
         config.commandType,
         `Request accepted. Waiting for runtime to become ${expectedRunning ? "deployed" : "undeployed"}...`,
@@ -561,7 +628,7 @@ export function createStandaloneLifecycleManager(
   }
 
   async function executeStandaloneLifecycleCommand(
-    command: ExtensionLifecycleCommand,
+    command: StandaloneLifecycleCommand,
     execution: {
       signal: AbortSignal;
       isCurrent(): boolean;
@@ -607,10 +674,12 @@ export function createStandaloneLifecycleManager(
     async runTarget(endpoint, topologyRef, cleanup) {
       const command = lifecycleCommandForTarget(endpoint, cleanup);
       const config = LIFECYCLE_COMMAND_CONFIG[command];
-      useTopoViewerStore.getState().setProcessing(
-        true,
-        processingModeForLifecycle(config.commandType)
-      );
+      (
+        useTopoViewerStore.getState().setProcessing as (
+          isProcessing: boolean,
+          mode?: UiProcessingMode
+        ) => void
+      )(true, processingModeForLifecycle(config.commandType));
       await lifecycleController.run(command, (execution) =>
         executeLifecycleCommand(config, topologyRef, undefined, execution)
       );

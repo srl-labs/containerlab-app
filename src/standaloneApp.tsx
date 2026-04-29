@@ -51,6 +51,7 @@ import {
 } from "./mainRuntimeDependencies";
 import {
   buildPacketflixCapture,
+  controlNodeLifecycle,
   createStandaloneExplorerBridge,
   createWiresharkVncSessions,
   deleteUiCustomNode,
@@ -720,6 +721,35 @@ function handleNodeLogsCommand(msg: VscodeMessage): void {
   });
 }
 
+function handleNodeLifecycleCommand(msg: VscodeMessage): void {
+  const target = getActiveTopologyTarget();
+  const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+  let action: "start" | "stop" | "restart" | null = null;
+  if (msg.command === "clab-node-start") {
+    action = "start";
+  } else if (msg.command === "clab-node-stop") {
+    action = "stop";
+  } else if (msg.command === "clab-node-restart") {
+    action = "restart";
+  }
+
+  if (!target || !nodeName || action === null) {
+    return;
+  }
+
+  void controlNodeLifecycle({
+    ...target,
+    nodeName,
+    action
+  })
+    .then(() => {
+      runtimeUiActions.notify(`${nodeName} ${action} requested.`, "success");
+    })
+    .catch((error: unknown) => {
+      runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+    });
+}
+
 function handleLinkImpairmentCommand(msg: VscodeMessage): void {
   const target = getActiveTopologyTarget();
   if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
@@ -833,6 +863,9 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   "clab-node-connect-ssh": handleNodeTerminalCommand,
   "clab-node-attach-shell": handleNodeTerminalCommand,
   "clab-node-view-logs": handleNodeLogsCommand,
+  "clab-node-start": handleNodeLifecycleCommand,
+  "clab-node-stop": handleNodeLifecycleCommand,
+  "clab-node-restart": handleNodeLifecycleCommand,
   "clab-interface-capture": (msg) => {
     const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
     const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";

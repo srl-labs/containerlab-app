@@ -482,6 +482,33 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
   assert.equal(response.body, upstreamBody);
 });
 
+test("/api/lab/start/stream forwards lab node lifecycle NDJSON", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "started" })}\n`;
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/start\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    assert.equal(call.headers.get("content-type"), "application/json");
+    assert.equal(call.body, "{}");
+    assert.equal(call.url.searchParams.get("stream"), "true");
+    return ndjsonResponse(upstreamBody);
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/start/stream",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
 test("/api/events includes CORS headers for direct Vite dev EventSource", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "http://api.example.test/login", () => {
@@ -634,6 +661,47 @@ test("/api/runtime/inspect/all scopes duplicate lab names across endpoints", asy
     "demo @ East": [{ name: "clab-demo-east" }],
     "demo @ West": [{ name: "clab-demo-west" }]
   });
+});
+
+test("/api/runtime/nodes/restart forwards node lifecycle request", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    return jsonResponse([
+      {
+        name: "clab-demo-leaf1",
+        state: "running"
+      }
+    ]);
+  });
+  context.fetchMock.on(
+    "POST",
+    "http://api.example.test/api/v1/labs/demo/nodes/clab-demo-leaf1/restart",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.equal(call.headers.get("content-type"), "application/json");
+      assert.equal(call.body, "{}");
+      return jsonResponse({ message: "Node restarted." });
+    }
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/nodes/restart",
+    headers: { cookie },
+    payload: {
+      nodeName: "leaf1",
+      topologyRef: demoTopologyRef(endpointId)
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), { success: true });
 });
 
 test("terminal session creation resolves topology ref and short node name before proxying", async (t) => {

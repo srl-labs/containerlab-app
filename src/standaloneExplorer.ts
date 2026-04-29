@@ -1504,7 +1504,7 @@ export function createStandaloneExplorerBridge(
     };
 
     const runNodeLifecycle = async (
-      action: "start" | "stop" | "pause" | "unpause",
+      action: "start" | "stop" | "restart" | "pause" | "unpause",
       successLabel: string
     ): Promise<void> => {
       if (!actionTopologyRef || !item?.name) {
@@ -1854,8 +1854,8 @@ export function createStandaloneExplorerBridge(
     };
 
     const runLabLifecycle = async (
-      endpoint: "deploy" | "destroy" | "redeploy",
-      cleanup: boolean
+      endpoint: LifecycleCommandEndpoint,
+      cleanup = false
     ): Promise<void> => {
       const topologyRef = requireTopologyRef();
       if (!topologyRef) {
@@ -2009,6 +2009,9 @@ export function createStandaloneExplorerBridge(
       "containerlab.lab.destroy.cleanup": () => runLabLifecycle("destroy", true),
       "containerlab.lab.redeploy": () => runLabLifecycle("redeploy", false),
       "containerlab.lab.redeploy.cleanup": () => runLabLifecycle("redeploy", true),
+      "containerlab.lab.start": () => runLabLifecycle("start"),
+      "containerlab.lab.stop": () => runLabLifecycle("stop"),
+      "containerlab.lab.restart": () => runLabLifecycle("restart"),
       "containerlab.lab.save": async () => {
         const topologyRef = requireTopologyRef();
         if (topologyRef) {
@@ -2075,6 +2078,7 @@ export function createStandaloneExplorerBridge(
       },
       "containerlab.node.start": () => runNodeLifecycle("start", `Started ${item?.label || item?.name || "node"}.`),
       "containerlab.node.stop": () => runNodeLifecycle("stop", `Stopped ${item?.label || item?.name || "node"}.`),
+      "containerlab.node.restart": () => runNodeLifecycle("restart", `Restarted ${item?.label || item?.name || "node"}.`),
       "containerlab.node.pause": () => runNodeLifecycle("pause", `Paused ${item?.label || item?.name || "node"}.`),
       "containerlab.node.unpause": () => runNodeLifecycle("unpause", `Unpaused ${item?.label || item?.name || "node"}.`),
       "containerlab.node.openBrowser": openNodeBrowser,

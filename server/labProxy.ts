@@ -1,5 +1,5 @@
 /**
- * Lab lifecycle action proxy - deploy, destroy, redeploy.
+ * Lab lifecycle action proxy - deploy, destroy, redeploy, start, stop, restart.
  */
 
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
@@ -31,6 +31,9 @@ interface ResolvedLabTarget {
   topologyRef?: TopologyRef;
   yamlPath?: string;
 }
+
+const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
+type LabNodeLifecycleEndpoint = (typeof LAB_NODE_LIFECYCLE_ENDPOINTS)[number];
 
 type EndpointResolver = (
   request: FastifyRequest,
@@ -154,6 +157,57 @@ export function registerLabProxy(
   resolveEndpoint: EndpointResolver,
   sessions: StandaloneTopologySessionManager
 ): void {
+  const registerLabNodeLifecycleProxy = (action: LabNodeLifecycleEndpoint): void => {
+    app.post<{ Body: LabActionBody }>(
+      `/api/lab/${action}`,
+      async (request: FastifyRequest<{ Body: LabActionBody }>, reply: FastifyReply) => {
+        const resolved = resolveEndpoint(
+          request,
+          reply,
+          request.body.endpointId ?? extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+        );
+        if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+        try {
+          const { client, endpoint } = resolved;
+          const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+          const lifecycle = await client.controlLabLifecycle(endpoint.token, target.labName, action, {
+            includeLogs: true
+          });
+          return reply.send({
+            success: true,
+            result: lifecycle.result,
+            message: lifecycle.message,
+            logs: lifecycle.logs ?? []
+          });
+        } catch (error) {
+          return handleRouteError(reply, error);
+        }
+      }
+    );
+
+    app.post<{ Body: LabActionBody }>(
+      `/api/lab/${action}/stream`,
+      async (request: FastifyRequest<{ Body: LabActionBody }>, reply: FastifyReply) => {
+        const resolved = resolveEndpoint(
+          request,
+          reply,
+          request.body.endpointId ?? extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+        );
+        if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+        try {
+          const { client, endpoint } = resolved;
+          const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+          const streamResponse = await client.openLifecycleStream(endpoint.token, action, target.labName);
+          await forwardNdjsonStream(request, reply, streamResponse);
+        } catch (error) {
+          return handleRouteError(reply, error);
+        }
+      }
+    );
+  };
+
   app.post<{ Body: LabStatusBody }>(
     "/api/lab/status",
     async (request: FastifyRequest<{ Body: LabStatusBody }>, reply: FastifyReply) => {
@@ -332,4 +386,8 @@ export function registerLabProxy(
       }
     }
   );
+
+  for (const action of LAB_NODE_LIFECYCLE_ENDPOINTS) {
+    registerLabNodeLifecycleProxy(action);
+  }
 }
