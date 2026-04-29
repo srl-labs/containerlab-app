@@ -231,7 +231,9 @@ function isRedDominant(background: string): boolean {
 }
 
 test.describe("standalone Monaco YAML editor", () => {
-  test("shows schema diagnostics, completion suggestions, and hover help", async ({ page }) => {
+  test("shows schema diagnostics, manual completion suggestions, and hover help", async ({
+    page
+  }) => {
     const consoleErrors: string[] = [];
     page.on("console", (message) => {
       if (message.type() === "error") {
@@ -240,6 +242,7 @@ test.describe("standalone Monaco YAML editor", () => {
     });
     await mockStandaloneApi(page);
     await openYamlEditor(page);
+    await expect(page.getByTestId("source-editor-suggestions-toggle")).toHaveCount(0);
 
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n", 4, 26);
     await selectEditorRange(page, {
@@ -298,12 +301,16 @@ test.describe("standalone Monaco YAML editor", () => {
 
     await page.keyboard.press("Escape");
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: ", 4, 13);
+    await expect(page.locator(".suggest-widget")).toBeHidden({ timeout: 1000 });
+    await triggerSuggest(page);
     await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
     await expect(page.locator(".suggest-widget")).toContainText("6wind_vsr");
 
     await page.keyboard.press("Escape");
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: ", 4, 13);
     await page.keyboard.type("n");
+    await expect(page.locator(".suggest-widget")).toBeHidden({ timeout: 1000 });
+    await triggerSuggest(page);
     await expect(page.locator(".suggest-widget")).toBeVisible({ timeout: 5000 });
     await expect(page.locator(".suggest-widget")).toContainText("nokia_srlinux");
 
