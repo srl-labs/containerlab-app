@@ -4,6 +4,15 @@
   "private": true,
   "description": "Desktop host for Containerlab.",
   "license": "Apache-2.0",
+  "author": "srl-labs",
+  "homepage": "https://containerlab.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srl-labs/containerlab-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/srl-labs/containerlab-web/issues"
+  },
   "type": "module",
   "main": "dist/main.cjs",
   "engines": {
@@ -23,13 +32,18 @@
     "dev": "npm run build --workspace containerlab-web && npm run build && npm run start",
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "package": "npm run package:appimage",
+    "package": "npm run package:linux",
+    "package:linux": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux",
     "package:appimage": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux AppImage",
+    "package:deb": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux deb",
+    "package:rpm": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux rpm",
+    "package:win": "npm run build --workspace containerlab-web && npm run build && electron-builder --win nsis --x64",
     "package:dir": "npm run build --workspace containerlab-web && npm run build && electron-builder --dir"
   },
   "build": {
     "appId": "dev.containerlab.desktop",
     "productName": "Containerlab",
+    "copyright": "Copyright © srl-labs",
     "electronVersion": "41.5.0",
     "icon": "../web/resources/containerlab.png",
     "afterPack": "scripts/after-pack.cjs",
@@ -52,10 +66,39 @@
       "output": "release"
     },
     "linux": {
+      "artifactName": "containerlab-desktop-${version}-${arch}.${ext}",
+      "executableName": "containerlab-desktop",
       "target": [
-        "dir"
+        "AppImage",
+        "deb",
+        "rpm"
       ],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "srl-labs",
+      "vendor": "srl-labs"
+    },
+    "deb": {
+      "packageName": "containerlab-desktop"
+    },
+    "rpm": {
+      "packageName": "containerlab-desktop"
+    },
+    "win": {
+      "artifactName": "containerlab-desktop-${version}-${arch}-setup.${ext}",
+      "executableName": "containerlab-desktop",
+      "icon": "resources/containerlab.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Containerlab"
     }
   }
 }

@@ -88,7 +88,7 @@ Use the development workflow when contributing to this repository or building a 
 
 ### Source Setup
 
-This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Installing or building from source also requires a GitHub token with GitHub Packages read access because `@srl-labs/clab-ui` is published through GitHub Packages.
+This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Installing or building from source also requires a GitHub token with GitHub Packages read access because `@srl-labs/clab-ui` is published through GitHub Packages. Building Linux desktop packages locally also requires `rpmbuild` for the `.rpm` artifact.
 
 ```bash
 export GITHUB_TOKEN=$(gh auth token)
@@ -104,6 +104,8 @@ Useful contributor commands:
 npm run build:web
 npm run build:desktop
 npm run package:desktop
+npm run package:desktop:linux
+npm run package:desktop:win
 npm run typecheck
 npm run test:unit
 npm run test:e2e:web
@@ -115,7 +117,9 @@ Run the Electron host locally after building the web assets:
 npm run dev:desktop
 ```
 
-On Linux, the desktop launcher forces Electron onto the X11/Ozone backend so it starts reliably under Ubuntu Wayland sessions. The packaged AppImage is written to `apps/desktop/release/Containerlab-0.0.1.AppImage`.
+On Linux, the desktop launcher forces Electron onto the X11/Ozone backend so it starts reliably under Ubuntu Wayland sessions. `npm run package:desktop` builds the Linux desktop artifacts by default: AppImage, `.deb`, and `.rpm`. All desktop package outputs are written to `apps/desktop/release/`.
+
+Windows packaging is built with `npm run package:desktop:win` and produces an unsigned NSIS `.exe` installer. Version tag builds (`v*.*.*`) publish the AppImage, `.deb`, `.rpm`, and `.exe` files as GitHub release assets.
 
 ### Local Docker Build
 

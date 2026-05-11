@@ -20,6 +20,8 @@
     "build:web": "npm run build --workspace containerlab-web",
     "build:desktop": "npm run build --workspace containerlab-desktop",
     "package:desktop": "npm run package --workspace containerlab-desktop",
+    "package:desktop:linux": "npm run package:linux --workspace containerlab-desktop",
+    "package:desktop:win": "npm run package:win --workspace containerlab-desktop",
     "start:web": "npm run start --workspace containerlab-web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "typecheck:local-ui": "npm run typecheck:local-ui --workspace containerlab-web",
