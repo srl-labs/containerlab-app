@@ -5,6 +5,11 @@ FROM node:24-alpine AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/desktop/package.json apps/desktop/package.json
+COPY packages/app-contract/package.json packages/app-contract/package.json
+COPY packages/app-server/package.json packages/app-server/package.json
+COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
 
 RUN --mount=type=secret,id=github_token,required=true \
   GITHUB_TOKEN="$(cat /run/secrets/github_token)" npm ci
@@ -27,7 +32,8 @@ RUN apk add --no-cache openssl
 
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/apps/web/package.json ./apps/web/package.json
+COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 
 USER node
 
@@ -36,4 +42,4 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; const tls = !['0','false','no','off'].includes(String(process.env.WEB_TLS_ENABLE || 'true').toLowerCase()); fetch((tls ? 'https' : 'http') + '://127.0.0.1:' + (process.env.PORT || '3001') + '/api/config').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
 
-CMD ["node", "dist/server/index.cjs"]
+CMD ["node", "apps/web/dist/server/index.cjs"]

@@ -1,0 +1,61 @@
+{
+  "name": "containerlab-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Desktop host for Containerlab.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/main.cjs",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@srl-labs/containerlab-app-server": "0.0.1"
+  },
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.7",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "start": "electron --ozone-platform=x11 .",
+    "dev": "npm run build --workspace containerlab-web && npm run build && npm run start",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "npm run package:appimage",
+    "package:appimage": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux AppImage",
+    "package:dir": "npm run build --workspace containerlab-web && npm run build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "dev.containerlab.desktop",
+    "productName": "Containerlab",
+    "electronVersion": "41.5.0",
+    "icon": "../web/resources/containerlab.png",
+    "afterPack": "scripts/after-pack.cjs",
+    "asar": true,
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist/client",
+        "to": "web-client"
+      },
+      {
+        "from": "../web/resources/containerlab.png",
+        "to": "containerlab.png"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Development"
+    }
+  }
+}
