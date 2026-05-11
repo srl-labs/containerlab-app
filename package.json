@@ -21,6 +21,7 @@
     "build:desktop": "npm run build --workspace containerlab-desktop",
     "package:desktop": "npm run package --workspace containerlab-desktop",
     "package:desktop:linux": "npm run package:linux --workspace containerlab-desktop",
+    "package:desktop:mac": "npm run package:mac --workspace containerlab-desktop",
     "package:desktop:win": "npm run package:win --workspace containerlab-desktop",
     "start:web": "npm run start --workspace containerlab-web",
     "typecheck": "npm run typecheck --workspaces --if-present",

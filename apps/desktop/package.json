@@ -37,6 +37,7 @@
     "package:appimage": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux AppImage",
     "package:deb": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux deb",
     "package:rpm": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux rpm",
+    "package:mac": "npm run build --workspace containerlab-web && npm run build && electron-builder --mac dmg --universal",
     "package:win": "npm run build --workspace containerlab-web && npm run build && electron-builder --win nsis --x64",
     "package:dir": "npm run build --workspace containerlab-web && npm run build && electron-builder --dir"
   },
@@ -82,6 +83,24 @@
     },
     "rpm": {
       "packageName": "containerlab-desktop"
+    },
+    "mac": {
+      "artifactName": "containerlab-desktop-${version}-${arch}.${ext}",
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/containerlab.icns",
+      "identity": null,
+      "notarize": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "sign": false
     },
     "win": {
       "artifactName": "containerlab-desktop-${version}-${arch}-setup.${ext}",
