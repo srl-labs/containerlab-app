@@ -1,0 +1,13 @@
+.git
+.github
+.vite
+blob-report
+coverage
+dev/topologies
+dist
+node_modules
+out
+playwright-report
+test-results
+*.log
+*.tgz

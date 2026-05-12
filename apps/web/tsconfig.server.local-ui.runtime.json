@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.server.json",
+  "compilerOptions": {
+    "paths": {
+      "@srl-labs/containerlab-app-contract": ["../../packages/app-contract/src/index.ts"],
+      "@srl-labs/containerlab-app-server": ["../../packages/app-server/src/index.ts"],
+      "@srl-labs/containerlab-standalone-runtime": ["../../packages/standalone-runtime/src/index.ts"],
+      "@srl-labs/containerlab-standalone-runtime/web-main": [
+        "../../packages/standalone-runtime/src/main.tsx"
+      ],
+      "@srl-labs/containerlab-standalone-runtime/wireshark-vnc-main": [
+        "../../packages/standalone-runtime/src/wiresharkVncMain.tsx"
+      ],
+      "@srl-labs/clab-ui": ["../../../clab-ui/dist/index.js"],
+      "@srl-labs/clab-ui/host": ["../../../clab-ui/dist/host/index.js"],
+      "@srl-labs/clab-ui/session": ["../../../clab-ui/dist/session/index.js"],
+      "@srl-labs/clab-ui/theme": ["../../../clab-ui/dist/theme/index.js"],
+      "@srl-labs/clab-ui/explorer": ["../../../clab-ui/dist/explorer/index.js"],
+      "@srl-labs/clab-ui/image-manager": ["../../../clab-ui/dist/image-manager/index.js"],
+      "@srl-labs/clab-ui/image-manager/catalog": ["../../../clab-ui/dist/image-manager/catalog.js"],
+      "@srl-labs/clab-ui/inspect": ["../../../clab-ui/dist/inspect/index.js"],
+      "@srl-labs/clab-ui/welcome": ["../../../clab-ui/dist/welcome/index.js"],
+      "@srl-labs/clab-ui/node-impairments": ["../../../clab-ui/dist/node-impairments/index.js"],
+      "@srl-labs/clab-ui/wireshark-vnc": ["../../../clab-ui/dist/wireshark-vnc/index.js"],
+      "@srl-labs/clab-ui/styles/global.css": ["../../../clab-ui/dist/styles/global.css"]
+    }
+  }
+}

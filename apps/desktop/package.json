@@ -1,0 +1,145 @@
+{
+  "name": "containerlab-desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Manage and inspect containerlab topologies from a desktop application.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "srl-labs",
+    "email": "containerlab@containerlab.dev",
+    "url": "https://containerlab.dev/"
+  },
+  "homepage": "https://containerlab.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/srl-labs/containerlab-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/srl-labs/containerlab-app/issues"
+  },
+  "type": "module",
+  "main": "dist/main.cjs",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@srl-labs/containerlab-app-server": "0.0.1"
+  },
+  "devDependencies": {
+    "electron": "^41.5.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.7",
+    "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "start": "electron --ozone-platform=x11 .",
+    "dev": "npm run build --workspace containerlab-app-web && npm run build && npm run start",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "package": "npm run package:linux",
+    "package:linux": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux",
+    "package:appimage": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux AppImage",
+    "package:deb": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux deb",
+    "package:rpm": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux rpm",
+    "package:mac": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --mac dmg --universal",
+    "package:win": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --win nsis --x64",
+    "package:dir": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --dir"
+  },
+  "build": {
+    "appId": "dev.containerlab.desktop",
+    "productName": "Containerlab",
+    "copyright": "Copyright © srl-labs",
+    "electronVersion": "41.5.0",
+    "icon": "../web/resources/containerlab.png",
+    "afterPack": "scripts/after-pack.cjs",
+    "asar": true,
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist/client",
+        "to": "web-client"
+      },
+      {
+        "from": "../web/resources/containerlab.png",
+        "to": "containerlab.png"
+      },
+      {
+        "from": "resources/containerlab.ico",
+        "to": "containerlab.ico"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "artifactName": "containerlab-desktop-${version}-${arch}.${ext}",
+      "executableName": "containerlab-desktop",
+      "icon": "resources/icons",
+      "synopsis": "Desktop UI for containerlab network labs",
+      "description": "Manage and inspect containerlab topologies from a desktop application.",
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Development",
+      "maintainer": "srl-labs <containerlab@containerlab.dev>",
+      "vendor": "srl-labs",
+      "desktop": {
+        "entry": {
+          "GenericName": "Network Lab Manager",
+          "Keywords": "containerlab;network;lab;topology;docker;podman;",
+          "StartupNotify": "false"
+        }
+      }
+    },
+    "deb": {
+      "packageName": "containerlab-desktop",
+      "packageCategory": "devel",
+      "fpm": [
+        "--deb-field=Origin: srl-labs"
+      ]
+    },
+    "rpm": {
+      "packageName": "containerlab-desktop"
+    },
+    "mac": {
+      "artifactName": "containerlab-desktop-${version}-${arch}.${ext}",
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/containerlab.icns",
+      "identity": null,
+      "notarize": false,
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "sign": false
+    },
+    "win": {
+      "artifactName": "containerlab-desktop-${version}-${arch}-setup.${ext}",
+      "executableName": "containerlab-desktop",
+      "icon": "resources/containerlab.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Containerlab"
+    }
+  }
+}
