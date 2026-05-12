@@ -74,7 +74,18 @@ function resolveStaticClientRoot(): string {
 }
 
 function resolveWindowIcon(): string | undefined {
+  const candidates =
+    process.platform === "win32"
+      ? [
+          path.resolve(process.resourcesPath, "containerlab.ico"),
+          path.resolve(electronApp.getAppPath(), "resources/containerlab.ico"),
+          path.resolve(process.cwd(), "resources/containerlab.ico"),
+          path.resolve(process.cwd(), "../desktop/resources/containerlab.ico")
+        ]
+      : [];
+
   return firstExistingFile([
+    ...candidates,
     path.resolve(process.resourcesPath, "containerlab.png"),
     path.resolve(electronApp.getAppPath(), "apps/web/resources/containerlab.png"),
     path.resolve(process.cwd(), "../web/resources/containerlab.png"),

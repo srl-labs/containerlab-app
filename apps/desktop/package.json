@@ -65,6 +65,10 @@
       {
         "from": "../web/resources/containerlab.png",
         "to": "containerlab.png"
+      },
+      {
+        "from": "resources/containerlab.ico",
+        "to": "containerlab.ico"
       }
     ],
     "directories": {
