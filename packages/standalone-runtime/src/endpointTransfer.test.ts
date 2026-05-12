@@ -72,6 +72,32 @@ test("parseEndpointProfiles validates import document shape and normalizes URLs"
   ]);
 });
 
+test("parseEndpointProfiles accepts legacy containerlab-web endpoint exports", () => {
+  const profiles = parseEndpointProfiles(
+    JSON.stringify({
+      kind: "containerlab-web.endpoints",
+      version: ENDPOINT_EXPORT_VERSION,
+      endpoints: [
+        {
+          url: "api.example.test/",
+          label: "Primary API",
+          username: "admin",
+          sessionDuration: "24h"
+        }
+      ]
+    })
+  );
+
+  assert.deepEqual(profiles, [
+    {
+      url: "https://api.example.test",
+      label: "Primary API",
+      username: "admin",
+      sessionDuration: "24h"
+    }
+  ]);
+});
+
 test("parseEndpointProfiles rejects malformed files without partial results", () => {
   assert.throws(() => parseEndpointProfiles("{"), EndpointTransferError);
   assert.throws(

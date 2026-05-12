@@ -153,7 +153,7 @@ test.describe("Standalone startup", () => {
       mimeType: "application/json",
       buffer: Buffer.from(
         JSON.stringify({
-          kind: "containerlab-web.endpoints",
+          kind: "containerlab-app.endpoints",
           version: 1,
           endpoints: [
             {

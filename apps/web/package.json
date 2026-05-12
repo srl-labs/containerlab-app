@@ -1,5 +1,5 @@
 {
-  "name": "containerlab-web",
+  "name": "containerlab-app-web",
   "version": "0.0.1",
   "private": true,
   "description": "Browser host for containerlab-app built on @srl-labs/clab-ui.",

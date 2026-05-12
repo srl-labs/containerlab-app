@@ -12,10 +12,10 @@
   "homepage": "https://containerlab.dev/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/srl-labs/containerlab-web.git"
+    "url": "https://github.com/srl-labs/containerlab-app.git"
   },
   "bugs": {
-    "url": "https://github.com/srl-labs/containerlab-web/issues"
+    "url": "https://github.com/srl-labs/containerlab-app/issues"
   },
   "type": "module",
   "main": "dist/main.cjs",
@@ -33,17 +33,17 @@
   },
   "scripts": {
     "start": "electron --ozone-platform=x11 .",
-    "dev": "npm run build --workspace containerlab-web && npm run build && npm run start",
+    "dev": "npm run build --workspace containerlab-app-web && npm run build && npm run start",
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "package": "npm run package:linux",
-    "package:linux": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux",
-    "package:appimage": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux AppImage",
-    "package:deb": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux deb",
-    "package:rpm": "npm run build --workspace containerlab-web && npm run build && electron-builder --linux rpm",
-    "package:mac": "npm run build --workspace containerlab-web && npm run build && electron-builder --mac dmg --universal",
-    "package:win": "npm run build --workspace containerlab-web && npm run build && electron-builder --win nsis --x64",
-    "package:dir": "npm run build --workspace containerlab-web && npm run build && electron-builder --dir"
+    "package:linux": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux",
+    "package:appimage": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux AppImage",
+    "package:deb": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux deb",
+    "package:rpm": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux rpm",
+    "package:mac": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --mac dmg --universal",
+    "package:win": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --win nsis --x64",
+    "package:dir": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --dir"
   },
   "build": {
     "appId": "dev.containerlab.desktop",

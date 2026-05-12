@@ -1,5 +1,5 @@
 /**
- * AttractorEmptyState — Animated empty state for containerlab-web.
+ * AttractorEmptyState — Animated empty state for containerlab-app.
  *
  * Loads the real 3D containerlab logo (model.gltf) via Three.js with
  * enhanced lighting, reflections, and floating particles that orbit
@@ -48,7 +48,7 @@ export function AttractorEmptyState({
     try {
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     } catch (error) {
-      console.warn("[containerlab-web] WebGL unavailable for empty-state animation", error);
+      console.warn("[containerlab-app] WebGL unavailable for empty-state animation", error);
       setWebglUnavailable(true);
       if (portalHost) {
         portalHost.style.pointerEvents = previousPortalPointerEvents ?? "none";

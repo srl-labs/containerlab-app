@@ -1,6 +1,8 @@
-export const ENDPOINT_EXPORT_KIND = "containerlab-web.endpoints";
+export const ENDPOINT_EXPORT_KIND = "containerlab-app.endpoints";
 export const ENDPOINT_EXPORT_VERSION = 1;
-export const ENDPOINT_EXPORT_FILENAME = "containerlab-web-endpoints.json";
+export const ENDPOINT_EXPORT_FILENAME = "containerlab-app-endpoints.json";
+
+const LEGACY_ENDPOINT_EXPORT_KIND = "containerlab-web.endpoints";
 
 export type EndpointSessionDuration = string;
 
@@ -150,7 +152,10 @@ export function parseEndpointProfiles(content: string): EndpointProfile[] {
   if (!isRecord(parsed)) {
     throw new EndpointTransferError("Endpoint import file must contain a JSON object");
   }
-  if (parsed.kind !== ENDPOINT_EXPORT_KIND || parsed.version !== ENDPOINT_EXPORT_VERSION) {
+  if (
+    (parsed.kind !== ENDPOINT_EXPORT_KIND && parsed.kind !== LEGACY_ENDPOINT_EXPORT_KIND) ||
+    parsed.version !== ENDPOINT_EXPORT_VERSION
+  ) {
     throw new EndpointTransferError("Endpoint import file has an unsupported format or version");
   }
   if (!Array.isArray(parsed.endpoints)) {

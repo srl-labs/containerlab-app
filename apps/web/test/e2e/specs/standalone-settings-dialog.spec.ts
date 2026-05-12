@@ -282,7 +282,7 @@ test.describe("Standalone Settings Dialog", () => {
     await dialog.locator('[data-testid="standalone-endpoints-export"]').click();
     const download = await downloadPromise;
     const downloadPath = await download.path();
-    expect(download.suggestedFilename()).toBe("containerlab-web-endpoints.json");
+    expect(download.suggestedFilename()).toBe("containerlab-app-endpoints.json");
     expect(downloadPath).toBeTruthy();
     const exported = await fs.readFile(downloadPath ?? "", "utf8");
     const payload = JSON.parse(exported) as {
@@ -291,7 +291,7 @@ test.describe("Standalone Settings Dialog", () => {
       version: number;
     };
     expect(payload).toEqual({
-      kind: "containerlab-web.endpoints",
+      kind: "containerlab-app.endpoints",
       version: 1,
       endpoints: [
         {
@@ -314,7 +314,7 @@ test.describe("Standalone Settings Dialog", () => {
       mimeType: "application/json",
       buffer: Buffer.from(
         JSON.stringify({
-          kind: "containerlab-web.endpoints",
+          kind: "containerlab-app.endpoints",
           version: 1,
           endpoints: [
             {
