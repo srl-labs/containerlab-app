@@ -37,13 +37,13 @@
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "package": "npm run package:linux",
-    "package:linux": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux",
-    "package:appimage": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux AppImage",
-    "package:deb": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux deb",
-    "package:rpm": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux rpm",
-    "package:mac": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --mac dmg --universal",
-    "package:win": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --win nsis --x64",
-    "package:dir": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --dir"
+    "package:linux": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux --publish never",
+    "package:appimage": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux AppImage --publish never",
+    "package:deb": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux deb --publish never",
+    "package:rpm": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux rpm --publish never",
+    "package:mac": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --mac dmg --universal --publish never",
+    "package:win": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:dir": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --dir --publish never"
   },
   "build": {
     "appId": "dev.containerlab.desktop",
