@@ -50,11 +50,13 @@ sudo systemctl status clab-api-server
 
 For temporary local trials, Containerlab's `containerlab tools api-server start` command can also start the API server. For regular use, prefer the installed service.
 
+On macOS, run `clab-api-server` in the Linux environment that owns containerlab and the Docker daemon, such as an OrbStack VM, Docker Desktop VM, devcontainer, or a remote Linux lab host. The app then connects to that API endpoint from the browser or desktop app.
+
 ---
 
 ## 2A. Install The Web App
 
-The web app is published as a container image. The current image name is still `ghcr.io/srl-labs/containerlab-web`.
+The web app is published as a multi-arch container image for `linux/amd64` and `linux/arm64`. The current image name is `ghcr.io/srl-labs/containerlab-web`.
 
 Run it on the same host as `clab-api-server`:
 
@@ -80,6 +82,8 @@ docker run -d --name containerlab-app \
 ```
 
 `CLAB_API_URL` must be reachable from inside the container. Users can still choose a different API URL on the login screen.
+
+On macOS, run the web image with Docker Desktop, OrbStack, or another Docker-compatible Linux VM. For a local VM-hosted API server, set `CLAB_API_URL` to the address that is reachable from inside the web container; for a remote lab host, use that host's `clab-api-server` URL.
 
 ---
 
@@ -168,7 +172,7 @@ macOS packaging is built with `npm run package:desktop:mac` and produces an unsi
 
 ### Local Docker Build
 
-The GHCR image is the default way to run the web app. Build locally only when testing local changes:
+The GHCR image is the default way to run the web app and is published for `linux/amd64` and `linux/arm64`. Build a local image only when testing local changes; the command below builds for your current Docker platform:
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) \
