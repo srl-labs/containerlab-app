@@ -11,14 +11,32 @@ type EndpointResolver = (
   endpointId?: string
 ) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
+interface ForwardTopologyEventsOptions {
+  shouldSuppressLine?: (line: string) => boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function writeTopologyEventError(reply: FastifyReply, message: string): void {
   reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
+}
+
+function isTopologyDocumentEventLine(line: string): boolean {
+  try {
+    const value = JSON.parse(line) as unknown;
+    return isRecord(value) && value.type === "topology-doc";
+  } catch {
+    return false;
+  }
 }
 
 async function forwardTopologyEvents(
   body: ReadableStream<Uint8Array>,
   reply: FastifyReply,
-  isAborted: () => boolean
+  isAborted: () => boolean,
+  options: ForwardTopologyEventsOptions = {}
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -41,7 +59,7 @@ async function forwardTopologyEvents(
           break;
         }
         const trimmed = line.trim();
-        if (trimmed) {
+        if (trimmed && options.shouldSuppressLine?.(trimmed) !== true) {
           eventId += 1;
           reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
         }
@@ -108,7 +126,10 @@ export function registerTopologyEventsProxy(
           return;
         }
 
-        await forwardTopologyEvents(response.body, reply, () => aborted);
+        await forwardTopologyEvents(response.body, reply, () => aborted, {
+          shouldSuppressLine: (line) =>
+            session.isInternalUpdate() && isTopologyDocumentEventLine(line)
+        });
       } catch (error) {
         if (!aborted) {
           const message = error instanceof Error ? error.message : "Topology event stream error";

@@ -15,11 +15,13 @@ interface SessionRecord {
   baseUrl: string;
   endpointId: string;
   host: TopologySessionCore;
+  isInternalUpdate(): boolean;
   lastAccess: number;
   sessionId: string;
   sourcePreference: TopologySourcePreference;
   token: string;
   topologyRef: TopologyRef;
+  disposeInternalUpdateTracker(): void;
 }
 
 interface CreateSessionOptions {
@@ -34,6 +36,13 @@ interface CreateSessionOptions {
 }
 
 const SESSION_TTL_MS = 5 * 60 * 1000;
+const INTERNAL_UPDATE_GRACE_MS = 250;
+
+interface InternalUpdateTracker {
+  dispose(): void;
+  isActive(): boolean;
+  set(updating: boolean): void;
+}
 
 export interface StandaloneTopologySessionManager {
   createSession(options: CreateSessionOptions): SessionRecord;
@@ -44,8 +53,65 @@ export interface StandaloneTopologySessionManager {
   getSession(sessionId: string, endpointId?: string): SessionRecord | null;
 }
 
+function createInternalUpdateTracker(): InternalUpdateTracker {
+  let internalUpdateDepth = 0;
+  let internalUpdateGraceUntil = 0;
+  let internalUpdateGraceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const clearGraceTimer = (): void => {
+    if (!internalUpdateGraceTimer) {
+      return;
+    }
+    clearTimeout(internalUpdateGraceTimer);
+    internalUpdateGraceTimer = undefined;
+  };
+
+  const startGraceWindow = (): void => {
+    internalUpdateGraceUntil = Date.now() + INTERNAL_UPDATE_GRACE_MS;
+    clearGraceTimer();
+    internalUpdateGraceTimer = setTimeout(() => {
+      internalUpdateGraceUntil = 0;
+      internalUpdateGraceTimer = undefined;
+    }, INTERNAL_UPDATE_GRACE_MS);
+  };
+
+  return {
+    dispose(): void {
+      internalUpdateDepth = 0;
+      internalUpdateGraceUntil = 0;
+      clearGraceTimer();
+    },
+
+    isActive(): boolean {
+      return internalUpdateDepth > 0 || Date.now() < internalUpdateGraceUntil;
+    },
+
+    set(updating: boolean): void {
+      if (updating) {
+        clearGraceTimer();
+        internalUpdateGraceUntil = 0;
+        internalUpdateDepth += 1;
+        return;
+      }
+
+      const hadActiveInternalUpdate = internalUpdateDepth > 0;
+      internalUpdateDepth = Math.max(0, internalUpdateDepth - 1);
+      if (!hadActiveInternalUpdate || internalUpdateDepth > 0) {
+        return;
+      }
+
+      startGraceWindow();
+    }
+  };
+}
+
 export function createStandaloneTopologySessionManager(): StandaloneTopologySessionManager {
   const sessions = new Map<string, SessionRecord>();
+
+  const disposeSessionRecord = (session: SessionRecord): void => {
+    session.host.dispose();
+    session.disposeInternalUpdateTracker();
+  };
 
   const cleanupExpiredSessions = (): void => {
     const now = Date.now();
@@ -53,7 +119,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
       if (now - session.lastAccess <= SESSION_TTL_MS) {
         continue;
       }
-      session.host.dispose();
+      disposeSessionRecord(session);
       sessions.delete(sessionId);
     }
   };
@@ -65,7 +131,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
     if (!session) {
       return false;
     }
-    session.host.dispose();
+    disposeSessionRecord(session);
     sessions.delete(sessionId);
     return true;
   };
@@ -81,6 +147,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         yamlPath: options.topologyRef.yamlPath,
         annotationsPath: options.topologyRef.annotationsPath
       });
+      const internalUpdateTracker = createInternalUpdateTracker();
 
       const host = new TopologySessionCore({
         fs,
@@ -88,6 +155,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         mode: options.mode,
         deploymentState: options.deploymentState,
         containerDataProvider: options.containerDataProvider,
+        setInternalUpdate: internalUpdateTracker.set,
         logger: {
           debug: () => {},
           info: () => {},
@@ -100,11 +168,13 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         baseUrl: options.client.getBaseUrl(),
         endpointId: options.endpointId,
         host,
+        isInternalUpdate: internalUpdateTracker.isActive,
         lastAccess: Date.now(),
         sessionId,
         sourcePreference: options.sourcePreference ?? "api-file",
         token: options.token,
-        topologyRef: options.topologyRef
+        topologyRef: options.topologyRef,
+        disposeInternalUpdateTracker: internalUpdateTracker.dispose
       };
 
       sessions.set(sessionId, record);
@@ -114,7 +184,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
     disposeAll() {
       clearInterval(cleanupTimer);
       for (const session of sessions.values()) {
-        session.host.dispose();
+        disposeSessionRecord(session);
       }
       sessions.clear();
     },
