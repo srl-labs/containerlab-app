@@ -1,0 +1,51 @@
+name: PR Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Web smoke E2E
+        run: npm run test:e2e:web:smoke
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: containerlab-app-playwright-report-${{ github.run_number }}
+          path: apps/web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 30
