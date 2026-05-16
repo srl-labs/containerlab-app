@@ -31,6 +31,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Verify release version
+        run: npm run check:release-version
+
       - name: Install Linux package tooling
         run: |
           sudo apt-get update
@@ -74,6 +77,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
+      - name: Verify release version
+        run: npm run check:release-version
+
       - name: Install dependencies
         run: npm ci
         env:
@@ -112,6 +118,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
+
+      - name: Verify release version
+        run: npm run check:release-version
 
       - name: Install dependencies
         run: npm ci

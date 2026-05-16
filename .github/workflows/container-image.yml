@@ -23,6 +23,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Verify release version
+        run: npm run check:release-version
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 

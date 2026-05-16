@@ -47,7 +47,8 @@ import {
   useLabStore,
   type DeploymentState,
   type EndpointImportResult,
-  type EndpointSessionDuration
+  type EndpointSessionDuration,
+  type InterfaceNetemPatch
 } from "./mainRuntimeDependencies";
 import {
   buildPacketflixCapture,
@@ -72,6 +73,7 @@ import {
   runtimeUiActions,
   useRuntimeUiStore,
   saveUiCustomNode,
+  setNetem,
   setDefaultUiCustomNode,
   uploadUiIcon,
   useLabTabsStore,
@@ -574,6 +576,51 @@ type VscodeMessage = {
   usedIcons?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function optionalStringField(data: Record<string, unknown>, key: string): string | undefined {
+  const value = data[key];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function optionalNumberField(data: Record<string, unknown>, key: string): number | undefined {
+  const value = data[key];
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : undefined;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim().replace(/%$/, "").trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function netemPatchFromValues(input: {
+  delay?: string;
+  jitter?: string;
+  loss?: number;
+  rate?: number;
+  corruption?: number;
+}): InterfaceNetemPatch {
+  return {
+    netemDelay: input.delay ?? "0ms",
+    netemJitter: input.jitter ?? "0ms",
+    netemLoss: input.loss !== undefined ? String(input.loss) : "0%",
+    netemRate: input.rate !== undefined ? String(input.rate) : "0",
+    netemCorruption: input.corruption !== undefined ? String(input.corruption) : "0"
+  };
+}
+
 function getActiveTopologyTarget() {
   const topologyRef = topologyManager.getCurrentTopologyRef();
   if (!topologyRef) {
@@ -752,14 +799,53 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
 
 function handleLinkImpairmentCommand(msg: VscodeMessage): void {
   const target = getActiveTopologyTarget();
-  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+  const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+  const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+  if (!target || !nodeName) {
     return;
   }
+  if (isRecord(msg.data)) {
+    if (!interfaceName) {
+      runtimeUiActions.notify("Missing interface for link impairment.", "error");
+      return;
+    }
+    const delay = optionalStringField(msg.data, "delay");
+    const jitter = optionalStringField(msg.data, "jitter");
+    const loss = optionalNumberField(msg.data, "loss");
+    const rate = optionalNumberField(msg.data, "rate");
+    const corruption = optionalNumberField(msg.data, "corruption");
+    void setNetem({
+      ...target,
+      nodeName,
+      interfaceName,
+      delay,
+      jitter,
+      loss,
+      rate,
+      corruption
+    })
+      .then(() => {
+        useLabStore.getState().updateInterfaceNetemState({
+          endpointId: target.endpointId,
+          topologyPath: target.topologyRef?.yamlPath,
+          labName: target.topologyRef?.labName,
+          nodeName,
+          interfaceName,
+          netem: netemPatchFromValues({ delay, jitter, loss, rate, corruption })
+        });
+        runtimeUiActions.notify(`Updated impairments for ${nodeName}:${interfaceName}.`, "success");
+      })
+      .catch((error: unknown) => {
+        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      });
+    return;
+  }
+
   runtimeUiActions.openNetem({
     ...target,
-    nodeName: msg.nodeName,
-    preferredInterfaceName: typeof msg.interfaceName === "string" ? msg.interfaceName : undefined,
-    title: `Impairments: ${msg.nodeName}`
+    nodeName,
+    preferredInterfaceName: interfaceName || undefined,
+    title: `Impairments: ${nodeName}`
   });
 }
 

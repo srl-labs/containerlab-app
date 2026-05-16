@@ -28,13 +28,11 @@ import {
 } from "@mui/material";
 
 import {
-  fetchNetem,
   fetchNodeLogs,
   fetchVersionCheck,
   fetchVersionInfo,
   inspectAllLabs,
   inspectLab,
-  netemFieldsFromShowResponse,
   normalizeNetemFields,
   resetNetem,
   setNetem,
@@ -45,7 +43,7 @@ import {
   type RuntimeTargetRequest
 } from "../runtimeApi";
 import { findLabStateForTopology } from "../standaloneHostShared";
-import type { ContainerState, LabState } from "../stores/labStore";
+import type { ContainerState, InterfaceNetemPatch, LabState } from "../stores/labStore";
 import { useLabStore } from "../stores/labStore";
 import { runtimeUiActions, useRuntimeUiStore } from "../stores/runtimeUiStore";
 import {
@@ -69,6 +67,11 @@ interface InspectGroup {
   containers: InspectContainerInfo[];
 }
 
+interface NetemInterfaceRow {
+  name: string;
+  label: string;
+}
+
 interface TopologyFileNameDialogState {
   request: ActiveTopologyFileNameDialogRequest;
   resolve: (value: string | undefined) => void;
@@ -89,12 +92,12 @@ interface CloneRepoDialogState {
   resolve: (value: CloneRepoDialogResult | undefined) => void;
 }
 
-const EMPTY_NETEM_FIELDS: NetemFields = {
-  delay: "",
-  jitter: "",
-  loss: "",
-  rate: "",
-  corruption: ""
+const DEFAULT_NETEM_FIELDS: NetemFields = {
+  delay: "0ms",
+  jitter: "0ms",
+  loss: "0%",
+  rate: "0",
+  corruption: "0"
 };
 
 function normalizeInspectGroups(
@@ -230,23 +233,58 @@ function findRuntimeContainer(
   return bestScore > 0 ? bestContainer : undefined;
 }
 
-function sortedInterfaceNames(container: ContainerState | undefined): string[] {
+function sortedInterfaceRows(container: ContainerState | undefined): NetemInterfaceRow[] {
   if (!container) {
     return [];
   }
   return [...container.interfaces.values()]
     .filter((iface) => iface.name !== "lo")
-    .map((iface) => iface.alias || iface.name)
-    .sort((left, right) => left.localeCompare(right));
+    .map((iface) => ({
+      name: iface.name,
+      label: iface.alias && iface.alias !== iface.name ? `${iface.alias} (${iface.name})` : iface.name
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function netemFieldsFromRuntimeContainer(
+  container: ContainerState | undefined
+): Record<string, NetemFields> {
+  const result: Record<string, NetemFields> = {};
+  if (!container) {
+    return result;
+  }
+  for (const iface of container.interfaces.values()) {
+    if (iface.name === "lo") {
+      continue;
+    }
+    result[iface.name] = {
+      delay: iface.netemDelay ?? "",
+      jitter: iface.netemJitter ?? "",
+      loss: iface.netemLoss ?? "",
+      rate: iface.netemRate ?? "",
+      corruption: iface.netemCorruption ?? ""
+    };
+  }
+  return result;
 }
 
 function parseOptionalNumber(value: string): number | undefined {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/%$/, "").trim();
   if (!trimmed) {
     return undefined;
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function netemPatchFromFields(fields: NetemFields): InterfaceNetemPatch {
+  return {
+    netemDelay: fields.delay.trim() || DEFAULT_NETEM_FIELDS.delay,
+    netemJitter: fields.jitter.trim() || DEFAULT_NETEM_FIELDS.jitter,
+    netemLoss: fields.loss.trim() || DEFAULT_NETEM_FIELDS.loss,
+    netemRate: fields.rate.trim() || DEFAULT_NETEM_FIELDS.rate,
+    netemCorruption: fields.corruption.trim() || DEFAULT_NETEM_FIELDS.corruption
+  };
 }
 
 function mergeInterfaceFields(
@@ -498,12 +536,13 @@ function NetemDialogView(props: {
   netemContainerName: string;
   netemError: string | null;
   netemFieldsByInterface: Record<string, NetemFields>;
+  netemInterfaceRows: NetemInterfaceRow[];
   netemLoading: boolean;
   netemPendingInterface: string | null;
   netemRequest: ReturnType<typeof useRuntimeUiStore.getState>["netemRequest"];
   setNetemFieldsByInterface: React.Dispatch<React.SetStateAction<Record<string, NetemFields>>>;
 }) {
-  const interfaceNames = Object.keys(props.netemFieldsByInterface);
+  const interfaceRows = props.netemInterfaceRows;
 
   return (
     <Dialog open={props.netemRequest !== null} onClose={props.closeNetem} maxWidth="lg" fullWidth>
@@ -531,13 +570,13 @@ function NetemDialogView(props: {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {interfaceNames.map((interfaceName) => {
-                  const fields = normalizeNetemFields(props.netemFieldsByInterface[interfaceName]);
+                {interfaceRows.map((row) => {
+                  const fields = normalizeNetemFields(props.netemFieldsByInterface[row.name]);
                   return (
-                    <TableRow key={interfaceName}>
-                      <TableCell>{interfaceName}</TableCell>
+                    <TableRow key={row.name}>
+                      <TableCell>{row.label}</TableCell>
                       {(["delay", "jitter", "loss", "rate", "corruption"] as Array<keyof NetemFields>).map((fieldKey) => (
-                        <TableCell key={`${interfaceName}:${fieldKey}`}>
+                        <TableCell key={`${row.name}:${fieldKey}`}>
                           <TextField
                             size="small"
                             value={fields[fieldKey]}
@@ -545,8 +584,8 @@ function NetemDialogView(props: {
                               const value = event.target.value;
                               props.setNetemFieldsByInterface((current) => ({
                                 ...current,
-                                [interfaceName]: {
-                                  ...normalizeNetemFields(current[interfaceName]),
+                                [row.name]: {
+                                  ...normalizeNetemFields(current[row.name]),
                                   [fieldKey]: value
                                 }
                               }));
@@ -559,8 +598,8 @@ function NetemDialogView(props: {
                           <Button
                             size="small"
                             variant="outlined"
-                            onClick={() => void props.applyNetem(interfaceName)}
-                            disabled={props.netemPendingInterface === interfaceName}
+                            onClick={() => void props.applyNetem(row.name)}
+                            disabled={props.netemPendingInterface === row.name}
                           >
                             Apply
                           </Button>
@@ -568,8 +607,8 @@ function NetemDialogView(props: {
                             size="small"
                             color="warning"
                             variant="outlined"
-                            onClick={() => void props.clearNetem(interfaceName)}
-                            disabled={props.netemPendingInterface === interfaceName}
+                            onClick={() => void props.clearNetem(row.name)}
+                            disabled={props.netemPendingInterface === row.name}
                           >
                             Reset
                           </Button>
@@ -581,7 +620,7 @@ function NetemDialogView(props: {
               </TableBody>
             </Table>
           </TableContainer>
-          {!props.netemLoading && interfaceNames.length === 0 ? (
+          {!props.netemLoading && interfaceRows.length === 0 ? (
             <Alert severity="info">No runtime interface data is available for this node.</Alert>
           ) : null}
         </Stack>
@@ -1026,8 +1065,12 @@ export function RuntimeActionDialogs() {
     });
   }, [labs, netemRequest]);
 
-  const availableInterfaces = useMemo(
-    () => sortedInterfaceNames(runtimeContainer),
+  const netemInterfaceRows = useMemo(
+    () => sortedInterfaceRows(runtimeContainer),
+    [runtimeContainer]
+  );
+  const runtimeNetemFields = useMemo(
+    () => netemFieldsFromRuntimeContainer(runtimeContainer),
     [runtimeContainer]
   );
   const trimmedTopologyFileNameInput = topologyFileNameInput.trim();
@@ -1363,53 +1406,16 @@ export function RuntimeActionDialogs() {
       setNetemFieldsByInterface({});
       setNetemContainerName("");
       setNetemError(null);
+      setNetemLoading(false);
       return;
     }
 
-    let cancelled = false;
-    setNetemLoading(true);
+    const interfaceNames = netemInterfaceRows.map((row) => row.name);
+    setNetemLoading(false);
     setNetemError(null);
-    setNetemFieldsByInterface(mergeInterfaceFields(availableInterfaces, {}));
-
-    const load = async () => {
-      try {
-        const result = await fetchNetem({
-          sessionId: netemRequest.sessionId,
-          topologyRef: netemRequest.topologyRef,
-          nodeName: netemRequest.nodeName
-        });
-        if (cancelled) {
-          return;
-        }
-
-        const existingFields = netemFieldsFromShowResponse(
-          result.impairments,
-          result.containerName
-        );
-        const interfaceNames = [...new Set([
-          ...availableInterfaces,
-          ...Object.keys(existingFields)
-        ])].sort((left, right) => left.localeCompare(right));
-
-        setNetemContainerName(result.containerName);
-        setNetemFieldsByInterface(mergeInterfaceFields(interfaceNames, existingFields));
-      } catch (error) {
-        if (!cancelled) {
-          setNetemError(error instanceof Error ? error.message : String(error));
-          setNetemFieldsByInterface(mergeInterfaceFields(availableInterfaces, {}));
-        }
-      } finally {
-        if (!cancelled) {
-          setNetemLoading(false);
-        }
-      }
-    };
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [availableInterfaces, netemRequest]);
+    setNetemContainerName(runtimeContainer?.name ?? "");
+    setNetemFieldsByInterface(mergeInterfaceFields(interfaceNames, runtimeNetemFields));
+  }, [netemInterfaceRows, netemRequest, runtimeContainer?.name, runtimeNetemFields]);
 
   const applyNetem = async (interfaceName: string): Promise<void> => {
     if (!netemRequest) {
@@ -1430,6 +1436,14 @@ export function RuntimeActionDialogs() {
         loss: parseOptionalNumber(fields.loss),
         rate: parseOptionalNumber(fields.rate),
         corruption: parseOptionalNumber(fields.corruption)
+      });
+      useLabStore.getState().updateInterfaceNetemState({
+        endpointId: netemRequest.endpointId,
+        topologyPath: netemRequest.topologyRef?.yamlPath,
+        labName: netemRequest.topologyRef?.labName,
+        nodeName: netemRequest.nodeName,
+        interfaceName,
+        netem: netemPatchFromFields(fields)
       });
       runtimeUiActions.notify(`Updated impairments for ${interfaceName}.`, "success");
     } catch (error) {
@@ -1453,9 +1467,17 @@ export function RuntimeActionDialogs() {
         nodeName: netemRequest.nodeName,
         interfaceName
       });
+      useLabStore.getState().updateInterfaceNetemState({
+        endpointId: netemRequest.endpointId,
+        topologyPath: netemRequest.topologyRef?.yamlPath,
+        labName: netemRequest.topologyRef?.labName,
+        nodeName: netemRequest.nodeName,
+        interfaceName,
+        netem: netemPatchFromFields(DEFAULT_NETEM_FIELDS)
+      });
       setNetemFieldsByInterface((current) => ({
         ...current,
-        [interfaceName]: EMPTY_NETEM_FIELDS
+        [interfaceName]: DEFAULT_NETEM_FIELDS
       }));
       runtimeUiActions.notify(`Cleared impairments for ${interfaceName}.`, "success");
     } catch (error) {
@@ -1597,6 +1619,7 @@ export function RuntimeActionDialogs() {
           netemContainerName={netemContainerName}
           netemError={netemError}
           netemFieldsByInterface={netemFieldsByInterface}
+          netemInterfaceRows={netemInterfaceRows}
           netemLoading={netemLoading}
           netemPendingInterface={netemPendingInterface}
           netemRequest={netemRequest}

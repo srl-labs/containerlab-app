@@ -62,6 +62,7 @@ interface LabStoreState {
   getLabsForEndpoint: (endpointId: string) => Map<string, LabState>;
   processEvent: (endpointId: string, event: EventData) => void;
   setConnected: (endpointId: string, connected: boolean) => void;
+  updateInterfaceNetemState: (update: InterfaceNetemUpdate) => void;
 }
 
 export interface EventData {
@@ -282,6 +283,117 @@ const INTERFACE_ATTRIBUTE_FIELDS: Array<[MutableInterfaceField, string]> = [
   ["netemCorruption", "netem_corruption"]
 ];
 
+const NETEM_INTERFACE_FIELDS = [
+  "netemDelay",
+  "netemJitter",
+  "netemLoss",
+  "netemRate",
+  "netemCorruption"
+] as const;
+
+const DEFAULT_INTERFACE_NETEM_STATE = {
+  netemDelay: "0ms",
+  netemJitter: "0ms",
+  netemLoss: "0%",
+  netemRate: "0",
+  netemCorruption: "0"
+} as const;
+
+type InterfaceNetemField = typeof NETEM_INTERFACE_FIELDS[number];
+
+export type InterfaceNetemPatch = Partial<Pick<InterfaceState, InterfaceNetemField>>;
+
+export interface InterfaceNetemUpdate {
+  endpointId?: string;
+  topologyPath?: string;
+  labName?: string;
+  nodeName: string;
+  interfaceName: string;
+  netem: InterfaceNetemPatch;
+}
+
+function normalizeNetemTargetValue(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function labMatchesNetemTarget(lab: LabState, update: InterfaceNetemUpdate): boolean {
+  const targetPath = normalizeLabStorePath(update.topologyPath);
+  if (targetPath) {
+    const labPathMatches = normalizeLabStorePath(lab.topologyPath) === targetPath;
+    const containerPathMatches = [...lab.containers.values()].some(
+      (container) => normalizeLabStorePath(container.labPath) === targetPath
+    );
+    if (labPathMatches || containerPathMatches) {
+      return true;
+    }
+  }
+
+  const targetLabName = normalizeLabStoreName(update.labName);
+  if (targetLabName) {
+    return normalizeLabStoreName(lab.name) === targetLabName;
+  }
+
+  // Runtime events and topology sessions can report different path forms.
+  // If the path did not match, let the node/container/interface match decide.
+  return true;
+}
+
+function containerMatchesNetemTarget(lab: LabState, container: ContainerState, nodeName: string): boolean {
+  const target = normalizeNetemTargetValue(nodeName);
+  if (!target) {
+    return false;
+  }
+
+  const containerName = normalizeNetemTargetValue(container.name);
+  const containerNodeName = normalizeNetemTargetValue(container.nodeName);
+  if (containerName === target || containerNodeName === target) {
+    return true;
+  }
+
+  const labPrefix = `clab-${normalizeNetemTargetValue(lab.name)}-`;
+  const shortContainerName = containerName.startsWith(labPrefix)
+    ? containerName.slice(labPrefix.length)
+    : containerName;
+  return shortContainerName === target || containerName.endsWith(`-${target}`);
+}
+
+function findInterfaceEntry(
+  interfaces: Map<string, InterfaceState>,
+  interfaceName: string
+): [string, InterfaceState] | undefined {
+  const target = normalizeNetemTargetValue(interfaceName);
+  if (!target) {
+    return undefined;
+  }
+  for (const [key, iface] of interfaces.entries()) {
+    if (
+      normalizeNetemTargetValue(iface.name) === target ||
+      normalizeNetemTargetValue(iface.alias) === target
+    ) {
+      return [key, iface];
+    }
+  }
+  return undefined;
+}
+
+function applyNetemPatch(iface: InterfaceState, patch: InterfaceNetemPatch): InterfaceState {
+  const next = { ...iface };
+  for (const field of NETEM_INTERFACE_FIELDS) {
+    const value = patch[field];
+    if (value !== undefined) {
+      next[field] = value;
+    }
+  }
+  return next;
+}
+
+function interfaceNetemPatchChanges(iface: InterfaceState, patch: InterfaceNetemPatch): boolean {
+  return NETEM_INTERFACE_FIELDS.some((field) => {
+    const value = patch[field];
+    return value !== undefined && iface[field] !== value;
+  });
+}
+
 function shouldDeleteInterface(interfaceName: string, action: string): boolean {
   return interfaceName.startsWith("clab-") || action === "delete";
 }
@@ -294,7 +406,8 @@ function baseInterfaceState(interfaceName: string, existing: InterfaceState | un
     state: existing?.state ?? "",
     type: existing?.type ?? "",
     mac: existing?.mac ?? "",
-    mtu: existing?.mtu ?? ""
+    mtu: existing?.mtu ?? "",
+    ...(existing ? {} : DEFAULT_INTERFACE_NETEM_STATE)
   };
 }
 
@@ -321,6 +434,20 @@ function preserveInterfaceMetadata(next: InterfaceState, existing: InterfaceStat
   }
   for (const field of ["alias", "label", "type", "mac", "mtu"] as const) {
     next[field] = existing[field];
+  }
+}
+
+function preserveInterfaceNetemState(
+  next: InterfaceState,
+  existing: InterfaceState | undefined
+): void {
+  if (!existing) {
+    return;
+  }
+  for (const field of NETEM_INTERFACE_FIELDS) {
+    if (next[field] === undefined && existing[field] !== undefined) {
+      next[field] = existing[field];
+    }
   }
 }
 
@@ -360,6 +487,7 @@ function upsertInterface(
   const existing = container.interfaces.get(interfaceName);
   const next = baseInterfaceState(interfaceName, existing);
   applyInterfaceAttributes(next, attrs);
+  preserveInterfaceNetemState(next, existing);
   if (action === "stats") {
     preserveInterfaceMetadata(next, existing);
   }
@@ -550,6 +678,64 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
       };
     });
   },
+
+  updateInterfaceNetemState: (update) =>
+    set((state) => {
+      let changed = false;
+      const labsByEndpoint = new Map(state.labsByEndpoint);
+
+      for (const [endpointId, endpointLabs] of state.labsByEndpoint.entries()) {
+        if (update.endpointId && endpointId !== update.endpointId) {
+          continue;
+        }
+
+        let endpointChanged = false;
+        const nextEndpointLabs = new Map(endpointLabs);
+
+        for (const [labKey, lab] of endpointLabs.entries()) {
+          if (!labMatchesNetemTarget(lab, update)) {
+            continue;
+          }
+
+          for (const [containerKey, container] of lab.containers.entries()) {
+            if (!containerMatchesNetemTarget(lab, container, update.nodeName)) {
+              continue;
+            }
+            const interfaceEntry = findInterfaceEntry(container.interfaces, update.interfaceName);
+            if (!interfaceEntry) {
+              continue;
+            }
+            const [interfaceKey, iface] = interfaceEntry;
+            if (!interfaceNetemPatchChanges(iface, update.netem)) {
+              continue;
+            }
+
+            const nextInterfaces = new Map(container.interfaces);
+            nextInterfaces.set(interfaceKey, applyNetemPatch(iface, update.netem));
+
+            const nextContainers = new Map(lab.containers);
+            nextContainers.set(containerKey, { ...container, interfaces: nextInterfaces });
+            nextEndpointLabs.set(labKey, { ...lab, containers: nextContainers });
+            endpointChanged = true;
+            changed = true;
+            break;
+          }
+        }
+
+        if (endpointChanged) {
+          labsByEndpoint.set(endpointId, nextEndpointLabs);
+        }
+      }
+
+      if (!changed) {
+        return state;
+      }
+
+      return {
+        labsByEndpoint,
+        labs: mergeLabsByEndpoint(labsByEndpoint)
+      };
+    }),
 
   clearEndpoint: (endpointId) =>
     set((state) => {
