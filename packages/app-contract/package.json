@@ -1,6 +1,6 @@
 {
   "name": "@srl-labs/containerlab-app-contract",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Shared route DTO types for Containerlab app hosts.",
   "license": "Apache-2.0",

@@ -170,6 +170,8 @@ On Linux, the desktop launcher forces Electron onto the X11/Ozone backend so it 
 
 macOS packaging is built with `npm run package:desktop:mac` and produces an unsigned universal `.dmg`. Windows packaging is built with `npm run package:desktop:win` and produces an unsigned NSIS `.exe` installer. Version tag builds (`v*.*.*`) publish the AppImage, `.deb`, `.rpm`, `.dmg`, and `.exe` files as GitHub release assets.
 
+Before creating a release tag, keep the root package version, workspace package versions, internal workspace dependency versions, and `package-lock.json` aligned with the tag without the leading `v`. CI runs `npm run check:release-version`, so a tag such as `v0.0.2` requires package version `0.0.2`.
+
 ### Local Docker Build
 
 The GHCR image is the default way to run the web app and is published for `linux/amd64` and `linux/arm64`. Build a local image only when testing local changes; the command below builds for your current Docker platform:

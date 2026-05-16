@@ -1,6 +1,6 @@
 {
   "name": "containerlab-app",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "description": "Workspace for Containerlab web and desktop hosts.",
   "license": "Apache-2.0",
@@ -24,7 +24,7 @@
     "package:desktop:mac": "npm run package:mac --workspace containerlab-desktop",
     "package:desktop:win": "npm run package:win --workspace containerlab-desktop",
     "start:web": "npm run start --workspace containerlab-app-web",
-    "typecheck": "npm run typecheck --workspaces --if-present",
+    "typecheck": "npm run check:release-version && npm run check:deps && npm run typecheck --workspaces --if-present",
     "typecheck:local-ui": "npm run typecheck:local-ui --workspace containerlab-app-web",
     "lint": "npm run lint --workspaces --if-present",
     "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin apps packages",
@@ -33,6 +33,8 @@
     "test:e2e:web": "npm run test:e2e --workspace containerlab-app-web",
     "test:e2e:web:local-ui": "npm run test:e2e:local-ui --workspace containerlab-app-web",
     "test:e2e:web:smoke": "npm run test:e2e:smoke --workspace containerlab-app-web",
+    "check:release-version": "node scripts/check-release-version.mjs",
+    "check:deps": "node scripts/check-deps.mjs",
     "check:local-clab-ui": "node scripts/check-local-clab-ui.mjs"
   },
   "devDependencies": {
