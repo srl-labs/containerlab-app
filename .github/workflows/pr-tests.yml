@@ -38,8 +38,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Web smoke E2E
-        run: npm run test:e2e:web:smoke
+      - name: Web E2E
+        run: npm run test:e2e:web
 
       - name: Upload Playwright report
         if: always()
