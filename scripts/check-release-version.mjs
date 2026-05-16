@@ -145,8 +145,8 @@ function expandWorkspaces(workspaces) {
       packages.push({
         packageJson,
         path: workspacePath,
-        relativePath: path.relative(projectRoot, workspacePath),
-        label: `${packageJson.name ?? entry.name} (${path.relative(projectRoot, workspacePath)})`
+        relativePath: toPackageLockPath(path.relative(projectRoot, workspacePath)),
+        label: `${packageJson.name ?? entry.name} (${toPackageLockPath(path.relative(projectRoot, workspacePath))})`
       });
     }
   }
@@ -164,4 +164,8 @@ function parseTagName(ref) {
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+function toPackageLockPath(filePath) {
+  return filePath.replaceAll("\\", "/");
 }
