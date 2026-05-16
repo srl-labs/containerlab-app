@@ -1,4 +1,4 @@
-export { useLabStore } from "./stores/labStore";
+export { useLabStore, type InterfaceNetemPatch } from "./stores/labStore";
 export {
   useEndpointStore,
   type EndpointImportResult,

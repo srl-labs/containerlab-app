@@ -74,6 +74,11 @@ test("processEvent merges interface-stats events keyed by attributes.interface",
   assert.equal(iface.rxBytes, "120");
   assert.equal(iface.txBytes, "240");
   assert.equal(iface.statsIntervalSeconds, "1");
+  assert.equal(iface.netemDelay, "0ms");
+  assert.equal(iface.netemJitter, "0ms");
+  assert.equal(iface.netemLoss, "0%");
+  assert.equal(iface.netemRate, "0");
+  assert.equal(iface.netemCorruption, "0");
 });
 
 test("stats-only updates preserve existing interface metadata", () => {
@@ -127,6 +132,196 @@ test("stats-only updates preserve existing interface metadata", () => {
   assert.equal(iface.mtu, "9000");
   assert.equal(iface.rxPackets, "88");
   assert.equal(iface.txPackets, "99");
+});
+
+test("partial interface updates preserve netem state until explicit netem values arrive", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "eth1",
+      alias: "server-link",
+      state: "up",
+      type: "veth",
+      netem_delay: "25ms",
+      netem_jitter: "5ms"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface-stats",
+    action: "stats",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      interface: "eth1",
+      rx_packets: 88
+    }
+  });
+
+  let iface = firstLab()?.containers.get("clab-demo-srl-netem")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.netemDelay, "25ms");
+  assert.equal(iface.netemJitter, "5ms");
+  assert.equal(iface.rxPackets, "88");
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "update",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "eth1",
+      state: "up"
+    }
+  });
+
+  iface = firstLab()?.containers.get("clab-demo-srl-netem")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.netemDelay, "25ms");
+  assert.equal(iface.netemJitter, "5ms");
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "update",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "eth1",
+      netem_delay: "0ms"
+    }
+  });
+
+  iface = firstLab()?.containers.get("clab-demo-srl-netem")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.netemDelay, "0ms");
+  assert.equal(iface.netemJitter, "5ms");
+});
+
+test("API-driven netem updates change the stored runtime interface state", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      "clab-node-name": "srl-netem"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      ifname: "eth1",
+      alias: "ethernet-1/1",
+      netem_delay: "100ms",
+      netem_jitter: "5ms"
+    }
+  });
+
+  store.updateInterfaceNetemState({
+    endpointId: ENDPOINT_ID,
+    topologyPath: "/labs/demo.clab.yml",
+    labName: "demo",
+    nodeName: "srl-netem",
+    interfaceName: "ethernet-1/1",
+    netem: {
+      netemDelay: "0ms",
+      netemJitter: "0ms",
+      netemLoss: "0%",
+      netemRate: "0",
+      netemCorruption: "0"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface-stats",
+    action: "stats",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      interface: "eth1",
+      rx_packets: 88
+    }
+  });
+
+  const iface = firstLab()?.containers.get("clab-demo-srl-netem")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.netemDelay, "0ms");
+  assert.equal(iface.netemJitter, "0ms");
+  assert.equal(iface.netemLoss, "0%");
+  assert.equal(iface.netemRate, "0");
+  assert.equal(iface.netemCorruption, "0");
+  assert.equal(iface.rxPackets, "88");
+});
+
+test("API-driven netem updates fall back to lab and node matching when topology paths differ", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/runtime/path/demo.clab.yml",
+      "clab-node-name": "srl-netem"
+    }
+  });
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface",
+    action: "create",
+    attributes: {
+      name: "clab-demo-srl-netem",
+      lab: "demo",
+      "lab-path": "/runtime/path/demo.clab.yml",
+      ifname: "eth1",
+      alias: "ethernet-1/1",
+      netem_delay: "100ms"
+    }
+  });
+
+  store.updateInterfaceNetemState({
+    endpointId: ENDPOINT_ID,
+    topologyPath: "/topology/session/path/demo.clab.yml",
+    labName: "demo",
+    nodeName: "srl-netem",
+    interfaceName: "ethernet-1/1",
+    netem: {
+      netemDelay: "0ms"
+    }
+  });
+
+  const iface = firstLab()?.containers.get("clab-demo-srl-netem")?.interfaces.get("eth1");
+  assert.ok(iface);
+  assert.equal(iface.netemDelay, "0ms");
 });
 
 test("interface events without lab-path are matched to an existing lab via container name", () => {

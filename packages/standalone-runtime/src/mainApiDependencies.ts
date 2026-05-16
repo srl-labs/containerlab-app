@@ -22,6 +22,7 @@ export {
   reconcileUiIcons,
   removeRuntimeImage,
   saveUiCustomNode,
+  setNetem,
   setDefaultUiCustomNode,
   uploadUiIcon
 } from "./runtimeApi";
