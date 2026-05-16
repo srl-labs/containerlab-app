@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test } from "../fixtures/browserErrors";
 
 const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
 const SEL_SETTINGS_PANEL = '[data-testid="standalone-settings-panel"]';

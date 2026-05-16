@@ -1,5 +1,6 @@
 import type { Page, Route } from "@playwright/test";
-import { expect, test } from "@playwright/test";
+
+import { expect, test } from "../fixtures/browserErrors";
 
 const ENDPOINT = {
   id: "endpoint-e2e",

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../fixtures/browserErrors";
 
 test.describe("Standalone startup", () => {
   test("renders endpoint login form without a configured session", async ({ page }) => {
