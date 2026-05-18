@@ -249,29 +249,68 @@ async function resolveLabTarget(
 }
 
 function stripContainerPrefix(labName: string, containerName: string): string {
-  const prefix = `clab-${labName}-`;
-  return containerName.startsWith(prefix) ? containerName.slice(prefix.length) : containerName;
+  const trimmed = containerName.trim();
+  const normalizedLab = labName.trim().toLowerCase();
+  if (!trimmed || !normalizedLab) {
+    return trimmed;
+  }
+
+  const normalizedName = trimmed.toLowerCase();
+  const defaultPrefix = `clab-${normalizedLab}-`;
+  if (normalizedName.startsWith(defaultPrefix)) {
+    return trimmed.slice(defaultPrefix.length);
+  }
+
+  const labPrefix = `${normalizedLab}-`;
+  if (normalizedName.startsWith(labPrefix)) {
+    return trimmed.slice(labPrefix.length);
+  }
+
+  const labSegment = `-${normalizedLab}-`;
+  const segmentIndex = normalizedName.lastIndexOf(labSegment);
+  if (segmentIndex >= 0) {
+    return trimmed.slice(segmentIndex + labSegment.length);
+  }
+
+  return trimmed;
+}
+
+function nodeNameCandidates(labName: string, value: string): string[] {
+  const candidates = new Set<string>();
+  const normalized = value.trim().toLowerCase();
+  if (normalized) {
+    candidates.add(normalized);
+  }
+
+  const stripped = stripContainerPrefix(labName, value).trim().toLowerCase();
+  if (stripped) {
+    candidates.add(stripped);
+  }
+
+  return [...candidates];
 }
 
 function scoreNodeMatch(labName: string, containerName: string, requestedNodeName: string): number {
   const normalizedContainer = containerName.trim().toLowerCase();
-  const normalizedRequested = requestedNodeName.trim().toLowerCase();
-  if (!normalizedRequested || !normalizedContainer) {
+  const requestedCandidates = nodeNameCandidates(labName, requestedNodeName);
+  const containerCandidates = nodeNameCandidates(labName, containerName);
+  if (requestedCandidates.length === 0 || !normalizedContainer) {
     return 0;
   }
-  if (normalizedContainer === normalizedRequested) {
+  if (requestedCandidates.includes(normalizedContainer)) {
     return 100;
   }
 
-  const shortName = stripContainerPrefix(labName.trim().toLowerCase(), normalizedContainer);
-  if (shortName === normalizedRequested) {
-    return 90;
-  }
-  if (shortName.startsWith(`${normalizedRequested}-`)) {
-    return 80;
-  }
-  if (normalizedContainer.endsWith(`-${normalizedRequested}`)) {
-    return 70;
+  for (const requested of requestedCandidates) {
+    if (containerCandidates.includes(requested)) {
+      return 90;
+    }
+    if (containerCandidates.some((candidate) => candidate.startsWith(`${requested}-`))) {
+      return 80;
+    }
+    if (normalizedContainer.endsWith(`-${requested}`)) {
+      return 70;
+    }
   }
 
   return 0;
