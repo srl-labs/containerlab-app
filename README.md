@@ -51,6 +51,10 @@ sudo systemctl enable --now clab-api-server
 
 For an immediate start with the generated defaults, use `install --start`.
 
+Authentication uses Linux/PAM accounts on the API server host, not app-local users. Each allowed user must exist on that host, sign in with their Linux password, and belong to `clab_api` or your configured `API_USER_GROUP`; `clab_admins` or `SUPERUSER_GROUP` grants elevated API permissions.
+
+For full API server setup and security details, see the [`clab-api-server` README](https://github.com/srl-labs/clab-api-server/blob/main/README.md).
+
 The systemd service runs as `root` because the API server controls host container runtime resources, network namespaces, Linux users, and lab files.
 
 For temporary local trials, Containerlab's `containerlab tools api-server start` command can also start the API server. For regular use, prefer the installed service.
@@ -72,7 +76,7 @@ docker run -d --name containerlab-app \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
-Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with a Linux user accepted by `clab-api-server`.
+Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with an allowed Linux/PAM user from the API server host.
 
 At login, enter a `clab-api-server` URL reachable from inside the web container, such as `https://lab-host.example.com:8090`. One app session can include multiple API endpoints; add the first endpoint at login and add more from the endpoint settings.
 
@@ -90,7 +94,7 @@ Download the desktop package for your platform from the GitHub release assets.
 | macOS | `containerlab-desktop-<version>-universal.dmg` | Open the DMG and move the app to Applications |
 | Windows | `containerlab-desktop-<version>-x64-setup.exe` | Run the installer |
 
-Launch the desktop app, enter the `clab-api-server` URL, and log in with a Linux user accepted by the API server.
+Launch the desktop app, enter the `clab-api-server` URL, and log in with an allowed Linux/PAM user from the API server host.
 
 The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Windows SmartScreen may show warnings until signing and notarization are added.
 
