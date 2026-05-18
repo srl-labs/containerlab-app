@@ -31,22 +31,27 @@ Both options can connect to local or remote `clab-api-server` endpoints. The API
 Install `clab-api-server` on the Linux host where containerlab and the container runtime run:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo -E bash
+curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo bash -s -- install
 ```
 
-Edit `/etc/clab-api-server.env` and set at least:
+This will:
+- Download the binary to `/usr/local/bin/clab-api-server`
+- Create a default configuration at `/etc/clab-api-server/clab-api-server.env`
+- Create a systemd unit at `/etc/systemd/system/clab-api-server.service`
+- Create the default Linux groups `clab_api` and `clab_admins` if they do not exist
+- Generate a random `JWT_SECRET` for new installations
 
-- `JWT_SECRET`: a strong random secret.
-- `API_SERVER_HOST`: the hostname or IP address that app clients should use for API and SSH access.
-
-The API server authenticates Linux users. Users must exist on the host and belong to the configured API group.
-
-Enable and start the service:
+Review the configuration and add users to the API group before starting the service:
 
 ```bash
+sudoedit /etc/clab-api-server/clab-api-server.env
+sudo usermod -aG clab_api <username>
 sudo systemctl enable --now clab-api-server
-sudo systemctl status clab-api-server
 ```
+
+For an immediate start with the generated defaults, use `install --start`.
+
+The systemd service runs as `root` because the API server controls host container runtime resources, network namespaces, Linux users, and lab files.
 
 For temporary local trials, Containerlab's `containerlab tools api-server start` command can also start the API server. For regular use, prefer the installed service.
 
