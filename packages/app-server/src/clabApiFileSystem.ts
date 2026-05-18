@@ -223,9 +223,17 @@ export class ClabApiFileSystemAdapter {
     }
 
     if (runningDocPath === "annotations") {
-      const content = await this.readRunningDoc("annotations");
-      this.setCachedContent(normalized, content);
-      return content;
+      try {
+        const content = await this.readRunningDoc("annotations");
+        this.setCachedContent(normalized, content);
+        return content;
+      } catch (error) {
+        if (isNotFoundError(error)) {
+          this.setCachedExists(normalized, false);
+          throw this.createNotFoundError(normalized);
+        }
+        throw error;
+      }
     }
 
     if (this.resolveRunningDocAliasPath(normalized)) {
