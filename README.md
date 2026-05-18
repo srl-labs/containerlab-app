@@ -72,13 +72,14 @@ Start the web app:
 ```bash
 docker run -d --name containerlab-app \
   --restart unless-stopped \
-  -p 3001:3001 \
+  --network host \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
 Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with an allowed Linux/PAM user from the API server host.
 
-At login, enter a `clab-api-server` URL reachable from inside the web container, such as `https://lab-host.example.com:8090`. One app session can include multiple API endpoints; add the first endpoint at login and add more from the endpoint settings.
+The web app can connect to multiple `clab-api-server` endpoints. If the API server runs on the same host, use the default `https://localhost:8090` endpoint. For remote lab hosts, enter their DNS name or IP address, for example `https://lab-host.example.com:8090`.
+
 
 ---
 
