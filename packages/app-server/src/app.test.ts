@@ -730,6 +730,66 @@ test("/api/runtime/nodes/restart forwards node lifecycle request", async (t) => 
   assert.deepEqual(response.json(), { success: true });
 });
 
+test("/api/runtime/capture resolves unresolved topology prefix to runtime container name", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test"
+  });
+
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    return jsonResponse([
+      {
+        name: "demo-leaf2",
+        state: "running"
+      }
+    ]);
+  });
+  context.fetchMock.on(
+    "POST",
+    "http://api.example.test/api/v1/labs/demo/capture/wireshark-vnc-sessions",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.deepEqual(JSON.parse(call.body ?? "{}"), {
+        targets: [{ containerName: "demo-leaf2", interfaceName: "e1-50" }],
+        theme: "dark"
+      });
+      return jsonResponse({
+        sessions: [
+          {
+            sessionId: "capture-1",
+            labName: "demo",
+            containerName: "demo-leaf2",
+            interfaceNames: ["e1-50"],
+            vncPath: "/api/v1/capture/wireshark-vnc-sessions/capture-1/vnc/",
+            showVolumeTip: false,
+            createdAt: "2026-05-18T00:00:00Z",
+            expiresAt: "2026-05-18T01:00:00Z"
+          }
+        ]
+      });
+    }
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/wireshark-vnc-sessions",
+    headers: { cookie },
+    payload: {
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [{ containerName: '${LAB_PREFIX:-""}-demo-leaf2', interfaceName: "e1-50" }],
+      theme: "dark"
+    }
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(
+    response.json<{ sessions: Array<{ containerName: string }> }>().sessions[0]?.containerName,
+    "demo-leaf2"
+  );
+});
+
 test("terminal session creation resolves topology ref and short node name before proxying", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "http://api.example.test/login", () => {
