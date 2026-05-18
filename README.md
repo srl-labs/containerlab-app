@@ -58,32 +58,18 @@ On macOS, run `clab-api-server` in the Linux environment that owns containerlab 
 
 The web app is published as a multi-arch container image for `linux/amd64` and `linux/arm64`. The current image name is `ghcr.io/srl-labs/containerlab-web`.
 
-Run it on the same host as `clab-api-server`:
+Start the web app:
 
 ```bash
 docker run -d --name containerlab-app \
   --restart unless-stopped \
   -p 3001:3001 \
-  --add-host=host.docker.internal:host-gateway \
-  -e CLAB_API_URL=https://host.docker.internal:8090 \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
 Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with a Linux user accepted by `clab-api-server`.
 
-If `clab-api-server` runs on another host, set `CLAB_API_URL` to that reachable endpoint:
-
-```bash
-docker run -d --name containerlab-app \
-  --restart unless-stopped \
-  -p 3001:3001 \
-  -e CLAB_API_URL=https://lab-host.example.com:8090 \
-  ghcr.io/srl-labs/containerlab-web:latest
-```
-
-`CLAB_API_URL` must be reachable from inside the container. Users can still choose a different API URL on the login screen.
-
-On macOS, run the web image with Docker Desktop, OrbStack, or another Docker-compatible Linux VM. For a local VM-hosted API server, set `CLAB_API_URL` to the address that is reachable from inside the web container; for a remote lab host, use that host's `clab-api-server` URL.
+At login, enter a `clab-api-server` URL reachable from inside the web container, such as `https://lab-host.example.com:8090`. One app session can include multiple API endpoints; add the first endpoint at login and add more from the endpoint settings.
 
 ---
 
@@ -112,7 +98,6 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3001` | Web server port |
-| `CLAB_API_URL` | `https://localhost:8090` | Default `clab-api-server` URL shown on the login screen |
 | `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
 | `WEB_TLS_ENABLE` | `true` | Serve the web app over HTTPS |
 | `WEB_TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed web certificate when cert/key files are unset |
@@ -125,7 +110,6 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CLAB_API_URL` | `https://localhost:8090` | Default `clab-api-server` URL shown on the login screen |
 | `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
 | `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local loopback port for the embedded app server |
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Enable desktop app-server debug logging |
