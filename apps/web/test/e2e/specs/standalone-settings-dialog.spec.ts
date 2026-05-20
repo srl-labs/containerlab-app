@@ -276,6 +276,53 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(tooltip).toContainText("Disk: 68% (100 GiB / 200 GiB on /)");
   });
 
+  test("opens Help & Feedback links from the explorer", async ({ page }) => {
+    await page.evaluate(() => {
+      const targetWindow = window as typeof window & {
+        __standaloneOpenedLinks?: Array<{
+          features?: string;
+          target?: string;
+          url: string;
+        }>;
+      };
+      targetWindow.__standaloneOpenedLinks = [];
+      window.open = (url?: string | URL, target?: string, features?: string): null => {
+        targetWindow.__standaloneOpenedLinks?.push({
+          features,
+          target,
+          url: String(url ?? "")
+        });
+        return null;
+      };
+    });
+
+    const documentationRow = page
+      .locator('[data-explorer-node-row="true"]')
+      .filter({ hasText: "Containerlab Documentation" });
+
+    await expect(documentationRow).toBeVisible();
+    await documentationRow.click();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const targetWindow = window as typeof window & {
+            __standaloneOpenedLinks?: Array<{
+              features?: string;
+              target?: string;
+              url: string;
+            }>;
+          };
+          return targetWindow.__standaloneOpenedLinks?.at(-1);
+        })
+      )
+      .toEqual({
+        features: "noopener,noreferrer",
+        target: "_blank",
+        url: "https://containerlab.dev/"
+      });
+  });
+
   test("exports and imports endpoint profiles from settings", async ({ page }) => {
     const dialog = await openSettings(page);
     await dialog.locator(SEL_NAV_ENDPOINTS).click();

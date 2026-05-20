@@ -1476,12 +1476,8 @@ export function createStandaloneExplorerBridge(
       id: `help:${link.url}`,
       label: link.label,
       tooltip: link.url,
+      link: link.url,
       collapsibleState: TREE_ITEM_NONE,
-      command: {
-        command: "containerlab.openLink",
-        title: "Open Link",
-        arguments: [link.url],
-      },
       children: [],
     }));
   }
