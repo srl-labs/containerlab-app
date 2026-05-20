@@ -338,7 +338,7 @@ test.describe("standalone Monaco YAML editor", () => {
       "  nodes:",
       "    srl1:",
       "      kind: nokia_srlinux",
-      "      type: ixrd1",
+      "      type: ixr-d1",
       "      image: ghcr.io/nokia/srlinux:latest",
       "    client1:",
       "      kind: linux",
