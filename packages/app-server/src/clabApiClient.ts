@@ -411,6 +411,21 @@ export class ClabApiClient {
     );
   }
 
+  async putWorkspaceFileBytes(
+    token: string,
+    pathValue: string,
+    content: Uint8Array,
+    contentType = "application/octet-stream",
+  ): Promise<void> {
+    await this.request(
+      "PUT",
+      `/api/v1/labs/workspace/file?path=${encodeURIComponent(pathValue)}`,
+      token,
+      content,
+      contentType,
+    );
+  }
+
   async deleteWorkspaceFile(
     token: string,
     pathValue: string,
@@ -1381,7 +1396,7 @@ export class ClabApiClient {
     method: string,
     path: string,
     token: string,
-    body?: string,
+    body?: string | Uint8Array,
     contentType?: string,
   ): Promise<Response> {
     const headers: Record<string, string> = {

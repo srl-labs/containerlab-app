@@ -21,6 +21,8 @@ import {
   createTopologyFile,
   deleteFileExplorerPath,
   deployLabFromUrl,
+  downloadFileExplorerFile,
+  downloadLabArchive,
   importTopologyFromUrl,
   fetchNodeBrowserPorts,
   generateDrawioGraph,
@@ -33,9 +35,11 @@ import {
   runSshxShareAction,
   createWiresharkVncSessions,
   uninstallEdgeShark,
+  uploadFileExplorerFile,
   writeFileExplorerFile,
   type FileExplorerDocument,
   type FileExplorerEntry,
+  type LabArchiveFormat,
   type NetemFields,
 } from "./runtimeApi";
 import {
@@ -79,6 +83,7 @@ import {
   normalizeLabName,
   normalizePathValue,
   safeFilename,
+  stripTopologySuffix,
   topologyPathsLikelyMatch,
   topologyEntryLabName,
 } from "./standaloneHostShared";
@@ -95,6 +100,46 @@ const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.openFolderInNewWindow",
   "containerlab.file.refresh",
 ] as const;
+const STANDALONE_TRANSFER_COMMAND_LABELS = new Map<string, string>([
+  ["containerlab.file.download", "Download File"],
+  ["containerlab.file.upload", "Upload File"],
+  ["containerlab.file.downloadArchive", "Download Lab Archive"],
+  ["containerlab.lab.downloadArchive", "Download Lab Archive"],
+]);
+const STANDALONE_TRANSFER_COMMAND_ICONS = new Map<string, string>([
+  ["containerlab.file.download", "download"],
+  ["containerlab.file.upload", "upload"],
+  ["containerlab.file.downloadArchive", "download"],
+  ["containerlab.lab.downloadArchive", "download"],
+]);
+const STANDALONE_TRANSFER_FILE_ACTIONS = [
+  {
+    commandId: "containerlab.file.download",
+    contextValues: ["containerlabFile", "containerlabFileTopology"],
+  },
+  {
+    commandId: "containerlab.file.upload",
+    contextValues: [
+      "containerlabFileExplorerRoot",
+      "containerlabFileFolder",
+      "containerlabFile",
+      "containerlabFileTopology",
+    ],
+  },
+  {
+    commandId: "containerlab.file.downloadArchive",
+    contextValues: ["containerlabFileFolder"],
+  },
+] as const;
+const STANDALONE_TRANSFER_LAB_ACTIONS = [
+  { commandId: "containerlab.lab.downloadArchive" },
+] as const;
+const STANDALONE_TRANSFER_COMMAND_METADATA = {
+  contributedFileActions: STANDALONE_TRANSFER_FILE_ACTIONS,
+  contributedLabActions: STANDALONE_TRANSFER_LAB_ACTIONS,
+  commandIcons: STANDALONE_TRANSFER_COMMAND_ICONS,
+  commandLabels: STANDALONE_TRANSFER_COMMAND_LABELS,
+};
 
 type ShareActionKind = "sshx" | "gotty";
 type ShareLifecycleAction = "attach" | "detach" | "reattach";
@@ -770,6 +815,88 @@ function triggerTextDownload(
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function triggerBlobDownload(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function pickTransferFiles(accept = "", multiple = false): Promise<File[]> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = accept;
+    input.multiple = multiple;
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    let settled = false;
+    const cleanup = (files: File[]) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      input.removeEventListener("change", handleChange);
+      input.removeEventListener("cancel", handleCancel);
+      input.remove();
+      resolve(files);
+    };
+    const handleChange = () => cleanup(Array.from(input.files ?? []));
+    const handleCancel = () => cleanup([]);
+    input.addEventListener("change", handleChange, { once: true });
+    input.addEventListener("cancel", handleCancel, { once: true });
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+function promptArchiveFormat(): LabArchiveFormat | undefined {
+  const rawValue = window.prompt("Archive format", "zip");
+  if (rawValue === null) {
+    return undefined;
+  }
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === "zip") {
+    return "zip";
+  }
+  if (normalized === "tar.gz" || normalized === "tgz") {
+    return "tar.gz";
+  }
+  runtimeUiActions.notify("Use zip or tar.gz as archive format.", "error");
+  return undefined;
+}
+
+function resolveArchiveLabFolder(input: {
+  item?: ExplorerTreeItem;
+  topologyRef?: TopologyRef;
+  targetLabel?: string;
+}): string | undefined {
+  const resourcePath = normalizePathValue(input.item?.resourcePath ?? "");
+  if (input.item?.resourceKind === "directory" && resourcePath && !resourcePath.includes("/")) {
+    return resourcePath;
+  }
+
+  const yamlPath = input.topologyRef?.yamlPath?.trim() ?? "";
+  if (yamlPath) {
+    const normalizedYamlPath = yamlPath.replace(/\\/g, "/");
+    const pathSegments = normalizedYamlPath.split("/").filter(Boolean);
+    const clabIndex = pathSegments.lastIndexOf(".clab");
+    if (clabIndex >= 0 && pathSegments[clabIndex + 1]) {
+      return pathSegments[clabIndex + 1];
+    }
+    const relativeYamlPath = normalizePathValue(yamlPath);
+    const relativeSegments = relativeYamlPath.split("/").filter(Boolean);
+    if (relativeSegments.length > 1) {
+      return relativeSegments[0];
+    }
+  }
+
+  const labName = input.topologyRef?.labName || input.item?.labName || input.targetLabel;
+  return labName ? stripTopologySuffix(labName).trim() : undefined;
 }
 
 function extractFirstHttpLink(value: string): string | undefined {
@@ -2548,6 +2675,88 @@ export function createStandaloneExplorerBridge(
       runtimeUiActions.notify(`Copied path for ${pathValue}.`, "success");
     };
 
+    const downloadWorkspaceFile = async (): Promise<void> => {
+      const endpointId = requireFileEndpointId();
+      const pathValue = requireFilePath();
+      if (!endpointId || !pathValue) {
+        return;
+      }
+      const download = await downloadFileExplorerFile(endpointId, pathValue);
+      triggerBlobDownload(download.filename, download.blob);
+      runtimeUiActions.notify(`Downloaded ${pathValue}.`, "success");
+    };
+
+    const uploadWorkspaceFile = async (): Promise<void> => {
+      const endpointId = requireFileEndpointId();
+      if (!endpointId) {
+        return;
+      }
+      const files = await pickTransferFiles("", item?.resourceKind !== "file");
+      if (files.length === 0) {
+        return;
+      }
+      if (item?.resourceKind === "file") {
+        const file = files[0];
+        const targetPath = item.resourcePath ?? "";
+        if (!targetPath) {
+          postExplorerError("No upload target path is available.");
+          return;
+        }
+        if (!window.confirm(`Replace "~/.clab/${targetPath}" with "${file.name}"?`)) {
+          return;
+        }
+        await uploadFileExplorerFile({ endpointId, file, path: targetPath, targetKind: "file" });
+        clearFileExplorerCache(endpointId);
+        runtimeUiActions.notify(`Uploaded ${targetPath}.`, "success");
+        controller.scheduleSnapshot(0);
+        return;
+      }
+
+      const directoryPath = selectedDirectoryPath();
+      await uploadFileExplorerFile({
+        endpointId,
+        files,
+        path: directoryPath,
+        targetKind: "directory",
+      });
+      clearFileExplorerCache(endpointId);
+      runtimeUiActions.notify(
+        `Uploaded ${files.length} file${files.length === 1 ? "" : "s"} to ~/.clab${directoryPath ? `/${directoryPath}` : ""}.`,
+        "success",
+      );
+      controller.scheduleSnapshot(0);
+    };
+
+    const downloadLabArchiveFlow = async (): Promise<void> => {
+      const endpointId = await resolveEndpointForAction(
+        "download a lab archive",
+        actionEndpointId,
+      );
+      if (!endpointId) {
+        return;
+      }
+      const labFolder = resolveArchiveLabFolder({
+        item,
+        topologyRef: resolveActionTopologyRef(),
+        targetLabel,
+      });
+      if (!labFolder) {
+        postExplorerError("Select a lab folder before downloading an archive.");
+        return;
+      }
+      const format = promptArchiveFormat();
+      if (!format) {
+        return;
+      }
+      const download = await downloadLabArchive({
+        endpointId,
+        format,
+        path: labFolder,
+      });
+      triggerBlobDownload(download.filename, download.blob);
+      runtimeUiActions.notify(`Downloaded archive for ${labFolder}.`, "success");
+    };
+
     const commandHandlers: Record<string, () => Promise<void> | void> = {
       "containerlab.openLink": () => {
         const link = typeof args[0] === "string" ? args[0] : undefined;
@@ -2592,6 +2801,9 @@ export function createStandaloneExplorerBridge(
       "containerlab.file.rename": renameWorkspaceItem,
       "containerlab.file.delete": deleteWorkspaceItem,
       "containerlab.file.copyPath": copyWorkspacePath,
+      "containerlab.file.download": downloadWorkspaceFile,
+      "containerlab.file.upload": uploadWorkspaceFile,
+      "containerlab.file.downloadArchive": downloadLabArchiveFlow,
       "containerlab.file.refresh": () => {
         clearFileExplorerCache(actionEndpointId);
         controller.scheduleSnapshot(0);
@@ -2653,6 +2865,7 @@ export function createStandaloneExplorerBridge(
         }
       },
       "containerlab.lab.delete": deleteTopologyFlow,
+      "containerlab.lab.downloadArchive": downloadLabArchiveFlow,
       "containerlab.lab.toggleFavorite": toggleFavoriteFlow,
       "containerlab.lab.sshToAllNodes": openSshToAllNodes,
       "containerlab.lab.sshx.attach": () => runShareAction("sshx", "attach"),
@@ -2832,6 +3045,7 @@ export function createStandaloneExplorerBridge(
         hideNonOwnedLabs: !showNonOwnedLabs,
         isLocalCaptureAllowed: true,
         hiddenCommandIds: STANDALONE_HIDDEN_COMMAND_IDS,
+        commandMetadata: STANDALONE_TRANSFER_COMMAND_METADATA,
         sectionOrder: [
           "runningLabs",
           "localLabs",

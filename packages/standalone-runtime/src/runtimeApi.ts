@@ -194,6 +194,14 @@ export interface FileExplorerDocument {
   content: string;
 }
 
+export type LabArchiveFormat = "zip" | "tar.gz";
+
+export interface BinaryDownloadResult {
+  blob: Blob;
+  contentType: string;
+  filename: string;
+}
+
 export interface DeployLabFromUrlResponse {
   success: boolean;
   labNames: string[];
@@ -411,6 +419,60 @@ async function requestJson<T>(input: string, init?: RequestInit, endpointId?: st
   }
 
   return (await response.json()) as T;
+}
+
+function filenameFromContentDisposition(header: string | null, fallback: string): string {
+  if (!header) {
+    return fallback;
+  }
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(header)?.[1];
+  if (quoted) {
+    return quoted;
+  }
+  const bare = /filename=([^;]+)/i.exec(header)?.[1]?.trim();
+  return bare || fallback;
+}
+
+async function requestBlob(
+  input: string,
+  fallbackFilename: string,
+  init?: RequestInit,
+  endpointId?: string
+): Promise<BinaryDownloadResult> {
+  let response: Response;
+  try {
+    response = await fetch(resolveRuntimeRequestUrl(input), {
+      credentials: "include",
+      ...init
+    });
+  } catch (error) {
+    markEndpointUnavailable(endpointId, "offline");
+    throw error;
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      markEndpointUnavailable(endpointId, "session_expired");
+    }
+    throw new Error(await readError(response));
+  }
+
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get("content-type") ?? "application/octet-stream",
+    filename: filenameFromContentDisposition(
+      response.headers.get("content-disposition"),
+      fallbackFilename
+    )
+  };
 }
 
 function asJsonBody(body: unknown, endpointId?: string): RequestInit {
@@ -717,6 +779,55 @@ export async function readFileExplorerFile(
   );
 }
 
+function safeDownloadFallbackName(pathValue: string): string {
+  const segments = pathValue.split(/[\\/]/).filter(Boolean);
+  return segments.at(-1) || "download";
+}
+
+export async function downloadFileExplorerFile(
+  endpointId: string,
+  pathValue: string
+): Promise<BinaryDownloadResult> {
+  return await requestBlob(
+    `/api/runtime/file-explorer/download?path=${encodeURIComponent(pathValue)}`,
+    safeDownloadFallbackName(pathValue),
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function uploadFileExplorerFile(input: {
+  endpointId: string;
+  file?: File;
+  files?: readonly File[];
+  path: string;
+  targetKind?: "directory" | "file";
+}): Promise<void> {
+  const files = input.files ?? (input.file ? [input.file] : []);
+  if (files.length === 0) {
+    throw new Error("Select at least one file to upload.");
+  }
+  const form = new FormData();
+  form.set("path", input.path);
+  if (input.targetKind) {
+    form.set("targetKind", input.targetKind);
+  }
+  for (const file of files) {
+    form.append("file", file, file.name);
+  }
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/file-explorer/upload",
+    withEndpointHeaders(
+      {
+        method: "POST",
+        body: form
+      },
+      input.endpointId
+    ),
+    input.endpointId
+  );
+}
+
 export async function writeFileExplorerFile(input: {
   endpointId: string;
   path: string;
@@ -772,6 +883,24 @@ export async function createFileExplorerDirectory(
     "/api/runtime/file-explorer/directory",
     asJsonBody({ path: pathValue }, endpointId),
     endpointId
+  );
+}
+
+export async function downloadLabArchive(input: {
+  endpointId: string;
+  format: LabArchiveFormat;
+  path: string;
+}): Promise<BinaryDownloadResult> {
+  const params = new URLSearchParams({
+    format: input.format,
+    path: input.path
+  });
+  const extension = input.format === "zip" ? "zip" : "tar.gz";
+  return await requestBlob(
+    `/api/runtime/labs/archive?${params.toString()}`,
+    `${safeDownloadFallbackName(input.path)}.${extension}`,
+    withEndpointHeaders({}, input.endpointId),
+    input.endpointId
   );
 }
 

@@ -5,6 +5,7 @@ import type { EndpointEntry } from "./endpointSessionStore.ts";
 import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.ts";
 import { registerEventsProxy } from "./eventsProxy.ts";
 import { registerFileProxy } from "./fileProxy.ts";
+import { registerFileTransferProxy } from "./fileTransferProxy.ts";
 import { registerLabProxy } from "./labProxy.ts";
 import { registerRuntimeProxy } from "./runtimeProxy.ts";
 import { registerTerminalStreamProxy } from "./terminalStreamProxy.ts";
@@ -28,6 +29,7 @@ export function registerStandaloneProxies(
   registerTopologyEventsProxy(app, resolveEndpoint, topologySessions);
   registerTopologyProxy(app, resolveEndpoint, topologySessions);
   registerFileProxy(app, resolveEndpoint);
+  registerFileTransferProxy(app, resolveEndpoint);
   registerLabProxy(app, resolveEndpoint, topologySessions);
   registerRuntimeProxy(app, resolveEndpoint, listEndpoints, topologySessions);
   registerCaptureVncStreamProxy(app, resolveEndpoint);

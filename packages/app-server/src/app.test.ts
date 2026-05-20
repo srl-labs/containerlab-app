@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
+import { gunzipSync } from "node:zlib";
 
 import { createStandaloneApp } from "./app";
 
@@ -128,6 +129,14 @@ function textResponse(payload: string, status = 200): Response {
   return new Response(payload, { status });
 }
 
+function bufferResponse(
+  payload: Buffer,
+  headers: Record<string, string> = {},
+  status = 200,
+): Response {
+  return new Response(payload, { status, headers });
+}
+
 function ndjsonResponse(payload: string): Response {
   return new Response(payload, {
     headers: { "content-type": "application/x-ndjson; charset=utf-8" },
@@ -166,6 +175,37 @@ function extractSessionCookie(response: {
   const match = /(?:^|;\s*)clab_session=([^;]+)/.exec(headerText);
   assert.ok(match?.[1], `expected clab_session cookie in ${headerText}`);
   return `clab_session=${match[1]}`;
+}
+
+function buildMultipartBody(input: {
+  boundary: string;
+  fields?: Record<string, string>;
+  files?: Array<{
+    content: Buffer;
+    contentType?: string;
+    fieldName: string;
+    filename: string;
+  }>;
+}): Buffer {
+  const chunks: Buffer[] = [];
+  for (const [name, value] of Object.entries(input.fields ?? {})) {
+    chunks.push(
+      Buffer.from(
+        `--${input.boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
+      ),
+    );
+  }
+  for (const file of input.files ?? []) {
+    chunks.push(
+      Buffer.from(
+        `--${input.boundary}\r\nContent-Disposition: form-data; name="${file.fieldName}"; filename="${file.filename}"\r\nContent-Type: ${file.contentType ?? "application/octet-stream"}\r\n\r\n`,
+      ),
+      file.content,
+      Buffer.from("\r\n"),
+    );
+  }
+  chunks.push(Buffer.from(`--${input.boundary}--\r\n`));
+  return Buffer.concat(chunks);
 }
 
 async function loginEndpoint(
@@ -218,6 +258,50 @@ function mockLoginAndTopology(context: TestAppContext): void {
         },
       ]);
     },
+  );
+}
+
+function mockDirectLabArchiveWorkspace(context: TestAppContext): void {
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/workspace/tree?path=srl-mirroring-lab",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      return jsonResponse([
+        {
+          name: "srl-mirroring-lab.clab.yml",
+          path: "srl-mirroring-lab/srl-mirroring-lab.clab.yml",
+          kind: "file",
+        },
+        {
+          name: "configs",
+          path: "srl-mirroring-lab/configs",
+          kind: "directory",
+        },
+      ]);
+    },
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/workspace/tree?path=srl-mirroring-lab%2Fconfigs",
+    () =>
+      jsonResponse([
+        {
+          name: "leaf.cfg",
+          path: "srl-mirroring-lab/configs/leaf.cfg",
+          kind: "file",
+        },
+      ]),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/workspace/file?path=srl-mirroring-lab%2Fsrl-mirroring-lab.clab.yml",
+    () => textResponse("name: srl-mirroring-lab\n"),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/workspace/file?path=srl-mirroring-lab%2Fconfigs%2Fleaf.cfg",
+    () => textResponse("set / system\n"),
   );
 }
 
@@ -722,6 +806,218 @@ test("/api/runtime/file-explorer/file forwards recursive deletes", async (t) => 
     path: "labs/configs",
     success: true,
   });
+});
+
+test("/api/runtime/file-explorer/download streams binary workspace files", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/workspace/file?path=labs%2Fimage.bin",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      return bufferResponse(Buffer.from([0, 1, 2, 255]), {
+        "content-type": "application/octet-stream",
+      });
+    },
+  );
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/file-explorer/download?path=labs%2Fimage.bin",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.match(response.headers["content-disposition"] as string, /image\.bin/);
+  assert.deepEqual(response.rawPayload, Buffer.from([0, 1, 2, 255]));
+});
+
+test("/api/runtime/file-explorer/upload forwards multipart file bytes", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on(
+    "PUT",
+    "http://api.example.test/api/v1/labs/workspace/file?path=labs%2Fimage.bin",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.equal(call.headers.get("content-type"), "application/octet-stream");
+      assert.equal(call.body, Buffer.from([0, 1, 2, 255]).toString());
+      return jsonResponse({ success: true });
+    },
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const boundary = "----clab-test-boundary";
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/file-explorer/upload",
+    headers: {
+      cookie,
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      "x-endpoint-id": endpointId,
+    },
+    payload: buildMultipartBody({
+      boundary,
+      fields: { path: "labs/image.bin" },
+      files: [
+        {
+          content: Buffer.from([0, 1, 2, 255]),
+          fieldName: "file",
+          filename: "image.bin",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    endpointId,
+    filesWritten: 1,
+    path: "labs/image.bin",
+    paths: ["labs/image.bin"],
+    success: true,
+  });
+});
+
+test("/api/runtime/file-explorer/upload forwards multiple files to a directory target", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  const written = new Map<string, string | undefined>();
+  for (const pathValue of [
+    "labs/configs/leaf.cfg",
+    "labs/configs/spine.cfg",
+  ] as const) {
+    context.fetchMock.on(
+      "PUT",
+      `http://api.example.test/api/v1/labs/workspace/file?path=${encodeURIComponent(pathValue)}`,
+      (call) => {
+        assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+        written.set(pathValue, call.body);
+        return jsonResponse({ success: true });
+      },
+    );
+  }
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const boundary = "----clab-test-multi-boundary";
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/file-explorer/upload",
+    headers: {
+      cookie,
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+      "x-endpoint-id": endpointId,
+    },
+    payload: buildMultipartBody({
+      boundary,
+      fields: { path: "labs/configs", targetKind: "directory" },
+      files: [
+        {
+          content: Buffer.from("leaf\n"),
+          contentType: "text/plain",
+          fieldName: "file",
+          filename: "leaf.cfg",
+        },
+        {
+          content: Buffer.from("spine\n"),
+          contentType: "text/plain",
+          fieldName: "file",
+          filename: "spine.cfg",
+        },
+      ],
+    }),
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    endpointId,
+    filesWritten: 2,
+    path: "labs/configs/leaf.cfg",
+    paths: ["labs/configs/leaf.cfg", "labs/configs/spine.cfg"],
+    success: true,
+  });
+  assert.deepEqual(written, new Map([
+    ["labs/configs/leaf.cfg", "leaf\n"],
+    ["labs/configs/spine.cfg", "spine\n"],
+  ]));
+});
+
+test("/api/runtime/labs/archive downloads all files from a direct lab folder", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  mockDirectLabArchiveWorkspace(context);
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/labs/archive?path=srl-mirroring-lab&format=zip",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.rawPayload.readUInt32LE(0), 0x04034b50);
+  assert.match(response.headers["content-disposition"] as string, /srl-mirroring-lab\.zip/);
+  assert.match(response.rawPayload.toString("utf8"), /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/);
+  assert.match(response.rawPayload.toString("utf8"), /srl-mirroring-lab\/configs\/leaf\.cfg/);
+});
+
+test("/api/runtime/labs/archive downloads tar.gz archives", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  mockDirectLabArchiveWorkspace(context);
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/labs/archive?path=srl-mirroring-lab&format=tar.gz",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.headers["content-type"], "application/gzip");
+  assert.match(response.headers["content-disposition"] as string, /srl-mirroring-lab\.tar\.gz/);
+  const tarContent = gunzipSync(response.rawPayload).toString("utf8");
+  assert.match(tarContent, /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/);
+  assert.match(tarContent, /srl-mirroring-lab\/configs\/leaf\.cfg/);
+  assert.match(tarContent, /set \/ system/);
+});
+
+test("/api/runtime/labs/archive rejects nested folder download targets", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/labs/archive?path=srl-mirroring-lab%2Fconfigs&format=zip",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 400, response.body);
+  assert.match(response.json<{ error: string }>().error, /direct lab folders/i);
 });
 
 test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async (t) => {
