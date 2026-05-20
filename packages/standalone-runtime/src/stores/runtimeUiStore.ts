@@ -2,6 +2,7 @@ import type { AlertColor } from "@mui/material/Alert";
 import { create } from "zustand";
 
 import type {
+  FileExplorerDocument,
   NetemFields,
   RuntimeTargetRequest,
   TerminalProtocol as ApiTerminalProtocol
@@ -47,6 +48,13 @@ export interface RuntimeTerminalWindow extends RuntimeTerminalRequest {
   minimized: boolean;
 }
 
+export interface RuntimeFileEditor extends FileExplorerDocument {
+  title: string;
+  originalContent: string;
+  saving: boolean;
+  error?: string;
+}
+
 interface SnackbarState {
   open: boolean;
   message: string;
@@ -58,9 +66,11 @@ interface RuntimeUiState {
   logsRequest: RuntimeNodeRequest | null;
   netemRequest: RuntimeNetemRequest | null;
   imageManagerOpen: boolean;
+  fileEditor: RuntimeFileEditor | null;
   terminals: RuntimeTerminalWindow[];
   versionOpen: boolean;
   snackbar: SnackbarState;
+  closeFileEditor: () => void;
   closeInspect: () => void;
   closeLogs: () => void;
   closeImageManager: () => void;
@@ -68,6 +78,8 @@ interface RuntimeUiState {
   closeSnackbar: () => void;
   closeTerminal: (id: string) => void;
   focusTerminal: (id: string) => void;
+  markFileEditorSaved: (content: string) => void;
+  openFileEditor: (document: FileExplorerDocument & { title: string }) => void;
   openInspect: (request: RuntimeInspectRequest) => void;
   openImageManager: () => void;
   openLogs: (request: RuntimeNodeRequest) => void;
@@ -75,6 +87,9 @@ interface RuntimeUiState {
   openTerminal: (request: RuntimeTerminalRequest) => string;
   openVersion: () => void;
   setTerminalConnecting: (id: string) => void;
+  setFileEditorContent: (content: string) => void;
+  setFileEditorError: (message?: string) => void;
+  setFileEditorSaving: (saving: boolean) => void;
   setTerminalError: (id: string, message: string) => void;
   setTerminalExited: (id: string, exitCode?: number | null, error?: string) => void;
   setTerminalMinimized: (id: string, minimized: boolean) => void;
@@ -134,9 +149,37 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   logsRequest: null,
   netemRequest: null,
   imageManagerOpen: false,
+  fileEditor: null,
   terminals: [],
   versionOpen: false,
   snackbar: defaultSnackbar,
+  openFileEditor: (document) =>
+    set({
+      fileEditor: {
+        ...document,
+        originalContent: document.content,
+        saving: false
+      }
+    }),
+  closeFileEditor: () => set({ fileEditor: null }),
+  setFileEditorContent: (content) =>
+    set((state) => ({
+      fileEditor: state.fileEditor ? { ...state.fileEditor, content, error: undefined } : null
+    })),
+  setFileEditorSaving: (saving) =>
+    set((state) => ({
+      fileEditor: state.fileEditor ? { ...state.fileEditor, saving } : null
+    })),
+  setFileEditorError: (message) =>
+    set((state) => ({
+      fileEditor: state.fileEditor ? { ...state.fileEditor, error: message, saving: false } : null
+    })),
+  markFileEditorSaved: (content) =>
+    set((state) => ({
+      fileEditor: state.fileEditor
+        ? { ...state.fileEditor, content, originalContent: content, saving: false, error: undefined }
+        : null
+    })),
   openInspect: (request) => set({ inspectRequest: request }),
   closeInspect: () => set({ inspectRequest: null }),
   openImageManager: () => set({ imageManagerOpen: true }),
@@ -274,6 +317,7 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 }));
 
 export const runtimeUiActions = {
+  closeFileEditor: () => useRuntimeUiStore.getState().closeFileEditor(),
   closeInspect: () => useRuntimeUiStore.getState().closeInspect(),
   closeImageManager: () => useRuntimeUiStore.getState().closeImageManager(),
   closeLogs: () => useRuntimeUiStore.getState().closeLogs(),
@@ -281,6 +325,7 @@ export const runtimeUiActions = {
   closeTerminal: (id: string) => useRuntimeUiStore.getState().closeTerminal(id),
   closeVersion: () => useRuntimeUiStore.setState({ versionOpen: false }),
   focusTerminal: (id: string) => useRuntimeUiStore.getState().focusTerminal(id),
+  markFileEditorSaved: (content: string) => useRuntimeUiStore.getState().markFileEditorSaved(content),
   notify: (message: string, severity?: AlertColor) =>
     useRuntimeUiStore.getState().showSnackbar(message, severity),
   openInspectAll: () =>
@@ -295,10 +340,15 @@ export const runtimeUiActions = {
       title
     }),
   openImageManager: () => useRuntimeUiStore.getState().openImageManager(),
+  openFileEditor: (document: FileExplorerDocument & { title: string }) =>
+    useRuntimeUiStore.getState().openFileEditor(document),
   openLogs: (request: RuntimeNodeRequest) => useRuntimeUiStore.getState().openLogs(request),
   openNetem: (request: RuntimeNetemRequest) => useRuntimeUiStore.getState().openNetem(request),
   openTerminal: (request: RuntimeTerminalRequest) => useRuntimeUiStore.getState().openTerminal(request),
   openVersion: () => useRuntimeUiStore.getState().openVersion(),
+  setFileEditorContent: (content: string) => useRuntimeUiStore.getState().setFileEditorContent(content),
+  setFileEditorError: (message?: string) => useRuntimeUiStore.getState().setFileEditorError(message),
+  setFileEditorSaving: (saving: boolean) => useRuntimeUiStore.getState().setFileEditorSaving(saving),
   setTerminalConnecting: (id: string) => useRuntimeUiStore.getState().setTerminalConnecting(id),
   setTerminalError: (id: string, message: string) => useRuntimeUiStore.getState().setTerminalError(id, message),
   setTerminalExited: (id: string, exitCode?: number | null, error?: string) =>

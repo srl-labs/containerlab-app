@@ -5,8 +5,11 @@ export {
 } from "./runtimeTerminalSettings";
 export { createStandaloneExplorerBridge } from "./standaloneExplorer";
 export {
+  isFileLabTab,
+  resolveFileTab,
   resolveLabTab,
-  useLabTabsStore
+  useLabTabsStore,
+  type FileLabTab
 } from "./stores/labTabsStore";
 export { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 export {

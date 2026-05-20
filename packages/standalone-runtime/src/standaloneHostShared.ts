@@ -21,6 +21,7 @@ export interface ExplorerTreeItem {
   contextValue?: string;
   command?: { command: string; title: string; arguments?: unknown[] };
   collapsibleState?: number;
+  hasChildren?: boolean;
   state?: string;
   status?: string;
   link?: string;
@@ -35,6 +36,8 @@ export interface ExplorerTreeItem {
   v6Address?: string;
   endpointId?: string;
   topologyRef?: TopologyRef;
+  resourceKind?: "file" | "directory";
+  resourcePath?: string;
   children?: ExplorerTreeItem[];
 }
 

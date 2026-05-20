@@ -2,13 +2,17 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 
 import type { ClabApiClient } from "./clabApiClient.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
-import { streamResponseHeaders } from "./streamResponseHeaders.ts";
+import {
+  disableStreamTimeouts,
+  startSseHeartbeat,
+  streamResponseHeaders,
+} from "./streamResponseHeaders.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 
 type EndpointResolver = (
   request: FastifyRequest,
   reply: FastifyReply,
-  endpointId?: string
+  endpointId?: string,
 ) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 interface ForwardTopologyEventsOptions {
@@ -20,7 +24,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function writeTopologyEventError(reply: FastifyReply, message: string): void {
-  reply.raw.write(`event: error\ndata: ${JSON.stringify({ error: message })}\n\n`);
+  reply.raw.write(
+    `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`,
+  );
 }
 
 function isTopologyDocumentEventLine(line: string): boolean {
@@ -36,7 +42,7 @@ async function forwardTopologyEvents(
   body: ReadableStream<Uint8Array>,
   reply: FastifyReply,
   isAborted: () => boolean,
-  options: ForwardTopologyEventsOptions = {}
+  options: ForwardTopologyEventsOptions = {},
 ): Promise<void> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -73,15 +79,21 @@ async function forwardTopologyEvents(
 export function registerTopologyEventsProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
-  sessions: StandaloneTopologySessionManager
+  sessions: StandaloneTopologySessionManager,
 ): void {
   app.get<{ Querystring: { endpointId?: string; sessionId?: string } }>(
     "/api/topology/events",
     async (
-      request: FastifyRequest<{ Querystring: { endpointId?: string; sessionId?: string } }>,
-      reply: FastifyReply
+      request: FastifyRequest<{
+        Querystring: { endpointId?: string; sessionId?: string };
+      }>,
+      reply: FastifyReply,
     ) => {
-      const resolved = resolveEndpoint(request, reply, request.query.endpointId);
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        request.query.endpointId,
+      );
       if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
@@ -97,13 +109,19 @@ export function registerTopologyEventsProxy(
         return reply.status(404).send({ error: "Topology session not found" });
       }
 
-      reply.raw.writeHead(200, streamResponseHeaders(request, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no"
-      }));
+      disableStreamTimeouts(request, reply);
+
+      reply.raw.writeHead(
+        200,
+        streamResponseHeaders(request, {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+        }),
+      );
       reply.raw.write(":ok\n\n");
+      const stopHeartbeat = startSseHeartbeat(reply);
 
       let aborted = false;
       const abortController = new AbortController();
@@ -118,29 +136,35 @@ export function registerTopologyEventsProxy(
           endpoint.token,
           session.topologyRef.labName,
           session.topologyRef.yamlPath,
-          { signal: abortController.signal }
+          { signal: abortController.signal },
         );
         if (!response.body) {
-          reply.raw.write("event: error\ndata: No topology event stream body\n\n");
+          reply.raw.write(
+            "event: error\ndata: No topology event stream body\n\n",
+          );
           reply.raw.end();
           return;
         }
 
         await forwardTopologyEvents(response.body, reply, () => aborted, {
           shouldSuppressLine: (line) =>
-            session.isInternalUpdate() && isTopologyDocumentEventLine(line)
+            session.isInternalUpdate() && isTopologyDocumentEventLine(line),
         });
       } catch (error) {
         if (!aborted) {
-          const message = error instanceof Error ? error.message : "Topology event stream error";
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Topology event stream error";
           writeTopologyEventError(reply, message);
         }
       } finally {
+        stopHeartbeat();
         reply.raw.off("close", abort);
         if (!aborted && !reply.raw.writableEnded) {
           reply.raw.end();
         }
       }
-    }
+    },
   );
 }

@@ -61,6 +61,7 @@ import {
   type CreateTopologyDialogResult,
   type EndpointSelectionOption
 } from "../runtimeActionFlows";
+import { FileEditorDialog } from "./FileEditorDialog";
 
 interface InspectGroup {
   labName: string;
@@ -1694,6 +1695,7 @@ export function RuntimeActionDialogs() {
         />
       ) : null}
 
+      <FileEditorDialog />
       {snackbar ? <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} /> : null}
     </>
   );

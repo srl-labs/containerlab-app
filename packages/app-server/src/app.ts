@@ -1,7 +1,7 @@
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
-  type FastifyRequest
+  type FastifyRequest,
 } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
@@ -15,13 +15,13 @@ import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.ts";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   buildEndpointId,
-  createEndpointSessionStore
+  createEndpointSessionStore,
 } from "./endpointSessionStore.ts";
 import {
   getEndpointIdFromRequest,
   getLegacySessionCookies,
   getSessionIdFromRequest,
-  setSessionCookie
+  setSessionCookie,
 } from "./middleware.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
@@ -57,7 +57,9 @@ function isSecureRequest(request: FastifyRequest): boolean {
   }
   const forwardedProto = request.headers["x-forwarded-proto"];
   if (typeof forwardedProto === "string") {
-    return forwardedProto.split(",").some((value) => value.trim().toLowerCase() === "https");
+    return forwardedProto
+      .split(",")
+      .some((value) => value.trim().toLowerCase() === "https");
   }
   return false;
 }
@@ -74,8 +76,15 @@ function isValidCloseCode(code: number): boolean {
   );
 }
 
-function closeSocket(socket: WebSocket, code: number | undefined, reason: string): void {
-  if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
+function closeSocket(
+  socket: WebSocket,
+  code: number | undefined,
+  reason: string,
+): void {
+  if (
+    socket.readyState === WebSocket.CLOSING ||
+    socket.readyState === WebSocket.CLOSED
+  ) {
     return;
   }
   if (code !== undefined && isValidCloseCode(code)) {
@@ -96,7 +105,10 @@ function requestWebSocketProtocols(request: FastifyRequest): string[] {
     .filter((value) => value.length > 0);
 }
 
-function buildViteDevWebSocketUrl(viteDevUrl: string, request: FastifyRequest): string {
+function buildViteDevWebSocketUrl(
+  viteDevUrl: string,
+  request: FastifyRequest,
+): string {
   const upstreamUrl = new URL(request.raw.url ?? "/", viteDevUrl);
   upstreamUrl.protocol = upstreamUrl.protocol === "https:" ? "wss:" : "ws:";
   return upstreamUrl.toString();
@@ -106,17 +118,21 @@ function proxyViteDevWebSocket(
   app: FastifyInstance,
   viteDevUrl: string,
   socket: WebSocket,
-  request: FastifyRequest
+  request: FastifyRequest,
 ): void {
   const protocols = requestWebSocketProtocols(request);
-  const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
+  const origin =
+    typeof request.headers.origin === "string"
+      ? request.headers.origin
+      : undefined;
   const upstreamOptions = origin
     ? { headers: { Origin: origin }, rejectUnauthorized: false }
     : { rejectUnauthorized: false };
   const upstreamUrl = buildViteDevWebSocketUrl(viteDevUrl, request);
-  const upstream = protocols.length > 0
-    ? new WebSocket(upstreamUrl, protocols, upstreamOptions)
-    : new WebSocket(upstreamUrl, upstreamOptions);
+  const upstream =
+    protocols.length > 0
+      ? new WebSocket(upstreamUrl, protocols, upstreamOptions)
+      : new WebSocket(upstreamUrl, upstreamOptions);
 
   upstream.on("open", () => {
     socket.on("message", (data: RawData, isBinary: boolean) => {
@@ -137,7 +153,10 @@ function proxyViteDevWebSocket(
   });
 
   upstream.on("error", (error: Error) => {
-    app.log.warn({ err: error, url: upstreamUrl }, "vite dev websocket proxy error");
+    app.log.warn(
+      { err: error, url: upstreamUrl },
+      "vite dev websocket proxy error",
+    );
     closeSocket(socket, 1011, "Vite dev websocket proxy failed");
   });
 
@@ -152,31 +171,36 @@ function proxyViteDevWebSocket(
 }
 
 export async function createStandaloneApp(
-  options: CreateStandaloneAppOptions = {}
+  options: CreateStandaloneAppOptions = {},
 ): Promise<FastifyInstance> {
-  const defaultClabApiUrl = options.defaultClabApiUrl ?? "https://localhost:8090";
+  const defaultClabApiUrl =
+    options.defaultClabApiUrl ?? "https://localhost:8090";
   const isDev = options.isDev ?? process.env.NODE_ENV !== "production";
   const viteDevUrl = options.viteDevUrl ?? "https://localhost:5173";
+  const fastifyOptions = {
+    logger: options.logger ?? true,
+    requestTimeout: 0,
+  };
   const app: FastifyInstance = options.https
-    ? (Fastify({ logger: options.logger ?? true, https: options.https }) as FastifyInstance)
-    : (Fastify({ logger: options.logger ?? true }) as FastifyInstance);
+    ? (Fastify({ ...fastifyOptions, https: options.https }) as FastifyInstance)
+    : (Fastify(fastifyOptions) as FastifyInstance);
 
   await app.register(fastifyCookie);
   await app.register(fastifyCors, {
     origin: isDev ? true : false,
-    credentials: true
+    credentials: true,
   });
   await app.register(fastifyWebsocket);
 
   const endpointSessions = createEndpointSessionStore({
-    persistenceFile: options.sessionPersistenceFile
+    persistenceFile: options.sessionPersistenceFile,
   });
   const topologySessions = createStandaloneTopologySessionManager();
 
   const maybeSetSessionCookie = (
     request: FastifyRequest,
     reply: FastifyReply,
-    sessionId: string
+    sessionId: string,
   ): void => {
     if (typeof (reply as Partial<FastifyReply>).setCookie === "function") {
       setSessionCookie(reply, sessionId, isSecureRequest(request));
@@ -185,7 +209,7 @@ export async function createStandaloneApp(
 
   const migrateLegacySession = (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ): EndpointSession | null => {
     const legacy = getLegacySessionCookies(request, defaultClabApiUrl);
     if (!legacy) {
@@ -211,7 +235,7 @@ export async function createStandaloneApp(
       label: defaultEndpointLabel(legacy.url),
       token: legacy.token,
       username: "user",
-      sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION
+      sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
     };
 
     return endpointSessions.replaceSession(sessionId, [migratedEntry]);
@@ -219,7 +243,7 @@ export async function createStandaloneApp(
 
   const resolveSession = (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ): EndpointSession | null => {
     const sessionId = getSessionIdFromRequest(request);
     if (sessionId) {
@@ -233,14 +257,15 @@ export async function createStandaloneApp(
 
   const ensureSession = (
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ): EndpointSession => {
     const resolved = resolveSession(request, reply);
     if (resolved) {
       return resolved;
     }
 
-    const sessionId = getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
+    const sessionId =
+      getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
     if (!getSessionIdFromRequest(request)) {
       maybeSetSessionCookie(request, reply, sessionId);
     }
@@ -250,7 +275,7 @@ export async function createStandaloneApp(
   const resolveEndpoint = (
     request: FastifyRequest,
     reply: FastifyReply,
-    preferredEndpointId?: string
+    preferredEndpointId?: string,
   ): ResolvedEndpoint | null => {
     const session = resolveSession(request, reply);
     if (!session || session.endpoints.size === 0) {
@@ -259,8 +284,8 @@ export async function createStandaloneApp(
 
     const endpointId = preferredEndpointId ?? getEndpointIdFromRequest(request);
     const endpoint = endpointId
-      ? session.endpoints.get(endpointId) ?? null
-      : Array.from(session.endpoints.values())[0] ?? null;
+      ? (session.endpoints.get(endpointId) ?? null)
+      : (Array.from(session.endpoints.values())[0] ?? null);
     if (!endpoint) {
       return null;
     }
@@ -268,11 +293,14 @@ export async function createStandaloneApp(
     return {
       session,
       endpoint,
-      client: new ClabApiClient({ baseUrl: endpoint.url })
+      client: new ClabApiClient({ baseUrl: endpoint.url }),
     };
   };
 
-  const listEndpoints = (request: FastifyRequest, reply: FastifyReply): EndpointEntry[] => {
+  const listEndpoints = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): EndpointEntry[] => {
     const session = resolveSession(request, reply);
     return session ? Array.from(session.endpoints.values()) : [];
   };
@@ -282,9 +310,14 @@ export async function createStandaloneApp(
     disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
     ensureSession,
     endpointSessions,
-    resolveSession
+    resolveSession,
   });
-  registerStandaloneProxies(app, resolveEndpoint, listEndpoints, topologySessions);
+  registerStandaloneProxies(
+    app,
+    resolveEndpoint,
+    listEndpoints,
+    topologySessions,
+  );
 
   app.get("/api/config", async (request, reply) => {
     const endpoints = listEndpoints(request, reply).map((entry) => ({
@@ -292,14 +325,17 @@ export async function createStandaloneApp(
       url: entry.url,
       label: entry.label,
       username: entry.username,
-      sessionDuration: entry.sessionDuration
+      sessionDuration: entry.sessionDuration,
     }));
     const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
     return reply.send(payload);
   });
 
   if (isDev) {
-    const proxyViteDevHttp = async (request: FastifyRequest, reply: FastifyReply) => {
+    const proxyViteDevHttp = async (
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ) => {
       try {
         const url = `${viteDevUrl}${request.url}`;
         const headers: Record<string, string> = {};
@@ -316,7 +352,7 @@ export async function createStandaloneApp(
           body:
             request.method !== "GET" && request.method !== "HEAD"
               ? JSON.stringify(request.body)
-              : undefined
+              : undefined,
         });
 
         reply.status(response.status);
@@ -339,22 +375,23 @@ export async function createStandaloneApp(
       wsHandler: (socket, request) => {
         proxyViteDevWebSocket(app, viteDevUrl, socket, request);
       },
-      handler: proxyViteDevHttp
+      handler: proxyViteDevHttp,
     });
 
     app.route({
       method: ["POST", "PUT", "PATCH", "DELETE"],
       url: "/*",
-      handler: proxyViteDevHttp
+      handler: proxyViteDevHttp,
     });
   } else {
     const fastifyStatic = await import("@fastify/static");
     const path = await import("node:path");
-    const clientRoot = options.staticClientRoot ?? path.resolve(process.cwd(), "dist/client");
+    const clientRoot =
+      options.staticClientRoot ?? path.resolve(process.cwd(), "dist/client");
 
     await app.register(fastifyStatic.default, {
       root: clientRoot,
-      prefix: "/"
+      prefix: "/",
     });
 
     app.setNotFoundHandler((_request, reply) => {
