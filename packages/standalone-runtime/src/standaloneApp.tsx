@@ -90,6 +90,7 @@ import type {
   ImageActionResult,
   KindImageReference,
 } from "@srl-labs/clab-ui/image-manager";
+import { confirmRuntimeAction } from "./runtimeActionFlows";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -509,14 +510,19 @@ async function openTopologyInTab(
   }
 }
 
-function confirmCloseLabTab(tabId: string): boolean {
+async function confirmCloseLabTab(tabId: string): Promise<boolean> {
   const tab = useLabTabsStore
     .getState()
     .tabs.find((entry) => entry.id === tabId);
   if (!isFileLabTab(tab) || tab.content === tab.originalContent) {
     return true;
   }
-  return window.confirm(`Discard unsaved changes to "${tab.title}"?`);
+  return confirmRuntimeAction({
+    title: "Discard Unsaved Changes",
+    message: `Discard unsaved changes to "${tab.title}"?`,
+    confirmLabel: "Discard",
+    severity: "warning",
+  });
 }
 
 function openWorkspaceFileInTab(document: {
@@ -531,7 +537,7 @@ function openWorkspaceFileInTab(document: {
 }
 
 async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
-  if (!confirmCloseLabTab(tabId)) {
+  if (!(await confirmCloseLabTab(tabId))) {
     return;
   }
   const closeResult = useLabTabsStore.getState().closeTab(tabId);

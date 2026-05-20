@@ -6,6 +6,68 @@ import {
 } from "./runtimeApi";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
 
+export type RuntimeDialogSeverity = "default" | "warning" | "error";
+
+export interface RuntimeConfirmDialogRequest {
+  cancelLabel?: string;
+  confirmLabel?: string;
+  message: string;
+  severity?: RuntimeDialogSeverity;
+  title?: string;
+}
+
+export interface ActiveRuntimeConfirmDialogRequest {
+  cancelLabel: string;
+  confirmLabel: string;
+  message: string;
+  severity: RuntimeDialogSeverity;
+  title: string;
+}
+
+export interface RuntimeTextInputDialogRequest {
+  allowEmpty?: boolean;
+  cancelLabel?: string;
+  confirmLabel?: string;
+  defaultValue?: string;
+  helperText?: string;
+  label?: string;
+  message?: string;
+  multiline?: boolean;
+  title?: string;
+}
+
+export interface ActiveRuntimeTextInputDialogRequest {
+  allowEmpty: boolean;
+  cancelLabel: string;
+  confirmLabel: string;
+  defaultValue: string;
+  helperText: string;
+  label: string;
+  message: string;
+  multiline: boolean;
+  title: string;
+}
+
+export interface RuntimeOptionSelectionDialogRequest {
+  cancelLabel?: string;
+  confirmLabel?: string;
+  label?: string;
+  message?: string;
+  options: EndpointSelectionOption[];
+  preferredValue?: string;
+  title?: string;
+}
+
+export interface ActiveRuntimeOptionSelectionDialogRequest {
+  cancelLabel: string;
+  confirmLabel: string;
+  label: string;
+  message: string;
+  options: EndpointSelectionOption[];
+  preferredValue: string;
+  title: string;
+}
+
 export interface TopologyFileNameDialogRequest {
   defaultValue?: string;
   message?: string;
@@ -118,11 +180,23 @@ type CreateTopologyDialogRequester = (
 type CloneRepoDialogRequester = (
   request: ActiveCloneRepoDialogRequest
 ) => Promise<CloneRepoDialogResult | undefined>;
+type RuntimeConfirmDialogRequester = (
+  request: ActiveRuntimeConfirmDialogRequest
+) => Promise<boolean>;
+type RuntimeTextInputDialogRequester = (
+  request: ActiveRuntimeTextInputDialogRequest
+) => Promise<string | undefined>;
+type RuntimeOptionSelectionDialogRequester = (
+  request: ActiveRuntimeOptionSelectionDialogRequest
+) => Promise<string | undefined>;
 
 let requestTopologyFileNameFromDialog: TopologyFileNameDialogRequester | null = null;
 let requestEndpointSelectionFromDialog: EndpointSelectionDialogRequester | null = null;
 let requestCreateTopologyFromDialog: CreateTopologyDialogRequester | null = null;
 let requestCloneRepoFromDialog: CloneRepoDialogRequester | null = null;
+let requestRuntimeConfirmFromDialog: RuntimeConfirmDialogRequester | null = null;
+let requestRuntimeTextInputFromDialog: RuntimeTextInputDialogRequester | null = null;
+let requestRuntimeOptionSelectionFromDialog: RuntimeOptionSelectionDialogRequester | null = null;
 
 export function setTopologyFileNameDialogRequester(
   requester: TopologyFileNameDialogRequester
@@ -166,6 +240,120 @@ export function setCloneRepoDialogRequester(requester: CloneRepoDialogRequester)
   };
 }
 
+export function setRuntimeConfirmDialogRequester(
+  requester: RuntimeConfirmDialogRequester
+): () => void {
+  requestRuntimeConfirmFromDialog = requester;
+  return () => {
+    if (requestRuntimeConfirmFromDialog === requester) {
+      requestRuntimeConfirmFromDialog = null;
+    }
+  };
+}
+
+export function setRuntimeTextInputDialogRequester(
+  requester: RuntimeTextInputDialogRequester
+): () => void {
+  requestRuntimeTextInputFromDialog = requester;
+  return () => {
+    if (requestRuntimeTextInputFromDialog === requester) {
+      requestRuntimeTextInputFromDialog = null;
+    }
+  };
+}
+
+export function setRuntimeOptionSelectionDialogRequester(
+  requester: RuntimeOptionSelectionDialogRequester
+): () => void {
+  requestRuntimeOptionSelectionFromDialog = requester;
+  return () => {
+    if (requestRuntimeOptionSelectionFromDialog === requester) {
+      requestRuntimeOptionSelectionFromDialog = null;
+    }
+  };
+}
+
+function normalizeRuntimeConfirmDialogRequest(
+  request: RuntimeConfirmDialogRequest
+): ActiveRuntimeConfirmDialogRequest {
+  return {
+    title: request.title?.trim() || "Confirm Action",
+    message: request.message.trim(),
+    confirmLabel: request.confirmLabel?.trim() || "Continue",
+    cancelLabel: request.cancelLabel?.trim() || "Cancel",
+    severity: request.severity ?? "default"
+  };
+}
+
+export function confirmRuntimeAction(request: RuntimeConfirmDialogRequest): Promise<boolean> {
+  const normalizedRequest = normalizeRuntimeConfirmDialogRequest(request);
+  if (!normalizedRequest.message) {
+    return Promise.resolve(false);
+  }
+  if (requestRuntimeConfirmFromDialog) {
+    return requestRuntimeConfirmFromDialog(normalizedRequest);
+  }
+  return Promise.resolve(false);
+}
+
+function normalizeRuntimeTextInputDialogRequest(
+  request: RuntimeTextInputDialogRequest
+): ActiveRuntimeTextInputDialogRequest {
+  return {
+    title: request.title?.trim() || "Enter Value",
+    message: request.message?.trim() || "",
+    label: request.label?.trim() || "Value",
+    defaultValue: request.defaultValue ?? "",
+    helperText: request.helperText?.trim() || "",
+    confirmLabel: request.confirmLabel?.trim() || "Continue",
+    cancelLabel: request.cancelLabel?.trim() || "Cancel",
+    allowEmpty: Boolean(request.allowEmpty),
+    multiline: Boolean(request.multiline)
+  };
+}
+
+export function promptForTextInput(
+  request: RuntimeTextInputDialogRequest
+): Promise<string | undefined> {
+  const normalizedRequest = normalizeRuntimeTextInputDialogRequest(request);
+  if (requestRuntimeTextInputFromDialog) {
+    return requestRuntimeTextInputFromDialog(normalizedRequest);
+  }
+  return Promise.resolve(undefined);
+}
+
+function normalizeRuntimeOptionSelectionDialogRequest(
+  request: RuntimeOptionSelectionDialogRequest
+): ActiveRuntimeOptionSelectionDialogRequest {
+  const options = request.options.filter((option) => option.value.trim().length > 0);
+  const preferredValue =
+    request.preferredValue && options.some((option) => option.value === request.preferredValue)
+      ? request.preferredValue
+      : options[0]?.value ?? "";
+  return {
+    title: request.title?.trim() || "Select Option",
+    message: request.message?.trim() || "Choose an option to continue.",
+    label: request.label?.trim() || "Option",
+    confirmLabel: request.confirmLabel?.trim() || "Continue",
+    cancelLabel: request.cancelLabel?.trim() || "Cancel",
+    options,
+    preferredValue
+  };
+}
+
+export function promptForOptionSelection(
+  request: RuntimeOptionSelectionDialogRequest
+): Promise<string | undefined> {
+  const normalizedRequest = normalizeRuntimeOptionSelectionDialogRequest(request);
+  if (normalizedRequest.options.length === 0 || !normalizedRequest.preferredValue) {
+    return Promise.resolve(undefined);
+  }
+  if (requestRuntimeOptionSelectionFromDialog) {
+    return requestRuntimeOptionSelectionFromDialog(normalizedRequest);
+  }
+  return Promise.resolve(undefined);
+}
+
 function normalizeTopologyFileNameDialogRequest(
   request?: TopologyFileNameDialogRequest
 ): ActiveTopologyFileNameDialogRequest {
@@ -183,9 +371,14 @@ export function promptForTopologyFileName(
   if (requestTopologyFileNameFromDialog) {
     return requestTopologyFileNameFromDialog(normalizedRequest);
   }
-  const fallbackValue = window.prompt("New topology file name", normalizedRequest.defaultValue);
-  const trimmedValue = fallbackValue?.trim();
-  return Promise.resolve(trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined);
+  return promptForTextInput({
+    title: normalizedRequest.title,
+    message: normalizedRequest.message,
+    label: "Topology file name",
+    defaultValue: normalizedRequest.defaultValue,
+    confirmLabel: "Create",
+    helperText: `Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`
+  });
 }
 
 function normalizeEndpointSelectionDialogRequest(
@@ -216,32 +409,14 @@ export function promptForEndpointSelection(
     return requestEndpointSelectionFromDialog(normalizedRequest);
   }
 
-  const optionsText = normalizedRequest.options
-    .map(
-      (option, index) =>
-        `${index + 1}. ${option.label}${option.description ? ` (${option.description})` : ""}`
-    )
-    .join("\n");
-  const defaultIndex = Math.max(
-    1,
-    normalizedRequest.options.findIndex((option) => option.value === normalizedRequest.preferredValue) + 1
-  );
-  const fallbackValue = window.prompt(
-    `${normalizedRequest.message}\n${optionsText}\n\nEnter number (1-${normalizedRequest.options.length}).`,
-    String(defaultIndex)
-  );
-  if (!fallbackValue) {
-    return Promise.resolve(undefined);
-  }
-  const selectedIndex = Number.parseInt(fallbackValue, 10);
-  if (
-    !Number.isFinite(selectedIndex) ||
-    selectedIndex < 1 ||
-    selectedIndex > normalizedRequest.options.length
-  ) {
-    return Promise.resolve(undefined);
-  }
-  return Promise.resolve(normalizedRequest.options[selectedIndex - 1].value);
+  return promptForOptionSelection({
+    title: normalizedRequest.title,
+    message: normalizedRequest.message,
+    label: "Endpoint",
+    confirmLabel: normalizedRequest.confirmLabel,
+    options: normalizedRequest.options,
+    preferredValue: normalizedRequest.preferredValue
+  });
 }
 
 function normalizeCreateTopologyDialogRequest(
@@ -332,50 +507,77 @@ function resolveCloneRepoDefaultMode(
 async function promptForCloneRepoSourceUrl(
   request: ActiveCloneRepoDialogRequest
 ): Promise<string | undefined> {
-  const mode = window.prompt(
-    "Repository source:\n1. Enter Git/HTTP URL\n2. Pick from popular labs\n\nEnter number (1-2).",
-    request.defaultMode === "popular" ? "2" : "1"
-  );
-  if (!mode) {
+  const sourceOptions: EndpointSelectionOption[] = [
+    { label: "Repository URL", value: "url" },
+    { label: "Popular Lab", value: "popular" }
+  ].filter((option) => option.value !== "popular" || request.popularOptions.length > 0);
+  const mode = await promptForOptionSelection({
+    title: "Repository Source",
+    message: "Choose how to select the repository source.",
+    label: "Source",
+    confirmLabel: "Continue",
+    options: sourceOptions,
+    preferredValue: request.defaultMode
+  });
+  if (mode === "url") {
+    return promptForTextInput({
+      title: "Repository Source",
+      message: "Enter a repository or topology URL.",
+      label: "Repository or topology URL",
+      defaultValue: request.defaultSourceUrl,
+      confirmLabel: "Continue"
+    });
+  }
+  if (mode !== "popular" || request.popularOptions.length === 0) {
     return undefined;
   }
 
-  if (mode.trim() === "1") {
-    const rawSourceUrl = window.prompt("Repository or topology URL", request.defaultSourceUrl);
-    return rawSourceUrl?.trim() || undefined;
-  }
-  if (mode.trim() !== "2" || request.popularOptions.length === 0) {
-    return undefined;
-  }
-
-  const optionsText = request.popularOptions
-    .map((option, index) => `${index + 1}. ${option.label}${option.description ? ` - ${option.description}` : ""}`)
-    .join("\n");
-  const rawSelection = window.prompt(
-    `Select popular repository:\n${optionsText}\n\nEnter number (1-${request.popularOptions.length}).`,
-    "1"
-  );
-  const selectedIndex = rawSelection ? Number.parseInt(rawSelection, 10) : 0;
-  if (!Number.isFinite(selectedIndex) || selectedIndex < 1 || selectedIndex > request.popularOptions.length) {
-    return undefined;
-  }
-  return request.popularOptions[selectedIndex - 1].value;
+  return promptForOptionSelection({
+    title: "Popular Lab",
+    message: "Choose a popular lab repository.",
+    label: "Popular lab",
+    confirmLabel: "Use Repository",
+    options: request.popularOptions,
+    preferredValue: request.popularOptions[0]?.value
+  });
 }
 
 function promptForCloneRepoTarget(
   request: ActiveCloneRepoDialogRequest
-): CloneRepoDialogTarget | undefined {
-  const modeSelection = window.prompt(
-    "Action:\n1. Deploy now\n2. Clone to undeployed labs\n\nEnter number (1-2).",
-    request.defaultTarget === "undeployed" ? "2" : "1"
-  );
-  if (modeSelection?.trim() === "2") {
-    return "undeployed";
+): Promise<CloneRepoDialogTarget | undefined> {
+  return promptForOptionSelection({
+    title: "Clone Action",
+    message: "Choose what to do with the cloned repository.",
+    label: "Action",
+    confirmLabel: "Continue",
+    options: [
+      { label: "Deploy now", value: "deploy" },
+      { label: "Clone to undeployed labs", value: "undeployed" }
+    ],
+    preferredValue: request.defaultTarget
+  }).then((value) => {
+    if (value === "deploy" || value === "undeployed") {
+      return value;
+    }
+    return undefined;
+  });
+}
+
+async function promptForOptionalLabNameOverride(
+  defaultValue: string
+): Promise<string | undefined> {
+  const rawLabNameOverride = await promptForTextInput({
+    title: "Lab Name Override",
+    message: "Leave empty to use the default lab name.",
+    label: "Lab name override",
+    defaultValue,
+    confirmLabel: "Continue",
+    allowEmpty: true
+  });
+  if (rawLabNameOverride === undefined) {
+    return undefined;
   }
-  if (modeSelection?.trim() === "1") {
-    return "deploy";
-  }
-  return undefined;
+  return rawLabNameOverride.trim() || "";
 }
 
 export async function promptForCloneRepo(
@@ -404,19 +606,18 @@ export async function promptForCloneRepo(
   if (!sourceUrl) {
     return undefined;
   }
-  const target = promptForCloneRepoTarget(normalizedRequest);
+  const target = await promptForCloneRepoTarget(normalizedRequest);
   if (!target) {
     return undefined;
   }
 
-  const rawLabNameOverride = window.prompt(
-    "Optional lab name override (leave empty to use default)",
+  const rawLabNameOverride = await promptForOptionalLabNameOverride(
     normalizedRequest.defaultLabNameOverride
   );
-  if (rawLabNameOverride === null) {
+  if (rawLabNameOverride === undefined) {
     return undefined;
   }
-  const labNameOverride = rawLabNameOverride.trim() || undefined;
+  const labNameOverride = rawLabNameOverride || undefined;
   return { endpointId, sourceUrl, labNameOverride, target };
 }
 
@@ -437,7 +638,13 @@ export async function createTopologyFileFlow(): Promise<void> {
 
 export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Promise<boolean> {
   const fileLabel = target.topologyRef?.yamlPath ?? "this topology file";
-  if (!window.confirm(`Delete ${fileLabel}?`)) {
+  const confirmed = await confirmRuntimeAction({
+    title: "Delete Topology File",
+    message: `Delete ${fileLabel}?`,
+    confirmLabel: "Delete",
+    severity: "error"
+  });
+  if (!confirmed) {
     return false;
   }
 

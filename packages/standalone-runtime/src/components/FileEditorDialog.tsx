@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useRef } from "react";
 
 import { writeFileExplorerFile } from "../runtimeApi";
+import { confirmRuntimeAction } from "../runtimeActionFlows";
 import { runtimeUiActions, useRuntimeUiStore } from "../stores/runtimeUiStore";
 import {
   attachContainerlabYamlSupport,
@@ -119,10 +120,15 @@ export function FileEditorDialog() {
     }
   }, [fileEditor]);
 
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback(async () => {
     const state = useRuntimeUiStore.getState().fileEditor;
     if (state && state.content !== state.originalContent) {
-      const shouldClose = window.confirm("Discard unsaved changes?");
+      const shouldClose = await confirmRuntimeAction({
+        title: "Discard Unsaved Changes",
+        message: `Discard unsaved changes to "${state.title}"?`,
+        confirmLabel: "Discard",
+        severity: "warning",
+      });
       if (!shouldClose) {
         return;
       }
@@ -164,7 +170,9 @@ export function FileEditorDialog() {
       open
       fullWidth
       maxWidth="lg"
-      onClose={handleClose}
+      onClose={() => {
+        void handleClose();
+      }}
       slotProps={{
         paper: {
           sx: { height: "82vh" },
@@ -194,7 +202,13 @@ export function FileEditorDialog() {
         <Box ref={containerRef} sx={{ flex: 1, minHeight: 0 }} />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose}>Close</Button>
+        <Button
+          onClick={() => {
+            void handleClose();
+          }}
+        >
+          Close
+        </Button>
         <Button
           variant="contained"
           onClick={handleSave}

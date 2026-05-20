@@ -43,10 +43,13 @@ import {
   type NetemFields,
 } from "./runtimeApi";
 import {
+  confirmRuntimeAction,
   deleteTopologyFileFlow,
   promptForCloneRepo,
   promptForCreateTopology,
   promptForEndpointSelection,
+  promptForOptionSelection,
+  promptForTextInput,
   saveConfigsFlow,
   type CloneRepoDialogTarget,
 } from "./runtimeActionFlows";
@@ -566,9 +569,11 @@ async function handleShareActionLink(
   }
 
   await navigator.clipboard.writeText(link).catch(() => {});
-  const shouldOpen = window.confirm(
-    `${kind.toUpperCase()} link copied to clipboard.\n\nOpen link now?`,
-  );
+  const shouldOpen = await confirmRuntimeAction({
+    title: `${kind.toUpperCase()} Link Copied`,
+    message: "The link was copied to clipboard.\n\nOpen link now?",
+    confirmLabel: "Open Link",
+  });
   if (shouldOpen) {
     window.open(link, "_blank", "noopener,noreferrer");
   }
@@ -775,32 +780,19 @@ async function pickPopularRepo(
     return undefined;
   }
 
-  const optionsText = repos
-    .map(
-      (repo, index) =>
-        `${index + 1}. ${repo.name} (⭐ ${repo.stars})` +
-        `${repo.description ? ` — ${repo.description}` : ""}`,
-    )
-    .join("\n");
-  const rawSelection = window.prompt(
-    `${promptTitle}:\n${optionsText}\n\nEnter number (1-${repos.length}).`,
-    "1",
-  );
-  if (!rawSelection) {
-    return undefined;
-  }
-
-  const selectedIndex = Number.parseInt(rawSelection, 10);
-  if (
-    !Number.isFinite(selectedIndex) ||
-    selectedIndex < 1 ||
-    selectedIndex > repos.length
-  ) {
-    runtimeUiActions.notify("Invalid popular repository selection.", "error");
-    return undefined;
-  }
-
-  return repos[selectedIndex - 1].htmlUrl;
+  return promptForOptionSelection({
+    title: promptTitle,
+    message: "Choose a popular lab repository.",
+    label: "Popular lab",
+    confirmLabel: "Use Repository",
+    options: repos.map((repo) => ({
+      label: repo.name,
+      description:
+        `${repo.stars} stars` + (repo.description ? ` - ${repo.description}` : ""),
+      value: repo.htmlUrl,
+    })),
+    preferredValue: repos[0]?.htmlUrl,
+  });
 }
 
 function triggerTextDownload(
@@ -854,19 +846,21 @@ function pickTransferFiles(accept = "", multiple = false): Promise<File[]> {
   });
 }
 
-function promptArchiveFormat(): LabArchiveFormat | undefined {
-  const rawValue = window.prompt("Archive format", "zip");
-  if (rawValue === null) {
-    return undefined;
+async function promptArchiveFormat(): Promise<LabArchiveFormat | undefined> {
+  const value = await promptForOptionSelection({
+    title: "Archive Format",
+    message: "Choose the archive format to download.",
+    label: "Format",
+    confirmLabel: "Download",
+    options: [
+      { label: "ZIP", value: "zip" },
+      { label: "tar.gz", value: "tar.gz" },
+    ],
+    preferredValue: "zip",
+  });
+  if (value === "zip" || value === "tar.gz") {
+    return value;
   }
-  const normalized = rawValue.trim().toLowerCase();
-  if (normalized === "zip") {
-    return "zip";
-  }
-  if (normalized === "tar.gz" || normalized === "tgz") {
-    return "tar.gz";
-  }
-  runtimeUiActions.notify("Use zip or tar.gz as archive format.", "error");
   return undefined;
 }
 
@@ -1838,11 +1832,14 @@ export function createStandaloneExplorerBridge(
       if (cloneOptions?.skipLabNamePrompt) {
         labNameOverride = cloneOptions.labNameOverride?.trim() || undefined;
       } else {
-        const rawLabNameOverride = window.prompt(
-          "Optional lab name override (leave empty to use default)",
-          "",
-        );
-        if (rawLabNameOverride === null) {
+        const rawLabNameOverride = await promptForTextInput({
+          title: "Lab Name Override",
+          message: "Leave empty to use the default lab name.",
+          label: "Lab name override",
+          confirmLabel: "Continue",
+          allowEmpty: true,
+        });
+        if (rawLabNameOverride === undefined) {
           return;
         }
         labNameOverride = rawLabNameOverride.trim() || undefined;
@@ -2044,33 +2041,27 @@ export function createStandaloneExplorerBridge(
           return;
         }
 
-        const optionText = candidates
-          .map(
-            (candidate, index) =>
-              `${index + 1}. ${candidate.hostPort}:${candidate.containerPort}/${candidate.protocol || "tcp"}` +
-              `${candidate.description ? ` — ${candidate.description}` : ""}`,
-          )
-          .join("\n");
-
-        const rawSelection = window.prompt(
-          `Select a port to open:\n${optionText}\n\nEnter number (1-${candidates.length}).`,
-          "1",
-        );
-        if (!rawSelection) {
+        const selectedUrl = await promptForOptionSelection({
+          title: "Open Browser Port",
+          message: "Select a port to open in the browser.",
+          label: "Port",
+          confirmLabel: "Open",
+          options: candidates.map((candidate) => ({
+            label: `${candidate.hostPort}:${candidate.containerPort}/${candidate.protocol || "tcp"}`,
+            description: candidate.description,
+            value: candidate.url,
+          })),
+          preferredValue: candidates[0]?.url,
+        });
+        if (!selectedUrl) {
           return;
         }
 
-        const selectedIndex = Number.parseInt(rawSelection, 10);
-        if (
-          !Number.isFinite(selectedIndex) ||
-          selectedIndex < 1 ||
-          selectedIndex > candidates.length
-        ) {
+        const target = candidates.find((candidate) => candidate.url === selectedUrl);
+        if (!target) {
           runtimeUiActions.notify("Invalid port selection.", "error");
           return;
         }
-
-        const target = candidates[selectedIndex - 1];
         window.open(target.url, "_blank", "noopener,noreferrer");
         runtimeUiActions.notify(`Opened ${target.url}.`, "success");
       } catch (error) {
@@ -2263,7 +2254,12 @@ export function createStandaloneExplorerBridge(
       }
       if (
         action === "uninstall" &&
-        !window.confirm("Uninstall EdgeShark on this endpoint?")
+        !(await confirmRuntimeAction({
+          title: "Uninstall EdgeShark",
+          message: "Uninstall EdgeShark on this endpoint?",
+          confirmLabel: "Uninstall",
+          severity: "warning",
+        }))
       ) {
         return;
       }
@@ -2507,18 +2503,22 @@ export function createStandaloneExplorerBridge(
       });
     };
 
-    const setSessionHostnameFlow = (): void => {
+    const setSessionHostnameFlow = async (): Promise<void> => {
       const actionEndpointLabel =
         findEndpointConfig(endpoints, actionEndpointId)?.label ??
         actionEndpointId ??
         "default";
       const currentHostname =
         getSessionHostnameOverride(actionEndpointId) ?? "";
-      const rawValue = window.prompt(
-        `Set session hostname override for packet capture on "${actionEndpointLabel}" (leave empty to clear)`,
-        currentHostname,
-      );
-      if (rawValue === null) {
+      const rawValue = await promptForTextInput({
+        title: "Session Hostname Override",
+        message: `Set the session hostname override for packet capture on "${actionEndpointLabel}". Leave empty to clear it.`,
+        label: "Hostname override",
+        defaultValue: currentHostname,
+        confirmLabel: "Save",
+        allowEmpty: true,
+      });
+      if (rawValue === undefined) {
         return;
       }
       const nextValue = setSessionHostnameOverride(rawValue, actionEndpointId);
@@ -2561,12 +2561,18 @@ export function createStandaloneExplorerBridge(
       return fileParentPath(item?.resourcePath ?? "");
     };
 
-    const promptWorkspacePath = (
+    const promptWorkspacePath = async (
       title: string,
       defaultPath: string,
-    ): string | undefined => {
-      const rawValue = window.prompt(title, defaultPath);
-      if (rawValue === null) {
+    ): Promise<string | undefined> => {
+      const rawValue = await promptForTextInput({
+        title,
+        message: "Enter a path under ~/.clab.",
+        label: "Path",
+        defaultValue: defaultPath,
+        confirmLabel: title.startsWith("Rename") ? "Rename" : "Create",
+      });
+      if (rawValue === undefined) {
         return undefined;
       }
       const normalized = normalizePathValue(rawValue);
@@ -2592,7 +2598,7 @@ export function createStandaloneExplorerBridge(
         return;
       }
       const parentPath = selectedDirectoryPath();
-      const pathValue = promptWorkspacePath(
+      const pathValue = await promptWorkspacePath(
         "New file path",
         joinWorkspacePath(parentPath, "untitled.txt"),
       );
@@ -2617,7 +2623,7 @@ export function createStandaloneExplorerBridge(
         return;
       }
       const parentPath = selectedDirectoryPath();
-      const pathValue = promptWorkspacePath(
+      const pathValue = await promptWorkspacePath(
         "New folder path",
         joinWorkspacePath(parentPath, "new-folder"),
       );
@@ -2636,7 +2642,7 @@ export function createStandaloneExplorerBridge(
       if (!endpointId || !oldPath) {
         return;
       }
-      const newPath = promptWorkspacePath("Rename path", oldPath);
+      const newPath = await promptWorkspacePath("Rename path", oldPath);
       if (!newPath || newPath === oldPath) {
         return;
       }
@@ -2655,7 +2661,13 @@ export function createStandaloneExplorerBridge(
       const isDirectory = item?.resourceKind === "directory";
       const kind = isDirectory ? "folder" : "file";
       const suffix = isDirectory ? " and everything inside it" : "";
-      if (!window.confirm(`Delete ${kind} "~/.clab/${pathValue}"${suffix}?`)) {
+      const confirmed = await confirmRuntimeAction({
+        title: `Delete ${kind}`,
+        message: `Delete ${kind} "~/.clab/${pathValue}"${suffix}?`,
+        confirmLabel: "Delete",
+        severity: "error",
+      });
+      if (!confirmed) {
         return;
       }
       await deleteFileExplorerPath(endpointId, pathValue, {
@@ -2702,7 +2714,13 @@ export function createStandaloneExplorerBridge(
           postExplorerError("No upload target path is available.");
           return;
         }
-        if (!window.confirm(`Replace "~/.clab/${targetPath}" with "${file.name}"?`)) {
+        const confirmed = await confirmRuntimeAction({
+          title: "Replace File",
+          message: `Replace "~/.clab/${targetPath}" with "${file.name}"?`,
+          confirmLabel: "Replace",
+          severity: "warning",
+        });
+        if (!confirmed) {
           return;
         }
         await uploadFileExplorerFile({ endpointId, file, path: targetPath, targetKind: "file" });
@@ -2744,7 +2762,7 @@ export function createStandaloneExplorerBridge(
         postExplorerError("Select a lab folder before downloading an archive.");
         return;
       }
-      const format = promptArchiveFormat();
+      const format = await promptArchiveFormat();
       if (!format) {
         return;
       }
@@ -2838,11 +2856,14 @@ export function createStandaloneExplorerBridge(
       "containerlab.lab.deploy.specificFile": () =>
         runLabLifecycle("deploy", false),
       "containerlab.lab.deploy.cleanup": async () => {
-        if (
-          window.confirm(
+        const confirmed = await confirmRuntimeAction({
+          title: "Deploy With Cleanup",
+          message:
             "Deploy (cleanup) may remove existing lab artifacts before deployment. Continue?",
-          )
-        ) {
+          confirmLabel: "Deploy",
+          severity: "warning",
+        });
+        if (confirmed) {
           await runLabLifecycle("deploy", true);
         }
       },
@@ -2889,7 +2910,12 @@ export function createStandaloneExplorerBridge(
       "containerlab.lab.fcli.subif": () => runFcli("subif"),
       "containerlab.lab.fcli.sysInfo": () => runFcli("sys-info"),
       "containerlab.lab.fcli.custom": async () => {
-        const customCommand = window.prompt("Custom fcli command", "bgp-peers");
+        const customCommand = await promptForTextInput({
+          title: "Custom fcli Command",
+          label: "fcli command",
+          defaultValue: "bgp-peers",
+          confirmLabel: "Run",
+        });
         if (customCommand?.trim()) {
           await runFcli(customCommand.trim());
         }
@@ -2901,9 +2927,12 @@ export function createStandaloneExplorerBridge(
         );
         if (
           endpointId &&
-          window.confirm(
-            "Close all active Wireshark VNC sessions for this endpoint?",
-          )
+          (await confirmRuntimeAction({
+            title: "Close Wireshark VNC Sessions",
+            message: "Close all active Wireshark VNC sessions for this endpoint?",
+            confirmLabel: "Close Sessions",
+            severity: "warning",
+          }))
         ) {
           try {
             const response = await closeAllWiresharkVncSessions(endpointId);
