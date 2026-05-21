@@ -31,7 +31,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit"
