@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { type TopologyRef } from "@srl-labs/clab-ui/session";
 
-import { resolveLabTab, useLabTabsStore } from "./labTabsStore";
+import { resolveFileTab, resolveLabTab, useLabTabsStore } from "./labTabsStore";
 
 function makeTopologyRef(path: string, labName: string, endpointId: string): TopologyRef {
   return {
@@ -42,6 +42,37 @@ test("openOrFocusTab adds once and focuses existing tabs without duplicates", ()
   assert.equal(second.alreadyOpen, true);
   assert.equal(useLabTabsStore.getState().tabs.length, 1);
   assert.equal(useLabTabsStore.getState().activeTabId, tab.id);
+});
+
+test("openOrFocusTab opens workspace files as editable tabs", () => {
+  const store = useLabTabsStore.getState();
+  const tab = resolveFileTab({
+    endpointId: "ep-1",
+    path: "new-lab/new-lab.clab.yml.annotations.json",
+    content: "{}"
+  });
+
+  const first = store.openOrFocusTab(tab);
+  assert.equal(first.alreadyOpen, false);
+  assert.equal(first.tab.kind, "file");
+  assert.equal(first.tab.title, "new-lab.clab.yml.annotations.json");
+  assert.equal(useLabTabsStore.getState().activeTabId, tab.id);
+
+  useLabTabsStore.getState().setFileTabContent(tab.id, "{\"dirty\":true}");
+  const second = useLabTabsStore.getState().openOrFocusTab(
+    resolveFileTab({
+      endpointId: "ep-1",
+      path: "new-lab/new-lab.clab.yml.annotations.json",
+      content: "{}"
+    })
+  );
+  assert.equal(second.alreadyOpen, true);
+  assert.equal(second.tab.kind, "file");
+  if (second.tab.kind !== "file") {
+    throw new Error("Expected a file tab.");
+  }
+  assert.equal(second.tab.content, "{\"dirty\":true}");
+  assert.equal(second.tab.originalContent, "{}");
 });
 
 test("closeTab prefers right neighbor, then left neighbor", () => {

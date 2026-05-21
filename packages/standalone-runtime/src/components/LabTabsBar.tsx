@@ -54,6 +54,8 @@ export function LabTabsBar({
       {tabs.map((tab) => {
         const active = tab.id === activeTabId;
         const endpointLabel = endpointBadgeLabel(tab.endpointId, endpointLabels);
+        const tabPath = tab.kind === "file" ? tab.path : tab.topologyRef.yamlPath;
+        const dirty = tab.kind === "file" && tab.content !== tab.originalContent;
         return (
           <div
             key={tab.id}
@@ -83,7 +85,7 @@ export function LabTabsBar({
               userSelect: "none",
               flexShrink: 0
             }}
-            title={tab.topologyRef.yamlPath}
+            title={tabPath}
             onMouseEnter={(event) => {
               if (!active) {
                 event.currentTarget.style.backgroundColor = HOVER_BG;
@@ -106,6 +108,7 @@ export function LabTabsBar({
               }}
             >
               {tab.title}
+              {dirty ? " *" : ""}
             </span>
             <span
               style={{

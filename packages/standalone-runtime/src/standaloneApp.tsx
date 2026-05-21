@@ -29,7 +29,7 @@ import {
   useTopoViewerStore,
   type ReactRoot,
   type TopologyRef,
-  type TopologySnapshot
+  type TopologySnapshot,
 } from "./mainUiDependencies";
 
 import {
@@ -44,11 +44,13 @@ import {
   useAuth,
   useEndpointStore,
   useEventStream,
+  useWorkspaceFileEvents,
   useLabStore,
   type DeploymentState,
   type EndpointImportResult,
   type EndpointSessionDuration,
-  type InterfaceNetemPatch
+  type InterfaceNetemPatch,
+  type WorkspaceFileEvent,
 } from "./mainRuntimeDependencies";
 import {
   buildPacketflixCapture,
@@ -61,6 +63,7 @@ import {
   fetchUiCustomNodes,
   fetchUiIcons,
   pullRuntimeImage,
+  isFileLabTab,
   getSessionHostnameOverride,
   loadCapturePreferences,
   loadTerminalPreferences,
@@ -68,6 +71,7 @@ import {
   readPersistedStandaloneTheme,
   reconcileUiIcons,
   removeRuntimeImage,
+  resolveFileTab,
   resolveLabTab,
   resolveStandaloneTheme,
   runtimeUiActions,
@@ -77,14 +81,16 @@ import {
   setDefaultUiCustomNode,
   uploadUiIcon,
   useLabTabsStore,
-  type TerminalPreferences
+  type FileLabTab,
+  type TerminalPreferences,
 } from "./mainApiDependencies";
 import type * as ImageManagerExports from "@srl-labs/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
   ImageActionResult,
-  KindImageReference
+  KindImageReference,
 } from "@srl-labs/clab-ui/image-manager";
+import { confirmRuntimeAction } from "./runtimeActionFlows";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -115,6 +121,11 @@ const LazyRuntimeActionDialogs = lazy(async () => {
   return { default: module.RuntimeActionDialogs };
 });
 
+const LazyFileEditorTabPanel = lazy(async () => {
+  const module = await import("./components/FileEditorTabPanel");
+  return { default: module.FileEditorTabPanel };
+});
+
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("./components/SettingsOverlay");
   return { default: module.SettingsOverlay };
@@ -131,7 +142,8 @@ const monacoGlobal = self as typeof self & {
     getWorker: (workerId: string, label: string) => Worker;
   };
 };
-const EditorWorker = (EditorWorkerModule as { default: new () => Worker }).default;
+const EditorWorker = (EditorWorkerModule as { default: new () => Worker })
+  .default;
 const JsonWorker = (JsonWorkerModule as { default: new () => Worker }).default;
 const YamlWorker = (YamlWorkerModule as { default: new () => Worker }).default;
 
@@ -145,7 +157,7 @@ if (!monacoGlobal.MonacoEnvironment) {
         return new YamlWorker();
       }
       return new EditorWorker();
-    }
+    },
   };
 }
 
@@ -154,7 +166,7 @@ const initialData = {
   dockerImages: [] as string[],
   customNodes: [],
   defaultNode: "",
-  customIcons: []
+  customIcons: [],
 };
 
 function runningLabImageReferences(endpointId?: string): KindImageReference[] {
@@ -174,19 +186,23 @@ function runningLabImageReferences(endpointId?: string): KindImageReference[] {
         label: `${lab.name} ${container.nodeName || container.name}`,
         endpointId: container.endpointId,
         path: lab.topologyPath,
-        nodeName: container.nodeName
+        nodeName: container.nodeName,
       });
     }
   }
   return references;
 }
 
-async function activeTopologyImageReferences(endpointId?: string): Promise<KindImageReference[]> {
+async function activeTopologyImageReferences(
+  endpointId?: string,
+): Promise<KindImageReference[]> {
   if (!standaloneRuntime) {
     return [];
   }
   const context = standaloneRuntime.session.getContext();
-  const contextEndpointId = extractEndpointIdFromTopologyId(context.topologyRef?.topologyId);
+  const contextEndpointId = extractEndpointIdFromTopologyId(
+    context.topologyRef?.topologyId,
+  );
   if (endpointId && contextEndpointId && endpointId !== contextEndpointId) {
     return [];
   }
@@ -195,41 +211,49 @@ async function activeTopologyImageReferences(endpointId?: string): Promise<KindI
     if (!snapshot.yamlContent.trim()) {
       return [];
     }
-    const { collectKindImageReferencesFromYaml } = await loadImageManagerModule();
+    const { collectKindImageReferencesFromYaml } =
+      await loadImageManagerModule();
     return collectKindImageReferencesFromYaml(snapshot.yamlContent, {
       endpointId: contextEndpointId ?? endpointId,
       label: snapshot.labName || snapshot.yamlFileName,
-      path: context.topologyRef?.yamlPath
+      path: context.topologyRef?.yamlPath,
     });
   } catch {
     return [];
   }
 }
 
-async function standaloneImageReferences(endpointId?: string): Promise<KindImageReference[]> {
+async function standaloneImageReferences(
+  endpointId?: string,
+): Promise<KindImageReference[]> {
   const [activeRefs, customNodes, imageManagerModule] = await Promise.all([
     activeTopologyImageReferences(endpointId),
     fetchUiCustomNodes(endpointId).catch(() => ({ customNodes: [] })),
-    loadImageManagerModule()
+    loadImageManagerModule(),
   ]);
   return [
     ...activeRefs,
     ...runningLabImageReferences(endpointId),
-    ...imageManagerModule.collectKindImageReferencesFromCustomTemplates(customNodes.customNodes, {
-      endpointId,
-      label: "Custom"
-    })
+    ...imageManagerModule.collectKindImageReferencesFromCustomTemplates(
+      customNodes.customNodes,
+      {
+        endpointId,
+        label: "Custom",
+      },
+    ),
   ];
 }
 
 function applyCustomNodes(
   customNodes: ReturnType<typeof useTopoViewerStore.getState>["customNodes"],
-  defaultNode: string
+  defaultNode: string,
 ): void {
   useTopoViewerStore.getState().setCustomNodes(customNodes, defaultNode);
 }
 
-function applyCustomIcons(customIcons: ReturnType<typeof useTopoViewerStore.getState>["customIcons"]): void {
+function applyCustomIcons(
+  customIcons: ReturnType<typeof useTopoViewerStore.getState>["customIcons"],
+): void {
   useTopoViewerStore.getState().setCustomIcons(customIcons);
 }
 
@@ -300,7 +324,9 @@ function loadPersistedTheme(): "light" | "dark" {
 function persistTheme(theme: "light" | "dark"): void {
   try {
     localStorage.setItem("clab-standalone-theme", theme);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 currentTheme = loadPersistedTheme();
@@ -322,24 +348,29 @@ function getConnectedEndpointIdForUiAssets(): string | undefined {
   if (
     currentEndpointId &&
     configuredEndpoints.some(
-      (endpoint) => endpoint.id === currentEndpointId && endpoint.status === "connected"
+      (endpoint) =>
+        endpoint.id === currentEndpointId && endpoint.status === "connected",
     )
   ) {
     return currentEndpointId;
   }
 
-  return configuredEndpoints.find((endpoint) => endpoint.status === "connected")?.id;
+  return configuredEndpoints.find((endpoint) => endpoint.status === "connected")
+    ?.id;
 }
 
 function getEndpointIdForEditorContext(): string | undefined {
-  return topologyManager.getCurrentEndpointId() ?? getConnectedEndpointIdForUiAssets();
+  return (
+    topologyManager.getCurrentEndpointId() ??
+    getConnectedEndpointIdForUiAssets()
+  );
 }
 
 function hasActiveConnectedTopologySession(): boolean {
   return Boolean(
     getConnectedEndpointIdForUiAssets() &&
     topologyManager.getCurrentSessionId() &&
-    topologyManager.getCurrentTopologyRef()
+    topologyManager.getCurrentTopologyRef(),
   );
 }
 
@@ -357,11 +388,13 @@ function createEmptyTopologySnapshot(): TopologySnapshot {
     mode: "edit",
     deploymentState: "undeployed",
     canUndo: false,
-    canRedo: false
+    canRedo: false,
   };
 }
 
-function removeLabFromRuntimeStore(topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">): void {
+function removeLabFromRuntimeStore(
+  topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">,
+): void {
   useLabStore.setState((state) => {
     let changed = false;
     const nextLabs = new Map(state.labs);
@@ -375,7 +408,8 @@ function removeLabFromRuntimeStore(topologyRef: Pick<TopologyRef, "topologyId" |
         normalizedPath.length > 0 &&
         (normalizePathValue(lab.topologyPath) === normalizedPath ||
           [...lab.containers.values()].some(
-            (container) => normalizePathValue(container.labPath) === normalizedPath
+            (container) =>
+              normalizePathValue(container.labPath) === normalizedPath,
           ));
       if (matchesPath) {
         nextLabs.delete(key);
@@ -402,7 +436,7 @@ const topologyManager = createStandaloneTopologyManager({
   getLabs: () => useLabStore.getState().labs,
   onTopologyFilesChanged: () => {
     scheduleExplorerSnapshot(0);
-  }
+  },
 });
 
 let topologyTabActivationQueue: Promise<void> = Promise.resolve();
@@ -424,25 +458,30 @@ function resolveLabTabFallbackEndpointId(): string | undefined {
 function requestViewportFitFromHost(): void {
   window.dispatchEvent(
     new MessageEvent("message", {
-      data: { type: MSG_FIT_VIEWPORT }
-    })
+      data: { type: MSG_FIT_VIEWPORT },
+    }),
   );
 }
 
 async function activateLabTabById(
   tabId: string,
-  options: { deploymentState?: DeploymentState } = {}
+  options: { deploymentState?: DeploymentState } = {},
 ): Promise<void> {
-  const tab = useLabTabsStore.getState().tabs.find((entry) => entry.id === tabId);
+  const tab = useLabTabsStore
+    .getState()
+    .tabs.find((entry) => entry.id === tabId);
   if (!tab) {
     return;
   }
   useLabTabsStore.getState().setActiveTab(tab.id);
+  if (isFileLabTab(tab)) {
+    return;
+  }
   try {
     await queueTopologyTabActivation(async () => {
       await topologyManager.loadTopologyFile(tab.topologyRef, {
         deploymentState: options.deploymentState,
-        endpointId: tab.endpointId
+        endpointId: tab.endpointId,
       });
     });
   } catch (error: unknown) {
@@ -453,25 +492,54 @@ async function activateLabTabById(
 
 async function openTopologyInTab(
   topologyRef: TopologyRef,
-  options: { deploymentState?: DeploymentState; endpointId?: string } = {}
+  options: { deploymentState?: DeploymentState; endpointId?: string } = {},
 ): Promise<void> {
   const resolvedTab = resolveLabTab(
     {
       endpointId: options.endpointId,
-      topologyRef
+      topologyRef,
     },
-    resolveLabTabFallbackEndpointId()
+    resolveLabTabFallbackEndpointId(),
   );
   const openResult = useLabTabsStore.getState().openOrFocusTab(resolvedTab);
   await activateLabTabById(openResult.tab.id, {
-    deploymentState: options.deploymentState
+    deploymentState: options.deploymentState,
   });
   if (!openResult.alreadyOpen) {
     requestViewportFitFromHost();
   }
 }
 
+async function confirmCloseLabTab(tabId: string): Promise<boolean> {
+  const tab = useLabTabsStore
+    .getState()
+    .tabs.find((entry) => entry.id === tabId);
+  if (!isFileLabTab(tab) || tab.content === tab.originalContent) {
+    return true;
+  }
+  return confirmRuntimeAction({
+    title: "Discard Unsaved Changes",
+    message: `Discard unsaved changes to "${tab.title}"?`,
+    confirmLabel: "Discard",
+    severity: "warning",
+  });
+}
+
+function openWorkspaceFileInTab(document: {
+  content: string;
+  endpointId: string;
+  path: string;
+  title: string;
+}): void {
+  const tab = resolveFileTab(document);
+  const openResult = useLabTabsStore.getState().openOrFocusTab(tab);
+  useLabTabsStore.getState().setActiveTab(openResult.tab.id);
+}
+
 async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
+  if (!(await confirmCloseLabTab(tabId))) {
+    return;
+  }
   const closeResult = useLabTabsStore.getState().closeTab(tabId);
   if (!closeResult.removed || !closeResult.wasActive) {
     return;
@@ -485,8 +553,12 @@ async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
   });
 }
 
-async function closeEndpointTabsAndActivateNext(endpointId: string): Promise<void> {
-  const closeResult = useLabTabsStore.getState().closeTabsByEndpoint(endpointId);
+async function closeEndpointTabsAndActivateNext(
+  endpointId: string,
+): Promise<void> {
+  const closeResult = useLabTabsStore
+    .getState()
+    .closeTabsByEndpoint(endpointId);
   if (closeResult.removedCount === 0) {
     return;
   }
@@ -509,7 +581,9 @@ async function clearLabTabsAndActiveTopology(): Promise<void> {
 }
 
 async function refreshCustomNodesForAuthenticatedUser(): Promise<void> {
-  const response = await fetchUiCustomNodes(getConnectedEndpointIdForUiAssets());
+  const response = await fetchUiCustomNodes(
+    getConnectedEndpointIdForUiAssets(),
+  );
   applyCustomNodes(response.customNodes, response.defaultNode);
 }
 
@@ -523,7 +597,7 @@ async function refreshCustomIconsForCurrentTopology(): Promise<void> {
   const response = await fetchUiIcons({
     endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
     sessionId: topologyManager.getCurrentSessionId() ?? undefined,
-    topologyRef
+    topologyRef,
   });
   applyCustomIcons(response.icons);
 }
@@ -531,20 +605,24 @@ async function refreshCustomIconsForCurrentTopology(): Promise<void> {
 const lifecycleManager = createStandaloneLifecycleManager({
   getCurrentSessionId: topologyManager.getCurrentSessionId,
   getCurrentTopologyRef: topologyManager.getCurrentTopologyRef,
-  invalidateTopologyFileListCache: topologyManager.invalidateTopologyFileListCache,
+  invalidateTopologyFileListCache:
+    topologyManager.invalidateTopologyFileListCache,
   removeLabFromRuntimeStore,
   scheduleExplorerSnapshot: (delay) => scheduleExplorerSnapshot(delay),
-  scheduleTopologySnapshotRefresh: (delay) => topologyManager.scheduleSnapshotRefresh(delay),
-  syncHostContext: topologyManager.syncHostContext
+  scheduleTopologySnapshotRefresh: (delay) =>
+    topologyManager.scheduleSnapshotRefresh(delay),
+  syncHostContext: topologyManager.syncHostContext,
 });
 
 const explorerBridge = createStandaloneExplorerBridge({
   debounceMs: EXPLORER_REFRESH_DEBOUNCE_MS,
   getEndpoints: getConfiguredEndpoints,
   getLabs: () => useLabStore.getState().labs,
-  invalidateTopologyFileListCache: topologyManager.invalidateTopologyFileListCache,
+  invalidateTopologyFileListCache:
+    topologyManager.invalidateTopologyFileListCache,
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
+  openFileEditor: openWorkspaceFileInTab,
   removeEndpoint: async (endpointId) => {
     await closeEndpointTabsAndActivateNext(endpointId);
     await topologyManager.disposeEndpointSession(endpointId);
@@ -552,10 +630,14 @@ const explorerBridge = createStandaloneExplorerBridge({
   resolveApiTopologyPath: topologyManager.resolveApiTopologyPath,
   resolveDeploymentState: topologyManager.resolveDeploymentState,
   resolveTopologyRef: topologyManager.resolveTopologyRef,
-  runLifecycle: lifecycleManager.runTarget
+  runLifecycle: lifecycleManager.runTarget,
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
+
+function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
+  return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
+}
 
 type VscodeMessage = {
   baseName?: string;
@@ -580,7 +662,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function optionalStringField(data: Record<string, unknown>, key: string): string | undefined {
+function optionalStringField(
+  data: Record<string, unknown>,
+  key: string,
+): string | undefined {
   const value = data[key];
   if (typeof value !== "string") {
     return undefined;
@@ -589,7 +674,10 @@ function optionalStringField(data: Record<string, unknown>, key: string): string
   return trimmed || undefined;
 }
 
-function optionalNumberField(data: Record<string, unknown>, key: string): number | undefined {
+function optionalNumberField(
+  data: Record<string, unknown>,
+  key: string,
+): number | undefined {
   const value = data[key];
   if (typeof value === "number") {
     return Number.isFinite(value) ? value : undefined;
@@ -617,14 +705,18 @@ function netemPatchFromValues(input: {
     netemJitter: input.jitter ?? "0ms",
     netemLoss: input.loss !== undefined ? String(input.loss) : "0%",
     netemRate: input.rate !== undefined ? String(input.rate) : "0",
-    netemCorruption: input.corruption !== undefined ? String(input.corruption) : "0"
+    netemCorruption:
+      input.corruption !== undefined ? String(input.corruption) : "0",
   };
 }
 
 function getActiveTopologyTarget() {
   const topologyRef = topologyManager.getCurrentTopologyRef();
   if (!topologyRef) {
-    runtimeUiActions.notify("No active topology session is available.", "error");
+    runtimeUiActions.notify(
+      "No active topology session is available.",
+      "error",
+    );
     return null;
   }
   const endpointId = topologyManager.getCurrentEndpointId() ?? undefined;
@@ -632,9 +724,14 @@ function getActiveTopologyTarget() {
   return { endpointId, sessionId, topologyRef };
 }
 
-function openPacketflixCaptures(links: Array<{ packetflixUri?: string }>): void {
+function openPacketflixCaptures(
+  links: Array<{ packetflixUri?: string }>,
+): void {
   if (links.length === 0) {
-    runtimeUiActions.notify("No packet capture targets were returned.", "warning");
+    runtimeUiActions.notify(
+      "No packet capture targets were returned.",
+      "warning",
+    );
     return;
   }
   for (const capture of links) {
@@ -648,7 +745,7 @@ function openPacketflixCaptures(links: Array<{ packetflixUri?: string }>): void 
 function openWiresharkVncSessions(
   sessions: Array<{ sessionId: string; showVolumeTip?: boolean }>,
   targetEndpointId: string | undefined,
-  theme: "light" | "dark"
+  theme: "light" | "dark",
 ): void {
   if (sessions.length === 0) {
     runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
@@ -662,11 +759,18 @@ function openWiresharkVncSessions(
     if (session.showVolumeTip) {
       params.set("showVolumeTip", "1");
     }
-    window.open(`/wireshark.html?${params.toString()}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `/wireshark.html?${params.toString()}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   }
 }
 
-function openCaptureForInterface(nodeName: string, interfaceName: string): void {
+function openCaptureForInterface(
+  nodeName: string,
+  interfaceName: string,
+): void {
   const target = getActiveTopologyTarget();
   if (!target) {
     return;
@@ -683,7 +787,7 @@ function openCaptureForInterface(nodeName: string, interfaceName: string): void 
         const response = await buildPacketflixCapture({
           ...target,
           targets: [{ containerName: nodeName, interfaceName }],
-          remoteHostname: getSessionHostnameOverride(target.endpointId)
+          remoteHostname: getSessionHostnameOverride(target.endpointId),
         });
         openPacketflixCaptures(response.captures ?? []);
         return;
@@ -693,16 +797,27 @@ function openCaptureForInterface(nodeName: string, interfaceName: string): void 
       const response = await createWiresharkVncSessions({
         ...target,
         targets: [{ containerName: nodeName, interfaceName }],
-        theme
+        theme,
       });
-      openWiresharkVncSessions(response.sessions ?? [], target.endpointId, theme);
+      openWiresharkVncSessions(
+        response.sessions ?? [],
+        target.endpointId,
+        theme,
+      );
     } catch (error: unknown) {
-      runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      runtimeUiActions.notify(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
     }
   })();
 }
 
-function triggerDownload(filename: string, content: string, mimeType: string): void {
+function triggerDownload(
+  filename: string,
+  content: string,
+  mimeType: string,
+): void {
   const blob = new Blob([content], { type: `${mimeType};charset=utf-8` });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -713,23 +828,35 @@ function triggerDownload(filename: string, content: string, mimeType: string): v
 }
 
 function handleGrafanaBundleExport(msg: VscodeMessage): void {
-  const baseName = typeof msg.baseName === "string" ? msg.baseName.trim() || "topology" : "topology";
+  const baseName =
+    typeof msg.baseName === "string"
+      ? msg.baseName.trim() || "topology"
+      : "topology";
   const svgContent = typeof msg.svgContent === "string" ? msg.svgContent : "";
-  const dashboardJson = typeof msg.dashboardJson === "string" ? msg.dashboardJson : "";
+  const dashboardJson =
+    typeof msg.dashboardJson === "string" ? msg.dashboardJson : "";
   const panelYaml = typeof msg.panelYaml === "string" ? msg.panelYaml : "";
   if (svgContent) {
     triggerDownload(`${baseName}.svg`, svgContent, "image/svg+xml");
   }
   if (dashboardJson) {
-    triggerDownload(`${baseName}.grafana.json`, dashboardJson, "application/json");
+    triggerDownload(
+      `${baseName}.grafana.json`,
+      dashboardJson,
+      "application/json",
+    );
   }
   if (panelYaml) {
-    triggerDownload(`${baseName}.flow_panel.yaml`, panelYaml, "application/yaml");
+    triggerDownload(
+      `${baseName}.flow_panel.yaml`,
+      panelYaml,
+      "application/yaml",
+    );
   }
   const files = [
     svgContent ? `${baseName}.svg` : null,
     dashboardJson ? `${baseName}.grafana.json` : null,
-    panelYaml ? `${baseName}.flow_panel.yaml` : null
+    panelYaml ? `${baseName}.flow_panel.yaml` : null,
   ].filter((value): value is string => value !== null);
   window.dispatchEvent(
     new MessageEvent("message", {
@@ -737,34 +864,42 @@ function handleGrafanaBundleExport(msg: VscodeMessage): void {
         type: MSG_SVG_EXPORT_RESULT,
         requestId: msg.requestId ?? "",
         success: true,
-        files
-      }
-    })
+        files,
+      },
+    }),
   );
 }
 
 function handleNodeTerminalCommand(msg: VscodeMessage): void {
   const target = getActiveTopologyTarget();
-  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+  if (
+    !target ||
+    typeof msg.nodeName !== "string" ||
+    msg.nodeName.trim().length === 0
+  ) {
     return;
   }
   runtimeUiActions.openTerminal({
     ...target,
     protocol: msg.command === "clab-node-attach-shell" ? "shell" : "ssh",
     nodeName: msg.nodeName,
-    title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`
+    title: `${msg.command === "clab-node-attach-shell" ? "Shell" : "SSH"}: ${msg.nodeName}`,
   });
 }
 
 function handleNodeLogsCommand(msg: VscodeMessage): void {
   const target = getActiveTopologyTarget();
-  if (!target || typeof msg.nodeName !== "string" || msg.nodeName.trim().length === 0) {
+  if (
+    !target ||
+    typeof msg.nodeName !== "string" ||
+    msg.nodeName.trim().length === 0
+  ) {
     return;
   }
   runtimeUiActions.openLogs({
     ...target,
     nodeName: msg.nodeName,
-    title: `Logs: ${msg.nodeName}`
+    title: `Logs: ${msg.nodeName}`,
   });
 }
 
@@ -787,26 +922,33 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
   void controlNodeLifecycle({
     ...target,
     nodeName,
-    action
+    action,
   })
     .then(() => {
       runtimeUiActions.notify(`${nodeName} ${action} requested.`, "success");
     })
     .catch((error: unknown) => {
-      runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+      runtimeUiActions.notify(
+        error instanceof Error ? error.message : String(error),
+        "error",
+      );
     });
 }
 
 function handleLinkImpairmentCommand(msg: VscodeMessage): void {
   const target = getActiveTopologyTarget();
   const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
-  const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+  const interfaceName =
+    typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
   if (!target || !nodeName) {
     return;
   }
   if (isRecord(msg.data)) {
     if (!interfaceName) {
-      runtimeUiActions.notify("Missing interface for link impairment.", "error");
+      runtimeUiActions.notify(
+        "Missing interface for link impairment.",
+        "error",
+      );
       return;
     }
     const delay = optionalStringField(msg.data, "delay");
@@ -822,7 +964,7 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
       jitter,
       loss,
       rate,
-      corruption
+      corruption,
     })
       .then(() => {
         useLabStore.getState().updateInterfaceNetemState({
@@ -831,12 +973,24 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
           labName: target.topologyRef?.labName,
           nodeName,
           interfaceName,
-          netem: netemPatchFromValues({ delay, jitter, loss, rate, corruption })
+          netem: netemPatchFromValues({
+            delay,
+            jitter,
+            loss,
+            rate,
+            corruption,
+          }),
         });
-        runtimeUiActions.notify(`Updated impairments for ${nodeName}:${interfaceName}.`, "success");
+        runtimeUiActions.notify(
+          `Updated impairments for ${nodeName}:${interfaceName}.`,
+          "success",
+        );
       })
       .catch((error: unknown) => {
-        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
+        runtimeUiActions.notify(
+          error instanceof Error ? error.message : String(error),
+          "error",
+        );
       });
     return;
   }
@@ -845,20 +999,26 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
     ...target,
     nodeName,
     preferredInterfaceName: interfaceName || undefined,
-    title: `Impairments: ${nodeName}`
+    title: `Impairments: ${nodeName}`,
   });
 }
 
 function handleSaveCustomNodeCommand(msg: VscodeMessage): void {
   const { command: _command, ...payload } = msg;
-  void saveUiCustomNode(payload as Record<string, unknown>, getEndpointIdForEditorContext()).then((response) => {
-    applyCustomNodeError(null);
-    applyCustomNodes(response.customNodes, response.defaultNode);
-  }).catch((error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    applyCustomNodeError(errorMessage);
-    runtimeUiActions.notify(errorMessage, "error");
-  });
+  void saveUiCustomNode(
+    payload as Record<string, unknown>,
+    getEndpointIdForEditorContext(),
+  )
+    .then((response) => {
+      applyCustomNodeError(null);
+      applyCustomNodes(response.customNodes, response.defaultNode);
+    })
+    .catch((error: unknown) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      applyCustomNodeError(errorMessage);
+      runtimeUiActions.notify(errorMessage, "error");
+    });
 }
 
 function handleDeleteCustomNodeCommand(msg: VscodeMessage): void {
@@ -867,14 +1027,17 @@ function handleDeleteCustomNodeCommand(msg: VscodeMessage): void {
     applyCustomNodeError("Missing custom node name.");
     return;
   }
-  void deleteUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
-    applyCustomNodeError(null);
-    applyCustomNodes(response.customNodes, response.defaultNode);
-  }).catch((error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    applyCustomNodeError(errorMessage);
-    runtimeUiActions.notify(errorMessage, "error");
-  });
+  void deleteUiCustomNode(nodeName, getEndpointIdForEditorContext())
+    .then((response) => {
+      applyCustomNodeError(null);
+      applyCustomNodes(response.customNodes, response.defaultNode);
+    })
+    .catch((error: unknown) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      applyCustomNodeError(errorMessage);
+      runtimeUiActions.notify(errorMessage, "error");
+    });
 }
 
 function handleSetDefaultCustomNodeCommand(msg: VscodeMessage): void {
@@ -883,14 +1046,17 @@ function handleSetDefaultCustomNodeCommand(msg: VscodeMessage): void {
     applyCustomNodeError("Missing custom node name.");
     return;
   }
-  void setDefaultUiCustomNode(nodeName, getEndpointIdForEditorContext()).then((response) => {
-    applyCustomNodeError(null);
-    applyCustomNodes(response.customNodes, response.defaultNode);
-  }).catch((error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    applyCustomNodeError(errorMessage);
-    runtimeUiActions.notify(errorMessage, "error");
-  });
+  void setDefaultUiCustomNode(nodeName, getEndpointIdForEditorContext())
+    .then((response) => {
+      applyCustomNodeError(null);
+      applyCustomNodes(response.customNodes, response.defaultNode);
+    })
+    .catch((error: unknown) => {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      applyCustomNodeError(errorMessage);
+      runtimeUiActions.notify(errorMessage, "error");
+    });
 }
 
 function handleIconUploadCommand(): void {
@@ -903,7 +1069,8 @@ function handleIconUploadCommand(): void {
       await uploadUiIcon(file, getEndpointIdForEditorContext());
       await refreshCustomIconsForCurrentTopology();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       runtimeUiActions.notify(errorMessage, "error");
     }
   })();
@@ -918,7 +1085,8 @@ function handleIconDeleteCommand(msg: VscodeMessage): void {
   void deleteUiIcon(iconName, getEndpointIdForEditorContext())
     .then(() => refreshCustomIconsForCurrentTopology())
     .catch((error: unknown) => {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       runtimeUiActions.notify(errorMessage, "error");
     });
 }
@@ -929,13 +1097,15 @@ function handleIconReconcileCommand(msg: VscodeMessage): void {
     return;
   }
   const usedIcons = Array.isArray(msg.usedIcons)
-    ? msg.usedIcons.filter((value): value is string => typeof value === "string")
+    ? msg.usedIcons.filter(
+        (value): value is string => typeof value === "string",
+      )
     : [];
   void reconcileUiIcons({
     endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
     sessionId: topologyManager.getCurrentSessionId() ?? undefined,
     topologyRef,
-    usedIcons
+    usedIcons,
   }).catch((error: unknown) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("[Standalone] icon reconcile failed:", errorMessage);
@@ -953,15 +1123,18 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   "clab-node-stop": handleNodeLifecycleCommand,
   "clab-node-restart": handleNodeLifecycleCommand,
   "clab-interface-capture": (msg) => {
-    const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
-    const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+    const nodeName =
+      typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+    const interfaceName =
+      typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
     openCaptureForInterface(nodeName, interfaceName);
   },
   "clab-link-impairment": handleLinkImpairmentCommand,
-  "topo-toggle-split-view": () => runtimeUiActions.notify(
-    "Split view is not available in standalone mode yet.",
-    "info"
-  ),
+  "topo-toggle-split-view": () =>
+    runtimeUiActions.notify(
+      "Split view is not available in standalone mode yet.",
+      "info",
+    ),
   "save-custom-node": handleSaveCustomNodeCommand,
   "delete-custom-node": handleDeleteCustomNodeCommand,
   "set-default-custom-node": handleSetDefaultCustomNodeCommand,
@@ -972,12 +1145,12 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   },
   "icon-upload": handleIconUploadCommand,
   "icon-delete": handleIconDeleteCommand,
-  "icon-reconcile": handleIconReconcileCommand
+  "icon-reconcile": handleIconReconcileCommand,
 };
 
 const IGNORED_STANDALONE_MESSAGE_COMMANDS = new Set([
   "reactTopoViewerLog",
-  "topoViewerLog"
+  "topoViewerLog",
 ]);
 
 // Standalone host bridge - explicit UI host with API-backed topology transport.
@@ -1031,27 +1204,27 @@ function setupStandaloneUiHost(): void {
       async pullImage(request): Promise<ImageActionResult> {
         return pullRuntimeImage({
           endpointId: request.endpointId,
-          image: request.image
+          image: request.image,
         });
       },
       async removeImage(request): Promise<ImageActionResult> {
         return removeRuntimeImage({
           endpointId: request.endpointId,
           reference: request.reference,
-          force: request.force
+          force: request.force,
         });
-      }
+      },
     },
     postMessage,
     targetWindow: window,
     meta: {
       isDevMock: true,
-      disableDevMockTraffic: true
-    }
+      disableDevMockTraffic: true,
+    },
   });
   const requestSnapshot: typeof apiHost.topology.requestSnapshot = async (
     context,
-    requestOptions
+    requestOptions,
   ) => {
     if (!hasActiveConnectedTopologySession()) {
       return createEmptyTopologySnapshot();
@@ -1064,9 +1237,9 @@ function setupStandaloneUiHost(): void {
       ...apiHost,
       topology: {
         ...apiHost.topology,
-        requestSnapshot
-      }
-    }
+        requestSnapshot,
+      },
+    },
   });
 }
 
@@ -1077,11 +1250,13 @@ type StandaloneWindowState = Window & {
 };
 
 const standaloneWindowState = window as StandaloneWindowState;
-let reactRoot: ReactRoot | null = standaloneWindowState.__clabStandaloneReactRoot ?? null;
+let reactRoot: ReactRoot | null =
+  standaloneWindowState.__clabStandaloneReactRoot ?? null;
 
 function renderApp(): void {
   (window as unknown as Record<string, unknown>).__INITIAL_DATA__ = initialData;
-  (window as unknown as Record<string, unknown>).__DOCKER_IMAGES__ = initialData.dockerImages;
+  (window as unknown as Record<string, unknown>).__DOCKER_IMAGES__ =
+    initialData.dockerImages;
 
   const container = document.getElementById("root");
   if (!container) throw new Error("Root element not found");
@@ -1109,7 +1284,9 @@ function resolveLabTabsHostElement(): TabsHostResolution {
     return { created: false, host: null };
   }
 
-  const existingHost = appRoot.querySelector("[data-standalone-lab-tabs-host='true']");
+  const existingHost = appRoot.querySelector(
+    "[data-standalone-lab-tabs-host='true']",
+  );
   if (existingHost instanceof HTMLDivElement) {
     return { created: false, host: existingHost };
   }
@@ -1142,7 +1319,9 @@ function resolveLabEmptyStateHostElement(): TabsHostResolution {
     return { created: false, host: null };
   }
 
-  const existingHost = mainElement.querySelector("[data-standalone-lab-empty-host='true']");
+  const existingHost = mainElement.querySelector(
+    "[data-standalone-lab-empty-host='true']",
+  );
   if (existingHost instanceof HTMLDivElement) {
     return { created: false, host: existingHost };
   }
@@ -1151,6 +1330,37 @@ function resolveLabEmptyStateHostElement(): TabsHostResolution {
   host.setAttribute("data-standalone-lab-empty-host", "true");
   host.style.position = "absolute";
   host.style.top = "0";
+  host.style.left = "0";
+  host.style.right = "0";
+  host.style.bottom = "0";
+  host.style.zIndex = "6";
+  host.style.pointerEvents = "none";
+  mainElement.appendChild(host);
+  return { created: true, host };
+}
+
+function resolveFileEditorHostElement(): TabsHostResolution {
+  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
+  if (!(appRoot instanceof HTMLDivElement)) {
+    return { created: false, host: null };
+  }
+
+  const mainElement = appRoot.querySelector("main");
+  if (!(mainElement instanceof HTMLElement)) {
+    return { created: false, host: null };
+  }
+
+  const existingHost = mainElement.querySelector(
+    "[data-standalone-file-editor-host='true']",
+  );
+  if (existingHost instanceof HTMLDivElement) {
+    return { created: false, host: existingHost };
+  }
+
+  const host = document.createElement("div");
+  host.setAttribute("data-standalone-file-editor-host", "true");
+  host.style.position = "absolute";
+  host.style.top = "45px";
   host.style.left = "0";
   host.style.right = "0";
   host.style.bottom = "0";
@@ -1239,7 +1449,75 @@ function StandaloneLabTabsMount() {
       onClose={handleClose}
       tabs={tabs}
     />,
-    host
+    host,
+  );
+}
+
+function useFileEditorPortalHost(): HTMLDivElement | null {
+  const [host, setHost] = useState<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    let ownedHost: HTMLDivElement | null = null;
+    let observer: MutationObserver | null = null;
+
+    const attach = () => {
+      const resolution = resolveFileEditorHostElement();
+      if (!resolution.host) {
+        return false;
+      }
+      if (resolution.created) {
+        ownedHost = resolution.host;
+      }
+      if (mounted) {
+        setHost(resolution.host);
+      }
+      return true;
+    };
+
+    if (!attach()) {
+      observer = new MutationObserver(() => {
+        if (attach()) {
+          observer?.disconnect();
+          observer = null;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    return () => {
+      mounted = false;
+      observer?.disconnect();
+      if (ownedHost && ownedHost.parentElement) {
+        ownedHost.remove();
+      }
+      setHost(null);
+    };
+  }, []);
+
+  return host;
+}
+
+function StandaloneFileEditorTabMount() {
+  const host = useFileEditorPortalHost();
+  const activeFileTab = useLabTabsStore((state): FileLabTab | null => {
+    const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
+    return isFileLabTab(activeTab) ? activeTab : null;
+  });
+
+  const handleClose = useCallback((tabId: string) => {
+    void closeLabTabAndActivateNext(tabId);
+  }, []);
+
+  if (!host || !activeFileTab) {
+    return null;
+  }
+
+  return createPortal(
+    <Suspense fallback={null}>
+      <LazyFileEditorTabPanel onClose={handleClose} tab={activeFileTab} />
+    </Suspense>,
+    host,
   );
 }
 
@@ -1288,9 +1566,10 @@ function useLabEmptyStatePortalHost(): HTMLDivElement | null {
   return host;
 }
 
-function computeContextPanelOcclusion(
-  host: HTMLDivElement | null
-): { left: number; right: number } {
+function computeContextPanelOcclusion(host: HTMLDivElement | null): {
+  left: number;
+  right: number;
+} {
   if (!host) {
     return { left: 0, right: 0 };
   }
@@ -1300,7 +1579,7 @@ function computeContextPanelOcclusion(
   }
 
   const panel = document.querySelector<HTMLElement>(
-    "[data-testid='context-panel'] .MuiDrawer-paper"
+    "[data-testid='context-panel'] .MuiDrawer-paper",
   );
   if (!panel) {
     return { left: 0, right: 0 };
@@ -1321,10 +1600,13 @@ function computeContextPanelOcclusion(
     : { left: 0, right: overlapWidth };
 }
 
-function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; right: number } {
+function useEmptyStateOcclusion(host: HTMLDivElement | null): {
+  left: number;
+  right: number;
+} {
   const [occlusion, setOcclusion] = useState<{ left: number; right: number }>({
     left: 0,
-    right: 0
+    right: 0,
   });
 
   useEffect(() => {
@@ -1364,7 +1646,7 @@ function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; ri
       });
       resizeObserver.observe(host);
       const panel = document.querySelector<HTMLElement>(
-        "[data-testid='context-panel'] .MuiDrawer-paper"
+        "[data-testid='context-panel'] .MuiDrawer-paper",
       );
       if (panel) {
         resizeObserver.observe(panel);
@@ -1379,7 +1661,7 @@ function useEmptyStateOcclusion(host: HTMLDivElement | null): { left: number; ri
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ["class", "style"]
+      attributeFilter: ["class", "style"],
     });
 
     window.addEventListener("resize", scheduleUpdate);
@@ -1473,9 +1755,12 @@ function StandaloneLabEmptyStateMount() {
 
   return createPortal(
     <Suspense fallback={null}>
-      <LazyAttractorEmptyState occlusionLeft={occlusion.left} occlusionRight={occlusion.right} />
+      <LazyAttractorEmptyState
+        occlusionLeft={occlusion.left}
+        occlusionRight={occlusion.right}
+      />
     </Suspense>,
-    host
+    host,
   );
 }
 
@@ -1498,23 +1783,35 @@ function StandaloneApp() {
     refreshConfig,
     removeEndpoint,
     updateEndpoint,
-    setEndpointSessionDuration
+    setEndpointSessionDuration,
   } = useAuth();
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
-  const [terminalPreferences, setTerminalPreferences] = useState<TerminalPreferences>(() =>
-    loadTerminalPreferences()
-  );
+  const [terminalPreferences, setTerminalPreferences] =
+    useState<TerminalPreferences>(() => loadTerminalPreferences());
   const imageManagerOpen = useRuntimeUiStore((state) => state.imageManagerOpen);
-  const closeImageManager = useRuntimeUiStore((state) => state.closeImageManager);
+  const closeImageManager = useRuntimeUiStore(
+    (state) => state.closeImageManager,
+  );
   const terminalCount = useRuntimeUiStore((state) => state.terminals.length);
   const runtimeChromeReady = useDeferredRuntimeChrome();
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
-    [endpointList]
+    [endpointList],
+  );
+
+  const handleWorkspaceFileEvent = useCallback(
+    (endpointId: string, event: WorkspaceFileEvent) => {
+      if (workspaceEventTouchesTopology(event.path)) {
+        topologyManager.invalidateTopologyFileListCache(endpointId);
+      }
+      explorerBridge.invalidateFileExplorerCache(endpointId);
+    },
+    [],
   );
 
   useEventStream(endpointList);
+  useWorkspaceFileEvents(endpointList, handleWorkspaceFileEvent);
 
   const labsRef = useRef(useLabStore.getState().labs);
   useEffect(() => {
@@ -1561,7 +1858,9 @@ function StandaloneApp() {
           return;
         }
         applyCustomNodes([], "");
-        applyCustomNodeError(error instanceof Error ? error.message : String(error));
+        applyCustomNodeError(
+          error instanceof Error ? error.message : String(error),
+        );
       }
     })();
 
@@ -1612,7 +1911,7 @@ function StandaloneApp() {
       await refreshConfig().catch(() => {});
       scheduleExplorerSnapshot(0);
     },
-    [addEndpoint, refreshConfig]
+    [addEndpoint, refreshConfig],
   );
 
   const handleExportEndpoints = useCallback(() => {
@@ -1625,15 +1924,19 @@ function StandaloneApp() {
       scheduleExplorerSnapshot(0);
       return result;
     },
-    [importEndpoints]
+    [importEndpoints],
   );
 
   const handleReconnectEndpoint = useCallback(
-    async (input: { endpointId: string; password: string; username: string }) => {
+    async (input: {
+      endpointId: string;
+      password: string;
+      username: string;
+    }) => {
       await reconnectEndpoint(input);
       scheduleExplorerSnapshot(0);
     },
-    [reconnectEndpoint]
+    [reconnectEndpoint],
   );
 
   const handleRemoveEndpoint = useCallback(
@@ -1642,7 +1945,7 @@ function StandaloneApp() {
       await removeEndpoint(endpointId);
       scheduleExplorerSnapshot(0);
     },
-    [removeEndpoint]
+    [removeEndpoint],
   );
 
   const handleThemeChange = useCallback((nextTheme: "light" | "dark") => {
@@ -1660,23 +1963,26 @@ function StandaloneApp() {
     void logout();
   }, [logout]);
 
-  const handleSaveTerminalPreferences = useCallback((
-    next: TerminalPreferences,
-    options?: {
-      notify?: boolean;
-    }
-  ) => {
-    setTerminalPreferences(persistTerminalPreferences(next));
-    if (options?.notify !== false) {
-      runtimeUiActions.notify("Terminal settings updated.", "success");
-    }
-  }, []);
+  const handleSaveTerminalPreferences = useCallback(
+    (
+      next: TerminalPreferences,
+      options?: {
+        notify?: boolean;
+      },
+    ) => {
+      setTerminalPreferences(persistTerminalPreferences(next));
+      if (options?.notify !== false) {
+        runtimeUiActions.notify("Terminal settings updated.", "success");
+      }
+    },
+    [],
+  );
 
   const handleSetEndpointSessionDuration = useCallback(
     (endpointId: string, sessionDuration: EndpointSessionDuration) => {
       setEndpointSessionDuration(endpointId, sessionDuration);
     },
-    [setEndpointSessionDuration]
+    [setEndpointSessionDuration],
   );
 
   const handleUpdateEndpoint = useCallback(
@@ -1690,15 +1996,21 @@ function StandaloneApp() {
       await updateEndpoint(input);
       scheduleExplorerSnapshot(0);
     },
-    [updateEndpoint]
+    [updateEndpoint],
   );
 
   if (loading) {
     return (
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        height: "100vh", color: "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #d4d4d4))"
-      }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          color:
+            "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #d4d4d4))",
+        }}
+      >
         Loading...
       </div>
     );
@@ -1728,6 +2040,7 @@ function StandaloneApp() {
     <>
       <App initialData={initialData} runtime={standaloneRuntime!} />
       <StandaloneLabTabsMount />
+      <StandaloneFileEditorTabMount />
       <StandaloneLabEmptyStateMount />
       {runtimeChromeReady ? (
         <>
@@ -1751,9 +2064,13 @@ function StandaloneApp() {
                   onClose={closeImageManager}
                   endpointOptions={endpointList.map((endpoint) => ({
                     id: endpoint.id,
-                    label: endpoint.label
+                    label: endpoint.label,
                   }))}
-                  initialEndpointId={endpointList.find((endpoint) => endpoint.status === "connected")?.id}
+                  initialEndpointId={
+                    endpointList.find(
+                      (endpoint) => endpoint.status === "connected",
+                    )?.id
+                  }
                 />
               </Suspense>
             ) : null}
@@ -1812,13 +2129,13 @@ function SettingsOverlayMounted(props: {
   }) => Promise<void>;
   onSetEndpointSessionDuration: (
     endpointId: string,
-    sessionDuration: EndpointSessionDuration
+    sessionDuration: EndpointSessionDuration,
   ) => void;
   onSaveTerminalPreferences: (
     next: TerminalPreferences,
     options?: {
       notify?: boolean;
-    }
+    },
   ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
@@ -1847,7 +2164,7 @@ function SettingsOverlayMounted(props: {
         />
       </Suspense>
     </MuiThemeProvider>,
-    overlayContainer
+    overlayContainer,
   );
 }
 

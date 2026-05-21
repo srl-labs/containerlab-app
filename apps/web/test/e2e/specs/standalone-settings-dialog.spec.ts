@@ -264,7 +264,10 @@ test.describe("Standalone Settings Dialog", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const endpointRow = page.locator('[data-explorer-node-row="true"]').filter({ hasText: "Test Endpoint" });
+    const endpointRow = page
+      .locator('[data-explorer-node-row="true"]')
+      .filter({ hasText: "Test Endpoint" })
+      .filter({ hasText: "localhost:8090" });
     await expect(endpointRow).toBeVisible();
     await metricsResponse;
     await page.waitForTimeout(100);
@@ -274,6 +277,53 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(tooltip).toContainText("CPU: 12% (8 cores)");
     await expect(tooltip).toContainText("Memory: 46% (4.0 GiB / 8.0 GiB)");
     await expect(tooltip).toContainText("Disk: 68% (100 GiB / 200 GiB on /)");
+  });
+
+  test("opens Help & Feedback links from the explorer", async ({ page }) => {
+    await page.evaluate(() => {
+      const targetWindow = window as typeof window & {
+        __standaloneOpenedLinks?: Array<{
+          features?: string;
+          target?: string;
+          url: string;
+        }>;
+      };
+      targetWindow.__standaloneOpenedLinks = [];
+      window.open = (url?: string | URL, target?: string, features?: string): null => {
+        targetWindow.__standaloneOpenedLinks?.push({
+          features,
+          target,
+          url: String(url ?? "")
+        });
+        return null;
+      };
+    });
+
+    const documentationRow = page
+      .locator('[data-explorer-node-row="true"]')
+      .filter({ hasText: "Containerlab Documentation" });
+
+    await expect(documentationRow).toBeVisible();
+    await documentationRow.click();
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const targetWindow = window as typeof window & {
+            __standaloneOpenedLinks?: Array<{
+              features?: string;
+              target?: string;
+              url: string;
+            }>;
+          };
+          return targetWindow.__standaloneOpenedLinks?.at(-1);
+        })
+      )
+      .toEqual({
+        features: "noopener,noreferrer",
+        target: "_blank",
+        url: "https://containerlab.dev/"
+      });
   });
 
   test("exports and imports endpoint profiles from settings", async ({ page }) => {

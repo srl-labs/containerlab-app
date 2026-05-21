@@ -1,8 +1,4 @@
-import type {
-  CustomIconInfo,
-  CustomNodeTemplate,
-  TopologyRef
-} from "@srl-labs/clab-ui/session";
+import type { CustomIconInfo, CustomNodeTemplate, TopologyRef } from "@srl-labs/clab-ui/session";
 
 import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
@@ -179,6 +175,33 @@ export interface RuntimeImageActionResponse {
   output?: string;
 }
 
+export interface FileExplorerEntry {
+  endpointId: string;
+  name: string;
+  path: string;
+  kind: "file" | "directory";
+  size?: number;
+  modifiedAt?: string;
+  hasChildren?: boolean;
+  labName?: string;
+  deploymentState?: string;
+  topologyRef?: TopologyRef;
+}
+
+export interface FileExplorerDocument {
+  endpointId: string;
+  path: string;
+  content: string;
+}
+
+export type LabArchiveFormat = "zip" | "tar.gz";
+
+export interface BinaryDownloadResult {
+  blob: Blob;
+  contentType: string;
+  filename: string;
+}
+
 export interface DeployLabFromUrlResponse {
   success: boolean;
   labNames: string[];
@@ -308,12 +331,16 @@ function normalizeInspectAllLabsPayload(value: unknown): InspectAllLabsResponse 
   return normalized;
 }
 
-function resolveEndpointId(target?: RuntimeTargetRequest | { endpointId?: string }): string | undefined {
+function resolveEndpointId(
+  target?: RuntimeTargetRequest | { endpointId?: string }
+): string | undefined {
   return target?.endpointId;
 }
 
 function resolveTargetEndpointId(target?: RuntimeTargetRequest): string | undefined {
-  return resolveEndpointId(target) ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId);
+  return (
+    resolveEndpointId(target) ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId)
+  );
 }
 
 function withEndpointHeaders(init: RequestInit = {}, endpointId?: string): RequestInit {
@@ -348,7 +375,10 @@ async function readError(response: Response): Promise<string> {
   return text;
 }
 
-function markEndpointUnavailable(endpointId: string | undefined, status: "offline" | "session_expired"): void {
+function markEndpointUnavailable(
+  endpointId: string | undefined,
+  status: "offline" | "session_expired"
+): void {
   if (!endpointId) {
     return;
   }
@@ -365,11 +395,7 @@ export function resolveRuntimeRequestUrl(
   return ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(input) ? input : toStandaloneServerUrl(input);
 }
 
-async function requestJson<T>(
-  input: string,
-  init?: RequestInit,
-  endpointId?: string
-): Promise<T> {
+async function requestJson<T>(input: string, init?: RequestInit, endpointId?: string): Promise<T> {
   let response: Response;
   try {
     response = await fetch(resolveRuntimeRequestUrl(input), {
@@ -393,6 +419,60 @@ async function requestJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+function filenameFromContentDisposition(header: string | null, fallback: string): string {
+  if (!header) {
+    return fallback;
+  }
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(header)?.[1];
+  if (quoted) {
+    return quoted;
+  }
+  const bare = /filename=([^;]+)/i.exec(header)?.[1]?.trim();
+  return bare || fallback;
+}
+
+async function requestBlob(
+  input: string,
+  fallbackFilename: string,
+  init?: RequestInit,
+  endpointId?: string
+): Promise<BinaryDownloadResult> {
+  let response: Response;
+  try {
+    response = await fetch(resolveRuntimeRequestUrl(input), {
+      credentials: "include",
+      ...init
+    });
+  } catch (error) {
+    markEndpointUnavailable(endpointId, "offline");
+    throw error;
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      markEndpointUnavailable(endpointId, "session_expired");
+    }
+    throw new Error(await readError(response));
+  }
+
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get("content-type") ?? "application/octet-stream",
+    filename: filenameFromContentDisposition(
+      response.headers.get("content-disposition"),
+      fallbackFilename
+    )
+  };
 }
 
 function asJsonBody(body: unknown, endpointId?: string): RequestInit {
@@ -425,9 +505,11 @@ export async function inspectLab(target: RuntimeTargetRequest): Promise<InspectL
   return normalizeInspectContainerList(payload);
 }
 
-export async function saveLabConfigs(input: RuntimeTargetRequest & {
-  nodeName?: string;
-}): Promise<SaveConfigResponse> {
+export async function saveLabConfigs(
+  input: RuntimeTargetRequest & {
+    nodeName?: string;
+  }
+): Promise<SaveConfigResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<SaveConfigResponse>(
     "/api/runtime/save",
@@ -436,11 +518,13 @@ export async function saveLabConfigs(input: RuntimeTargetRequest & {
   );
 }
 
-export async function requestNodeSsh(input: RuntimeTargetRequest & {
-  nodeName: string;
-  duration?: string;
-  sshUsername?: string;
-}): Promise<SSHAccessResponse> {
+export async function requestNodeSsh(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    duration?: string;
+    sshUsername?: string;
+  }
+): Promise<SSHAccessResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<SSHAccessResponse>(
     "/api/runtime/ssh",
@@ -449,14 +533,16 @@ export async function requestNodeSsh(input: RuntimeTargetRequest & {
   );
 }
 
-export async function openTerminalSession(input: RuntimeTargetRequest & {
-  nodeName: string;
-  protocol: TerminalProtocol;
-  cols: number;
-  rows: number;
-  sshUsername?: string;
-  telnetPort?: number;
-}): Promise<TerminalSessionInfo> {
+export async function openTerminalSession(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    protocol: TerminalProtocol;
+    cols: number;
+    rows: number;
+    sshUsername?: string;
+    telnetPort?: number;
+  }
+): Promise<TerminalSessionInfo> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<TerminalSessionInfo>(
     "/api/runtime/terminal-sessions",
@@ -496,10 +582,12 @@ export function connectTerminalSessionWebSocket(sessionId: string, endpointId?: 
   return new WebSocket(url);
 }
 
-export async function fetchNodeLogs(input: RuntimeTargetRequest & {
-  nodeName: string;
-  tail?: string;
-}): Promise<LogsResponse> {
+export async function fetchNodeLogs(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    tail?: string;
+  }
+): Promise<LogsResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<LogsResponse>(
     "/api/runtime/logs",
@@ -508,10 +596,12 @@ export async function fetchNodeLogs(input: RuntimeTargetRequest & {
   );
 }
 
-export async function controlNodeLifecycle(input: RuntimeTargetRequest & {
-  nodeName: string;
-  action: NodeLifecycleAction;
-}): Promise<void> {
+export async function controlNodeLifecycle(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    action: NodeLifecycleAction;
+  }
+): Promise<void> {
   const endpointId = resolveTargetEndpointId(input);
   await requestJson<{ success: boolean }>(
     `/api/runtime/nodes/${encodeURIComponent(input.action)}`,
@@ -520,9 +610,11 @@ export async function controlNodeLifecycle(input: RuntimeTargetRequest & {
   );
 }
 
-export async function fetchNodeBrowserPorts(input: RuntimeTargetRequest & {
-  nodeName: string;
-}): Promise<NodeBrowserPortsResponse> {
+export async function fetchNodeBrowserPorts(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+  }
+): Promise<NodeBrowserPortsResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<NodeBrowserPortsResponse>(
     "/api/runtime/nodes/browser-ports",
@@ -531,9 +623,11 @@ export async function fetchNodeBrowserPorts(input: RuntimeTargetRequest & {
   );
 }
 
-export async function runSshxShareAction(input: RuntimeTargetRequest & {
-  action: ShareToolAction;
-}): Promise<ShareToolResponse> {
+export async function runSshxShareAction(
+  input: RuntimeTargetRequest & {
+    action: ShareToolAction;
+  }
+): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<ShareToolResponse>(
     `/api/runtime/share/sshx/${encodeURIComponent(input.action)}`,
@@ -542,10 +636,12 @@ export async function runSshxShareAction(input: RuntimeTargetRequest & {
   );
 }
 
-export async function runGottyShareAction(input: RuntimeTargetRequest & {
-  action: ShareToolAction;
-  port?: number;
-}): Promise<ShareToolResponse> {
+export async function runGottyShareAction(
+  input: RuntimeTargetRequest & {
+    action: ShareToolAction;
+    port?: number;
+  }
+): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<ShareToolResponse>(
     `/api/runtime/share/gotty/${encodeURIComponent(input.action)}`,
@@ -554,9 +650,11 @@ export async function runGottyShareAction(input: RuntimeTargetRequest & {
   );
 }
 
-export async function runFcliCommand(input: RuntimeTargetRequest & {
-  command: string;
-}): Promise<FcliCommandResponse> {
+export async function runFcliCommand(
+  input: RuntimeTargetRequest & {
+    command: string;
+  }
+): Promise<FcliCommandResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<FcliCommandResponse>(
     "/api/runtime/fcli",
@@ -565,10 +663,12 @@ export async function runFcliCommand(input: RuntimeTargetRequest & {
   );
 }
 
-export async function generateDrawioGraph(input: RuntimeTargetRequest & {
-  layout: "horizontal" | "vertical" | "interactive";
-  theme?: string;
-}): Promise<DrawioGenerateResponse> {
+export async function generateDrawioGraph(
+  input: RuntimeTargetRequest & {
+    layout: "horizontal" | "vertical" | "interactive";
+    theme?: string;
+  }
+): Promise<DrawioGenerateResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<DrawioGenerateResponse>(
     "/api/runtime/labs/graph/drawio",
@@ -609,9 +709,11 @@ export async function fetchRuntimeImages(endpointId?: string): Promise<RuntimeIm
   );
 }
 
-export async function pullRuntimeImage(input: RuntimeTargetRequest & {
-  image: string;
-}): Promise<RuntimeImageActionResponse> {
+export async function pullRuntimeImage(
+  input: RuntimeTargetRequest & {
+    image: string;
+  }
+): Promise<RuntimeImageActionResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<RuntimeImageActionResponse>(
     "/api/runtime/images/pull",
@@ -620,10 +722,12 @@ export async function pullRuntimeImage(input: RuntimeTargetRequest & {
   );
 }
 
-export async function removeRuntimeImage(input: RuntimeTargetRequest & {
-  reference: string;
-  force?: boolean;
-}): Promise<RuntimeImageActionResponse> {
+export async function removeRuntimeImage(
+  input: RuntimeTargetRequest & {
+    reference: string;
+    force?: boolean;
+  }
+): Promise<RuntimeImageActionResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<RuntimeImageActionResponse>(
     "/api/runtime/images/remove",
@@ -648,10 +752,164 @@ export async function uninstallEdgeShark(endpointId?: string): Promise<void> {
   );
 }
 
-export async function deployLabFromUrl(input: RuntimeTargetRequest & {
-  topologySourceUrl: string;
-  labNameOverride?: string;
-}): Promise<DeployLabFromUrlResponse> {
+export async function listFileExplorerDirectory(
+  endpointId: string,
+  pathValue = ""
+): Promise<FileExplorerEntry[]> {
+  const params = new URLSearchParams();
+  if (pathValue) {
+    params.set("path", pathValue);
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return await requestJson<FileExplorerEntry[]>(
+    `/api/runtime/file-explorer/tree${suffix}`,
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function readFileExplorerFile(
+  endpointId: string,
+  pathValue: string
+): Promise<FileExplorerDocument> {
+  return await requestJson<FileExplorerDocument>(
+    `/api/runtime/file-explorer/file?path=${encodeURIComponent(pathValue)}`,
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+function safeDownloadFallbackName(pathValue: string): string {
+  const segments = pathValue.split(/[\\/]/).filter(Boolean);
+  return segments.at(-1) || "download";
+}
+
+export async function downloadFileExplorerFile(
+  endpointId: string,
+  pathValue: string
+): Promise<BinaryDownloadResult> {
+  return await requestBlob(
+    `/api/runtime/file-explorer/download?path=${encodeURIComponent(pathValue)}`,
+    safeDownloadFallbackName(pathValue),
+    withEndpointHeaders({}, endpointId),
+    endpointId
+  );
+}
+
+export async function uploadFileExplorerFile(input: {
+  endpointId: string;
+  file?: File;
+  files?: readonly File[];
+  path: string;
+  targetKind?: "directory" | "file";
+}): Promise<void> {
+  const files = input.files ?? (input.file ? [input.file] : []);
+  if (files.length === 0) {
+    throw new Error("Select at least one file to upload.");
+  }
+  const form = new FormData();
+  form.set("path", input.path);
+  if (input.targetKind) {
+    form.set("targetKind", input.targetKind);
+  }
+  for (const file of files) {
+    form.append("file", file, file.name);
+  }
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/file-explorer/upload",
+    withEndpointHeaders(
+      {
+        method: "POST",
+        body: form
+      },
+      input.endpointId
+    ),
+    input.endpointId
+  );
+}
+
+export async function writeFileExplorerFile(input: {
+  endpointId: string;
+  path: string;
+  content: string;
+}): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/file-explorer/file?path=${encodeURIComponent(input.path)}`,
+    withEndpointHeaders(
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: input.path, content: input.content })
+      },
+      input.endpointId
+    ),
+    input.endpointId
+  );
+}
+
+export async function deleteFileExplorerPath(
+  endpointId: string,
+  pathValue: string,
+  options: { recursive?: boolean } = {}
+): Promise<void> {
+  const params = new URLSearchParams({ path: pathValue });
+  if (options.recursive) {
+    params.set("recursive", "true");
+  }
+  await requestJson<{ success: boolean }>(
+    `/api/runtime/file-explorer/file?${params.toString()}`,
+    withEndpointHeaders({ method: "DELETE" }, endpointId),
+    endpointId
+  );
+}
+
+export async function renameFileExplorerPath(input: {
+  endpointId: string;
+  oldPath: string;
+  newPath: string;
+}): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/file-explorer/file/rename",
+    asJsonBody({ oldPath: input.oldPath, newPath: input.newPath }, input.endpointId),
+    input.endpointId
+  );
+}
+
+export async function createFileExplorerDirectory(
+  endpointId: string,
+  pathValue: string
+): Promise<void> {
+  await requestJson<{ success: boolean }>(
+    "/api/runtime/file-explorer/directory",
+    asJsonBody({ path: pathValue }, endpointId),
+    endpointId
+  );
+}
+
+export async function downloadLabArchive(input: {
+  endpointId: string;
+  format: LabArchiveFormat;
+  path: string;
+}): Promise<BinaryDownloadResult> {
+  const params = new URLSearchParams({
+    format: input.format,
+    path: input.path
+  });
+  const extension = input.format === "zip" ? "zip" : "tar.gz";
+  return await requestBlob(
+    `/api/runtime/labs/archive?${params.toString()}`,
+    `${safeDownloadFallbackName(input.path)}.${extension}`,
+    withEndpointHeaders({}, input.endpointId),
+    input.endpointId
+  );
+}
+
+export async function deployLabFromUrl(
+  input: RuntimeTargetRequest & {
+    topologySourceUrl: string;
+    labNameOverride?: string;
+  }
+): Promise<DeployLabFromUrlResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<DeployLabFromUrlResponse>(
     "/api/runtime/labs/deploy-from-url",
@@ -660,10 +918,12 @@ export async function deployLabFromUrl(input: RuntimeTargetRequest & {
   );
 }
 
-export async function importTopologyFromUrl(input: RuntimeTargetRequest & {
-  topologySourceUrl: string;
-  labNameOverride?: string;
-}): Promise<ImportTopologyFromUrlResponse> {
+export async function importTopologyFromUrl(
+  input: RuntimeTargetRequest & {
+    topologySourceUrl: string;
+    labNameOverride?: string;
+  }
+): Promise<ImportTopologyFromUrlResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<ImportTopologyFromUrlResponse>(
     "/api/runtime/topology-file/import-from-url",
@@ -672,10 +932,12 @@ export async function importTopologyFromUrl(input: RuntimeTargetRequest & {
   );
 }
 
-export async function buildPacketflixCapture(input: RuntimeTargetRequest & {
-  targets: CaptureTarget[];
-  remoteHostname?: string;
-}): Promise<CapturePacketflixResponse> {
+export async function buildPacketflixCapture(
+  input: RuntimeTargetRequest & {
+    targets: CaptureTarget[];
+    remoteHostname?: string;
+  }
+): Promise<CapturePacketflixResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<CapturePacketflixResponse>(
     "/api/runtime/capture/packetflix",
@@ -684,10 +946,12 @@ export async function buildPacketflixCapture(input: RuntimeTargetRequest & {
   );
 }
 
-export async function createWiresharkVncSessions(input: RuntimeTargetRequest & {
-  targets: CaptureTarget[];
-  theme?: string;
-}): Promise<CaptureWiresharkVncCreateResponse> {
+export async function createWiresharkVncSessions(
+  input: RuntimeTargetRequest & {
+    targets: CaptureTarget[];
+    theme?: string;
+  }
+): Promise<CaptureWiresharkVncCreateResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<CaptureWiresharkVncCreateResponse>(
     "/api/runtime/capture/wireshark-vnc-sessions",
@@ -707,7 +971,10 @@ export async function fetchWiresharkVncSessionReady(
   );
 }
 
-export async function closeWiresharkVncSession(sessionId: string, endpointId?: string): Promise<void> {
+export async function closeWiresharkVncSession(
+  sessionId: string,
+  endpointId?: string
+): Promise<void> {
   await requestJson<{ success: boolean }>(
     `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}`,
     withEndpointHeaders({ method: "DELETE" }, endpointId),
@@ -808,9 +1075,11 @@ export async function deleteUiIcon(iconName: string, endpointId?: string): Promi
   );
 }
 
-export async function reconcileUiIcons(input: RuntimeTargetRequest & {
-  usedIcons: string[];
-}): Promise<void> {
+export async function reconcileUiIcons(
+  input: RuntimeTargetRequest & {
+    usedIcons: string[];
+  }
+): Promise<void> {
   const endpointId = resolveTargetEndpointId(input);
   await requestJson<{ success: boolean }>(
     "/api/runtime/ui/icons/reconcile",
@@ -819,9 +1088,11 @@ export async function reconcileUiIcons(input: RuntimeTargetRequest & {
   );
 }
 
-export async function fetchNetem(input: RuntimeTargetRequest & {
-  nodeName: string;
-}): Promise<NetemShowResult> {
+export async function fetchNetem(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+  }
+): Promise<NetemShowResult> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<NetemShowResult>(
     "/api/runtime/netem/show",
@@ -830,15 +1101,17 @@ export async function fetchNetem(input: RuntimeTargetRequest & {
   );
 }
 
-export async function setNetem(input: RuntimeTargetRequest & {
-  nodeName: string;
-  interfaceName: string;
-  delay?: string;
-  jitter?: string;
-  loss?: number;
-  rate?: number;
-  corruption?: number;
-}): Promise<void> {
+export async function setNetem(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    interfaceName: string;
+    delay?: string;
+    jitter?: string;
+    loss?: number;
+    rate?: number;
+    corruption?: number;
+  }
+): Promise<void> {
   const endpointId = resolveTargetEndpointId(input);
   await requestJson<{ success: boolean }>(
     "/api/runtime/netem/set",
@@ -847,10 +1120,12 @@ export async function setNetem(input: RuntimeTargetRequest & {
   );
 }
 
-export async function resetNetem(input: RuntimeTargetRequest & {
-  nodeName: string;
-  interfaceName: string;
-}): Promise<void> {
+export async function resetNetem(
+  input: RuntimeTargetRequest & {
+    nodeName: string;
+    interfaceName: string;
+  }
+): Promise<void> {
   const endpointId = resolveTargetEndpointId(input);
   await requestJson<{ success: boolean }>(
     "/api/runtime/netem/reset",

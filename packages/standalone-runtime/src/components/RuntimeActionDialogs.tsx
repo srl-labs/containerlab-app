@@ -51,16 +51,23 @@ import {
   setCloneRepoDialogRequester,
   setCreateTopologyDialogRequester,
   setEndpointSelectionDialogRequester,
+  setRuntimeConfirmDialogRequester,
+  setRuntimeOptionSelectionDialogRequester,
+  setRuntimeTextInputDialogRequester,
   setTopologyFileNameDialogRequester,
   type ActiveCloneRepoDialogRequest,
   type ActiveCreateTopologyDialogRequest,
   type ActiveEndpointSelectionDialogRequest,
+  type ActiveRuntimeConfirmDialogRequest,
+  type ActiveRuntimeOptionSelectionDialogRequest,
+  type ActiveRuntimeTextInputDialogRequest,
   type ActiveTopologyFileNameDialogRequest,
   type CloneRepoDialogResult,
   type CloneRepoDialogTarget,
   type CreateTopologyDialogResult,
   type EndpointSelectionOption
 } from "../runtimeActionFlows";
+import { FileEditorDialog } from "./FileEditorDialog";
 
 interface InspectGroup {
   labName: string;
@@ -90,6 +97,21 @@ interface CreateTopologyDialogState {
 interface CloneRepoDialogState {
   request: ActiveCloneRepoDialogRequest;
   resolve: (value: CloneRepoDialogResult | undefined) => void;
+}
+
+interface RuntimeConfirmDialogState {
+  request: ActiveRuntimeConfirmDialogRequest;
+  resolve: (value: boolean) => void;
+}
+
+interface RuntimeTextInputDialogState {
+  request: ActiveRuntimeTextInputDialogRequest;
+  resolve: (value: string | undefined) => void;
+}
+
+interface RuntimeOptionSelectionDialogState {
+  request: ActiveRuntimeOptionSelectionDialogRequest;
+  resolve: (value: string | undefined) => void;
 }
 
 const DEFAULT_NETEM_FIELDS: NetemFields = {
@@ -960,6 +982,155 @@ function EndpointSelectionDialogView(props: {
   );
 }
 
+function runtimeConfirmButtonColor(
+  severity: ActiveRuntimeConfirmDialogRequest["severity"] | undefined
+): "error" | "primary" | "warning" {
+  if (severity === "error") {
+    return "error";
+  }
+  if (severity === "warning") {
+    return "warning";
+  }
+  return "primary";
+}
+
+function RuntimeConfirmDialogView(props: {
+  closeRuntimeConfirmDialog: (value: boolean) => void;
+  runtimeConfirmDialog: RuntimeConfirmDialogState | null;
+}) {
+  if (!props.runtimeConfirmDialog) {
+    return null;
+  }
+  const request = props.runtimeConfirmDialog.request;
+  const buttonColor = runtimeConfirmButtonColor(request.severity);
+
+  return (
+    <Dialog open onClose={() => props.closeRuntimeConfirmDialog(false)} maxWidth="xs" fullWidth>
+      <DialogTitle>{request.title}</DialogTitle>
+      <DialogContent dividers>
+        <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>
+          {request.message}
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeRuntimeConfirmDialog(false)}>
+          {request.cancelLabel}
+        </Button>
+        <Button
+          variant="contained"
+          color={buttonColor}
+          onClick={() => props.closeRuntimeConfirmDialog(true)}
+        >
+          {request.confirmLabel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function RuntimeTextInputDialogView(props: {
+  closeRuntimeTextInputDialog: (value: string | undefined) => void;
+  runtimeTextInputDialog: RuntimeTextInputDialogState | null;
+  runtimeTextInputValue: string;
+  runtimeTextInputValueCanSubmit: boolean;
+  setRuntimeTextInputValue: (value: string) => void;
+  submitRuntimeTextInputDialog: () => void;
+}) {
+  if (!props.runtimeTextInputDialog) {
+    return null;
+  }
+  const request = props.runtimeTextInputDialog.request;
+
+  return (
+    <Dialog open onClose={() => props.closeRuntimeTextInputDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request.title}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {request.message ? (
+            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line" }}>
+              {request.message}
+            </Typography>
+          ) : null}
+          <TextField
+            autoFocus
+            fullWidth
+            label={request.label}
+            value={props.runtimeTextInputValue}
+            onChange={(event) => props.setRuntimeTextInputValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (!request.multiline && event.key === "Enter") {
+                event.preventDefault();
+                props.submitRuntimeTextInputDialog();
+              }
+            }}
+            helperText={request.helperText || undefined}
+            multiline={request.multiline}
+            minRows={request.multiline ? 3 : undefined}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeRuntimeTextInputDialog(undefined)}>
+          {request.cancelLabel}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={props.submitRuntimeTextInputDialog}
+          disabled={!props.runtimeTextInputValueCanSubmit}
+        >
+          {request.confirmLabel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function RuntimeOptionSelectionDialogView(props: {
+  closeRuntimeOptionSelectionDialog: (value: string | undefined) => void;
+  runtimeOptionSelectionDialog: RuntimeOptionSelectionDialogState | null;
+  runtimeOptionSelectionIsValid: boolean;
+  runtimeOptionSelectionValue: string;
+  setRuntimeOptionSelectionValue: (value: string) => void;
+  submitRuntimeOptionSelectionDialog: () => void;
+}) {
+  if (!props.runtimeOptionSelectionDialog) {
+    return null;
+  }
+  const request = props.runtimeOptionSelectionDialog.request;
+
+  return (
+    <Dialog open onClose={() => props.closeRuntimeOptionSelectionDialog(undefined)} maxWidth="sm" fullWidth>
+      <DialogTitle>{request.title}</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line" }}>
+            {request.message}
+          </Typography>
+          <EndpointOptionSelect
+            labelId="runtime-option-selection-label"
+            label={request.label}
+            options={request.options}
+            value={props.runtimeOptionSelectionValue}
+            onChange={props.setRuntimeOptionSelectionValue}
+          />
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => props.closeRuntimeOptionSelectionDialog(undefined)}>
+          {request.cancelLabel}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={props.submitRuntimeOptionSelectionDialog}
+          disabled={!props.runtimeOptionSelectionIsValid}
+        >
+          {request.confirmLabel}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 function RuntimeSnackbarView(props: {
   closeSnackbar: () => void;
   snackbar: ReturnType<typeof useRuntimeUiStore.getState>["snackbar"];
@@ -1030,10 +1201,19 @@ export function RuntimeActionDialogs() {
   );
   const [cloneRepoPopularValue, setCloneRepoPopularValue] = useState("");
   const [cloneRepoLabNameOverrideInput, setCloneRepoLabNameOverrideInput] = useState("");
+  const [runtimeConfirmDialog, setRuntimeConfirmDialog] = useState<RuntimeConfirmDialogState | null>(null);
+  const [runtimeTextInputDialog, setRuntimeTextInputDialog] = useState<RuntimeTextInputDialogState | null>(null);
+  const [runtimeTextInputValue, setRuntimeTextInputValue] = useState("");
+  const [runtimeOptionSelectionDialog, setRuntimeOptionSelectionDialog] =
+    useState<RuntimeOptionSelectionDialogState | null>(null);
+  const [runtimeOptionSelectionValue, setRuntimeOptionSelectionValue] = useState("");
   const topologyFileNameDialogRef = useRef<TopologyFileNameDialogState | null>(null);
   const endpointSelectionDialogRef = useRef<EndpointSelectionDialogState | null>(null);
   const createTopologyDialogRef = useRef<CreateTopologyDialogState | null>(null);
   const cloneRepoDialogRef = useRef<CloneRepoDialogState | null>(null);
+  const runtimeConfirmDialogRef = useRef<RuntimeConfirmDialogState | null>(null);
+  const runtimeTextInputDialogRef = useRef<RuntimeTextInputDialogState | null>(null);
+  const runtimeOptionSelectionDialogRef = useRef<RuntimeOptionSelectionDialogState | null>(null);
 
   const filteredInspectGroups = useMemo(
     () => filterInspectGroups(inspectGroups, inspectFilter),
@@ -1077,6 +1257,10 @@ export function RuntimeActionDialogs() {
   const trimmedCreateTopologyFileNameInput = createTopologyFileNameInput.trim();
   const trimmedCloneRepoSourceUrlInput = cloneRepoSourceUrlInput.trim();
   const trimmedCloneRepoLabNameOverrideInput = cloneRepoLabNameOverrideInput.trim();
+  const trimmedRuntimeTextInputValue = runtimeTextInputValue.trim();
+  const runtimeTextInputValueCanSubmit = runtimeTextInputDialog
+    ? runtimeTextInputDialog.request.allowEmpty || trimmedRuntimeTextInputValue.length > 0
+    : false;
   const endpointSelectionIsValid = useMemo(
     () =>
       endpointSelectionDialog
@@ -1107,6 +1291,15 @@ export function RuntimeActionDialogs() {
         : false,
     [cloneRepoDialog, cloneRepoPopularValue]
   );
+  const runtimeOptionSelectionIsValid = useMemo(
+    () =>
+      runtimeOptionSelectionDialog
+        ? runtimeOptionSelectionDialog.request.options.some(
+            (option) => option.value === runtimeOptionSelectionValue
+          )
+        : false,
+    [runtimeOptionSelectionDialog, runtimeOptionSelectionValue]
+  );
   let cloneRepoResolvedSourceUrl = trimmedCloneRepoSourceUrlInput;
   if (cloneRepoMode === "popular") {
     cloneRepoResolvedSourceUrl = cloneRepoPopularIsValid ? cloneRepoPopularValue : "";
@@ -1128,6 +1321,18 @@ export function RuntimeActionDialogs() {
   useEffect(() => {
     cloneRepoDialogRef.current = cloneRepoDialog;
   }, [cloneRepoDialog]);
+
+  useEffect(() => {
+    runtimeConfirmDialogRef.current = runtimeConfirmDialog;
+  }, [runtimeConfirmDialog]);
+
+  useEffect(() => {
+    runtimeTextInputDialogRef.current = runtimeTextInputDialog;
+  }, [runtimeTextInputDialog]);
+
+  useEffect(() => {
+    runtimeOptionSelectionDialogRef.current = runtimeOptionSelectionDialog;
+  }, [runtimeOptionSelectionDialog]);
 
   useEffect(() => {
     const cleanup = setTopologyFileNameDialogRequester((request) =>
@@ -1190,6 +1395,51 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
+    const cleanup = setRuntimeConfirmDialogRequester((request) =>
+      new Promise((resolve) => {
+        setRuntimeConfirmDialog((current) => {
+          current?.resolve(false);
+          return { request, resolve };
+        });
+      })
+    );
+    return () => {
+      cleanup();
+      runtimeConfirmDialogRef.current?.resolve(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    const cleanup = setRuntimeTextInputDialogRequester((request) =>
+      new Promise((resolve) => {
+        setRuntimeTextInputDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      })
+    );
+    return () => {
+      cleanup();
+      runtimeTextInputDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    const cleanup = setRuntimeOptionSelectionDialogRequester((request) =>
+      new Promise((resolve) => {
+        setRuntimeOptionSelectionDialog((current) => {
+          current?.resolve(undefined);
+          return { request, resolve };
+        });
+      })
+    );
+    return () => {
+      cleanup();
+      runtimeOptionSelectionDialogRef.current?.resolve(undefined);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!topologyFileNameDialog) {
       return;
     }
@@ -1227,6 +1477,20 @@ export function RuntimeActionDialogs() {
     );
     setCloneRepoLabNameOverrideInput(cloneRepoDialog.request.defaultLabNameOverride);
   }, [cloneRepoDialog]);
+
+  useEffect(() => {
+    if (!runtimeTextInputDialog) {
+      return;
+    }
+    setRuntimeTextInputValue(runtimeTextInputDialog.request.defaultValue);
+  }, [runtimeTextInputDialog]);
+
+  useEffect(() => {
+    if (!runtimeOptionSelectionDialog) {
+      return;
+    }
+    setRuntimeOptionSelectionValue(runtimeOptionSelectionDialog.request.preferredValue);
+  }, [runtimeOptionSelectionDialog]);
 
   useEffect(() => {
     if (!inspectRequest) {
@@ -1576,6 +1840,58 @@ export function RuntimeActionDialogs() {
     trimmedCloneRepoLabNameOverrideInput
   ]);
 
+  const closeRuntimeConfirmDialog = useCallback((value: boolean): void => {
+    setRuntimeConfirmDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const closeRuntimeTextInputDialog = useCallback((value: string | undefined): void => {
+    setRuntimeTextInputDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitRuntimeTextInputDialog = useCallback((): void => {
+    if (!runtimeTextInputValueCanSubmit) {
+      return;
+    }
+    closeRuntimeTextInputDialog(trimmedRuntimeTextInputValue);
+  }, [
+    closeRuntimeTextInputDialog,
+    runtimeTextInputValueCanSubmit,
+    trimmedRuntimeTextInputValue
+  ]);
+
+  const closeRuntimeOptionSelectionDialog = useCallback((value: string | undefined): void => {
+    setRuntimeOptionSelectionDialog((current) => {
+      if (!current) {
+        return current;
+      }
+      current.resolve(value);
+      return null;
+    });
+  }, []);
+
+  const submitRuntimeOptionSelectionDialog = useCallback((): void => {
+    if (!runtimeOptionSelectionIsValid) {
+      return;
+    }
+    closeRuntimeOptionSelectionDialog(runtimeOptionSelectionValue);
+  }, [
+    closeRuntimeOptionSelectionDialog,
+    runtimeOptionSelectionIsValid,
+    runtimeOptionSelectionValue
+  ]);
+
   return (
     <>
       {inspectRequest ? (
@@ -1694,6 +2010,27 @@ export function RuntimeActionDialogs() {
         />
       ) : null}
 
+      <FileEditorDialog />
+      <RuntimeConfirmDialogView
+        closeRuntimeConfirmDialog={closeRuntimeConfirmDialog}
+        runtimeConfirmDialog={runtimeConfirmDialog}
+      />
+      <RuntimeTextInputDialogView
+        closeRuntimeTextInputDialog={closeRuntimeTextInputDialog}
+        runtimeTextInputDialog={runtimeTextInputDialog}
+        runtimeTextInputValue={runtimeTextInputValue}
+        runtimeTextInputValueCanSubmit={runtimeTextInputValueCanSubmit}
+        setRuntimeTextInputValue={setRuntimeTextInputValue}
+        submitRuntimeTextInputDialog={submitRuntimeTextInputDialog}
+      />
+      <RuntimeOptionSelectionDialogView
+        closeRuntimeOptionSelectionDialog={closeRuntimeOptionSelectionDialog}
+        runtimeOptionSelectionDialog={runtimeOptionSelectionDialog}
+        runtimeOptionSelectionIsValid={runtimeOptionSelectionIsValid}
+        runtimeOptionSelectionValue={runtimeOptionSelectionValue}
+        setRuntimeOptionSelectionValue={setRuntimeOptionSelectionValue}
+        submitRuntimeOptionSelectionDialog={submitRuntimeOptionSelectionDialog}
+      />
       {snackbar ? <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} /> : null}
     </>
   );
