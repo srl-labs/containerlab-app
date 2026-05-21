@@ -136,11 +136,15 @@ async function mockStandaloneApi(page: Page): Promise<void> {
 async function openYamlEditor(page: Page): Promise<void> {
   await page.goto("/");
   await expect(page.locator('[data-testid="topoviewer-app"]')).toBeVisible({ timeout: 20000 });
-  await page.getByLabel(/Expand Test Endpoint|Collapse Test Endpoint/).click({ force: true });
+  await page
+    .locator('[data-explorer-node-row="true"]')
+    .filter({ hasText: ENDPOINT.label })
+    .filter({ hasText: ENDPOINT.url.replace(/^https?:\/\//i, "") })
+    .click({ force: true });
 
-  const localLabsToggle = page.getByLabel(/Expand Local Labs|Collapse Local Labs/);
-  if ((await localLabsToggle.count()) > 0) {
-    await localLabsToggle.click({ force: true });
+  const undeployedLabsExpand = page.getByLabel("Expand Undeployed Labs");
+  if ((await undeployedLabsExpand.count()) > 0) {
+    await undeployedLabsExpand.click({ force: true });
   }
 
   await page.getByText("demo.clab.yml", { exact: true }).click({ force: true });

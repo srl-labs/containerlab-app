@@ -264,7 +264,10 @@ test.describe("Standalone Settings Dialog", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    const endpointRow = page.locator('[data-explorer-node-row="true"]').filter({ hasText: "Test Endpoint" });
+    const endpointRow = page
+      .locator('[data-explorer-node-row="true"]')
+      .filter({ hasText: "Test Endpoint" })
+      .filter({ hasText: "localhost:8090" });
     await expect(endpointRow).toBeVisible();
     await metricsResponse;
     await page.waitForTimeout(100);
