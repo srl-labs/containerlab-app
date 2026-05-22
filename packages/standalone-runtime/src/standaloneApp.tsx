@@ -622,6 +622,7 @@ const explorerBridge = createStandaloneExplorerBridge({
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache:
     topologyManager.invalidateTopologyFileListCache,
+  defaultExpandExplorerTrees: isPagesRuntimeMode(),
   lifecycleActionsAvailable: !isPagesRuntimeMode(),
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
@@ -1189,13 +1190,14 @@ function hidePagesLifecycleButtons(): void {
       button.title = "Deploy is not available in GitHub Pages mode.";
     }
     button.tabIndex = -1;
-    hidePagesLifecycleElement(
-      selector.includes("navbar-deploy-menu")
-        ? button
-        : button.parentElement?.tagName === "SPAN"
-          ? button.parentElement
-          : button,
-    );
+    let elementToHide: HTMLElement = button;
+    if (
+      !selector.includes("navbar-deploy-menu") &&
+      button.parentElement?.tagName === "SPAN"
+    ) {
+      elementToHide = button.parentElement;
+    }
+    hidePagesLifecycleElement(elementToHide);
   }
 }
 
@@ -1315,12 +1317,33 @@ function setupStandaloneUiHost(): void {
     }
     return apiHost.topology.requestSnapshot(context, requestOptions);
   };
+  const dispatchCommand: typeof apiHost.topology.dispatchCommand = async (
+    context,
+    revision,
+    command,
+  ) => {
+    const response = await apiHost.topology.dispatchCommand(
+      context,
+      revision,
+      command,
+    );
+    if (isPagesRuntimeMode() && response.type === "topology-host:ack") {
+      const endpointId =
+        extractEndpointIdFromTopologyId(context.topologyRef?.topologyId) ??
+        topologyManager.getCurrentEndpointId() ??
+        getDefaultEndpointId();
+      topologyManager.invalidateTopologyFileListCache(endpointId);
+      explorerBridge.invalidateFileExplorerCache(endpointId);
+    }
+    return response;
+  };
 
   standaloneRuntime = createClabUiRuntime({
     host: {
       ...apiHost,
       topology: {
         ...apiHost.topology,
+        dispatchCommand,
         requestSnapshot,
       },
     },

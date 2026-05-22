@@ -4,6 +4,16 @@
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
 [![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
 
+## Try It In Your Browser
+
+Want to try the UI, create `*.clab.yml` files, or visualize containerlab topologies without installing anything? Open the GitHub Pages sandbox:
+
+https://srl-labs.github.io/containerlab-app/
+
+The sandbox runs entirely in your browser and stores its workspace in browser storage. It is meant for editing and visualization; deploying, destroying, and inspecting real labs require the web or desktop app connected to a reachable `clab-api-server`.
+
+---
+
 `containerlab-app` provides graphical applications for [containerlab](https://containerlab.dev/). It ships the same standalone UI in two forms:
 
 - **Web app:** a containerized web service you open in a browser.

@@ -2,6 +2,7 @@ import { createExplorerController } from "@srl-labs/clab-ui/host";
 import type {
   ExplorerAction,
   ExplorerIncomingMessage,
+  ExplorerSectionId,
   ExplorerSnapshotProviders,
   ExplorerUiState,
 } from "@srl-labs/clab-ui/explorer";
@@ -647,6 +648,7 @@ type ExplorerSnapshotMessage = Extract<
   ExplorerIncomingMessage,
   { command: "snapshot" }
 >;
+type ExpandedBySection = NonNullable<ExplorerUiState["expandedBySection"]>;
 type ExplorerTreeProviderLike = {
   getChildren(
     element?: ExplorerTreeItem,
@@ -661,6 +663,7 @@ interface StandaloneExplorerBridgeOptions {
   getEndpoints: () => EndpointConfig[];
   getLabs: () => Map<string, LabState>;
   invalidateTopologyFileListCache: (endpointId?: string) => void;
+  defaultExpandExplorerTrees?: boolean;
   lifecycleActionsAvailable?: boolean;
   openFileEditor: (
     document: FileExplorerDocument & { title: string },
@@ -1246,6 +1249,42 @@ function dedupeExplorerActions(actions: ExplorerAction[]): ExplorerAction[] {
   return deduped;
 }
 
+function cloneExpandedBySection(
+  expandedBySection: ExplorerUiState["expandedBySection"],
+): ExpandedBySection {
+  const next: ExpandedBySection = {};
+  for (const [sectionId, itemIds] of Object.entries(
+    expandedBySection ?? {},
+  )) {
+    next[sectionId as ExplorerSectionId] = [...itemIds];
+  }
+  return next;
+}
+
+function isExpandableTreeItem(item: ExplorerTreeItem): boolean {
+  return (
+    item.collapsibleState !== TREE_ITEM_NONE ||
+    Boolean(item.hasChildren) ||
+    (item.children?.length ?? 0) > 0
+  );
+}
+
+function collectExpandableTreeItemIds(items: ExplorerTreeItem[]): string[] {
+  const ids: string[] = [];
+  const visit = (item: ExplorerTreeItem): void => {
+    if (item.id && isExpandableTreeItem(item)) {
+      ids.push(item.id);
+    }
+    for (const child of item.children ?? []) {
+      visit(child);
+    }
+  };
+  for (const item of items) {
+    visit(item);
+  }
+  return ids;
+}
+
 export function createStandaloneExplorerBridge(
   options: StandaloneExplorerBridgeOptions,
 ): StandaloneExplorerBridge {
@@ -1263,6 +1302,10 @@ export function createStandaloneExplorerBridge(
   const gottyLinksByLab = new Map<string, string>();
   const endpointHealthCache = new Map<string, EndpointHealthCacheEntry>();
   const fileExplorerCache = new Map<string, FileExplorerEntry[]>();
+  const defaultExpandedBySection: Partial<Record<ExplorerSectionId, string[]>> =
+    {};
+  const defaultExpandedSections = new Set<ExplorerSectionId>();
+  const userManagedExpandedSections = new Set<ExplorerSectionId>();
   let scheduleHealthSnapshotRefresh = (_delay?: number): void => {};
 
   function sendExplorerMessage(message: ExplorerIncomingMessage): void {
@@ -1571,6 +1614,106 @@ export function createStandaloneExplorerBridge(
     };
   }
 
+  async function collectDefaultFileExplorerExpandedIds(
+    fileProvider: ExplorerTreeProviderLike,
+  ): Promise<string[]> {
+    const expandedIds: string[] = [];
+
+    const visit = async (item: ExplorerTreeItem): Promise<void> => {
+      if (
+        !item.id ||
+        item.resourceKind !== "directory" ||
+        !item.endpointId
+      ) {
+        return;
+      }
+      if (!item.hasChildren && !item.id.startsWith("file-root:")) {
+        return;
+      }
+
+      let children: ExplorerTreeItem[];
+      try {
+        children = await fileProvider.getChildren(item);
+      } catch {
+        return;
+      }
+
+      expandedIds.push(item.id);
+      for (const child of children) {
+        await visit(child);
+      }
+    };
+
+    const roots = await fileProvider.getChildren();
+    for (const root of roots) {
+      await visit(root);
+    }
+    return expandedIds;
+  }
+
+  async function applyDefaultExpandedExplorerState(input: {
+    fileProvider: ExplorerTreeProviderLike;
+    runningItems: ExplorerTreeItem[];
+  }): Promise<void> {
+    if (options.defaultExpandExplorerTrees !== true) {
+      return;
+    }
+
+    defaultExpandedBySection.runningLabs = collectExpandableTreeItemIds(
+      input.runningItems,
+    );
+    defaultExpandedBySection.fileExplorer =
+      await collectDefaultFileExplorerExpandedIds(input.fileProvider);
+    defaultExpandedSections.add("runningLabs");
+    defaultExpandedSections.add("fileExplorer");
+
+    const nextExpanded = cloneExpandedBySection(
+      explorerUiState.expandedBySection,
+    );
+    let changed = false;
+    for (const sectionId of ["runningLabs", "fileExplorer"] as const) {
+      if (userManagedExpandedSections.has(sectionId)) {
+        continue;
+      }
+      const defaultIds = defaultExpandedBySection[sectionId] ?? [];
+      if (!stringArraysEqual(nextExpanded[sectionId], defaultIds)) {
+        nextExpanded[sectionId] = [...defaultIds];
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    explorerUiState = {
+      ...explorerUiState,
+      expandedBySection: nextExpanded,
+    };
+    sendExplorerMessage({ command: "uiState", state: explorerUiState });
+  }
+
+  function trackUserManagedExpandedSections(state: ExplorerUiState): void {
+    if (options.defaultExpandExplorerTrees !== true) {
+      return;
+    }
+
+    const expandedBySection = state.expandedBySection;
+    for (const sectionId of ["runningLabs", "fileExplorer"] as const) {
+      const nextIds = expandedBySection?.[sectionId];
+      if (!defaultExpandedSections.has(sectionId) || nextIds === undefined) {
+        continue;
+      }
+      if (
+        stringArraysEqual(nextIds, defaultExpandedBySection[sectionId] ?? [])
+      ) {
+        userManagedExpandedSections.delete(sectionId);
+      } else {
+        userManagedExpandedSections.add(sectionId);
+      }
+    }
+  }
+
   function transformSnapshotForEndpointRoots(
     message: ExplorerSnapshotMessage,
   ): ExplorerSnapshotMessage {
@@ -1613,6 +1756,8 @@ export function createStandaloneExplorerBridge(
     const runningItems = buildEndpointGroupedItems(filterText, files);
     const localItems: ExplorerTreeItem[] = [];
     const helpItems = buildHelpItems();
+    const fileProvider = buildFileExplorerProvider(filterText);
+    await applyDefaultExpandedExplorerState({ fileProvider, runningItems });
 
     const providers: StandaloneExplorerSnapshotProviders = {
       runningProvider: new SimpleExplorerProvider(
@@ -1621,7 +1766,7 @@ export function createStandaloneExplorerBridge(
       localProvider: new SimpleExplorerProvider(
         localItems,
       ) as ExplorerSnapshotProviders["localProvider"],
-      fileProvider: buildFileExplorerProvider(filterText),
+      fileProvider,
       helpProvider: new SimpleExplorerProvider(
         helpItems,
       ) as ExplorerSnapshotProviders["helpProvider"],
@@ -1653,6 +1798,11 @@ export function createStandaloneExplorerBridge(
         preferredEndpointId,
       });
     const targetLabel = resolveExplorerTargetLabel(item, actionTopologyRef);
+    const refreshWorkspaceAfterMutation = (endpointId?: string): void => {
+      options.invalidateTopologyFileListCache(endpointId);
+      clearFileExplorerCache(endpointId);
+      controller.scheduleSnapshot(0);
+    };
     const resolveActionTopologyRef = (): TopologyRef | undefined =>
       resolveExplorerActionTopologyRef({
         actionEndpointId,
@@ -1875,8 +2025,7 @@ export function createStandaloneExplorerBridge(
             topologySourceUrl,
             labNameOverride,
           });
-          options.invalidateTopologyFileListCache(endpointId);
-          controller.scheduleSnapshot(0);
+          refreshWorkspaceAfterMutation(endpointId);
           runtimeUiActions.notify(
             `Cloned ${response.labName} to undeployed labs.`,
             "success",
@@ -1893,8 +2042,7 @@ export function createStandaloneExplorerBridge(
           topologySourceUrl,
           labNameOverride,
         });
-        options.invalidateTopologyFileListCache(endpointId);
-        controller.scheduleSnapshot(0);
+        refreshWorkspaceAfterMutation(endpointId);
         const labNames = response.labNames ?? [];
         runtimeUiActions.notify(
           labNames.length > 0
@@ -2353,8 +2501,7 @@ export function createStandaloneExplorerBridge(
           endpointId: createTopologyInput.endpointId,
           fileName: createTopologyInput.fileName,
         });
-        options.invalidateTopologyFileListCache(createTopologyInput.endpointId);
-        controller.scheduleSnapshot(0);
+        refreshWorkspaceAfterMutation(createTopologyInput.endpointId);
         runtimeUiActions.notify(
           `Created topology file "${createTopologyInput.fileName}".`,
           "success",
@@ -2471,8 +2618,7 @@ export function createStandaloneExplorerBridge(
         topologyRef,
       });
       if (deleted) {
-        options.invalidateTopologyFileListCache(actionEndpointId);
-        controller.scheduleSnapshot(0);
+        refreshWorkspaceAfterMutation(actionEndpointId);
       }
     };
 
@@ -2636,7 +2782,7 @@ export function createStandaloneExplorerBridge(
         return;
       }
       await writeFileExplorerFile({ endpointId, path: pathValue, content: "" });
-      clearFileExplorerCache(endpointId);
+      refreshWorkspaceAfterMutation(endpointId);
       await options.openFileEditor({
         endpointId,
         path: pathValue,
@@ -2661,9 +2807,8 @@ export function createStandaloneExplorerBridge(
         return;
       }
       await createFileExplorerDirectory(endpointId, pathValue);
-      clearFileExplorerCache(endpointId);
+      refreshWorkspaceAfterMutation(endpointId);
       runtimeUiActions.notify(`Created ${pathValue}`, "success");
-      controller.scheduleSnapshot(0);
     };
 
     const renameWorkspaceItem = async (): Promise<void> => {
@@ -2677,9 +2822,8 @@ export function createStandaloneExplorerBridge(
         return;
       }
       await renameFileExplorerPath({ endpointId, oldPath, newPath });
-      clearFileExplorerCache(endpointId);
+      refreshWorkspaceAfterMutation(endpointId);
       runtimeUiActions.notify(`Renamed ${oldPath} to ${newPath}`, "success");
-      controller.scheduleSnapshot(0);
     };
 
     const deleteWorkspaceItem = async (): Promise<void> => {
@@ -2703,9 +2847,8 @@ export function createStandaloneExplorerBridge(
       await deleteFileExplorerPath(endpointId, pathValue, {
         recursive: isDirectory,
       });
-      clearFileExplorerCache(endpointId);
+      refreshWorkspaceAfterMutation(endpointId);
       runtimeUiActions.notify(`Deleted ${pathValue}`, "success");
-      controller.scheduleSnapshot(0);
     };
 
     const copyWorkspacePath = async (): Promise<void> => {
@@ -2754,9 +2897,8 @@ export function createStandaloneExplorerBridge(
           return;
         }
         await uploadFileExplorerFile({ endpointId, file, path: targetPath, targetKind: "file" });
-        clearFileExplorerCache(endpointId);
+        refreshWorkspaceAfterMutation(endpointId);
         runtimeUiActions.notify(`Uploaded ${targetPath}.`, "success");
-        controller.scheduleSnapshot(0);
         return;
       }
 
@@ -2767,12 +2909,11 @@ export function createStandaloneExplorerBridge(
         path: directoryPath,
         targetKind: "directory",
       });
-      clearFileExplorerCache(endpointId);
+      refreshWorkspaceAfterMutation(endpointId);
       runtimeUiActions.notify(
         `Uploaded ${files.length} file${files.length === 1 ? "" : "s"} to ~/.clab${directoryPath ? `/${directoryPath}` : ""}.`,
         "success",
       );
-      controller.scheduleSnapshot(0);
     };
 
     const downloadLabArchiveFlow = async (): Promise<void> => {
@@ -2853,8 +2994,7 @@ export function createStandaloneExplorerBridge(
       "containerlab.file.upload": uploadWorkspaceFile,
       "containerlab.file.downloadArchive": downloadLabArchiveFlow,
       "containerlab.file.refresh": () => {
-        clearFileExplorerCache(actionEndpointId);
-        controller.scheduleSnapshot(0);
+        refreshWorkspaceAfterMutation(actionEndpointId);
       },
       "containerlab.install.edgeshark": () =>
         runEndpointEdgeSharkAction("install"),
@@ -3124,6 +3264,7 @@ export function createStandaloneExplorerBridge(
       explorerFilterText = filterText;
     },
     onUiStateChanged(state) {
+      trackUserManagedExpandedSections(state ?? {});
       explorerUiState = state ?? {};
     },
     refreshOnUiStateChanged(previous, next) {
