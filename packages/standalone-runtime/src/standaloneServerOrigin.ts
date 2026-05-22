@@ -1,3 +1,5 @@
+import { standaloneRuntimeMode, type StandaloneRuntimeMode } from "./runtimeMode";
+
 function configuredStandaloneServerOrigin(): string {
   const env = (import.meta as ImportMeta & {
     env?: { VITE_CLAB_STANDALONE_SERVER_ORIGIN?: string };
@@ -21,8 +23,13 @@ function normalizeOrigin(value: string): string | null {
 export function resolveStandaloneServerOrigin(
   location: Pick<Location, "origin"> = window.location,
   configuredOrigin = configuredStandaloneServerOrigin(),
-  useConfiguredOrigin = shouldUseConfiguredStandaloneServerOrigin()
+  useConfiguredOrigin = shouldUseConfiguredStandaloneServerOrigin(),
+  runtimeMode: StandaloneRuntimeMode = standaloneRuntimeMode()
 ): string {
+  if (runtimeMode === "pages") {
+    return location.origin;
+  }
+
   if (!useConfiguredOrigin) {
     return location.origin;
   }

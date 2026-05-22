@@ -60,6 +60,7 @@ import {
   type CapturePreferences,
   type CapturePreferredAction
 } from "../runtimeCaptureSettings";
+import { isPagesRuntimeMode } from "../runtimeMode";
 import {
   type EndpointConfig,
   type EndpointImportResult,
@@ -180,6 +181,16 @@ const SETTINGS_SECTIONS: Array<{
     icon: <InfoOutlinedIcon fontSize="small" />
   }
 ];
+
+const PAGES_HIDDEN_SETTINGS_SECTIONS = new Set<SettingsSectionKey>(["endpoints", "capture"]);
+const SETTINGS_OVERLAY_Z_INDEX = (theme: Theme) => theme.zIndex.drawer + 2;
+
+function normalizeSettingsSectionForMode(
+  section: SettingsSectionKey,
+  pagesMode: boolean
+): SettingsSectionKey {
+  return pagesMode && PAGES_HIDDEN_SETTINGS_SECTIONS.has(section) ? "general" : section;
+}
 
 function accentSx(theme: Theme, color: "info" | "success" | "warning" | "error") {
   return {
@@ -520,9 +531,12 @@ export function SettingsOverlay({
   onThemeChange,
   terminalPreferences
 }: SettingsOverlayProps) {
+  const pagesMode = isPagesRuntimeMode();
   const [panelOpen, setPanelOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("endpoints");
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(
+    () => normalizeSettingsSectionForMode("endpoints", isPagesRuntimeMode())
+  );
   const [requestedEndpointAction, setRequestedEndpointAction] = useState<EndpointUiAction | null>(null);
   const [sshUserMappingText, setSshUserMappingText] = useState("");
   const [telnetPortText, setTelnetPortText] = useState("");
@@ -546,6 +560,16 @@ export function SettingsOverlay({
   const primaryEndpoint = primarySettingsEndpoint(endpoints);
   const captureEndpoint = captureSettingsEndpoint(endpoints, captureEndpointId);
   const captureEndpointLabel = captureSettingsEndpointLabel(captureEndpoint);
+  const settingsSections = useMemo(
+    () => pagesMode
+      ? SETTINGS_SECTIONS.filter((section) => !PAGES_HIDDEN_SETTINGS_SECTIONS.has(section.key))
+      : SETTINGS_SECTIONS,
+    [pagesMode]
+  );
+
+  useEffect(() => {
+    setActiveSection((section) => normalizeSettingsSectionForMode(section, pagesMode));
+  }, [pagesMode]);
 
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
@@ -563,13 +587,16 @@ export function SettingsOverlay({
 
   useEffect(() => {
     const unsubscribe = subscribeEndpointUiAction((action) => {
+      if (pagesMode) {
+        return;
+      }
       setPanelOpen(false);
       setDialogOpen(true);
       setActiveSection("endpoints");
       setRequestedEndpointAction(action);
     });
     return unsubscribe;
-  }, []);
+  }, [pagesMode]);
 
   useEffect(() => {
     if (!dialogOpen || activeSection !== "about") {
@@ -670,10 +697,10 @@ export function SettingsOverlay({
   const handleOpenDialog = useCallback(
     (section: SettingsSectionKey = "endpoints") => {
       setPanelOpen(false);
-      setActiveSection(section);
+      setActiveSection(normalizeSettingsSectionForMode(section, pagesMode));
       setDialogOpen(true);
     },
-    []
+    [pagesMode]
   );
   const handleCloseDialog = useCallback(() => {
     setDialogOpen(false);
@@ -941,7 +968,7 @@ export function SettingsOverlay({
             position: "fixed",
             top: 8,
             right: 8,
-            zIndex: 1200,
+            zIndex: SETTINGS_OVERLAY_Z_INDEX,
             bgcolor: "background.paper",
             color: "action.active",
             border: 1,
@@ -964,7 +991,7 @@ export function SettingsOverlay({
             position: "fixed",
             top: 8,
             right: 48,
-            zIndex: 1200,
+            zIndex: SETTINGS_OVERLAY_Z_INDEX,
             width: 340,
             maxWidth: "calc(100vw - 64px)",
             p: 2,
@@ -989,14 +1016,16 @@ export function SettingsOverlay({
               >
                 General Settings
               </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<LogoutIcon />}
-                onClick={handleLogoutClick}
-              >
-                Disconnect Sessions
-              </Button>
+              {!pagesMode ? (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<LogoutIcon />}
+                  onClick={handleLogoutClick}
+                >
+                  Disconnect Sessions
+                </Button>
+              ) : null}
             </Stack>
           </Stack>
         </Paper>
@@ -1055,12 +1084,12 @@ export function SettingsOverlay({
               }}
             >
               <List disablePadding>
-                {SETTINGS_SECTIONS.map((section, index) => (
+                {settingsSections.map((section, index) => (
                   <React.Fragment key={section.key}>
                     {index > 0 ? <Divider /> : null}
                     <ListItemButton
                       selected={section.key === activeSection}
-                      onClick={() => setActiveSection(section.key)}
+                      onClick={() => setActiveSection(normalizeSettingsSectionForMode(section.key, pagesMode))}
                       data-testid={`standalone-settings-nav-${section.key}`}
                       sx={{
                         alignItems: "flex-start",

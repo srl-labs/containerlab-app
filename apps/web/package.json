@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "NODE_ENV=development concurrently -k -n server,vite \"tsx watch server/index.ts\" \"sh -c 'node ../../scripts/wait-web-server.mjs && vite --config vite.config.ts'\"",
     "dev:local": "node ../../scripts/check-local-clab-ui.mjs && NODE_ENV=development CLAB_UI_SOURCE=local concurrently -k -n server,vite \"tsx watch --tsconfig tsconfig.server.local-ui.runtime.json server/index.ts\" \"sh -c 'node ../../scripts/wait-web-server.mjs && vite --config vite.config.ts'\"",
+    "dev:pages": "NODE_ENV=development VITE_CLAB_RUNTIME_MODE=pages vite --config vite.config.ts",
+    "dev:pages:local": "node ../../scripts/check-local-clab-ui.mjs && NODE_ENV=development CLAB_UI_SOURCE=local VITE_CLAB_RUNTIME_MODE=pages vite --config vite.config.ts",
     "build": "vite build --config vite.config.ts && npm run build:server",
+    "build:pages": "VITE_CLAB_RUNTIME_MODE=pages vite build --config vite.config.ts",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/server/index.cjs --sourcemap",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "typecheck:local-ui": "node ../../scripts/check-local-clab-ui.mjs && tsc -p tsconfig.local-ui.json --noEmit && tsc -p tsconfig.server.local-ui.json --noEmit",

@@ -20,6 +20,8 @@ import GroupsIcon from "@mui/icons-material/Groups";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
+import { publicAssetUrl } from "../publicAssetUrl";
+
 interface AboutSettingsContentProps {
   versionCheck: string;
   versionError: string | null;
@@ -199,7 +201,7 @@ export function AboutSettingsContent({
       >
         <Box
           component="img"
-          src="/containerlab.svg"
+          src={publicAssetUrl("containerlab.svg")}
           alt=""
           sx={{ width: 56, height: 56, flexShrink: 0 }}
         />

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import type { EndpointConfig } from "../stores/endpointStore";
 import { standaloneServerUrl } from "../standaloneServerOrigin";
+import { isPagesRuntimeMode } from "../runtimeMode";
 
 export interface WorkspaceFileEvent {
   action?: string;
@@ -17,12 +18,21 @@ export function useWorkspaceFileEvents(
 ): void {
   const handlerRef = useRef(onWorkspaceFileEvent);
   const sourcesRef = useRef<Map<string, EventSource>>(new Map());
+  const pagesMode = isPagesRuntimeMode();
 
   useEffect(() => {
     handlerRef.current = onWorkspaceFileEvent;
   }, [onWorkspaceFileEvent]);
 
   useEffect(() => {
+    if (pagesMode) {
+      for (const source of sourcesRef.current.values()) {
+        source.close();
+      }
+      sourcesRef.current.clear();
+      return;
+    }
+
     const streamableEndpoints = endpoints.filter(
       (endpoint) => endpoint.status === "connected",
     );
@@ -61,7 +71,7 @@ export function useWorkspaceFileEvents(
         }
       };
     }
-  }, [endpoints]);
+  }, [endpoints, pagesMode]);
 
   useEffect(() => {
     const sources = sourcesRef.current;

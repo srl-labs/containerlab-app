@@ -15,6 +15,7 @@ import {
   endpointStatusSeverity,
   endpointNeedsReconnect
 } from "../endpointStatus";
+import { publicAssetUrl } from "../publicAssetUrl";
 
 import {
   endpointSessionDurationLabel,
@@ -223,7 +224,7 @@ export function LoginPage({
           <Box
             component="object"
             type="image/svg+xml"
-            data="/containerlab-animated.svg"
+            data={publicAssetUrl("containerlab-animated.svg")}
             aria-label="Containerlab Logo"
             sx={{
               width: 200,

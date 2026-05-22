@@ -9,6 +9,8 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+import { publicAssetUrl } from "../publicAssetUrl";
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -318,7 +320,7 @@ export function AttractorEmptyState({
 
     let disposed = false;
     const loader = new GLTFLoader();
-    loader.load("/model.gltf", (gltf) => {
+    loader.load(publicAssetUrl("model.gltf"), (gltf) => {
       if (disposed) {
         return;
       }

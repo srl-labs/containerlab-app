@@ -19,9 +19,22 @@ test("resolveStandaloneServerOrigin routes Vite dev traffic to standalone backen
     resolveStandaloneServerOrigin(
       { origin: "https://localhost:5174" },
       "https://localhost:3000",
-      true
+      true,
+      "standalone"
     ),
     "https://localhost:3000"
+  );
+});
+
+test("resolveStandaloneServerOrigin keeps Pages mode on the current origin", () => {
+  assert.equal(
+    resolveStandaloneServerOrigin(
+      { origin: "https://localhost:5174" },
+      "https://localhost:3000",
+      true,
+      "pages"
+    ),
+    "https://localhost:5174"
   );
 });
 
