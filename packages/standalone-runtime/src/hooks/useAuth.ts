@@ -15,11 +15,22 @@ import {
   type EndpointStatus
 } from "../stores/endpointStore";
 import { useLabStore } from "../stores/labStore";
+import { isPagesRuntimeMode, PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 interface AuthMeResponse {
   authenticated?: boolean;
   endpoints?: EndpointConfig[];
 }
+
+const PAGES_SANDBOX_ENDPOINT: EndpointConfig = {
+  id: PAGES_SANDBOX_ENDPOINT_ID,
+  url: "local://containerlab-pages",
+  label: "Local workspace",
+  username: "local",
+  sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
+  status: "connected",
+  connected: true
+};
 
 function withStatus(endpoint: Omit<EndpointConfig, "connected"> & { connected?: boolean }): EndpointConfig {
   return {
@@ -91,6 +102,7 @@ function mergeStoredAndServerEndpoints(
 }
 
 export function useEndpointAuth() {
+  const pagesMode = isPagesRuntimeMode();
   const endpoints = useEndpointStore((state) => state.endpoints);
   const addEndpointToStore = useEndpointStore((state) => state.addEndpoint);
   const clearEndpoints = useEndpointStore((state) => state.clear);
@@ -112,9 +124,23 @@ export function useEndpointAuth() {
   const setInitialized = useAuthStore((state) => state.setInitialized);
   const setLoading = useAuthStore((state) => state.setLoading);
 
-  const endpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
+  const storedEndpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
+  const endpointList = useMemo(
+    () => pagesMode ? [PAGES_SANDBOX_ENDPOINT] : storedEndpointList,
+    [pagesMode, storedEndpointList]
+  );
+  const effectiveEndpoints = useMemo(
+    () => pagesMode
+      ? new Map([[PAGES_SANDBOX_ENDPOINT.id, PAGES_SANDBOX_ENDPOINT]])
+      : endpoints,
+    [endpoints, pagesMode]
+  );
 
   const refreshConfig = useCallback(async () => {
+    if (pagesMode) {
+      setDefaultApiUrl("");
+      return;
+    }
     const response = await fetch("/api/config", { credentials: "include" });
     if (!response.ok) {
       return;
@@ -123,9 +149,13 @@ export function useEndpointAuth() {
     if (typeof payload.defaultClabApiUrl === "string") {
       setDefaultApiUrl(payload.defaultClabApiUrl);
     }
-  }, [setDefaultApiUrl]);
+  }, [pagesMode, setDefaultApiUrl]);
 
   const refreshEndpoints = useCallback(async () => {
+    if (pagesMode) {
+      setEndpoints([PAGES_SANDBOX_ENDPOINT]);
+      return;
+    }
     const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
     const response = await fetch("/auth/endpoints", { credentials: "include" });
     if (!response.ok) {
@@ -137,9 +167,18 @@ export function useEndpointAuth() {
       : [];
     syncRemovedEndpointState(previousEndpoints, nextEndpoints);
     setEndpoints(mergeStoredAndServerEndpoints(previousEndpoints, nextEndpoints));
-  }, [setEndpoints]);
+  }, [pagesMode, setEndpoints]);
 
   useEffect(() => {
+    if (pagesMode) {
+      setEndpoints([PAGES_SANDBOX_ENDPOINT]);
+      setDefaultApiUrl("");
+      clearError();
+      setLoading(false);
+      setInitialized(true);
+      return;
+    }
+
     if (initialized) {
       return;
     }
@@ -185,8 +224,10 @@ export function useEndpointAuth() {
     hydratePersisted,
     initialized,
     markAllSaved,
+    pagesMode,
     refreshConfig,
     setEndpoints,
+    setDefaultApiUrl,
     setError,
     setInitialized,
     setLoading
@@ -200,6 +241,10 @@ export function useEndpointAuth() {
       url: string;
       username: string;
     }): Promise<EndpointConfig> => {
+      if (pagesMode) {
+        addEndpointToStore(PAGES_SANDBOX_ENDPOINT);
+        return PAGES_SANDBOX_ENDPOINT;
+      }
       clearError();
       const response = await fetch("/auth/endpoints/add", {
         method: "POST",
@@ -216,11 +261,15 @@ export function useEndpointAuth() {
       addEndpointToStore(endpoint);
       return endpoint;
     },
-    [addEndpointToStore, clearError, setError]
+    [addEndpointToStore, clearError, pagesMode, setError]
   );
 
   const removeEndpoint = useCallback(
     async (endpointId: string): Promise<void> => {
+      if (pagesMode) {
+        addEndpointToStore(PAGES_SANDBOX_ENDPOINT);
+        return;
+      }
       clearError();
       const existing = useEndpointStore.getState().endpoints.get(endpointId);
       if (!existing) {
@@ -249,7 +298,7 @@ export function useEndpointAuth() {
       removeEndpointFromStore(endpointId);
       useLabStore.getState().clearEndpoint(endpointId);
     },
-    [clearError, forgetEndpointFromStore, removeEndpointFromStore, setError]
+    [addEndpointToStore, clearError, forgetEndpointFromStore, pagesMode, removeEndpointFromStore, setError]
   );
 
   const reconnectEndpoint = useCallback(
@@ -258,6 +307,10 @@ export function useEndpointAuth() {
       password: string;
       username: string;
     }): Promise<EndpointConfig> => {
+      if (pagesMode) {
+        addEndpointToStore(PAGES_SANDBOX_ENDPOINT);
+        return PAGES_SANDBOX_ENDPOINT;
+      }
       clearError();
       const existing = useEndpointStore.getState().endpoints.get(input.endpointId);
       if (!existing) {
@@ -287,7 +340,7 @@ export function useEndpointAuth() {
       addEndpointToStore(endpoint);
       return endpoint;
     },
-    [addEndpointToStore, clearError, setError]
+    [addEndpointToStore, clearError, pagesMode, setError]
   );
 
   const updateEndpointSessionDuration = useCallback(
@@ -328,6 +381,14 @@ export function useEndpointAuth() {
       url: string;
       username: string;
     }): Promise<EndpointConfig> => {
+      if (pagesMode) {
+        const endpoint = {
+          ...PAGES_SANDBOX_ENDPOINT,
+          label: input.label.trim() || PAGES_SANDBOX_ENDPOINT.label
+        };
+        addEndpointToStore(endpoint);
+        return endpoint;
+      }
       clearError();
       const existing = useEndpointStore.getState().endpoints.get(input.endpointId);
       if (!existing) {
@@ -368,7 +429,7 @@ export function useEndpointAuth() {
       addEndpointToStore(endpoint);
       return endpoint;
     },
-    [addEndpointToStore, clearError, setError]
+    [addEndpointToStore, clearError, pagesMode, setError]
   );
 
   const exportEndpoints = useCallback((): string => {
@@ -385,32 +446,40 @@ export function useEndpointAuth() {
   );
 
   const logout = useCallback(async () => {
+    if (pagesMode) {
+      addEndpointToStore(PAGES_SANDBOX_ENDPOINT);
+      return;
+    }
     clearError();
     await fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     markAllSaved();
     useLabStore.getState().clear();
-  }, [clearError, markAllSaved]);
+  }, [addEndpointToStore, clearError, markAllSaved, pagesMode]);
 
   const forgetAllEndpoints = useCallback(() => {
+    if (pagesMode) {
+      addEndpointToStore(PAGES_SANDBOX_ENDPOINT);
+      return;
+    }
     clearError();
     void fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
     clearEndpoints();
     useLabStore.getState().clear();
-  }, [clearEndpoints, clearError]);
+  }, [addEndpointToStore, clearEndpoints, clearError, pagesMode]);
 
   return {
     addEndpoint,
-    defaultApiUrl,
+    defaultApiUrl: pagesMode ? "" : defaultApiUrl,
     endpointList,
-    endpoints,
-    error,
+    endpoints: effectiveEndpoints,
+    error: pagesMode ? null : error,
     exportEndpoints,
     forgetAllEndpoints,
-    hasConnectedEndpoint: endpointList.some((ep) => ep.status === "connected"),
-    hasEndpointSession: endpointList.some((ep) => ep.status !== "saved"),
+    hasConnectedEndpoint: pagesMode || endpointList.some((ep) => ep.status === "connected"),
+    hasEndpointSession: pagesMode || endpointList.some((ep) => ep.status !== "saved"),
     importEndpoints,
-    isAuthenticated: endpointList.some((ep) => ep.status !== "saved"),
-    loading,
+    isAuthenticated: pagesMode || endpointList.some((ep) => ep.status !== "saved"),
+    loading: pagesMode ? false : loading,
     logout,
     reconnectEndpoint,
     refreshConfig,

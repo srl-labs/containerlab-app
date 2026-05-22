@@ -91,6 +91,8 @@ import type {
   KindImageReference,
 } from "@srl-labs/clab-ui/image-manager";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
+import { publicAssetUrl } from "./publicAssetUrl";
+import { isPagesRuntimeMode } from "./runtimeMode";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -620,6 +622,7 @@ const explorerBridge = createStandaloneExplorerBridge({
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache:
     topologyManager.invalidateTopologyFileListCache,
+  lifecycleActionsAvailable: !isPagesRuntimeMode(),
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
   openFileEditor: openWorkspaceFileInTab,
@@ -760,7 +763,7 @@ function openWiresharkVncSessions(
       params.set("showVolumeTip", "1");
     }
     window.open(
-      `/wireshark.html?${params.toString()}`,
+      `${publicAssetUrl("wireshark.html")}?${params.toString()}`,
       "_blank",
       "noopener,noreferrer",
     );
@@ -1153,6 +1156,77 @@ const IGNORED_STANDALONE_MESSAGE_COMMANDS = new Set([
   "topoViewerLog",
 ]);
 
+const PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS = [
+  'button[data-testid="navbar-deploy"]',
+  'button[data-testid="navbar-deploy-menu"]',
+] as const;
+
+function hidePagesLifecycleElement(element: HTMLElement): void {
+  if (!element.hidden) {
+    element.hidden = true;
+  }
+  if (element.style.display !== "none") {
+    element.style.display = "none";
+  }
+  if (element.getAttribute("aria-hidden") !== "true") {
+    element.setAttribute("aria-hidden", "true");
+  }
+}
+
+function hidePagesLifecycleButtons(): void {
+  for (const selector of PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS) {
+    const button = document.querySelector<HTMLButtonElement>(selector);
+    if (!button) {
+      continue;
+    }
+    if (!button.disabled) {
+      button.disabled = true;
+    }
+    if (button.getAttribute("aria-disabled") !== "true") {
+      button.setAttribute("aria-disabled", "true");
+    }
+    if (button.title !== "Deploy is not available in GitHub Pages mode.") {
+      button.title = "Deploy is not available in GitHub Pages mode.";
+    }
+    button.tabIndex = -1;
+    hidePagesLifecycleElement(
+      selector.includes("navbar-deploy-menu")
+        ? button
+        : button.parentElement?.tagName === "SPAN"
+          ? button.parentElement
+          : button,
+    );
+  }
+}
+
+function usePagesLifecycleControlsHidden(): void {
+  useEffect(() => {
+    if (!isPagesRuntimeMode()) {
+      return;
+    }
+
+    hidePagesLifecycleButtons();
+    const observer = new MutationObserver(hidePagesLifecycleButtons);
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: [
+        "aria-disabled",
+        "aria-hidden",
+        "disabled",
+        "hidden",
+        "style",
+        "title",
+      ],
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+}
+
 // Standalone host bridge - explicit UI host with API-backed topology transport.
 function setupStandaloneUiHost(): void {
   const warnedCommands = new Set<string>();
@@ -1167,11 +1241,21 @@ function setupStandaloneUiHost(): void {
     }
 
     if (msg.command === MSG_CANCEL_LAB_LIFECYCLE) {
+      if (isPagesRuntimeMode()) {
+        return;
+      }
       lifecycleManager.cancel();
       return;
     }
 
     if (isStandaloneLifecycleCommand(msg.command)) {
+      if (isPagesRuntimeMode()) {
+        runtimeUiActions.notify(
+          "Deploy is not available in GitHub Pages mode.",
+          "warning",
+        );
+        return;
+      }
       const lifecycleCommand = msg.command;
       void lifecycleManager.run(lifecycleCommand).catch((error: unknown) => {
         console.error(`[Standalone] lifecycle command failed:`, error);
@@ -1794,6 +1878,8 @@ function StandaloneApp() {
   );
   const terminalCount = useRuntimeUiStore((state) => state.terminals.length);
   const runtimeChromeReady = useDeferredRuntimeChrome();
+  const runtimeDialogsReady = isPagesRuntimeMode() || runtimeChromeReady;
+  usePagesLifecycleControlsHidden();
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -2042,7 +2128,7 @@ function StandaloneApp() {
       <StandaloneLabTabsMount />
       <StandaloneFileEditorTabMount />
       <StandaloneLabEmptyStateMount />
-      {runtimeChromeReady ? (
+      {runtimeDialogsReady ? (
         <>
           <MuiThemeProvider>
             {terminalCount > 0 ? (

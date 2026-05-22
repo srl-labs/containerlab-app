@@ -4,6 +4,7 @@ import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import { useEndpointStore } from "./stores/endpointStore";
 import { useLabStore } from "./stores/labStore";
+import { isPagesRuntimeMode, PAGES_SANDBOX_ENDPOINT_ID } from "./runtimeMode";
 
 export interface RuntimeTargetRequest {
   endpointId?: string;
@@ -380,6 +381,9 @@ function markEndpointUnavailable(
   status: "offline" | "session_expired"
 ): void {
   if (!endpointId) {
+    return;
+  }
+  if (isPagesRuntimeMode() && endpointId === PAGES_SANDBOX_ENDPOINT_ID) {
     return;
   }
   useLabStore.getState().setConnected(endpointId, false);

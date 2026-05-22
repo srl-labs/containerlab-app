@@ -53,6 +53,7 @@ import {
   saveConfigsFlow,
   type CloneRepoDialogTarget,
 } from "./runtimeActionFlows";
+import { publicAssetUrl } from "./publicAssetUrl";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type {
   ContainerState,
@@ -102,6 +103,27 @@ const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.addToWorkspace",
   "containerlab.lab.openFolderInNewWindow",
   "containerlab.file.refresh",
+] as const;
+const PAGES_LIFECYCLE_HIDDEN_COMMAND_IDS = [
+  "containerlab.lab.deployPopular",
+  "containerlab.lab.deploy",
+  "containerlab.lab.deploy.specificFile",
+  "containerlab.lab.deploy.cleanup",
+  "containerlab.lab.destroy",
+  "containerlab.lab.destroy.cleanup",
+  "containerlab.lab.redeploy",
+  "containerlab.lab.redeploy.cleanup",
+  "containerlab.lab.start",
+  "containerlab.lab.stop",
+  "containerlab.lab.restart",
+  "containerlab.lab.save",
+  "containerlab.lab.sshToAllNodes",
+  "containerlab.node.save",
+  "containerlab.node.start",
+  "containerlab.node.stop",
+  "containerlab.node.restart",
+  "containerlab.node.pause",
+  "containerlab.node.unpause",
 ] as const;
 const STANDALONE_TRANSFER_COMMAND_LABELS = new Map<string, string>([
   ["containerlab.file.download", "Download File"],
@@ -639,6 +661,7 @@ interface StandaloneExplorerBridgeOptions {
   getEndpoints: () => EndpointConfig[];
   getLabs: () => Map<string, LabState>;
   invalidateTopologyFileListCache: (endpointId?: string) => void;
+  lifecycleActionsAvailable?: boolean;
   openFileEditor: (
     document: FileExplorerDocument & { title: string },
   ) => Promise<void> | void;
@@ -1226,6 +1249,10 @@ function dedupeExplorerActions(actions: ExplorerAction[]): ExplorerAction[] {
 export function createStandaloneExplorerBridge(
   options: StandaloneExplorerBridgeOptions,
 ): StandaloneExplorerBridge {
+  const lifecycleActionsAvailable = options.lifecycleActionsAvailable !== false;
+  const hiddenCommandIds = lifecycleActionsAvailable
+    ? STANDALONE_HIDDEN_COMMAND_IDS
+    : [...STANDALONE_HIDDEN_COMMAND_IDS, ...PAGES_LIFECYCLE_HIDDEN_COMMAND_IDS];
   let explorerFilterText = "";
   let explorerUiState: ExplorerUiState = {};
   const explorerSubscribers = new Set<
@@ -1777,7 +1804,7 @@ export function createStandaloneExplorerBridge(
           if (session.showVolumeTip) {
             params.set("showVolumeTip", "1");
           }
-          const capturePageUrl = `/wireshark.html?${params.toString()}`;
+          const capturePageUrl = `${publicAssetUrl("wireshark.html")}?${params.toString()}`;
           window.open(capturePageUrl, "_blank", "noopener,noreferrer");
         }
 
@@ -2376,7 +2403,7 @@ export function createStandaloneExplorerBridge(
             : connectedEndpoints[0]?.id,
         defaultMode: "url",
         defaultSourceUrl: "https://github.com/srl-labs/srl-telemetry-lab",
-        defaultTarget: "deploy",
+        defaultTarget: lifecycleActionsAvailable ? "deploy" : "undeployed",
       });
       if (cloneRepoInput) {
         await cloneFromUrlFlow(
@@ -2416,6 +2443,13 @@ export function createStandaloneExplorerBridge(
       endpoint: LifecycleCommandEndpoint,
       cleanup = false,
     ): Promise<void> => {
+      if (!lifecycleActionsAvailable) {
+        runtimeUiActions.notify(
+          "Deploy and lifecycle actions are not available in GitHub Pages mode.",
+          "warning",
+        );
+        return;
+      }
       const topologyRef = requireTopologyRef();
       if (!topologyRef) {
         return;
@@ -2836,7 +2870,13 @@ export function createStandaloneExplorerBridge(
       "containerlab.editor.topoViewerEditor": createTopologyFileFlow,
       "containerlab.lab.cloneRepo": cloneRepositoryFlow,
       "containerlab.lab.clonePopularRepo": () => clonePopularFlow("undeployed"),
-      "containerlab.lab.deployPopular": () => clonePopularFlow("deploy"),
+      "containerlab.lab.deployPopular": () =>
+        lifecycleActionsAvailable
+          ? clonePopularFlow("deploy")
+          : runtimeUiActions.notify(
+              "Deploy is not available in GitHub Pages mode.",
+              "warning",
+            ),
       "containerlab.images.manage": runtimeUiActions.openImageManager,
       "containerlab.inspectAll": runtimeUiActions.openInspectAll,
       "containerlab.inspectOneLab": () => {
@@ -3069,7 +3109,7 @@ export function createStandaloneExplorerBridge(
       return {
         hideNonOwnedLabs: !showNonOwnedLabs,
         isLocalCaptureAllowed: true,
-        hiddenCommandIds: STANDALONE_HIDDEN_COMMAND_IDS,
+        hiddenCommandIds,
         commandMetadata: STANDALONE_TRANSFER_COMMAND_METADATA,
         sectionOrder: [
           "runningLabs",

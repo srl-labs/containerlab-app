@@ -19,6 +19,8 @@ import {
   type EndpointImportResult
 } from "./endpointTransfer";
 import { useAuth } from "./hooks/useAuth";
+import { installPagesSandboxRuntime } from "./pagesSandboxRuntime";
+import { isPagesRuntimeMode } from "./runtimeMode";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -30,6 +32,10 @@ import type * as StandaloneAppModule from "./standaloneApp";
 let bootstrapRoot: Root | null = null;
 let standaloneMountStarted = false;
 let standaloneRuntimeModulePromise: Promise<typeof StandaloneAppModule> | null = null;
+
+if (isPagesRuntimeMode()) {
+  installPagesSandboxRuntime();
+}
 
 function LoadingScreen() {
   return (

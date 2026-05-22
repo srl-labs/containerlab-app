@@ -6,6 +6,7 @@ import {
   isValidEndpointSessionDuration,
   useEndpointStore
 } from "./endpointStore";
+import { PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -97,6 +98,50 @@ test("hydratePersisted defaults missing sessionDuration to 24h", () => {
   assert.equal(endpoint.sessionDuration, DEFAULT_ENDPOINT_SESSION_DURATION);
   assert.equal(endpoint.status, "saved");
   assert.equal(endpoint.connected, false);
+});
+
+test("pages sandbox endpoint is never persisted or hydrated as a real endpoint", () => {
+  const store = useEndpointStore.getState();
+  store.addEndpoint({
+    id: PAGES_SANDBOX_ENDPOINT_ID,
+    url: "local://containerlab-pages",
+    label: "Local workspace",
+    username: "local",
+    sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
+    status: "connected",
+    connected: true
+  });
+  store.addEndpoint({
+    id: "endpoint-1",
+    url: "https://localhost:8090",
+    label: "server-a",
+    username: "alice",
+    sessionDuration: DEFAULT_ENDPOINT_SESSION_DURATION,
+    status: "saved",
+    connected: false
+  });
+
+  const persisted = JSON.parse(
+    globalThis.localStorage.getItem("clab-standalone-endpoints") ?? "[]"
+  ) as Array<{ id?: string }>;
+  assert.deepEqual(persisted.map((endpoint) => endpoint.id), ["endpoint-1"]);
+
+  useEndpointStore.setState({ endpoints: new Map() });
+  globalThis.localStorage.setItem(
+    "clab-standalone-endpoints",
+    JSON.stringify([
+      {
+        id: PAGES_SANDBOX_ENDPOINT_ID,
+        url: "local://containerlab-pages",
+        label: "Local workspace",
+        username: "local"
+      }
+    ])
+  );
+
+  useEndpointStore.getState().hydratePersisted();
+
+  assert.equal(useEndpointStore.getState().endpoints.size, 0);
 });
 
 test("importProfiles merges by URL and username while preserving connection state", () => {

@@ -12,9 +12,12 @@ const workspaceRoot = path.resolve(__dirname, "../..");
 const localClabUiRoot = path.resolve(workspaceRoot, "../clab-ui");
 const localClabUiDistRoot = path.join(localClabUiRoot, "dist");
 const useLocalClabUi = process.env.CLAB_UI_SOURCE === "local";
+const runtimeMode = process.env.VITE_CLAB_RUNTIME_MODE ?? "standalone";
+const pagesMode = runtimeMode === "pages";
 const apiServerPort = process.env.PORT ?? "3001";
 const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
 const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
+const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? (pagesMode ? "/containerlab-app/" : "/");
 
 if (useLocalClabUi && !fs.existsSync(path.join(localClabUiDistRoot, "index.js"))) {
   throw new Error(
@@ -140,8 +143,10 @@ export default defineConfig(({ command }) => {
       })
     ],
     define: {
+      "import.meta.env.VITE_CLAB_RUNTIME_MODE": JSON.stringify(runtimeMode),
       "import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN": JSON.stringify(apiServerTarget)
     },
+    base: publicBasePath,
     root: __dirname,
     publicDir: path.resolve(__dirname, "resources"),
     resolve: {
