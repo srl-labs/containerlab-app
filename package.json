@@ -1,6 +1,6 @@
 {
   "name": "containerlab-app",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "private": true,
   "description": "Workspace for Containerlab web and desktop hosts.",
   "license": "Apache-2.0",

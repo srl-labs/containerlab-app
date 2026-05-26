@@ -1,6 +1,6 @@
 {
   "name": "@srl-labs/containerlab-standalone-runtime",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "private": true,
   "description": "Shared standalone Containerlab renderer/runtime for web and desktop hosts.",
   "license": "Apache-2.0",
@@ -17,7 +17,7 @@
     "@mui/icons-material": "^7.3.10",
     "@mui/material": "^7.3.10",
     "@srl-labs/clab-ui": "0.0.35",
-    "@srl-labs/containerlab-app-contract": "0.0.3",
+    "@srl-labs/containerlab-app-contract": "0.1.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "ajv": "^8.18.0",

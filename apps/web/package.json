@@ -1,6 +1,6 @@
 {
   "name": "containerlab-app-web",
-  "version": "0.0.3",
+  "version": "0.1.0",
   "private": true,
   "description": "Browser host for containerlab-app built on @srl-labs/clab-ui.",
   "license": "Apache-2.0",
@@ -40,8 +40,8 @@
     "@fastify/websocket": "^11.2.0",
     "@mui/icons-material": "^7.3.10",
     "@mui/material": "^7.3.10",
-    "@srl-labs/containerlab-app-server": "0.0.3",
-    "@srl-labs/containerlab-standalone-runtime": "0.0.3",
+    "@srl-labs/containerlab-app-server": "0.1.0",
+    "@srl-labs/containerlab-standalone-runtime": "0.1.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "ajv": "^8.18.0",
