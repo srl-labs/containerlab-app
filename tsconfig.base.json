@@ -15,6 +15,9 @@
       "@srl-labs/containerlab-app-contract": ["./packages/app-contract/src/index.ts"],
       "@srl-labs/containerlab-app-server": ["./packages/app-server/src/index.ts"],
       "@srl-labs/containerlab-standalone-runtime": ["./packages/standalone-runtime/src/index.ts"],
+      "@srl-labs/containerlab-standalone-runtime/terminal-main": [
+        "./packages/standalone-runtime/src/terminalMain.tsx"
+      ],
       "@srl-labs/containerlab-standalone-runtime/web-main": ["./packages/standalone-runtime/src/main.tsx"],
       "@srl-labs/containerlab-standalone-runtime/wireshark-vnc-main": [
         "./packages/standalone-runtime/src/wiresharkVncMain.tsx"

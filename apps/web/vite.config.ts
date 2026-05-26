@@ -124,6 +124,10 @@ const workspacePackageAliases = [
     replacement: path.resolve(workspaceRoot, "packages/standalone-runtime/src/main.tsx")
   },
   {
+    find: /^@srl-labs\/containerlab-standalone-runtime\/terminal-main$/,
+    replacement: path.resolve(workspaceRoot, "packages/standalone-runtime/src/terminalMain.tsx")
+  },
+  {
     find: /^@srl-labs\/containerlab-standalone-runtime\/wireshark-vnc-main$/,
     replacement: path.resolve(workspaceRoot, "packages/standalone-runtime/src/wiresharkVncMain.tsx")
   },
@@ -202,6 +206,7 @@ export default defineConfig(({ command }) => {
       warmup: {
         clientFiles: [
           "./src/main.tsx",
+          "./src/terminalMain.tsx",
           "./src/wiresharkVncMain.tsx",
           "../../packages/standalone-runtime/src/standaloneApp.tsx",
           "../../packages/standalone-runtime/src/mainUiDependencies.ts",
@@ -238,6 +243,7 @@ export default defineConfig(({ command }) => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, "index.html"),
+          terminal: path.resolve(__dirname, "terminal.html"),
           wireshark: path.resolve(__dirname, "wireshark.html")
         }
       }
