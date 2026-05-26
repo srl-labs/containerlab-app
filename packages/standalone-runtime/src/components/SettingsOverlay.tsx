@@ -593,6 +593,10 @@ export function SettingsOverlay({
       setPanelOpen(false);
       setDialogOpen(true);
       setActiveSection("endpoints");
+      if (action.action === "add") {
+        setRequestedEndpointAction(null);
+        return;
+      }
       setRequestedEndpointAction(action);
     });
     return unsubscribe;

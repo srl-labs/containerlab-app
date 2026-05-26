@@ -139,11 +139,19 @@ const STANDALONE_TRANSFER_COMMAND_LABELS = new Map<string, string>([
   ["containerlab.file.downloadArchive", "Download Lab Archive"],
   ["containerlab.lab.downloadArchive", "Download Lab Archive"],
 ]);
+const STANDALONE_COMMAND_LABELS = new Map<string, string>([
+  ...STANDALONE_TRANSFER_COMMAND_LABELS,
+  ["containerlab.endpoint.add", "Add Endpoint"],
+]);
 const STANDALONE_TRANSFER_COMMAND_ICONS = new Map<string, string>([
   ["containerlab.file.download", "download"],
   ["containerlab.file.upload", "upload"],
   ["containerlab.file.downloadArchive", "download"],
   ["containerlab.lab.downloadArchive", "download"],
+]);
+const STANDALONE_COMMAND_ICONS = new Map<string, string>([
+  ...STANDALONE_TRANSFER_COMMAND_ICONS,
+  ["containerlab.endpoint.add", "add"],
 ]);
 const STANDALONE_TRANSFER_FILE_ACTIONS = [
   {
@@ -167,11 +175,14 @@ const STANDALONE_TRANSFER_FILE_ACTIONS = [
 const STANDALONE_TRANSFER_LAB_ACTIONS = [
   { commandId: "containerlab.lab.downloadArchive" },
 ] as const;
-const STANDALONE_TRANSFER_COMMAND_METADATA = {
+const STANDALONE_EXPLORER_COMMAND_METADATA = {
   contributedFileActions: STANDALONE_TRANSFER_FILE_ACTIONS,
   contributedLabActions: STANDALONE_TRANSFER_LAB_ACTIONS,
-  commandIcons: STANDALONE_TRANSFER_COMMAND_ICONS,
-  commandLabels: STANDALONE_TRANSFER_COMMAND_LABELS,
+  contributedSectionContextActions: {
+    [RUNNING_LABS_SECTION_ID]: [{ commandId: "containerlab.endpoint.add" }],
+  },
+  commandIcons: STANDALONE_COMMAND_ICONS,
+  commandLabels: STANDALONE_COMMAND_LABELS,
 };
 
 type ShareActionKind = "sshx" | "gotty";
@@ -3039,6 +3050,8 @@ export function createStandaloneExplorerBridge(
           window.open(link, "_blank", "noopener,noreferrer");
         }
       },
+      "containerlab.endpoint.add": () =>
+        dispatchEndpointUiAction({ action: "add" }),
       "containerlab.endpoint.reconnect": () =>
         actionEndpointId
           ? dispatchEndpointUiAction({
@@ -3336,7 +3349,7 @@ export function createStandaloneExplorerBridge(
         hideNonOwnedLabs: !showNonOwnedLabs,
         isLocalCaptureAllowed: true,
         hiddenCommandIds,
-        commandMetadata: STANDALONE_TRANSFER_COMMAND_METADATA,
+        commandMetadata: STANDALONE_EXPLORER_COMMAND_METADATA,
         sectionOrder: [
           RUNNING_LABS_SECTION_ID,
           LOCAL_LABS_SECTION_ID,
