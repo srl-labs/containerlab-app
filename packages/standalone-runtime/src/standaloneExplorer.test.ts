@@ -622,7 +622,7 @@ test("create topology action refreshes the expanded file explorer tree", async (
   installSandboxFetch(t, entriesByPath, { topologyFiles });
   const disposeCreateDialog = setCreateTopologyDialogRequester(async () => ({
     endpointId: SANDBOX_ENDPOINT.id,
-    fileName: "labs/new.clab.yml",
+    fileName: "labs/new",
   }));
   t.after(disposeCreateDialog);
 

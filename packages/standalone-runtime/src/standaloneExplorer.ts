@@ -46,6 +46,7 @@ import {
 import {
   confirmRuntimeAction,
   deleteTopologyFileFlow,
+  normalizeTopologyFileNameForCreate,
   promptForCloneRepo,
   promptForCreateTopology,
   promptForEndpointSelection,
@@ -2593,14 +2594,15 @@ export function createStandaloneExplorerBridge(
       if (!createTopologyInput) {
         return;
       }
+      const fileName = normalizeTopologyFileNameForCreate(createTopologyInput.fileName);
       try {
         const created = await createTopologyFile({
           endpointId: createTopologyInput.endpointId,
-          fileName: createTopologyInput.fileName,
+          fileName,
         });
         refreshWorkspaceAfterMutation(createTopologyInput.endpointId);
         runtimeUiActions.notify(
-          `Created topology file "${createTopologyInput.fileName}".`,
+          `Created topology file "${fileName}".`,
           "success",
         );
         await options.loadTopologyFile(created.topologyRef, {
