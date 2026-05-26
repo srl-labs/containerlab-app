@@ -52,6 +52,35 @@ export interface LabState {
   containers: Map<string, ContainerState>;
 }
 
+export interface LabRuntimeSnapshotContainer {
+  name: string;
+  containerId?: string;
+  image?: string;
+  kind?: string;
+  state?: string;
+  status?: string;
+  ipv4Address?: string;
+  ipv6Address?: string;
+  labName?: string;
+  labPath?: string;
+  absLabPath?: string;
+  nodeName?: string;
+  owner?: string;
+}
+
+export interface LabRuntimeSnapshot {
+  containers: LabRuntimeSnapshotContainer[];
+  endpointId: string;
+  labName?: string;
+  topologyPath?: string;
+}
+
+export interface LabRemovalTarget {
+  endpointId?: string;
+  labName?: string;
+  topologyPath?: string;
+}
+
 interface LabStoreState {
   labs: Map<string, LabState>;
   labsByEndpoint: Map<string, Map<string, LabState>>;
@@ -61,6 +90,8 @@ interface LabStoreState {
   getAllLabs: () => Map<string, LabState>;
   getLabsForEndpoint: (endpointId: string) => Map<string, LabState>;
   processEvent: (endpointId: string, event: EventData) => void;
+  removeLabByTopology: (target: LabRemovalTarget) => void;
+  replaceLabSnapshot: (snapshot: LabRuntimeSnapshot) => void;
   setConnected: (endpointId: string, connected: boolean) => void;
   updateInterfaceNetemState: (update: InterfaceNetemUpdate) => void;
 }
@@ -216,6 +247,17 @@ function fallbackContainerStatus(state: string): string {
 function isRunningContainerState(state: string): boolean {
   const normalized = state.trim().toLowerCase();
   return normalized.includes("running") || normalized.includes("healthy");
+}
+
+function stateFromStatus(status: string | undefined): string {
+  const normalized = (status ?? "").trim().toLowerCase();
+  if (normalized === "up" || normalized.startsWith("up ")) {
+    return "running";
+  }
+  if (normalized.startsWith("exited")) {
+    return "exited";
+  }
+  return "";
 }
 
 function interfacesForContainerState(
@@ -649,6 +691,132 @@ function mergeLabsByEndpoint(
   return merged;
 }
 
+function firstSnapshotValue(
+  containers: LabRuntimeSnapshotContainer[],
+  pick: (container: LabRuntimeSnapshotContainer) => string | undefined
+): string {
+  for (const container of containers) {
+    const value = pick(container)?.trim();
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function snapshotTopologyPath(snapshot: LabRuntimeSnapshot): string {
+  return (
+    firstSnapshotValue(snapshot.containers, (container) => container.absLabPath || container.labPath) ||
+    snapshot.topologyPath ||
+    ""
+  );
+}
+
+function snapshotLabName(snapshot: LabRuntimeSnapshot): string {
+  return firstSnapshotValue(snapshot.containers, (container) => container.labName) || snapshot.labName || "";
+}
+
+function labMatchesRemovalTarget(lab: LabState, target: LabRemovalTarget): boolean {
+  if (target.endpointId && lab.endpointId !== target.endpointId) {
+    return false;
+  }
+
+  const targetPath = normalizeLabStorePath(target.topologyPath);
+  if (targetPath) {
+    if (normalizeLabStorePath(lab.topologyPath) === targetPath) {
+      return true;
+    }
+    return [...lab.containers.values()].some(
+      (container) => normalizeLabStorePath(container.labPath) === targetPath
+    );
+  }
+
+  const targetLabName = normalizeLabStoreName(target.labName);
+  return Boolean(targetLabName) && normalizeLabStoreName(lab.name) === targetLabName;
+}
+
+function buildContainerFromSnapshot(
+  endpointId: string,
+  container: LabRuntimeSnapshotContainer,
+  existing: ContainerState | undefined
+): ContainerState {
+  const status = container.status ?? existing?.status ?? "";
+  const state = container.state?.trim() || stateFromStatus(status) || existing?.state || "";
+  return {
+    endpointId,
+    name: container.name,
+    containerId: container.containerId ?? existing?.containerId ?? "",
+    labName: container.labName ?? existing?.labName ?? "",
+    labPath: container.absLabPath ?? container.labPath ?? existing?.labPath ?? "",
+    owner: container.owner ?? existing?.owner ?? "",
+    nodeName: container.nodeName ?? existing?.nodeName ?? "",
+    kind: container.kind ?? existing?.kind ?? "",
+    image: container.image ?? existing?.image ?? "",
+    state,
+    status,
+    ipv4Address: container.ipv4Address ?? existing?.ipv4Address ?? "N/A",
+    ipv6Address: container.ipv6Address ?? existing?.ipv6Address ?? "N/A",
+    interfaces: new Map(existing?.interfaces ?? [])
+  };
+}
+
+function replaceSnapshotInEndpointLabs(
+  endpointId: string,
+  endpointLabs: Map<string, LabState>,
+  snapshot: LabRuntimeSnapshot
+): Map<string, LabState> {
+  const topologyPath = snapshotTopologyPath(snapshot);
+  const labName = snapshotLabName(snapshot);
+  const firstContainerName = firstSnapshotValue(snapshot.containers, (container) => container.name);
+  const preferredLabKey = resolveLabStoreKey(topologyPath);
+  const existingEntry = resolveExistingLabEntry(
+    endpointLabs,
+    topologyPath,
+    labName,
+    firstContainerName,
+    preferredLabKey
+  );
+  const labKey = preferredLabKey ?? existingEntry?.key ?? resolveNamedLabStoreKey(labName);
+  if (!labKey) {
+    return endpointLabs;
+  }
+
+  const nextEndpointLabs = new Map(endpointLabs);
+  if (existingEntry && existingEntry.key !== labKey) {
+    nextEndpointLabs.delete(existingEntry.key);
+  }
+
+  const containers = new Map<string, ContainerState>();
+  for (const container of snapshot.containers) {
+    const containerName = container.name.trim();
+    if (!containerName) {
+      continue;
+    }
+    containers.set(
+      containerName,
+      buildContainerFromSnapshot(
+        endpointId,
+        { ...container, name: containerName },
+        existingEntry?.lab.containers.get(containerName)
+      )
+    );
+  }
+
+  if (containers.size === 0) {
+    nextEndpointLabs.delete(labKey);
+    return nextEndpointLabs;
+  }
+
+  nextEndpointLabs.set(labKey, {
+    endpointId,
+    name: labName || existingEntry?.lab.name || "",
+    owner: firstSnapshotValue(snapshot.containers, (container) => container.owner) || existingEntry?.lab.owner || "",
+    topologyPath: topologyPath || existingEntry?.lab.topologyPath || "",
+    containers
+  });
+  return nextEndpointLabs;
+}
+
 export const useLabStore = create<LabStoreState>((set, get) => ({
   labs: new Map(),
   labsByEndpoint: new Map(),
@@ -678,6 +846,67 @@ export const useLabStore = create<LabStoreState>((set, get) => ({
       };
     });
   },
+
+  removeLabByTopology: (target) =>
+    set((state) => {
+      let changed = false;
+      const labsByEndpoint = new Map(state.labsByEndpoint);
+
+      for (const [endpointId, endpointLabs] of state.labsByEndpoint.entries()) {
+        if (target.endpointId && endpointId !== target.endpointId) {
+          continue;
+        }
+
+        const nextEndpointLabs = new Map(endpointLabs);
+        for (const [labKey, lab] of endpointLabs.entries()) {
+          if (labMatchesRemovalTarget(lab, target)) {
+            nextEndpointLabs.delete(labKey);
+            changed = true;
+          }
+        }
+
+        if (nextEndpointLabs.size === 0) {
+          labsByEndpoint.delete(endpointId);
+        } else if (nextEndpointLabs.size !== endpointLabs.size) {
+          labsByEndpoint.set(endpointId, nextEndpointLabs);
+        }
+      }
+
+      if (!changed) {
+        return state;
+      }
+
+      return {
+        labsByEndpoint,
+        labs: mergeLabsByEndpoint(labsByEndpoint)
+      };
+    }),
+
+  replaceLabSnapshot: (snapshot) =>
+    set((state) => {
+      const endpointId = snapshot.endpointId.trim();
+      if (!endpointId) {
+        return state;
+      }
+
+      const previousEndpointLabs = state.labsByEndpoint.get(endpointId) ?? new Map();
+      const nextEndpointLabs = replaceSnapshotInEndpointLabs(endpointId, previousEndpointLabs, snapshot);
+      if (nextEndpointLabs === previousEndpointLabs) {
+        return state;
+      }
+
+      const labsByEndpoint = new Map(state.labsByEndpoint);
+      if (nextEndpointLabs.size === 0) {
+        labsByEndpoint.delete(endpointId);
+      } else {
+        labsByEndpoint.set(endpointId, nextEndpointLabs);
+      }
+
+      return {
+        labsByEndpoint,
+        labs: mergeLabsByEndpoint(labsByEndpoint)
+      };
+    }),
 
   updateInterfaceNetemState: (update) =>
     set((state) => {

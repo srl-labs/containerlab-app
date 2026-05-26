@@ -565,3 +565,89 @@ test("processEvent marks die events as stopped until a removal event arrives", (
   assert.equal(container, undefined);
   assert.equal(useLabStore.getState().labs.size, 0);
 });
+
+test("removeLabByTopology removes endpoint-scoped lab state", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "start",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      state: "running"
+    }
+  });
+
+  store.removeLabByTopology({
+    endpointId: ENDPOINT_ID,
+    topologyPath: "/labs/demo.clab.yml"
+  });
+
+  assert.equal(useLabStore.getState().labs.size, 0);
+  assert.equal(useLabStore.getState().labsByEndpoint.get(ENDPOINT_ID), undefined);
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "interface-stats",
+    action: "stats",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml",
+      interface: "e1-1",
+      state: "up"
+    }
+  });
+
+  const container = firstLab()?.containers.get("clab-demo-srl1");
+  assert.equal(container?.state, "up");
+  assert.notEqual(container?.state, "exited");
+});
+
+test("replaceLabSnapshot refreshes state and drops stale containers", () => {
+  const store = useLabStore.getState();
+
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "die",
+    attributes: {
+      name: "clab-demo-srl1",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+  store.processEvent(ENDPOINT_ID, {
+    type: "container",
+    action: "die",
+    attributes: {
+      name: "clab-demo-srl2",
+      lab: "demo",
+      "lab-path": "/labs/demo.clab.yml"
+    }
+  });
+
+  store.replaceLabSnapshot({
+    endpointId: ENDPOINT_ID,
+    labName: "demo",
+    topologyPath: "/labs/demo.clab.yml",
+    containers: [
+      {
+        name: "clab-demo-srl1",
+        labName: "demo",
+        absLabPath: "/labs/demo.clab.yml",
+        nodeName: "srl1",
+        status: "Up 2 seconds"
+      }
+    ]
+  });
+
+  const lab = firstLab();
+  assert.ok(lab);
+  assert.equal(lab.containers.size, 1);
+  assert.equal(lab.containers.get("clab-demo-srl2"), undefined);
+  const container = lab.containers.get("clab-demo-srl1");
+  assert.equal(container?.state, "running");
+  assert.equal(container?.status, "Up 2 seconds");
+  assert.equal(container?.nodeName, "srl1");
+});

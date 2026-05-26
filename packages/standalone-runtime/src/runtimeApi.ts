@@ -24,6 +24,7 @@ export interface InspectContainerInfo {
   labName: string;
   labPath: string;
   absLabPath: string;
+  nodeName: string;
   group: string;
   owner: string;
 }
@@ -309,6 +310,7 @@ function normalizeInspectContainer(value: unknown): InspectContainerInfo {
     labName: pickString(record, "labName", "lab_name"),
     labPath: pickString(record, "labPath", "lab_path"),
     absLabPath: pickString(record, "absLabPath", "abs_lab_path"),
+    nodeName: pickString(record, "nodeName", "node_name", "clab-node-name"),
     group: pickString(record, "group"),
     owner: pickString(record, "owner")
   };

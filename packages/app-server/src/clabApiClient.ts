@@ -1505,7 +1505,7 @@ export function buildWebSocketUrl(baseUrl: string, path: string): string {
   return url.toString();
 }
 
-function isUpstreamNetworkError(error: unknown): boolean {
+export function isUpstreamNetworkError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   if (
     message === "fetch failed" ||
