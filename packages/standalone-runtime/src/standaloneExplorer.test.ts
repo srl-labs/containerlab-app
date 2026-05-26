@@ -191,9 +191,7 @@ function findNode(
 }
 
 function fileRootNode(snapshot: ExplorerSnapshotMessage): ExplorerNode {
-  const fileSection = snapshot.sections.find(
-    (section) => section.id === "fileExplorer",
-  );
+  const fileSection = fileExplorerSection(snapshot);
   assert.ok(fileSection, "expected file explorer section");
   const root = fileSection.nodes.find(
     (node) => node.id === `file-root:${SANDBOX_ENDPOINT.id}`,
@@ -206,13 +204,48 @@ function fileExplorerHasNode(
   snapshot: ExplorerSnapshotMessage,
   id: string,
 ): boolean {
-  const fileSection = snapshot.sections.find(
-    (section) => section.id === "fileExplorer",
-  );
+  const fileSection = fileExplorerSection(snapshot);
   const root = fileSection?.nodes.find(
     (node) => node.id === `file-root:${SANDBOX_ENDPOINT.id}`,
   );
   return Boolean(root && findNode(root.children, id));
+}
+
+function fileExplorerSection(
+  snapshot: ExplorerSnapshotMessage,
+): ExplorerSnapshotMessage["sections"][number] | undefined {
+  return snapshot.sections.find((section) => {
+    const sectionId = String(section.id);
+    return sectionId === "fileExplorer" || sectionId === "localLabs";
+  });
+}
+
+function expandedBySection(
+  state: ExplorerUiState,
+): Partial<Record<string, string[]>> | undefined {
+  return state.expandedBySection as
+    | Partial<Record<string, string[]>>
+    | undefined;
+}
+
+function fileExplorerExpandedIds(state: ExplorerUiState): string[] | undefined {
+  const expanded = expandedBySection(state);
+  return expanded?.fileExplorer ?? expanded?.localLabs;
+}
+
+function withFileExplorerExpandedIds(
+  state: ExplorerUiState,
+  itemIds: string[],
+): ExplorerUiState {
+  const expanded = expandedBySection(state);
+  return {
+    ...state,
+    expandedBySection: {
+      ...expanded,
+      fileExplorer: itemIds,
+      localLabs: itemIds,
+    } as ExplorerUiState["expandedBySection"],
+  };
 }
 
 function sectionById(
@@ -424,7 +457,7 @@ test("pages sandbox default expansion opens endpoint and file explorer trees", a
     `endpoint:${SANDBOX_ENDPOINT.id}`,
     `endpoint-section:local:${SANDBOX_ENDPOINT.id}`,
   ]);
-  assert.deepEqual(state.expandedBySection?.fileExplorer, [
+  assert.deepEqual(fileExplorerExpandedIds(state), [
     `file-root:${SANDBOX_ENDPOINT.id}`,
     `file:${SANDBOX_ENDPOINT.id}:labs`,
     `file:${SANDBOX_ENDPOINT.id}:labs/configs`,
@@ -504,13 +537,9 @@ test("pages sandbox default expansion respects manual file collapse", async (t) 
   await persistedSnapshot;
 
   const collapsedSnapshot = waitForNextExplorerSnapshot(bridge);
-  bridge.explorer.persistUiState({
-    ...expandedState,
-    expandedBySection: {
-      ...expandedState.expandedBySection,
-      fileExplorer: [],
-    },
-  });
+  bridge.explorer.persistUiState(
+    withFileExplorerExpandedIds(expandedState, []),
+  );
 
   assert.equal(fileRootNode(await collapsedSnapshot).children.length, 0);
 });

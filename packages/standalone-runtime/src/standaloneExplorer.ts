@@ -100,6 +100,13 @@ import {
 
 const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
 const ENDPOINT_HEALTH_CACHE_TTL_MS = 30_000;
+const RUNNING_LABS_SECTION_ID = "runningLabs" satisfies ExplorerSectionId;
+const LOCAL_LABS_SECTION_ID = "localLabs" satisfies ExplorerSectionId;
+const FILE_EXPLORER_SECTION_ID = "fileExplorer";
+const FILE_EXPLORER_STATE_SECTION_IDS = [
+  FILE_EXPLORER_SECTION_ID,
+  LOCAL_LABS_SECTION_ID,
+] as const;
 const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.addToWorkspace",
   "containerlab.lab.openFolderInNewWindow",
@@ -648,7 +655,7 @@ type ExplorerSnapshotMessage = Extract<
   ExplorerIncomingMessage,
   { command: "snapshot" }
 >;
-type ExpandedBySection = NonNullable<ExplorerUiState["expandedBySection"]>;
+type ExpandedBySection = Partial<Record<string, string[]>>;
 type ExplorerTreeProviderLike = {
   getChildren(
     element?: ExplorerTreeItem,
@@ -1256,7 +1263,7 @@ function cloneExpandedBySection(
   for (const [sectionId, itemIds] of Object.entries(
     expandedBySection ?? {},
   )) {
-    next[sectionId as ExplorerSectionId] = [...itemIds];
+    next[sectionId] = [...itemIds];
   }
   return next;
 }
@@ -1302,10 +1309,10 @@ export function createStandaloneExplorerBridge(
   const gottyLinksByLab = new Map<string, string>();
   const endpointHealthCache = new Map<string, EndpointHealthCacheEntry>();
   const fileExplorerCache = new Map<string, FileExplorerEntry[]>();
-  const defaultExpandedBySection: Partial<Record<ExplorerSectionId, string[]>> =
-    {};
-  const defaultExpandedSections = new Set<ExplorerSectionId>();
-  const userManagedExpandedSections = new Set<ExplorerSectionId>();
+  const defaultExpandedBySection: ExpandedBySection = {};
+  const defaultExpandedSections = new Set<string>();
+  const userManagedExpandedSections = new Set<string>();
+  let nativeFileExplorerSectionObserved = false;
   let scheduleHealthSnapshotRefresh = (_delay?: number): void => {};
 
   function sendExplorerMessage(message: ExplorerIncomingMessage): void {
@@ -1552,8 +1559,23 @@ export function createStandaloneExplorerBridge(
     }));
   }
 
+  function fileExplorerExpandedItemIds(): Set<string> {
+    const expanded = explorerUiState.expandedBySection as
+      | ExpandedBySection
+      | undefined;
+    const itemIds = nativeFileExplorerSectionObserved
+      ? (expanded?.[FILE_EXPLORER_SECTION_ID] ??
+        expanded?.[LOCAL_LABS_SECTION_ID] ??
+        [])
+      : (expanded?.[LOCAL_LABS_SECTION_ID] ??
+        expanded?.[FILE_EXPLORER_SECTION_ID] ??
+        []);
+    return new Set(itemIds);
+  }
+
   function buildFileExplorerProvider(
     filterText: string,
+    respectExpandedState = true,
   ): ExplorerTreeProviderLike {
     const normalizedFilter = filterText.trim().toLowerCase();
     const entryMatchesFilter = (entry: FileExplorerEntry): boolean => {
@@ -1588,6 +1610,13 @@ export function createStandaloneExplorerBridge(
         }
 
         if (!element.endpointId || element.resourceKind !== "directory") {
+          return [];
+        }
+        if (
+          respectExpandedState &&
+          element.id &&
+          !fileExplorerExpandedItemIds().has(element.id)
+        ) {
           return [];
         }
 
@@ -1662,16 +1691,24 @@ export function createStandaloneExplorerBridge(
     defaultExpandedBySection.runningLabs = collectExpandableTreeItemIds(
       input.runningItems,
     );
-    defaultExpandedBySection.fileExplorer =
+    const defaultFileExplorerIds =
       await collectDefaultFileExplorerExpandedIds(input.fileProvider);
-    defaultExpandedSections.add("runningLabs");
-    defaultExpandedSections.add("fileExplorer");
+    for (const sectionId of FILE_EXPLORER_STATE_SECTION_IDS) {
+      defaultExpandedBySection[sectionId] = defaultFileExplorerIds;
+    }
+    defaultExpandedSections.add(RUNNING_LABS_SECTION_ID);
+    for (const sectionId of FILE_EXPLORER_STATE_SECTION_IDS) {
+      defaultExpandedSections.add(sectionId);
+    }
 
     const nextExpanded = cloneExpandedBySection(
       explorerUiState.expandedBySection,
     );
     let changed = false;
-    for (const sectionId of ["runningLabs", "fileExplorer"] as const) {
+    for (const sectionId of [
+      RUNNING_LABS_SECTION_ID,
+      ...FILE_EXPLORER_STATE_SECTION_IDS,
+    ] as const) {
       if (userManagedExpandedSections.has(sectionId)) {
         continue;
       }
@@ -1688,7 +1725,8 @@ export function createStandaloneExplorerBridge(
 
     explorerUiState = {
       ...explorerUiState,
-      expandedBySection: nextExpanded,
+      expandedBySection:
+        nextExpanded as ExplorerUiState["expandedBySection"],
     };
     sendExplorerMessage({ command: "uiState", state: explorerUiState });
   }
@@ -1698,8 +1736,13 @@ export function createStandaloneExplorerBridge(
       return;
     }
 
-    const expandedBySection = state.expandedBySection;
-    for (const sectionId of ["runningLabs", "fileExplorer"] as const) {
+    const expandedBySection = state.expandedBySection as
+      | ExpandedBySection
+      | undefined;
+    for (const sectionId of [
+      RUNNING_LABS_SECTION_ID,
+      ...FILE_EXPLORER_STATE_SECTION_IDS,
+    ] as const) {
       const nextIds = expandedBySection?.[sectionId];
       if (!defaultExpandedSections.has(sectionId) || nextIds === undefined) {
         continue;
@@ -1714,15 +1757,38 @@ export function createStandaloneExplorerBridge(
     }
   }
 
+  function shouldRefreshOnExplorerUiStateChanged(
+    previous: ExplorerUiState,
+    next: ExplorerUiState,
+  ): boolean {
+    const previousExpanded = previous.expandedBySection as
+      | Partial<Record<string, string[]>>
+      | undefined;
+    const nextExpanded = next.expandedBySection as
+      | Partial<Record<string, string[]>>
+      | undefined;
+    return FILE_EXPLORER_STATE_SECTION_IDS.some(
+      (sectionId) =>
+        !stringArraysEqual(
+          previousExpanded?.[sectionId],
+          nextExpanded?.[sectionId],
+        ),
+    );
+  }
+
   function transformSnapshotForEndpointRoots(
     message: ExplorerSnapshotMessage,
   ): ExplorerSnapshotMessage {
     const runningSection = message.sections.find(
-      (section) => section.id === "runningLabs",
+      (section) => section.id === RUNNING_LABS_SECTION_ID,
     );
     const localSection = message.sections.find(
-      (section) => section.id === "localLabs",
+      (section) => section.id === LOCAL_LABS_SECTION_ID,
     );
+    const hasNativeFileExplorerSection = message.sections.some(
+      (section) => String(section.id) === FILE_EXPLORER_SECTION_ID,
+    );
+    nativeFileExplorerSectionObserved ||= hasNativeFileExplorerSection;
     if (!runningSection) {
       return message;
     }
@@ -1730,21 +1796,36 @@ export function createStandaloneExplorerBridge(
     return {
       ...message,
       sections: message.sections
-        .filter((section) => section.id !== "localLabs")
-        .map((section) => {
-          if (section.id !== "runningLabs") {
-            return section;
+        .flatMap((section) => {
+          if (section.id === LOCAL_LABS_SECTION_ID) {
+            if (hasNativeFileExplorerSection) {
+              return [];
+            }
+            return [
+              {
+                ...section,
+                label: "File Explorer",
+                count: section.nodes.length,
+                appearance: "bareTree" as const,
+              },
+            ];
           }
-          return {
-            ...section,
-            label: "Endpoints",
-            count: options.getEndpoints().length,
-            appearance: "bareTree",
-            toolbarActions: dedupeExplorerActions([
-              ...section.toolbarActions,
-              ...(localSection?.toolbarActions ?? []),
-            ]),
-          };
+
+          if (section.id !== RUNNING_LABS_SECTION_ID) {
+            return [section];
+          }
+          return [
+            {
+              ...section,
+              label: "Endpoints",
+              count: options.getEndpoints().length,
+              appearance: "bareTree" as const,
+              toolbarActions: dedupeExplorerActions([
+                ...section.toolbarActions,
+                ...(localSection?.toolbarActions ?? []),
+              ]),
+            },
+          ];
         }),
     };
   }
@@ -1754,18 +1835,23 @@ export function createStandaloneExplorerBridge(
   ): Promise<ExplorerSnapshotProviders> {
     const files = await options.listTopologyFiles();
     const runningItems = buildEndpointGroupedItems(filterText, files);
-    const localItems: ExplorerTreeItem[] = [];
     const helpItems = buildHelpItems();
     const fileProvider = buildFileExplorerProvider(filterText);
-    await applyDefaultExpandedExplorerState({ fileProvider, runningItems });
+    const defaultExpansionFileProvider = buildFileExplorerProvider(
+      filterText,
+      false,
+    );
+    await applyDefaultExpandedExplorerState({
+      fileProvider: defaultExpansionFileProvider,
+      runningItems,
+    });
 
     const providers: StandaloneExplorerSnapshotProviders = {
       runningProvider: new SimpleExplorerProvider(
         runningItems,
       ) as ExplorerSnapshotProviders["runningProvider"],
-      localProvider: new SimpleExplorerProvider(
-        localItems,
-      ) as ExplorerSnapshotProviders["localProvider"],
+      localProvider:
+        fileProvider as ExplorerSnapshotProviders["localProvider"],
       fileProvider,
       helpProvider: new SimpleExplorerProvider(
         helpItems,
@@ -3252,12 +3338,13 @@ export function createStandaloneExplorerBridge(
         hiddenCommandIds,
         commandMetadata: STANDALONE_TRANSFER_COMMAND_METADATA,
         sectionOrder: [
-          "runningLabs",
-          "localLabs",
-          "fileExplorer",
+          RUNNING_LABS_SECTION_ID,
+          LOCAL_LABS_SECTION_ID,
+          FILE_EXPLORER_SECTION_ID,
           "helpFeedback",
-        ],
-        expandedBySection: explorerUiState.expandedBySection,
+        ] as unknown as ExplorerSectionId[],
+        expandedBySection:
+          explorerUiState.expandedBySection as ExplorerUiState["expandedBySection"],
       };
     },
     onFilterTextChanged(filterText) {
@@ -3268,16 +3355,7 @@ export function createStandaloneExplorerBridge(
       explorerUiState = state ?? {};
     },
     refreshOnUiStateChanged(previous, next) {
-      const previousExpanded = previous.expandedBySection as
-        | Partial<Record<string, string[]>>
-        | undefined;
-      const nextExpanded = next.expandedBySection as
-        | Partial<Record<string, string[]>>
-        | undefined;
-      return !stringArraysEqual(
-        previousExpanded?.fileExplorer,
-        nextExpanded?.fileExplorer,
-      );
+      return shouldRefreshOnExplorerUiStateChanged(previous, next);
     },
   } as Parameters<typeof createExplorerController>[0] & {
     refreshOnUiStateChanged?: (
@@ -3297,7 +3375,11 @@ export function createStandaloneExplorerBridge(
         return controller.invokeAction(actionRef);
       },
       persistUiState(state) {
+        const previous = explorerUiState;
         void controller.persistUiState(state);
+        if (shouldRefreshOnExplorerUiStateChanged(previous, state ?? {})) {
+          controller.scheduleSnapshot(0);
+        }
       },
       setFilter(filterText) {
         void controller.setFilter(filterText);

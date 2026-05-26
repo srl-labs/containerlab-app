@@ -1,7 +1,7 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { ClabApiClient } from "./clabApiClient.ts";
+import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient.ts";
 import type {
   InspectContainerInfo,
   RuntimeImageActionResponse,
@@ -171,7 +171,7 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   if (error instanceof RequestError) {
     return reply.status(error.statusCode).send({ error: message });
   }
-  return reply.status(500).send({ error: message });
+  return reply.status(getHttpErrorStatus(error) ?? 500).send({ error: message });
 }
 
 function resolveRequestedEndpointId(target?: RuntimeTargetBody): string | undefined {

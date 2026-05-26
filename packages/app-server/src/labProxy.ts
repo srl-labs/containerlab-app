@@ -5,7 +5,7 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { ClabApiClient } from "./clabApiClient.ts";
+import { getHttpErrorStatus, type ClabApiClient } from "./clabApiClient.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
 import {
   extractEndpointIdFromTopologyId,
@@ -169,7 +169,7 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   if (error instanceof RequestError) {
     return reply.status(error.statusCode).send({ error: message });
   }
-  return reply.status(500).send({ error: message });
+  return reply.status(getHttpErrorStatus(error) ?? 500).send({ error: message });
 }
 
 async function openAndForwardLifecycleStream(
