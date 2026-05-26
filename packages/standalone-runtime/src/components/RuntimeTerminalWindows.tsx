@@ -19,8 +19,10 @@ import CopyIcon from "@mui/icons-material/ContentCopy";
 import DownloadIcon from "@mui/icons-material/Download";
 import ExportLogIcon from "@mui/icons-material/Subject";
 import MinimizeIcon from "@mui/icons-material/Minimize";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ResetIcon from "@mui/icons-material/RestartAlt";
 import RestoreIcon from "@mui/icons-material/OpenInFull";
+import SplitIcon from "@mui/icons-material/ViewColumn";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
@@ -39,12 +41,15 @@ import {
   resolveTerminalSshUsername
 } from "../runtimeTerminalSettings";
 import type { TerminalPreferences } from "../runtimeTerminalSettings";
+import { buildDetachedTerminalUrl } from "../runtimeDetachedTerminal";
 import type { ContainerState, LabState } from "../stores/labStore";
 import { useLabStore } from "../stores/labStore";
 import {
   runtimeUiActions,
   useRuntimeUiStore,
-  type RuntimeTerminalWindow
+  type RuntimeTerminalGroup,
+  type RuntimeTerminalPane,
+  type RuntimeTerminalShell
 } from "../stores/runtimeUiStore";
 import { findLabStateForTopology } from "../standaloneHostShared";
 import {
@@ -89,7 +94,7 @@ function findRuntimeContainer(
   input: {
     endpointId?: string;
     nodeName: string;
-    topologyRef?: RuntimeTerminalWindow["topologyRef"];
+    topologyRef?: RuntimeTerminalPane["topologyRef"];
   }
 ): ContainerState | undefined {
   const topologyHint = input.topologyRef?.yamlPath
@@ -149,12 +154,12 @@ function handleTerminalSocketPayload(input: {
   payload: TerminalSocketPayload;
   socket: WebSocket;
   terminal: Terminal | null;
-  windowId: string;
+  paneId: string;
 }): void {
-  const { fitAddon, payload, socket, terminal, windowId } = input;
+  const { fitAddon, payload, socket, terminal, paneId } = input;
   switch (payload.type) {
     case "ready":
-      runtimeUiActions.setTerminalReady(windowId);
+      runtimeUiActions.setTerminalReady(paneId);
       fitAddon?.fit();
       sendTerminalResize(socket, terminal);
       break;
@@ -170,13 +175,13 @@ function handleTerminalSocketPayload(input: {
           errorMessage ? ` ${errorMessage}` : ""
         }\r\n`
       );
-      runtimeUiActions.setTerminalExited(windowId, payload.exitCode, errorMessage);
+      runtimeUiActions.setTerminalExited(paneId, payload.exitCode, errorMessage);
       break;
     }
     case "error":
       if (payload.error) {
         terminal?.write(`\r\n[error] ${payload.error}\r\n`);
-        runtimeUiActions.setTerminalError(windowId, payload.error);
+        runtimeUiActions.setTerminalError(paneId, payload.error);
       }
       break;
     default:
@@ -188,17 +193,17 @@ function normalizeTerminalOutput(value: string): string {
   return value.replace(/\r?\n/g, "\r\n");
 }
 
-function statusColor(windowState: RuntimeTerminalWindow): "default" | "error" | "success" | "warning" {
-  switch (windowState.state) {
-    case "ready":
-      return "success";
-    case "error":
-      return "error";
-    case "exited":
-      return "warning";
-    default:
-      return "default";
+function terminalStatusDotColor(paneState: RuntimeTerminalPane | undefined): string {
+  if (paneState?.state === "ready") {
+    return "success.main";
   }
+  if (paneState?.state === "error") {
+    return "error.main";
+  }
+  if (paneState?.state === "exited") {
+    return "warning.main";
+  }
+  return "text.disabled";
 }
 
 function readCssColor(styles: CSSStyleDeclaration, property: string, fallback: string): string {
@@ -261,8 +266,6 @@ function consumeToolbarMouseEvent(event: React.MouseEvent): void {
   event.stopPropagation();
 }
 
-const FONT_SIZE_PERSIST_DELAY_MS = 220;
-
 function hasTerminalDomFocus(root: HTMLDivElement | null): boolean {
   if (!root) {
     return false;
@@ -271,69 +274,92 @@ function hasTerminalDomFocus(root: HTMLDivElement | null): boolean {
   return activeElement instanceof Node && root.contains(activeElement);
 }
 
-function TerminalWindow({
+function activePaneForGroup(group: RuntimeTerminalGroup | undefined): RuntimeTerminalPane | undefined {
+  return group?.panes.find((pane) => pane.id === group.activePaneId) ?? group?.panes[0];
+}
+
+function terminalPaneLabel(pane: RuntimeTerminalPane, index: number, count: number): string {
+  return count > 1 ? `${index + 1}. ${pane.title}` : pane.title;
+}
+
+function openDetachedTerminalWindow(paneState: RuntimeTerminalPane): void {
+  const popup = window.open(buildDetachedTerminalUrl(paneState), "_blank", "noopener,noreferrer");
+  if (!popup) {
+    runtimeUiActions.notify("Browser blocked the terminal popup.", "warning");
+  }
+}
+
+const FONT_SIZE_PERSIST_DELAY_MS = 220;
+
+export function RuntimeTerminalPaneView({
+  active,
+  actionsAnchorElement,
+  actionsOpen = false,
+  hidden,
+  onCloseActions,
   onSaveTerminalPreferences,
-  terminalPreferences,
-  windowState
+  paneState,
+  popoverZIndex,
+  terminalPreferences
 }: {
+  actionsAnchorElement?: HTMLElement | null;
+  active: boolean;
+  actionsOpen?: boolean;
+  hidden: boolean;
+  onCloseActions?: () => void;
   onSaveTerminalPreferences: (
     next: TerminalPreferences,
     options?: {
       notify?: boolean;
     }
   ) => void;
+  paneState: RuntimeTerminalPane;
+  popoverZIndex?: number;
   terminalPreferences: TerminalPreferences;
-  windowState: RuntimeTerminalWindow;
 }) {
   const labs = useLabStore((state) => state.labs);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const websocketRef = useRef<WebSocket | null>(null);
-  const dragStateRef = useRef<{
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-    nextX: number;
-    nextY: number;
-    frameId: number | null;
-  } | null>(null);
-  const latestWindowRef = useRef(windowState);
+  const latestPaneRef = useRef(paneState);
+  const latestHiddenRef = useRef(hidden);
   const sessionClosedRef = useRef(false);
   const latestPreferencesRef = useRef(terminalPreferences);
   const fontSizePreviewRef = useRef(terminalPreferences.fontSize);
   const fontSizePersistTimerRef = useRef<number | null>(null);
   const [fontSizePreview, setFontSizePreview] = useState(terminalPreferences.fontSize);
-  const [actionsAnchorElement, setActionsAnchorElement] = useState<HTMLElement | null>(null);
-  const focusedTerminalId = useRuntimeUiStore((state) => {
-    let focused: RuntimeTerminalWindow | null = null;
-    for (const terminal of state.terminals) {
-      if (!focused || terminal.zIndex > focused.zIndex) {
-        focused = terminal;
-      }
-    }
-    return focused?.id ?? null;
-  });
-  const actionsPopoverOpen = actionsAnchorElement !== null;
-  const isTerminalFocused = focusedTerminalId === windowState.id && !windowState.minimized;
-  const isOutputTerminal = windowState.protocol === "output";
+  const isOutputTerminal = paneState.protocol === "output";
 
   const runtimeContainer = useMemo(
     () =>
       findRuntimeContainer(labs, {
-        endpointId: windowState.endpointId,
-        topologyRef: windowState.topologyRef,
-        nodeName: windowState.nodeName
+        endpointId: paneState.endpointId,
+        topologyRef: paneState.topologyRef,
+        nodeName: paneState.nodeName
       }),
-    [labs, windowState.endpointId, windowState.nodeName, windowState.topologyRef]
+    [labs, paneState.endpointId, paneState.nodeName, paneState.topologyRef]
   );
 
   useEffect(() => {
-    latestWindowRef.current = windowState;
-  }, [windowState]);
+    latestPaneRef.current = paneState;
+  }, [paneState]);
+
+  useEffect(() => {
+    latestHiddenRef.current = hidden;
+    if (!hidden) {
+      const frame = window.requestAnimationFrame(() => {
+        fitAddonRef.current?.fit();
+        const socket = websocketRef.current;
+        if (socket?.readyState === WebSocket.OPEN) {
+          sendTerminalResize(socket, xtermRef.current);
+        }
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+    return undefined;
+  }, [hidden]);
 
   useEffect(() => {
     latestPreferencesRef.current = terminalPreferences;
@@ -362,11 +388,11 @@ function TerminalWindow({
     term.open(terminalRef.current);
     requestAnimationFrame(() => fitAddon.fit());
     if (isOutputTerminal) {
-      const output = (windowState.initialOutput ?? "").trim();
+      const output = (paneState.initialOutput ?? "").trim();
       term.write(output.length > 0 ? `${normalizeTerminalOutput(output)}\r\n` : "No output returned.\r\n");
-      runtimeUiActions.setTerminalReady(windowState.id);
+      runtimeUiActions.setTerminalReady(paneState.id);
     } else {
-      term.write(`Opening ${windowState.protocol} terminal for ${windowState.nodeName}...\r\n`);
+      term.write(`Opening ${paneState.protocol} terminal for ${paneState.nodeName}...\r\n`);
     }
 
     const dataDisposable = term.onData((data) => {
@@ -380,23 +406,13 @@ function TerminalWindow({
     });
 
     const observer = new ResizeObserver(() => {
-      if (latestWindowRef.current.minimized) {
+      if (latestHiddenRef.current) {
         return;
       }
       fitAddon.fit();
-      runtimeUiActions.updateTerminalLayout(windowState.id, {
-        width: rootRef.current?.offsetWidth,
-        height: rootRef.current?.offsetHeight
-      });
       const socket = websocketRef.current;
       if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(
-          JSON.stringify({
-            type: "resize",
-            cols: term.cols,
-            rows: term.rows
-          })
-        );
+        sendTerminalResize(socket, term);
       }
     });
 
@@ -406,7 +422,6 @@ function TerminalWindow({
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
-    resizeObserverRef.current = observer;
 
     return () => {
       dataDisposable.dispose();
@@ -414,14 +429,13 @@ function TerminalWindow({
       xtermRef.current?.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
-      resizeObserverRef.current = null;
     };
   }, [
     isOutputTerminal,
-    windowState.id,
-    windowState.initialOutput,
-    windowState.nodeName,
-    windowState.protocol
+    paneState.id,
+    paneState.initialOutput,
+    paneState.nodeName,
+    paneState.protocol
   ]);
 
   useEffect(() => {
@@ -467,20 +481,16 @@ function TerminalWindow({
   }, [fontSizePreview]);
 
   useEffect(() => {
-    fitAddonRef.current?.fit();
-  }, [windowState.width, windowState.height, windowState.minimized]);
-
-  useEffect(() => {
-    if (windowState.state !== "creating" || xtermRef.current === null) {
+    if (paneState.state !== "creating" || xtermRef.current === null) {
       return;
     }
     if (isOutputTerminal) {
-      runtimeUiActions.setTerminalReady(windowState.id);
+      runtimeUiActions.setTerminalReady(paneState.id);
       return;
     }
-    const sessionProtocol = windowState.protocol;
+    const sessionProtocol = paneState.protocol;
     if (sessionProtocol === "output") {
-      runtimeUiActions.setTerminalReady(windowState.id);
+      runtimeUiActions.setTerminalReady(paneState.id);
       return;
     }
 
@@ -494,10 +504,10 @@ function TerminalWindow({
     const rows = xtermRef.current.rows || 36;
 
     void openTerminalSession({
-      endpointId: windowState.endpointId,
-      sessionId: windowState.sessionId,
-      topologyRef: windowState.topologyRef,
-      nodeName: windowState.nodeName,
+      endpointId: paneState.endpointId,
+      sessionId: paneState.sessionId,
+      topologyRef: paneState.topologyRef,
+      nodeName: paneState.nodeName,
       protocol: sessionProtocol,
       cols,
       rows,
@@ -506,16 +516,16 @@ function TerminalWindow({
     })
       .then((session) => {
         if (cancelled) {
-          void closeTerminalSession(session.sessionId, windowState.endpointId).catch(() => {});
+          void closeTerminalSession(session.sessionId, paneState.endpointId).catch(() => {});
           return;
         }
-        runtimeUiActions.setTerminalSession(windowState.id, session.sessionId);
-        runtimeUiActions.setTerminalConnecting(windowState.id);
+        runtimeUiActions.setTerminalSession(paneState.id, session.sessionId);
+        runtimeUiActions.setTerminalConnecting(paneState.id);
       })
       .catch((error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
         xtermRef.current?.write(`\r\n[error] ${message}\r\n`);
-        runtimeUiActions.setTerminalError(windowState.id, message);
+        runtimeUiActions.setTerminalError(paneState.id, message);
       });
 
     return () => {
@@ -523,25 +533,25 @@ function TerminalWindow({
     };
   }, [
     isOutputTerminal,
+    paneState.endpointId,
+    paneState.id,
+    paneState.nodeName,
+    paneState.protocol,
+    paneState.sessionId,
+    paneState.state,
+    paneState.topologyRef,
     runtimeContainer?.kind,
     terminalPreferences.sshUserMapping,
-    terminalPreferences.telnetPort,
-    windowState.endpointId,
-    windowState.id,
-    windowState.nodeName,
-    windowState.protocol,
-    windowState.sessionId,
-    windowState.state,
-    windowState.topologyRef
+    terminalPreferences.telnetPort
   ]);
 
   useEffect(() => {
-    if (!windowState.terminalSessionId || websocketRef.current || xtermRef.current === null) {
+    if (!paneState.terminalSessionId || websocketRef.current || xtermRef.current === null) {
       return;
     }
 
     sessionClosedRef.current = false;
-    const socket = connectTerminalSessionWebSocket(windowState.terminalSessionId, windowState.endpointId);
+    const socket = connectTerminalSessionWebSocket(paneState.terminalSessionId, paneState.endpointId);
     websocketRef.current = socket;
 
     socket.onmessage = (event) => {
@@ -551,26 +561,26 @@ function TerminalWindow({
           payload: JSON.parse(String(event.data)) as TerminalSocketPayload,
           socket,
           terminal: xtermRef.current,
-          windowId: windowState.id
+          paneId: paneState.id
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        runtimeUiActions.setTerminalError(windowState.id, message);
+        runtimeUiActions.setTerminalError(paneState.id, message);
       }
     };
 
     socket.onerror = () => {
-      runtimeUiActions.setTerminalError(windowState.id, "Terminal connection failed.");
+      runtimeUiActions.setTerminalError(paneState.id, "Terminal connection failed.");
     };
 
     socket.onclose = () => {
       websocketRef.current = null;
-      const latestWindow = latestWindowRef.current;
-      if (!sessionClosedRef.current && latestWindow.state !== "exited" && latestWindow.state !== "error") {
+      const latestPane = latestPaneRef.current;
+      if (!sessionClosedRef.current && latestPane.state !== "exited" && latestPane.state !== "error") {
         runtimeUiActions.setTerminalExited(
-          latestWindow.id,
-          latestWindow.exitCode,
-          latestWindow.error ?? "Connection closed."
+          latestPane.id,
+          latestPane.exitCode,
+          latestPane.error ?? "Connection closed."
         );
       }
     };
@@ -580,21 +590,21 @@ function TerminalWindow({
       socket.close();
       websocketRef.current = null;
     };
-  }, [windowState.endpointId, windowState.id, windowState.terminalSessionId]);
+  }, [paneState.endpointId, paneState.id, paneState.terminalSessionId]);
 
   useEffect(() => {
     return () => {
-      const sessionId = windowState.terminalSessionId;
+      const sessionId = paneState.terminalSessionId;
       const socket = websocketRef.current;
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: "close" }));
         socket.close();
       }
       if (sessionId) {
-        void closeTerminalSession(sessionId, windowState.endpointId).catch(() => {});
+        void closeTerminalSession(sessionId, paneState.endpointId).catch(() => {});
       }
     };
-  }, [windowState.endpointId, windowState.terminalSessionId]);
+  }, [paneState.endpointId, paneState.terminalSessionId]);
 
   useEffect(() => {
     return () => {
@@ -604,96 +614,6 @@ function TerminalWindow({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (windowState.minimized) {
-      setActionsAnchorElement(null);
-    }
-  }, [windowState.minimized]);
-
-  const handleHeaderMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (windowState.minimized) {
-      runtimeUiActions.setTerminalMinimized(windowState.id, false);
-    }
-    runtimeUiActions.focusTerminal(windowState.id);
-    const latestWindow = latestWindowRef.current;
-    dragStateRef.current = {
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: latestWindow.x,
-      originY: latestWindow.y,
-      nextX: latestWindow.x,
-      nextY: latestWindow.y,
-      frameId: null
-    };
-
-    if (rootRef.current) {
-      rootRef.current.style.willChange = "transform";
-      rootRef.current.style.transition = "none";
-    }
-
-    const applyDragPreview = () => {
-      const drag = dragStateRef.current;
-      const root = rootRef.current;
-      if (!drag || !root) {
-        return;
-      }
-      drag.frameId = null;
-      root.style.transform = `translate3d(${drag.nextX - drag.originX}px, ${drag.nextY - drag.originY}px, 0)`;
-    };
-
-    const handleMove = (moveEvent: MouseEvent) => {
-      const drag = dragStateRef.current;
-      if (!drag) {
-        return;
-      }
-      drag.nextX = drag.originX + (moveEvent.clientX - drag.startX);
-      drag.nextY = drag.originY + (moveEvent.clientY - drag.startY);
-      if (drag.frameId === null) {
-        drag.frameId = requestAnimationFrame(applyDragPreview);
-      }
-    };
-
-    const handleUp = () => {
-      const drag = dragStateRef.current;
-      if (drag && drag.frameId !== null) {
-        cancelAnimationFrame(drag.frameId);
-      }
-      if (rootRef.current) {
-        rootRef.current.style.transform = "";
-        rootRef.current.style.willChange = "";
-        rootRef.current.style.transition = "";
-      }
-      if (drag && (drag.nextX !== drag.originX || drag.nextY !== drag.originY)) {
-        runtimeUiActions.updateTerminalLayout(windowState.id, {
-          x: drag.nextX,
-          y: drag.nextY
-        });
-      }
-      dragStateRef.current = null;
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseup", handleUp);
-    };
-
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseup", handleUp);
-  };
-
-  const handleClose = () => {
-    setActionsAnchorElement(null);
-    sessionClosedRef.current = true;
-    const socket = websocketRef.current;
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: "close" }));
-      socket.close();
-    }
-    if (windowState.terminalSessionId) {
-      void closeTerminalSession(windowState.terminalSessionId, windowState.endpointId).catch(() => {});
-    }
-    runtimeUiActions.closeTerminal(windowState.id);
-  };
 
   const handleExport = useCallback(
     (scope: TerminalExportScope) => {
@@ -708,8 +628,8 @@ function TerminalWindow({
         return;
       }
       const filename = createTerminalExportFileName({
-        nodeName: windowState.nodeName,
-        protocol: windowState.protocol,
+        nodeName: paneState.nodeName,
+        protocol: paneState.protocol,
         scope
       });
       downloadTextFile(filename, content);
@@ -718,7 +638,7 @@ function TerminalWindow({
         "success"
       );
     },
-    [windowState.nodeName, windowState.protocol]
+    [paneState.nodeName, paneState.protocol]
   );
 
   const handleCopy = useCallback(() => {
@@ -790,22 +710,9 @@ function TerminalWindow({
     [handleFontSizeUpdate]
   );
 
-  const handleOpenActions = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      consumeToolbarMouseEvent(event);
-      runtimeUiActions.focusTerminal(windowState.id);
-      setActionsAnchorElement(event.currentTarget);
-    },
-    [windowState.id]
-  );
-
-  const handleCloseActions = useCallback(() => {
-    setActionsAnchorElement(null);
-  }, []);
-
   const handleTerminalWheelZoom = useCallback(
     (event: React.WheelEvent<HTMLDivElement>) => {
-      if (!isTerminalFocused || !hasTerminalDomFocus(rootRef.current)) {
+      if (!active || hidden || !hasTerminalDomFocus(rootRef.current)) {
         return;
       }
       const delta = resolveTerminalWheelZoomDelta({
@@ -820,29 +727,23 @@ function TerminalWindow({
       event.stopPropagation();
       handleFontSizeUpdate(fontSizePreviewRef.current + delta);
     },
-    [handleFontSizeUpdate, isTerminalFocused]
+    [active, handleFontSizeUpdate, hidden]
   );
 
   const syncTerminalSizeToSession = useCallback(() => {
     const term = xtermRef.current;
-    if (!term) {
+    if (!term || hidden) {
       return;
     }
     fitAddonRef.current?.fit();
     const socket = websocketRef.current;
     if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(
-        JSON.stringify({
-          type: "resize",
-          cols: term.cols,
-          rows: term.rows
-        })
-      );
+      sendTerminalResize(socket, term);
     }
-  }, []);
+  }, [hidden]);
 
   useEffect(() => {
-    if (!isTerminalFocused) {
+    if (!active || hidden) {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -875,10 +776,10 @@ function TerminalWindow({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [handleFontSizeUpdate, isTerminalFocused]);
+  }, [active, handleFontSizeUpdate, hidden]);
 
   useEffect(() => {
-    if (windowState.minimized) {
+    if (hidden) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
@@ -887,106 +788,37 @@ function TerminalWindow({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [syncTerminalSizeToSession, windowState.height, windowState.minimized, windowState.width]);
+  }, [hidden, syncTerminalSizeToSession]);
 
   return (
-    <Paper
+    <Box
       ref={rootRef}
-      elevation={10}
-      onMouseDown={() => runtimeUiActions.focusTerminal(windowState.id)}
+      onMouseDown={() => runtimeUiActions.activateTerminalPane(paneState.id)}
       onWheel={handleTerminalWheelZoom}
-      data-testid="runtime-terminal-window"
+      data-testid="runtime-terminal-pane"
       sx={{
-        position: "fixed",
-        left: windowState.x,
-        top: windowState.y,
-        width: windowState.width,
-        height: windowState.minimized ? "auto" : windowState.height,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        resize: windowState.minimized ? "none" : "both",
-        zIndex: windowState.zIndex,
-        border: 1,
+        borderLeft: 1,
         borderColor: "divider",
-        bgcolor: "background.paper",
-        backfaceVisibility: "hidden",
-        contain: "layout paint",
-        minWidth: 420,
-        minHeight: windowState.minimized ? 0 : 220
+        boxShadow: active ? "inset 2px 0 0 var(--clab-ui-focus-border, #1976d2)" : "none",
+        display: hidden ? "none" : "flex",
+        flex: 1,
+        flexDirection: "column",
+        minHeight: 0,
+        minWidth: 280,
+        overflow: "hidden"
       }}
     >
-      <Box
-        onMouseDown={handleHeaderMouseDown}
-        sx={{
-          cursor: "move",
-          px: 1.25,
-          py: 0.75,
-          borderBottom: windowState.minimized ? 0 : 1,
-          borderColor: "divider",
-          bgcolor: "action.hover",
-          userSelect: "none"
-        }}
-      >
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <Stack sx={{ minWidth: 0, flex: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-              {windowState.title}
-            </Typography>
-            <Typography variant="caption" sx={{ opacity: 0.75 }} noWrap>
-              {runtimeContainer?.kind || (isOutputTerminal ? "command-output" : "node")} •{" "}
-              {windowState.nodeName}
-            </Typography>
-          </Stack>
-          <Chip
-            size="small"
-            label={`${windowState.protocol} • ${windowState.state}`}
-            color={statusColor(windowState)}
-            variant="outlined"
-          />
-          <Tooltip title="Terminal Actions">
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<ActionsIcon fontSize="small" />}
-              onMouseDown={consumeToolbarMouseEvent}
-              onClick={handleOpenActions}
-              data-testid="runtime-terminal-actions-button"
-              aria-label="Open terminal actions"
-              sx={{ px: 1.1, textTransform: "none", minWidth: 0 }}
-            >
-              Actions
-            </Button>
-          </Tooltip>
-          <IconButton
-            size="small"
-            onMouseDown={consumeToolbarMouseEvent}
-            onClick={() => runtimeUiActions.setTerminalMinimized(windowState.id, !windowState.minimized)}
-            aria-label={windowState.minimized ? "Restore terminal window" : "Minimize terminal window"}
-          >
-            {windowState.minimized ? <RestoreIcon fontSize="inherit" /> : <MinimizeIcon fontSize="inherit" />}
-          </IconButton>
-          <IconButton
-            size="small"
-            onMouseDown={consumeToolbarMouseEvent}
-            onClick={handleClose}
-            aria-label="Close terminal window"
-          >
-            <CloseIcon fontSize="inherit" />
-          </IconButton>
-        </Stack>
-      </Box>
       <Popover
-        open={actionsPopoverOpen}
+        open={actionsOpen && !hidden}
         anchorEl={actionsAnchorElement}
-        onClose={handleCloseActions}
+        onClose={onCloseActions}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         disableRestoreFocus
         slotProps={{
           root: {
             sx: {
-              zIndex: Math.max(windowState.zIndex + 20, 2500)
+              zIndex: popoverZIndex ?? 2500
             }
           },
           paper: {
@@ -1109,8 +941,7 @@ function TerminalWindow({
         sx={{
           flex: 1,
           minHeight: 0,
-          bgcolor: "background.default",
-          display: windowState.minimized ? "none" : "block"
+          bgcolor: "background.default"
         }}
       >
         <Box
@@ -1124,17 +955,507 @@ function TerminalWindow({
           }}
         />
       </Box>
-    </Paper>
+    </Box>
   );
 }
 
-const MemoTerminalWindow = React.memo(
-  TerminalWindow,
+const MemoTerminalPaneView = React.memo(
+  RuntimeTerminalPaneView,
   (previousProps, nextProps) =>
-    previousProps.windowState === nextProps.windowState &&
+    previousProps.active === nextProps.active &&
+    previousProps.actionsAnchorElement === nextProps.actionsAnchorElement &&
+    previousProps.actionsOpen === nextProps.actionsOpen &&
+    previousProps.hidden === nextProps.hidden &&
+    previousProps.paneState === nextProps.paneState &&
+    previousProps.popoverZIndex === nextProps.popoverZIndex &&
     previousProps.terminalPreferences === nextProps.terminalPreferences &&
     previousProps.onSaveTerminalPreferences === nextProps.onSaveTerminalPreferences
 );
+
+function TerminalShell({
+  onSaveTerminalPreferences,
+  shell,
+  terminalPreferences,
+  terminals
+}: {
+  onSaveTerminalPreferences: (
+    next: TerminalPreferences,
+    options?: {
+      notify?: boolean;
+    }
+  ) => void;
+  shell: RuntimeTerminalShell;
+  terminalPreferences: TerminalPreferences;
+  terminals: RuntimeTerminalGroup[];
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const latestShellRef = useRef(shell);
+  const dragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    nextX: number;
+    nextY: number;
+    frameId: number | null;
+  } | null>(null);
+  const activeTerminalGroupId = useRuntimeUiStore((state) => state.activeTerminalGroupId);
+  const [actionsAnchorElement, setActionsAnchorElement] = useState<HTMLElement | null>(null);
+  const activeGroup = terminals.find((group) => group.id === activeTerminalGroupId) ?? terminals.at(-1);
+  const activePane = activePaneForGroup(activeGroup);
+  const actionsPopoverOpen = actionsAnchorElement !== null;
+
+  useEffect(() => {
+    latestShellRef.current = shell;
+  }, [shell]);
+
+  const handleHeaderMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (shell.minimized) {
+      runtimeUiActions.setTerminalMinimized(shell.id, false);
+    }
+    runtimeUiActions.focusTerminal(shell.id);
+    const latestShell = latestShellRef.current;
+    dragStateRef.current = {
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: latestShell.x,
+      originY: latestShell.y,
+      nextX: latestShell.x,
+      nextY: latestShell.y,
+      frameId: null
+    };
+
+    if (rootRef.current) {
+      rootRef.current.style.willChange = "transform";
+      rootRef.current.style.transition = "none";
+    }
+
+    const applyDragPreview = () => {
+      const drag = dragStateRef.current;
+      const root = rootRef.current;
+      if (!drag || !root) {
+        return;
+      }
+      drag.frameId = null;
+      root.style.transform = `translate3d(${drag.nextX - drag.originX}px, ${drag.nextY - drag.originY}px, 0)`;
+    };
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      const drag = dragStateRef.current;
+      if (!drag) {
+        return;
+      }
+      drag.nextX = drag.originX + (moveEvent.clientX - drag.startX);
+      drag.nextY = drag.originY + (moveEvent.clientY - drag.startY);
+      if (drag.frameId === null) {
+        drag.frameId = requestAnimationFrame(applyDragPreview);
+      }
+    };
+
+    const handleUp = () => {
+      const drag = dragStateRef.current;
+      if (drag && drag.frameId !== null) {
+        cancelAnimationFrame(drag.frameId);
+      }
+      if (rootRef.current) {
+        rootRef.current.style.transform = "";
+        rootRef.current.style.willChange = "";
+        rootRef.current.style.transition = "";
+      }
+      if (drag && (drag.nextX !== drag.originX || drag.nextY !== drag.originY)) {
+        runtimeUiActions.updateTerminalLayout(shell.id, {
+          x: drag.nextX,
+          y: drag.nextY
+        });
+      }
+      dragStateRef.current = null;
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+  };
+
+  const handleOpenActions = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      consumeToolbarMouseEvent(event);
+      if (activePane) {
+        runtimeUiActions.activateTerminalPane(activePane.id);
+      }
+      setActionsAnchorElement(event.currentTarget);
+    },
+    [activePane]
+  );
+
+  const handleCloseActions = useCallback(() => {
+    setActionsAnchorElement(null);
+  }, []);
+
+  const handleToggleMinimized = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      consumeToolbarMouseEvent(event);
+      runtimeUiActions.setTerminalMinimized(shell.id, !shell.minimized);
+    },
+    [shell.id, shell.minimized]
+  );
+
+  const handleCloseShell = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    consumeToolbarMouseEvent(event);
+    runtimeUiActions.closeAllTerminals();
+  }, []);
+
+  useEffect(() => {
+    setActionsAnchorElement(null);
+  }, [activePane?.id, shell.minimized]);
+
+  return (
+    <Paper
+      ref={rootRef}
+      elevation={10}
+      onMouseDown={() => runtimeUiActions.focusTerminal(shell.id)}
+      data-testid="runtime-terminal-window"
+      sx={{
+        position: "fixed",
+        left: shell.x,
+        top: shell.y,
+        width: shell.width,
+        height: shell.minimized ? "auto" : shell.height,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        resize: shell.minimized ? "none" : "both",
+        zIndex: shell.zIndex,
+        border: 1,
+        borderColor: "divider",
+        bgcolor: "background.paper",
+        backfaceVisibility: "hidden",
+        contain: "layout paint",
+        minWidth: 520,
+        minHeight: shell.minimized ? 0 : 280
+      }}
+    >
+      <Box
+        onMouseDown={handleHeaderMouseDown}
+        sx={{
+          cursor: "move",
+          px: 1,
+          py: 0.625,
+          borderBottom: shell.minimized ? 0 : 1,
+          borderColor: "divider",
+          bgcolor: "action.hover",
+          userSelect: "none"
+        }}
+      >
+        <Stack direction="row" alignItems="center" spacing={0.75}>
+          <Stack sx={{ flex: 1, minWidth: 0 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                fontWeight: 700,
+                letterSpacing: 0,
+                lineHeight: 1.2,
+                textTransform: "uppercase"
+              }}
+              noWrap
+            >
+              Terminal
+            </Typography>
+            {activePane ? (
+              <Typography variant="caption" sx={{ opacity: 0.7, lineHeight: 1.2 }} noWrap>
+                {activePane.title}
+              </Typography>
+            ) : null}
+          </Stack>
+          <Tooltip title="Terminal Actions">
+            <span>
+              <Button
+                size="small"
+                variant="text"
+                startIcon={<ActionsIcon fontSize="small" />}
+                disabled={!activePane}
+                onMouseDown={consumeToolbarMouseEvent}
+                onClick={handleOpenActions}
+                data-testid="runtime-terminal-actions-button"
+                aria-label="Open terminal actions"
+                sx={{ minWidth: 0, px: 0.75, py: 0.25, textTransform: "none" }}
+              >
+                Actions
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Open Active Terminal in New Window">
+            <span>
+              <IconButton
+                size="small"
+                disabled={!activePane}
+                onMouseDown={consumeToolbarMouseEvent}
+                onClick={() => activePane && openDetachedTerminalWindow(activePane)}
+                data-testid="runtime-terminal-detach"
+                aria-label="Open active terminal in new window"
+              >
+                <OpenInNewIcon fontSize="inherit" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <IconButton
+            size="small"
+            onMouseDown={consumeToolbarMouseEvent}
+            onClick={handleToggleMinimized}
+            aria-label={shell.minimized ? "Restore terminal shell" : "Minimize terminal shell"}
+            data-testid="runtime-terminal-minimize-shell"
+          >
+            {shell.minimized ? <RestoreIcon fontSize="inherit" /> : <MinimizeIcon fontSize="inherit" />}
+          </IconButton>
+          <Tooltip title="Close Terminal Window">
+            <IconButton
+              size="small"
+              onMouseDown={consumeToolbarMouseEvent}
+              onClick={handleCloseShell}
+              aria-label="Close terminal window"
+              data-testid="runtime-terminal-close-shell"
+            >
+              <CloseIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Box>
+      <Box
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          bgcolor: "background.default",
+          display: shell.minimized ? "none" : "flex"
+        }}
+      >
+        <Box sx={{ flex: 1, minHeight: 0, minWidth: 0, overflow: "hidden" }}>
+          {terminals.map((group) => {
+            const groupActive = group.id === activeGroup?.id;
+            return (
+              <Box
+                key={group.id}
+                data-testid="runtime-terminal-tab-panel"
+                sx={{
+                  display: groupActive ? "flex" : "none",
+                  flexDirection: "row",
+                  height: "100%",
+                  minHeight: 0,
+                  overflow: "hidden"
+                }}
+              >
+                {group.panes.map((pane) => (
+                  <MemoTerminalPaneView
+                    key={pane.id}
+                    actionsAnchorElement={actionsAnchorElement}
+                    actionsOpen={actionsPopoverOpen && groupActive && pane.id === group.activePaneId}
+                    active={groupActive && pane.id === group.activePaneId}
+                    hidden={!groupActive || shell.minimized}
+                    onCloseActions={handleCloseActions}
+                    onSaveTerminalPreferences={onSaveTerminalPreferences}
+                    paneState={pane}
+                    popoverZIndex={Math.max(shell.zIndex + 20, 2500)}
+                    terminalPreferences={terminalPreferences}
+                  />
+                ))}
+              </Box>
+            );
+          })}
+        </Box>
+        <Box
+          role="tablist"
+          aria-label="Open terminal tabs"
+          data-testid="runtime-terminal-tabs"
+          onMouseDown={consumeToolbarMouseEvent}
+          sx={{
+            bgcolor: "background.paper",
+            borderLeft: 1,
+            borderColor: "divider",
+            display: "flex",
+            flex: "0 0 236px",
+            flexDirection: "column",
+            minHeight: 0,
+            overflowY: "auto",
+            p: 0.5
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              fontWeight: 700,
+              letterSpacing: 0,
+              lineHeight: 1.3,
+              px: 0.75,
+              py: 0.5,
+              textTransform: "uppercase"
+            }}
+          >
+            Terminals
+          </Typography>
+          <Stack spacing={0.25} sx={{ minHeight: 0 }}>
+            {terminals.map((group) => {
+              const selected = group.id === activeGroup?.id;
+              const groupActivePane = activePaneForGroup(group);
+              return (
+                <Box key={group.id}>
+                  <Box
+                    role="tab"
+                    aria-selected={selected}
+                    data-testid={`runtime-terminal-tab-${group.id}`}
+                    onClick={() => runtimeUiActions.activateTerminalGroup(group.id)}
+                    sx={{
+                      alignItems: "center",
+                      borderLeft: 2,
+                      borderLeftColor: selected ? "primary.main" : "transparent",
+                      borderRadius: 0.75,
+                      bgcolor: selected ? "action.selected" : "transparent",
+                      color: selected ? "text.primary" : "text.secondary",
+                      cursor: "pointer",
+                      display: "flex",
+                      gap: 0.25,
+                      height: 30,
+                      minWidth: 0,
+                      px: 0.5
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        bgcolor: terminalStatusDotColor(groupActivePane),
+                        borderRadius: "50%",
+                        flex: "0 0 auto",
+                        height: 7,
+                        width: 7
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      title={group.title}
+                      sx={{ flex: 1, fontWeight: selected ? 700 : 500, minWidth: 0 }}
+                      noWrap
+                    >
+                      {group.title}
+                      {group.panes.length > 1 ? ` (${group.panes.length})` : ""}
+                    </Typography>
+                    <Tooltip title="Split Terminal">
+                      <IconButton
+                        size="small"
+                        onMouseDown={consumeToolbarMouseEvent}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          runtimeUiActions.activateTerminalGroup(group.id);
+                          const pane = activePaneForGroup(group);
+                          if (pane) {
+                            runtimeUiActions.splitTerminal(pane.id);
+                          }
+                        }}
+                        aria-label={`Split ${group.title}`}
+                        data-testid="runtime-terminal-tab-split"
+                        sx={{ height: 22, width: 22 }}
+                      >
+                        <SplitIcon fontSize="inherit" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Kill Terminal">
+                      <IconButton
+                        size="small"
+                        onMouseDown={consumeToolbarMouseEvent}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          runtimeUiActions.closeTerminal(group.id);
+                        }}
+                        aria-label={`Kill ${group.title}`}
+                        data-testid="runtime-terminal-tab-kill"
+                        sx={{ height: 22, width: 22 }}
+                      >
+                        <CloseIcon fontSize="inherit" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  {group.panes.length > 1 ? (
+                    <Stack
+                      spacing={0.25}
+                      sx={{
+                        borderLeft: 1,
+                        borderColor: "divider",
+                        ml: 1,
+                        mt: 0.25,
+                        pl: 0.5
+                      }}
+                    >
+                      {group.panes.map((pane, paneIndex) => {
+                        const paneSelected = selected && pane.id === group.activePaneId;
+                        const paneLabel = terminalPaneLabel(pane, paneIndex, group.panes.length);
+                        return (
+                          <Box
+                            key={pane.id}
+                            role="button"
+                            data-testid={`runtime-terminal-split-pane-${pane.id}`}
+                            onClick={() => runtimeUiActions.activateTerminalPane(pane.id)}
+                            sx={{
+                              alignItems: "center",
+                              borderRadius: 0.75,
+                              bgcolor: paneSelected ? "action.selected" : "transparent",
+                              color: paneSelected ? "text.primary" : "text.secondary",
+                              cursor: "pointer",
+                              display: "flex",
+                              gap: 0.25,
+                              height: 28,
+                              minWidth: 0,
+                              px: 0.5
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                bgcolor: terminalStatusDotColor(pane),
+                                borderRadius: "50%",
+                                flex: "0 0 auto",
+                                height: 6,
+                                width: 6
+                              }}
+                            />
+                            <Typography
+                              variant="caption"
+                              title={pane.title}
+                              sx={{
+                                flex: 1,
+                                fontWeight: paneSelected ? 700 : 500,
+                                minWidth: 0
+                              }}
+                              noWrap
+                            >
+                              {paneLabel}
+                            </Typography>
+                            <Tooltip title="Close Split">
+                              <IconButton
+                                size="small"
+                                onMouseDown={consumeToolbarMouseEvent}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  runtimeUiActions.closeTerminal(pane.id);
+                                }}
+                                aria-label={`Close ${paneLabel}`}
+                                data-testid="runtime-terminal-split-pane-kill"
+                                sx={{ height: 20, width: 20 }}
+                              >
+                                <CloseIcon fontSize="inherit" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        );
+                      })}
+                    </Stack>
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Stack>
+        </Box>
+      </Box>
+    </Paper>
+  );
+}
 
 export function RuntimeTerminalWindows(props: {
   onSaveTerminalPreferences: (
@@ -1146,16 +1467,18 @@ export function RuntimeTerminalWindows(props: {
   terminalPreferences: TerminalPreferences;
 }) {
   const terminals = useRuntimeUiStore((state) => state.terminals);
+  const shell = useRuntimeUiStore((state) => state.terminalShell);
+
+  if (terminals.length === 0) {
+    return null;
+  }
+
   return (
-    <>
-      {terminals.map((terminal) => (
-        <MemoTerminalWindow
-          key={terminal.id}
-          onSaveTerminalPreferences={props.onSaveTerminalPreferences}
-          terminalPreferences={props.terminalPreferences}
-          windowState={terminal}
-        />
-      ))}
-    </>
+    <TerminalShell
+      onSaveTerminalPreferences={props.onSaveTerminalPreferences}
+      shell={shell}
+      terminalPreferences={props.terminalPreferences}
+      terminals={terminals}
+    />
   );
 }

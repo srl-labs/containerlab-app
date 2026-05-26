@@ -7,6 +7,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./terminal-main": "./src/terminalMain.tsx",
     "./web-main": "./src/main.tsx",
     "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx"
   },
@@ -15,7 +16,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.10",
     "@mui/material": "^7.3.10",
-    "@srl-labs/clab-ui": "0.0.34",
+    "@srl-labs/clab-ui": "0.0.35",
     "@srl-labs/containerlab-app-contract": "0.0.3",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

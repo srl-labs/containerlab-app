@@ -1065,6 +1065,139 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
   assert.equal(response.body, upstreamBody);
 });
 
+test("/api/lab/deploy reconciles upstream network errors", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/,
+    () => {
+      throw new TypeError("fetch failed");
+    },
+  );
+  let inspectCalls = 0;
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      inspectCalls += 1;
+      if (inspectCalls === 1) {
+        return jsonResponse({ error: "lab not found" }, 404);
+      }
+      return jsonResponse([{ name: "clab-demo-srl1" }]);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/deploy",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    success: true,
+    reconciled: true,
+    result: {
+      labName: "demo",
+      running: true,
+    },
+    message: "Lifecycle deploy result reconciled after the upstream connection was interrupted.",
+    logs: [],
+  });
+});
+
+test("/api/lab/destroy reconciles upstream network errors", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  context.fetchMock.on(
+    "DELETE",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/,
+    () => {
+      throw new TypeError("fetch failed");
+    },
+  );
+  let inspectCalls = 0;
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      inspectCalls += 1;
+      if (inspectCalls === 1) {
+        return jsonResponse([{ name: "clab-demo-srl1" }]);
+      }
+      return jsonResponse({ error: "lab not found" }, 404);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/destroy",
+    headers: { cookie },
+    payload: {
+      cleanup: true,
+      topologyRef: demoTopologyRef(endpointId),
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    success: true,
+    reconciled: true,
+    result: {
+      labName: "demo",
+      running: false,
+    },
+    message: "Lifecycle destroy result reconciled after the upstream connection was interrupted.",
+    logs: [],
+  });
+});
+
+test("/api/lab/redeploy reports indeterminate upstream network errors as retryable", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  context.fetchMock.on(
+    "PUT",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/,
+    () => {
+      throw new TypeError("fetch failed");
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/redeploy",
+    headers: { cookie },
+    payload: {
+      cleanup: true,
+      topologyRef: demoTopologyRef(endpointId),
+    },
+  });
+
+  assert.equal(response.statusCode, 503, response.body);
+  assert.equal(response.headers["retry-after"], "5");
+  assert.deepEqual(response.json(), {
+    success: false,
+    reconciled: false,
+    error: "Lifecycle redeploy result is unknown after the upstream connection was interrupted. Retry after a short delay or refresh lab state.",
+  });
+});
+
 test("/api/lab/start/stream forwards lab node lifecycle NDJSON", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);

@@ -1,4 +1,5 @@
 export type EndpointUiAction =
+  | { action: "add" }
   | { action: "reconnect"; endpointId: string }
   | { action: "remove"; endpointId: string };
 
@@ -17,6 +18,10 @@ export function subscribeEndpointUiAction(
 ): () => void {
   const handleEvent = (event: Event) => {
     const detail = (event as CustomEvent<EndpointUiAction>).detail;
+    if (detail?.action === "add") {
+      listener(detail);
+      return;
+    }
     if (detail?.endpointId && (detail.action === "reconnect" || detail.action === "remove")) {
       listener(detail);
     }

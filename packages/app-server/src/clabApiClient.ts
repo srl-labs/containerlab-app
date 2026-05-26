@@ -1485,17 +1485,47 @@ export function isNotFoundError(error: unknown): boolean {
 }
 
 export function getHttpErrorStatus(error: unknown): number | undefined {
-  if (typeof error !== "object" || error === null || !("status" in error)) {
-    return undefined;
+  if (typeof error === "object" && error !== null && "status" in error) {
+    const status = (error as { status?: unknown }).status;
+    if (typeof status === "number" && status >= 400 && status <= 599) {
+      return status;
+    }
   }
-  const status = (error as { status?: unknown }).status;
-  return typeof status === "number" && status >= 400 && status <= 599
-    ? status
-    : undefined;
+
+  if (isUpstreamNetworkError(error)) {
+    return 502;
+  }
+
+  return undefined;
 }
 
 export function buildWebSocketUrl(baseUrl: string, path: string): string {
   const url = new URL(path, baseUrl);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.toString();
+}
+
+export function isUpstreamNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    message === "fetch failed" ||
+    message.includes("fetch failed") ||
+    message.startsWith("Unable to connect to clab-api-server at ")
+  ) {
+    return true;
+  }
+
+  const cause = error instanceof Error ? error.cause : undefined;
+  if (!(cause instanceof Error)) {
+    return false;
+  }
+
+  const causeMessage = cause.message;
+  return (
+    causeMessage.includes("ECONNREFUSED") ||
+    causeMessage.includes("ECONNRESET") ||
+    causeMessage.includes("UND_ERR_SOCKET") ||
+    causeMessage.includes("other side closed") ||
+    causeMessage.includes("socket hang up")
+  );
 }

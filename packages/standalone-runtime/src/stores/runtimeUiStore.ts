@@ -34,12 +34,27 @@ export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
   initialOutput?: string;
 }
 
-export interface RuntimeTerminalWindow extends RuntimeTerminalRequest {
+export type RuntimeTerminalPaneState = "creating" | "connecting" | "ready" | "exited" | "error";
+
+export interface RuntimeTerminalPane extends RuntimeTerminalRequest {
   id: string;
   terminalSessionId?: string;
-  state: "creating" | "connecting" | "ready" | "exited" | "error";
+  state: RuntimeTerminalPaneState;
   exitCode?: number | null;
   error?: string;
+}
+
+export type RuntimeTerminalWindow = RuntimeTerminalPane;
+
+export interface RuntimeTerminalGroup {
+  activePaneId: string;
+  id: string;
+  panes: RuntimeTerminalPane[];
+  title: string;
+}
+
+export interface RuntimeTerminalShell {
+  id: string;
   x: number;
   y: number;
   width: number;
@@ -67,9 +82,14 @@ interface RuntimeUiState {
   netemRequest: RuntimeNetemRequest | null;
   imageManagerOpen: boolean;
   fileEditor: RuntimeFileEditor | null;
-  terminals: RuntimeTerminalWindow[];
+  activeTerminalGroupId?: string;
+  terminalShell: RuntimeTerminalShell;
+  terminals: RuntimeTerminalGroup[];
   versionOpen: boolean;
   snackbar: SnackbarState;
+  activateTerminalGroup: (groupId: string) => void;
+  activateTerminalPane: (paneId: string) => void;
+  closeAllTerminals: () => void;
   closeFileEditor: () => void;
   closeInspect: () => void;
   closeLogs: () => void;
@@ -86,6 +106,7 @@ interface RuntimeUiState {
   openNetem: (request: RuntimeNetemRequest) => void;
   openTerminal: (request: RuntimeTerminalRequest) => string;
   openVersion: () => void;
+  splitTerminal: (paneId: string) => string | null;
   setTerminalConnecting: (id: string) => void;
   setFileEditorContent: (content: string) => void;
   setFileEditorError: (message?: string) => void;
@@ -98,7 +119,7 @@ interface RuntimeUiState {
   showSnackbar: (message: string, severity?: AlertColor) => void;
   updateTerminalLayout: (
     id: string,
-    layout: Partial<Pick<RuntimeTerminalWindow, "height" | "width" | "x" | "y">>
+    layout: Partial<Pick<RuntimeTerminalShell, "height" | "width" | "x" | "y">>
   ) => void;
 }
 
@@ -125,23 +146,104 @@ function terminalMatchKey(request: RuntimeTerminalRequest): string {
   return `${request.protocol}:${topologyKey(request)}:${request.nodeName.trim().toLowerCase()}`;
 }
 
-function nextZIndex(terminals: RuntimeTerminalWindow[]): number {
-  return terminals.reduce((max, terminal) => Math.max(max, terminal.zIndex), 1400) + 1;
+function createId(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function createWindow(request: RuntimeTerminalRequest, terminals: RuntimeTerminalWindow[]): RuntimeTerminalWindow {
-  const index = terminals.length % 6;
+function createTerminalPane(request: RuntimeTerminalRequest): RuntimeTerminalPane {
   return {
     ...request,
-    id: `term-${Math.random().toString(36).slice(2, 10)}`,
-    state: "creating",
-    x: 96 + index * 28,
-    y: 88 + index * 24,
-    width: 760,
-    height: 460,
-    zIndex: nextZIndex(terminals),
-    minimized: false
+    id: createId("term"),
+    state: "creating"
   };
+}
+
+function createTerminalGroup(request: RuntimeTerminalRequest): RuntimeTerminalGroup {
+  const pane = createTerminalPane(request);
+  return {
+    activePaneId: pane.id,
+    id: createId("term-tab"),
+    panes: [pane],
+    title: request.title
+  };
+}
+
+const defaultTerminalShell: RuntimeTerminalShell = {
+  id: "runtime-terminal-shell",
+  x: 96,
+  y: 88,
+  width: 860,
+  height: 500,
+  zIndex: 1401,
+  minimized: false
+};
+
+function nextShellZIndex(shell: RuntimeTerminalShell): number {
+  return Math.max(shell.zIndex, 1400) + 1;
+}
+
+function duplicatePaneRequest(pane: RuntimeTerminalPane): RuntimeTerminalRequest {
+  return {
+    endpointId: pane.endpointId,
+    initialOutput: pane.initialOutput,
+    nodeName: pane.nodeName,
+    protocol: pane.protocol,
+    sessionId: pane.sessionId,
+    sshUsername: pane.sshUsername,
+    telnetPort: pane.telnetPort,
+    title: pane.title,
+    topologyRef: pane.topologyRef
+  };
+}
+
+function findPaneLocation(
+  terminals: RuntimeTerminalGroup[],
+  paneId: string
+): { group: RuntimeTerminalGroup; groupIndex: number; pane: RuntimeTerminalPane; paneIndex: number } | null {
+  for (const [groupIndex, group] of terminals.entries()) {
+    const paneIndex = group.panes.findIndex((pane) => pane.id === paneId);
+    if (paneIndex >= 0) {
+      return {
+        group,
+        groupIndex,
+        pane: group.panes[paneIndex],
+        paneIndex
+      };
+    }
+  }
+  return null;
+}
+
+function resolveNextActiveGroupId(
+  terminals: RuntimeTerminalGroup[],
+  previousActiveGroupId: string | undefined
+): string | undefined {
+  if (terminals.some((group) => group.id === previousActiveGroupId)) {
+    return previousActiveGroupId;
+  }
+  return terminals.at(-1)?.id;
+}
+
+function updatePane(
+  terminals: RuntimeTerminalGroup[],
+  paneId: string,
+  update: (pane: RuntimeTerminalPane) => RuntimeTerminalPane
+): { changed: boolean; terminals: RuntimeTerminalGroup[] } {
+  let changed = false;
+  const nextTerminals = terminals.map((group) => {
+    let groupChanged = false;
+    const panes = group.panes.map((pane) => {
+      if (pane.id !== paneId) {
+        return pane;
+      }
+      const nextPane = update(pane);
+      groupChanged = nextPane !== pane;
+      changed = changed || groupChanged;
+      return nextPane;
+    });
+    return groupChanged ? { ...group, panes } : group;
+  });
+  return { changed, terminals: nextTerminals };
 }
 
 export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
@@ -150,6 +252,8 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   netemRequest: null,
   imageManagerOpen: false,
   fileEditor: null,
+  activeTerminalGroupId: undefined,
+  terminalShell: defaultTerminalShell,
   terminals: [],
   versionOpen: false,
   snackbar: defaultSnackbar,
@@ -189,121 +293,221 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   openNetem: (request) => set({ netemRequest: request }),
   closeNetem: () => set({ netemRequest: null }),
   openTerminal: (request) => {
-    const existing = get().terminals.find(
-      (terminal) => terminalMatchKey(terminal) === terminalMatchKey(request)
-    );
+    const terminals = get().terminals;
+    const requestedKey = terminalMatchKey(request);
+    const existing = terminals
+      .flatMap((group) => group.panes)
+      .find((pane) => terminalMatchKey(pane) === requestedKey);
     if (existing) {
       get().focusTerminal(existing.id);
-      if (existing.minimized) {
-        get().setTerminalMinimized(existing.id, false);
-      }
       return existing.id;
     }
 
-    const windowState = createWindow(request, get().terminals);
+    const group = createTerminalGroup(request);
     set((state) => ({
-      terminals: [...state.terminals, windowState]
+      activeTerminalGroupId: group.id,
+      terminalShell: {
+        ...state.terminalShell,
+        minimized: false,
+        zIndex: nextShellZIndex(state.terminalShell)
+      },
+      terminals: [...state.terminals, group]
     }));
-    return windowState.id;
+    return group.activePaneId;
   },
-  focusTerminal: (id) =>
+  activateTerminalGroup: (groupId) =>
     set((state) => {
-      const target = state.terminals.find((terminal) => terminal.id === id);
-      if (!target) {
-        return state;
-      }
-      const maxZIndex = state.terminals.reduce((max, terminal) => Math.max(max, terminal.zIndex), 1400);
-      if (target.zIndex === maxZIndex && !target.minimized) {
+      const group = state.terminals.find((candidate) => candidate.id === groupId);
+      if (!group) {
         return state;
       }
       return {
-        terminals: state.terminals.map((terminal) =>
-          terminal.id === id
-            ? { ...terminal, zIndex: nextZIndex(state.terminals), minimized: false }
-            : terminal
+        activeTerminalGroupId: group.id,
+        terminalShell: {
+          ...state.terminalShell,
+          minimized: false,
+          zIndex: nextShellZIndex(state.terminalShell)
+        }
+      };
+    }),
+  activateTerminalPane: (paneId) =>
+    set((state) => {
+      const location = findPaneLocation(state.terminals, paneId);
+      if (!location) {
+        return state;
+      }
+      return {
+        activeTerminalGroupId: location.group.id,
+        terminalShell: {
+          ...state.terminalShell,
+          minimized: false,
+          zIndex: nextShellZIndex(state.terminalShell)
+        },
+        terminals: state.terminals.map((group) =>
+          group.id === location.group.id ? { ...group, activePaneId: paneId } : group
         )
       };
     }),
+  focusTerminal: (id) =>
+    set((state) => {
+      const group = state.terminals.find((candidate) => candidate.id === id);
+      const location = group ? null : findPaneLocation(state.terminals, id);
+      if (!group && !location && id !== state.terminalShell.id) {
+        return state;
+      }
+      const activeGroupId = group?.id ?? location?.group.id ?? state.activeTerminalGroupId;
+      return {
+        activeTerminalGroupId: activeGroupId,
+        terminalShell: {
+          ...state.terminalShell,
+          minimized: id === state.terminalShell.id ? state.terminalShell.minimized : false,
+          zIndex: nextShellZIndex(state.terminalShell)
+        },
+        terminals: location
+          ? state.terminals.map((candidate) =>
+              candidate.id === location.group.id ? { ...candidate, activePaneId: id } : candidate
+            )
+          : state.terminals
+      };
+    }),
   closeTerminal: (id) =>
-    set((state) => ({
-      terminals: state.terminals.filter((terminal) => terminal.id !== id)
-    })),
+    set((state) => {
+      const closingGroup = state.terminals.find((group) => group.id === id);
+      if (closingGroup) {
+        const terminals = state.terminals.filter((group) => group.id !== id);
+        return {
+          activeTerminalGroupId: resolveNextActiveGroupId(terminals, state.activeTerminalGroupId),
+          terminals
+        };
+      }
+
+      const location = findPaneLocation(state.terminals, id);
+      if (!location) {
+        return state;
+      }
+
+      const terminals = state.terminals.flatMap((group) => {
+        if (group.id !== location.group.id) {
+          return [group];
+        }
+        const panes = group.panes.filter((pane) => pane.id !== id);
+        if (panes.length === 0) {
+          return [];
+        }
+        return [
+          {
+            ...group,
+            activePaneId:
+              group.activePaneId === id
+                ? panes[Math.max(0, Math.min(location.paneIndex - 1, panes.length - 1))].id
+                : group.activePaneId,
+            panes
+          }
+        ];
+      });
+
+      return {
+        activeTerminalGroupId: resolveNextActiveGroupId(terminals, state.activeTerminalGroupId),
+        terminals
+      };
+    }),
+  closeAllTerminals: () =>
+    set({
+      activeTerminalGroupId: undefined,
+      terminals: []
+    }),
   updateTerminalLayout: (id, layout) =>
     set((state) => {
-      let changed = false;
-      const terminals = state.terminals.map((terminal) => {
-        if (terminal.id !== id) {
-          return terminal;
-        }
-        const nextTerminal = { ...terminal, ...layout };
-        const hasChanges =
-          nextTerminal.x !== terminal.x ||
-          nextTerminal.y !== terminal.y ||
-          nextTerminal.width !== terminal.width ||
-          nextTerminal.height !== terminal.height;
-        if (!hasChanges) {
-          return terminal;
-        }
-        changed = true;
-        return nextTerminal;
-      });
-      return changed ? { terminals } : state;
+      if (id !== state.terminalShell.id) {
+        return state;
+      }
+      const nextShell = { ...state.terminalShell, ...layout };
+      const hasChanges =
+        nextShell.x !== state.terminalShell.x ||
+        nextShell.y !== state.terminalShell.y ||
+        nextShell.width !== state.terminalShell.width ||
+        nextShell.height !== state.terminalShell.height;
+      return hasChanges ? { terminalShell: nextShell } : state;
     }),
   setTerminalConnecting: (id) =>
-    set((state) => ({
-      terminals: state.terminals.map((terminal) =>
-        terminal.id === id ? { ...terminal, state: "connecting", error: undefined } : terminal
-      )
-    })),
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "connecting",
+        error: undefined
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalSession: (id, sessionId) =>
-    set((state) => ({
-      terminals: state.terminals.map((terminal) =>
-        terminal.id === id ? { ...terminal, terminalSessionId: sessionId } : terminal
-      )
-    })),
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({ ...pane, terminalSessionId: sessionId }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalReady: (id) =>
-    set((state) => ({
-      terminals: state.terminals.map((terminal) =>
-        terminal.id === id ? { ...terminal, state: "ready", error: undefined } : terminal
-      )
-    })),
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "ready",
+        error: undefined
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalExited: (id, exitCode, error) =>
-    set((state) => ({
-      terminals: state.terminals.map((terminal) =>
-        terminal.id === id
-          ? {
-              ...terminal,
-              state: "exited",
-              exitCode,
-              error
-            }
-          : terminal
-      )
-    })),
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "exited",
+        exitCode,
+        error
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalError: (id, message) =>
-    set((state) => ({
-      terminals: state.terminals.map((terminal) =>
-        terminal.id === id
-          ? {
-              ...terminal,
-              state: "error",
-              error: message
-            }
-          : terminal
-      )
-    })),
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "error",
+        error: message
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalMinimized: (id, minimized) =>
     set((state) => {
-      let changed = false;
-      const terminals = state.terminals.map((terminal) => {
-        if (terminal.id !== id || terminal.minimized === minimized) {
-          return terminal;
+      if (id !== state.terminalShell.id || state.terminalShell.minimized === minimized) {
+        return state;
+      }
+      return {
+        terminalShell: {
+          ...state.terminalShell,
+          minimized
         }
-        changed = true;
-        return { ...terminal, minimized };
-      });
-      return changed ? { terminals } : state;
+      };
     }),
+  splitTerminal: (paneId) => {
+    const location = findPaneLocation(get().terminals, paneId);
+    if (!location) {
+      return null;
+    }
+    const pane = createTerminalPane(duplicatePaneRequest(location.pane));
+    set((state) => ({
+      activeTerminalGroupId: location.group.id,
+      terminalShell: {
+        ...state.terminalShell,
+        minimized: false,
+        zIndex: nextShellZIndex(state.terminalShell)
+      },
+      terminals: state.terminals.map((group) =>
+        group.id === location.group.id
+          ? {
+              ...group,
+              activePaneId: pane.id,
+              panes: [...group.panes, pane]
+            }
+          : group
+      )
+    }));
+    return pane.id;
+  },
   openVersion: () => set({ versionOpen: true }),
   closeSnackbar: () => set({ snackbar: defaultSnackbar }),
   showSnackbar: (message, severity = "info") =>
@@ -317,6 +521,9 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 }));
 
 export const runtimeUiActions = {
+  activateTerminalGroup: (groupId: string) => useRuntimeUiStore.getState().activateTerminalGroup(groupId),
+  activateTerminalPane: (paneId: string) => useRuntimeUiStore.getState().activateTerminalPane(paneId),
+  closeAllTerminals: () => useRuntimeUiStore.getState().closeAllTerminals(),
   closeFileEditor: () => useRuntimeUiStore.getState().closeFileEditor(),
   closeInspect: () => useRuntimeUiStore.getState().closeInspect(),
   closeImageManager: () => useRuntimeUiStore.getState().closeImageManager(),
@@ -346,6 +553,7 @@ export const runtimeUiActions = {
   openNetem: (request: RuntimeNetemRequest) => useRuntimeUiStore.getState().openNetem(request),
   openTerminal: (request: RuntimeTerminalRequest) => useRuntimeUiStore.getState().openTerminal(request),
   openVersion: () => useRuntimeUiStore.getState().openVersion(),
+  splitTerminal: (paneId: string) => useRuntimeUiStore.getState().splitTerminal(paneId),
   setFileEditorContent: (content: string) => useRuntimeUiStore.getState().setFileEditorContent(content),
   setFileEditorError: (message?: string) => useRuntimeUiStore.getState().setFileEditorError(message),
   setFileEditorSaving: (saving: boolean) => useRuntimeUiStore.getState().setFileEditorSaving(saving),
@@ -360,6 +568,6 @@ export const runtimeUiActions = {
     useRuntimeUiStore.getState().setTerminalSession(id, sessionId),
   updateTerminalLayout: (
     id: string,
-    layout: Partial<Pick<RuntimeTerminalWindow, "height" | "width" | "x" | "y">>
+    layout: Partial<Pick<RuntimeTerminalShell, "height" | "width" | "x" | "y">>
   ) => useRuntimeUiStore.getState().updateTerminalLayout(id, layout)
 };

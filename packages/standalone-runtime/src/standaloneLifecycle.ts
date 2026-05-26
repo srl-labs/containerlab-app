@@ -56,7 +56,11 @@ interface StandaloneLifecycleManagerOptions {
   getCurrentSessionId: () => string | null;
   getCurrentTopologyRef: () => TopologyRef | null;
   invalidateTopologyFileListCache: () => void;
-  removeLabFromRuntimeStore: (topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">) => void;
+  removeLabFromRuntimeStore: (topologyRef: Pick<TopologyRef, "labName" | "topologyId" | "yamlPath">) => void;
+  refreshRuntimeStore?: (target: {
+    sessionId?: string;
+    topologyRef: TopologyRef;
+  }) => Promise<void>;
   scheduleExplorerSnapshot: (delay?: number) => void;
   scheduleTopologySnapshotRefresh: (delay?: number) => void;
   syncHostContext: (options?: {
@@ -570,6 +574,24 @@ export function createStandaloneLifecycleManager(
     postLifecycleStatusMessage(config.commandType, "success");
   }
 
+  async function refreshRuntimeStoreAfterLifecycle(
+    config: LifecycleCommandConfig,
+    request: ActiveLifecycleRequest
+  ): Promise<void> {
+    if (config.commandType === "destroy" || !options.refreshRuntimeStore) {
+      return;
+    }
+    try {
+      await options.refreshRuntimeStore({
+        sessionId: request.sessionId,
+        topologyRef: request.topologyRef
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      postLifecycleLogMessage(config.commandType, `Runtime refresh failed: ${message}`, "stderr");
+    }
+  }
+
   async function executeLifecycleCommand(
     config: LifecycleCommandConfig,
     topologyRef: TopologyRef,
@@ -598,6 +620,7 @@ export function createStandaloneLifecycleManager(
       }
 
       if (!shouldWaitForLabRunningState(config.commandType)) {
+        await refreshRuntimeStoreAfterLifecycle(config, request);
         completeLifecycleSuccess(config, topologyRef);
         return;
       }
@@ -617,6 +640,7 @@ export function createStandaloneLifecycleManager(
         return;
       }
 
+      await refreshRuntimeStoreAfterLifecycle(config, request);
       completeLifecycleSuccess(config, topologyRef);
     } catch (error) {
       if (!request.isCurrent() || request.isCancelled() || isAbortError(error)) {

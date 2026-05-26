@@ -33,6 +33,8 @@
     "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin apps packages",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin apps packages --fix --fix-suggestions",
     "test:unit": "node --import tsx --test 'packages/**/*.test.ts' 'packages/**/*.test.tsx'",
+    "stress:api-bff": "node scripts/run-stress-api-bff.mjs",
+    "stress:api-bff:worker": "node scripts/stress-api-bff.mjs",
     "test:e2e:web": "npm run test:e2e --workspace containerlab-app-web",
     "test:e2e:web:local-ui": "npm run test:e2e:local-ui --workspace containerlab-app-web",
     "test:e2e:web:smoke": "npm run test:e2e:smoke --workspace containerlab-app-web",

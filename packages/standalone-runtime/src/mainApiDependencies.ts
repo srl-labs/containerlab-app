@@ -21,6 +21,7 @@ export {
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  inspectLab,
   pullRuntimeImage,
   reconcileUiIcons,
   removeRuntimeImage,

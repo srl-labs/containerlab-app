@@ -48,6 +48,7 @@ import { useLabStore } from "../stores/labStore";
 import { runtimeUiActions, useRuntimeUiStore } from "../stores/runtimeUiStore";
 import {
   DEFAULT_TOPOLOGY_FILE_NAME,
+  normalizeTopologyFileNameForCreate,
   setCloneRepoDialogRequester,
   setCreateTopologyDialogRequester,
   setEndpointSelectionDialogRequester,
@@ -1135,14 +1136,40 @@ function RuntimeSnackbarView(props: {
   closeSnackbar: () => void;
   snackbar: ReturnType<typeof useRuntimeUiStore.getState>["snackbar"];
 }) {
+  const severity = props.snackbar.severity;
   return (
     <Snackbar
       open={props.snackbar.open}
       autoHideDuration={5000}
       onClose={props.closeSnackbar}
       anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      sx={{
+        maxWidth: { xs: "calc(100vw - 32px)", sm: 560 }
+      }}
     >
-      <Alert onClose={props.closeSnackbar} severity={props.snackbar.severity} variant="filled">
+      <Alert
+        onClose={props.closeSnackbar}
+        severity={severity}
+        variant="outlined"
+        sx={(theme) => ({
+          alignItems: "flex-start",
+          bgcolor: "background.paper",
+          borderColor: `${severity}.main`,
+          boxShadow: theme.shadows[6],
+          color: "text.primary",
+          width: "100%",
+          "& .MuiAlert-icon": {
+            color: `${severity}.main`
+          },
+          "& .MuiAlert-action": {
+            color: "text.secondary"
+          },
+          "& .MuiAlert-message": {
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word"
+          }
+        })}
+      >
         {props.snackbar.message}
       </Alert>
     </Snackbar>
@@ -1802,7 +1829,7 @@ export function RuntimeActionDialogs() {
     }
     closeCreateTopologyDialog({
       endpointId: createTopologyEndpointValue,
-      fileName: trimmedCreateTopologyFileNameInput
+      fileName: normalizeTopologyFileNameForCreate(trimmedCreateTopologyFileNameInput)
     });
   }, [
     closeCreateTopologyDialog,

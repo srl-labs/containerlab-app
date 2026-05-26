@@ -580,7 +580,7 @@ function useRequestedEndpointActionDialog(input: {
       setRemoveEndpointId,
       sortedEndpoints
     } = input;
-    if (!requestedAction) {
+    if (!requestedAction || requestedAction.action === "add") {
       return;
     }
 

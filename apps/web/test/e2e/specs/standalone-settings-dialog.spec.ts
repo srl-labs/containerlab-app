@@ -52,6 +52,93 @@ test.describe("Standalone Settings Dialog", () => {
     return dialog;
   }
 
+  async function mockConnectedEndpointExplorer(page: Page) {
+    await page.addInitScript(() => {
+      class MockEventSource extends EventTarget {
+        onopen: ((event: Event) => void) | null = null;
+        onmessage: ((event: MessageEvent) => void) | null = null;
+        onerror: ((event: Event) => void) | null = null;
+        readyState = 0;
+        url: string;
+
+        constructor(url: string) {
+          super();
+          this.url = url;
+          window.setTimeout(() => {
+            this.readyState = 1;
+            this.onopen?.(new Event("open"));
+            this.dispatchEvent(new Event("open"));
+          }, 0);
+        }
+
+        close(): void {
+          this.readyState = 2;
+        }
+      }
+
+      window.EventSource = MockEventSource as unknown as typeof EventSource;
+    });
+    await page.route("**/auth/me**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          endpoints: [
+            {
+              id: "test-endpoint",
+              url: "https://localhost:8090",
+              label: "Test Endpoint",
+              username: "admin",
+              sessionDuration: "24h",
+              status: "connected",
+              connected: true
+            }
+          ]
+        })
+      });
+    });
+    await page.route("**/files**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([])
+      });
+    });
+    await page.route("**/api/runtime/ui/custom-nodes**", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ customNodes: [], defaultNode: "" })
+      });
+    });
+    await page.route("**/auth/endpoints/test-endpoint/metrics", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          serverInfo: {
+            version: "test",
+            uptime: "1m",
+            startTime: "2026-04-24T00:00:00Z"
+          },
+          metrics: {
+            cpu: { usagePercent: 12.4, numCPU: 8 },
+            mem: { usagePercent: 45.6, usedMem: 4_294_967_296, totalMem: 8_589_934_592 },
+            disk: {
+              path: "/",
+              usagePercent: 67.8,
+              usedDisk: 107_374_182_400,
+              totalDisk: 214_748_364_800
+            }
+          }
+        })
+      });
+    });
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+  }
+
   test("quick panel keeps connection status and logout close to the gear button", async ({ page }) => {
     await page.locator(SEL_SETTINGS_BUTTON).click();
 
@@ -277,6 +364,49 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(tooltip).toContainText("CPU: 12% (8 cores)");
     await expect(tooltip).toContainText("Memory: 46% (4.0 GiB / 8.0 GiB)");
     await expect(tooltip).toContainText("Disk: 68% (100 GiB / 200 GiB on /)");
+  });
+
+  test("endpoint explorer quick actions and blank endpoint area menu expose endpoint workflows", async ({ page }) => {
+    await mockConnectedEndpointExplorer(page);
+
+    const endpointRow = page
+      .locator('[data-explorer-node-row="true"]')
+      .filter({ hasText: "Test Endpoint" })
+      .filter({ hasText: "localhost:8090" });
+    await expect(endpointRow).toBeVisible();
+
+    await endpointRow.hover();
+    const newTopologyButton = endpointRow.getByRole("button", { name: "New topology file" });
+    await newTopologyButton.hover();
+    await expect(page.getByRole("tooltip", { name: "New Topology File" })).toBeVisible();
+
+    await page.mouse.move(0, 0);
+    const cloneButton = endpointRow.getByRole("button", { name: "Clone repository" });
+    await endpointRow.hover();
+    await cloneButton.hover();
+    await expect(page.getByRole("tooltip", { name: "Clone Repository" })).toBeVisible();
+
+    await page.mouse.move(0, 0);
+    await endpointRow.click({ button: "right" });
+    const endpointMenu = page.locator('[data-testid="context-menu"]').last();
+    await expect(endpointMenu.getByText("New Topology File", { exact: true })).toBeVisible();
+    await expect(endpointMenu.getByText("Clone Repository", { exact: true })).toBeVisible();
+    await expect(endpointMenu.getByText("Capture", { exact: true })).toBeVisible();
+    await expect(endpointMenu.getByText("Topology", { exact: true })).toHaveCount(0);
+    await expect(endpointMenu.getByText("Other", { exact: true })).toHaveCount(0);
+
+    await page.keyboard.press("Escape");
+    const rowBox = await endpointRow.boundingBox();
+    if (!rowBox) {
+      throw new Error("Expected endpoint row to have a bounding box");
+    }
+    await page.mouse.click(rowBox.x + 12, rowBox.y + rowBox.height + 16, { button: "right" });
+    const blankAreaMenu = page.locator('[data-testid="context-menu"]').last();
+    await blankAreaMenu.getByText("Add Endpoint", { exact: true }).click();
+
+    const dialog = page.locator(SEL_SETTINGS_DIALOG);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
   });
 
   test("opens Help & Feedback links from the explorer", async ({ page }) => {

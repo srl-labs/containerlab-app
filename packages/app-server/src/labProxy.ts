@@ -5,7 +5,12 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { ClabApiClient } from "./clabApiClient.ts";
+import {
+  getHttpErrorStatus,
+  isUpstreamNetworkError,
+  type ClabApiClient,
+  type LifecycleActionResult
+} from "./clabApiClient.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
 import {
   extractEndpointIdFromTopologyId,
@@ -36,6 +41,9 @@ interface ResolvedLabTarget {
 const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
 type LabNodeLifecycleEndpoint = (typeof LAB_NODE_LIFECYCLE_ENDPOINTS)[number];
 type LifecycleStreamEndpoint = "deploy" | "destroy" | "redeploy" | LabNodeLifecycleEndpoint;
+
+const LIFECYCLE_RECONCILE_TIMEOUT_MS = 30000;
+const LIFECYCLE_RECONCILE_INTERVAL_MS = 1000;
 
 interface LifecycleStreamOptions {
   cleanup?: boolean;
@@ -169,7 +177,141 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   if (error instanceof RequestError) {
     return reply.status(error.statusCode).send({ error: message });
   }
-  return reply.status(500).send({ error: message });
+  return reply.status(getHttpErrorStatus(error) ?? 500).send({ error: message });
+}
+
+function lifecycleExpectedRunning(action: LifecycleStreamEndpoint): boolean | undefined {
+  switch (action) {
+    case "deploy":
+      return true;
+    case "destroy":
+      return false;
+    case "redeploy":
+    case "start":
+    case "restart":
+    case "stop":
+      return undefined;
+  }
+}
+
+function lifecycleUnknownMessage(action: LifecycleStreamEndpoint): string {
+  return `Lifecycle ${action} result is unknown after the upstream connection was interrupted. Retry after a short delay or refresh lab state.`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function waitForLabRunningState(
+  client: ClabApiClient,
+  token: string,
+  labName: string,
+  expectedRunning: boolean
+): Promise<{ matched: boolean; running?: boolean; error?: unknown }> {
+  const deadline = Date.now() + LIFECYCLE_RECONCILE_TIMEOUT_MS;
+  let lastRunning: boolean | undefined;
+  let lastError: unknown;
+
+  while (Date.now() <= deadline) {
+    try {
+      const running = await client.isLabRunning(token, labName);
+      lastRunning = running;
+      if (running === expectedRunning) {
+        return { matched: true, running };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await sleep(LIFECYCLE_RECONCILE_INTERVAL_MS);
+  }
+
+  return { matched: false, running: lastRunning, error: lastError };
+}
+
+async function reconcileIndeterminateLifecycleError(
+  reply: FastifyReply,
+  error: unknown,
+  client: ClabApiClient,
+  token: string,
+  labName: string,
+  action: LifecycleStreamEndpoint,
+  preRunning?: boolean
+): Promise<FastifyReply | undefined> {
+  if (!isUpstreamNetworkError(error)) {
+    return undefined;
+  }
+
+  const expectedRunning = lifecycleExpectedRunning(action);
+  if (expectedRunning === undefined) {
+    reply.header("Retry-After", "5");
+    return reply.status(503).send({
+      success: false,
+      reconciled: false,
+      error: lifecycleUnknownMessage(action)
+    });
+  }
+
+  const state = await waitForLabRunningState(client, token, labName, expectedRunning);
+  const canTrustState =
+    action === "destroy" ||
+    (action === "deploy" && preRunning === false);
+  if (state.matched && canTrustState) {
+    return reply.send({
+      success: true,
+      reconciled: true,
+      result: {
+        labName,
+        running: state.running
+      },
+      message: `Lifecycle ${action} result reconciled after the upstream connection was interrupted.`,
+      logs: []
+    });
+  }
+
+  reply.header("Retry-After", "5");
+  return reply.status(503).send({
+    success: false,
+    reconciled: false,
+    running: state.running,
+    error: lifecycleUnknownMessage(action)
+  });
+}
+
+async function sendLifecycleJsonAction(
+  reply: FastifyReply,
+  client: ClabApiClient,
+  token: string,
+  labName: string,
+  action: LifecycleStreamEndpoint,
+  run: () => Promise<LifecycleActionResult>,
+  options: { preRunning?: boolean } = {}
+): Promise<FastifyReply> {
+  try {
+    const lifecycle = await run();
+    return reply.send({
+      success: true,
+      result: lifecycle.result,
+      message: lifecycle.message,
+      logs: lifecycle.logs ?? []
+    });
+  } catch (error) {
+    const reconciled = await reconcileIndeterminateLifecycleError(
+      reply,
+      error,
+      client,
+      token,
+      labName,
+      action,
+      options.preRunning
+    );
+    if (reconciled) {
+      return reconciled;
+    }
+    throw error;
+  }
 }
 
 async function openAndForwardLifecycleStream(
@@ -179,7 +321,8 @@ async function openAndForwardLifecycleStream(
   token: string,
   action: LifecycleStreamEndpoint,
   labName: string,
-  options: LifecycleStreamOptions = {}
+  options: LifecycleStreamOptions = {},
+  reconcileOptions: { preRunning?: boolean } = {}
 ): Promise<FastifyReply | void> {
   let aborted = false;
   const abortController = new AbortController();
@@ -196,6 +339,18 @@ async function openAndForwardLifecycleStream(
     await forwardNdjsonStream(request, reply, streamResponse, () => aborted);
   } catch (error) {
     if (!aborted) {
+      const reconciled = await reconcileIndeterminateLifecycleError(
+        reply,
+        error,
+        client,
+        token,
+        labName,
+        action,
+        reconcileOptions.preRunning
+      );
+      if (reconciled) {
+        return reconciled;
+      }
       return handleRouteError(reply, error);
     }
   } finally {
@@ -222,15 +377,17 @@ export function registerLabProxy(
         try {
           const { client, endpoint } = resolved;
           const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-          const lifecycle = await client.controlLabLifecycle(endpoint.token, target.labName, action, {
-            includeLogs: true
-          });
-          return reply.send({
-            success: true,
-            result: lifecycle.result,
-            message: lifecycle.message,
-            logs: lifecycle.logs ?? []
-          });
+          return await sendLifecycleJsonAction(
+            reply,
+            client,
+            endpoint.token,
+            target.labName,
+            action,
+            () =>
+              client.controlLabLifecycle(endpoint.token, target.labName, action, {
+                includeLogs: true
+              })
+          );
         } catch (error) {
           return handleRouteError(reply, error);
         }
@@ -299,17 +456,21 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const lifecycle = await client.deployLab(endpoint.token, target.labName, {
-          path: target.yamlPath,
-          cleanup: request.body.cleanup === true,
-          includeLogs: true
-        });
-        return reply.send({
-          success: true,
-          result: lifecycle.result,
-          message: lifecycle.message,
-          logs: lifecycle.logs ?? []
-        });
+        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        return await sendLifecycleJsonAction(
+          reply,
+          client,
+          endpoint.token,
+          target.labName,
+          "deploy",
+          () =>
+            client.deployLab(endpoint.token, target.labName, {
+              path: target.yamlPath,
+              cleanup: request.body.cleanup === true,
+              includeLogs: true
+            }),
+          { preRunning }
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -360,16 +521,20 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const lifecycle = await client.destroyLab(endpoint.token, target.labName, {
-          cleanup: request.body.cleanup === true,
-          includeLogs: true
-        });
-        return reply.send({
-          success: true,
-          result: lifecycle.result,
-          message: lifecycle.message,
-          logs: lifecycle.logs ?? []
-        });
+        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        return await sendLifecycleJsonAction(
+          reply,
+          client,
+          endpoint.token,
+          target.labName,
+          "destroy",
+          () =>
+            client.destroyLab(endpoint.token, target.labName, {
+              cleanup: request.body.cleanup === true,
+              includeLogs: true
+            }),
+          { preRunning }
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -419,16 +584,18 @@ export function registerLabProxy(
       try {
         const { client, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const lifecycle = await client.redeployLab(endpoint.token, target.labName, {
-          cleanup: request.body.cleanup === true,
-          includeLogs: true
-        });
-        return reply.send({
-          success: true,
-          result: lifecycle.result,
-          message: lifecycle.message,
-          logs: lifecycle.logs ?? []
-        });
+        return await sendLifecycleJsonAction(
+          reply,
+          client,
+          endpoint.token,
+          target.labName,
+          "redeploy",
+          () =>
+            client.redeployLab(endpoint.token, target.labName, {
+              cleanup: request.body.cleanup === true,
+              includeLogs: true
+            })
+        );
       } catch (error) {
         return handleRouteError(reply, error);
       }

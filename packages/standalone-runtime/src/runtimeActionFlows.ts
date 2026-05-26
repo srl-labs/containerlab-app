@@ -168,6 +168,16 @@ export interface ActiveCloneRepoDialogRequest {
 
 export const DEFAULT_TOPOLOGY_FILE_NAME = "new-lab.clab.yml";
 
+export function normalizeTopologyFileNameForCreate(fileName: string): string {
+  const trimmed = fileName.trim();
+  const lastSeparatorIndex = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  const basename = trimmed.slice(lastSeparatorIndex + 1);
+  if (!basename || basename.includes(".")) {
+    return trimmed;
+  }
+  return `${trimmed}.clab.yml`;
+}
+
 type TopologyFileNameDialogRequester = (
   request: ActiveTopologyFileNameDialogRequest
 ) => Promise<string | undefined>;
@@ -446,7 +456,13 @@ export async function promptForCreateTopology(
     return undefined;
   }
   if (requestCreateTopologyFromDialog) {
-    return requestCreateTopologyFromDialog(normalizedRequest);
+    const result = await requestCreateTopologyFromDialog(normalizedRequest);
+    return result
+      ? {
+          ...result,
+          fileName: normalizeTopologyFileNameForCreate(result.fileName)
+        }
+      : undefined;
   }
 
   const endpointId = await promptForEndpointSelection({
@@ -467,7 +483,7 @@ export async function promptForCreateTopology(
   if (!fileName) {
     return undefined;
   }
-  return { endpointId, fileName };
+  return { endpointId, fileName: normalizeTopologyFileNameForCreate(fileName) };
 }
 
 function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): ActiveCloneRepoDialogRequest {
@@ -627,10 +643,11 @@ export async function createTopologyFileFlow(): Promise<void> {
     return;
   }
 
+  const fileName = normalizeTopologyFileNameForCreate(rawFileName);
   try {
-    const created = await createTopologyFile({ fileName: rawFileName });
-    runtimeUiActions.notify(`Created topology file "${rawFileName}".`, "success");
-    runtimeUiActions.openInspectLab({ topologyRef: created.topologyRef }, `New Topology: ${rawFileName}`);
+    const created = await createTopologyFile({ fileName });
+    runtimeUiActions.notify(`Created topology file "${fileName}".`, "success");
+    runtimeUiActions.openInspectLab({ topologyRef: created.topologyRef }, `New Topology: ${fileName}`);
   } catch (error) {
     runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
   }

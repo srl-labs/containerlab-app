@@ -100,6 +100,7 @@ function resolveSessionPersistenceFile(): string {
 let appServer: FastifyInstance | null = null;
 let mainWindow: BrowserWindow | null = null;
 const captureWindows = new Set<BrowserWindow>();
+const terminalWindows = new Set<BrowserWindow>();
 let isQuitting = false;
 
 function parseAppUrl(rawUrl: string, serverOrigin: string): URL | null {
@@ -119,6 +120,11 @@ function isWiresharkCaptureUrl(rawUrl: string, serverOrigin: string): boolean {
   return parsed?.origin === serverOrigin && parsed.pathname === "/wireshark.html";
 }
 
+function isTerminalUrl(rawUrl: string, serverOrigin: string): boolean {
+  const parsed = parseAppUrl(rawUrl, serverOrigin);
+  return parsed?.origin === serverOrigin && parsed.pathname === "/terminal.html";
+}
+
 function openExternalUrl(rawUrl: string): void {
   void shell.openExternal(rawUrl);
 }
@@ -133,6 +139,8 @@ function applyNavigationPolicy(window: BrowserWindow, serverOrigin: string): voi
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isWiresharkCaptureUrl(url, serverOrigin)) {
       openWiresharkCaptureWindow(url, serverOrigin);
+    } else if (isTerminalUrl(url, serverOrigin)) {
+      openTerminalWindow(url, serverOrigin);
     } else {
       openExternalUrl(url);
     }
@@ -175,6 +183,39 @@ function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
   });
 
   void captureWindow.loadURL(url);
+}
+
+function openTerminalWindow(url: string, serverOrigin: string): void {
+  const icon = resolveWindowIcon();
+  const terminalWindow = new BrowserWindow({
+    autoHideMenuBar: true,
+    backgroundColor: "#07111f",
+    center: true,
+    height: 720,
+    icon,
+    minHeight: 360,
+    minWidth: 640,
+    parent: mainWindow ?? undefined,
+    show: false,
+    title: "Containerlab Terminal",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    },
+    width: 1000
+  });
+
+  terminalWindows.add(terminalWindow);
+  applyNavigationPolicy(terminalWindow, serverOrigin);
+  terminalWindow.once("ready-to-show", () => {
+    terminalWindow.show();
+  });
+  terminalWindow.on("closed", () => {
+    terminalWindows.delete(terminalWindow);
+  });
+
+  void terminalWindow.loadURL(url);
 }
 
 async function startLocalAppServer(): Promise<string> {

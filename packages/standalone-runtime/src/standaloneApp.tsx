@@ -39,7 +39,6 @@ import {
   extractEndpointIdFromTopologyId,
   isStandaloneLifecycleCommand,
   labsEqualForExplorer,
-  normalizePathValue,
   resolveStandaloneStartupScreen,
   useAuth,
   useEndpointStore,
@@ -62,6 +61,7 @@ import {
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  inspectLab,
   pullRuntimeImage,
   isFileLabTab,
   getSessionHostnameOverride,
@@ -395,30 +395,35 @@ function createEmptyTopologySnapshot(): TopologySnapshot {
 }
 
 function removeLabFromRuntimeStore(
-  topologyRef: Pick<TopologyRef, "topologyId" | "yamlPath">,
+  topologyRef: Pick<TopologyRef, "labName" | "topologyId" | "yamlPath">,
 ): void {
-  useLabStore.setState((state) => {
-    let changed = false;
-    const nextLabs = new Map(state.labs);
-    const endpointId = extractEndpointIdFromTopologyId(topologyRef.topologyId);
-    const normalizedPath = normalizePathValue(topologyRef.yamlPath ?? "");
-    for (const [key, lab] of nextLabs.entries()) {
-      if (endpointId && lab.endpointId !== endpointId) {
-        continue;
-      }
-      const matchesPath =
-        normalizedPath.length > 0 &&
-        (normalizePathValue(lab.topologyPath) === normalizedPath ||
-          [...lab.containers.values()].some(
-            (container) =>
-              normalizePathValue(container.labPath) === normalizedPath,
-          ));
-      if (matchesPath) {
-        nextLabs.delete(key);
-        changed = true;
-      }
-    }
-    return changed ? { labs: nextLabs } : state;
+  useLabStore.getState().removeLabByTopology({
+    endpointId: extractEndpointIdFromTopologyId(topologyRef.topologyId),
+    labName: topologyRef.labName,
+    topologyPath: topologyRef.yamlPath,
+  });
+}
+
+async function refreshRuntimeStoreForTopology(target: {
+  sessionId?: string;
+  topologyRef: TopologyRef;
+}): Promise<void> {
+  const endpointId = extractEndpointIdFromTopologyId(target.topologyRef.topologyId);
+  if (!endpointId) {
+    return;
+  }
+
+  const containers = await inspectLab({
+    endpointId,
+    sessionId: target.sessionId,
+    topologyRef: target.topologyRef,
+  });
+
+  useLabStore.getState().replaceLabSnapshot({
+    endpointId,
+    labName: target.topologyRef.labName,
+    topologyPath: target.topologyRef.yamlPath,
+    containers,
   });
 }
 
@@ -610,6 +615,7 @@ const lifecycleManager = createStandaloneLifecycleManager({
   invalidateTopologyFileListCache:
     topologyManager.invalidateTopologyFileListCache,
   removeLabFromRuntimeStore,
+  refreshRuntimeStore: refreshRuntimeStoreForTopology,
   scheduleExplorerSnapshot: (delay) => scheduleExplorerSnapshot(delay),
   scheduleTopologySnapshotRefresh: (delay) =>
     topologyManager.scheduleSnapshotRefresh(delay),
