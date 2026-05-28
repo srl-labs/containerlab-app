@@ -186,7 +186,7 @@ export function FileEditorDialog() {
             {dirty ? " *" : ""}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            ~/.clab/{fileEditor.path}
+            Lab workspace/{fileEditor.path}
           </Typography>
         </Stack>
       </DialogTitle>
