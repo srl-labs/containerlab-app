@@ -69,7 +69,7 @@ The systemd service runs as `root` because the API server controls host containe
 
 For temporary local trials, Containerlab's `containerlab tools api-server start` command can also start the API server. For regular use, prefer the installed service.
 
-Topology files created through the app are stored by `clab-api-server` on the API host. By default that is the authenticated user's `~/.clab` directory. To use another server-side root, set `CLAB_LABS_ROOT=/absolute/path` in the API server configuration; files are then stored under `$CLAB_LABS_ROOT/users/<username>/`. For the Containerlab tools helper, use `containerlab tools api-server start --labs-dir /absolute/path`.
+Topology files created through the app are stored by `clab-api-server` on the API host. By default that is the authenticated user's `~/.clab` directory. To use another server-side root, set `CLAB_LABS_ROOT=/absolute/path` in the API server configuration; files are then stored under `$CLAB_LABS_ROOT/<username>/`. For the Containerlab tools helper, use `containerlab tools api-server start --labs-dir /absolute/path`.
 
 On macOS, run `clab-api-server` in the Linux environment that owns containerlab and the Docker daemon, such as an OrbStack VM, Docker Desktop VM, devcontainer, or a remote Linux lab host. The app then connects to that API endpoint from the browser or desktop app.
 
