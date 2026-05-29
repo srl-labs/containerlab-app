@@ -1241,7 +1241,7 @@ function buildFileExplorerEntryItem(
     id: `file:${entry.endpointId}:${entry.path || "."}`,
     label: entry.name || safeFilename(entry.path),
     description,
-    tooltip: `~/.clab/${entry.path}`,
+    tooltip: `Lab workspace/${entry.path}`,
     contextValue,
     endpointId: entry.endpointId,
     labName: entry.labName,
@@ -1610,7 +1610,7 @@ export function createStandaloneExplorerBridge(
             .map((endpoint) => ({
               id: `file-root:${endpoint.id}`,
               label: endpoint.label,
-              tooltip: `${endpoint.label} (${endpoint.url}): ~/.clab`,
+              tooltip: `${endpoint.label} (${endpoint.url}): lab workspace`,
               contextValue: "containerlabFileExplorerRoot",
               endpointId: endpoint.id,
               resourceKind: "directory",
@@ -2842,7 +2842,7 @@ export function createStandaloneExplorerBridge(
     ): Promise<string | undefined> => {
       const rawValue = await promptForTextInput({
         title,
-        message: "Enter a path under ~/.clab.",
+        message: "Enter a path under the lab workspace.",
         label: "Path",
         defaultValue: defaultPath,
         confirmLabel: title.startsWith("Rename") ? "Rename" : "Create",
@@ -2936,7 +2936,7 @@ export function createStandaloneExplorerBridge(
       const suffix = isDirectory ? " and everything inside it" : "";
       const confirmed = await confirmRuntimeAction({
         title: `Delete ${kind}`,
-        message: `Delete ${kind} "~/.clab/${pathValue}"${suffix}?`,
+        message: `Delete ${kind} "Lab workspace/${pathValue}"${suffix}?`,
         confirmLabel: "Delete",
         severity: "error",
       });
@@ -2955,7 +2955,7 @@ export function createStandaloneExplorerBridge(
       if (!pathValue) {
         return;
       }
-      await copyText(`~/.clab/${pathValue}`);
+      await copyText(pathValue);
       runtimeUiActions.notify(`Copied path for ${pathValue}.`, "success");
     };
 
@@ -2988,7 +2988,7 @@ export function createStandaloneExplorerBridge(
         }
         const confirmed = await confirmRuntimeAction({
           title: "Replace File",
-          message: `Replace "~/.clab/${targetPath}" with "${file.name}"?`,
+          message: `Replace "Lab workspace/${targetPath}" with "${file.name}"?`,
           confirmLabel: "Replace",
           severity: "warning",
         });
@@ -3010,7 +3010,7 @@ export function createStandaloneExplorerBridge(
       });
       refreshWorkspaceAfterMutation(endpointId);
       runtimeUiActions.notify(
-        `Uploaded ${files.length} file${files.length === 1 ? "" : "s"} to ~/.clab${directoryPath ? `/${directoryPath}` : ""}.`,
+        `Uploaded ${files.length} file${files.length === 1 ? "" : "s"} to lab workspace${directoryPath ? `/${directoryPath}` : ""}.`,
         "success",
       );
     };
