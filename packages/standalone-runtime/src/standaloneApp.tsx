@@ -94,7 +94,7 @@ import type {
 import {
   mergeCustomNodeTemplates,
   parseCustomNodeTemplatesExport,
-} from "./customNodeImportExport";
+} from "@srl-labs/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { isPagesRuntimeMode } from "./runtimeMode";
