@@ -85,16 +85,16 @@ import {
   type FileLabTab,
   type TerminalPreferences,
 } from "./mainApiDependencies";
-import {
-  mergeCustomNodeTemplates,
-  parseCustomNodeTemplatesExport,
-} from "@srl-labs/clab-ui/session";
 import type * as ImageManagerExports from "@srl-labs/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
   ImageActionResult,
   KindImageReference,
 } from "@srl-labs/clab-ui/image-manager";
+import {
+  mergeCustomNodeTemplates,
+  parseCustomNodeTemplatesExport,
+} from "./customNodeImportExport";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { isPagesRuntimeMode } from "./runtimeMode";
