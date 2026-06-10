@@ -71,6 +71,7 @@ import {
   readPersistedStandaloneTheme,
   reconcileUiIcons,
   removeRuntimeImage,
+  replaceUiCustomNodes,
   resolveFileTab,
   resolveLabTab,
   resolveStandaloneTheme,
@@ -84,6 +85,10 @@ import {
   type FileLabTab,
   type TerminalPreferences,
 } from "./mainApiDependencies";
+import {
+  mergeCustomNodeTemplates,
+  parseCustomNodeTemplatesExport,
+} from "@srl-labs/clab-ui/session";
 import type * as ImageManagerExports from "@srl-labs/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
@@ -269,11 +274,11 @@ function clearStandaloneUiState(): void {
   applyCustomNodeError(null);
 }
 
-function pickIconFile(): Promise<File | null> {
+function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".svg,.png,image/svg+xml,image/png";
+    input.accept = accept;
     input.style.position = "fixed";
     input.style.left = "-9999px";
     let settled = false;
@@ -1069,10 +1074,42 @@ function handleSetDefaultCustomNodeCommand(msg: VscodeMessage): void {
     });
 }
 
+function handleImportCustomNodesCommand(): void {
+  void (async () => {
+    try {
+      const file = await pickFile(".json,application/json");
+      if (!file) {
+        return;
+      }
+      const imported = parseCustomNodeTemplatesExport(await file.text());
+      const existing = useTopoViewerStore.getState().customNodes;
+      const { customNodes, added, replaced } = mergeCustomNodeTemplates(
+        existing,
+        imported,
+      );
+      const response = await replaceUiCustomNodes(
+        customNodes,
+        getEndpointIdForEditorContext(),
+      );
+      applyCustomNodeError(null);
+      applyCustomNodes(response.customNodes, response.defaultNode);
+      runtimeUiActions.notify(
+        `Imported node templates: ${added} added, ${replaced} updated`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      applyCustomNodeError(errorMessage);
+      runtimeUiActions.notify(errorMessage, "error");
+    }
+  })();
+}
+
 function handleIconUploadCommand(): void {
   void (async () => {
     try {
-      const file = await pickIconFile();
+      const file = await pickFile(".svg,.png,image/svg+xml,image/png");
       if (!file) {
         return;
       }
@@ -1148,6 +1185,7 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   "save-custom-node": handleSaveCustomNodeCommand,
   "delete-custom-node": handleDeleteCustomNodeCommand,
   "set-default-custom-node": handleSetDefaultCustomNodeCommand,
+  "import-custom-nodes": handleImportCustomNodesCommand,
   "icon-list": () => {
     void refreshCustomIconsForCurrentTopology().catch(() => {
       applyCustomIcons([]);

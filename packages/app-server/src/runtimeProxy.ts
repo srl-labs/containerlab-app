@@ -1452,6 +1452,29 @@ export function registerRuntimeProxy(
     }
   );
 
+  app.put<{ Body: { customNodes?: unknown } }>(
+    "/api/runtime/ui/custom-nodes",
+    async (request: FastifyRequest<{ Body: { customNodes?: unknown } }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply);
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const customNodes = request.body?.customNodes;
+        if (!Array.isArray(customNodes)) {
+          throw new RequestError("Missing customNodes array", 400);
+        }
+        return reply.send(
+          await resolved.client.replaceCustomNodes(
+            resolved.endpoint.token,
+            customNodes as Record<string, unknown>[]
+          )
+        );
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
   app.delete<{ Params: { name: string } }>(
     "/api/runtime/ui/custom-nodes/:name",
     async (request: FastifyRequest<{ Params: { name: string } }>, reply: FastifyReply) => {

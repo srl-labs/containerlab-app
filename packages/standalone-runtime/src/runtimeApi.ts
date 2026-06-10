@@ -1017,6 +1017,24 @@ export async function saveUiCustomNode(
   );
 }
 
+export async function replaceUiCustomNodes(
+  customNodes: CustomNodeTemplate[],
+  endpointId?: string
+): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    "/api/runtime/ui/custom-nodes",
+    withEndpointHeaders(
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customNodes })
+      },
+      endpointId
+    ),
+    endpointId
+  );
+}
+
 export async function deleteUiCustomNode(
   name: string,
   endpointId?: string

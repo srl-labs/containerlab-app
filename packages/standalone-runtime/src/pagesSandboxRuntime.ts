@@ -758,6 +758,16 @@ class PagesSandboxApi {
       return successResponse(currentCustomNodes(this.storage));
     }
 
+    if (path === "/api/runtime/ui/custom-nodes" && method === "PUT") {
+      const payload = await requestPayload(input, init) as { customNodes?: unknown };
+      const customNodes = Array.isArray(payload.customNodes) ? payload.customNodes : [];
+      return successResponse(writeCustomNodes(
+        this.storage,
+        customNodes,
+        firstCustomNodeName(customNodes),
+      ));
+    }
+
     if (path === "/api/runtime/ui/custom-nodes" && method === "POST") {
       const payload = await requestPayload(input, init) as Record<string, unknown>;
       const current = currentCustomNodes(this.storage);
