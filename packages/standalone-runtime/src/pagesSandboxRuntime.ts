@@ -109,8 +109,9 @@ interface FileExplorerEntry {
 
 interface IconInfo {
   name: string;
-  url?: string;
-  source?: string;
+  source: "global" | "workspace";
+  dataUri: string;
+  format: "svg" | "png";
 }
 
 let installed = false;
@@ -550,6 +551,30 @@ function writeIcons(storage: StorageLike, icons: IconInfo[]): void {
   writeJson(storage, SANDBOX_STORAGE_ICONS, icons);
 }
 
+function iconInfoFromUploadPayload(payload: {
+  fileName?: unknown;
+  contentType?: unknown;
+  dataBase64?: unknown;
+}): IconInfo {
+  const fileName = typeof payload.fileName === "string" ? safeFilename(payload.fileName) : "icon.svg";
+  const dotIndex = fileName.lastIndexOf(".");
+  const rawName = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
+  const ext = dotIndex > 0 ? fileName.slice(dotIndex + 1).toLowerCase() : "svg";
+  const format = ext === "png" ? "png" : "svg";
+  let contentType = format === "png" ? "image/png" : "image/svg+xml";
+  if (typeof payload.contentType === "string" && payload.contentType.length > 0) {
+    contentType = payload.contentType;
+  }
+  const dataBase64 = typeof payload.dataBase64 === "string" ? payload.dataBase64 : "";
+
+  return {
+    name: rawName || "icon",
+    source: "global",
+    dataUri: `data:${contentType};base64,${dataBase64}`,
+    format,
+  };
+}
+
 function fakeHealthMetrics(): EndpointHealthMetrics {
   return {
     serverInfo: {
@@ -804,15 +829,11 @@ class PagesSandboxApi {
 
     if (path === "/api/runtime/ui/icons" && method === "POST") {
       const payload = await requestPayload(input, init) as { fileName?: unknown; dataBase64?: unknown };
-      const iconName = typeof payload.fileName === "string" ? safeFilename(payload.fileName) : "icon.svg";
-      const icons = currentIcons(this.storage).filter((icon) => icon.name !== iconName);
-      icons.push({
-        name: iconName,
-        source: "browser",
-        url: typeof payload.dataBase64 === "string" ? `data:image/svg+xml;base64,${payload.dataBase64}` : undefined,
-      });
+      const uploadedIcon = iconInfoFromUploadPayload(payload);
+      const icons = currentIcons(this.storage).filter((icon) => icon.name !== uploadedIcon.name);
+      icons.push(uploadedIcon);
       writeIcons(this.storage, icons);
-      return successResponse({ success: true, iconName });
+      return successResponse({ success: true, iconName: uploadedIcon.name });
     }
 
     if (path.startsWith("/api/runtime/ui/icons/") && method === "DELETE") {
@@ -963,10 +984,14 @@ class PagesSandboxApi {
       }
       this.fs.writeFiles(files);
       const directories = this.fs.readDirectories();
-      for (const directoryPath of [...directories]) {
+      const directoriesToDelete: string[] = [];
+      for (const directoryPath of directories) {
         if (directoryPath === pathValue || directoryPath.startsWith(`${pathValue}/`)) {
-          directories.delete(directoryPath);
+          directoriesToDelete.push(directoryPath);
         }
+      }
+      for (const directoryPath of directoriesToDelete) {
+        directories.delete(directoryPath);
       }
       this.fs.writeDirectories(directories);
       return;

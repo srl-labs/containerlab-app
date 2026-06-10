@@ -61,6 +61,7 @@ import {
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  importUiIcons,
   inspectLab,
   pullRuntimeImage,
   isFileLabTab,
@@ -93,7 +94,7 @@ import type {
 } from "@srl-labs/clab-ui/image-manager";
 import {
   mergeCustomNodeTemplates,
-  parseCustomNodeTemplatesExport,
+  parseCustomNodeTemplatesExportFile,
 } from "@srl-labs/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
@@ -256,6 +257,23 @@ function applyCustomNodes(
   defaultNode: string,
 ): void {
   useTopoViewerStore.getState().setCustomNodes(customNodes, defaultNode);
+}
+
+function rewriteTemplateIconNames(
+  templates: ReturnType<typeof useTopoViewerStore.getState>["customNodes"],
+  renamedIcons: Record<string, string>,
+): ReturnType<typeof useTopoViewerStore.getState>["customNodes"] {
+  if (Object.keys(renamedIcons).length === 0) {
+    return templates;
+  }
+  return templates.map((template) => {
+    const iconName = typeof template.icon === "string" ? template.icon : "";
+    const renamedIcon = renamedIcons[iconName];
+    if (renamedIcon === undefined) {
+      return template;
+    }
+    return { ...template, icon: renamedIcon };
+  });
 }
 
 function applyCustomIcons(
@@ -1081,7 +1099,15 @@ function handleImportCustomNodesCommand(): void {
       if (!file) {
         return;
       }
-      const imported = parseCustomNodeTemplatesExport(await file.text());
+      const parsed = parseCustomNodeTemplatesExportFile(await file.text());
+      const iconImport = await importUiIcons(
+        parsed.icons,
+        getEndpointIdForEditorContext(),
+      );
+      const imported = rewriteTemplateIconNames(
+        parsed.templates,
+        iconImport.renamed,
+      );
       const existing = useTopoViewerStore.getState().customNodes;
       const { customNodes, added, replaced } = mergeCustomNodeTemplates(
         existing,
@@ -1093,8 +1119,9 @@ function handleImportCustomNodesCommand(): void {
       );
       applyCustomNodeError(null);
       applyCustomNodes(response.customNodes, response.defaultNode);
+      await refreshCustomIconsForCurrentTopology();
       runtimeUiActions.notify(
-        `Imported node templates: ${added} added, ${replaced} updated`,
+        `Imported node templates: ${added} added, ${replaced} updated, ${iconImport.imported} icons imported`,
         "success",
       );
     } catch (error: unknown) {
