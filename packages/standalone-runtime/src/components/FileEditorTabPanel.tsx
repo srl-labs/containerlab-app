@@ -413,7 +413,7 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
               whiteSpace: "nowrap",
             }}
           >
-            ~/.clab/{tab.path}
+            Lab workspace/{tab.path}
           </div>
         </div>
         <button
