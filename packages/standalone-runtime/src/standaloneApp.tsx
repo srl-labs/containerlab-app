@@ -61,6 +61,7 @@ import {
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
+  importUiIcons,
   inspectLab,
   pullRuntimeImage,
   isFileLabTab,
@@ -71,6 +72,7 @@ import {
   readPersistedStandaloneTheme,
   reconcileUiIcons,
   removeRuntimeImage,
+  replaceUiCustomNodes,
   resolveFileTab,
   resolveLabTab,
   resolveStandaloneTheme,
@@ -90,6 +92,10 @@ import type {
   ImageActionResult,
   KindImageReference,
 } from "@srl-labs/clab-ui/image-manager";
+import {
+  mergeCustomNodeTemplates,
+  parseCustomNodeTemplatesExportFile,
+} from "@srl-labs/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { isPagesRuntimeMode } from "./runtimeMode";
@@ -253,6 +259,23 @@ function applyCustomNodes(
   useTopoViewerStore.getState().setCustomNodes(customNodes, defaultNode);
 }
 
+function rewriteTemplateIconNames(
+  templates: ReturnType<typeof useTopoViewerStore.getState>["customNodes"],
+  renamedIcons: Record<string, string>,
+): ReturnType<typeof useTopoViewerStore.getState>["customNodes"] {
+  if (Object.keys(renamedIcons).length === 0) {
+    return templates;
+  }
+  return templates.map((template) => {
+    const iconName = typeof template.icon === "string" ? template.icon : "";
+    const renamedIcon = renamedIcons[iconName];
+    if (renamedIcon === undefined) {
+      return template;
+    }
+    return { ...template, icon: renamedIcon };
+  });
+}
+
 function applyCustomIcons(
   customIcons: ReturnType<typeof useTopoViewerStore.getState>["customIcons"],
 ): void {
@@ -269,11 +292,11 @@ function clearStandaloneUiState(): void {
   applyCustomNodeError(null);
 }
 
-function pickIconFile(): Promise<File | null> {
+function pickFile(accept: string): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".svg,.png,image/svg+xml,image/png";
+    input.accept = accept;
     input.style.position = "fixed";
     input.style.left = "-9999px";
     let settled = false;
@@ -1069,10 +1092,51 @@ function handleSetDefaultCustomNodeCommand(msg: VscodeMessage): void {
     });
 }
 
+function handleImportCustomNodesCommand(): void {
+  void (async () => {
+    try {
+      const file = await pickFile(".json,application/json");
+      if (!file) {
+        return;
+      }
+      const parsed = parseCustomNodeTemplatesExportFile(await file.text());
+      const iconImport = await importUiIcons(
+        parsed.icons,
+        getEndpointIdForEditorContext(),
+      );
+      const imported = rewriteTemplateIconNames(
+        parsed.templates,
+        iconImport.renamed,
+      );
+      const existing = useTopoViewerStore.getState().customNodes;
+      const { customNodes, added, replaced } = mergeCustomNodeTemplates(
+        existing,
+        imported,
+      );
+      const response = await replaceUiCustomNodes(
+        customNodes,
+        getEndpointIdForEditorContext(),
+      );
+      applyCustomNodeError(null);
+      applyCustomNodes(response.customNodes, response.defaultNode);
+      await refreshCustomIconsForCurrentTopology();
+      runtimeUiActions.notify(
+        `Imported node templates: ${added} added, ${replaced} updated, ${iconImport.imported} icons imported`,
+        "success",
+      );
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      applyCustomNodeError(errorMessage);
+      runtimeUiActions.notify(errorMessage, "error");
+    }
+  })();
+}
+
 function handleIconUploadCommand(): void {
   void (async () => {
     try {
-      const file = await pickIconFile();
+      const file = await pickFile(".svg,.png,image/svg+xml,image/png");
       if (!file) {
         return;
       }
@@ -1148,6 +1212,7 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   "save-custom-node": handleSaveCustomNodeCommand,
   "delete-custom-node": handleDeleteCustomNodeCommand,
   "set-default-custom-node": handleSetDefaultCustomNodeCommand,
+  "import-custom-nodes": handleImportCustomNodesCommand,
   "icon-list": () => {
     void refreshCustomIconsForCurrentTopology().catch(() => {
       applyCustomIcons([]);

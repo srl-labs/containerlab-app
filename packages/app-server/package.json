@@ -13,7 +13,7 @@
     "@fastify/cors": "^10.1.0",
     "@fastify/static": "^8.3.0",
     "@fastify/websocket": "^11.2.0",
-    "@srl-labs/clab-ui": "0.0.35",
+    "@srl-labs/clab-ui": "0.1.0",
     "@srl-labs/containerlab-app-contract": "0.1.1",
     "fastify": "^5.8.5",
     "ws": "^8.20.0"

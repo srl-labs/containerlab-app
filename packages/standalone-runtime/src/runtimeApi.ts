@@ -1,4 +1,9 @@
-import type { CustomIconInfo, CustomNodeTemplate, TopologyRef } from "@srl-labs/clab-ui/session";
+import type {
+  CustomIconInfo,
+  CustomNodeTemplate,
+  CustomNodeTemplateExportIcon,
+  TopologyRef,
+} from "@srl-labs/clab-ui/session";
 
 import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
@@ -83,9 +88,20 @@ export interface IconListResponse {
   icons: CustomIconInfo[];
 }
 
+export interface IconUploadRequest {
+  fileName: string;
+  contentType?: string;
+  dataBase64: string;
+}
+
 export interface IconUploadResponse {
   success: boolean;
   iconName: string;
+}
+
+export interface IconImportResponse {
+  imported: number;
+  renamed: Record<string, string>;
 }
 
 export interface NetemFields {
@@ -1017,6 +1033,24 @@ export async function saveUiCustomNode(
   );
 }
 
+export async function replaceUiCustomNodes(
+  customNodes: CustomNodeTemplate[],
+  endpointId?: string
+): Promise<CustomNodesResponse> {
+  return await requestJson<CustomNodesResponse>(
+    "/api/runtime/ui/custom-nodes",
+    withEndpointHeaders(
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customNodes })
+      },
+      endpointId
+    ),
+    endpointId
+  );
+}
+
 export async function deleteUiCustomNode(
   name: string,
   endpointId?: string
@@ -1048,6 +1082,27 @@ export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconLi
   );
 }
 
+async function deleteUiIconIfExists(iconName: string, endpointId?: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      resolveRuntimeRequestUrl(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`),
+      withEndpointHeaders({ method: "DELETE" }, endpointId)
+    );
+  } catch (error) {
+    markEndpointUnavailable(endpointId, "offline");
+    throw error;
+  }
+
+  if (response.ok || response.status === 404) {
+    return;
+  }
+  if (response.status === 401 || response.status === 403) {
+    markEndpointUnavailable(endpointId, "session_expired");
+  }
+  throw new Error(await readError(response));
+}
+
 async function fileToBase64(file: File): Promise<string> {
   const buffer = new Uint8Array(await file.arrayBuffer());
   let binary = "";
@@ -1058,17 +1113,24 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export async function uploadUiIcon(file: File, endpointId?: string): Promise<IconUploadResponse> {
+async function uploadUiIconPayload(
+  request: IconUploadRequest,
+  endpointId?: string
+): Promise<IconUploadResponse> {
   return await requestJson<IconUploadResponse>(
     "/api/runtime/ui/icons",
-    asJsonBody(
-      {
-        fileName: file.name,
-        contentType: file.type || undefined,
-        dataBase64: await fileToBase64(file)
-      },
-      endpointId
-    ),
+    asJsonBody(request, endpointId),
+    endpointId
+  );
+}
+
+export async function uploadUiIcon(file: File, endpointId?: string): Promise<IconUploadResponse> {
+  return await uploadUiIconPayload(
+    {
+      fileName: file.name,
+      contentType: file.type || undefined,
+      dataBase64: await fileToBase64(file),
+    },
     endpointId
   );
 }
@@ -1079,6 +1141,46 @@ export async function deleteUiIcon(iconName: string, endpointId?: string): Promi
     withEndpointHeaders({ method: "DELETE" }, endpointId),
     endpointId
   );
+}
+
+function iconUploadRequestFromExportIcon(icon: CustomNodeTemplateExportIcon): IconUploadRequest {
+  const match = /^data:([^;,]+);base64,([\s\S]*)$/.exec(icon.dataUri);
+  if (!match) {
+    throw new Error(`Icon "${icon.name}" is not a base64 data URI`);
+  }
+  const expectedContentType = icon.format === "png" ? "image/png" : "image/svg+xml";
+  if (match[1].toLowerCase() !== expectedContentType) {
+    throw new Error(
+      `Icon "${icon.name}" has MIME type ${match[1]}, expected ${expectedContentType}`
+    );
+  }
+  return {
+    fileName: `${icon.name}.${icon.format}`,
+    contentType: expectedContentType,
+    dataBase64: match[2],
+  };
+}
+
+function canDeleteUiIconName(iconName: string): boolean {
+  return /^[a-z0-9_-]+$/.test(iconName);
+}
+
+export async function importUiIcons(
+  icons: CustomNodeTemplateExportIcon[],
+  endpointId?: string
+): Promise<IconImportResponse> {
+  const renamed: Record<string, string> = {};
+  for (const icon of icons) {
+    const request = iconUploadRequestFromExportIcon(icon);
+    if (canDeleteUiIconName(icon.name)) {
+      await deleteUiIconIfExists(icon.name, endpointId);
+    }
+    const response = await uploadUiIconPayload(request, endpointId);
+    if (response.iconName !== icon.name) {
+      renamed[icon.name] = response.iconName;
+    }
+  }
+  return { imported: icons.length, renamed };
 }
 
 export async function reconcileUiIcons(
