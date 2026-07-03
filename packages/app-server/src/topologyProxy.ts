@@ -417,11 +417,10 @@ type EndpointResolver = (
   endpointId?: string
 ) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
-function modeForDeploymentState(
-  mode: "edit" | "view" | undefined,
-  deploymentState: DeploymentState
-): "edit" | "view" {
-  return mode ?? (deploymentState === "deployed" ? "view" : "edit");
+function resolveRequestedMode(mode: "edit" | "view" | undefined): "edit" | "view" {
+  // Topologies are editable regardless of deployment state; read-only mode is
+  // an explicit request (e.g. running-lab documents of non-owned labs).
+  return mode ?? "edit";
 }
 
 function topologyErrorStatusCode(error: unknown): number {
@@ -441,7 +440,7 @@ async function snapshotForRequest(
   const sessionId = body.sessionId?.trim() ?? "";
   const fallbackDeploymentState = body.deploymentState ?? "unknown";
   if (!sessionId) {
-    return createEmptySnapshot(modeForDeploymentState(body.mode, fallbackDeploymentState), fallbackDeploymentState);
+    return createEmptySnapshot(resolveRequestedMode(body.mode), fallbackDeploymentState);
   }
 
   const session = sessions.getSession(sessionId, endpoint.id);
@@ -450,7 +449,7 @@ async function snapshotForRequest(
   }
 
   const deploymentState = body.deploymentState ?? "undeployed";
-  const mode = modeForDeploymentState(body.mode, deploymentState);
+  const mode = resolveRequestedMode(body.mode);
   const runtimeContainers = toRuntimeContainers(body.runtimeContainers ?? []);
   const containerDataProvider = createRuntimeContainerDataProvider(runtimeContainers);
   session.host.updateContext({ mode, deploymentState, containerDataProvider });
@@ -484,7 +483,7 @@ async function responseForCommandRequest(
   }
 
   const deploymentState = body.deploymentState ?? "undeployed";
-  const mode = modeForDeploymentState(body.mode, deploymentState);
+  const mode = resolveRequestedMode(body.mode);
   const containerDataProvider = createRuntimeContainerDataProvider(
     toRuntimeContainers(body.runtimeContainers ?? [])
   );
@@ -543,7 +542,8 @@ export function registerTopologyProxy(
             endpoint.id
           );
       const deploymentState = request.body.deploymentState ?? "undeployed";
-      const mode = request.body.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+      const mode =
+        request.body.mode ?? (sourcePreference === "running-lab-doc" ? "view" : "edit");
       const containerDataProvider = createRuntimeContainerDataProvider(
         toRuntimeContainers(request.body.runtimeContainers ?? [])
       );

@@ -30,6 +30,10 @@ interface LabActionBody extends LabTarget {
   cleanup?: boolean;
 }
 
+interface LabApplyBody extends LabTarget {
+  dryRun?: boolean;
+}
+
 interface LabStatusBody extends LabTarget {}
 
 interface ResolvedLabTarget {
@@ -40,7 +44,7 @@ interface ResolvedLabTarget {
 
 const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
 type LabNodeLifecycleEndpoint = (typeof LAB_NODE_LIFECYCLE_ENDPOINTS)[number];
-type LifecycleStreamEndpoint = "deploy" | "destroy" | "redeploy" | LabNodeLifecycleEndpoint;
+type LifecycleStreamEndpoint = "deploy" | "destroy" | "redeploy" | "apply" | LabNodeLifecycleEndpoint;
 
 const LIFECYCLE_RECONCILE_TIMEOUT_MS = 30000;
 const LIFECYCLE_RECONCILE_INTERVAL_MS = 1000;
@@ -183,6 +187,7 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
 function lifecycleExpectedRunning(action: LifecycleStreamEndpoint): boolean | undefined {
   switch (action) {
     case "deploy":
+    case "apply":
       return true;
     case "destroy":
       return false;
@@ -257,7 +262,7 @@ async function reconcileIndeterminateLifecycleError(
   const state = await waitForLabRunningState(client, token, labName, expectedRunning);
   const canTrustState =
     action === "destroy" ||
-    (action === "deploy" && preRunning === false);
+    ((action === "deploy" || action === "apply") && preRunning === false);
   if (state.matched && canTrustState) {
     return reply.send({
       success: true,
@@ -632,7 +637,134 @@ export function registerLabProxy(
     }
   );
 
+  app.post<{ Body: LabApplyBody }>(
+    "/api/lab/apply",
+    async (request: FastifyRequest<{ Body: LabApplyBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        request.body.endpointId ?? extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+      );
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const dirtyTarget = {
+          endpointId: endpoint.id,
+          labName: target.labName,
+          yamlPath: target.yamlPath
+        };
+
+        if (request.body.dryRun === true) {
+          const lifecycle = await client.applyLab(endpoint.token, target.labName, {
+            path: target.yamlPath,
+            dryRun: true
+          });
+          const changesPending = applyResultHasPendingChanges(lifecycle.result);
+          if (changesPending !== undefined) {
+            sessions.setDirtyForTopology(dirtyTarget, changesPending);
+          }
+          return reply.send({
+            success: true,
+            result: lifecycle.result,
+            changesPending: changesPending ?? null,
+            message: lifecycle.message,
+            logs: []
+          });
+        }
+
+        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        return await sendLifecycleJsonAction(
+          reply,
+          client,
+          endpoint.token,
+          target.labName,
+          "apply",
+          async () => {
+            const lifecycle = await client.applyLab(endpoint.token, target.labName, {
+              path: target.yamlPath,
+              includeLogs: true
+            });
+            sessions.setDirtyForTopology(dirtyTarget, false);
+            return lifecycle;
+          },
+          { preRunning }
+        );
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: LabApplyBody }>(
+    "/api/lab/apply/stream",
+    async (request: FastifyRequest<{ Body: LabApplyBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(
+        request,
+        reply,
+        request.body.endpointId ?? extractEndpointIdFromTopologyId(request.body.topologyRef?.topologyId)
+      );
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { client, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        return await openAndForwardLifecycleStream(
+          request,
+          reply,
+          client,
+          endpoint.token,
+          "apply",
+          target.labName,
+          {
+            path: target.yamlPath
+          },
+          { preRunning }
+        );
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
   for (const action of LAB_NODE_LIFECYCLE_ENDPOINTS) {
     registerLabNodeLifecycleProxy(action);
   }
+}
+
+/**
+ * Interpret a containerlab apply result (dry-run plan or applied summary):
+ * `true` when applying would change or did change anything, `false` when the
+ * lab is in sync, `undefined` when the payload shape is unknown.
+ */
+function applyResultHasPendingChanges(result: unknown): boolean | undefined {
+  if (typeof result !== "object" || result === null) {
+    return undefined;
+  }
+  const record = result as Record<string, unknown>;
+  if (record.deployedLab === true) {
+    return true;
+  }
+  const changeLists = [
+    "addedNodes",
+    "deletedNodes",
+    "recreatedNodes",
+    "startedNodes",
+    "addedLinks",
+    "deletedEndpoints",
+    "restartedNodes"
+  ];
+  let sawList = false;
+  for (const key of changeLists) {
+    const value = record[key];
+    if (Array.isArray(value)) {
+      sawList = true;
+      if (value.length > 0) {
+        return true;
+      }
+    }
+  }
+  return sawList ? false : undefined;
 }
