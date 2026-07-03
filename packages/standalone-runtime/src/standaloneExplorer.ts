@@ -118,6 +118,7 @@ const PAGES_LIFECYCLE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.deploy",
   "containerlab.lab.deploy.specificFile",
   "containerlab.lab.deploy.cleanup",
+  "containerlab.lab.apply",
   "containerlab.lab.destroy",
   "containerlab.lab.destroy.cleanup",
   "containerlab.lab.redeploy",
@@ -3150,6 +3151,7 @@ export function createStandaloneExplorerBridge(
       "containerlab.lab.redeploy": () => runLabLifecycle("redeploy", false),
       "containerlab.lab.redeploy.cleanup": () =>
         runLabLifecycle("redeploy", true),
+      "containerlab.lab.apply": () => runLabLifecycle("apply", false),
       "containerlab.lab.start": () => runLabLifecycle("start"),
       "containerlab.lab.stop": () => runLabLifecycle("stop"),
       "containerlab.lab.restart": () => runLabLifecycle("restart"),

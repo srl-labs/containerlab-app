@@ -18,6 +18,7 @@ import {
   runtimeContainersEqual,
   runtimeContainersTopologyEqual
 } from "./runtimeData";
+import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standaloneDirtyState";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
@@ -83,6 +84,15 @@ export interface StandaloneTopologyManager {
 
 const FILE_LIST_CACHE_TTL_MS = 1500;
 const RUNTIME_STATS_GRAPH_UPDATE_INTERVAL_MS = 1000;
+
+/**
+ * The topology is editable whenever it is backed by a writable API file; only
+ * running-lab documents (e.g. labs owned by other users) open read-only.
+ * Deployment state no longer decides editability.
+ */
+function modeForSourcePreference(sourcePreference: TopologySourcePreference): "edit" | "view" {
+  return sourcePreference === "running-lab-doc" ? "view" : "edit";
+}
 
 export function createStandaloneTopologyManager(
   options: StandaloneTopologyManagerOptions
@@ -442,7 +452,8 @@ export function createStandaloneTopologyManager(
     const deploymentState =
       hostOptions.deploymentState ??
       (isTopologyRunning(topologyRef, options.getLabs()) ? "deployed" : "undeployed");
-    const mode = hostOptions.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+    const mode =
+      hostOptions.mode ?? modeForSourcePreference(hostOptions.sourcePreference ?? "api-file");
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef, options.getLabs());
 
     const response = await fetch(
@@ -571,7 +582,7 @@ export function createStandaloneTopologyManager(
     const topologyRef = currentTopologyRef;
     const isDeployed = isTopologyRunning(topologyRef ?? undefined, labs);
     const deploymentState = hostOptions.deploymentState ?? (isDeployed ? "deployed" : "undeployed");
-    const mode = hostOptions.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+    const mode = hostOptions.mode ?? modeForSourcePreference(currentSourcePreference);
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef ?? undefined, labs);
 
     setHostContext(
@@ -660,10 +671,11 @@ export function createStandaloneTopologyManager(
     const { canonicalTopologyRef, canonicalEndpointId, sourcePreference } =
       await resolveLoadTopologyTarget(topologyRef, endpointId, loadOptions);
     useTopoViewerStore.getState().setCustomIcons([]);
+    resetTopologyDirtyState();
     const initialDeploymentState =
       loadOptions.deploymentState ??
       (isTopologyRunning(canonicalTopologyRef, options.getLabs()) ? "deployed" : "undeployed");
-    const initialMode = initialDeploymentState === "deployed" ? "view" : "edit";
+    const initialMode = modeForSourcePreference(sourcePreference);
     await ensureTopologySession(canonicalTopologyRef, {
       deploymentState: initialDeploymentState,
       mode: initialMode,
@@ -682,7 +694,7 @@ export function createStandaloneTopologyManager(
       snapshot.deploymentState,
       loadOptions.deploymentState
     );
-    const resolvedMode = resolvedState === "deployed" ? "view" : "edit";
+    const resolvedMode = modeForSourcePreference(sourcePreference);
 
     if (snapshot.deploymentState !== resolvedState || snapshot.mode !== resolvedMode) {
       useTopoViewerStore.getState().setInitialData({
@@ -690,6 +702,14 @@ export function createStandaloneTopologyManager(
         mode: resolvedMode
       });
       syncHostContext({ deploymentState: resolvedState, mode: resolvedMode });
+    }
+
+    if (resolvedState === "deployed") {
+      // Establish the sync baseline for a running lab via a dry-run apply.
+      void refreshTopologyDirtyState({
+        sessionId: currentSessionId ?? undefined,
+        topologyRef: canonicalTopologyRef
+      });
     }
   }
 

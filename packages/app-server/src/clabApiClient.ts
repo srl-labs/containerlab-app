@@ -328,6 +328,7 @@ type LifecycleEndpoint =
   | "deploy"
   | "destroy"
   | "redeploy"
+  | "apply"
   | "start"
   | "stop"
   | "restart";
@@ -712,6 +713,33 @@ export class ClabApiClient {
     return normalizeLifecycleActionResult(payload);
   }
 
+  async applyLab(
+    token: string,
+    labName: string,
+    options: { path?: string; dryRun?: boolean; includeLogs?: boolean } = {},
+  ): Promise<LifecycleActionResult> {
+    const params = new URLSearchParams();
+    if (options.path) {
+      params.set("path", options.path);
+    }
+    if (options.dryRun) {
+      params.set("dryRun", "true");
+    }
+    if (options.includeLogs) {
+      params.set("includeLogs", "true");
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/apply${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({}),
+      "application/json",
+    );
+    const payload = (await res.json()) as unknown;
+    return normalizeLifecycleActionResult(payload);
+  }
+
   async redeployLab(
     token: string,
     labName: string,
@@ -768,39 +796,24 @@ export class ClabApiClient {
     const params = new URLSearchParams();
     params.set("stream", "true");
 
-    if (endpoint === "deploy" && options.path) {
+    if ((endpoint === "deploy" || endpoint === "apply") && options.path) {
       params.set("path", options.path);
     }
     if (options.cleanup) {
       params.set("cleanup", "true");
     }
 
-    let method = "POST";
-    let path = `/api/v1/labs/${enc(labName)}/deploy`;
-    let body: string | undefined = JSON.stringify({});
-    let contentType: string | undefined = "application/json";
-
-    if (endpoint === "destroy") {
-      method = "DELETE";
-      path = `/api/v1/labs/${enc(labName)}`;
-      body = undefined;
-      contentType = undefined;
-    } else if (endpoint === "redeploy") {
-      method = "PUT";
-      path = `/api/v1/labs/${enc(labName)}`;
-    } else if (
-      endpoint === "start" ||
-      endpoint === "stop" ||
-      endpoint === "restart"
-    ) {
-      path = `/api/v1/labs/${enc(labName)}/${enc(endpoint)}`;
-    }
+    const { method, path, hasJsonBody } = lifecycleStreamRequestTarget(
+      endpoint,
+      labName,
+    );
+    const body = hasJsonBody ? JSON.stringify({}) : undefined;
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
     };
-    if (contentType) {
-      headers["Content-Type"] = contentType;
+    if (hasJsonBody) {
+      headers["Content-Type"] = "application/json";
     }
 
     let res: Response;
@@ -1450,6 +1463,38 @@ function upstreamNetworkErrorMessage(baseUrl: string, error: unknown): string {
       ? `: ${cause.message}`
       : "";
   return `Unable to connect to clab-api-server at ${baseUrl}: ${message}${causeMessage}`;
+}
+
+function lifecycleStreamRequestTarget(
+  endpoint: LifecycleEndpoint,
+  labName: string,
+): { method: string; path: string; hasJsonBody: boolean } {
+  switch (endpoint) {
+    case "destroy":
+      return {
+        method: "DELETE",
+        path: `/api/v1/labs/${enc(labName)}`,
+        hasJsonBody: false,
+      };
+    case "redeploy":
+      return {
+        method: "PUT",
+        path: `/api/v1/labs/${enc(labName)}`,
+        hasJsonBody: true,
+      };
+    case "deploy":
+      return {
+        method: "POST",
+        path: `/api/v1/labs/${enc(labName)}/deploy`,
+        hasJsonBody: true,
+      };
+    default:
+      return {
+        method: "POST",
+        path: `/api/v1/labs/${enc(labName)}/${enc(endpoint)}`,
+        hasJsonBody: true,
+      };
+  }
 }
 
 function normalizeLifecycleActionResult(

@@ -1,6 +1,6 @@
 {
   "name": "containerlab-desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Manage and inspect containerlab topologies from a desktop application.",
   "license": "Apache-2.0",
@@ -23,7 +23,7 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@srl-labs/containerlab-app-server": "0.1.1"
+    "@srl-labs/containerlab-app-server": "0.2.0"
   },
   "devDependencies": {
     "electron": "^41.5.0",
@@ -48,7 +48,7 @@
   "build": {
     "appId": "dev.containerlab.desktop",
     "productName": "Containerlab",
-    "copyright": "Copyright © srl-labs",
+    "copyright": "Copyright \u00a9 srl-labs",
     "electronVersion": "41.5.0",
     "icon": "../web/resources/containerlab.png",
     "afterPack": "scripts/after-pack.cjs",

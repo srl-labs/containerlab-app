@@ -51,6 +51,14 @@ export interface StandaloneTopologySessionManager {
   disposeSession(sessionId: string): boolean;
   disposeSessionsForToken(token: string, baseUrl?: string): void;
   getSession(sessionId: string, endpointId?: string): SessionRecord | null;
+  /**
+   * Update the topology sync (dirty) state on every session that edits the
+   * given lab, so later snapshots report it to the webview.
+   */
+  setDirtyForTopology(
+    target: { endpointId?: string; labName?: string; yamlPath?: string },
+    dirty: boolean | undefined
+  ): void;
 }
 
 function createInternalUpdateTracker(): InternalUpdateTracker {
@@ -222,6 +230,34 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
       }
       session.lastAccess = Date.now();
       return session;
+    },
+
+    setDirtyForTopology(target, dirty) {
+      const normalizedLabName = target.labName?.trim().toLowerCase() ?? "";
+      const normalizedYamlPath = normalizePath(target.yamlPath);
+      if (!normalizedLabName && !normalizedYamlPath) {
+        return;
+      }
+
+      for (const session of sessions.values()) {
+        if (target.endpointId && session.endpointId !== target.endpointId) {
+          continue;
+        }
+        const sessionLabName = session.topologyRef.labName.trim().toLowerCase();
+        const sessionYamlPath = normalizePath(session.topologyRef.yamlPath);
+        const matchesPath =
+          normalizedYamlPath.length > 0 && sessionYamlPath === normalizedYamlPath;
+        const matchesLabName =
+          normalizedLabName.length > 0 && sessionLabName === normalizedLabName;
+        if (!matchesPath && !matchesLabName) {
+          continue;
+        }
+        session.host.updateContext({ dirty });
+      }
     }
   };
+}
+
+function normalizePath(pathValue: string | undefined): string {
+  return (pathValue ?? "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//, "");
 }

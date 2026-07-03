@@ -8,6 +8,7 @@ import {
   type TopologyRef
 } from "@srl-labs/clab-ui/session";
 
+import { refreshTopologyDirtyState } from "./standaloneDirtyState";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import type {
   DeploymentState,
@@ -21,7 +22,7 @@ type StandaloneLifecycleCommand =
   | "startLab"
   | "stopLab"
   | "restartLab";
-type UiProcessingMode = "deploy" | "destroy" | "start" | "stop" | "restart";
+type UiProcessingMode = "deploy" | "destroy" | "apply" | "start" | "stop" | "restart";
 
 const LIFECYCLE_STATE_WAIT_TIMEOUT_MS = 120_000;
 const LIFECYCLE_STATE_WAIT_POLL_MS = 750;
@@ -115,6 +116,12 @@ const LIFECYCLE_COMMAND_CONFIG: Record<StandaloneLifecycleCommand, LifecycleComm
     endpoint: "redeploy",
     cleanup: true,
     label: "redeploy (cleanup)"
+  },
+  applyLab: {
+    commandType: "apply",
+    endpoint: "apply",
+    cleanup: false,
+    label: "apply"
   },
   startLab: {
     commandType: "start",
@@ -301,6 +308,7 @@ function getLifecycleTypeFromProcessingMode(): LifecycleCommandType {
   switch (processingMode) {
     case "destroy":
     case "redeploy":
+    case "apply":
     case "start":
     case "stop":
     case "restart":
@@ -324,6 +332,9 @@ function lifecycleCommandForTarget(
   if (endpoint === "redeploy") {
     return cleanup ? "redeployLabCleanup" : "redeployLab";
   }
+  if (endpoint === "apply") {
+    return "applyLab";
+  }
   if (endpoint === "start") {
     return "startLab";
   }
@@ -340,14 +351,24 @@ function processingModeForLifecycle(commandType: LifecycleCommandType): UiProces
   if (commandType === "destroy") {
     return "destroy";
   }
-  if (commandType === "start" || commandType === "stop" || commandType === "restart") {
+  if (
+    commandType === "apply" ||
+    commandType === "start" ||
+    commandType === "stop" ||
+    commandType === "restart"
+  ) {
     return commandType;
   }
   return "deploy";
 }
 
 function shouldWaitForLabRunningState(commandType: LifecycleCommandType): boolean {
-  return commandType === "deploy" || commandType === "destroy" || commandType === "redeploy";
+  return (
+    commandType === "deploy" ||
+    commandType === "destroy" ||
+    commandType === "redeploy" ||
+    commandType === "apply"
+  );
 }
 
 function expectedRunningState(commandType: LifecycleCommandType): boolean {
@@ -570,8 +591,28 @@ export function createStandaloneLifecycleManager(
     options.invalidateTopologyFileListCache();
     options.scheduleExplorerSnapshot(0);
     syncActiveTopologyAfterLifecycle(config.commandType, topologyRef);
+    refreshDirtyStateAfterLifecycle(config.commandType, topologyRef);
     postLifecycleLogMessage(config.commandType, `${config.label} completed.`, "stdout");
     postLifecycleStatusMessage(config.commandType, "success");
+  }
+
+  function refreshDirtyStateAfterLifecycle(
+    commandType: LifecycleCommandType,
+    topologyRef: TopologyRef
+  ): void {
+    if (commandType !== "deploy" && commandType !== "redeploy" && commandType !== "apply") {
+      return;
+    }
+    const currentTopologyRef = options.getCurrentTopologyRef();
+    if (!currentTopologyRef || currentTopologyRef.topologyId !== topologyRef.topologyId) {
+      return;
+    }
+    // Dry-run apply confirms the runtime is in sync and stamps the result on
+    // the server-side topology sessions as well.
+    void refreshTopologyDirtyState({
+      sessionId: options.getCurrentSessionId() ?? undefined,
+      topologyRef
+    });
   }
 
   async function refreshRuntimeStoreAfterLifecycle(

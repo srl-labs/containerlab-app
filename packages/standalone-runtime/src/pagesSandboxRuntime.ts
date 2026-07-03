@@ -616,7 +616,8 @@ function updateSessionContext(
   request: TopologySessionRequest,
 ): void {
   const deploymentState = request.deploymentState ?? "undeployed";
-  const mode = request.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+  // Sandbox topologies are always editable; runtime data is mock-only.
+  const mode = request.mode ?? "edit";
   const containerDataProvider = createRuntimeContainerDataProvider(
     (request.runtimeContainers ?? []) as Parameters<typeof createRuntimeContainerDataProvider>[0],
   );
@@ -885,7 +886,8 @@ class PagesSandboxApi {
       SANDBOX_ENDPOINT_ID,
     );
     const deploymentState = request.deploymentState ?? "undeployed";
-    const mode = request.mode ?? (deploymentState === "deployed" ? "view" : "edit");
+    // Sandbox topologies are always editable; runtime data is mock-only.
+    const mode = request.mode ?? "edit";
     const host = new TopologySessionCore({
       fs: this.fs,
       yamlFilePath: topologyRef.yamlPath,
