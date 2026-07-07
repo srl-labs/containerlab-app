@@ -38,8 +38,13 @@ interface LabStatusBody extends LabTarget {}
 
 interface ResolvedLabTarget {
   labName: string;
+  runtimeLabName: string;
   topologyRef?: TopologyRef;
   yamlPath?: string;
+}
+
+interface ResolveLabTargetOptions {
+  preferTopologyLabName?: boolean;
 }
 
 const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
@@ -136,7 +141,8 @@ async function resolveLabTarget(
   endpoint: EndpointEntry,
   client: ClabApiClient,
   sessions: StandaloneTopologySessionManager,
-  target: LabTarget
+  target: LabTarget,
+  options: ResolveLabTargetOptions = {}
 ): Promise<ResolvedLabTarget> {
   const sessionId = target.sessionId?.trim() ?? "";
   if (sessionId) {
@@ -144,14 +150,18 @@ async function resolveLabTarget(
     if (!session) {
       throw new RequestError("Topology session not found", 404);
     }
-    const labName = await resolveRunningLabNameForTopology(
+    const runtimeLabName = await resolveRunningLabNameForTopology(
       client,
       endpoint.token,
       session.topologyRef,
       session.topologyRef.labName
     );
+    const labName = options.preferTopologyLabName
+      ? session.topologyRef.labName || runtimeLabName
+      : runtimeLabName;
     return {
       labName,
+      runtimeLabName,
       topologyRef: session.topologyRef,
       yamlPath: session.topologyRef.yamlPath
     };
@@ -164,13 +174,16 @@ async function resolveLabTarget(
       target.topologyRef,
       endpoint.id
     );
-    const labName = await resolveRunningLabNameForTopology(
+    const runtimeLabName = await resolveRunningLabNameForTopology(
       client,
       endpoint.token,
       topologyRef,
       topologyRef.labName
     );
-    return { labName, topologyRef, yamlPath: topologyRef.yamlPath };
+    const labName = options.preferTopologyLabName
+      ? topologyRef.labName || runtimeLabName
+      : runtimeLabName;
+    return { labName, runtimeLabName, topologyRef, yamlPath: topologyRef.yamlPath };
   }
 
   throw new RequestError("Missing topologyRef or sessionId", 400);
@@ -327,7 +340,7 @@ async function openAndForwardLifecycleStream(
   action: LifecycleStreamEndpoint,
   labName: string,
   options: LifecycleStreamOptions = {},
-  reconcileOptions: { preRunning?: boolean } = {}
+  reconcileOptions: { labName?: string; preRunning?: boolean } = {}
 ): Promise<FastifyReply | void> {
   let aborted = false;
   const abortController = new AbortController();
@@ -349,7 +362,7 @@ async function openAndForwardLifecycleStream(
         error,
         client,
         token,
-        labName,
+        reconcileOptions.labName ?? labName,
         action,
         reconcileOptions.preRunning
       );
@@ -649,7 +662,9 @@ export function registerLabProxy(
 
       try {
         const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body, {
+          preferTopologyLabName: true
+        });
         const dirtyTarget = {
           endpointId: endpoint.id,
           labName: target.labName,
@@ -674,12 +689,12 @@ export function registerLabProxy(
           });
         }
 
-        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        const preRunning = await client.isLabRunning(endpoint.token, target.runtimeLabName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
           client,
           endpoint.token,
-          target.labName,
+          target.runtimeLabName,
           "apply",
           async () => {
             const lifecycle = await client.applyLab(endpoint.token, target.labName, {
@@ -709,8 +724,10 @@ export function registerLabProxy(
 
       try {
         const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        const target = await resolveLabTarget(endpoint, client, sessions, request.body, {
+          preferTopologyLabName: true
+        });
+        const preRunning = await client.isLabRunning(endpoint.token, target.runtimeLabName).catch(() => undefined);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -721,7 +738,7 @@ export function registerLabProxy(
           {
             path: target.yamlPath
           },
-          { preRunning }
+          { labName: target.runtimeLabName, preRunning }
         );
       } catch (error) {
         return handleRouteError(reply, error);
