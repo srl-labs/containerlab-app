@@ -321,6 +321,55 @@ function demoTopologyRef(endpointId: string): {
   };
 }
 
+function vlanMismatchTopologyRef(endpointId: string): ReturnType<typeof demoTopologyRef> {
+  return {
+    topologyId: `standalone:${endpointId}::vlan.clab.yml`,
+    labName: "srlinux-vlan-handling-lab",
+    yamlPath: "vlan.clab.yml",
+    annotationsPath: "vlan.clab.yml.annotations.json",
+    source: "standalone",
+  };
+}
+
+function mockVlanMismatchTopology(context: TestAppContext): void {
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/topology/files",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      return jsonResponse([
+        {
+          labName: "srlinux-vlan-handling-lab",
+          yamlFileName: "vlan.clab.yml",
+          annotationsFileName: "vlan.clab.yml.annotations.json",
+          hasAnnotations: true,
+          deploymentState: "undeployed",
+        },
+      ]);
+    },
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    return jsonResponse({
+      vlan: [
+        {
+          name: "clab-vlan-srl1",
+          lab_name: "vlan",
+          absLabPath: "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
+          labPath: "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
+        },
+      ],
+    });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/vlan", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+    return jsonResponse([{ name: "clab-vlan-srl1" }]);
+  });
+}
+
 test("GET /api/config returns empty endpoints without a session", async (t) => {
   const { app, fetchMock } = await createTestContext(t);
 
@@ -1334,6 +1383,82 @@ test("/api/lab/redeploy/stream forwards PUT lifecycle request", async (t) => {
     url: "/api/lab/redeploy/stream",
     headers: { cookie },
     payload: { topologyRef: demoTopologyRef(endpointId) },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
+test("/api/lab/apply keeps editable topology lab name when runtime lab name differs", async (t) => {
+  const context = await createTestContext(t);
+  mockVlanMismatchTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/srlinux-vlan-handling-lab\/apply\?/,
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.equal(call.headers.get("content-type"), "application/json");
+      assert.equal(call.body, "{}");
+      assert.equal(call.url.searchParams.get("path"), "vlan.clab.yml");
+      assert.equal(call.url.searchParams.get("includeLogs"), "true");
+      return jsonResponse({
+        labName: "vlan",
+        addedNodes: ["client4"],
+        deletedNodes: [],
+      });
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/apply",
+    headers: { cookie },
+    payload: { topologyRef: vlanMismatchTopologyRef(endpointId) },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    success: true,
+    result: {
+      labName: "vlan",
+      addedNodes: ["client4"],
+      deletedNodes: [],
+    },
+    logs: [],
+  });
+});
+
+test("/api/lab/apply/stream keeps editable topology lab name when runtime lab name differs", async (t) => {
+  const context = await createTestContext(t);
+  mockVlanMismatchTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "applied" })}\n`;
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/srlinux-vlan-handling-lab\/apply\?/,
+    (call) => {
+      assert.ok(call.signal instanceof AbortSignal);
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.equal(call.headers.get("content-type"), "application/json");
+      assert.equal(call.body, "{}");
+      assert.equal(call.url.searchParams.get("stream"), "true");
+      assert.equal(call.url.searchParams.get("path"), "vlan.clab.yml");
+      return ndjsonResponse(upstreamBody);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/apply/stream",
+    headers: { cookie },
+    payload: { topologyRef: vlanMismatchTopologyRef(endpointId) },
   });
 
   assert.equal(response.statusCode, 200, response.body);
