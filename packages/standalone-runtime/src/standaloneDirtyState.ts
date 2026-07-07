@@ -16,6 +16,20 @@ export interface DirtyStateTarget {
   topologyRef: TopologyRef;
 }
 
+interface DirtyStateStoreCompat {
+  setDirty?: (dirty: boolean | undefined) => void;
+  setInitialData?: (data: { isDirty?: boolean }) => void;
+}
+
+function setTopologyDirtyState(dirty: boolean | undefined): void {
+  const store = useTopoViewerStore.getState() as DirtyStateStoreCompat;
+  if (store.setDirty) {
+    store.setDirty(dirty);
+    return;
+  }
+  store.setInitialData?.(dirty === undefined ? {} : { isDirty: dirty });
+}
+
 export async function refreshTopologyDirtyState(
   target: DirtyStateTarget
 ): Promise<boolean | undefined> {
@@ -44,10 +58,10 @@ export async function refreshTopologyDirtyState(
     // Leave the sync state unknown when the dry-run cannot run.
   }
 
-  useTopoViewerStore.getState().setDirty(dirty);
+  setTopologyDirtyState(dirty);
   return dirty;
 }
 
 export function resetTopologyDirtyState(): void {
-  useTopoViewerStore.getState().setDirty(undefined);
+  setTopologyDirtyState(undefined);
 }
