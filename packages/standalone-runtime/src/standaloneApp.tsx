@@ -134,6 +134,18 @@ const LazyFileEditorTabPanel = lazy(async () => {
   return { default: module.FileEditorTabPanel };
 });
 
+const FILE_TAB_TOPOLOGY_CHROME_CSS = `
+  [data-testid="context-panel"],
+  [data-testid="panel-toggle-btn"],
+  [data-testid="panel-toggle-btn"] + * {
+    display: none !important;
+  }
+
+  header.MuiAppBar-root:has([data-testid="navbar-lab-name"]) {
+    display: none !important;
+  }
+`;
+
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("./components/SettingsOverlay");
   return { default: module.SettingsOverlay };
@@ -1971,6 +1983,10 @@ function StandaloneApp() {
     (state) => state.closeImageManager,
   );
   const terminalCount = useRuntimeUiStore((state) => state.terminals.length);
+  const activeLabTabKind = useLabTabsStore((state) => {
+    const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
+    return activeTab?.kind ?? null;
+  });
   const runtimeChromeReady = useDeferredRuntimeChrome();
   const runtimeDialogsReady = isPagesRuntimeMode() || runtimeChromeReady;
   usePagesLifecycleControlsHidden();
@@ -2218,6 +2234,9 @@ function StandaloneApp() {
 
   return (
     <>
+      {activeLabTabKind === "file" ? (
+        <style>{FILE_TAB_TOPOLOGY_CHROME_CSS}</style>
+      ) : null}
       <App initialData={initialData} runtime={standaloneRuntime!} />
       <StandaloneLabTabsMount />
       <StandaloneFileEditorTabMount />

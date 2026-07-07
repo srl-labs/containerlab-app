@@ -10,6 +10,9 @@ import type { ClabApiClient } from "./clabApiClient.ts";
 type ContainerDataProvider = ReturnType<typeof createRuntimeContainerDataProvider>;
 type DeploymentState = "deployed" | "undeployed" | "unknown";
 type TopologySourcePreference = "api-file" | "running-lab-doc";
+type DirtyContextHost = {
+  updateContext(context: { dirty: boolean | undefined }): void;
+};
 
 interface SessionRecord {
   baseUrl: string;
@@ -252,7 +255,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         if (!matchesPath && !matchesLabName) {
           continue;
         }
-        session.host.updateContext({ dirty });
+        (session.host as unknown as DirtyContextHost).updateContext({ dirty });
       }
     }
   };

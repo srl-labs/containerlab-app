@@ -19,6 +19,7 @@ import type {
 
 type StandaloneLifecycleCommand =
   | ExtensionLifecycleCommand
+  | "applyLab"
   | "startLab"
   | "stopLab"
   | "restartLab";
