@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { ClabApiClient } from "./clabApiClient.ts";
+import type { ClabApiClientFactory } from "./clabApiClient.ts";
 import type {
   EndpointEntry,
   EndpointSession,
@@ -17,6 +17,10 @@ import {
   clearSessionCookie,
   normalizeApiUrl
 } from "./middleware.ts";
+import {
+  EndpointPolicyError,
+  type EndpointAccessPolicy,
+} from "./endpointPolicy.ts";
 
 export interface EndpointPublicInfo {
   id: string;
@@ -57,11 +61,13 @@ interface UpdateEndpointBody {
 }
 
 interface AuthRouteOptions {
+  createClient: ClabApiClientFactory;
   defaultApiUrl: string;
   disposeEndpointSessions: (endpointId: string) => void;
-  ensureSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
   endpointSessions: EndpointSessionStore;
+  endpointPolicy: EndpointAccessPolicy;
   resolveSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession | null;
+  rotateSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
 }
 
 function defaultEndpointLabel(url: string, requestedLabel: string | undefined): string {
@@ -91,8 +97,11 @@ function toPublicInfo(
   };
 }
 
-async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInfo> {
-  const client = new ClabApiClient({ baseUrl: entry.url });
+async function validateEndpoint(
+  entry: EndpointEntry,
+  createClient: ClabApiClientFactory,
+): Promise<EndpointPublicInfo> {
+  const client = createClient(entry.url);
   try {
     await client.getVersion(entry.token);
     return toPublicInfo(entry, "connected");
@@ -110,8 +119,16 @@ async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInf
   }
 }
 
-async function listEndpointInfos(session: EndpointSession): Promise<EndpointPublicInfo[]> {
-  return await Promise.all(Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry)));
+async function listEndpointInfos(
+  session: EndpointSession,
+  createClient: ClabApiClientFactory,
+  endpointPolicy: EndpointAccessPolicy,
+): Promise<EndpointPublicInfo[]> {
+  return await Promise.all(
+    Array.from(session.endpoints.values())
+      .filter((entry) => endpointPolicy.isAllowed(entry.url))
+      .map((entry) => validateEndpoint(entry, createClient)),
+  );
 }
 
 function requireCredentials(username: string | undefined, password: string | undefined): string | null {
@@ -122,6 +139,9 @@ function requireCredentials(username: string | undefined, password: string | und
 }
 
 function authErrorStatusCode(error: unknown): number {
+  if (error instanceof EndpointPolicyError) {
+    return error.statusCode;
+  }
   if (
     error instanceof Error &&
     (error.message === "Invalid API endpoint URL" ||
@@ -153,7 +173,10 @@ function resolveEndpointSessionDuration(
   return normalized;
 }
 
-async function authenticateEndpoint(body: AddEndpointBody, defaultApiUrl: string): Promise<EndpointEntry> {
+async function authenticateEndpoint(
+  body: AddEndpointBody,
+  options: Pick<AuthRouteOptions, "createClient" | "defaultApiUrl" | "endpointPolicy">,
+): Promise<EndpointEntry> {
   const username = body.username?.trim() ?? "";
   const password = body.password;
   const sessionDuration = resolveEndpointSessionDuration(body.sessionDuration);
@@ -162,13 +185,14 @@ async function authenticateEndpoint(body: AddEndpointBody, defaultApiUrl: string
     throw new Error(credentialError);
   }
 
-  const rawUrl = body.url ?? body.apiUrl ?? defaultApiUrl;
+  const rawUrl = body.url ?? body.apiUrl ?? options.defaultApiUrl;
   const normalizedUrl = normalizeApiUrl(rawUrl);
   if (!normalizedUrl) {
     throw new Error("Invalid API endpoint URL");
   }
 
-  const client = new ClabApiClient({ baseUrl: normalizedUrl });
+  options.endpointPolicy.assertAllowed(normalizedUrl);
+  const client = options.createClient(normalizedUrl);
   const result = await client.login(username, password, sessionDuration);
 
   return {
@@ -184,18 +208,19 @@ async function authenticateEndpoint(body: AddEndpointBody, defaultApiUrl: string
 async function reconnectEndpoint(
   endpointId: string,
   body: ReconnectEndpointBody,
-  session: EndpointSession,
+  session: EndpointSession | null,
   options: AuthRouteOptions
 ): Promise<EndpointEntry> {
-  const existing = session.endpoints.get(endpointId) ?? null;
-  const rawUrl = existing?.url ?? body.url;
+  const existing = session?.endpoints.get(endpointId) ?? null;
+  const rawUrl = body.url ?? existing?.url;
   const normalizedUrl = rawUrl ? normalizeApiUrl(rawUrl) : null;
   if (!normalizedUrl) {
     throw new Error("Endpoint URL is required to reconnect");
   }
+  options.endpointPolicy.assertAllowed(normalizedUrl);
 
   const sessionDuration = resolveEndpointSessionDuration(body.sessionDuration ?? existing?.sessionDuration);
-  const result = await new ClabApiClient({ baseUrl: normalizedUrl }).login(
+  const result = await options.createClient(normalizedUrl).login(
     body.username.trim(),
     body.password,
     sessionDuration
@@ -208,16 +233,14 @@ async function reconnectEndpoint(
     username: body.username.trim(),
     sessionDuration
   };
-  options.disposeEndpointSessions(endpointId);
-  options.endpointSessions.upsertEndpoint(session.sessionId, updated);
   return updated;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptions): void {
   app.post<{ Body: AddEndpointBody }>("/auth/endpoints/add", async (request, reply) => {
     try {
-      const entry = await authenticateEndpoint(request.body, options.defaultApiUrl);
-      const session = options.ensureSession(request, reply);
+      const entry = await authenticateEndpoint(request.body, options);
+      const session = options.rotateSession(request, reply);
       options.disposeEndpointSessions(entry.id);
       options.endpointSessions.upsertEndpoint(session.sessionId, entry);
       clearLegacySessionCookies(reply);
@@ -230,8 +253,8 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
 
   app.post<{ Body: AddEndpointBody }>("/auth/login", async (request, reply) => {
     try {
-      const entry = await authenticateEndpoint(request.body, options.defaultApiUrl);
-      const session = options.ensureSession(request, reply);
+      const entry = await authenticateEndpoint(request.body, options);
+      const session = options.rotateSession(request, reply);
       options.disposeEndpointSessions(entry.id);
       options.endpointSessions.upsertEndpoint(session.sessionId, entry);
       clearLegacySessionCookies(reply);
@@ -253,7 +276,13 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ endpoints: [] });
     }
 
-    return reply.send({ endpoints: await listEndpointInfos(session) });
+    return reply.send({
+      endpoints: await listEndpointInfos(
+        session,
+        options.createClient,
+        options.endpointPolicy,
+      ),
+    });
   });
 
   app.get<{ Params: { id: string } }>("/auth/endpoints/:id/metrics", async (request, reply) => {
@@ -269,7 +298,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
     }
 
     try {
-      const client = new ClabApiClient({ baseUrl: endpoint.url });
+      const client = options.createClient(endpoint.url);
       return reply.send(await client.getHealthMetrics(endpoint.token));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load endpoint metrics";
@@ -308,8 +337,11 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       }
 
       try {
-        const session = options.ensureSession(request, reply);
+        const session = options.resolveSession(request, reply);
         const updated = await reconnectEndpoint(endpointId, request.body, session, options);
+        const rotatedSession = options.rotateSession(request, reply);
+        options.disposeEndpointSessions(endpointId);
+        options.endpointSessions.upsertEndpoint(rotatedSession.sessionId, updated);
         clearLegacySessionCookies(reply);
         return reply.send(toPublicInfo(updated, "connected"));
       } catch (error) {
@@ -368,11 +400,27 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       if (!nextUrl) {
         return reply.status(400).send({ error: "Invalid API endpoint URL" });
       }
+      if (nextUrl !== existing.url) {
+        return reply.status(400).send({
+          error: "Changing an endpoint URL requires reconnecting with credentials",
+        });
+      }
+      try {
+        options.endpointPolicy.assertAllowed(nextUrl);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Endpoint is not allowed";
+        return reply.status(authErrorStatusCode(error)).send({ error: message });
+      }
 
       const nextUsername =
         request.body.username !== undefined ? request.body.username.trim() : existing.username;
       if (!nextUsername) {
         return reply.status(400).send({ error: "Username is required" });
+      }
+      if (nextUsername !== existing.username) {
+        return reply.status(400).send({
+          error: "Changing an endpoint username requires reconnecting with credentials",
+        });
       }
 
       const nextSessionDuration =
@@ -393,7 +441,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
 
       options.disposeEndpointSessions(endpointId);
       options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-      return reply.send(await validateEndpoint(updated));
+      return reply.send(await validateEndpoint(updated, options.createClient));
     }
   );
 
@@ -403,7 +451,11 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ authenticated: false, endpoints: [] });
     }
 
-    const endpoints = await listEndpointInfos(session);
+    const endpoints = await listEndpointInfos(
+      session,
+      options.createClient,
+      options.endpointPolicy,
+    );
     return reply.send({
       authenticated: endpoints.some((endpoint) => endpoint.connected),
       endpoints

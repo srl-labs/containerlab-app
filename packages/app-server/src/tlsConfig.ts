@@ -69,13 +69,17 @@ export function defaultWebTlsPaths(env: NodeJS.ProcessEnv = process.env): {
 }
 
 export function defaultWebTlsHosts(env: NodeJS.ProcessEnv = process.env): string[] {
+  const configuredHosts = [env.WEB_TLS_HOST, env.HOST].filter(
+    (host): host is string => Boolean(host?.trim()),
+  );
   return normalizeHosts([
     "localhost",
     "127.0.0.1",
     "::1",
-    os.hostname(),
-    env.WEB_TLS_HOST,
-    env.HOST
+    // Container IDs are ephemeral hostnames. Once an operator supplies an
+    // access name, keep the persisted self-signed certificate independent of
+    // container recreation.
+    ...(configuredHosts.length > 0 ? configuredHosts : [os.hostname()]),
   ]);
 }
 

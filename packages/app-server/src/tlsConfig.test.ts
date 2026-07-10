@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { defaultWebTlsPaths, resolveWebTlsConfig } from "./tlsConfig";
+import {
+  defaultWebTlsHosts,
+  defaultWebTlsPaths,
+  resolveWebTlsConfig,
+} from "./tlsConfig";
 
 test("resolveWebTlsConfig generates and reuses a localhost certificate", (t) => {
   const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), "containerlab-web-tls-test-"));
@@ -55,4 +59,13 @@ test("defaultWebTlsPaths uses XDG_CONFIG_HOME", () => {
   });
   assert.equal(paths.certFile, "/tmp/containerlab-web-test/containerlab-web/tls/localhost.pem");
   assert.equal(paths.keyFile, "/tmp/containerlab-web-test/containerlab-web/tls/localhost-key.pem");
+});
+
+test("explicit web TLS hosts exclude the ephemeral machine hostname", () => {
+  assert.deepEqual(defaultWebTlsHosts({ WEB_TLS_HOST: "web.example.test:3000" }), [
+    "localhost",
+    "127.0.0.1",
+    "::1",
+    "web.example.test",
+  ]);
 });

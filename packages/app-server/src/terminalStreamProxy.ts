@@ -3,13 +3,19 @@ import WebSocket, { type RawData } from "ws";
 
 import { buildWebSocketUrl } from "./clabApiClient.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
-import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
+import type { ApiWebSocketTlsOptions } from "./upstreamTls.ts";
 
 type EndpointResolver = (
   request: FastifyRequest,
   reply: FastifyReply,
   endpointId?: string
-) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
+) => {
+  endpoint: EndpointEntry;
+  client: {
+    getBaseUrl(): string;
+    getWebSocketOptions(): ApiWebSocketTlsOptions;
+  };
+} | null;
 
 function isValidCloseCode(code: number): boolean {
   return (
@@ -36,7 +42,7 @@ function closeSocket(socket: WebSocket, code: number | undefined, reason: string
 
 export function registerTerminalStreamProxy(
   app: FastifyInstance,
-  resolveEndpoint: EndpointResolver
+  resolveEndpoint: EndpointResolver,
 ): void {
   app.get<{ Params: { sessionId: string }; Querystring: { endpointId?: string } }>(
     "/api/runtime/terminal-sessions/:sessionId/stream",
@@ -56,7 +62,7 @@ export function registerTerminalStreamProxy(
           headers: {
             Authorization: `Bearer ${endpoint.token}`
           },
-          ...apiTlsWebSocketOptions()
+          ...client.getWebSocketOptions()
         }
       );
 

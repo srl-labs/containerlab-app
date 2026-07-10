@@ -1,0 +1,44 @@
+name: containerlab-app
+
+services:
+  web:
+    image: ${CONTAINERLAB_APP_IMAGE:-ghcr.io/srl-labs/containerlab-web:latest}
+    restart: unless-stopped
+    init: true
+    user: node
+    ports:
+      - "${CONTAINERLAB_APP_BIND_ADDRESS:-127.0.0.1}:${CONTAINERLAB_APP_PORT:-3001}:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      CLAB_API_URL: ${CLAB_API_URL:-https://host.docker.internal:8090}
+      CLAB_API_ALLOWED_ORIGINS: ${CLAB_API_ALLOWED_ORIGINS:-}
+      CLAB_API_LOCAL_HOST_MODE: "true"
+      CLAB_API_CA_FILE: /run/secrets/clab-api-ca.pem
+      CLAB_API_TLS_SERVER_NAME: ${CLAB_API_TLS_SERVER_NAME:-localhost}
+      CLAB_API_TLS_VERIFY: ${CLAB_API_TLS_VERIFY:-true}
+      CONTAINERLAB_WEB_SESSION_FILE: /home/node/.local/state/containerlab-web/endpoint-sessions.json
+      PORT: "3001"
+      WEB_LISTEN_ADDRESS: 0.0.0.0
+      WEB_TLS_ENABLE: ${WEB_TLS_ENABLE:-true}
+      WEB_TLS_HOST: ${WEB_TLS_HOST:-localhost}
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    volumes:
+      - type: bind
+        source: ${CLAB_API_CA_FILE_HOST:-/root/.config/clab-api-server/tls/localhost.pem}
+        target: /run/secrets/clab-api-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - web-tls:/home/node/.config/containerlab-web/tls
+      - app-state:/home/node/.local/state/containerlab-web
+
+volumes:
+  app-state:
+  web-tls:

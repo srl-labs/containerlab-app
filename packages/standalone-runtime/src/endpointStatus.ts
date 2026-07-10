@@ -1,6 +1,5 @@
 import type { AlertColor } from "@mui/material/Alert";
-
-import type { EndpointStatus } from "./stores/endpointStore";
+import type { EndpointStatus } from "@srl-labs/containerlab-app-contract";
 
 export function endpointStatusLabel(status: EndpointStatus): string {
   switch (status) {

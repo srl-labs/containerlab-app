@@ -4,6 +4,17 @@ dist/
 out/
 apps/desktop/release/
 
+# Local deployment configuration and TLS material
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.cer
+*.p12
+*.pfx
+
 # Test output
 coverage/
 test-results/

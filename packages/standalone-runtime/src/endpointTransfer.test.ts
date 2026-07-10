@@ -72,6 +72,31 @@ test("parseEndpointProfiles validates import document shape and normalizes URLs"
   ]);
 });
 
+test("parseEndpointProfiles stores only credential-free endpoint origins", () => {
+  const document = (url: string) =>
+    JSON.stringify({
+      kind: ENDPOINT_EXPORT_KIND,
+      version: ENDPOINT_EXPORT_VERSION,
+      endpoints: [
+        {
+          url,
+          label: "Primary API",
+          username: "admin",
+          sessionDuration: "24h"
+        }
+      ]
+    });
+
+  assert.equal(
+    parseEndpointProfiles(document("https://api.example.test/base?query=yes#hash"))[0]?.url,
+    "https://api.example.test"
+  );
+  assert.throws(
+    () => parseEndpointProfiles(document("https://embedded:secret@api.example.test")),
+    /invalid URL/
+  );
+});
+
 test("parseEndpointProfiles accepts legacy containerlab-web endpoint exports", () => {
   const profiles = parseEndpointProfiles(
     JSON.stringify({

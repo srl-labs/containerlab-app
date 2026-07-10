@@ -1,0 +1,9 @@
+services:
+  web:
+    network_mode: host
+    ports: !reset []
+    extra_hosts: !reset []
+    environment:
+      CLAB_API_URL: https://localhost:8090
+      CLAB_API_TLS_SERVER_NAME: localhost
+      WEB_LISTEN_ADDRESS: 127.0.0.1

@@ -1,4 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { normalizeEndpointProfileUrl } from "@srl-labs/containerlab-app-contract";
 
 const SESSION_COOKIE_NAME = "clab_session";
 const LEGACY_TOKEN_COOKIE_NAME = "clab_token";
@@ -31,19 +32,7 @@ export function clearSessionCookie(reply: FastifyReply): void {
 }
 
 export function normalizeApiUrl(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return null;
-
-  const withProtocol = /^[a-z][a-z0-9+\-.]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const parsed = new URL(withProtocol);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return null;
-    }
-    return parsed.toString().replace(/\/+$/, "");
-  } catch {
-    return null;
-  }
+  return normalizeEndpointProfileUrl(raw);
 }
 
 export function getLegacySessionCookies(

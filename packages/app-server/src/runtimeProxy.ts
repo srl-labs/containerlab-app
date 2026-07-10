@@ -1,8 +1,10 @@
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient.ts";
+import { getHttpErrorStatus } from "./clabApiClient.ts";
 import type {
+  ClabApiClient,
+  ClabApiClientFactory,
   InspectContainerInfo,
   RuntimeImageActionResponse,
   RuntimeImagesResponse,
@@ -27,6 +29,10 @@ import {
   resolveRunningLabNameForTopology
 } from "./topologyIdentity.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
+import {
+  encodeVncProxyWildcard,
+  vncUpstreamQuery,
+} from "./vncProxyPath.ts";
 
 interface RuntimeTargetBody {
   endpointId?: string;
@@ -150,6 +156,41 @@ type EndpointResolver = (
 ) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 type EndpointListResolver = (request: FastifyRequest, reply: FastifyReply) => EndpointEntry[];
+
+const VNC_HTTP_REQUEST_HEADERS = new Set([
+  "accept",
+  "accept-language",
+  "cache-control",
+  "content-encoding",
+  "content-language",
+  "content-type",
+  "if-match",
+  "if-modified-since",
+  "if-none-match",
+  "if-range",
+  "if-unmodified-since",
+  "pragma",
+  "range",
+]);
+
+// VNC assets share the app origin, so upstream endpoints must not be able to
+// mutate browser security or authentication state through response headers.
+const VNC_HTTP_RESPONSE_HEADERS = new Set([
+  "accept-ranges",
+  "cache-control",
+  "content-disposition",
+  "content-language",
+  "content-range",
+  "content-security-policy",
+  "content-type",
+  "cross-origin-resource-policy",
+  "etag",
+  "expires",
+  "last-modified",
+  "pragma",
+  "vary",
+  "x-content-type-options",
+]);
 
 interface ResolvedLabTarget {
   labName: string;
@@ -552,7 +593,8 @@ export function registerRuntimeProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
   listEndpoints: EndpointListResolver,
-  sessions: StandaloneTopologySessionManager
+  sessions: StandaloneTopologySessionManager,
+  createClient: ClabApiClientFactory,
 ): void {
   app.get("/api/runtime/inspect/all", async (request, reply) => {
     const requestedEndpointId = getEndpointIdFromRequest(request);
@@ -579,7 +621,7 @@ export function registerRuntimeProxy(
       const responses = await Promise.all(
         endpoints.map(async (endpoint) => ({
           endpoint,
-          labs: await new ClabApiClient({ baseUrl: endpoint.url }).listLabs(endpoint.token)
+          labs: await createClient(endpoint.url).listLabs(endpoint.token)
         }))
       );
       return reply.send(mergeInspectAllResponses(responses));
@@ -1359,31 +1401,34 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const wildcard = request.params["*"] ?? "";
+        const wildcard = encodeVncProxyWildcard(request.params["*"]);
+        if (wildcard === null) {
+          throw new RequestError("Invalid VNC asset path", 400);
+        }
         const suffix = wildcard.length > 0 ? `/${wildcard}` : "/";
-        const rawUrl = request.raw.url ?? "";
-        const queryIndex = rawUrl.indexOf("?");
-        const query = queryIndex >= 0 ? rawUrl.slice(queryIndex) : "";
-        const upstreamUrl =
-          `${resolved.client.getBaseUrl()}` +
+        const query = vncUpstreamQuery(request.raw.url);
+        const upstreamPath =
           `/api/v1/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}` +
           `/vnc${suffix}${query}`;
 
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${resolved.endpoint.token}`
+          Authorization: `Bearer ${resolved.endpoint.token}`,
+          // The proxy buffers a decoded Fetch response. Asking for identity
+          // avoids stale compression metadata and an unnecessary decode/re-encode.
+          "accept-encoding": "identity",
         };
         for (const [key, value] of Object.entries(request.headers)) {
           if (typeof value !== "string") {
             continue;
           }
           const lower = key.toLowerCase();
-          if (lower === "host" || lower === "authorization" || lower === "content-length") {
+          if (!VNC_HTTP_REQUEST_HEADERS.has(lower)) {
             continue;
           }
-          headers[key] = value;
+          headers[lower] = value;
         }
 
-        const upstreamResponse = await fetch(upstreamUrl, {
+        const upstreamResponse = await resolved.client.requestRaw(upstreamPath, {
           method: request.method,
           headers
         });
@@ -1391,7 +1436,7 @@ export function registerRuntimeProxy(
         reply.status(upstreamResponse.status);
         for (const [key, value] of upstreamResponse.headers.entries()) {
           const lower = key.toLowerCase();
-          if (lower === "transfer-encoding" || lower === "connection") {
+          if (!VNC_HTTP_RESPONSE_HEADERS.has(lower)) {
             continue;
           }
           reply.header(key, value);

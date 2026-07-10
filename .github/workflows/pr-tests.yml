@@ -32,6 +32,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       - name: Unit tests
         run: npm run test:unit
 
@@ -40,6 +43,17 @@ jobs:
 
       - name: Web E2E
         run: npm run test:e2e:web
+
+      - name: Validate hardened Compose deployment
+        run: |
+          npm run check:compose
+          npm run check:compose:host
+
+      - name: Build web container smoke image
+        run: docker build --secret id=github_token,env=GITHUB_TOKEN -t containerlab-web:smoke .
+
+      - name: Smoke test hardened web container
+        run: npm run test:image -- containerlab-web:smoke
 
       - name: Upload Playwright report
         if: always()

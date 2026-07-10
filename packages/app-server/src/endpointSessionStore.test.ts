@@ -100,3 +100,48 @@ test("session store can persist endpoint sessions across app server restarts", (
   assert.equal(thirdStore.getSession(sessionId), null);
   thirdStore.dispose();
 });
+
+test("session store flushes throttled access timestamps before dispose without erasing sessions", async (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "clab-endpoint-touch-"));
+  t.after(() => {
+    fs.rmSync(tempDir, { force: true, recursive: true });
+  });
+
+  const persistenceFile = path.join(tempDir, "endpoint-sessions.json");
+  const sessionId = "session-touched";
+  const store = createEndpointSessionStore({
+    persistenceFile,
+    touchPersistenceIntervalMs: 60_000,
+  });
+  store.upsertEndpoint(sessionId, makeEntry());
+
+  const before = JSON.parse(fs.readFileSync(persistenceFile, "utf8")) as {
+    sessions: Array<{ lastAccess: number; sessionId: string }>;
+  };
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.ok(store.getSession(sessionId));
+
+  const beforeDispose = JSON.parse(fs.readFileSync(persistenceFile, "utf8")) as {
+    sessions: Array<{ lastAccess: number; sessionId: string }>;
+  };
+  assert.equal(
+    beforeDispose.sessions[0]?.lastAccess,
+    before.sessions[0]?.lastAccess,
+    "touch persistence should be throttled",
+  );
+
+  store.dispose();
+  const afterDispose = JSON.parse(fs.readFileSync(persistenceFile, "utf8")) as {
+    sessions: Array<{ lastAccess: number; sessionId: string }>;
+  };
+  assert.equal(afterDispose.sessions.length, 1);
+  assert.equal(afterDispose.sessions[0]?.sessionId, sessionId);
+  assert.ok(
+    (afterDispose.sessions[0]?.lastAccess ?? 0) >
+      (before.sessions[0]?.lastAccess ?? 0),
+  );
+
+  const restoredStore = createEndpointSessionStore({ persistenceFile });
+  assert.ok(restoredStore.getSession(sessionId));
+  restoredStore.dispose();
+});

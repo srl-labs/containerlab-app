@@ -38,6 +38,9 @@
     "test:e2e:web": "npm run test:e2e --workspace containerlab-app-web",
     "test:e2e:web:local-ui": "npm run test:e2e:local-ui --workspace containerlab-app-web",
     "test:e2e:web:smoke": "npm run test:e2e:smoke --workspace containerlab-app-web",
+    "check:compose": "docker compose config --quiet",
+    "check:compose:host": "docker compose -f compose.yaml -f compose.host-network.yaml config --quiet",
+    "test:image": "sh scripts/smoke-container-image.sh",
     "check:release-version": "node scripts/check-release-version.mjs",
     "check:deps": "node scripts/check-deps.mjs",
     "check:local-clab-ui": "node scripts/check-local-clab-ui.mjs"

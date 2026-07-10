@@ -21,11 +21,19 @@ import {
   getEndpointIdFromRequest,
   getLegacySessionCookies,
   getSessionIdFromRequest,
+  normalizeApiUrl,
   setSessionCookie,
 } from "./middleware.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { ClabApiClient } from "./clabApiClient.ts";
+import type { EndpointAccessPolicy } from "./endpointPolicy.ts";
+import { createEndpointAccessPolicyFromEnv } from "./endpointPolicy.ts";
+import {
+  createApiTlsTransport,
+  resolveApiTlsConfig,
+  type ResolvedApiTlsConfig,
+} from "./upstreamTls.ts";
 
 interface ResolvedEndpoint {
   client: ClabApiClient;
@@ -34,10 +42,13 @@ interface ResolvedEndpoint {
 }
 
 export interface CreateStandaloneAppOptions {
+  apiTls?: ResolvedApiTlsConfig;
   defaultClabApiUrl?: string;
+  endpointPolicy?: EndpointAccessPolicy;
   https?: HttpsServerOptions;
   isDev?: boolean;
   logger?: boolean;
+  readinessProbeTimeoutMs?: number;
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
   viteDevUrl?: string;
@@ -173,10 +184,38 @@ function proxyViteDevWebSocket(
 export async function createStandaloneApp(
   options: CreateStandaloneAppOptions = {},
 ): Promise<FastifyInstance> {
-  const defaultClabApiUrl =
+  const configuredDefaultClabApiUrl =
     options.defaultClabApiUrl ?? "https://localhost:8090";
+  const defaultClabApiUrl = normalizeApiUrl(configuredDefaultClabApiUrl);
+  if (!defaultClabApiUrl) {
+    throw new Error(
+      `Invalid default clab-api-server URL: ${configuredDefaultClabApiUrl}`,
+    );
+  }
   const isDev = options.isDev ?? process.env.NODE_ENV !== "production";
   const viteDevUrl = options.viteDevUrl ?? "https://localhost:5173";
+  const endpointPolicy =
+    options.endpointPolicy ??
+    createEndpointAccessPolicyFromEnv(defaultClabApiUrl);
+  const apiTls =
+    options.apiTls ?? resolveApiTlsConfig(process.env, !isDev);
+  const defaultApiOrigin = new URL(defaultClabApiUrl).origin;
+  const defaultApiTlsTransport = createApiTlsTransport(apiTls);
+  const otherApiTlsTransport = apiTls.serverName
+    ? createApiTlsTransport({ ...apiTls, serverName: undefined })
+    : defaultApiTlsTransport;
+  const createClient = (baseUrl: string): ClabApiClient => {
+    endpointPolicy.assertAllowed(baseUrl);
+    const apiTlsTransport =
+      new URL(baseUrl).origin === defaultApiOrigin
+        ? defaultApiTlsTransport
+        : otherApiTlsTransport;
+    return new ClabApiClient({
+      baseUrl,
+      dispatcher: apiTlsTransport.dispatcher,
+      websocketOptions: apiTlsTransport.websocketOptions,
+    });
+  };
   const fastifyOptions = {
     logger: options.logger ?? true,
     requestTimeout: 0,
@@ -215,6 +254,9 @@ export async function createStandaloneApp(
     if (!legacy) {
       return null;
     }
+    if (!endpointPolicy.isAllowed(legacy.url)) {
+      return null;
+    }
 
     const existingSessionId = getSessionIdFromRequest(request);
     if (existingSessionId) {
@@ -224,10 +266,11 @@ export async function createStandaloneApp(
       }
     }
 
-    const sessionId = existingSessionId ?? globalThis.crypto.randomUUID();
-    if (!existingSessionId) {
-      maybeSetSessionCookie(request, reply, sessionId);
-    }
+    // Never adopt an unknown caller-supplied cookie as server-side session
+    // state. Doing so would let an attacker preselect the key that later holds
+    // a victim's upstream bearer token.
+    const sessionId = globalThis.crypto.randomUUID();
+    maybeSetSessionCookie(request, reply, sessionId);
 
     const migratedEntry: EndpointEntry = {
       id: buildEndpointId(),
@@ -255,21 +298,24 @@ export async function createStandaloneApp(
     return migrateLegacySession(request, reply);
   };
 
-  const ensureSession = (
+  const rotateSession = (
     request: FastifyRequest,
     reply: FastifyReply,
   ): EndpointSession => {
-    const resolved = resolveSession(request, reply);
-    if (resolved) {
-      return resolved;
+    const previousSessionId = getSessionIdFromRequest(request);
+    const previousSession = previousSessionId
+      ? endpointSessions.getSession(previousSessionId)
+      : null;
+    const entries = previousSession
+      ? Array.from(previousSession.endpoints.values())
+      : [];
+    const sessionId = globalThis.crypto.randomUUID();
+    const session = endpointSessions.replaceSession(sessionId, entries);
+    if (previousSessionId) {
+      endpointSessions.clearSession(previousSessionId);
     }
-
-    const sessionId =
-      getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
-    if (!getSessionIdFromRequest(request)) {
-      maybeSetSessionCookie(request, reply, sessionId);
-    }
-    return endpointSessions.replaceSession(sessionId, []);
+    maybeSetSessionCookie(request, reply, sessionId);
+    return session;
   };
 
   const resolveEndpoint = (
@@ -289,11 +335,14 @@ export async function createStandaloneApp(
     if (!endpoint) {
       return null;
     }
+    if (!endpointPolicy.isAllowed(endpoint.url)) {
+      return null;
+    }
 
     return {
       session,
       endpoint,
-      client: new ClabApiClient({ baseUrl: endpoint.url }),
+      client: createClient(endpoint.url),
     };
   };
 
@@ -302,22 +351,44 @@ export async function createStandaloneApp(
     reply: FastifyReply,
   ): EndpointEntry[] => {
     const session = resolveSession(request, reply);
-    return session ? Array.from(session.endpoints.values()) : [];
+    return session
+      ? Array.from(session.endpoints.values()).filter((endpoint) =>
+          endpointPolicy.isAllowed(endpoint.url),
+        )
+      : [];
   };
 
   registerAuthRoutes(app, {
+    createClient,
     defaultApiUrl: defaultClabApiUrl,
     disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
-    ensureSession,
     endpointSessions,
+    endpointPolicy,
     resolveSession,
+    rotateSession,
   });
   registerStandaloneProxies(
     app,
     resolveEndpoint,
     listEndpoints,
     topologySessions,
+    createClient,
   );
+
+  app.get("/api/health/live", async (_request, reply) => {
+    return reply.send({ status: "ok" });
+  });
+
+  app.get("/api/health/ready", async (_request, reply) => {
+    try {
+      await createClient(defaultClabApiUrl).probeHealth(
+        options.readinessProbeTimeoutMs,
+      );
+      return reply.send({ status: "ready" });
+    } catch {
+      return reply.status(503).send({ status: "upstream_unavailable" });
+    }
+  });
 
   app.get("/api/config", async (request, reply) => {
     const endpoints = listEndpoints(request, reply).map((entry) => ({
@@ -402,6 +473,10 @@ export async function createStandaloneApp(
   app.addHook("onClose", async () => {
     endpointSessions.dispose();
     topologySessions.disposeAll();
+    await defaultApiTlsTransport.dispose();
+    if (otherApiTlsTransport !== defaultApiTlsTransport) {
+      await otherApiTlsTransport.dispose();
+    }
   });
 
   return app;

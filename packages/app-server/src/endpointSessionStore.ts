@@ -2,22 +2,17 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export type EndpointSessionDuration = string;
+import {
+  isValidEndpointSessionDuration,
+  type EndpointSessionDuration,
+} from "@srl-labs/containerlab-app-contract";
 
-const ENDPOINT_SESSION_DURATION_PATTERN =
-  /^(?:(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))|(?:\d+(?:\.\d+)?(?:d|w)))+$/i;
-
-export const DEFAULT_ENDPOINT_SESSION_DURATION: EndpointSessionDuration = "24h";
-
-export function normalizeEndpointSessionDuration(value: unknown): EndpointSessionDuration {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : DEFAULT_ENDPOINT_SESSION_DURATION;
-}
-
-export function isValidEndpointSessionDuration(value: string): boolean {
-  return ENDPOINT_SESSION_DURATION_PATTERN.test(value.trim());
-}
+export {
+  DEFAULT_ENDPOINT_SESSION_DURATION,
+  isValidEndpointSessionDuration,
+  normalizeEndpointSessionDuration,
+  type EndpointSessionDuration,
+} from "@srl-labs/containerlab-app-contract";
 
 export interface EndpointEntry {
   id: string;
@@ -35,6 +30,7 @@ export interface EndpointSession {
 }
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_TOUCH_PERSIST_INTERVAL_MS = 60_000;
 
 function cloneEntries(entries: Iterable<EndpointEntry>): Map<string, EndpointEntry> {
   return new Map(Array.from(entries, (entry) => [entry.id, { ...entry }]));
@@ -55,6 +51,7 @@ export interface EndpointSessionStore {
 
 export interface EndpointSessionStoreOptions {
   persistenceFile?: string;
+  touchPersistenceIntervalMs?: number;
 }
 
 interface PersistedEndpointSession {
@@ -174,9 +171,51 @@ export function createEndpointSessionStore(
   options: EndpointSessionStoreOptions = {}
 ): EndpointSessionStore {
   const sessions = readPersistedSessions(options.persistenceFile);
+  const touchPersistenceIntervalMs =
+    options.touchPersistenceIntervalMs ?? DEFAULT_TOUCH_PERSIST_INTERVAL_MS;
+  let pendingTouchPersist = false;
+  let touchPersistTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const writeSessions = (): void => {
+    writePersistedSessions(options.persistenceFile, sessions.values());
+  };
+
+  const clearTouchPersistTimer = (): void => {
+    if (touchPersistTimer === undefined) {
+      return;
+    }
+    clearTimeout(touchPersistTimer);
+    touchPersistTimer = undefined;
+  };
+
+  const flushPendingTouches = (): void => {
+    clearTouchPersistTimer();
+    if (!pendingTouchPersist) {
+      return;
+    }
+    pendingTouchPersist = false;
+    writeSessions();
+  };
 
   const persistSessions = (): void => {
-    writePersistedSessions(options.persistenceFile, sessions.values());
+    clearTouchPersistTimer();
+    pendingTouchPersist = false;
+    writeSessions();
+  };
+
+  const scheduleTouchPersist = (): void => {
+    if (!options.persistenceFile) {
+      return;
+    }
+    pendingTouchPersist = true;
+    if (touchPersistTimer !== undefined) {
+      return;
+    }
+    touchPersistTimer = setTimeout(
+      flushPendingTouches,
+      Math.max(1, touchPersistenceIntervalMs),
+    );
+    touchPersistTimer.unref?.();
   };
 
   const cleanupExpiredSessions = (): void => {
@@ -198,6 +237,7 @@ export function createEndpointSessionStore(
 
   function touch(session: EndpointSession): EndpointSession {
     session.lastAccess = Date.now();
+    scheduleTouchPersist();
     return session;
   }
 
@@ -209,6 +249,7 @@ export function createEndpointSessionStore(
 
     dispose() {
       clearInterval(cleanupTimer);
+      flushPendingTouches();
       sessions.clear();
     },
 

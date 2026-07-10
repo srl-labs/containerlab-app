@@ -227,6 +227,7 @@ test("isValidEndpointSessionDuration accepts free-form durations", () => {
   assert.equal(isValidEndpointSessionDuration("7d"), true);
   assert.equal(isValidEndpointSessionDuration("1.5d"), true);
   assert.equal(isValidEndpointSessionDuration("2w"), true);
+  assert.equal(isValidEndpointSessionDuration("0h"), false);
   assert.equal(isValidEndpointSessionDuration("forever"), false);
   assert.equal(isValidEndpointSessionDuration(""), false);
 });

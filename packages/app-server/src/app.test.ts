@@ -3,11 +3,14 @@ import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
 
 import { createStandaloneApp } from "./app";
+import type { EndpointAccessPolicy } from "./endpointPolicy";
+import { createEndpointAccessPolicy } from "./endpointPolicy";
 
 interface FetchCall {
   body: string | undefined;
   headers: Headers;
   method: string;
+  redirect: "error" | "follow" | "manual" | undefined;
   signal: AbortSignal | null;
   url: URL;
 }
@@ -71,6 +74,7 @@ class FetchMock {
       body: bodyToString(init?.body),
       headers: fetchInputHeaders(input, init),
       method: fetchInputMethod(input, init),
+      redirect: init?.redirect,
       signal: fetchInputSignal(input, init),
       url: fetchInputUrl(input),
     };
@@ -91,15 +95,30 @@ interface TestAppContext {
   fetchMock: FetchMock;
 }
 
-async function createTestContext(t: TestContext): Promise<TestAppContext> {
+const allowAllEndpointPolicy: EndpointAccessPolicy = {
+  assertAllowed(): void {},
+  isAllowed(): boolean {
+    return true;
+  },
+};
+
+async function createTestContext(
+  t: TestContext,
+  options: {
+    endpointPolicy?: EndpointAccessPolicy;
+    readinessProbeTimeoutMs?: number;
+  } = {},
+): Promise<TestAppContext> {
   const originalFetch = globalThis.fetch;
   const fetchMock = new FetchMock();
   globalThis.fetch = fetchMock.fetch;
 
   const app = await createStandaloneApp({
     defaultClabApiUrl: "https://default-api.test:8080",
+    endpointPolicy: options.endpointPolicy ?? allowAllEndpointPolicy,
     isDev: true,
     logger: false,
+    readinessProbeTimeoutMs: options.readinessProbeTimeoutMs,
     viteDevUrl: "http://vite.test",
   });
 
@@ -234,7 +253,7 @@ async function loginEndpoint(
     endpoint: { id: string };
   }>();
   return {
-    cookie: cookie ?? extractSessionCookie(response),
+    cookie: extractSessionCookie(response),
     endpointId: payload.endpoint.id,
   };
 }
@@ -383,9 +402,109 @@ test("GET /api/config returns empty endpoints without a session", async (t) => {
   assert.equal(fetchMock.calls.length, 0);
 });
 
+test("health endpoints separate local liveness from upstream readiness", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("GET", "https://default-api.test:8080/health", (call) => {
+    assert.equal(call.redirect, "error");
+    return jsonResponse({ status: "ok" });
+  });
+
+  const live = await context.app.inject({ method: "GET", url: "/api/health/live" });
+  assert.equal(live.statusCode, 200);
+  assert.deepEqual(live.json(), { status: "ok" });
+  assert.equal(context.fetchMock.calls.length, 0);
+
+  const ready = await context.app.inject({ method: "GET", url: "/api/health/ready" });
+  assert.equal(ready.statusCode, 200);
+  assert.deepEqual(ready.json(), { status: "ready" });
+});
+
+test("readiness returns 503 when the upstream health probe times out", async (t) => {
+  const context = await createTestContext(t, { readinessProbeTimeoutMs: 20 });
+  context.fetchMock.on(
+    "GET",
+    "https://default-api.test:8080/health",
+    (call) =>
+      new Promise<Response>((_resolve, reject) => {
+        assert.ok(call.signal);
+        call.signal.addEventListener(
+          "abort",
+          () => reject(call.signal?.reason ?? new Error("aborted")),
+          { once: true },
+        );
+      }),
+  );
+
+  const ready = await context.app.inject({
+    method: "GET",
+    url: "/api/health/ready",
+  });
+  assert.equal(ready.statusCode, 503, ready.body);
+  assert.deepEqual(ready.json(), { status: "upstream_unavailable" });
+});
+
+test("endpoint policy rejects unlisted metadata destinations before fetch", async (t) => {
+  const endpointPolicy = createEndpointAccessPolicy({
+    defaultApiUrl: "https://default-api.test:8080",
+  });
+  const context = await createTestContext(t, { endpointPolicy });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/auth/login",
+    payload: {
+      url: "http://169.254.169.254",
+      username: "alice",
+      password: "secret",
+    },
+  });
+
+  assert.equal(response.statusCode, 403, response.body);
+  assert.match(response.json<{ error: string }>().error, /not allowed/);
+  assert.equal(context.fetchMock.calls.length, 0);
+});
+
+test("login rejects endpoint URLs with embedded credentials before fetch", async (t) => {
+  const context = await createTestContext(t);
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/auth/login",
+    payload: {
+      url: "https://embedded:secret@api.example.test:8090/path?query=yes#fragment",
+      username: "alice",
+      password: "secret",
+    },
+  });
+
+  assert.equal(response.statusCode, 400, response.body);
+  assert.equal(context.fetchMock.calls.length, 0);
+});
+
+test("login normalizes endpoint paths, queries, and fragments to a clean origin", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://api.example.test:8090/login", () =>
+    jsonResponse({ token: "secret-token" }),
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/auth/login",
+    payload: {
+      url: "https://api.example.test:8090/base?query=yes#fragment",
+      username: "alice",
+      password: "secret",
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json<{ clabApiUrl: string }>().clabApiUrl, "https://api.example.test:8090");
+});
+
 test("POST /auth/login normalizes endpoint URL, forwards credentials, and hides tokens", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "https://api.example.test/login", (call) => {
+    assert.equal(call.redirect, "error");
     assert.deepEqual(JSON.parse(call.body ?? "{}"), {
       username: "alice",
       password: "secret",
@@ -434,12 +553,101 @@ test("POST /auth/login normalizes endpoint URL, forwards credentials, and hides 
   assert.equal(config.json<{ endpoints: unknown[] }>().endpoints.length, 1);
 });
 
+test("login replaces an unknown caller-supplied session cookie", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://api.example.test/login", () =>
+    jsonResponse({ token: "victim-token" }),
+  );
+
+  const attackerCookie = "clab_session=attacker-chosen-id";
+  const login = await context.app.inject({
+    method: "POST",
+    url: "/auth/login",
+    headers: { cookie: attackerCookie },
+    payload: {
+      url: "https://api.example.test",
+      username: "victim",
+      password: "secret",
+    },
+  });
+  assert.equal(login.statusCode, 200, login.body);
+  const freshCookie = extractSessionCookie(login);
+  assert.notEqual(freshCookie, attackerCookie);
+
+  const attackerReplay = await context.app.inject({
+    method: "GET",
+    url: "/auth/me",
+    headers: { cookie: attackerCookie },
+  });
+  assert.equal(attackerReplay.statusCode, 200, attackerReplay.body);
+  assert.deepEqual(attackerReplay.json(), {
+    authenticated: false,
+    endpoints: [],
+  });
+
+  context.fetchMock.on(
+    "GET",
+    "https://api.example.test/api/v1/version",
+    () => jsonResponse({ versionInfo: "connected" }),
+  );
+  const victim = await context.app.inject({
+    method: "GET",
+    url: "/auth/me",
+    headers: { cookie: freshCookie },
+  });
+  assert.equal(victim.statusCode, 200, victim.body);
+  assert.equal(victim.json<{ authenticated: boolean }>().authenticated, true);
+});
+
+test("adding credentials rotates an existing valid session cookie", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://attacker-api.test/login", () =>
+    jsonResponse({ token: "attacker-token" }),
+  );
+  context.fetchMock.on("POST", "https://victim-api.test/login", () =>
+    jsonResponse({ token: "victim-token" }),
+  );
+
+  const attacker = await loginEndpoint(context, {
+    url: "https://attacker-api.test",
+    username: "attacker",
+  });
+  const victimLogin = await context.app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    headers: { cookie: attacker.cookie },
+    payload: {
+      url: "https://victim-api.test",
+      username: "victim",
+      password: "secret",
+    },
+  });
+  assert.equal(victimLogin.statusCode, 200, victimLogin.body);
+  const rotatedCookie = extractSessionCookie(victimLogin);
+  assert.notEqual(rotatedCookie, attacker.cookie);
+
+  const attackerReplay = await context.app.inject({
+    method: "GET",
+    url: "/api/config",
+    headers: { cookie: attacker.cookie },
+  });
+  assert.deepEqual(attackerReplay.json<{ endpoints: unknown[] }>().endpoints, []);
+
+  const victimConfig = await context.app.inject({
+    method: "GET",
+    url: "/api/config",
+    headers: { cookie: rotatedCookie },
+  });
+  assert.equal(victimConfig.json<{ endpoints: unknown[] }>().endpoints.length, 2);
+});
+
 test("GET /auth/me reports connected, expired, and offline endpoint states", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", /\/login$/, (call) => {
     return jsonResponse({ token: `${call.url.hostname}-token` });
   });
-  context.fetchMock.on("GET", "http://connected.test/api/v1/version", () => {
+  context.fetchMock.on("GET", "http://connected.test/api/v1/version", (call) => {
+    assert.equal(call.redirect, "error");
     return jsonResponse({ versionInfo: "connected" });
   });
   context.fetchMock.on("GET", "http://expired.test/api/v1/version", () => {
@@ -449,11 +657,11 @@ test("GET /auth/me reports connected, expired, and offline endpoint states", asy
     throw new Error("offline");
   });
 
-  const connected = await loginEndpoint(context, {
+  let connected = await loginEndpoint(context, {
     url: "http://connected.test",
     label: "Connected",
   });
-  await loginEndpoint(
+  connected = await loginEndpoint(
     context,
     {
       url: "http://expired.test",
@@ -461,7 +669,7 @@ test("GET /auth/me reports connected, expired, and offline endpoint states", asy
     },
     connected.cookie,
   );
-  await loginEndpoint(
+  connected = await loginEndpoint(
     context,
     {
       url: "http://offline.test",
@@ -537,6 +745,121 @@ test("endpoint preference updates reject invalid durations and persist valid one
       .endpoints[0]?.sessionDuration,
     "36h",
   );
+});
+
+test("endpoint PATCH never forwards an existing token to a changed origin", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://server-a.test/login", () =>
+    jsonResponse({ token: "server-a-token" }),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "https://server-a.test",
+    username: "alice",
+  });
+
+  const response = await context.app.inject({
+    method: "PATCH",
+    url: `/auth/endpoints/${endpointId}`,
+    headers: { cookie },
+    payload: { url: "https://server-b.test", username: "bob" },
+  });
+  assert.equal(response.statusCode, 400, response.body);
+  assert.match(response.json<{ error: string }>().error, /requires reconnecting/i);
+  assert.equal(
+    context.fetchMock.calls.some((call) => call.url.hostname === "server-b.test"),
+    false,
+  );
+});
+
+test("authenticated reconnect can move an endpoint to a new origin", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://server-a.test/login", () =>
+    jsonResponse({ token: "server-a-token" }),
+  );
+  context.fetchMock.on("POST", "https://server-b.test/login", (call) => {
+    assert.equal(call.headers.get("authorization"), null);
+    assert.deepEqual(JSON.parse(call.body ?? "{}"), {
+      username: "bob",
+      password: "new-password",
+      sessionDuration: "24h",
+    });
+    return jsonResponse({ token: "server-b-token" });
+  });
+  const original = await loginEndpoint(context, {
+    url: "https://server-a.test",
+    username: "alice",
+  });
+
+  const reconnect = await context.app.inject({
+    method: "POST",
+    url: `/auth/endpoints/${original.endpointId}/reconnect`,
+    headers: { cookie: original.cookie },
+    payload: {
+      url: "https://server-b.test",
+      username: "bob",
+      password: "new-password",
+    },
+  });
+  assert.equal(reconnect.statusCode, 200, reconnect.body);
+  const rotatedCookie = extractSessionCookie(reconnect);
+  const config = await context.app.inject({
+    method: "GET",
+    url: "/api/config",
+    headers: { cookie: rotatedCookie },
+  });
+  assert.deepEqual(
+    config.json<{ endpoints: Array<{ url: string; username: string }> }>().endpoints,
+    [
+      {
+        id: original.endpointId,
+        label: "server-a.test",
+        sessionDuration: "24h",
+        url: "https://server-b.test",
+        username: "bob",
+      },
+    ],
+  );
+});
+
+test("saved endpoint can reconnect after its server session has expired", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "https://saved-server.test/login", (call) => {
+    assert.deepEqual(JSON.parse(call.body ?? "{}"), {
+      username: "alice",
+      password: "new-password",
+      sessionDuration: "7d",
+    });
+    return jsonResponse({ token: "fresh-token" });
+  });
+
+  const reconnect = await context.app.inject({
+    method: "POST",
+    url: "/auth/endpoints/saved-endpoint/reconnect",
+    payload: {
+      label: "Saved lab host",
+      url: "https://saved-server.test",
+      username: "alice",
+      password: "new-password",
+      sessionDuration: "7d",
+    },
+  });
+  assert.equal(reconnect.statusCode, 200, reconnect.body);
+  const freshCookie = extractSessionCookie(reconnect);
+
+  const config = await context.app.inject({
+    method: "GET",
+    url: "/api/config",
+    headers: { cookie: freshCookie },
+  });
+  assert.deepEqual(config.json<{ endpoints: unknown[] }>().endpoints, [
+    {
+      id: "saved-endpoint",
+      label: "Saved lab host",
+      sessionDuration: "7d",
+      url: "https://saved-server.test",
+      username: "alice",
+    },
+  ]);
 });
 
 test("deleting the last endpoint clears the browser session", async (t) => {
@@ -1087,6 +1410,8 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
       assert.equal(call.body, "{}");
       assert.equal(call.url.searchParams.get("stream"), "true");
       assert.equal(call.url.searchParams.get("path"), "labs/demo.clab.yml");
+      assert.equal(call.url.searchParams.get("reconfigure"), "true");
+      assert.equal(call.url.searchParams.get("cleanup"), null);
       return ndjsonResponse(upstreamBody);
     },
   );
@@ -1098,7 +1423,7 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
       cookie,
       origin: "https://localhost:5173",
     },
-    payload: { topologyRef: demoTopologyRef(endpointId) },
+    payload: { cleanup: true, topologyRef: demoTopologyRef(endpointId) },
   });
 
   assert.equal(response.statusCode, 200, response.body);
@@ -1522,7 +1847,7 @@ test("/api/runtime/inspect/all scopes duplicate lab names across endpoints", asy
     url: "http://east.test",
     label: "East",
   });
-  await loginEndpoint(
+  const west = await loginEndpoint(
     context,
     {
       url: "http://west.test",
@@ -1534,7 +1859,7 @@ test("/api/runtime/inspect/all scopes duplicate lab names across endpoints", asy
   const response = await context.app.inject({
     method: "GET",
     url: "/api/runtime/inspect/all",
-    headers: { cookie: east.cookie },
+    headers: { cookie: west.cookie },
   });
 
   assert.equal(response.statusCode, 200, response.body);
@@ -1657,6 +1982,58 @@ test("/api/runtime/capture resolves unresolved topology prefix to runtime contai
       ?.containerName,
     "demo-leaf2",
   );
+
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/capture/wireshark-vnc-sessions/capture-1/vnc/index.html?view=fit",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      assert.equal(call.headers.get("accept"), "text/html");
+      assert.equal(call.headers.get("accept-encoding"), "identity");
+      assert.equal(call.headers.get("range"), "bytes=0-9");
+      assert.equal(call.headers.get("cookie"), null);
+      assert.equal(call.headers.get("x-endpoint-id"), null);
+      assert.equal(call.headers.get("proxy-authorization"), null);
+      assert.equal(call.redirect, "error");
+      return new Response("vnc client", {
+        headers: {
+          "clear-site-data": '"cookies"',
+          "content-encoding": "gzip",
+          "content-length": "999",
+          "content-type": "text/html; charset=utf-8",
+          "set-cookie": "clab_session=upstream-known; Path=/; HttpOnly",
+        },
+      });
+    },
+  );
+  const vncAsset = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/capture/wireshark-vnc-sessions/capture-1/vnc/index.html?view=fit&endpointId=${encodeURIComponent(endpointId)}`,
+    headers: {
+      accept: "text/html",
+      "accept-encoding": "gzip",
+      cookie,
+      "proxy-authorization": "Basic browser-secret",
+      range: "bytes=0-9",
+      "x-endpoint-id": endpointId,
+    },
+  });
+  assert.equal(vncAsset.statusCode, 200, vncAsset.body);
+  assert.equal(vncAsset.body, "vnc client");
+  assert.equal(vncAsset.headers["clear-site-data"], undefined);
+  assert.equal(vncAsset.headers["content-encoding"], undefined);
+  assert.equal(vncAsset.headers["content-length"], String(Buffer.byteLength("vnc client")));
+  assert.equal(vncAsset.headers["set-cookie"], undefined);
+  assert.match(String(vncAsset.headers["content-type"]), /^text\/html/);
+
+  const upstreamCallCount = context.fetchMock.calls.length;
+  const traversal = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/capture/wireshark-vnc-sessions/capture-1/vnc/..%2F..%2Fusers",
+    headers: { cookie },
+  });
+  assert.equal(traversal.statusCode, 400, traversal.body);
+  assert.equal(context.fetchMock.calls.length, upstreamCallCount);
 });
 
 test("terminal session creation resolves topology ref and short node name before proxying", async (t) => {

@@ -2,13 +2,21 @@
  * Typed HTTP client for clab-api-server REST endpoints.
  */
 
+import type { Dispatcher } from "undici";
+import type { ApiWebSocketTlsOptions } from "./upstreamTls.ts";
+
 interface HttpError extends Error {
   status?: number;
 }
 
 export interface ClabApiClientOptions {
   baseUrl: string;
+  dispatcher?: Dispatcher;
+  fetchImpl?: typeof fetch;
+  websocketOptions?: ApiWebSocketTlsOptions;
 }
+
+export type ClabApiClientFactory = (baseUrl: string) => ClabApiClient;
 
 interface StreamRequestOptions {
   signal?: AbortSignal;
@@ -335,13 +343,34 @@ type LifecycleEndpoint =
 
 export class ClabApiClient {
   private readonly baseUrl: string;
+  private readonly dispatcher?: Dispatcher;
+  private readonly fetchImpl: typeof fetch;
+  private readonly websocketOptions: ApiWebSocketTlsOptions;
 
   constructor(options: ClabApiClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.dispatcher = options.dispatcher;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
+    this.websocketOptions = options.websocketOptions ?? {};
   }
 
   getBaseUrl(): string {
     return this.baseUrl;
+  }
+
+  getWebSocketOptions(): ApiWebSocketTlsOptions {
+    return { ...this.websocketOptions };
+  }
+
+  /**
+   * Send a transport-scoped request to an API-relative path while preserving
+   * this client's TLS and redirect policy.
+   */
+  async requestRaw(path: string, init: RequestInit = {}): Promise<Response> {
+    if (!path.startsWith("/")) {
+      throw new Error("Raw clab-api-server request path must be absolute");
+    }
+    return await this.fetch(`${this.baseUrl}${path}`, init);
   }
 
   async login(
@@ -354,7 +383,7 @@ export class ClabApiClient {
       body.sessionDuration = sessionDuration;
     }
 
-    const res = await fetch(`${this.baseUrl}/login`, {
+    const res = await this.fetch(`${this.baseUrl}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -474,7 +503,7 @@ export class ClabApiClient {
     token: string,
     requestOptions: StreamRequestOptions = {},
   ): Promise<Response> {
-    const res = await fetch(`${this.baseUrl}/api/v1/labs/workspace/events`, {
+    const res = await this.fetch(`${this.baseUrl}/api/v1/labs/workspace/events`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: requestOptions.signal,
     });
@@ -489,6 +518,31 @@ export class ClabApiClient {
   async getHealthMetrics(token: string): Promise<HealthMetricsResponse> {
     const res = await this.get("/api/v1/health/metrics", token);
     return (await res.json()) as HealthMetricsResponse;
+  }
+
+  async probeHealth(timeoutMs = 3_000): Promise<void> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort(
+        new Error(`GET /health timed out after ${timeoutMs} ms`),
+      );
+    }, Math.max(1, timeoutMs));
+    timeout.unref?.();
+    try {
+      const res = await this.fetch(`${this.baseUrl}/health`, {
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => res.statusText);
+        const err: HttpError = new Error(
+          `GET /health failed (${res.status}): ${text}`,
+        );
+        err.status = res.status;
+        throw err;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async getLabTopologyYaml(token: string, labName: string): Promise<string> {
@@ -570,7 +624,7 @@ export class ClabApiClient {
     labName: string,
     filePath: string,
   ): Promise<boolean> {
-    const res = await fetch(
+    const res = await this.fetch(
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/file?path=${encodeURIComponent(filePath)}`,
       {
         method: "HEAD",
@@ -585,7 +639,7 @@ export class ClabApiClient {
     labName: string,
     filePath: string,
   ): Promise<string | undefined> {
-    const res = await fetch(
+    const res = await this.fetch(
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/file?path=${encodeURIComponent(filePath)}`,
       {
         method: "HEAD",
@@ -635,7 +689,7 @@ export class ClabApiClient {
       params.set("path", options.path);
     }
     if (options.cleanup) {
-      params.set("cleanup", "true");
+      params.set("reconfigure", "true");
     }
     if (options.includeLogs) {
       params.set("includeLogs", "true");
@@ -800,7 +854,7 @@ export class ClabApiClient {
       params.set("path", options.path);
     }
     if (options.cleanup) {
-      params.set("cleanup", "true");
+      params.set(endpoint === "deploy" ? "reconfigure" : "cleanup", "true");
     }
 
     const { method, path, hasJsonBody } = lifecycleStreamRequestTarget(
@@ -818,7 +872,7 @@ export class ClabApiClient {
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, {
+      res = await this.fetch(`${this.baseUrl}${path}?${params.toString()}`, {
         method,
         headers,
         body,
@@ -1357,7 +1411,7 @@ export class ClabApiClient {
     }
     const qs = params.toString();
     const url = `${this.baseUrl}/api/v1/events${qs ? `?${qs}` : ""}`;
-    const res = await fetch(url, {
+    const res = await this.fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: requestOptions.signal,
     });
@@ -1378,7 +1432,7 @@ export class ClabApiClient {
     const url =
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/events` +
       `?path=${encodeURIComponent(filePath)}`;
-    const res = await fetch(url, {
+    const res = await this.fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       signal: requestOptions.signal,
     });
@@ -1391,7 +1445,7 @@ export class ClabApiClient {
   }
 
   private async get(path: string, token: string): Promise<Response> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await this.fetch(`${this.baseUrl}${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
@@ -1418,7 +1472,7 @@ export class ClabApiClient {
     if (contentType) {
       headers["Content-Type"] = contentType;
     }
-    const res = await fetch(`${this.baseUrl}${path}`, {
+    const res = await this.fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
       body,
@@ -1432,6 +1486,15 @@ export class ClabApiClient {
       throw err;
     }
     return res;
+  }
+
+  private async fetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
+    const requestInit = {
+      ...init,
+      redirect: "error" as const,
+      ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}),
+    } as RequestInit & { dispatcher?: Dispatcher };
+    return await this.fetchImpl(input, requestInit);
   }
 }
 

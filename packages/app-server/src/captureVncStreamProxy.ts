@@ -4,13 +4,23 @@ import WebSocket, { type RawData } from "ws";
 import { buildWebSocketUrl } from "./clabApiClient.ts";
 import { getCaptureSessionEndpoint, setCaptureSessionEndpoint } from "./captureSessionStore.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
-import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
+import type { ApiWebSocketTlsOptions } from "./upstreamTls.ts";
+import {
+  encodeVncProxyWildcard,
+  vncUpstreamQuery,
+} from "./vncProxyPath.ts";
 
 type EndpointResolver = (
   request: FastifyRequest,
   reply: FastifyReply,
   endpointId?: string
-) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
+) => {
+  endpoint: EndpointEntry;
+  client: {
+    getBaseUrl(): string;
+    getWebSocketOptions(): ApiWebSocketTlsOptions;
+  };
+} | null;
 
 type ResolvedCaptureEndpoint = NonNullable<ReturnType<EndpointResolver>>;
 
@@ -35,12 +45,6 @@ function closeSocket(socket: WebSocket, code: number | undefined, reason: string
     return;
   }
   socket.close();
-}
-
-function requestQueryString(request: FastifyRequest): string {
-  const rawUrl = request.raw.url ?? "";
-  const queryIndex = rawUrl.indexOf("?");
-  return queryIndex >= 0 ? rawUrl.slice(queryIndex) : "";
 }
 
 function resolveCaptureEndpoint(
@@ -81,9 +85,10 @@ function requestedWebSocketProtocols(request: FastifyRequest): string[] {
 function createUpstreamSocket(
   upstreamUrl: string,
   protocols: string[],
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  websocketOptions: ApiWebSocketTlsOptions,
 ): WebSocket {
-  const options = { headers, perMessageDeflate: false, ...apiTlsWebSocketOptions() };
+  const options = { headers, perMessageDeflate: false, ...websocketOptions };
   return protocols.length > 0
     ? new WebSocket(upstreamUrl, protocols, options)
     : new WebSocket(upstreamUrl, options);
@@ -91,7 +96,7 @@ function createUpstreamSocket(
 
 export function registerCaptureVncStreamProxy(
   app: FastifyInstance,
-  resolveEndpoint: EndpointResolver
+  resolveEndpoint: EndpointResolver,
 ): void {
   type CaptureWsRequest = FastifyRequest<{
     Params: { sessionId: string; "*"?: string };
@@ -99,7 +104,7 @@ export function registerCaptureVncStreamProxy(
   }>;
 
   const createHandler = (
-    suffixResolver: (request: CaptureWsRequest) => string
+    suffixResolver: (request: CaptureWsRequest) => string | null
   ) =>
     (
       socket: WebSocket,
@@ -114,7 +119,11 @@ export function registerCaptureVncStreamProxy(
       setCaptureSessionEndpoint(sessionId, resolved.endpoint.id);
 
       const suffix = suffixResolver(request);
-      const query = requestQueryString(request);
+      if (suffix === null) {
+        closeSocket(socket, 1008, "Invalid VNC websocket path");
+        return;
+      }
+      const query = vncUpstreamQuery(request.raw.url);
 
       const upstreamPath =
         `/api/v1/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/vnc/websockify` +
@@ -130,7 +139,12 @@ export function registerCaptureVncStreamProxy(
         upstreamHeaders.Origin = origin;
       }
 
-      const upstream = createUpstreamSocket(upstreamUrl, requestedWebSocketProtocols(request), upstreamHeaders);
+      const upstream = createUpstreamSocket(
+        upstreamUrl,
+        requestedWebSocketProtocols(request),
+        upstreamHeaders,
+        resolved.client.getWebSocketOptions(),
+      );
 
       const forwardUpstreamError = (error: Error): void => {
         app.log.warn({ err: error, sessionId }, "capture vnc upstream websocket error");
@@ -178,7 +192,8 @@ export function registerCaptureVncStreamProxy(
     { websocket: true },
     createHandler((request) => {
       const wildcard = request.params["*"] ?? "";
-      return wildcard.length > 0 ? `/${wildcard}` : "";
+      const encoded = encodeVncProxyWildcard(wildcard);
+      return encoded === null ? null : encoded.length > 0 ? `/${encoded}` : "";
     })
   );
 }

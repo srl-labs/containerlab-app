@@ -32,7 +32,7 @@ Both apps connect to a reachable `clab-api-server` and use it to authenticate, l
 | Web app | You want one shared UI reachable from a browser, often on a lab server or VM. | Container image |
 | Desktop app | You want a local application window on your workstation. | `.deb`, `.rpm`, AppImage, `.dmg`, or `.exe` |
 
-Both options can connect to local or remote `clab-api-server` endpoints. The API endpoint is selected at login, so one app installation can work with multiple lab hosts.
+Both options can connect to allowlisted local or remote `clab-api-server` endpoints. The API endpoint is selected at login, so one app installation can work with multiple lab hosts after the app operator configures their exact origins.
 
 ---
 
@@ -79,18 +79,91 @@ On macOS, run `clab-api-server` in the Linux environment that owns containerlab 
 
 The web app is published as a multi-arch container image for `linux/amd64` and `linux/arm64`. The current image name is `ghcr.io/srl-labs/containerlab-web`.
 
-Start the web app:
+The supported host deployment keeps the privilege boundary explicit:
+
+```text
+browser -> unprivileged containerlab-app container -> host clab-api-server -> host containerlab/runtime
+```
+
+`clab-api-server` must listen on an address reachable from the Docker bridge. Restrict that listener with the host firewall and TLS; it remains the component that authenticates users and owns access to containerlab, lab files, network namespaces, and the container runtime.
+
+The repository includes a hardened bridge-network Compose deployment. It publishes the UI on loopback by default, drops every Linux capability, uses a read-only root filesystem, and persists only web TLS material and protected endpoint-session state:
 
 ```bash
+docker compose up -d
+```
+
+Its default upstream URL is `https://host.docker.internal:8090`. Override values in a `.env` file when needed:
+
+```dotenv
+CLAB_API_URL=https://host.docker.internal:8090
+CLAB_API_CA_FILE_HOST=/root/.config/clab-api-server/tls/localhost.pem
+CLAB_API_TLS_SERVER_NAME=localhost
+CLAB_API_TLS_VERIFY=true
+WEB_TLS_HOST=localhost
+CONTAINERLAB_APP_BIND_ADDRESS=127.0.0.1
+CONTAINERLAB_APP_PORT=3001
+```
+
+The app server combines Node's bundled roots with the operating-system trust store. The Compose deployment additionally bind-mounts the host API server's default auto-generated certificate from `/root/.config/clab-api-server/tls/localhost.pem`, trusts that exact certificate, and verifies it with the `localhost` server name while routing over `host.docker.internal`. This is the default path produced when the root-managed systemd service uses `TLS_AUTO_CERT=true`. If `TLS_CERT_FILE` points elsewhere, set `CLAB_API_CA_FILE_HOST` to that certificate path. If the certificate uses another DNS name, set `CLAB_API_TLS_SERVER_NAME` to a name in its SAN list.
+
+Before starting Compose, make the host API listener reachable from the Docker bridge. The installer intentionally defaults `API_LISTEN_ADDRESS` to loopback; change it to the Docker bridge address or another firewall-protected host address and restart `clab-api-server`. Do not expose the listener to untrusted networks.
+
+For a custom deployment, the equivalent Compose override is:
+
+```yaml
+services:
+  web:
+    environment:
+      CLAB_API_CA_FILE: /run/secrets/clab-api-ca.pem
+      CLAB_API_TLS_SERVER_NAME: api-host.example.com
+    volumes:
+      - /absolute/path/to/clab-api-ca.pem:/run/secrets/clab-api-ca.pem:ro
+```
+
+The equivalent hardened `docker run` command is:
+
+```bash
+docker volume create containerlab-app-state
+docker volume create containerlab-app-tls
 docker run -d --name containerlab-app \
   --restart unless-stopped \
-  --network host \
+  --init \
+  --add-host host.docker.internal:host-gateway \
+  --publish 127.0.0.1:3001:3001 \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m \
+  --mount type=volume,src=containerlab-app-tls,dst=/home/node/.config/containerlab-web/tls \
+  --mount type=volume,src=containerlab-app-state,dst=/home/node/.local/state/containerlab-web \
+  --mount type=bind,src=/root/.config/clab-api-server/tls/localhost.pem,dst=/run/secrets/clab-api-ca.pem,readonly \
+  --env CLAB_API_URL=https://host.docker.internal:8090 \
+  --env CLAB_API_LOCAL_HOST_MODE=true \
+  --env CLAB_API_CA_FILE=/run/secrets/clab-api-ca.pem \
+  --env CLAB_API_TLS_SERVER_NAME=localhost \
+  --env CLAB_API_TLS_VERIFY=true \
+  --env CONTAINERLAB_WEB_SESSION_FILE=/home/node/.local/state/containerlab-web/endpoint-sessions.json \
+  --env WEB_TLS_HOST=localhost \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
 Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with an allowed Linux/PAM user from the API server host.
 
-The web app can connect to multiple `clab-api-server` endpoints. If the API server runs on the same host, use the default `https://localhost:8090` endpoint. For remote lab hosts, enter their DNS name or IP address, for example `https://lab-host.example.com:8090`.
+The configured `CLAB_API_URL` origin is always allowed. To let users add more API endpoints, the app operator must list their exact origins in `CLAB_API_ALLOWED_ORIGINS`, separated by commas. This prevents the unauthenticated login route from becoming a proxy to arbitrary host, private-network, or cloud-metadata services. `CLAB_API_LOCAL_HOST_MODE=true` additionally permits the well-known local container-host aliases, but only with the same scheme and port as `CLAB_API_URL`.
+
+> [!CAUTION]
+> Do not bind-mount the host `containerlab` binary, Docker/Podman socket, lab directories, `/proc`, `/sys`, or network namespaces into the web container. A mounted binary still runs in the container's namespaces, while a runtime-socket or privileged mount gives a web-facing process host-equivalent control. Keep those resources behind the authenticated host `clab-api-server` boundary.
+
+If the API is intentionally bound only to host loopback, Linux `--network host` remains a compatibility fallback. It has a broader network blast radius than the bridge deployment and should be paired with the strict endpoint allowlist. No containerlab binary or runtime mount is required in either mode.
+
+Use the provided Linux-only override to keep both the API server and web listener on host loopback:
+
+```bash
+docker compose -f compose.yaml -f compose.host-network.yaml up -d
+```
+
+The override removes published ports, uses the host network namespace, connects to `https://localhost:8090`, and sets `WEB_LISTEN_ADDRESS=127.0.0.1`. The UI is therefore reachable only from that host unless you intentionally place a trusted reverse proxy in front of it.
 
 
 ---
@@ -107,7 +180,25 @@ Download the desktop package for your platform from the GitHub release assets.
 | macOS | `containerlab-desktop-<version>-universal.dmg` | Open the DMG and move the app to Applications |
 | Windows | `containerlab-desktop-<version>-x64-setup.exe` | Run the installer |
 
-Launch the desktop app, enter the `clab-api-server` URL, and log in with an allowed Linux/PAM user from the API server host.
+TLS verification is enabled for the desktop app. When the local root-managed
+API uses its generated self-signed certificate, copy only the public
+certificate to a user-readable location and launch the desktop app with it:
+
+```bash
+install -d -m 0700 "$HOME/.config/containerlab-desktop"
+sudo install -m 0644 -o "$(id -u)" -g "$(id -g)" \
+  /root/.config/clab-api-server/tls/localhost.pem \
+  "$HOME/.config/containerlab-desktop/clab-api-ca.pem"
+CLAB_API_CA_FILE="$HOME/.config/containerlab-desktop/clab-api-ca.pem" \
+  containerlab-desktop
+```
+
+For a remote server, set `CLAB_API_URL` to its HTTPS origin. A CA installed in
+the operating-system trust store is used automatically; otherwise provide it
+through `CLAB_API_CA_FILE` before launch. `CLAB_API_TLS_VERIFY=false` is an
+explicit compatibility escape hatch for an isolated loopback-only trial, not
+a production default. Then log in with an allowed Linux/PAM user from the API
+server host.
 
 The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Windows SmartScreen may show warnings until signing and notarization are added.
 
@@ -120,21 +211,42 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3001` | Web server port |
-| `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
+| `WEB_LISTEN_ADDRESS` | `0.0.0.0` | Web listener address; the host-network override pins this to `127.0.0.1` |
+| `CLAB_API_URL` | `https://localhost:8090` | Default and implicitly allowed clab-api-server endpoint |
+| `CLAB_API_ALLOWED_ORIGINS` | unset | Comma-separated additional exact API origins users may connect to |
+| `CLAB_API_LOCAL_HOST_MODE` | `false` | Permit local host aliases with the default API scheme and port |
+| `CLAB_API_TLS_VERIFY` | `true` in production | Verify upstream API TLS certificates; development defaults to `false` |
+| `CLAB_API_CA_FILE` | unset | Additional PEM CA file appended to Node and operating-system trust roots for clab-api-server HTTP and WebSocket connections |
+| `CLAB_API_TLS_SERVER_NAME` | URL hostname | Optional TLS server-name override for the configured default endpoint when its trusted certificate is reached through a container-host alias |
+| `CONTAINERLAB_WEB_SESSION_FILE` | unset | Optional protected file that persists browser endpoint sessions and bearer tokens across restarts |
 | `WEB_TLS_ENABLE` | `true` | Serve the web app over HTTPS |
 | `WEB_TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed web certificate when cert/key files are unset |
 | `WEB_TLS_CERT_FILE` | unset | Path to a web TLS certificate |
 | `WEB_TLS_KEY_FILE` | unset | Path to a web TLS private key |
-| `WEB_TLS_HOST` | auto-detected | Hostname used when generating a local certificate |
+| `WEB_TLS_HOST` | auto-detected | Stable browser access name used when generating a local certificate; set it for containers so certificate reuse does not depend on an ephemeral container hostname |
 | `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Interface stats interval requested from the API event stream |
 
 ### Desktop App
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
+| `CLAB_API_URL` | `https://localhost:8090` | Default and implicitly allowed clab-api-server endpoint |
+| `CLAB_API_ALLOWED_ORIGINS` | unset | Comma-separated additional exact API origins users may connect to |
+| `CLAB_API_LOCAL_HOST_MODE` | `false` | Permit local host aliases with the default API scheme and port |
+| `CLAB_API_TLS_VERIFY` | `true` | Verify upstream API TLS certificates |
+| `CLAB_API_CA_FILE` | unset | Additional PEM CA file used only for clab-api-server connections |
+| `CLAB_API_TLS_SERVER_NAME` | URL hostname | Optional TLS server-name override for the configured default endpoint |
 | `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local loopback port for the embedded app server |
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Enable desktop app-server debug logging |
+
+`CONTAINERLAB_WEB_SESSION_FILE` contains live upstream bearer tokens and is written with mode `0600`. Mount it only on storage trusted at the same level as the logged-in API users. Leave it unset for intentionally ephemeral browser sessions.
+
+### Health Endpoints
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /api/health/live` | The web process is serving requests; used by the container health check |
+| `GET /api/health/ready` | The configured default clab-api-server answered its public health probe; returns `503` when unavailable |
 
 ---
 

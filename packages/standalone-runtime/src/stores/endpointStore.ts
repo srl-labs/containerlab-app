@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { EndpointStatus } from "@srl-labs/containerlab-app-contract";
 
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -14,7 +15,6 @@ import { PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 const STORAGE_KEY = "clab-standalone-endpoints";
 
-export type EndpointStatus = "connected" | "session_expired" | "offline" | "saved";
 export {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   isValidEndpointSessionDuration,
@@ -23,6 +23,7 @@ export {
   type EndpointProfile,
   type EndpointSessionDuration
 } from "../endpointTransfer";
+export type { EndpointStatus } from "@srl-labs/containerlab-app-contract";
 
 export function endpointSessionDurationLabel(duration: EndpointSessionDuration): string {
   return normalizeEndpointSessionDuration(duration);
