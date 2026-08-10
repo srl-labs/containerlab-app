@@ -171,11 +171,12 @@ interface EditMenuItem {
   separator?: boolean;
 }
 
-const SELECTABLE_SELECTOR = "input, textarea, select, [contenteditable='true'], pre, code";
+const SELECTABLE_SELECTOR =
+  "input, textarea, select, [contenteditable]:not([contenteditable='false']), pre, code";
 
 // Avoid selecting random labels; only real text surfaces.
 const SELECTION_GUARD_CSS = `
-  body, body * { -webkit-user-select: none !important; user-select: none !important; }
+  body { -webkit-user-select: none !important; user-select: none !important; }
   body :is(${SELECTABLE_SELECTOR}),
   body :is(${SELECTABLE_SELECTOR}) * {
     -webkit-user-select: text !important; user-select: text !important;
@@ -280,7 +281,15 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
   return new Promise(function (resolve) {
     var ROOT_ID = "clab-desktop-edit-context-menu-root";
     var prev = document.getElementById(ROOT_ID);
-    if (prev) prev.remove();
+    if (prev) {
+      prev.dispatchEvent(new Event("clab-context-menu-close"));
+      if (prev.isConnected) prev.remove();
+    }
+
+    var contextTarget = document.elementFromPoint(p.x, p.y);
+    var editTarget = p.isEditable && contextTarget
+      ? contextTarget.closest("input, textarea, [contenteditable]:not([contenteditable='false'])")
+      : null;
 
     function cssVar(names, fallback) {
       var css = getComputedStyle(document.documentElement);
@@ -302,6 +311,18 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
       }
       return (r * 299 + g * 587 + b * 114) / 1000 < 140;
     }
+    function isTransparent(color) {
+      return !color || color === "transparent" || color === "rgba(0, 0, 0, 0)";
+    }
+    function colorAtPoint(property, fallback) {
+      var el = contextTarget;
+      while (el) {
+        var value = getComputedStyle(el)[property];
+        if (!isTransparent(value)) return value;
+        el = el.parentElement;
+      }
+      return fallback;
+    }
 
     var sample = document.querySelector(".MuiMenu-paper");
     var bg, fg, border, hover, hoverFg, sepColor, font;
@@ -313,7 +334,12 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
         ? s.borderColor
         : cssVar(["--vscode-panel-border"], "rgba(128,128,128,.35)");
     } else {
-      var editorBg = cssVar(["--vscode-editor-background", "--clab-ui-editor-background"], "#ffffff");
+      var contextBg = colorAtPoint("backgroundColor", "#ffffff");
+      var contextFg = colorAtPoint("color", "#333333");
+      var editorBg = cssVar(
+        ["--vscode-editor-background", "--clab-ui-editor-background"],
+        contextBg
+      );
       var dark = isDark(editorBg);
       bg = cssVar(
         ["--vscode-sideBar-background", "--vscode-menu-background", "--vscode-dropdown-background"],
@@ -321,7 +347,7 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
       );
       fg = cssVar(
         ["--vscode-menu-foreground", "--vscode-sideBar-foreground", "--vscode-foreground"],
-        dark ? "#cccccc" : "#333333"
+        dark ? "#cccccc" : contextFg
       );
       border = cssVar(["--vscode-menu-border", "--vscode-panel-border"], "rgba(128,128,128,.35)");
     }
@@ -339,12 +365,64 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
     root.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:transparent;font-family:" + font;
     var menu = document.createElement("div");
     menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Edit menu");
     menu.style.cssText = "position:fixed;left:" + p.x + "px;top:" + p.y + "px;min-width:180px;max-width:280px;padding:4px 0;margin:0;background:" + bg + ";color:" + fg + ";border:1px solid " + border + ";border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.18);box-sizing:border-box;font-size:13px;line-height:1.4;user-select:none";
 
     var done = false;
-    function finish(v) { if (done) return; done = true; root.remove(); resolve(v); }
+    var enabledButtons = [];
+    function consumeKey(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    }
+    function restoreEditFocus() {
+      if (!editTarget || !editTarget.isConnected || typeof editTarget.focus !== "function") return;
+      try { editTarget.focus({ preventScroll: true }); } catch (_) { editTarget.focus(); }
+    }
+    function finish(v) {
+      if (done) return;
+      done = true;
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("blur", onWindowBlur);
+      root.remove();
+      restoreEditFocus();
+      resolve(v);
+    }
+    function focusButton(index) {
+      if (!enabledButtons.length) return;
+      var next = (index + enabledButtons.length) % enabledButtons.length;
+      enabledButtons[next].focus({ preventScroll: true });
+    }
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        consumeKey(e);
+        finish(null);
+        return;
+      }
+      var current = enabledButtons.indexOf(document.activeElement);
+      if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
+        consumeKey(e);
+        focusButton(current + 1);
+      } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
+        consumeKey(e);
+        focusButton(current < 0 ? enabledButtons.length - 1 : current - 1);
+      } else if (e.key === "Home") {
+        consumeKey(e);
+        focusButton(0);
+      } else if (e.key === "End") {
+        consumeKey(e);
+        focusButton(enabledButtons.length - 1);
+      } else if ((e.key === "Enter" || e.key === " ") && current >= 0) {
+        consumeKey(e);
+        enabledButtons[current].click();
+      }
+    }
+    function onWindowBlur() { finish(null); }
+    root.addEventListener("clab-context-menu-close", function () { finish(null); });
     root.addEventListener("mousedown", function (e) { e.preventDefault(); if (e.target === root) finish(null); });
     root.addEventListener("contextmenu", function (e) { e.preventDefault(); finish(null); });
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("blur", onWindowBlur);
 
     for (var i = 0; i < p.items.length; i++) {
       var item = p.items[i];
@@ -358,19 +436,26 @@ const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
       btn.type = "button";
       btn.textContent = item.label;
       btn.disabled = !item.enabled;
+      btn.setAttribute("role", "menuitem");
+      btn.tabIndex = -1;
       btn.setAttribute("data-testid", "context-menu-item-" + item.id);
       btn.style.cssText = "display:block;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:4px 12px;min-height:28px;font:inherit;cursor:" + (item.enabled ? "pointer" : "default") + ";opacity:" + (item.enabled ? "1" : ".4");
       if (item.enabled) {
+        enabledButtons.push(btn);
         (function (id, b) {
           b.addEventListener("mouseenter", function () { b.style.background = hover; b.style.color = hoverFg; });
           b.addEventListener("mouseleave", function () { b.style.background = "transparent"; b.style.color = "inherit"; });
+          b.addEventListener("focus", function () { b.style.background = hover; b.style.color = hoverFg; });
+          b.addEventListener("blur", function () { b.style.background = "transparent"; b.style.color = "inherit"; });
           b.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); finish(id); });
         })(item.id, btn);
       }
       menu.appendChild(btn);
     }
     root.appendChild(menu);
-    document.documentElement.appendChild(root);
+    var modalRoot = contextTarget && contextTarget.closest(".MuiModal-root");
+    (modalRoot || document.documentElement).appendChild(root);
+    if (p.keyboardInvocation) focusButton(0);
     requestAnimationFrame(function () {
       var r = menu.getBoundingClientRect();
       var left = p.x, top = p.y;
@@ -390,6 +475,8 @@ function showAppStyledContextMenu(
   const payload = {
     x: params.x,
     y: params.y,
+    isEditable: params.isEditable,
+    keyboardInvocation: params.menuSourceType === "keyboard",
     items: items.map((item, index) => ({
       id: item.id,
       label: item.label ?? "",
