@@ -36,7 +36,7 @@ async function start(): Promise<void> {
     viteDevUrl: VITE_DEV_URL
   });
 
-  await app.listen({ port: PORT, host: "0.0.0.0" });
+  await app.listen({ port: PORT, host: "::", ipv6Only: false });
   const protocol = WEB_TLS.enabled ? "https" : "http";
   app.log.info(`Standalone app server running at ${protocol}://localhost:${PORT}`);
   if (WEB_TLS.generated && WEB_TLS.certFile) {

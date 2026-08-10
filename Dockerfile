@@ -40,6 +40,6 @@ USER node
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; const tls = !['0','false','no','off'].includes(String(process.env.WEB_TLS_ENABLE || 'true').toLowerCase()); fetch((tls ? 'https' : 'http') + '://127.0.0.1:' + (process.env.PORT || '3001') + '/api/config').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
+  CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; const tls = !['0','false','no','off'].includes(String(process.env.WEB_TLS_ENABLE || 'true').toLowerCase()); fetch((tls ? 'https' : 'http') + '://[::1]:' + (process.env.PORT || '3001') + '/api/config').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1));"
 
 CMD ["node", "apps/web/dist/server/index.cjs"]
