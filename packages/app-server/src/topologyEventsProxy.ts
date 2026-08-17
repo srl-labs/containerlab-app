@@ -104,34 +104,38 @@ export function registerTopologyEventsProxy(
       }
 
       const { client, endpoint } = resolved;
-      const session = sessions.getSession(sessionId, endpoint.id);
-      if (!session) {
+      const sessionLease = sessions.acquireSession(sessionId, endpoint.id);
+      if (!sessionLease) {
         return reply.status(404).send({ error: "Topology session not found" });
       }
-
-      disableStreamTimeouts(request, reply);
-
-      reply.raw.writeHead(
-        200,
-        streamResponseHeaders(request, {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
-          "X-Accel-Buffering": "no",
-        }),
-      );
-      reply.raw.write(":ok\n\n");
-      const stopHeartbeat = startSseHeartbeat(reply);
+      const { session } = sessionLease;
 
       let aborted = false;
+      let closeListenerAttached = false;
+      let stopHeartbeat: (() => void) | undefined;
       const abortController = new AbortController();
       const abort = (): void => {
         aborted = true;
         abortController.abort();
       };
-      reply.raw.on("close", abort);
 
       try {
+        disableStreamTimeouts(request, reply);
+
+        reply.raw.writeHead(
+          200,
+          streamResponseHeaders(request, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            Connection: "keep-alive",
+            "X-Accel-Buffering": "no",
+          }),
+        );
+        reply.raw.write(":ok\n\n");
+        stopHeartbeat = startSseHeartbeat(reply);
+        reply.raw.on("close", abort);
+        closeListenerAttached = true;
+
         const response = await client.openTopologyEventStream(
           endpoint.token,
           session.topologyRef.labName,
@@ -159,8 +163,11 @@ export function registerTopologyEventsProxy(
           writeTopologyEventError(reply, message);
         }
       } finally {
-        stopHeartbeat();
-        reply.raw.off("close", abort);
+        stopHeartbeat?.();
+        sessionLease.release();
+        if (closeListenerAttached) {
+          reply.raw.off("close", abort);
+        }
         if (!aborted && !reply.raw.writableEnded) {
           reply.raw.end();
         }

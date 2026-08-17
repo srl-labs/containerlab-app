@@ -43,8 +43,15 @@ function ndjsonResponse(lines: string[]): Response {
 async function injectTopologyEvents(options: {
   internalUpdate: boolean;
   lines: string[];
-}): Promise<{ body: string; statusCode: number }> {
+}): Promise<{
+  body: string;
+  leaseAcquired: number;
+  leaseReleased: number;
+  statusCode: number;
+}> {
   const app = Fastify({ logger: false });
+  let leaseAcquired = 0;
+  let leaseReleased = 0;
   let openedLabName = "";
   let openedPath = "";
   let openedToken = "";
@@ -63,6 +70,23 @@ async function injectTopologyEvents(options: {
   } as Pick<ClabApiClient, "openTopologyEventStream"> as ClabApiClient;
 
   const sessions = {
+    acquireSession(id: string, endpointId?: string) {
+      if (id !== sessionId || endpointId !== endpoint.id) {
+        return null;
+      }
+      leaseAcquired += 1;
+      return {
+        session: {
+          endpointId: endpoint.id,
+          isInternalUpdate: () => options.internalUpdate,
+          sessionId,
+          topologyRef
+        },
+        release() {
+          leaseReleased += 1;
+        }
+      };
+    },
     createSession() {
       throw new Error("not used");
     },
@@ -103,6 +127,8 @@ async function injectTopologyEvents(options: {
     assert.equal(openedPath, topologyRef.yamlPath);
     return {
       body: response.body,
+      leaseAcquired,
+      leaseReleased,
       statusCode: response.statusCode
     };
   } finally {
@@ -126,6 +152,8 @@ test("/api/topology/events forwards topology document events outside internal up
   });
 
   assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.leaseAcquired, 1);
+  assert.equal(response.leaseReleased, 1);
   assert.match(response.body, /:ok/);
   assert.match(response.body, /rev-external/);
 });
