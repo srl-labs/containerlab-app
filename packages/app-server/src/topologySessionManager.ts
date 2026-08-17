@@ -27,6 +27,15 @@ interface SessionRecord {
   disposeInternalUpdateTracker(): void;
 }
 
+interface ManagedSessionRecord extends SessionRecord {
+  activeLeaseCount: number;
+}
+
+interface TopologySessionLease {
+  release(): void;
+  session: SessionRecord;
+}
+
 interface CreateSessionOptions {
   client: ClabApiClient;
   containerDataProvider: ContainerDataProvider;
@@ -48,6 +57,8 @@ interface InternalUpdateTracker {
 }
 
 export interface StandaloneTopologySessionManager {
+  /** Keep a session out of idle cleanup while a long-lived consumer is using it. */
+  acquireSession(sessionId: string, endpointId?: string): TopologySessionLease | null;
   createSession(options: CreateSessionOptions): SessionRecord;
   disposeAll(): void;
   disposeSessionsForEndpoint(endpointId: string): void;
@@ -117,7 +128,7 @@ function createInternalUpdateTracker(): InternalUpdateTracker {
 }
 
 export function createStandaloneTopologySessionManager(): StandaloneTopologySessionManager {
-  const sessions = new Map<string, SessionRecord>();
+  const sessions = new Map<string, ManagedSessionRecord>();
 
   const disposeSessionRecord = (session: SessionRecord): void => {
     session.host.dispose();
@@ -127,7 +138,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
   const cleanupExpiredSessions = (): void => {
     const now = Date.now();
     for (const [sessionId, session] of sessions.entries()) {
-      if (now - session.lastAccess <= SESSION_TTL_MS) {
+      if (session.activeLeaseCount > 0 || now - session.lastAccess <= SESSION_TTL_MS) {
         continue;
       }
       disposeSessionRecord(session);
@@ -148,6 +159,31 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
   };
 
   return {
+    acquireSession(sessionId, endpointId) {
+      const session = sessions.get(sessionId);
+      if (!session || (endpointId && session.endpointId !== endpointId)) {
+        return null;
+      }
+
+      session.lastAccess = Date.now();
+      session.activeLeaseCount += 1;
+      let released = false;
+
+      return {
+        session,
+        release() {
+          if (released) {
+            return;
+          }
+          released = true;
+          session.activeLeaseCount = Math.max(0, session.activeLeaseCount - 1);
+          if (sessions.get(sessionId) === session) {
+            session.lastAccess = Date.now();
+          }
+        }
+      };
+    },
+
     createSession(options) {
       const sessionId = globalThis.crypto.randomUUID();
       const fs = new ClabApiFileSystemAdapter({
@@ -175,7 +211,8 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         }
       });
 
-      const record: SessionRecord = {
+      const record: ManagedSessionRecord = {
+        activeLeaseCount: 0,
         baseUrl: options.client.getBaseUrl(),
         endpointId: options.endpointId,
         host,

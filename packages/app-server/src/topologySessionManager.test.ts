@@ -166,6 +166,46 @@ test("topology sessions expose an internal-update grace window after host writes
   }
 });
 
+test("active topology session leases prevent idle cleanup until released", (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setInterval"], now: 1_000 });
+
+  const yamlPath = "labs/demo.clab.yml";
+  const client = new InMemoryClabApiClient({
+    [yamlPath]: "name: demo\ntopology:\n  nodes: {}\n"
+  }) as unknown as ClabApiClient;
+  const manager = createStandaloneTopologySessionManager();
+
+  try {
+    const session = manager.createSession({
+      client,
+      token: "secret-token",
+      endpointId: "endpoint-remote",
+      topologyRef: {
+        topologyId: `standalone:endpoint-remote::${yamlPath}`,
+        labName: "demo",
+        yamlPath,
+        annotationsPath: `${yamlPath}.annotations.json`,
+        source: "standalone"
+      },
+      mode: "edit",
+      deploymentState: "undeployed",
+      containerDataProvider: createRuntimeContainerDataProvider([])
+    });
+
+    const lease = manager.acquireSession(session.sessionId, "endpoint-remote");
+    assert.ok(lease);
+
+    t.mock.timers.tick(6 * 60 * 1000);
+    assert.equal(manager.getSession(session.sessionId, "endpoint-remote"), session);
+
+    lease.release();
+    t.mock.timers.tick(6 * 60 * 1000);
+    assert.equal(manager.getSession(session.sessionId, "endpoint-remote"), null);
+  } finally {
+    manager.disposeAll();
+  }
+});
+
 test("running-lab-doc sessions treat missing annotations as empty and create them on save", async () => {
   const labName = "demo";
   const yamlPath = "/home/alice/.clab/demo/demo.clab.yml";
