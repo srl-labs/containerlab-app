@@ -17,7 +17,8 @@ const pagesMode = runtimeMode === "pages";
 const apiServerPort = process.env.PORT ?? "3001";
 const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
 const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
-const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? (pagesMode ? "/containerlab-app/" : "/");
+const publicBasePath =
+  process.env.VITE_PUBLIC_BASE_PATH ?? (pagesMode ? "/containerlab-app/" : "./");
 
 if (useLocalClabUi && !fs.existsSync(path.join(localClabUiDistRoot, "index.js"))) {
   throw new Error(

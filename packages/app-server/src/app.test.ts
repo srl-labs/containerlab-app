@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
 
-import { createStandaloneApp } from "./app";
+import { createStandaloneApp, normalizeBasePath } from "./app";
 
 interface FetchCall {
   body: string | undefined;
@@ -1749,4 +1752,88 @@ test("terminal session creation resolves topology ref and short node name before
 
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json<{ sessionId: string }>().sessionId, "terminal-1");
+});
+
+async function createStaticAppContext(
+  t: TestContext,
+  basePath?: string
+): Promise<Awaited<ReturnType<typeof createStandaloneApp>>> {
+  const clientRoot = mkdtempSync(join(tmpdir(), "clab-web-static-"));
+  writeFileSync(
+    join(clientRoot, "index.html"),
+    '<!doctype html><html><head><title>app</title></head><body></body></html>'
+  );
+
+  const app = await createStandaloneApp({
+    basePath,
+    isDev: false,
+    logger: false,
+    staticClientRoot: clientRoot,
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  return app;
+}
+
+test("normalizeBasePath accepts bare, prefixed, and trailing-slash forms", () => {
+  assert.equal(normalizeBasePath(undefined), "");
+  assert.equal(normalizeBasePath(""), "");
+  assert.equal(normalizeBasePath("  "), "");
+  assert.equal(normalizeBasePath("/"), "");
+  assert.equal(normalizeBasePath("web"), "/web");
+  assert.equal(normalizeBasePath("/web"), "/web");
+  assert.equal(normalizeBasePath("/web/"), "/web");
+  assert.equal(normalizeBasePath("/web///"), "/web");
+  assert.equal(normalizeBasePath(" /clab/web/ "), "/clab/web");
+});
+
+test("the client is served at the root when no base path is configured", async (t) => {
+  const app = await createStaticAppContext(t);
+
+  const index = await app.inject({ method: "GET", url: "/" });
+  assert.equal(index.statusCode, 200);
+  assert.match(index.body, /<title>app<\/title>/);
+  assert.match(index.body, /<base href="\/">/);
+
+  const deepLink = await app.inject({ method: "GET", url: "/anything" });
+  assert.equal(deepLink.statusCode, 200);
+  assert.match(deepLink.body, /<title>app<\/title>/);
+
+  const config = await app.inject({ method: "GET", url: "/api/config" });
+  assert.equal(config.statusCode, 200);
+});
+
+test("a configured base path serves the client and keeps other paths off the fallback", async (t) => {
+  const app = await createStaticAppContext(t, "/web");
+
+  const index = await app.inject({ method: "GET", url: "/web/" });
+  assert.equal(index.statusCode, 200);
+  assert.match(index.body, /<title>app<\/title>/);
+
+  const bare = await app.inject({ method: "GET", url: "/web" });
+  assert.equal(bare.statusCode, 308);
+  assert.equal(bare.headers.location, "/web/");
+
+  const deepLink = await app.inject({ method: "GET", url: "/web/anything" });
+  assert.equal(deepLink.statusCode, 200);
+  assert.match(deepLink.body, /<title>app<\/title>/);
+
+  const outside = await app.inject({ method: "GET", url: "/anything" });
+  assert.equal(outside.statusCode, 404);
+});
+
+test("a configured base path moves the API and declares the document base", async (t) => {
+  const app = await createStaticAppContext(t, "/web");
+
+  const index = await app.inject({ method: "GET", url: "/web/" });
+  assert.match(index.body, /<base href="\/web\/">/);
+
+  const config = await app.inject({ method: "GET", url: "/web/api/config" });
+  assert.equal(config.statusCode, 200);
+
+  const rootConfig = await app.inject({ method: "GET", url: "/api/config" });
+  assert.equal(rootConfig.statusCode, 404);
 });

@@ -1,6 +1,7 @@
 export {
   createStandaloneApp,
   createStandaloneApp as createContainerlabAppServer,
+  normalizeBasePath,
   type CreateStandaloneAppOptions
 } from "./app.ts";
 export { configureApiTlsVerification } from "./upstreamTls.ts";

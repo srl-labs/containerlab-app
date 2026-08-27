@@ -34,6 +34,7 @@ interface ResolvedEndpoint {
 }
 
 export interface CreateStandaloneAppOptions {
+  basePath?: string;
   defaultClabApiUrl?: string;
   https?: HttpsServerOptions;
   isDev?: boolean;
@@ -41,6 +42,15 @@ export interface CreateStandaloneAppOptions {
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
   viteDevUrl?: string;
+}
+
+export function normalizeBasePath(value: string | undefined): string {
+  const trimmed = (value ?? "").trim();
+  if (trimmed.length === 0 || trimmed === "/") {
+    return "";
+  }
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return withLeadingSlash.replace(/\/+$/, "");
 }
 
 function defaultEndpointLabel(url: string): string {
@@ -177,6 +187,7 @@ export async function createStandaloneApp(
     options.defaultClabApiUrl ?? "https://localhost:8090";
   const isDev = options.isDev ?? process.env.NODE_ENV !== "production";
   const viteDevUrl = options.viteDevUrl ?? "https://localhost:5173";
+  const basePath = normalizeBasePath(options.basePath);
   const fastifyOptions = {
     logger: options.logger ?? true,
     requestTimeout: 0,
@@ -305,31 +316,36 @@ export async function createStandaloneApp(
     return session ? Array.from(session.endpoints.values()) : [];
   };
 
-  registerAuthRoutes(app, {
-    defaultApiUrl: defaultClabApiUrl,
-    disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
-    ensureSession,
-    endpointSessions,
-    resolveSession,
-  });
-  registerStandaloneProxies(
-    app,
-    resolveEndpoint,
-    listEndpoints,
-    topologySessions,
-  );
+  await app.register(
+    async (scoped: FastifyInstance) => {
+      registerAuthRoutes(scoped, {
+        defaultApiUrl: defaultClabApiUrl,
+        disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
+        ensureSession,
+        endpointSessions,
+        resolveSession,
+      });
+      registerStandaloneProxies(
+        scoped,
+        resolveEndpoint,
+        listEndpoints,
+        topologySessions,
+      );
 
-  app.get("/api/config", async (request, reply) => {
-    const endpoints = listEndpoints(request, reply).map((entry) => ({
-      id: entry.id,
-      url: entry.url,
-      label: entry.label,
-      username: entry.username,
-      sessionDuration: entry.sessionDuration,
-    }));
-    const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
-    return reply.send(payload);
-  });
+      scoped.get("/api/config", async (request, reply) => {
+        const endpoints = listEndpoints(request, reply).map((entry) => ({
+          id: entry.id,
+          url: entry.url,
+          label: entry.label,
+          username: entry.username,
+          sessionDuration: entry.sessionDuration,
+        }));
+        const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
+        return reply.send(payload);
+      });
+    },
+    { prefix: basePath },
+  );
 
   if (isDev) {
     const proxyViteDevHttp = async (
@@ -389,13 +405,59 @@ export async function createStandaloneApp(
     const clientRoot =
       options.staticClientRoot ?? path.resolve(process.cwd(), "dist/client");
 
+    const { readFile } = await import("node:fs/promises");
+    const documents = new Map<string, string>();
+
+    const readDocument = async (name: string): Promise<string> => {
+      const cached = documents.get(name);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const html = await readFile(path.join(clientRoot, name), "utf8");
+      const baseTag = `<base href="${basePath}/">`;
+      const headMatch = /<head(\s[^>]*)?>/i.exec(html);
+      const doctypeMatch = /<!doctype[^>]*>/i.exec(html);
+      const anchor = headMatch ?? doctypeMatch;
+      const withBase = anchor
+        ? `${html.slice(0, anchor.index + anchor[0].length)}${baseTag}${html.slice(
+            anchor.index + anchor[0].length,
+          )}`
+        : `${baseTag}${html}`;
+      documents.set(name, withBase);
+      return withBase;
+    };
+
+    const sendDocument = async (name: string, reply: FastifyReply) => {
+      return reply.type("text/html; charset=utf-8").send(await readDocument(name));
+    };
+
     await app.register(fastifyStatic.default, {
       root: clientRoot,
-      prefix: "/",
+      prefix: `${basePath}/`,
+      index: false,
     });
 
-    app.setNotFoundHandler((_request, reply) => {
-      return reply.sendFile("index.html");
+    if (basePath) {
+      app.get(basePath, (_request, reply) => {
+        return reply.redirect(`${basePath}/`, 308);
+      });
+    }
+
+    for (const name of ["index.html", "terminal.html", "wireshark.html"]) {
+      app.get(`${basePath}/${name}`, async (_request, reply) => {
+        return sendDocument(name, reply);
+      });
+    }
+
+    app.get(`${basePath}/`, async (_request, reply) => {
+      return sendDocument("index.html", reply);
+    });
+
+    app.setNotFoundHandler(async (request, reply) => {
+      if (basePath && !request.url.startsWith(`${basePath}/`)) {
+        return reply.code(404).send({ error: "Not Found" });
+      }
+      return sendDocument("index.html", reply);
     });
   }
 

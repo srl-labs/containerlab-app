@@ -37,6 +37,23 @@ export function resolveStandaloneServerOrigin(
   return normalizeOrigin(configuredOrigin) ?? location.origin;
 }
 
-export function standaloneServerUrl(path: string): string {
-  return new URL(path, resolveStandaloneServerOrigin()).toString();
+function documentBaseUri(): string {
+  return typeof document === "undefined" ? "/" : document.baseURI;
+}
+
+export function resolveAppBasePath(baseUri: string = documentBaseUri()): string {
+  try {
+    const pathname = new URL(baseUri).pathname;
+    return pathname.endsWith("/") ? pathname : `${pathname}/`;
+  } catch {
+    return "/";
+  }
+}
+
+export function standaloneServerUrl(
+  path: string,
+  origin = resolveStandaloneServerOrigin(),
+  basePath = resolveAppBasePath()
+): string {
+  return new URL(path.replace(/^\/+/, ""), `${origin}${basePath}`).toString();
 }
