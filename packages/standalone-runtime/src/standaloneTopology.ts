@@ -329,7 +329,7 @@ export function createStandaloneTopologyManager(
 
   async function fetchTopologyFilesForEndpoint(endpointId: string): Promise<TopologyFileEntry[]> {
     try {
-      const response = await fetch("/files", withEndpointHeaders(endpointId, { credentials: "include" }));
+      const response = await fetch(standaloneServerUrl("/files"), withEndpointHeaders(endpointId, { credentials: "include" }));
       if (!response.ok) {
         return [];
       }

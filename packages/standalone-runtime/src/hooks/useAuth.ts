@@ -6,6 +6,7 @@ import {
   serializeEndpointProfiles,
   type EndpointImportResult
 } from "../endpointTransfer";
+import { standaloneServerUrl } from "../standaloneServerOrigin";
 import { useAuthStore } from "../stores/authStore";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -141,7 +142,7 @@ export function useEndpointAuth() {
       setDefaultApiUrl("");
       return;
     }
-    const response = await fetch("/api/config", { credentials: "include" });
+    const response = await fetch(standaloneServerUrl("/api/config"), { credentials: "include" });
     if (!response.ok) {
       return;
     }
@@ -157,7 +158,7 @@ export function useEndpointAuth() {
       return;
     }
     const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
-    const response = await fetch("/auth/endpoints", { credentials: "include" });
+    const response = await fetch(standaloneServerUrl("/auth/endpoints"), { credentials: "include" });
     if (!response.ok) {
       throw new Error(await readError(response, "Failed to load endpoints"));
     }
@@ -190,7 +191,7 @@ export function useEndpointAuth() {
       try {
         await refreshConfig().catch(() => {});
         const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
-        const response = await fetch("/auth/me", { credentials: "include" });
+        const response = await fetch(standaloneServerUrl("/auth/me"), { credentials: "include" });
         if (!response.ok) {
           throw new Error(await readError(response, "Authentication check failed"));
         }
@@ -246,7 +247,7 @@ export function useEndpointAuth() {
         return PAGES_SANDBOX_ENDPOINT;
       }
       clearError();
-      const response = await fetch("/auth/endpoints/add", {
+      const response = await fetch(standaloneServerUrl("/auth/endpoints/add"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -281,7 +282,7 @@ export function useEndpointAuth() {
         return;
       }
 
-      const response = await fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}`, {
+      const response = await fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}`), {
         method: "DELETE",
         credentials: "include"
       });
@@ -355,7 +356,7 @@ export function useEndpointAuth() {
         return;
       }
 
-      void fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}/preferences`, {
+      void fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/preferences`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -413,7 +414,7 @@ export function useEndpointAuth() {
         return endpoint;
       }
 
-      const response = await fetch(`/auth/endpoints/${encodeURIComponent(input.endpointId)}`, {
+      const response = await fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(input.endpointId)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -451,7 +452,7 @@ export function useEndpointAuth() {
       return;
     }
     clearError();
-    await fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    await fetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
     markAllSaved();
     useLabStore.getState().clear();
   }, [addEndpointToStore, clearError, markAllSaved, pagesMode]);
@@ -462,7 +463,7 @@ export function useEndpointAuth() {
       return;
     }
     clearError();
-    void fetch("/auth/logout", { method: "POST", credentials: "include" }).catch(() => {});
+    void fetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
     clearEndpoints();
     useLabStore.getState().clear();
   }, [addEndpointToStore, clearEndpoints, clearError, pagesMode]);

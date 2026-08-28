@@ -10,6 +10,7 @@ import {
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
 const VITE_DEV_URL = process.env.VITE_DEV_URL ?? "https://localhost:5173";
+const BASE_PATH = process.env.WEB_BASE_PATH ?? "";
 const IS_DEV = process.env.NODE_ENV !== "production";
 const API_TLS_VERIFY = configureApiTlsVerification();
 const WEB_TLS = resolveWebTlsConfig();
@@ -28,6 +29,7 @@ function resolveStaticClientRoot(): string {
 
 async function start(): Promise<void> {
   const app = await createContainerlabAppServer({
+    basePath: BASE_PATH,
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     https: WEB_TLS.https,
     isDev: IS_DEV,
@@ -38,7 +40,9 @@ async function start(): Promise<void> {
 
   await app.listen({ port: PORT, host: "::", ipv6Only: false });
   const protocol = WEB_TLS.enabled ? "https" : "http";
-  app.log.info(`Standalone app server running at ${protocol}://localhost:${PORT}`);
+  app.log.info(
+    `Standalone app server running at ${protocol}://localhost:${PORT}${BASE_PATH}`
+  );
   if (WEB_TLS.generated && WEB_TLS.certFile) {
     app.log.warn(`Generated self-signed web TLS certificate at ${WEB_TLS.certFile}`);
   }

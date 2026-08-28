@@ -9,6 +9,7 @@ import type {
 import type { TopologyRef } from "@srl-labs/clab-ui/session";
 
 import { dispatchEndpointUiAction } from "./endpointActions";
+import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
   fetchEndpointHealthMetrics,
   formatEndpointHealthTooltip,
@@ -801,7 +802,7 @@ function normalizePopularRepos(value: unknown): PopularLabRepo[] {
 
 async function fetchPopularRepos(): Promise<PopularLabRepo[]> {
   try {
-    const response = await fetch("/api/runtime/popular-repos", {
+    const response = await fetch(standaloneServerUrl("/api/runtime/popular-repos"), {
       credentials: "include",
     });
     if (!response.ok) {

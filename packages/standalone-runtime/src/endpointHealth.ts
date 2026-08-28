@@ -1,3 +1,5 @@
+import { standaloneServerUrl } from "./standaloneServerOrigin";
+
 export interface EndpointHealthMetrics {
   serverInfo: {
     version: string;
@@ -46,7 +48,9 @@ export async function fetchEndpointHealthMetrics(
   endpointId: string,
   signal?: AbortSignal
 ): Promise<EndpointHealthMetrics> {
-  const response = await fetch(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`, {
+  const response = await fetch(
+    standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`),
+    {
     credentials: "include",
     signal
   });

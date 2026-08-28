@@ -120,6 +120,7 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 | Variable | Default | Description |
 | --- | --- | --- |
 | `PORT` | `3001` | Web server port |
+| `WEB_BASE_PATH` | unset | Base path to serve the app under, for example `/web` |
 | `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
 | `WEB_TLS_ENABLE` | `true` | Serve the web app over HTTPS |
 | `WEB_TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed web certificate when cert/key files are unset |
