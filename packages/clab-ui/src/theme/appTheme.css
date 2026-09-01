@@ -1,0 +1,116 @@
+/* =============================================================================
+ * App theme globals (framework-agnostic).
+ * Ported out of the former MUI `MuiCssBaseline` overrides so the canvas,
+ * explorer, and animations keep working after the MUI removal.
+ * ============================================================================= */
+
+/* Bridge vars consumed by the React Flow canvas and topology nodes. */
+:root {
+  --clab-ui-editor-background: var(--vscode-editor-background);
+  --clab-ui-editor-foreground: var(--vscode-editor-foreground);
+  --clab-ui-panel-background: var(--vscode-sideBar-background);
+  --clab-ui-panel-border: var(--vscode-panel-border);
+  --clab-ui-button-background: var(--vscode-button-background);
+  --clab-ui-button-foreground: var(--vscode-button-foreground);
+  --clab-ui-input-background: var(--vscode-input-background);
+  --clab-ui-input-foreground: var(--vscode-input-foreground);
+  --clab-ui-input-border: var(--vscode-input-border);
+  --clab-ui-focus-border: var(--vscode-focusBorder);
+  --clab-ui-font-family: var(--vscode-font-family);
+  --clab-ui-font-size: var(--vscode-font-size);
+
+  --topoviewer-surface-panel: var(--clab-ui-panel-background, var(--vscode-sideBar-background));
+  --topoviewer-surface-elevated: var(--clab-ui-panel-background, var(--vscode-sideBar-background));
+  --topoviewer-grid-color: var(--clab-ui-panel-border, var(--vscode-panel-border));
+  --topoviewer-node-label-background: var(--vscode-badge-background);
+  --topoviewer-node-label-foreground: var(--clab-ui-editor-foreground, var(--vscode-foreground));
+  --topoviewer-node-label-outline: var(--clab-ui-editor-background, var(--vscode-editor-background));
+  --topoviewer-edge-label-background: var(--clab-ui-editor-background, var(--vscode-editor-background));
+  --topoviewer-edge-label-foreground: var(--clab-ui-editor-foreground, var(--vscode-foreground));
+  --topoviewer-edge-label-outline: var(--clab-ui-editor-background, var(--vscode-editor-background));
+  --topoviewer-network-node-background: var(--clab-ui-panel-background, var(--vscode-sideBar-background));
+}
+
+/* Slim scrollbars to match the VS Code aesthetic. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Explorer webview: honor the host VS Code font metrics. */
+body[data-webview-kind="containerlab-explorer"],
+.containerlab-explorer-root {
+  font-family: var(
+    --clab-ui-font-family,
+    var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif)
+  );
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-node-label,
+.containerlab-explorer-root .explorer-node-label {
+  font-size: var(--clab-ui-font-size, var(--vscode-font-size, 13px));
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-node-inline-icon,
+.containerlab-explorer-root .explorer-node-inline-icon {
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-node-inline-icon-button,
+.containerlab-explorer-root .explorer-node-inline-icon-button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: inherit;
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-node-inline-icon-favorite,
+.containerlab-explorer-root .explorer-node-inline-icon-favorite {
+  color: var(--vscode-charts-yellow, var(--vscode-editorWarning-foreground));
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-node-inline-icon-shared,
+.containerlab-explorer-root .explorer-node-inline-icon-shared {
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+}
+
+body[data-webview-kind="containerlab-explorer"] .explorer-section-title,
+.containerlab-explorer-root .explorer-section-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+}
+
+@keyframes shortcutFade {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}

@@ -1,0 +1,99 @@
+/**
+ * DynamicList - Array of string inputs with add/remove
+ */
+import React, { useRef } from "react";
+import { Box, TextInput } from "@mantine/core";
+
+import { AddItemButton, DeleteItemButton } from "./ListButtons";
+import { createRowIds, nextRowId } from "./listRowIds";
+
+interface DynamicListProps {
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+  addLabel?: string;
+  disabled?: boolean;
+  hideAddButton?: boolean;
+}
+
+export const DynamicList: React.FC<DynamicListProps> = ({
+  items,
+  onChange,
+  placeholder,
+  addLabel = "Add",
+  disabled,
+  hideAddButton
+}) => {
+  // Stable per-row identities so removing a row doesn't reassign focus/state to
+  // its neighbor. Add/remove handlers keep the id list aligned with the items
+  // array; an external length change (parent reset) regenerates all ids.
+  const rowIdsRef = useRef<number[] | null>(null);
+  if (rowIdsRef.current === null || rowIdsRef.current.length !== items.length) {
+    rowIdsRef.current = createRowIds(items.length);
+  }
+  const rowIds = rowIdsRef.current;
+
+  const handleAdd = () => {
+    rowIdsRef.current = [...rowIds, nextRowId()];
+    onChange([...items, ""]);
+  };
+
+  const handleRemove = (index: number) => {
+    rowIdsRef.current = rowIds.filter((_, i) => i !== index);
+    onChange(items.filter((_, i) => i !== index));
+  };
+
+  const handleChange = (index: number, value: string) => {
+    const newItems = [...items];
+    newItems[index] = value;
+    onChange(newItems);
+  };
+
+  return (
+    <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {items.map((item, index) => (
+        <DynamicListItem
+          key={rowIds[index]}
+          value={item}
+          onChange={(value) => handleChange(index, value)}
+          onRemove={() => handleRemove(index)}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      ))}
+      {hideAddButton !== true && (
+        <AddItemButton onAdd={handleAdd} label={addLabel} disabled={disabled} />
+      )}
+    </Box>
+  );
+};
+
+/**
+ * Single list item with input and delete button
+ */
+interface DynamicListItemProps {
+  value: string;
+  onChange: (value: string) => void;
+  onRemove: () => void;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+const DynamicListItem: React.FC<DynamicListItemProps> = ({
+  value,
+  onChange,
+  onRemove,
+  placeholder,
+  disabled
+}) => (
+  <Box style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <TextInput
+      value={value}
+      onChange={(e) => onChange(e.currentTarget.value)}
+      placeholder={placeholder}
+      disabled={disabled}
+      style={{ flex: 1 }}
+    />
+    <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+  </Box>
+);

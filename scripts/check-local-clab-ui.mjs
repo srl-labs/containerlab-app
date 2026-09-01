@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
-const localClabUiDistRoot = path.resolve(projectRoot, "../clab-ui/dist");
+const localClabUiDistRoot = path.join(projectRoot, "packages/clab-ui/dist");
 const viteCacheRoot = path.join(projectRoot, "node_modules/.vite");
 const localClabUiHashFile = path.join(viteCacheRoot, "clab-ui-dist.hash");
 
@@ -47,9 +47,7 @@ for (const missingFile of missingFiles) {
 }
 console.error("");
 console.error("Build clab-ui before running local mode:");
-console.error("  cd ../clab-ui");
-console.error("  npm install");
-console.error("  npm run build");
+console.error("  npm run build:clab-ui");
 process.exit(1);
 
 function collectFiles(root, relativeDir = "") {

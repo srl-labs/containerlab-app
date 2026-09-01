@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-viewer/
+out/
+docs-site/
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.nyc_output/
+.agents
+.claude

@@ -1,0 +1,478 @@
+{
+  "freeTextAnnotations": [
+    {
+      "id": "freeText_1775750560571",
+      "text": "Stripe Connector",
+      "position": {
+        "x": 456.63829603215765,
+        "y": -379.5174543465205
+      },
+      "fontSize": 21,
+      "fontColor": "#d4d4d4",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1775750560571-1",
+      "text": "Stripe 1",
+      "position": {
+        "x": 162.59492464006,
+        "y": -108.95193822254343
+      },
+      "fontSize": 21,
+      "fontColor": "#d4d4d4",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1775750560571-1-1",
+      "text": "Stripe 2",
+      "position": {
+        "x": 1189.183159934163,
+        "y": -97.06958528136684
+      },
+      "fontSize": 21,
+      "fontColor": "#d4d4d4",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    },
+    {
+      "id": "freeText_1775750560571-1-1-1",
+      "text": "Front-end",
+      "position": {
+        "x": 664.2518928340165,
+        "y": 584.7852380188214
+      },
+      "fontSize": 21,
+      "fontColor": "#d4d4d4",
+      "fontWeight": "normal",
+      "fontStyle": "normal",
+      "textDecoration": "none",
+      "textAlign": "left",
+      "fontFamily": "Arial"
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "freeShape_1775750323871",
+      "shapeType": "rectangle",
+      "position": {
+        "x": 156.8687598768821,
+        "y": -86.60758406601346
+      },
+      "width": 516,
+      "height": 150,
+      "fillColor": "#50C4D0",
+      "fillOpacity": 0.2,
+      "borderColor": "#d4d4d4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    },
+    {
+      "id": "freeShape_1775750323871-1",
+      "shapeType": "rectangle",
+      "position": {
+        "x": 756.5152366146449,
+        "y": -74.71399802790188
+      },
+      "width": 516,
+      "height": 138,
+      "fillColor": "#FFA663",
+      "fillOpacity": 0.2,
+      "borderColor": "#d4d4d4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    },
+    {
+      "id": "freeShape_1775750323871-1-1",
+      "shapeType": "rectangle",
+      "position": {
+        "x": 449.99503262439464,
+        "y": -354.1055905444048
+      },
+      "width": 516,
+      "height": 138,
+      "fillColor": "#9765FE",
+      "fillOpacity": 0.2,
+      "borderColor": "#d4d4d4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    },
+    {
+      "id": "freeShape_1775750323871-2",
+      "shapeType": "rectangle",
+      "position": {
+        "x": 518.8576309913005,
+        "y": 354.40855493323073
+      },
+      "width": 385,
+      "height": 309,
+      "fillColor": "#F26C69",
+      "fillOpacity": 0.2,
+      "borderColor": "#d4d4d4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "rotation": 0,
+      "zIndex": -1
+    }
+  ],
+  "trafficRateAnnotations": [],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "be-spine1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 560,
+        "y": -320
+      }
+    },
+    {
+      "id": "be-spine2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 800,
+        "y": -320
+      }
+    },
+    {
+      "id": "fe-spine1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 560,
+        "y": 560
+      }
+    },
+    {
+      "id": "fe-spine2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 800,
+        "y": 560
+      }
+    },
+    {
+      "id": "fe-leaf1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 560,
+        "y": 400
+      }
+    },
+    {
+      "id": "fe-leaf2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 800,
+        "y": 400
+      }
+    },
+    {
+      "id": "be-stripe-1-leaf1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 860,
+        "y": 60
+      }
+    },
+    {
+      "id": "be-stripe-1-leaf2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 900,
+        "y": 320
+      }
+    },
+    {
+      "id": "be-stripe-1-leaf3",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 920,
+        "y": 560
+      }
+    },
+    {
+      "id": "be-stripe-1-leaf4",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 1160,
+        "y": 380
+      }
+    },
+    {
+      "id": "be-stripe-2-leaf1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": -200,
+        "y": 540
+      }
+    },
+    {
+      "id": "be-stripe-2-leaf2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": -20,
+        "y": 700
+      }
+    },
+    {
+      "id": "be-stripe-2-leaf3",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 320,
+        "y": 880
+      }
+    },
+    {
+      "id": "be-stripe-2-leaf4",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 180,
+        "y": 680
+      }
+    },
+    {
+      "id": "server1",
+      "position": {
+        "x": 200,
+        "y": 200
+      },
+      "icon": "server",
+      "iconCornerRadius": 4
+    },
+    {
+      "id": "server2",
+      "position": {
+        "x": 320,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "server3",
+      "position": {
+        "x": 440,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "server4",
+      "position": {
+        "x": 560,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "be-stripe1-leaf1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 200,
+        "y": -40
+      },
+      "labelBackgroundColor": "#000000",
+      "icon": "pe"
+    },
+    {
+      "id": "be-stripe1-leaf2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 320,
+        "y": -40
+      }
+    },
+    {
+      "id": "be-stripe1-leaf3",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 440,
+        "y": -40
+      }
+    },
+    {
+      "id": "be-stripe1-leaf4",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 560,
+        "y": -40
+      }
+    },
+    {
+      "id": "fe-leaf3",
+      "position": {
+        "x": 1040,
+        "y": 540
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "fe-leaf4",
+      "position": {
+        "x": 1200,
+        "y": 520
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-spine3",
+      "position": {
+        "x": 980.0000000000001,
+        "y": -300.00000000000006
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-spine4",
+      "position": {
+        "x": 1260,
+        "y": -300.00000000000006
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-stripe1-leaf5",
+      "position": {
+        "x": 740.0000000000001,
+        "y": -40.00000000000003
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-stripe1-leaf6",
+      "position": {
+        "x": 820.0000000000001,
+        "y": -40.00000000000003
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-stripe1-leaf7",
+      "position": {
+        "x": 940.0000000000001,
+        "y": -40.00000000000003
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "be-stripe1-leaf8",
+      "position": {
+        "x": 1080,
+        "y": -40.00000000000003
+      },
+      "icon": "pe",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "server5",
+      "position": {
+        "x": 800,
+        "y": 200
+      },
+      "icon": "server",
+      "iconCornerRadius": 4
+    },
+    {
+      "id": "server6",
+      "position": {
+        "x": 920,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "server7",
+      "position": {
+        "x": 1040,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "server8",
+      "position": {
+        "x": 1160,
+        "y": 200
+      },
+      "icon": "server"
+    },
+    {
+      "id": "be-stripe2-leaf1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 800,
+        "y": -40
+      }
+    },
+    {
+      "id": "be-stripe2-leaf2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 920,
+        "y": -40
+      }
+    },
+    {
+      "id": "be-stripe2-leaf3",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 1040,
+        "y": -40
+      }
+    },
+    {
+      "id": "be-stripe2-leaf4",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 1160,
+        "y": -40
+      }
+    }
+  ],
+  "edgeAnnotations": [
+    {
+      "id": "Clab-Link20",
+      "source": "be-spine1",
+      "target": "be-stripe1-leaf1",
+      "sourceEndpoint": "e1-1",
+      "targetEndpoint": "e1-63",
+      "endpointLabelOffsetEnabled": true,
+      "endpointLabelOffset": 20
+    }
+  ],
+  "aliasEndpointAnnotations": [],
+  "viewerSettings": {
+    "style": "telemetry-style",
+    "linkLabelMode": "telemetry-style",
+    "lastNonTelemetryLinkLabelMode": "show-all",
+    "telemetryNodeSizePx": 60,
+    "telemetryInterfaceSizePercent": 45,
+    "gridLineWidth": 0.4,
+    "gridStyle": "dotted",
+    "gridColor": null,
+    "gridBgColor": null
+  }
+}

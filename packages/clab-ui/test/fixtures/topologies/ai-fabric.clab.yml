@@ -1,0 +1,340 @@
+name: ai-fabric
+prefix: __lab-name
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:26.3.1
+    linux:
+      image: ghcr.io/srl-labs/network-multitool
+  #########################################################
+  nodes:
+    # FRONT END
+    fe-spine1:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.14
+      startup-config: configs/fabric/fe/spine1.srl.cfg
+    fe-spine2:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.15
+      startup-config: configs/fabric/fe/spine2.srl.cfg
+    fe-leaf1:
+      type: ixr-d5
+      mgmt-ipv4: 172.20.20.16
+      startup-config: configs/fabric/fe/leaf1.srl.cfg
+    fe-leaf2:
+      type: ixr-d5
+      mgmt-ipv4: 172.20.20.17
+      startup-config: configs/fabric/fe/leaf2.srl.cfg
+    ###### BACK END
+    #### SPINES
+    be-spine1:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.18
+      startup-config: configs/fabric/be/spine1.srl.cfg
+    be-spine2:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.19
+      startup-config: configs/fabric/be/spine2.srl.cfg
+    ### STRIPE 1
+    be-stripe1-leaf1:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.20
+      startup-config: configs/fabric/be/stripe1-leaf1.srl.cfg
+    be-stripe1-leaf2:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.21
+      startup-config: configs/fabric/be/stripe1-leaf2.srl.cfg
+    be-stripe1-leaf3:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.22
+      startup-config: configs/fabric/be/stripe1-leaf3.srl.cfg
+    be-stripe1-leaf4:
+      type: ixr-h5-64o
+      mgmt-ipv4: 172.20.20.23
+      startup-config: configs/fabric/be/stripe1-leaf4.srl.cfg
+    ### STRIPE 2
+    be-stripe2-leaf1:
+      kind: nokia_srlinux
+      type: ixr-h5-64o
+      image: ghcr.io/nokia/srlinux:26.3.1
+      startup-config: configs/fabric/be/stripe2-leaf1.srl.cfg
+      mgmt-ipv4: 172.20.20.24
+    be-stripe2-leaf2:
+      kind: nokia_srlinux
+      type: ixr-h5-64o
+      image: ghcr.io/nokia/srlinux:26.3.1
+      startup-config: configs/fabric/be/stripe2-leaf2.srl.cfg
+      mgmt-ipv4: 172.20.20.25
+    be-stripe2-leaf3:
+      kind: nokia_srlinux
+      type: ixr-h5-64o
+      image: ghcr.io/nokia/srlinux:26.3.1
+      startup-config: configs/fabric/be/stripe2-leaf3.srl.cfg
+      mgmt-ipv4: 172.20.20.26
+    be-stripe2-leaf4:
+      kind: nokia_srlinux
+      type: ixr-h5-64o
+      image: ghcr.io/nokia/srlinux:26.3.1
+      startup-config: configs/fabric/be/stripe2-leaf4.srl.cfg
+      mgmt-ipv4: 172.20.20.27
+    #########################################################
+    server1:
+      kind: linux
+      mgmt-ipv4: 172.20.20.28
+      binds:
+        - configs/servers/server1.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+    server2:
+      kind: linux
+      mgmt-ipv4: 172.20.20.29
+      binds:
+        - configs/servers/server2.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+    server3:
+      kind: linux
+      mgmt-ipv4: 172.20.20.30
+      binds:
+        - configs/servers/server3.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+    server4:
+      kind: linux
+      mgmt-ipv4: 172.20.20.31
+      binds:
+        - configs/servers/server4.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+    server5:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool
+      binds:
+        - configs/servers/server5.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+      mgmt-ipv4: 172.20.20.32
+    server6:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool
+      binds:
+        - configs/servers/server6.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+      mgmt-ipv4: 172.20.20.33
+    server7:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool
+      binds:
+        - configs/servers/server7.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+      mgmt-ipv4: 172.20.20.34
+    server8:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool
+      binds:
+        - configs/servers/server8.sh:/bond0.sh
+      exec:
+        - bash bond0.sh
+      mgmt-ipv4: 172.20.20.35
+  ############################
+
+  links:
+    ############# FRONT END LINKS #############
+
+    # Spine - Leaf
+    - endpoints: [ "fe-spine1:e1-1", "fe-leaf1:e1-27" ]
+    - endpoints: [ "fe-spine1:e1-2", "fe-leaf2:e1-27" ]
+    - endpoints: [ "fe-spine2:e1-1", "fe-leaf1:e1-28" ]
+    - endpoints: [ "fe-spine2:e1-2", "fe-leaf2:e1-28" ]
+    # Leaf1 - server
+    - endpoints: [ "fe-leaf1:e1-1", "server1:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-2", "server2:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-3", "server3:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-4", "server4:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-5", "server5:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-6", "server6:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-7", "server7:eth9" ]
+    - endpoints: [ "fe-leaf1:e1-8", "server8:eth9" ]
+    # Leaf2 - server
+    - endpoints: [ "fe-leaf2:e1-1", "server1:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-2", "server2:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-3", "server3:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-4", "server4:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-5", "server5:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-6", "server6:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-7", "server7:eth10" ]
+    - endpoints: [ "fe-leaf2:e1-8", "server8:eth10" ]
+
+    ############# BACK END LINKS ##############
+    ############ INTERSWITCH LINKS ############
+    # 1:1 subscription: each leaf has 8 logical uplinks and 8 logical downlinks
+    # Leaf uplinks: e1-61..e1-62 -> spine1, e1-63..e1-64 -> spine2 (4 physical / 8 logical)
+    # Spine ports: 2 physical per leaf broken out into 4 logical
+    # --- be-spine1 uplinks ---
+    # be-stripe1-leaf1
+    - endpoints: [ "be-spine1:e1-1-1", "be-stripe1-leaf1:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-1-2", "be-stripe1-leaf1:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-2-1", "be-stripe1-leaf1:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-2-2", "be-stripe1-leaf1:e1-62-2" ]
+    # be-stripe1-leaf2
+    - endpoints: [ "be-spine1:e1-3-1", "be-stripe1-leaf2:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-3-2", "be-stripe1-leaf2:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-4-1", "be-stripe1-leaf2:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-4-2", "be-stripe1-leaf2:e1-62-2" ]
+    # be-stripe1-leaf3
+    - endpoints: [ "be-spine1:e1-5-1", "be-stripe1-leaf3:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-5-2", "be-stripe1-leaf3:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-6-1", "be-stripe1-leaf3:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-6-2", "be-stripe1-leaf3:e1-62-2" ]
+    # be-stripe1-leaf4
+    - endpoints: [ "be-spine1:e1-7-1", "be-stripe1-leaf4:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-7-2", "be-stripe1-leaf4:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-8-1", "be-stripe1-leaf4:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-8-2", "be-stripe1-leaf4:e1-62-2" ]
+    # be-stripe2-leaf1
+    - endpoints: [ "be-spine1:e1-9-1", "be-stripe2-leaf1:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-9-2", "be-stripe2-leaf1:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-10-1", "be-stripe2-leaf1:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-10-2", "be-stripe2-leaf1:e1-62-2" ]
+    # be-stripe2-leaf2
+    - endpoints: [ "be-spine1:e1-11-1", "be-stripe2-leaf2:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-11-2", "be-stripe2-leaf2:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-12-1", "be-stripe2-leaf2:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-12-2", "be-stripe2-leaf2:e1-62-2" ]
+    # be-stripe2-leaf3
+    - endpoints: [ "be-spine1:e1-13-1", "be-stripe2-leaf3:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-13-2", "be-stripe2-leaf3:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-14-1", "be-stripe2-leaf3:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-14-2", "be-stripe2-leaf3:e1-62-2" ]
+    # be-stripe2-leaf4
+    - endpoints: [ "be-spine1:e1-15-1", "be-stripe2-leaf4:e1-61-1" ]
+    - endpoints: [ "be-spine1:e1-15-2", "be-stripe2-leaf4:e1-61-2" ]
+    - endpoints: [ "be-spine1:e1-16-1", "be-stripe2-leaf4:e1-62-1" ]
+    - endpoints: [ "be-spine1:e1-16-2", "be-stripe2-leaf4:e1-62-2" ]
+    # --- be-spine2 uplinks ---
+    # be-stripe1-leaf1
+    - endpoints: [ "be-spine2:e1-1-1", "be-stripe1-leaf1:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-1-2", "be-stripe1-leaf1:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-2-1", "be-stripe1-leaf1:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-2-2", "be-stripe1-leaf1:e1-64-2" ]
+    # be-stripe1-leaf2
+    - endpoints: [ "be-spine2:e1-3-1", "be-stripe1-leaf2:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-3-2", "be-stripe1-leaf2:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-4-1", "be-stripe1-leaf2:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-4-2", "be-stripe1-leaf2:e1-64-2" ]
+    # be-stripe1-leaf3
+    - endpoints: [ "be-spine2:e1-5-1", "be-stripe1-leaf3:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-5-2", "be-stripe1-leaf3:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-6-1", "be-stripe1-leaf3:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-6-2", "be-stripe1-leaf3:e1-64-2" ]
+    # be-stripe1-leaf4
+    - endpoints: [ "be-spine2:e1-7-1", "be-stripe1-leaf4:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-7-2", "be-stripe1-leaf4:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-8-1", "be-stripe1-leaf4:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-8-2", "be-stripe1-leaf4:e1-64-2" ]
+    # be-stripe2-leaf1
+    - endpoints: [ "be-spine2:e1-9-1", "be-stripe2-leaf1:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-9-2", "be-stripe2-leaf1:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-10-1", "be-stripe2-leaf1:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-10-2", "be-stripe2-leaf1:e1-64-2" ]
+    # be-stripe2-leaf2
+    - endpoints: [ "be-spine2:e1-11-1", "be-stripe2-leaf2:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-11-2", "be-stripe2-leaf2:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-12-1", "be-stripe2-leaf2:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-12-2", "be-stripe2-leaf2:e1-64-2" ]
+    # be-stripe2-leaf3
+    - endpoints: [ "be-spine2:e1-13-1", "be-stripe2-leaf3:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-13-2", "be-stripe2-leaf3:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-14-1", "be-stripe2-leaf3:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-14-2", "be-stripe2-leaf3:e1-64-2" ]
+    # be-stripe2-leaf4
+    - endpoints: [ "be-spine2:e1-15-1", "be-stripe2-leaf4:e1-63-1" ]
+    - endpoints: [ "be-spine2:e1-15-2", "be-stripe2-leaf4:e1-63-2" ]
+    - endpoints: [ "be-spine2:e1-16-1", "be-stripe2-leaf4:e1-64-1" ]
+    - endpoints: [ "be-spine2:e1-16-2", "be-stripe2-leaf4:e1-64-2" ]
+
+    ################ EDGE LINKS ##################
+    # Each leaf has 8 logical downlinks (e1-1..e1-4, broken out)
+    # Each server has 8 BE NICs (eth1..eth8) to 4 leaves in its stripe (2 NICs per leaf)
+    # On each leaf, server N uses physical port N (both logical subports)
+    #   stripe1-leafL:e1-N-1 <-> serverN:ethL     (NIC to leaf L, first of pair)
+    #   stripe1-leafL:e1-N-2 <-> serverN:eth(L+4) (NIC to leaf L, second of pair)
+    # ----- stripe 1 -----
+    # be-stripe1-leaf1 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe1-leaf1:e1-1-1", "server1:eth1" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-1-2", "server1:eth5" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-2-1", "server2:eth1" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-2-2", "server2:eth5" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-3-1", "server3:eth1" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-3-2", "server3:eth5" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-4-1", "server4:eth1" ]
+    - endpoints: [ "be-stripe1-leaf1:e1-4-2", "server4:eth5" ]
+    # be-stripe1-leaf2 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe1-leaf2:e1-1-1", "server1:eth2" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-1-2", "server1:eth6" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-2-1", "server2:eth2" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-2-2", "server2:eth6" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-3-1", "server3:eth2" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-3-2", "server3:eth6" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-4-1", "server4:eth2" ]
+    - endpoints: [ "be-stripe1-leaf2:e1-4-2", "server4:eth6" ]
+    # be-stripe1-leaf3 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe1-leaf3:e1-1-1", "server1:eth3" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-1-2", "server1:eth7" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-2-1", "server2:eth3" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-2-2", "server2:eth7" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-3-1", "server3:eth3" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-3-2", "server3:eth7" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-4-1", "server4:eth3" ]
+    - endpoints: [ "be-stripe1-leaf3:e1-4-2", "server4:eth7" ]
+    # be-stripe1-leaf4 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe1-leaf4:e1-1-1", "server1:eth4" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-1-2", "server1:eth8" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-2-1", "server2:eth4" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-2-2", "server2:eth8" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-3-1", "server3:eth4" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-3-2", "server3:eth8" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-4-1", "server4:eth4" ]
+    - endpoints: [ "be-stripe1-leaf4:e1-4-2", "server4:eth8" ]
+    # ----- stripe 2 -----
+    # be-stripe2-leaf1 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe2-leaf1:e1-1-1", "server5:eth1" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-1-2", "server5:eth5" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-2-1", "server6:eth1" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-2-2", "server6:eth5" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-3-1", "server7:eth1" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-3-2", "server7:eth5" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-4-1", "server8:eth1" ]
+    - endpoints: [ "be-stripe2-leaf1:e1-4-2", "server8:eth5" ]
+    # be-stripe2-leaf2 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe2-leaf2:e1-1-1", "server5:eth2" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-1-2", "server5:eth6" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-2-1", "server6:eth2" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-2-2", "server6:eth6" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-3-1", "server7:eth2" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-3-2", "server7:eth6" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-4-1", "server8:eth2" ]
+    - endpoints: [ "be-stripe2-leaf2:e1-4-2", "server8:eth6" ]
+    # be-stripe2-leaf3 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe2-leaf3:e1-1-1", "server5:eth3" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-1-2", "server5:eth7" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-2-1", "server6:eth3" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-2-2", "server6:eth7" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-3-1", "server7:eth3" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-3-2", "server7:eth7" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-4-1", "server8:eth3" ]
+    - endpoints: [ "be-stripe2-leaf3:e1-4-2", "server8:eth7" ]
+    # be-stripe2-leaf4 <- all 4 stripe servers (2 NICs each)
+    - endpoints: [ "be-stripe2-leaf4:e1-1-1", "server5:eth4" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-1-2", "server5:eth8" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-2-1", "server6:eth4" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-2-2", "server6:eth8" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-3-1", "server7:eth4" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-3-2", "server7:eth8" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-4-1", "server8:eth4" ]
+    - endpoints: [ "be-stripe2-leaf4:e1-4-2", "server8:eth8" ]

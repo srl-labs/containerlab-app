@@ -1,5 +1,8 @@
 # containerlab-app
 
+This monorepo contains the Containerlab web and desktop applications together
+with the independently versioned `@srl-labs/clab-ui` package.
+
 [![Doc](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/cmd/tools/api-server/start/)
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
 [![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
@@ -142,10 +145,9 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 
 Use the development workflow when contributing to this repository, building a custom web image, or packaging the desktop app.
 
-This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Installing or building from source also requires a GitHub token with GitHub Packages read access because `@srl-labs/clab-ui` is published through GitHub Packages. Building Linux desktop packages locally also requires `rpmbuild` for the `.rpm` artifact.
+This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Building Linux desktop packages locally also requires `rpmbuild` for the `.rpm` artifact.
 
 ```bash
-export GITHUB_TOKEN=$(gh auth token)
 npm install
 npm run dev:web
 ```
@@ -176,37 +178,36 @@ On Linux, the desktop launcher forces Electron onto the X11/Ozone backend so it 
 
 macOS packaging is built with `npm run package:desktop:mac` and produces an unsigned universal `.dmg`. Windows packaging is built with `npm run package:desktop:win` and produces an unsigned NSIS `.exe` installer. Version tag builds (`v*.*.*`) publish the AppImage, `.deb`, `.rpm`, `.dmg`, and `.exe` files as GitHub release assets.
 
-Before creating a release tag, keep the root package version, workspace package versions, internal workspace dependency versions, and `package-lock.json` aligned with the tag without the leading `v`. CI runs `npm run check:release-version`, so a tag such as `v0.0.2` requires package version `0.0.2`.
+Before creating an app release tag, keep the root package version, private workspace package versions, internal workspace dependency versions, and `package-lock.json` aligned with the tag without the leading `v`. The publishable `@srl-labs/clab-ui` workspace is versioned independently. CI runs `npm run check:release-version`, so a tag such as `v0.0.2` requires app package version `0.0.2`.
 
 ### Local Docker Build
 
 The GHCR image is the default way to run the web app and is published for `linux/amd64` and `linux/arm64`. Build a local image only when testing local changes; the command below builds for your current Docker platform:
 
 ```bash
-GITHUB_TOKEN=$(gh auth token) \
-  docker build --secret id=github_token,env=GITHUB_TOKEN -t containerlab-web .
+docker build -t containerlab-web .
 ```
 
 Run the locally built image with the same environment shown in the web app install section, replacing the image name with `containerlab-web`.
 
 ### Local `clab-ui` Mode
 
-By default this repository resolves `@srl-labs/clab-ui` from the published package after `npm install`. To test unpublished UI changes, build a sibling `clab-ui` checkout first:
+`@srl-labs/clab-ui` lives in `packages/clab-ui`. Standard app commands build the
+workspace package before consuming it. For a Vite development loop that aliases
+the package directly to its TypeScript source, run:
 
 ```bash
-cd ../clab-ui
-npm install
-npm run build
+npm run dev:pages:local
 ```
 
-Then start strict local mode from this repository:
+To run the API-backed development server against the local package boundary:
 
 ```bash
-cd ../containerlab-app
 npm run dev:web:local
 ```
 
-`dev:web:local` fails fast if required files are missing from `../clab-ui/dist`.
+Use `npm run build:clab-ui`, `npm run typecheck:clab-ui`, and
+`npm run pack:clab-ui` to build, validate, or package the UI independently.
 
 ---
 
@@ -237,17 +238,20 @@ apps/desktop                  Electron host
 packages/app-server           shared Fastify BFF used by web and desktop
 packages/standalone-runtime   shared standalone renderer/runtime around clab-ui
 packages/app-contract         shared browser-facing DTO types
+packages/clab-ui              shared publishable topology UI package
 ```
 
 This repository is the `containerlab-app` monorepo and owns:
 
 - the standalone web app host and Docker image for the shared `@srl-labs/clab-ui` experience
 - the Electron desktop app host and desktop package artifacts
+- the shared `@srl-labs/clab-ui` package
 - the shared app server used by web and desktop
 - standalone unit and Playwright E2E test suites
 - static resources used by the standalone app
 
-`@srl-labs/clab-ui` remains the shared UI package consumed by this repo and `vscode-containerlab`.
+`@srl-labs/clab-ui` remains independently publishable for consumers such as
+`vscode-containerlab`.
 
 ---
 

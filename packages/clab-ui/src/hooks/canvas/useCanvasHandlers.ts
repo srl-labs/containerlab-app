@@ -1,0 +1,1108 @@
+/**
+ * Canvas event handlers for ReactFlowCanvas
+ * Comprehensive handlers for all canvas interactions
+ */
+import type React from "react";
+import { useCallback, useRef, useState } from "react";
+import {
+  type ReactFlowInstance,
+  type OnNodesChange,
+  type OnNodeDrag,
+  type NodeMouseHandler,
+  type EdgeMouseHandler,
+  type OnConnect,
+  type OnSelectionChangeFunc,
+  type Connection,
+  type Node,
+  type Edge,
+  type NodeChange,
+  type NodePositionChange,
+  type XYPosition
+} from "@xyflow/react";
+
+import type { TopoNode, TopoEdge, FreeShapeNodeData } from "../../core/types/graph";
+import { useTopologySessionClient } from "../../host";
+import type { TopologySessionClient } from "../../session";
+import { log } from "../../utils/logger";
+import { isLineHandleActive } from "../../components/canvas/nodes/AnnotationHandles";
+import {
+  FREE_SHAPE_NODE_TYPE,
+  GROUP_NODE_TYPE,
+  isAnnotationNodeType
+} from "../../annotations/annotationNodeConverters";
+import { DEFAULT_LINE_LENGTH } from "../../annotations/constants";
+import {
+  saveAnnotationNodesFromGraph,
+  saveNodePositions,
+  saveNodePositionsWithAnnotations,
+  saveNodePositionsWithMemberships
+} from "../../services";
+import { useGraphStore } from "../../stores/graphStore";
+import { useDeploymentState } from "../../stores/topoViewerStore";
+import { allocateEndpointsForLink } from "../../utils/endpointAllocator";
+import { buildEdgeId } from "../../utils/edgeId";
+import { snapToGrid } from "../../utils/grid";
+
+/** Handlers for group member movement during drag */
+interface GroupMemberHandlers {
+  /** Get member node IDs for a group */
+  getGroupMembers?: (groupId: string, options?: { includeNested?: boolean }) => string[];
+  /** Handle node dropped (for group membership updates) */
+  onNodeDropped?: (nodeId: string, position: { x: number; y: number }) => void;
+}
+
+interface CanvasHandlersConfig {
+  selectNode: (id: string | null) => void;
+  selectEdge: (id: string | null) => void;
+  editNode: (id: string | null) => void;
+  editNetwork: (id: string | null) => void;
+  editEdge: (id: string | null) => void;
+  mode: "view" | "edit";
+  isLocked: boolean;
+  onNodesChangeBase: OnNodesChange;
+  onLockedAction?: () => void;
+  /** Called only when the click actually falls through to the pane (no add-mode/shift-click handling). */
+  onPaneClickExtra?: () => void;
+  /**
+   * Optional guard to suppress syncing React Flow selection into the app store.
+   * Used to prevent side effects (like auto-opening the ContextPanel) during transient
+   * interactions such as link creation.
+   */
+  shouldSuppressSelectionSync?: () => boolean;
+  /** Current nodes (needed for position tracking) */
+  nodes?: Node[];
+  /** Direct setNodes for member node updates (bypasses React Flow drag tracking) */
+  setNodes?: React.Dispatch<React.SetStateAction<Node[]>>;
+  /** Callback when an edge is created via drag-to-connect */
+  onEdgeCreated?: (
+    sourceId: string,
+    targetId: string,
+    edgeData: {
+      id: string;
+      source: string;
+      target: string;
+      sourceEndpoint: string;
+      targetEndpoint: string;
+    }
+  ) => void;
+  /** Handlers for group member movement */
+  groupMemberHandlers?: GroupMemberHandlers;
+  /** Called after topology/network node positions are manually committed. */
+  onTopologyNodePositionCommit?: () => void;
+  /** Optional shared React Flow instance ref */
+  reactFlowInstanceRef?: React.RefObject<ReactFlowInstance | null>;
+  /** Geo layout support */
+  geoLayout?: {
+    isGeoLayout: boolean;
+    isEditable: boolean;
+    getGeoUpdateForNode?: (node: Node) => {
+      geoCoordinates?: { lat: number; lng: number };
+      endGeoCoordinates?: { lat: number; lng: number };
+    } | null;
+  };
+}
+
+interface ContextMenuState {
+  type: "node" | "edge" | "pane" | null;
+  position: { x: number; y: number };
+  targetId: string | null;
+}
+
+interface CanvasHandlers {
+  reactFlowInstance: React.RefObject<ReactFlowInstance | null>;
+  onInit: (instance: ReactFlowInstance) => void;
+  onNodeClick: NodeMouseHandler;
+  onNodeDoubleClick: NodeMouseHandler;
+  onEdgeClick: EdgeMouseHandler;
+  onEdgeDoubleClick: EdgeMouseHandler;
+  onPaneClick: (event: React.MouseEvent) => void;
+  onConnect: OnConnect;
+  onNodesChange: OnNodesChange;
+  onSelectionChange: OnSelectionChangeFunc;
+  onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
+  onEdgeContextMenu: (event: React.MouseEvent, edge: Edge) => void;
+  onPaneContextMenu: (event: MouseEvent | React.MouseEvent) => void;
+  onNodeDragStart: OnNodeDrag;
+  onNodeDrag: OnNodeDrag;
+  onNodeDragStop: OnNodeDrag;
+  contextMenu: ContextMenuState;
+  closeContextMenu: () => void;
+}
+
+const NODE_TYPE_TOPOLOGY = "topology-node";
+const NODE_TYPE_NETWORK = "network-node";
+const EDITABLE_NODE_TYPES = [NODE_TYPE_TOPOLOGY, NODE_TYPE_NETWORK];
+
+// ============================================================================
+// Line drag helpers
+// ============================================================================
+
+interface LineDragSnapshot {
+  nodePosition: XYPosition;
+  startPosition: XYPosition;
+  endPosition: XYPosition;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isLineShapeNode(node: Node): node is Node<FreeShapeNodeData> {
+  if (node.type !== FREE_SHAPE_NODE_TYPE) return false;
+  if (!isRecord(node.data)) return false;
+  return node.data.shapeType === "line";
+}
+
+function isTopoNode(node: Node): node is TopoNode {
+  return (
+    node.type === "topology-node" ||
+    node.type === "network-node" ||
+    node.type === "group-node" ||
+    node.type === "free-text-node" ||
+    node.type === "free-shape-node" ||
+    node.type === "traffic-rate-node"
+  );
+}
+
+function isTopoEdge(edge: Edge): edge is TopoEdge {
+  return (
+    typeof edge.id === "string" &&
+    typeof edge.source === "string" &&
+    typeof edge.target === "string"
+  );
+}
+
+function getLineEndpoints(node: Node): { start: XYPosition; end: XYPosition } | null {
+  if (!isLineShapeNode(node)) return null;
+  const data = node.data;
+  const start = data.startPosition ?? node.position;
+  const end = data.endPosition ?? {
+    x: start.x + DEFAULT_LINE_LENGTH,
+    y: start.y
+  };
+  return {
+    start: { x: start.x, y: start.y },
+    end: { x: end.x, y: end.y }
+  };
+}
+
+function recordLineDragSnapshot(snapshots: Map<string, LineDragSnapshot>, node: Node): void {
+  const endpoints = getLineEndpoints(node);
+  if (!endpoints) return;
+  snapshots.set(node.id, {
+    nodePosition: { x: node.position.x, y: node.position.y },
+    startPosition: endpoints.start,
+    endPosition: endpoints.end
+  });
+}
+
+function collectLineDragNodes(
+  draggedNode: Node,
+  nodes: Node[] | undefined,
+  groupMemberHandlers?: GroupMemberHandlers
+): Node[] {
+  if (!nodes) {
+    return isLineShapeNode(draggedNode) ? [draggedNode] : [];
+  }
+
+  if (draggedNode.type === GROUP_NODE_TYPE && groupMemberHandlers?.getGroupMembers) {
+    const memberIds = groupMemberHandlers.getGroupMembers(draggedNode.id, { includeNested: true });
+    const nodesById = new Map(nodes.map((node) => [node.id, node]));
+    const lineNodes: Node[] = [];
+    for (const id of memberIds) {
+      const node = nodesById.get(id);
+      if (node && isLineShapeNode(node)) lineNodes.push(node);
+    }
+    return lineNodes;
+  }
+
+  const selectedLines = nodes.filter((node) => node.selected === true && isLineShapeNode(node));
+  if (selectedLines.length > 0) return selectedLines;
+  return isLineShapeNode(draggedNode) ? [draggedNode] : [];
+}
+
+function applyLineDragSnapshots(snapshots: Map<string, LineDragSnapshot>): void {
+  if (snapshots.size === 0) return;
+  const currentNodes = useGraphStore.getState().nodes;
+  const updateNode = useGraphStore.getState().updateNode;
+  const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
+
+  for (const [id, snapshot] of snapshots) {
+    const currentNode = nodesById.get(id);
+    if (!currentNode) continue;
+    const dx = currentNode.position.x - snapshot.nodePosition.x;
+    const dy = currentNode.position.y - snapshot.nodePosition.y;
+    if (dx === 0 && dy === 0) continue;
+    updateNode(id, {
+      data: {
+        startPosition: {
+          x: snapshot.startPosition.x + dx,
+          y: snapshot.startPosition.y + dy
+        },
+        endPosition: {
+          x: snapshot.endPosition.x + dx,
+          y: snapshot.endPosition.y + dy
+        }
+      }
+    });
+  }
+
+  snapshots.clear();
+}
+
+// ============================================================================
+// Node drag stop helpers (extracted for complexity reduction)
+// ============================================================================
+
+/** Build position changes for group members */
+function buildGroupMemberChanges(
+  _node: Node,
+  members: string[],
+  nodes: Node[] | undefined
+): NodeChange[] {
+  if (!nodes || members.length === 0) return [];
+  const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const changes: NodeChange[] = [];
+  for (const memberId of members) {
+    const memberNode = nodesById.get(memberId);
+    if (memberNode) {
+      changes.push({
+        type: "position",
+        id: memberId,
+        position: memberNode.position,
+        dragging: false
+      });
+    }
+  }
+  return changes;
+}
+
+function buildSelectedNodeChanges(
+  draggedNodeId: string,
+  nodes: Node[] | undefined,
+  excludeIds: Set<string>,
+  delta?: XYPosition
+): NodeChange[] {
+  if (!nodes) return [];
+  const changes: NodeChange[] = [];
+  for (const node of nodes) {
+    if (node.id === draggedNodeId) continue;
+    if (node.selected !== true) continue;
+    if (excludeIds.has(node.id)) continue;
+    const position = delta
+      ? { x: node.position.x + delta.x, y: node.position.y + delta.y }
+      : node.position;
+    changes.push({ type: "position", id: node.id, position, dragging: false });
+  }
+  return changes;
+}
+
+function isNodePositionChange(change: NodeChange): change is NodePositionChange {
+  return change.type === "position" && change.position !== undefined;
+}
+
+function hasTopologyPositionChange(changes: NodeChange[], nodes: Node[]): boolean {
+  const nodeTypes = new Map(nodes.map((node) => [node.id, node.type]));
+  return changes.filter(isNodePositionChange).some((change) => {
+    const nodeType = nodeTypes.get(change.id);
+    return nodeType === NODE_TYPE_TOPOLOGY || nodeType === NODE_TYPE_NETWORK;
+  });
+}
+
+function notifyTopologyPositionCommit(
+  changes: NodeChange[],
+  onTopologyNodePositionCommit: (() => void) | undefined
+): void {
+  if (!onTopologyNodePositionCommit) return;
+  if (hasTopologyPositionChange(changes, useGraphStore.getState().nodes)) {
+    onTopologyNodePositionCommit();
+  }
+}
+
+/** Clean up group tracking refs */
+function cleanupGroupRefs(
+  nodeId: string,
+  groupMembersRef: React.RefObject<Map<string, string[]>>,
+  groupMemberIdSetsRef: React.RefObject<Map<string, Set<string>>>,
+  groupLastPositionRef: React.RefObject<Map<string, XYPosition>>
+): void {
+  groupMembersRef.current.delete(nodeId);
+  groupMemberIdSetsRef.current.delete(nodeId);
+  groupLastPositionRef.current.delete(nodeId);
+}
+
+function updateNodeWithGeoData(
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>> | undefined,
+  nodeId: string,
+  update: {
+    geoCoordinates?: { lat: number; lng: number };
+    endGeoCoordinates?: { lat: number; lng: number };
+  }
+) {
+  if (!setNodes) return;
+  setNodes((latestNodes) => applyGeoUpdateToNodeList(latestNodes, nodeId, update));
+}
+
+function applyGeoUpdateToNodeList(
+  nodes: Node[],
+  nodeId: string,
+  update: {
+    geoCoordinates?: { lat: number; lng: number };
+    endGeoCoordinates?: { lat: number; lng: number };
+  }
+): Node[] {
+  return nodes.map((n) => {
+    if (n.id !== nodeId) return n;
+    const data = isRecord(n.data) ? n.data : {};
+    return {
+      ...n,
+      data: {
+        ...data,
+        ...(update.geoCoordinates ? { geoCoordinates: update.geoCoordinates } : {}),
+        ...(update.endGeoCoordinates ? { endGeoCoordinates: update.endGeoCoordinates } : {})
+      }
+    };
+  });
+}
+
+function saveGeoUpdate(
+  sessionClient: TopologySessionClient,
+  currentNodes: Node[],
+  nodeId: string,
+  update: {
+    geoCoordinates?: { lat: number; lng: number };
+    endGeoCoordinates?: { lat: number; lng: number };
+  }
+) {
+  const nodeTypeMap = new Map(currentNodes.map((n) => [n.id, n.type]));
+  const isAnnotation = isAnnotationNodeType(nodeTypeMap.get(nodeId));
+
+  if (isAnnotation) {
+    const nodesForSave = applyGeoUpdateToNodeList(currentNodes, nodeId, update);
+    void saveAnnotationNodesFromGraph(sessionClient, nodesForSave);
+    return;
+  }
+
+  if (update.geoCoordinates) {
+    void saveNodePositions(sessionClient, [{ id: nodeId, geoCoordinates: update.geoCoordinates }]);
+  }
+}
+
+function handleGeoDragStop(
+  sessionClient: TopologySessionClient,
+  node: Node,
+  onNodesChangeBase: OnNodesChange,
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>> | undefined,
+  geoLayout: CanvasHandlersConfig["geoLayout"]
+): boolean {
+  const isGeoEdit = geoLayout?.isGeoLayout === true && geoLayout.isEditable === true;
+  if (!isGeoEdit || geoLayout.getGeoUpdateForNode === undefined) return false;
+
+  const draggedPosition = node.position;
+  log.info(
+    `[ReactFlowCanvas] Node ${node.id} dragged to geo position ${draggedPosition.x}, ${draggedPosition.y}`
+  );
+
+  const changes: NodeChange[] = [
+    { type: "position", id: node.id, position: draggedPosition, dragging: false }
+  ];
+  onNodesChangeBase(changes);
+
+  const currentNodes = useGraphStore.getState().nodes;
+  const storeNode = currentNodes.find((n) => n.id === node.id);
+  if (!storeNode) return true;
+
+  const movedNode = { ...storeNode, position: draggedPosition };
+  const update = geoLayout.getGeoUpdateForNode(movedNode);
+  if (!update?.geoCoordinates && !update?.endGeoCoordinates) return true;
+
+  updateNodeWithGeoData(setNodes, node.id, update);
+  saveGeoUpdate(sessionClient, currentNodes, node.id, update);
+  return true;
+}
+
+function finalizeGroupChanges(
+  node: Node,
+  nodes: Node[] | undefined,
+  groupMembersRef: React.RefObject<Map<string, string[]>>,
+  groupMemberIdSetsRef: React.RefObject<Map<string, Set<string>>>,
+  groupLastPositionRef: React.RefObject<Map<string, XYPosition>>
+): NodeChange[] {
+  const memberIds = groupMembersRef.current.get(node.id) ?? [];
+  const memberChanges = buildGroupMemberChanges(node, memberIds, nodes);
+  cleanupGroupRefs(node.id, groupMembersRef, groupMemberIdSetsRef, groupLastPositionRef);
+  return memberChanges;
+}
+
+function flushScheduledGroupMove(
+  groupMoveRafIdRef: React.RefObject<number | null>,
+  flushPendingGroupMove: () => void
+): void {
+  if (groupMoveRafIdRef.current !== null) {
+    window.cancelAnimationFrame(groupMoveRafIdRef.current);
+    groupMoveRafIdRef.current = null;
+  }
+  flushPendingGroupMove();
+}
+
+function persistPositionChanges(
+  sessionClient: TopologySessionClient,
+  changes: NodeChange[]
+) {
+  const currentNodes = useGraphStore.getState().nodes;
+  const nodeTypeMap = new Map(currentNodes.map((n) => [n.id, n.type]));
+  const movedPositions = changes
+    .filter(isNodePositionChange)
+    .map((change) => ({ id: change.id, position: change.position }));
+
+  const topoPositions = movedPositions.filter(
+    (pos) => !isAnnotationNodeType(nodeTypeMap.get(pos.id))
+  );
+  const movedAnnotations = movedPositions.some((pos) =>
+    isAnnotationNodeType(nodeTypeMap.get(pos.id))
+  );
+
+  // When both topology positions and annotations are moved together (e.g., group with members),
+  // save them in a single command to create one undo entry
+  if (topoPositions.length > 0 && movedAnnotations) {
+    void saveNodePositionsWithAnnotations(sessionClient, topoPositions, currentNodes);
+    return;
+  }
+
+  if (topoPositions.length > 0) {
+    // Include memberships so position + membership changes are a single undo entry
+    // (e.g., dragging a node into/out of a group).
+    void saveNodePositionsWithMemberships(sessionClient, topoPositions);
+    return;
+  }
+
+  if (movedAnnotations) {
+    // Use applySnapshot: false to prevent snapshot re-apply from reverting local changes
+    void saveAnnotationNodesFromGraph(sessionClient, currentNodes, { applySnapshot: false });
+  }
+}
+
+/** Hook for node drag handlers with group member movement */
+function useNodeDragHandlers(
+  sessionClient: TopologySessionClient,
+  isLockedRef: React.RefObject<boolean>,
+  nodes: Node[] | undefined,
+  onNodesChangeBase: OnNodesChange,
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>> | undefined,
+  groupMemberHandlers?: GroupMemberHandlers,
+  onTopologyNodePositionCommit?: () => void,
+  geoLayout?: CanvasHandlersConfig["geoLayout"]
+) {
+  // Track the last position of a dragging group to compute delta
+  const groupLastPositionRef = useRef<Map<string, XYPosition>>(new Map());
+  // Track member IDs that are being moved with a group
+  const groupMembersRef = useRef<Map<string, string[]>>(new Map());
+  const groupMemberIdSetsRef = useRef<Map<string, Set<string>>>(new Map());
+  const pendingGroupMoveRef = useRef<{
+    nodeId: string;
+    dx: number;
+    dy: number;
+    memberIdSet: Set<string>;
+  } | null>(null);
+  const groupMoveRafIdRef = useRef<number | null>(null);
+  const lineDragStartRef = useRef<Map<string, LineDragSnapshot>>(new Map());
+
+  const flushPendingGroupMove = useCallback(() => {
+    const pending = pendingGroupMoveRef.current;
+    pendingGroupMoveRef.current = null;
+    if (!pending || !setNodes) return;
+    if ((pending.dx === 0 && pending.dy === 0) || pending.memberIdSet.size === 0) return;
+
+    setNodes((currentNodes) =>
+      currentNodes.map((n) => {
+        if (!pending.memberIdSet.has(n.id)) {
+          return n;
+        }
+        return {
+          ...n,
+          position: {
+            x: n.position.x + pending.dx,
+            y: n.position.y + pending.dy
+          }
+        };
+      })
+    );
+  }, [setNodes]);
+
+  const scheduleGroupMoveFlush = useCallback(() => {
+    if (groupMoveRafIdRef.current !== null) return;
+    groupMoveRafIdRef.current = window.requestAnimationFrame(() => {
+      groupMoveRafIdRef.current = null;
+      flushPendingGroupMove();
+    });
+  }, [flushPendingGroupMove]);
+
+  const onNodeDragStart: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (isLockedRef.current || !nodes) return;
+
+      // If dragging a group node, capture members and their initial positions
+      if (node.type === GROUP_NODE_TYPE && groupMemberHandlers?.getGroupMembers) {
+        const memberIds = groupMemberHandlers.getGroupMembers(node.id, { includeNested: true });
+        groupMembersRef.current.set(node.id, memberIds);
+        groupMemberIdSetsRef.current.set(node.id, new Set(memberIds));
+        groupLastPositionRef.current.set(node.id, { ...node.position });
+      }
+
+      lineDragStartRef.current.clear();
+      const lineNodes = collectLineDragNodes(node, nodes, groupMemberHandlers);
+      for (const lineNode of lineNodes) {
+        recordLineDragSnapshot(lineDragStartRef.current, lineNode);
+      }
+    },
+    [isLockedRef, nodes, groupMemberHandlers]
+  );
+
+  // Called during drag - moves members with group using direct state update
+  const onNodeDrag: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (isLockedRef.current || !setNodes) return;
+
+      // Handle group member movement during drag
+      if (node.type === GROUP_NODE_TYPE) {
+        const lastPos = groupLastPositionRef.current.get(node.id);
+        const memberIdSet = groupMemberIdSetsRef.current.get(node.id);
+
+        if (lastPos && memberIdSet && memberIdSet.size > 0) {
+          // Calculate delta
+          const dx = node.position.x - lastPos.x;
+          const dy = node.position.y - lastPos.y;
+
+          if (dx !== 0 || dy !== 0) {
+            const pending = pendingGroupMoveRef.current;
+            if (pending && pending.nodeId === node.id) {
+              pending.dx += dx;
+              pending.dy += dy;
+            } else {
+              flushPendingGroupMove();
+              pendingGroupMoveRef.current = { nodeId: node.id, dx, dy, memberIdSet };
+            }
+            scheduleGroupMoveFlush();
+          }
+        }
+
+        // Update last position for next delta calculation
+        groupLastPositionRef.current.set(node.id, { ...node.position });
+      }
+    },
+    [isLockedRef, setNodes, flushPendingGroupMove, scheduleGroupMoveFlush]
+  );
+
+  const onNodeDragStop: OnNodeDrag = useCallback(
+    (_event, node) => {
+      if (isLockedRef.current) return;
+
+      flushScheduledGroupMove(groupMoveRafIdRef, flushPendingGroupMove);
+
+      // Skip for shape nodes with active line handle
+      if (node.type === FREE_SHAPE_NODE_TYPE && isLineHandleActive()) {
+        lineDragStartRef.current.clear();
+        return;
+      }
+
+      if (handleGeoDragStop(sessionClient, node, onNodesChangeBase, setNodes, geoLayout)) {
+        lineDragStartRef.current.clear();
+        return;
+      }
+
+      // Normal (non-geo) mode: update preset position
+      const isGroupNode = node.type === GROUP_NODE_TYPE;
+      const shouldSnap = !isAnnotationNodeType(node.type);
+      const finalPosition = isGroupNode || !shouldSnap ? node.position : snapToGrid(node.position);
+      const changes: NodeChange[] = [
+        { type: "position", id: node.id, position: finalPosition, dragging: false }
+      ];
+      const delta = isGroupNode
+        ? null
+        : {
+            x: finalPosition.x - node.position.x,
+            y: finalPosition.y - node.position.y
+          };
+
+      // Handle group node members
+      if (isGroupNode) {
+        changes.push(
+          ...finalizeGroupChanges(
+            node,
+            nodes,
+            groupMembersRef,
+            groupMemberIdSetsRef,
+            groupLastPositionRef
+          )
+        );
+      }
+
+      // Include other selected nodes for multi-drag persistence (and snap with same delta)
+      const excludeIds = new Set(
+        changes.filter((c): c is NodeChange & { id: string } => "id" in c).map((c) => c.id)
+      );
+      changes.push(
+        ...buildSelectedNodeChanges(
+          node.id,
+          nodes,
+          excludeIds,
+          delta && (delta.x !== 0 || delta.y !== 0) ? delta : undefined
+        )
+      );
+
+      onNodesChangeBase(changes);
+      log.info(`[ReactFlowCanvas] Node ${node.id} moved to ${finalPosition.x}, ${finalPosition.y}`);
+
+      // Notify group member handler for membership updates
+      if (groupMemberHandlers?.onNodeDropped) {
+        groupMemberHandlers.onNodeDropped(node.id, finalPosition);
+      }
+
+      applyLineDragSnapshots(lineDragStartRef.current);
+      persistPositionChanges(sessionClient, changes);
+      notifyTopologyPositionCommit(changes, onTopologyNodePositionCommit);
+    },
+    [
+      sessionClient,
+      isLockedRef,
+      nodes,
+      onNodesChangeBase,
+      groupMemberHandlers,
+      onTopologyNodePositionCommit,
+      geoLayout,
+      setNodes,
+      flushPendingGroupMove
+    ]
+  );
+
+  return { onNodeDragStart, onNodeDrag, onNodeDragStop };
+}
+
+/** Hook for context menu handlers */
+function useContextMenuHandlers(
+  selectNode: (id: string | null) => void,
+  selectEdge: (id: string | null) => void,
+  openNodeMenu: (x: number, y: number, id: string) => void,
+  openEdgeMenu: (x: number, y: number, id: string) => void,
+  openPaneMenu: (x: number, y: number) => void
+) {
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectNode(node.id);
+      selectEdge(null);
+      openNodeMenu(event.clientX, event.clientY, node.id);
+    },
+    [selectNode, selectEdge, openNodeMenu]
+  );
+
+  const onEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: Edge) => {
+      event.preventDefault();
+      event.stopPropagation();
+      selectEdge(edge.id);
+      selectNode(null);
+      openEdgeMenu(event.clientX, event.clientY, edge.id);
+    },
+    [selectNode, selectEdge, openEdgeMenu]
+  );
+
+  const onPaneContextMenu = useCallback(
+    (event: MouseEvent | React.MouseEvent) => {
+      event.preventDefault();
+      selectNode(null);
+      selectEdge(null);
+      openPaneMenu(event.clientX, event.clientY);
+    },
+    [selectNode, selectEdge, openPaneMenu]
+  );
+
+  return { onNodeContextMenu, onEdgeContextMenu, onPaneContextMenu };
+}
+
+/** Hook for context menu state management */
+function useContextMenuState() {
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    type: null,
+    position: { x: 0, y: 0 },
+    targetId: null
+  });
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu({ type: null, position: { x: 0, y: 0 }, targetId: null });
+  }, []);
+
+  const openNodeMenu = useCallback((x: number, y: number, nodeId: string) => {
+    setContextMenu({ type: "node", position: { x, y }, targetId: nodeId });
+  }, []);
+
+  const openEdgeMenu = useCallback((x: number, y: number, edgeId: string) => {
+    setContextMenu({ type: "edge", position: { x, y }, targetId: edgeId });
+  }, []);
+
+  const openPaneMenu = useCallback((x: number, y: number) => {
+    setContextMenu({ type: "pane", position: { x, y }, targetId: null });
+  }, []);
+
+  return { contextMenu, closeContextMenu, openNodeMenu, openEdgeMenu, openPaneMenu };
+}
+
+/** Hook for node click handlers */
+function useNodeClickHandlers(
+  selectNode: (id: string | null) => void,
+  selectEdge: (id: string | null) => void,
+  editNode: (id: string | null) => void,
+  editNetwork: (id: string | null) => void,
+  closeContextMenu: () => void,
+  modeRef: React.RefObject<"view" | "edit">,
+  isDeployedRef: React.RefObject<boolean>
+) {
+  const openNodeEditor = useCallback(
+    (node: Node) => {
+      if (node.type === NODE_TYPE_NETWORK) {
+        editNetwork(node.id);
+      } else {
+        editNode(node.id);
+      }
+    },
+    [editNode, editNetwork]
+  );
+
+  const onNodeClick: NodeMouseHandler = useCallback(
+    (_event, node) => {
+      log.info(`[ReactFlowCanvas] Node clicked: ${node.id}`);
+      closeContextMenu();
+      if (isAnnotationNodeType(node.type)) return;
+      // Deployed labs select on click so the info panel shows runtime data;
+      // the editor opens via double-click or the context menu instead.
+      if (
+        modeRef.current === "edit" &&
+        !isDeployedRef.current &&
+        EDITABLE_NODE_TYPES.includes(node.type ?? "")
+      ) {
+        openNodeEditor(node);
+      } else {
+        selectNode(node.id);
+        selectEdge(null);
+      }
+    },
+    [selectNode, selectEdge, openNodeEditor, closeContextMenu, modeRef, isDeployedRef]
+  );
+
+  const onNodeDoubleClick: NodeMouseHandler = useCallback(
+    (_event, node) => {
+      // Annotation double-click (text/shape/group) is handled by the annotation wrapper.
+      if (isAnnotationNodeType(node.type)) return;
+      // Undeployed labs open the editor on single click already.
+      if (modeRef.current === "edit" && EDITABLE_NODE_TYPES.includes(node.type ?? "")) {
+        openNodeEditor(node);
+      }
+    },
+    [openNodeEditor, modeRef]
+  );
+
+  return { onNodeClick, onNodeDoubleClick };
+}
+
+/** Hook for edge click handlers */
+function useEdgeClickHandlers(
+  selectNode: (id: string | null) => void,
+  selectEdge: (id: string | null) => void,
+  editEdge: (id: string | null) => void,
+  closeContextMenu: () => void,
+  modeRef: React.RefObject<"view" | "edit">,
+  isDeployedRef: React.RefObject<boolean>
+) {
+  const onEdgeClick: EdgeMouseHandler = useCallback(
+    (_event, edge) => {
+      log.info(`[ReactFlowCanvas] Edge clicked: ${edge.id}`);
+      closeContextMenu();
+      // Deployed labs select on click so the info panel shows runtime data;
+      // the editor opens via double-click or the context menu instead.
+      if (modeRef.current === "edit" && !isDeployedRef.current) {
+        editEdge(edge.id);
+      } else {
+        selectEdge(edge.id);
+        selectNode(null);
+      }
+    },
+    [selectNode, selectEdge, editEdge, closeContextMenu, modeRef, isDeployedRef]
+  );
+
+  const onEdgeDoubleClick: EdgeMouseHandler = useCallback(
+    (_event, edge) => {
+      // Undeployed labs open the editor on single click already.
+      if (modeRef.current === "edit") {
+        editEdge(edge.id);
+      }
+    },
+    [editEdge, modeRef]
+  );
+
+  return { onEdgeClick, onEdgeDoubleClick };
+}
+
+/** Hook for pane click handler */
+function usePaneClickHandler(
+  selectNode: (id: string | null) => void,
+  selectEdge: (id: string | null) => void,
+  editNode: (id: string | null) => void,
+  closeContextMenu: () => void,
+  onPaneClickExtra?: () => void
+) {
+  return useCallback(
+    (_event: React.MouseEvent) => {
+      closeContextMenu();
+      document.dispatchEvent(new Event("topoviewer:pane-click"));
+
+      selectNode(null);
+      selectEdge(null);
+      // Clear editing state so panel returns to palette
+      editNode(null);
+      onPaneClickExtra?.();
+    },
+    [selectNode, selectEdge, editNode, closeContextMenu, onPaneClickExtra]
+  );
+}
+
+/** Hook for connection handler */
+function useConnectionHandler(
+  modeRef: React.RefObject<"view" | "edit">,
+  isLockedRef: React.RefObject<boolean>,
+  onLockedAction?: () => void,
+  onEdgeCreated?: (
+    sourceId: string,
+    targetId: string,
+    edgeData: {
+      id: string;
+      source: string;
+      target: string;
+      sourceEndpoint: string;
+      targetEndpoint: string;
+    }
+  ) => void
+) {
+  return useCallback(
+    (connection: Connection) => {
+      if (modeRef.current !== "edit") return;
+      if (isLockedRef.current) {
+        onLockedAction?.();
+        return;
+      }
+      if (!connection.source || !connection.target) return;
+
+      log.info(
+        `[ReactFlowCanvas] Creating edge via drag-connect: ${connection.source} -> ${connection.target}`
+      );
+      const { nodes, edges } = useGraphStore.getState();
+      const topoNodes = nodes.filter(isTopoNode);
+      const topoEdges = edges.filter(isTopoEdge);
+      const { sourceEndpoint, targetEndpoint } = allocateEndpointsForLink(
+        topoNodes,
+        topoEdges,
+        connection.source,
+        connection.target
+      );
+      const edgeId = buildEdgeId(
+        connection.source,
+        connection.target,
+        sourceEndpoint,
+        targetEndpoint
+      );
+
+      const edgeData = {
+        id: edgeId,
+        source: connection.source,
+        target: connection.target,
+        sourceEndpoint,
+        targetEndpoint
+      };
+
+      // Use unified callback which handles:
+      // 1. Adding edge to React state
+      // 2. Persisting via TopologyHost commands
+      // 3. Undo/redo support
+      if (onEdgeCreated) {
+        onEdgeCreated(connection.source, connection.target, edgeData);
+      }
+    },
+    [onLockedAction, modeRef, isLockedRef, onEdgeCreated]
+  );
+}
+
+/** Node types that can be selected via box selection and synced to context */
+const SELECTABLE_NODE_TYPES = [NODE_TYPE_TOPOLOGY, NODE_TYPE_NETWORK];
+
+/** Hook for selection change handler (box selection support) */
+function useSelectionChangeHandler(
+  selectNode: (id: string | null) => void,
+  selectEdge: (id: string | null) => void
+): OnSelectionChangeFunc {
+  return useCallback(
+    ({ nodes, edges }) => {
+      // Filter to only topology/network nodes (ignore annotation nodes for context selection)
+      const selectableNodes = nodes.filter((n) => SELECTABLE_NODE_TYPES.includes(n.type ?? ""));
+
+      // If exactly one selectable node is selected, sync to context
+      if (selectableNodes.length === 1 && edges.length === 0) {
+        selectNode(selectableNodes[0].id);
+        return;
+      }
+
+      // If exactly one edge is selected and no nodes, sync to context
+      if (edges.length === 1 && selectableNodes.length === 0) {
+        selectEdge(edges[0].id);
+        return;
+      }
+
+      // Multiple items selected or no selectable items - clear context selection
+      // (React Flow manages the visual selection via node.selected property)
+      if (
+        selectableNodes.length > 1 ||
+        edges.length > 1 ||
+        (selectableNodes.length > 0 && edges.length > 0)
+      ) {
+        selectNode(null);
+        selectEdge(null);
+        log.info(`[ReactFlowCanvas] Box selection: ${nodes.length} nodes, ${edges.length} edges`);
+      }
+    },
+    [selectNode, selectEdge]
+  );
+}
+
+/**
+ * Hook for canvas event handlers
+ */
+export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers {
+  const sessionClient = useTopologySessionClient();
+  const {
+    selectNode,
+    selectEdge,
+    editNode,
+    editNetwork,
+    editEdge,
+    mode,
+    isLocked,
+    onNodesChangeBase,
+    onLockedAction,
+    onPaneClickExtra,
+    shouldSuppressSelectionSync,
+    nodes,
+    setNodes,
+    onEdgeCreated,
+    groupMemberHandlers,
+    onTopologyNodePositionCommit,
+    reactFlowInstanceRef,
+    geoLayout
+  } = config;
+
+  const localReactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const reactFlowInstance = reactFlowInstanceRef ?? localReactFlowInstanceRef;
+  const deploymentState = useDeploymentState();
+  const modeRef = useRef(mode);
+  const isLockedRef = useRef(isLocked);
+  const isDeployedRef = useRef(deploymentState === "deployed");
+  modeRef.current = mode;
+  isLockedRef.current = isLocked;
+  isDeployedRef.current = deploymentState === "deployed";
+
+  // Context menu state
+  const { contextMenu, closeContextMenu, openNodeMenu, openEdgeMenu, openPaneMenu } =
+    useContextMenuState();
+
+  // Initialize
+  const onInit = useCallback(
+    (instance: ReactFlowInstance) => {
+      reactFlowInstance.current = instance;
+      log.info("[ReactFlowCanvas] React Flow initialized");
+      // Don't auto-fitView in geo layout mode - map controls the viewport
+      if (geoLayout?.isGeoLayout !== true) {
+        void instance.fitView({ padding: 0.2, duration: 0 });
+      }
+    },
+    [geoLayout?.isGeoLayout]
+  );
+
+  // Click handlers (extracted hooks)
+  const { onNodeClick, onNodeDoubleClick } = useNodeClickHandlers(
+    selectNode,
+    selectEdge,
+    editNode,
+    editNetwork,
+    closeContextMenu,
+    modeRef,
+    isDeployedRef
+  );
+  const { onEdgeClick, onEdgeDoubleClick } = useEdgeClickHandlers(
+    selectNode,
+    selectEdge,
+    editEdge,
+    closeContextMenu,
+    modeRef,
+    isDeployedRef
+  );
+  const onPaneClick = usePaneClickHandler(
+    selectNode,
+    selectEdge,
+    editNode,
+    closeContextMenu,
+    onPaneClickExtra
+  );
+  const onConnect = useConnectionHandler(modeRef, isLockedRef, onLockedAction, onEdgeCreated);
+
+  // Drag handlers (extracted hook)
+  const { onNodeDragStart, onNodeDrag, onNodeDragStop } = useNodeDragHandlers(
+    sessionClient,
+    isLockedRef,
+    nodes,
+    onNodesChangeBase,
+    setNodes,
+    groupMemberHandlers,
+    onTopologyNodePositionCommit,
+    geoLayout
+  );
+
+  // Context menu handlers (extracted hook)
+  const { onNodeContextMenu, onEdgeContextMenu, onPaneContextMenu } = useContextMenuHandlers(
+    selectNode,
+    selectEdge,
+    openNodeMenu,
+    openEdgeMenu,
+    openPaneMenu
+  );
+
+  // Selection change handler (for box selection)
+  const baseOnSelectionChange = useSelectionChangeHandler(selectNode, selectEdge);
+  const onSelectionChange: OnSelectionChangeFunc = useCallback(
+    (params) => {
+      if (shouldSuppressSelectionSync?.() === true) return;
+      baseOnSelectionChange(params);
+    },
+    [baseOnSelectionChange, shouldSuppressSelectionSync]
+  );
+
+  return {
+    reactFlowInstance,
+    onInit,
+    onNodeClick,
+    onNodeDoubleClick,
+    onEdgeClick,
+    onEdgeDoubleClick,
+    onPaneClick,
+    onConnect,
+    // All nodes (topology + annotation) live in the graph store - the single
+    // source of truth - so node changes pass through to it directly.
+    onNodesChange: onNodesChangeBase,
+    onSelectionChange,
+    onNodeContextMenu,
+    onEdgeContextMenu,
+    onPaneContextMenu,
+    onNodeDragStart,
+    onNodeDrag,
+    onNodeDragStop,
+    contextMenu,
+    closeContextMenu
+  };
+}

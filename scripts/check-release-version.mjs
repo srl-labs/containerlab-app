@@ -63,6 +63,11 @@ function assertTopLevelLockVersion() {
 }
 
 function assertWorkspaceVersion(workspacePackage) {
+  // Publishable packages such as @srl-labs/clab-ui have their own release cycle.
+  if (workspacePackage.packageJson.private === false) {
+    return;
+  }
+
   if (workspacePackage.packageJson.version !== rootPackage.version) {
     failures.push(
       `${workspacePackage.label} version ${workspacePackage.packageJson.version} does not match root version ${rootPackage.version}`
