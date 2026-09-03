@@ -1,6 +1,6 @@
 // Link info view with endpoint tabs.
 import React, { useState } from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { LinkData } from "../../../../hooks/ui";
 import type { InterfaceStatsPayload } from "../../../../core/types/topology";
@@ -115,17 +115,17 @@ export const LinkInfoView: React.FC<LinkInfoViewProps> = ({ linkData }) => {
   ];
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <TabNavigation
         tabs={endpointTabs}
         activeTab={activeTab}
         onTabChange={(id) => setActiveTab(toEndpointTab(id))}
       />
 
-      <Box style={{ flex: 1, overflow: "auto" }}>
+      <Box sx={{ flex: 1, overflow: "auto" }}>
         <PanelSectionHeader title="Endpoint" withTopDivider={true} />
-        <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
-          <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
             <ReadOnlyCopyField label="Node" value={currentEndpoint.node ?? ""} />
             <ReadOnlyCopyField label="Interface" value={currentEndpoint.interface ?? ""} />
           </Box>
@@ -133,15 +133,15 @@ export const LinkInfoView: React.FC<LinkInfoViewProps> = ({ linkData }) => {
         </Box>
 
         <PanelSectionHeader title="Layer 2" withTopDivider={true} />
-        <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
-          <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
             <ReadOnlyCopyField label="MAC" value={currentEndpoint.mac ?? ""} mono />
             <ReadOnlyCopyField label="MTU" value={String(currentEndpoint.mtu ?? "")} />
           </Box>
         </Box>
 
         <PanelSectionHeader title="Traffic" withTopDivider={true} />
-        <Box style={{ minHeight: 200 }}>
+        <Box sx={{ minHeight: 200 }}>
           <React.Suspense fallback={null}>
             <LazyTrafficChart stats={currentEndpoint.stats} endpointKey={endpointKey} />
           </React.Suspense>

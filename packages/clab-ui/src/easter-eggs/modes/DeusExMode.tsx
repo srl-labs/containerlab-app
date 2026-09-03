@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Box from "@mui/material/Box";
 
 import { lerpColor, useNodeGlow } from "../shared";
 import type { RGBColor, BaseModeProps } from "../shared";
@@ -103,9 +104,10 @@ const DeusExCanvas: React.FC<{
   if (!isActive) return null;
 
   return (
-    <canvas
+    <Box
+      component="canvas"
       ref={canvasRef}
-      style={{
+      sx={{
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
@@ -264,8 +266,8 @@ export const DeusExMode: React.FC<BaseModeProps> = ({
     <>
       <DeusExCanvas isActive={isActive} getRotationAngle={getRotationAngle} />
 
-      <div
-        style={{
+      <Box
+        sx={{
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
@@ -273,15 +275,16 @@ export const DeusExMode: React.FC<BaseModeProps> = ({
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
-          paddingBottom: 32,
-          gap: 16
+          pb: 4,
+          gap: 2
         }}
       >
-        <button
-          type="button"
+        <Box
+          component="button"
           onClick={handleSwitch}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -302,12 +305,13 @@ export const DeusExMode: React.FC<BaseModeProps> = ({
           title={`Current: ${modeName}`}
         >
           Switch
-        </button>
-        <button
-          type="button"
+        </Box>
+        <Box
+          component="button"
           onClick={handleClose}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -327,8 +331,8 @@ export const DeusExMode: React.FC<BaseModeProps> = ({
           }}
         >
           Shutdown
-        </button>
-      </div>
+        </Box>
+      </Box>
     </>
   );
 };

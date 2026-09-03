@@ -1,22 +1,27 @@
-import { IconRefresh, IconSearch } from "@tabler/icons-react";
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Paper,
-  Stack,
-  Table,
-  Text,
-  TextInput,
-  Title,
-  UnstyledButton
-} from "@mantine/core";
+/* eslint-disable import-x/max-dependencies */
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SearchIcon from "@mui/icons-material/Search";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import InputAdornment from "@mui/material/InputAdornment";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../host";
-import { AppThemeProvider } from "../theme/index";
+import { MuiThemeProvider } from "../theme/index";
 import { usePostMessage } from "./shared/hooks";
 
 import type { ContainerPort, InspectContainerData, InspectWebviewInitialData } from "./types";
@@ -71,7 +76,7 @@ interface ColumnDefinition {
   id: ColumnId;
   label: string;
   value: (row: InspectRow) => string;
-  style?: React.CSSProperties;
+  sx?: Record<string, string | number>;
 }
 
 interface SortState {
@@ -95,12 +100,7 @@ const COLUMNS: ReadonlyArray<ColumnDefinition> = [
   { id: "containerName", label: "Name", value: (row) => row.containerName },
   { id: "kind", label: "Kind", value: (row) => row.kind },
   { id: "type", label: "Type", value: (row) => row.type },
-  {
-    id: "image",
-    label: "Image",
-    value: (row) => row.image,
-    style: { minWidth: 180, maxWidth: 240 }
-  },
+  { id: "image", label: "Image", value: (row) => row.image, sx: { minWidth: 180, maxWidth: 240 } },
   { id: "state", label: "State", value: (row) => row.state },
   { id: "status", label: "Status", value: (row) => row.status },
   { id: "pid", label: "PID", value: (row) => row.pid },
@@ -304,12 +304,12 @@ function stateToColorToken(state: string): string {
   const normalized = state.trim().toLowerCase();
   switch (normalized) {
     case "running":
-      return "green";
+      return "success.main";
     case "exited":
     case "stopped":
-      return "red";
+      return "error.main";
     default:
-      return "yellow";
+      return "warning.main";
   }
 }
 
@@ -324,15 +324,16 @@ function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Ele
   }
 
   return (
-    <Group gap={4}>
+    <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
       {row.ports.map((port) => {
         const key = `${row.containerId}-${port.port}-${port.protocol}`;
         return (
-          <Badge
+          <Chip
             key={key}
-            size="sm"
-            variant="outline"
-            style={{ cursor: "pointer" }}
+            size="small"
+            variant="outlined"
+            clickable
+            label={`${port.port}/${port.protocol}`}
             onClick={() => {
               onOpenPort({
                 containerName: row.containerName,
@@ -341,12 +342,10 @@ function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Ele
                 protocol: port.protocol
               });
             }}
-          >
-            {`${port.port}/${port.protocol}`}
-          </Badge>
+          />
         );
       })}
-    </Group>
+    </Stack>
   );
 }
 
@@ -357,99 +356,88 @@ function InspectGroupPanel({
   onOpenPort
 }: Readonly<InspectGroupPanelProps>): React.JSX.Element {
   return (
-    <Paper withBorder style={{ overflow: "hidden" }}>
-      <div
-        style={{
-          paddingInline: 12,
-          paddingBlock: 8,
-          borderBottom: "1px solid var(--mantine-color-default-border)",
+    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+      <Box
+        sx={{
+          px: 1.5,
+          py: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 8,
+          gap: 1,
           flexWrap: "wrap"
         }}
       >
-        <Text size="sm" fw={600}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {group.labName}
-        </Text>
-        <Badge size="sm" variant="outline">{`${group.rows.length} containers`}</Badge>
-      </div>
+        </Typography>
+        <Chip size="small" variant="outlined" label={`${group.rows.length} containers`} />
+      </Box>
 
-      <Table.ScrollContainer minWidth={480} maxHeight={420}>
-        <Table stickyHeader aria-label={`Inspect table for ${group.labName}`}>
-          <Table.Thead>
-            <Table.Tr>
-              {COLUMNS.map((column) => {
-                const isActive = activeSort?.columnId === column.id;
-                const direction = isActive ? activeSort.direction : "asc";
-                return (
-                  <Table.Th key={column.id} style={{ whiteSpace: "nowrap", ...column.style }}>
-                    <UnstyledButton
-                      onClick={() => {
-                        onToggleSort(group.labName, column.id);
-                      }}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        font: "inherit",
-                        color: "inherit"
-                      }}
-                    >
-                      {column.label}
-                      <span style={{ opacity: isActive ? 1 : 0, fontSize: "0.75em" }}>
-                        {direction === "asc" ? "\u25B2" : "\u25BC"}
-                      </span>
-                    </UnstyledButton>
-                  </Table.Th>
-                );
-              })}
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
+      <TableContainer sx={{ maxHeight: 420 }}>
+        <Table stickyHeader size="small" aria-label={`Inspect table for ${group.labName}`}>
+          <TableHead>
+            <TableRow>
+              {COLUMNS.map((column) => (
+                <TableCell key={column.id} sx={{ whiteSpace: "nowrap", ...column.sx }}>
+                  <TableSortLabel
+                    active={activeSort?.columnId === column.id}
+                    direction={activeSort?.columnId === column.id ? activeSort.direction : "asc"}
+                    onClick={() => {
+                      onToggleSort(group.labName, column.id);
+                    }}
+                  >
+                    {column.label}
+                  </TableSortLabel>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+          <TableBody>
             {group.rows.map((row) => {
               const stateColor = stateToColorToken(row.state);
               return (
-                <Table.Tr
-                  key={`${group.labName}-${row.containerId || row.containerName}-${row.network}`}
-                >
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.containerName || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.kind || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.type || "-"}</Table.Td>
-                  <Table.Td style={{ minWidth: 180, maxWidth: 240 }} title={row.image || ""}>
-                    <Text
-                      size="sm"
-                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                <TableRow key={`${group.labName}-${row.containerId || row.containerName}-${row.network}`} hover>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.containerName || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.kind || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.type || "-"}</TableCell>
+                  <TableCell sx={{ minWidth: 180, maxWidth: 240 }} title={row.image || ""}>
+                    <Typography
+                      variant="body2"
+                      sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     >
                       {row.image || "-"}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>
-                    <Badge
-                      size="sm"
-                      variant="outline"
-                      color={stateColor}
-                      style={{ fontWeight: 600 }}
-                    >
-                      {row.state || "-"}
-                    </Badge>
-                  </Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.status || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.pid || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.ipv4 || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.ipv6 || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.network || "-"}</Table.Td>
-                  <Table.Td style={{ whiteSpace: "nowrap" }}>{row.owner || "-"}</Table.Td>
-                  <Table.Td>
+                    </Typography>
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={row.state || "-"}
+                      sx={{
+                        color: stateColor,
+                        borderColor: stateColor,
+                        fontWeight: 600
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.status || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.pid || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.ipv4 || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.ipv6 || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.network || "-"}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.owner || "-"}</TableCell>
+                  <TableCell>
                     <PortsCell row={row} onOpenPort={onOpenPort} />
-                  </Table.Td>
-                </Table.Tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </Table.Tbody>
+          </TableBody>
         </Table>
-      </Table.ScrollContainer>
+      </TableContainer>
     </Paper>
   );
 }
@@ -532,64 +520,72 @@ export function InspectApp(): React.JSX.Element {
   );
 
   return (
-    <AppThemeProvider>
-      <div
-        style={{
+    <MuiThemeProvider>
+      <Box
+        sx={{
           width: "100%",
           height: "100%",
-          padding: 16,
+          p: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 2,
           overflow: "hidden",
-          backgroundColor: "var(--mantine-color-body)"
+          bgcolor: "background.default"
         }}
       >
         <Paper
-          withBorder
-          style={{
-            padding: 12,
+          variant="outlined"
+          sx={{
+            p: 1.5,
             display: "flex",
-            gap: 12,
+            gap: 1.5,
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap"
           }}
         >
-          <Title order={5} style={{ lineHeight: 1.2 }}>
+          <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
             Containerlab Inspect
-          </Title>
+          </Typography>
 
-          <Group gap="xs" align="center" style={{ minWidth: 260 }}>
-            <TextInput
-              style={{ flex: 1 }}
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 260 }}>
+            <TextField
+              fullWidth
               value={searchText}
               onChange={(event) => {
-                setSearchText(event.currentTarget.value);
+                setSearchText(event.target.value);
               }}
               placeholder="Search labs or nodes"
-              leftSection={<IconSearch size={18} />}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  )
+                }
+              }}
             />
             <Button
-              variant="outline"
-              leftSection={<IconRefresh size={18} />}
+              variant="outlined"
+              startIcon={<RefreshIcon fontSize="small" />}
               onClick={() => {
                 postMessage({ command: "refresh" });
               }}
             >
               Refresh
             </Button>
-          </Group>
+          </Stack>
         </Paper>
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 4 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pr: 0.5 }}>
           {!hasData ? (
-            <Alert color="blue" variant="outline">
+            <Alert severity="info" variant="outlined">
               No containers found.
             </Alert>
           ) : null}
 
-          <Stack gap="md">
+          <Stack spacing={2}>
             {filteredGroups.map((group) => (
               <InspectGroupPanel
                 key={group.labName}
@@ -600,9 +596,9 @@ export function InspectApp(): React.JSX.Element {
               />
             ))}
           </Stack>
-        </div>
-      </div>
-    </AppThemeProvider>
+        </Box>
+      </Box>
+    </MuiThemeProvider>
   );
 }
 

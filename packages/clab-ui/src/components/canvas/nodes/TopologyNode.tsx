@@ -4,12 +4,10 @@
  */
 import React, { useMemo, memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import {
-  IconPlayerPlayFilled,
-  IconPlayerStopFilled,
-  IconPlayerPauseFilled,
-  IconBan
-} from "@tabler/icons-react";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
+import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 
 import type { TopologyNodeData } from "../types";
 import { SELECTION_COLOR, DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../types";
@@ -22,7 +20,6 @@ import {
 import {
   useCustomIcons,
   useDeploymentState,
-  useIsNodeSearchDimmed,
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
 import { getCustomIconMap } from "../../../utils/iconUtils";
@@ -135,13 +132,13 @@ function getRuntimeBadgeColors(state: NodeRuntimeBadgeState): {
 function getRuntimeBadgeIcon(state: NodeRuntimeBadgeState, iconColor: string): React.ReactElement {
   switch (state) {
     case "running":
-      return <IconPlayerPlayFilled size="0.52rem" style={{ color: iconColor }} />;
+      return <PlayArrowRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
     case "paused":
-      return <IconPlayerPauseFilled size="0.52rem" style={{ color: iconColor }} />;
+      return <PauseRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
     case "undeployed":
-      return <IconBan size="0.52rem" style={{ color: iconColor }} />;
+      return <BlockRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
     default:
-      return <IconPlayerStopFilled size="0.52rem" style={{ color: iconColor }} />;
+      return <StopRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
   }
 }
 
@@ -152,8 +149,7 @@ const SELECTED_OUTLINE = `2px solid ${SELECTION_COLOR}`;
 /**
  * TopologyNode component renders network device nodes with SVG icons
  */
-const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
-  const isSearchDimmed = useIsNodeSearchDimmed(id);
+const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const nodeData = isTopologyNodeData(data) ? data : FALLBACK_NODE_DATA;
   const {
     label,
@@ -237,11 +233,9 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     (): React.CSSProperties => ({
       ...(isLinkTarget ? CONTAINER_STYLE_LINK_TARGET : CONTAINER_STYLE_BASE),
       width: iconSize,
-      height: iconSize,
-      opacity: isSearchDimmed ? 0.2 : 1,
-      transition: "opacity 120ms ease-in-out"
+      height: iconSize
     }),
-    [isLinkTarget, iconSize, isSearchDimmed]
+    [isLinkTarget, iconSize]
   );
 
   // Build class names for CSS-based hover effects

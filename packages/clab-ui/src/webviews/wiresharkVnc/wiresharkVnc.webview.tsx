@@ -1,9 +1,14 @@
-import { Alert, Loader, Paper, Stack, Text } from "@mantine/core";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import CircularProgress from "@mui/material/CircularProgress";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { AppThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 
 import type { WiresharkVncInitialData } from "./types";
@@ -105,16 +110,10 @@ export function WiresharkVncApp(): React.JSX.Element {
   }, [postMessage]);
 
   return (
-    <AppThemeProvider>
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          backgroundColor: "var(--mantine-color-body)"
-        }}
-      >
-        <iframe
+    <MuiThemeProvider>
+      <Box sx={{ position: "relative", width: "100%", height: "100%", bgcolor: "background.default" }}>
+        <Box
+          component="iframe"
           title="Wireshark VNC"
           src={iframeSrc || undefined}
           onLoad={() => {
@@ -133,7 +132,7 @@ export function WiresharkVncApp(): React.JSX.Element {
               postMessage({ type: "retry-check" });
             }
           }}
-          style={{
+          sx={{
             border: 0,
             position: "absolute",
             inset: 0,
@@ -145,35 +144,43 @@ export function WiresharkVncApp(): React.JSX.Element {
 
         {isLoading ? (
           <Stack
-            align="center"
-            justify="center"
-            style={{
+            sx={{
               position: "absolute",
               inset: 0,
-              padding: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              p: 2,
               textAlign: "center"
             }}
           >
-            <Paper withBorder style={{ paddingInline: 24, paddingBlock: 20, maxWidth: 460 }}>
-              <Stack gap="sm" align="center">
-                <Loader size={24} />
-                <Text fw={500}>Loading Wireshark...</Text>
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 3,
+                py: 2.5,
+                maxWidth: 460,
+                bgcolor: (theme) => theme.alpha(theme.palette.background.paper, 0.92)
+              }}
+            >
+              <Stack spacing={1.5} alignItems="center">
+                <CircularProgress size={24} />
+                <Typography variant="subtitle1">Loading Wireshark...</Typography>
                 {showVolumeTip ? (
-                  <Alert color="blue" variant="outline" style={{ textAlign: "left" }}>
+                  <Alert severity="info" variant="outlined" sx={{ textAlign: "left" }}>
                     Tip: Save pcap files to `/pcaps` to persist them in the lab directory.
                   </Alert>
                 ) : null}
                 {retryInfo ? (
-                  <Text size="xs" c="dimmed">
+                  <Typography variant="caption" color="text.secondary">
                     {retryInfo}
-                  </Text>
+                  </Typography>
                 ) : null}
               </Stack>
             </Paper>
           </Stack>
         ) : null}
-      </div>
-    </AppThemeProvider>
+      </Box>
+    </MuiThemeProvider>
   );
 }
 

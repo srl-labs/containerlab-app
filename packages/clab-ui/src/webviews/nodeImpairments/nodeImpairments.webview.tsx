@@ -1,9 +1,23 @@
-import { Alert, Button, Group, Paper, Table, Text, TextInput, Title } from "@mantine/core";
+/* eslint-disable import-x/max-dependencies */
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { AppThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 
 import type { NetemDataMap, NetemFields, NodeImpairmentsInitialData } from "./types";
@@ -104,35 +118,36 @@ export function NodeImpairmentsApp(): React.JSX.Element {
   );
 
   return (
-    <AppThemeProvider>
-      <div
-        style={{
+    <MuiThemeProvider>
+      <Box
+        sx={{
           width: "100%",
           height: "100%",
-          padding: 16,
-          backgroundColor: "var(--mantine-color-body)",
+          p: 2,
+          bgcolor: "background.default",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column"
         }}
       >
         <Paper
-          withBorder
-          style={{
-            padding: 12,
+          variant="outlined"
+          sx={{
+            p: 1.5,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: 1,
             flexWrap: "wrap"
           }}
         >
-          <Title order={5} style={{ lineHeight: 1.2 }}>
+          <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
             Link Impairments: {nodeName}
-          </Title>
+          </Typography>
 
-          <Group gap="xs">
+          <Stack direction="row" spacing={1}>
             <Button
+              variant="contained"
               onClick={() => {
                 postMessage({ command: "apply", data: netemByInterface });
               }}
@@ -140,7 +155,7 @@ export function NodeImpairmentsApp(): React.JSX.Element {
               Apply
             </Button>
             <Button
-              variant="outline"
+              variant="outlined"
               onClick={() => {
                 postMessage({ command: "clearAll" });
               }}
@@ -148,93 +163,84 @@ export function NodeImpairmentsApp(): React.JSX.Element {
               Clear All
             </Button>
             <Button
-              variant="outline"
+              variant="outlined"
               onClick={() => {
                 postMessage({ command: "refresh" });
               }}
             >
               Refresh
             </Button>
-          </Group>
+          </Stack>
         </Paper>
 
-        <div style={{ flex: 1, minHeight: 0, overflow: "hidden", marginTop: 16 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", mt: 2 }}>
           {sortedInterfaces.length === 0 ? (
-            <Alert color="blue" variant="outline">
+            <Alert severity="info" variant="outlined">
               No interfaces available for this node.
             </Alert>
           ) : (
-            <Table.ScrollContainer
-              minWidth={480}
-              maxHeight="100%"
-              style={{
-                border: "1px solid var(--mantine-color-default-border)",
-                borderRadius: "var(--mantine-radius-default)"
-              }}
-            >
-              <Table
-                stickyHeader
-                aria-label={`Link impairments table for ${nodeName}`}
-              >
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th style={{ whiteSpace: "nowrap" }}>Interface</Table.Th>
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: "100%" }}>
+              <Table stickyHeader size="small" aria-label={`Link impairments table for ${nodeName}`}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ whiteSpace: "nowrap" }}>Interface</TableCell>
                     {FIELD_META.map((field) => (
-                      <Table.Th key={field.key} style={{ whiteSpace: "nowrap" }}>
+                      <TableCell key={field.key} sx={{ whiteSpace: "nowrap" }}>
                         {field.label}
-                      </Table.Th>
+                      </TableCell>
                     ))}
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
                   {sortedInterfaces.map((iface) => {
                     const fields = netemByInterface[iface];
                     const hasValidationError = hasDelayValidationError(fields);
 
                     return (
-                      <Table.Tr key={iface}>
-                        <Table.Td style={{ whiteSpace: "nowrap", fontWeight: 500 }}>
-                          {iface}
-                        </Table.Td>
+                      <TableRow key={iface} hover>
+                        <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 500 }}>{iface}</TableCell>
                         {FIELD_META.map((field) => {
                           const showDelayMessage = field.key === "delay" && hasValidationError;
                           const isErrorField =
                             hasValidationError && (field.key === "delay" || field.key === "jitter");
 
                           return (
-                            <Table.Td key={`${iface}-${field.key}`} style={{ minWidth: 148 }}>
-                              <TextInput
+                            <TableCell key={`${iface}-${field.key}`} sx={{ minWidth: 148 }}>
+                              <TextField
+                                fullWidth
                                 type={field.inputType}
                                 value={fields[field.key]}
                                 placeholder={field.placeholder}
-                                error={
+                                error={isErrorField}
+                                helperText={
                                   showDelayMessage
                                     ? "A positive delay is required if jitter is set."
-                                    : isErrorField
+                                    : " "
                                 }
                                 onChange={(event) => {
-                                  updateField(iface, field.key, event.currentTarget.value);
+                                  updateField(iface, field.key, event.target.value);
                                 }}
-                                rightSection={
-                                  <Text size="xs" c="dimmed" style={{ whiteSpace: "nowrap" }}>
-                                    {field.unit}
-                                  </Text>
-                                }
-                                rightSectionWidth={64}
+                                slotProps={{
+                                  input: {
+                                    endAdornment: (
+                                      <InputAdornment position="end">{field.unit}</InputAdornment>
+                                    )
+                                  }
+                                }}
                               />
-                            </Table.Td>
+                            </TableCell>
                           );
                         })}
-                      </Table.Tr>
+                      </TableRow>
                     );
                   })}
-                </Table.Tbody>
+                </TableBody>
               </Table>
-            </Table.ScrollContainer>
+            </TableContainer>
           )}
-        </div>
-      </div>
-    </AppThemeProvider>
+        </Box>
+      </Box>
+    </MuiThemeProvider>
   );
 }
 

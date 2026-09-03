@@ -1,6 +1,8 @@
 // Bordered section with title and optional inheritance badge.
 import React from "react";
-import { Box, Divider, Text } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Divider from "@mui/material/Divider";
+import Typography from "@mui/material/Typography";
 
 import { InheritanceBadge } from "./Badge";
 
@@ -21,14 +23,12 @@ export const Section: React.FC<SectionProps> = ({
 }) => (
   <>
     <Box>
-      <Box style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <Text size="xs" tt="uppercase" c="dimmed" style={{ letterSpacing: "0.08em" }}>
-          {title}
-        </Text>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+        <Typography variant="overline">{title}</Typography>
         {inherited === true && <InheritanceBadge />}
       </Box>
       {children}
     </Box>
-    {hasBorder && <Divider my={12} />}
+    {hasBorder && <Divider sx={{ my: 1.5 }} />}
   </>
 );

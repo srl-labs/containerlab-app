@@ -1,6 +1,6 @@
 // Group editor form.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { GroupStyleAnnotation } from "../../../core/types/topology";
 import type { GroupEditorData } from "../../../hooks/canvas";
@@ -34,7 +34,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
   const style = formData.style;
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Basic Information" withTopDivider={false}>
         <InputField
           id="group-name"
@@ -43,7 +43,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
           onChange={(v) => updateField("name", v)}
           placeholder="e.g., rack1"
         />
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <SelectField
             id="group-label-position"
             label="Label Position"
@@ -64,7 +64,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
 
       <PanelSection
         title="Background"
-        bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 16 }}
+        bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
       >
         <ColorField
           label="Color"
@@ -84,7 +84,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
       </PanelSection>
 
       <PanelSection title="Border">
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ColorField
             label="Color"
             value={style.borderColor ?? "#dddddd"}
@@ -103,7 +103,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
             clearable
           />
         </Box>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
             id="group-corner-radius"
             label="Corner Radius"
@@ -133,7 +133,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
         </Box>
       </PanelSection>
 
-      <PanelSection title="Label" bodySx={{ padding: 16 }}>
+      <PanelSection title="Label" bodySx={{ p: 2 }}>
         <ColorField
           label="Text Color"
           value={style.labelColor ?? style.color ?? "#ebecf0"}

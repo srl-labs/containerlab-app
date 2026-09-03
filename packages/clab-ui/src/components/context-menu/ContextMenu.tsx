@@ -1,6 +1,13 @@
 // Context menu dropdown at a given position.
 import React, { useCallback } from "react";
-import { Menu, Portal } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import Divider from "@mui/material/Divider";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 export interface ContextMenuItem {
   id: string;
@@ -24,88 +31,6 @@ interface ContextMenuProps {
   openToLeft?: boolean;
 }
 
-const MENU_Z_INDEX = 1400;
-const BACKDROP_Z_INDEX = 1350;
-
-function itemStyle(compact: boolean): React.CSSProperties | undefined {
-  if (!compact) return undefined;
-  return {
-    minHeight: 28,
-    paddingTop: 2,
-    paddingBottom: 2,
-    paddingLeft: 8,
-    paddingRight: 8,
-    fontSize: 12.5,
-    lineHeight: 1.25
-  };
-}
-
-function dividerStyle(compact: boolean): React.CSSProperties | undefined {
-  return compact ? { marginTop: 1, marginBottom: 1 } : undefined;
-}
-
-interface RenderOptions {
-  compact: boolean;
-  openToLeft: boolean;
-  onClose: () => void;
-}
-
-function renderContextMenuItem(item: ContextMenuItem, options: RenderOptions): React.ReactElement {
-  const { compact, openToLeft, onClose } = options;
-
-  if (item.divider === true) {
-    return <Menu.Divider key={item.id} style={dividerStyle(compact)} />;
-  }
-
-  if (item.children && item.children.length > 0) {
-    const handleParentClick = item.onClick
-      ? () => {
-          if (item.disabled !== true) {
-            item.onClick?.();
-            onClose();
-          }
-        }
-      : undefined;
-    return (
-      <Menu.Sub key={item.id} position={openToLeft ? "left-start" : "right-start"}>
-        <Menu.Sub.Target>
-          <Menu.Sub.Item
-            leftSection={item.icon}
-            disabled={item.disabled}
-            onClick={handleParentClick}
-            data-testid={`context-menu-item-${item.id}`}
-            style={itemStyle(compact)}
-          >
-            {item.label}
-          </Menu.Sub.Item>
-        </Menu.Sub.Target>
-        <Menu.Sub.Dropdown
-          style={{ minWidth: 150, maxWidth: compact ? 240 : undefined }}
-        >
-          {item.children.map((child) => renderContextMenuItem(child, options))}
-        </Menu.Sub.Dropdown>
-      </Menu.Sub>
-    );
-  }
-
-  return (
-    <Menu.Item
-      key={item.id}
-      leftSection={item.icon}
-      color={item.danger === true ? "red" : undefined}
-      disabled={item.disabled}
-      onClick={() => {
-        item.onClick?.();
-        onClose();
-      }}
-      data-testid={`context-menu-item-${item.id}`}
-      style={itemStyle(compact)}
-    >
-      {item.label}
-    </Menu.Item>
-  );
-}
-
 export const ContextMenu: React.FC<ContextMenuProps> = ({
   isVisible,
   position,
@@ -113,6 +38,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
   onClose,
   onBackdropContextMenu,
   compact = false,
+  openSubmenuOnHover = true,
   openToLeft = false
 }) => {
   const handleBackdropContextMenu = useCallback(
@@ -138,48 +64,378 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
 
   if (!isVisible || items.length === 0) return null;
 
-  const options: RenderOptions = { compact, openToLeft, onClose };
+  return (
+    <Menu
+      open={isVisible}
+      onClose={onClose}
+      anchorReference="anchorPosition"
+      anchorPosition={{ top: position.y, left: position.x }}
+      transformOrigin={{
+        vertical: "top",
+        horizontal: openToLeft ? "right" : "left"
+      }}
+      data-testid="context-menu"
+      slotProps={{
+        backdrop: {
+          invisible: true,
+          onContextMenu: handleBackdropContextMenu
+        },
+        paper: {
+          sx: compact
+            ? {
+                minWidth: 150,
+                maxWidth: 248,
+                "& .MuiDivider-root": { my: 0.1 }
+              }
+            : { minWidth: 180 },
+          onContextMenu: suppressNativeMenu
+        }
+      }}
+    >
+      {items.map((item) => {
+        if (item.divider === true) {
+          return <Divider key={item.id} />;
+        }
+        if (item.children && item.children.length > 0) {
+          return (
+            <MenuItemWithSubmenu
+              key={item.id}
+              item={item}
+              onClose={onClose}
+              compact={compact}
+              openSubmenuOnHover={openSubmenuOnHover}
+              openToLeft={openToLeft}
+            />
+          );
+        }
+        return (
+          <MenuItemButton
+            key={item.id}
+            item={item}
+            onClose={onClose}
+            compact={compact}
+            openToLeft={openToLeft}
+          />
+        );
+      })}
+    </Menu>
+  );
+};
+
+/**
+ * Individual menu item component
+ */
+interface MenuItemComponentProps {
+  item: ContextMenuItem;
+  onClose: () => void;
+  compact?: boolean;
+  openSubmenuOnHover?: boolean;
+  openToLeft?: boolean;
+}
+
+function submenuGutterSx(compact: boolean) {
+  return {
+    width: compact ? 14 : 16,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "0 0 auto",
+    mr: compact ? 0.35 : 0.8
+  };
+}
+
+function useMenuItemClick(item: ContextMenuItem, onClose: () => void) {
+  return useCallback(() => {
+    if (item.disabled !== true && item.onClick !== undefined) {
+      item.onClick();
+      onClose();
+    }
+  }, [item, onClose]);
+}
+
+function handleSubmenuMouseEnter(params: {
+  event: React.MouseEvent<HTMLElement>;
+  openSubmenuOnHover: boolean;
+  cancelClose: () => void;
+  setAnchorEl: React.Dispatch<React.SetStateAction<HTMLElement | null>>;
+}) {
+  const { event, openSubmenuOnHover, cancelClose, setAnchorEl } = params;
+  if (!openSubmenuOnHover) {
+    return;
+  }
+  cancelClose();
+  setAnchorEl(event.currentTarget);
+}
+
+function handleSubmenuItemClick(item: ContextMenuItem, onClose: () => void): void {
+  if (item.disabled !== true && item.onClick !== undefined) {
+    item.onClick();
+    onClose();
+  }
+}
+
+function handleSubmenuToggleClick(params: {
+  event: React.MouseEvent<HTMLElement>;
+  openSubmenuOnHover: boolean;
+  disabled?: boolean;
+  hasClickHandler: boolean;
+  cancelClose: () => void;
+  setAnchorEl: React.Dispatch<React.SetStateAction<HTMLElement | null>>;
+}) {
+  const { event, openSubmenuOnHover, disabled, hasClickHandler, cancelClose, setAnchorEl } = params;
+  if (openSubmenuOnHover || disabled === true || hasClickHandler) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  cancelClose();
+  setAnchorEl((current) => (current ? null : event.currentTarget));
+}
+
+function renderSubmenuChild(params: {
+  child: ContextMenuItem;
+  onClose: () => void;
+  compact: boolean;
+  openSubmenuOnHover: boolean;
+  openToLeft: boolean;
+}): React.ReactElement {
+  const { child, onClose, compact, openSubmenuOnHover, openToLeft } = params;
+  if (child.divider === true) {
+    return <Divider key={child.id} />;
+  }
+  if (child.children && child.children.length > 0) {
+    return (
+      <MenuItemWithSubmenu
+        key={child.id}
+        item={child}
+        onClose={onClose}
+        compact={compact}
+        openSubmenuOnHover={openSubmenuOnHover}
+        openToLeft={openToLeft}
+      />
+    );
+  }
+  return (
+    <MenuItemButton
+      key={child.id}
+      item={child}
+      onClose={onClose}
+      compact={compact}
+      openToLeft={openToLeft}
+    />
+  );
+}
+
+function resolveSubmenuClickHandler(
+  hasClickHandler: boolean,
+  handleClick: (event: React.MouseEvent<HTMLElement>) => void,
+  handleOpenSubmenuByClick: (event: React.MouseEvent<HTMLElement>) => void
+): (event: React.MouseEvent<HTMLElement>) => void {
+  if (hasClickHandler) {
+    return handleClick;
+  }
+  return handleOpenSubmenuByClick;
+}
+
+function submenuItemSx(compact: boolean, openToLeft: boolean) {
+  return {
+    justifyContent: openToLeft ? "flex-start" : "space-between",
+    ...(compact ? { minHeight: 28, py: 0.2, px: 0.85 } : {})
+  };
+}
+
+function compactPrimarySlotProps(compact: boolean) {
+  if (!compact) {
+    return undefined;
+  }
+  return {
+    primary: {
+      noWrap: true,
+      sx: {
+        fontSize: 12.5,
+        lineHeight: 1.25
+      }
+    }
+  };
+}
+
+function renderMenuItemLabel(params: {
+  item: ContextMenuItem;
+  compact: boolean;
+  isDanger?: boolean;
+}): React.ReactElement {
+  const { item, compact, isDanger = false } = params;
+  const hasIcon = item.icon !== undefined && item.icon !== null;
+  return (
+    <>
+      {hasIcon && (
+        <ListItemIcon
+          sx={{
+            ...(compact ? { minWidth: 22 } : {}),
+            ...(isDanger ? { color: "error.main" } : {})
+          }}
+        >
+          {item.icon}
+        </ListItemIcon>
+      )}
+      <ListItemText slotProps={compactPrimarySlotProps(compact)}>{item.label}</ListItemText>
+    </>
+  );
+}
+
+const MenuItemButton: React.FC<MenuItemComponentProps> = ({
+  item,
+  onClose,
+  compact = false,
+  openToLeft = false
+}) => {
+  const handleClick = useMenuItemClick(item, onClose);
+  const isDanger = item.danger === true;
+
+  return (
+    <MenuItem
+      onClick={handleClick}
+      disabled={item.disabled}
+      dense={compact}
+      data-testid={`context-menu-item-${item.id}`}
+      sx={{
+        ...(compact ? { minHeight: 28, py: 0.2, px: 0.85 } : {}),
+        ...(isDanger ? { color: "error.main" } : {})
+      }}
+    >
+      {openToLeft && <Box sx={submenuGutterSx(compact)} />}
+      {renderMenuItemLabel({ item, compact, isDanger })}
+    </MenuItem>
+  );
+};
+
+const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
+  item,
+  onClose,
+  compact = false,
+  openSubmenuOnHover = true,
+  openToLeft = false
+}) => {
+  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
+  const submenuOpen = Boolean(anchorEl);
+  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setAnchorEl(null), 100);
+  }, [cancelClose]);
+
+  React.useEffect(() => () => cancelClose(), [cancelClose]);
+
+  const handleMouseEnter = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      handleSubmenuMouseEnter({
+        event,
+        openSubmenuOnHover,
+        cancelClose,
+        setAnchorEl
+      });
+    },
+    [cancelClose, openSubmenuOnHover]
+  );
+
+  const handleClick = useCallback(
+    (_event: React.MouseEvent<HTMLElement>) => {
+      handleSubmenuItemClick(item, onClose);
+    },
+    [item, onClose]
+  );
+
+  const handleOpenSubmenuByClick = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      handleSubmenuToggleClick({
+        event,
+        openSubmenuOnHover,
+        disabled: item.disabled,
+        hasClickHandler: Boolean(item.onClick),
+        cancelClose,
+        setAnchorEl
+      });
+    },
+    [cancelClose, item.disabled, item.onClick, openSubmenuOnHover]
+  );
+
+  const renderChild = useCallback(
+    (child: ContextMenuItem) =>
+      renderSubmenuChild({
+        child,
+        onClose,
+        compact,
+        openSubmenuOnHover,
+        openToLeft
+      }),
+    [compact, onClose, openSubmenuOnHover, openToLeft]
+  );
+
+  const clickHandler = resolveSubmenuClickHandler(
+    Boolean(item.onClick),
+    handleClick,
+    handleOpenSubmenuByClick
+  );
+  const anchorHorizontal = openToLeft ? "left" : "right";
+  const transformHorizontal = openToLeft ? "right" : "left";
 
   return (
     <>
-      {/* Invisible full-screen layer that relays right-clicks (repositioning the
-          menu) while it is open, mirroring the old MUI modal backdrop. */}
-      <Portal>
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: BACKDROP_Z_INDEX }}
-          onContextMenu={handleBackdropContextMenu}
-        />
-      </Portal>
-      <Menu
-        opened={isVisible}
-        onClose={onClose}
-        position={openToLeft ? "bottom-end" : "bottom-start"}
-        offset={0}
-        zIndex={MENU_Z_INDEX}
-        withinPortal
+      <MenuItem
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={scheduleClose}
+        onClick={clickHandler}
+        disabled={item.disabled}
+        dense={compact}
+        data-testid={`context-menu-item-${item.id}`}
+        sx={submenuItemSx(compact, openToLeft)}
       >
-        <Menu.Target>
-          <div
-            style={{
-              position: "fixed",
-              top: position.y,
-              left: position.x,
-              width: 0,
-              height: 0,
-              pointerEvents: "none"
-            }}
-          />
-        </Menu.Target>
-        <Menu.Dropdown
-          data-testid="context-menu"
-          onContextMenu={suppressNativeMenu}
-          style={{
-            minWidth: compact ? 150 : 180,
-            maxWidth: compact ? 248 : undefined
-          }}
-        >
-          {items.map((item) => renderContextMenuItem(item, options))}
-        </Menu.Dropdown>
+        {openToLeft && (
+          <Box sx={submenuGutterSx(compact)}>
+            <ChevronLeftIcon fontSize="small" />
+          </Box>
+        )}
+        {renderMenuItemLabel({ item, compact })}
+        {!openToLeft && <ChevronRightIcon fontSize="small" sx={{ ml: compact ? 0.45 : 1 }} />}
+      </MenuItem>
+      <Menu
+        anchorEl={anchorEl}
+        open={submenuOpen}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: anchorHorizontal
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: transformHorizontal
+        }}
+        hideBackdrop
+        sx={{ pointerEvents: "none" }}
+        slotProps={{
+          paper: {
+            sx: compact
+              ? {
+                  minWidth: 150,
+                  maxWidth: 240,
+                  pointerEvents: "auto",
+                  "& .MuiDivider-root": { my: 0.1 }
+                }
+              : { minWidth: 150, pointerEvents: "auto" },
+            onMouseEnter: cancelClose,
+            onMouseLeave: scheduleClose
+          }
+        }}
+      >
+        {item.children?.map(renderChild)}
       </Menu>
     </>
   );

@@ -1,14 +1,13 @@
 // Shared form components for annotation editors.
 import React from "react";
-import { Button } from "@mantine/core";
+import Button from "@mui/material/Button";
+import type { SxProps, Theme } from "@mui/material/styles";
 
-const TOGGLE_BASE_STYLE: React.CSSProperties = {
-  fontWeight: 500,
+const TOGGLE_BASE_SX = {
+  fontWeight: (theme: Theme) => theme.typography.fontWeightMedium,
   minWidth: 0,
-  paddingLeft: 12,
-  paddingRight: 12,
-  paddingTop: 4,
-  paddingBottom: 4
+  px: 1.5,
+  py: 0.5
 };
 
 /**
@@ -18,15 +17,18 @@ export const Toggle: React.FC<{
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  sx?: React.CSSProperties;
+  sx?: SxProps<Theme>;
 }> = ({ active, onClick, children, sx }) => {
-  const mergedStyle = sx !== undefined ? { ...TOGGLE_BASE_STYLE, ...sx } : TOGGLE_BASE_STYLE;
+  const mergedSx =
+    sx !== undefined && !Array.isArray(sx) && typeof sx !== "function"
+      ? Object.assign({}, TOGGLE_BASE_SX, sx)
+      : TOGGLE_BASE_SX;
   return (
     <Button
-      variant={active ? "filled" : "outline"}
-      size="compact-sm"
+      variant={active ? "contained" : "outlined"}
+      size="small"
       onClick={onClick}
-      style={mergedStyle}
+      sx={mergedSx}
     >
       {children}
     </Button>
@@ -34,7 +36,7 @@ export const Toggle: React.FC<{
 };
 
 /**
- * Grid pattern background for previews (style-compatible object)
+ * Grid pattern background for previews (sx-compatible style object)
  */
 export const PREVIEW_GRID_BG_SX = {
   backgroundImage:

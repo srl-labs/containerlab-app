@@ -2,14 +2,13 @@
 /* eslint-disable import-x/max-dependencies */
 import React from "react";
 import type { Edge, Node, ReactFlowInstance } from "@xyflow/react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 import { shallow } from "zustand/shallow";
 
 import type { TopoEdge, TopoNode } from "./core/types";
 import { NETWORK_TYPES } from "./core/types/editors";
-import type { SettingsSection } from "./components/panels/lab-settings";
 
-import { AppThemeProvider } from "./theme";
+import { MuiThemeProvider } from "./theme";
 import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
@@ -23,11 +22,10 @@ import {
   type EdgeAnnotationLookup
 } from "./annotations/edgeAnnotations";
 import type { ReactFlowCanvasRef } from "./components/canvas";
-import { ReactFlowCanvas, CanvasZoomControls } from "./components/canvas";
+import { ReactFlowCanvas } from "./components/canvas";
 import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
-import { SidebarRail } from "./components/panels/sidebar/SidebarRail";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
 import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
@@ -45,7 +43,12 @@ import {
   useUndoRedoControls
 } from "./hooks/app";
 import { useFilteredGraphElements, useSelectionData } from "./hooks/app/useAppContentHelpers";
-import { isDevExplorerDisabledByUrl, useDevExplorerPane } from "./hooks/app/useDevExplorerPane";
+import {
+  DEV_EXPLORER_MIN_WIDTH,
+  getDevExplorerMaxWidth,
+  isDevExplorerDisabledByUrl,
+  useDevExplorerPane
+} from "./hooks/app/useDevExplorerPane";
 import {
   applyGraphDeletions,
   buildAnnotationSaveCommand,
@@ -60,7 +63,6 @@ import {
   usePanelVisibility,
   useShakeAnimation,
   useShortcutDisplay,
-  type SidebarView,
   type useLayoutControls
 } from "./hooks/ui";
 import {
@@ -87,14 +89,9 @@ import {
   toNetemState
 } from "./utils/netemOverrides";
 import { isRecord } from "./core/utilities/typeHelpers";
-import type { ExplorerSectionId } from "./explorer/shared/explorer/types";
 
 type LayoutControls = ReturnType<typeof useLayoutControls>;
 const DEV_EXPLORER_DEFER_MS = 300;
-
-// The rail splits the explorer into two panes: labs (running + undeployed) and files.
-const LAB_EXPLORER_SECTIONS: readonly ExplorerSectionId[] = ["runningLabs", "localLabs"];
-const FILE_EXPLORER_SECTIONS: readonly ExplorerSectionId[] = ["fileExplorer"];
 
 const LazyContainerlabExplorerView = React.lazy(async () => {
   const module = await import("./explorer/containerlabExplorerView.webview");
@@ -106,11 +103,15 @@ const LazyLifecycleProgressModal = React.lazy(async () => {
   return { default: module.LifecycleProgressModal };
 });
 
-const LazySettingsModal = React.lazy(async () => {
-  const module = await import("./components/panels/settings/SettingsModal");
-  return { default: module.SettingsModal };
+const LazyLabSettingsModal = React.lazy(async () => {
+  const module = await import("./components/panels/lab-settings/LabSettingsModal");
+  return { default: module.LabSettingsModal };
 });
 
+const LazyShortcutsModal = React.lazy(async () => {
+  const module = await import("./components/panels/ShortcutsModal");
+  return { default: module.ShortcutsModal };
+});
 
 const LazySvgExportModal = React.lazy(async () => {
   const module = await import("./components/panels/SvgExportModal");
@@ -127,11 +128,10 @@ const LazyAboutModal = React.lazy(async () => {
   return { default: module.AboutModal };
 });
 
-const LazyHelpModal = React.lazy(async () => {
-  const module = await import("./components/panels/HelpModal");
-  return { default: module.HelpModal };
+const LazyFindNodePopover = React.lazy(async () => {
+  const module = await import("./components/panels/FindNodePopover");
+  return { default: module.FindNodePopover };
 });
-
 
 const TOPO_NODE_TYPES = new Set<string>([
   "topology-node",
@@ -539,11 +539,7 @@ const SvgExportModalContainer: React.FC<SvgExportModalContainerProps> = React.me
 );
 SvgExportModalContainer.displayName = "SvgExportModalContainer";
 
-function DeferredDevExplorerView({
-  visibleSections
-}: {
-  visibleSections?: readonly ExplorerSectionId[];
-}) {
+function DeferredDevExplorerView() {
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
@@ -569,7 +565,7 @@ function DeferredDevExplorerView({
 
   return (
     <React.Suspense fallback={null}>
-      <LazyContainerlabExplorerView visibleSections={visibleSections} />
+      <LazyContainerlabExplorerView />
     </React.Suspense>
   );
 }
@@ -689,8 +685,6 @@ const LifecycleModalHost: React.FC<LifecycleModalHostProps> = React.memo(
 );
 LifecycleModalHost.displayName = "LifecycleModalHost";
 
-// Top-level UI composition; many conditional branches for panels, modals, and chrome.
-/* eslint-disable complexity */
 export const AppContent: React.FC<AppContentProps> = ({
   reactFlowRef,
   rfInstance,
@@ -699,11 +693,9 @@ export const AppContent: React.FC<AppContentProps> = ({
   chrome = "full"
 }) => {
   const viewerOnly = chrome === "viewer";
-  const [helpOpen, setHelpOpen] = React.useState(false);
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
-  const { renderAboutModal, renderDeployMenuItems, customSettingsSections, colorScheme } =
-    useClabUiRuntime();
+  const { renderAboutModal, renderDeployMenuItems } = useClabUiRuntime();
   const state = useTopoViewerStore(selectAppContentState, shallow);
   const topoActions = useTopoViewerActions();
   const graphActions = useGraphActions();
@@ -719,19 +711,8 @@ export const AppContent: React.FC<AppContentProps> = ({
     [isDevMock]
   );
   useDevMockTrafficStats(shouldCollectDevMockTrafficStats(host, isDevMock, interactionMode));
-  const { layoutRef } = useDevExplorerPane(showDevExplorer);
-  const renderExplorerContent = React.useCallback(
-    (view: SidebarView) => (
-      <DeferredDevExplorerView
-        visibleSections={view === "files" ? FILE_EXPLORER_SECTIONS : LAB_EXPLORER_SECTIONS}
-      />
-    ),
-    []
-  );
-  // The rail/context panel show whenever a topology is active. When the host
-  // exposes an explorer they also show without one, so a fresh user (e.g. an
-  // empty pages sandbox) can browse and create their first lab.
-  const showSidebarChrome = !viewerOnly && (hasActiveTopology || showDevExplorer);
+  const { layoutRef, devExplorerWidth, isDevExplorerDragging, handleDevExplorerResizeStart } =
+    useDevExplorerPane(showDevExplorer);
 
   React.useEffect(() => {
     if (!shouldDumpCssVars()) return;
@@ -900,6 +881,9 @@ export const AppContent: React.FC<AppContentProps> = ({
     }
   }, [topoActions]);
 
+  const [paletteTabRequest, setPaletteTabRequest] = React.useState<{ tabId: string } | undefined>(
+    undefined
+  );
   const customNodeCommands = useCustomNodeCommands(
     state.customNodes,
     topoActions.editCustomTemplate
@@ -1225,29 +1209,18 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   const easterEgg = useEasterEgg({});
 
-  // On a new selection/edit, route the sidebar to the palette (so the editor is
-  // visible) and auto-open it. Rising-edge only, so switching to the Explorer
-  // view with a lingering selection isn't immediately overridden.
-  const hadContextContentRef = React.useRef(false);
+  // Auto-open context panel when selection/editing state changes
   React.useEffect(() => {
-    const isNewSelection = hasContextContent && !hadContextContentRef.current;
-    hadContextContentRef.current = hasContextContent;
-    if (!isNewSelection || !hasActiveTopology || viewerOnly || isProcessing) {
-      return;
-    }
-    panelVisibility.setActiveSidebarView("palette");
-    if (panelVisibility.autoOpenOnInteraction && !panelVisibility.isContextPanelOpen) {
+    if (
+      hasActiveTopology &&
+      !viewerOnly &&
+      hasContextContent &&
+      !isProcessing &&
+      !panelVisibility.isContextPanelOpen
+    ) {
       panelVisibility.handleOpenContextPanel("auto");
     }
   }, [hasActiveTopology, viewerOnly, hasContextContent, isProcessing, panelVisibility]);
-
-  const handleSelectSidebarView = React.useCallback(
-    (view: SidebarView) => {
-      panelVisibility.setActiveSidebarView(view);
-      panelVisibility.handleOpenContextPanel("manual");
-    },
-    [panelVisibility]
-  );
 
   // close if palette wasn't open, else go back to palette
   const handleContextPanelBack = React.useCallback(() => {
@@ -1364,42 +1337,39 @@ export const AppContent: React.FC<AppContentProps> = ({
     host.topoViewer.cancelLifecycle();
   }, [host]);
 
+  const handleToggleSplit = React.useCallback(() => {
+    if (!hasActiveTopology) {
+      return;
+    }
+    panelVisibility.handleOpenContextPanel("manual");
+    setPaletteTabRequest({ tabId: "yaml" });
+  }, [hasActiveTopology, panelVisibility]);
   const isBulkLinkModalOpen = shouldShowBulkLinkModal(
     hasActiveTopology,
     panelVisibility.showBulkLinkModal,
     isProcessing
   );
 
-  const autoOpenedEmptyExplorerRef = React.useRef(false);
   React.useEffect(() => {
     if (hasActiveTopology) {
-      autoOpenedEmptyExplorerRef.current = false;
       return;
     }
-    // Without a topology the palette/editor views have nothing to show, so point
-    // the sidebar at the Explorer. Auto-open it once per empty session so the
-    // user can still collapse it with the rail button afterwards.
-    if (showDevExplorer) {
-      // Only the palette view needs a topology; leave Explorer/Files selected.
-      if (panelVisibility.activeSidebarView === "palette") {
-        panelVisibility.setActiveSidebarView("explorer");
-      }
-      if (!autoOpenedEmptyExplorerRef.current) {
-        autoOpenedEmptyExplorerRef.current = true;
-        if (!panelVisibility.isContextPanelOpen) {
-          panelVisibility.handleOpenContextPanel("manual");
-        }
-      }
+    if (!panelVisibility.isContextPanelOpen) {
+      panelVisibility.handleOpenContextPanel("manual");
     }
-    // The settings modal stays available without a lab (it hides the Lab
-    // section itself); only the topology-specific modals get dismissed.
+    if (panelVisibility.findPopoverPosition !== null) {
+      panelVisibility.handleCloseFindPopover();
+    }
+    if (panelVisibility.showLabSettingsModal) {
+      panelVisibility.handleCloseLabSettings();
+    }
     if (panelVisibility.showSvgExportModal) {
       panelVisibility.handleCloseSvgExport();
     }
     if (panelVisibility.showBulkLinkModal) {
       panelVisibility.handleCloseBulkLink();
     }
-  }, [hasActiveTopology, showDevExplorer, panelVisibility]);
+  }, [hasActiveTopology, panelVisibility]);
 
   const previousHasActiveTopology = React.useRef(hasActiveTopology);
   React.useEffect(() => {
@@ -1437,21 +1407,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     [sessionClient, topoActions]
   );
 
-  // A host-supplied About dialog replaces the modal's Info section when present.
-  const handleOpenSettings = (section?: SettingsSection) => {
-    if (section === "info" && renderAboutModal) {
-      panelVisibility.handleShowAbout();
-      return;
-    }
-    panelVisibility.handleShowLabSettings(section);
-  };
-
-  const helpModal = helpOpen ? (
-    <React.Suspense fallback={null}>
-      <LazyHelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
-    </React.Suspense>
-  ) : null;
-
   let aboutModal: React.ReactNode = null;
   if (panelVisibility.showAboutPanel) {
     if (renderAboutModal) {
@@ -1471,36 +1426,33 @@ export const AppContent: React.FC<AppContentProps> = ({
     }
   }
 
-  // The floating navbar and zoom controls sit opposite the rail/sidebar.
-  const chromeSide = panelVisibility.sidebarSide === "left" ? "right" : "left";
-
   return (
-    <AppThemeProvider>
+    <MuiThemeProvider>
       <Box
         data-testid="topoviewer-app"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-          width: "100%",
-          overflow: "hidden",
-          position: "relative"
-        }}
+        display="flex"
+        flexDirection="column"
+        height="100%"
+        width="100%"
+        overflow="hidden"
       >
         <AnnotationRuntimeBridge
           rfInstance={rfInstance}
           onLockedAction={handleLockedAction}
           runtimeRef={annotationRuntimeRef}
         />
-        {!viewerOnly && hasActiveTopology && (
+        {!viewerOnly && (
           <Navbar
             hasActiveTopology={hasActiveTopology}
+            onZoomToFit={handleZoomToFit}
             layout={layoutControls.layout}
             onLayoutChange={layoutControls.setLayout}
-            onOpenSettings={handleOpenSettings}
-            barSide={chromeSide}
-            rfInstance={rfInstance}
+            onLabSettings={panelVisibility.handleShowLabSettings}
+            onToggleSplit={handleToggleSplit}
+            onFindNode={panelVisibility.handleOpenFindPopover}
             onCaptureViewport={panelVisibility.handleShowSvgExport}
+            onShowShortcuts={panelVisibility.handleShowShortcuts}
+            onShowAbout={panelVisibility.handleShowAbout}
             onShowBulkLink={panelVisibility.handleShowBulkLink}
             linkLabelMode={state.linkLabelMode}
             onLinkLabelModeChange={handleLinkLabelModeChange}
@@ -1510,46 +1462,64 @@ export const AppContent: React.FC<AppContentProps> = ({
             canRedo={undoRedo.canRedo}
             onUndo={undoRedo.undo}
             onRedo={undoRedo.redo}
+            onLogoClick={easterEgg.handleLogoClick}
+            logoClickProgress={easterEgg.state.progress}
+            isPartyMode={easterEgg.state.isPartyMode}
             renderDeployMenuItems={renderDeployMenuItems}
           />
         )}
         <Box
           ref={layoutRef}
-          style={{
-            display: "flex",
-            flexDirection: panelVisibility.sidebarSide === "right" ? "row-reverse" : "row",
-            flexGrow: 1,
-            overflow: "hidden",
-            position: "relative"
-          }}
+          sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
         >
-          {showSidebarChrome && (
-            <SidebarRail
-              activeView={panelVisibility.activeSidebarView}
-              isOpen={panelVisibility.isContextPanelOpen}
-              side={panelVisibility.sidebarSide}
-              showExplorer={showDevExplorer}
-              showFiles={showDevExplorer}
-              showPalette={hasActiveTopology}
-              onSelectView={handleSelectSidebarView}
-              onClose={panelVisibility.handleCloseContextPanel}
-              onToggleSide={panelVisibility.handleToggleSidebarSide}
-              onOpenSettings={() => handleOpenSettings("general")}
-              onOpenHelp={() => setHelpOpen(true)}
-              colorScheme={colorScheme}
-            />
+          {showDevExplorer && (
+            <Box
+              sx={{
+                position: "relative",
+                width: devExplorerWidth,
+                minWidth: DEV_EXPLORER_MIN_WIDTH,
+                maxWidth: getDevExplorerMaxWidth(),
+                flexShrink: 0,
+                borderRight: "1px solid",
+                borderColor: "divider",
+                bgcolor: "background.paper",
+                overflow: "hidden"
+              }}
+            >
+              <DeferredDevExplorerView />
+              <Box
+                onMouseDown={handleDevExplorerResizeStart}
+                sx={{
+                  position: "absolute",
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 4,
+                  cursor: "col-resize",
+                  zIndex: 2,
+                  "&:hover": { bgcolor: "primary.main", opacity: 0.3 },
+                  ...(isDevExplorerDragging
+                    ? {
+                      bgcolor: "primary.main",
+                      opacity: 0.28
+                    }
+                    : {})
+                }}
+              />
+            </Box>
           )}
-          <Box style={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}>
-          {showSidebarChrome && (
+          {!viewerOnly && hasActiveTopology && (
             <ContextPanel
               isOpen={panelVisibility.isContextPanelOpen}
-              side={panelVisibility.sidebarSide}
-              activeView={panelVisibility.activeSidebarView}
-              renderExplorer={renderExplorerContent}
+              side={panelVisibility.panelSide}
+              onOpen={panelVisibility.handleOpenContextPanel}
+              onClose={panelVisibility.handleCloseContextPanel}
+              onBack={handleContextPanelBack}
+              onToggleSide={panelVisibility.handleTogglePanelSide}
               rfInstance={rfInstance}
               palette={{
                 mode: state.mode,
-                requestedTab: undefined,
+                requestedTab: paletteTabRequest,
 
                 onEditCustomNode: customNodeCommands.onEditCustomNode,
                 onDeleteCustomNode: customNodeCommands.onDeleteCustomNode,
@@ -1625,7 +1595,7 @@ export const AppContent: React.FC<AppContentProps> = ({
           )}
           <Box
             component="main"
-            style={{
+            sx={{
               flexGrow: 1,
               overflow: "hidden",
               position: "relative"
@@ -1642,14 +1612,6 @@ export const AppContent: React.FC<AppContentProps> = ({
             <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
             <EasterEggRenderer easterEgg={easterEgg} />
             <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-            {hasActiveTopology && (
-              <CanvasZoomControls
-                rfInstance={rfInstance}
-                onFitView={handleZoomToFit}
-                side={chromeSide}
-              />
-            )}
-          </Box>
           </Box>
         </Box>
 
@@ -1657,17 +1619,12 @@ export const AppContent: React.FC<AppContentProps> = ({
         <LifecycleModalHost onClose={handleCloseLifecycleModal} onCancel={handleCancelLifecycle} />
         {panelVisibility.showLabSettingsModal ? (
           <React.Suspense fallback={null}>
-            <LazySettingsModal
+            <LazyLabSettingsModal
               isOpen={panelVisibility.showLabSettingsModal}
               onClose={panelVisibility.handleCloseLabSettings}
               mode={state.mode}
               isLocked={isInteractionLocked}
               labSettings={state.labSettings ?? { name: state.labName }}
-              initialSection={panelVisibility.settingsSection}
-              autoOpenOnInteraction={panelVisibility.autoOpenOnInteraction}
-              onToggleAutoOpen={panelVisibility.handleToggleAutoOpen}
-              customSections={customSettingsSections}
-              showLabSettings={hasActiveTopology}
               gridLineWidth={layoutControls.gridLineWidth}
               onGridLineWidthChange={layoutControls.setGridLineWidth}
               gridStyle={layoutControls.gridStyle}
@@ -1677,6 +1634,14 @@ export const AppContent: React.FC<AppContentProps> = ({
               gridBgColor={layoutControls.gridBgColor}
               onGridBgColorChange={layoutControls.setGridBgColor}
               onResetGridColors={layoutControls.resetGridColors}
+            />
+          </React.Suspense>
+        ) : null}
+        {panelVisibility.showShortcutsModal ? (
+          <React.Suspense fallback={null}>
+            <LazyShortcutsModal
+              isOpen={panelVisibility.showShortcutsModal}
+              onClose={panelVisibility.handleCloseShortcuts}
             />
           </React.Suspense>
         ) : null}
@@ -1699,9 +1664,18 @@ export const AppContent: React.FC<AppContentProps> = ({
           </React.Suspense>
         ) : null}
         {aboutModal}
-        {helpModal}
+
+        {/* Popovers */}
+        {panelVisibility.findPopoverPosition ? (
+          <React.Suspense fallback={null}>
+            <LazyFindNodePopover
+              anchorPosition={panelVisibility.findPopoverPosition}
+              onClose={panelVisibility.handleCloseFindPopover}
+              rfInstance={rfInstance}
+            />
+          </React.Suspense>
+        ) : null}
       </Box>
-    </AppThemeProvider>
+    </MuiThemeProvider>
   );
 };
-/* eslint-enable complexity */

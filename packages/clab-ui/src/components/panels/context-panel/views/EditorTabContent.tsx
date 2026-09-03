@@ -1,6 +1,6 @@
 // Editor content for the Edit tab.
 import React from "react";
-import { IconPencil } from "@tabler/icons-react";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 
 import { useContextPanelContent } from "../../../../hooks/ui/useContextPanelContent";
 import { useIsLocked } from "../../../../stores/topoViewerStore";
@@ -29,7 +29,7 @@ export interface EditorTabContentProps
 /** Placeholder shown when no editor is active */
 const EditorPlaceholder: React.FC = () => (
   <PanelEmptyState
-    icon={<IconPencil size={48} style={{ opacity: 0.5 }} />}
+    icon={<EditOutlinedIcon sx={{ fontSize: 48, opacity: 0.5 }} />}
     message="Select a node, link, or annotation and click edit to modify it here."
   />
 );

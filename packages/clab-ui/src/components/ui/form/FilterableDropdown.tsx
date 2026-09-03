@@ -1,6 +1,8 @@
 // Searchable dropdown with keyboard navigation.
 import React from "react";
-import { Autocomplete, Select } from "@mantine/core";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import Box from "@mui/material/Box";
 
 interface FilterableDropdownOption {
   value: string;
@@ -36,44 +38,63 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   helperText,
   required
 }) => {
-  const data = options.map((opt) => ({ value: opt.value, label: opt.label }));
-  const mantineRenderOption = renderOption
-    ? ({ option }: { option: { value: string; label?: string } }) =>
-        renderOption({ value: option.value, label: option.label ?? option.value })
-    : undefined;
-
-  if (allowFreeText) {
-    return (
-      <Autocomplete
-        id={id}
-        data={data}
-        value={value}
-        onChange={onChange}
-        label={label}
-        placeholder={placeholder}
-        description={helperText}
-        required={required}
-        disabled={disabled}
-        renderOption={mantineRenderOption}
-        maxDropdownHeight={200}
-      />
-    );
-  }
+  const selectedOption = options.find((opt) => opt.value === value) ?? null;
 
   return (
-    <Select
+    <Autocomplete
       id={id}
-      data={data}
-      value={value.length > 0 ? value : null}
-      onChange={(newValue) => onChange(newValue ?? "")}
-      label={label}
-      placeholder={placeholder}
-      description={helperText}
-      required={required}
+      options={options}
+      value={selectedOption}
+      onChange={(_event, newValue) => {
+        if (newValue !== null) {
+          onChange(typeof newValue === "string" ? newValue : newValue.value);
+        } else {
+          onChange("");
+        }
+      }}
+      onInputChange={(_event, newInputValue, reason) => {
+        if (allowFreeText && reason === "input") {
+          onChange(newInputValue);
+        }
+      }}
+      inputValue={allowFreeText ? value : undefined}
+      getOptionLabel={(option) => {
+        if (typeof option === "string") return option;
+        return option.label;
+      }}
+      isOptionEqualToValue={(option, val) => option.value === val.value}
+      freeSolo={allowFreeText}
       disabled={disabled}
-      searchable
-      renderOption={mantineRenderOption}
-      maxDropdownHeight={200}
+      size="small"
+      fullWidth
+      renderOption={
+        renderOption
+          ? (props, option) => {
+              const { key, ...otherProps } = props as React.HTMLAttributes<HTMLLIElement> & {
+                key: React.Key;
+              };
+              return (
+                <Box component="li" key={key} {...otherProps}>
+                  {renderOption(option)}
+                </Box>
+              );
+            }
+          : undefined
+      }
+      renderInput={(params) => (
+        <TextField
+          {...(params as unknown as React.ComponentProps<typeof TextField>)}
+          label={label}
+          placeholder={placeholder}
+          helperText={helperText}
+          required={required}
+        />
+      )}
+      slotProps={{
+        listbox: {
+          sx: { maxHeight: 200 }
+        }
+      }}
     />
   );
 };

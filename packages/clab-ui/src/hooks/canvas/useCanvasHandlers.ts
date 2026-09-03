@@ -7,7 +7,6 @@ import { useCallback, useRef, useState } from "react";
 import {
   type ReactFlowInstance,
   type OnNodesChange,
-  type OnNodeDrag,
   type NodeMouseHandler,
   type EdgeMouseHandler,
   type OnConnect,
@@ -122,9 +121,9 @@ interface CanvasHandlers {
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
   onEdgeContextMenu: (event: React.MouseEvent, edge: Edge) => void;
   onPaneContextMenu: (event: MouseEvent | React.MouseEvent) => void;
-  onNodeDragStart: OnNodeDrag;
-  onNodeDrag: OnNodeDrag;
-  onNodeDragStop: OnNodeDrag;
+  onNodeDragStart: NodeMouseHandler;
+  onNodeDrag: NodeMouseHandler;
+  onNodeDragStop: NodeMouseHandler;
   contextMenu: ContextMenuState;
   closeContextMenu: () => void;
 }
@@ -537,7 +536,7 @@ function useNodeDragHandlers(
     });
   }, [flushPendingGroupMove]);
 
-  const onNodeDragStart: OnNodeDrag = useCallback(
+  const onNodeDragStart: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (isLockedRef.current || !nodes) return;
 
@@ -559,7 +558,7 @@ function useNodeDragHandlers(
   );
 
   // Called during drag - moves members with group using direct state update
-  const onNodeDrag: OnNodeDrag = useCallback(
+  const onNodeDrag: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (isLockedRef.current || !setNodes) return;
 
@@ -593,7 +592,7 @@ function useNodeDragHandlers(
     [isLockedRef, setNodes, flushPendingGroupMove, scheduleGroupMoveFlush]
   );
 
-  const onNodeDragStop: OnNodeDrag = useCallback(
+  const onNodeDragStop: NodeMouseHandler = useCallback(
     (_event, node) => {
       if (isLockedRef.current) return;
 

@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Box from "@mui/material/Box";
 
 import { useNightcallAudio } from "../audio";
 import {
@@ -127,9 +128,10 @@ const NightcallCanvas: React.FC<{
   if (!isActive) return null;
 
   return (
-    <canvas
+    <Box
+      component="canvas"
       ref={canvasRef}
-      style={{
+      sx={{
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
@@ -430,8 +432,8 @@ export const NightcallMode: React.FC<BaseModeProps> = ({
       />
 
       {/* Control buttons - retro style */}
-      <div
-        style={{
+      <Box
+        sx={{
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
@@ -439,15 +441,16 @@ export const NightcallMode: React.FC<BaseModeProps> = ({
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
-          paddingBottom: 32,
-          gap: 16
+          pb: 4,
+          gap: 2
         }}
       >
-        <button
-          type="button"
+        <Box
+          component="button"
           onClick={handleSwitch}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -466,7 +469,7 @@ export const NightcallMode: React.FC<BaseModeProps> = ({
           title={`Current: ${modeName}`}
         >
           Switch
-        </button>
+        </Box>
         <MuteButton
           isMuted={audio.isMuted}
           onToggle={audio.toggleMute}
@@ -475,11 +478,12 @@ export const NightcallMode: React.FC<BaseModeProps> = ({
           unmutedShadow="0 0 20px rgba(255, 0, 128, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.1)"
           borderColor="rgba(255, 0, 128, 0.5)"
         />
-        <button
-          type="button"
+        <Box
+          component="button"
           onClick={handleClose}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -497,8 +501,8 @@ export const NightcallMode: React.FC<BaseModeProps> = ({
           }}
         >
           End Nightcall
-        </button>
-      </div>
+        </Box>
+      </Box>
     </>
   );
 };

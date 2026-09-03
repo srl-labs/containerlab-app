@@ -67,7 +67,7 @@ function buildLinkLabelStyle(zoom: number): React.CSSProperties {
     top: 0,
     left: 0,
     fontSize: `${scaledFont}px`,
-    fontFamily: "'Roboto', sans-serif",
+    fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
     color: LINK_LABEL_TEXT_COLOR,
     backgroundColor: LINK_LABEL_BG_COLOR,
     padding: `${padY}px ${padX}px`,

@@ -1,31 +1,37 @@
 // Node and annotation palette for the context panel.
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  IconAffiliate,
-  IconCircle,
-  IconDeviceFloppy,
-  IconFileDownload,
-  IconFileUpload,
-  IconGauge,
-  IconMinus,
-  IconNetwork,
-  IconPencil,
-  IconPlugConnected,
-  IconPlus,
-  IconPower,
-  IconSearch,
-  IconSelect,
-  IconServer,
-  IconSitemap,
-  IconSquare,
-  IconStar,
-  IconStarFilled,
-  IconTopologyStar,
-  IconTrash,
-  IconTypography,
-  IconX
-} from "@tabler/icons-react";
-import { ActionIcon, Box, Button, Card, Divider, Text, TextInput, Tooltip } from "@mantine/core";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AddIcon from "@mui/icons-material/Add";
+import CableIcon from "@mui/icons-material/Cable";
+import CircleOutlinedIcon from "@mui/icons-material/CircleOutlined";
+import ClearIcon from "@mui/icons-material/Clear";
+import CropSquareIcon from "@mui/icons-material/CropSquare";
+import DeleteIcon from "@mui/icons-material/Delete";
+import DeviceHubIcon from "@mui/icons-material/DeviceHub";
+import DnsIcon from "@mui/icons-material/Dns";
+import EditIcon from "@mui/icons-material/Edit";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
+import HubIcon from "@mui/icons-material/Hub";
+import LanIcon from "@mui/icons-material/Lan";
+import PowerIcon from "@mui/icons-material/Power";
+import RemoveIcon from "@mui/icons-material/Remove";
+import SaveIcon from "@mui/icons-material/Save";
+import SearchIcon from "@mui/icons-material/Search";
+import SelectAllIcon from "@mui/icons-material/SelectAll";
+import SpeedIcon from "@mui/icons-material/Speed";
+import StarIcon from "@mui/icons-material/Star";
+import StarOutlineIcon from "@mui/icons-material/StarOutline";
+import TextFieldsIcon from "@mui/icons-material/TextFields";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 
 import type { CustomNodeTemplate } from "../../../core/types/editors";
 import {
@@ -77,14 +83,14 @@ interface NetworkTypeDefinition {
 }
 
 const NETWORK_TYPE_DEFINITIONS: readonly NetworkTypeDefinition[] = [
-  { type: "host", label: "Host", icon: <IconServer size={18} /> },
-  { type: "mgmt-net", label: "Mgmt Net", icon: <IconNetwork size={18} /> },
-  { type: "macvlan", label: "Macvlan", icon: <IconPlugConnected size={18} /> },
-  { type: "vxlan", label: "VXLAN", icon: <IconAffiliate size={18} /> },
-  { type: "vxlan-stitch", label: "VXLAN Stitch", icon: <IconPlugConnected size={18} /> },
-  { type: "dummy", label: "Dummy", icon: <IconPower size={18} /> },
-  { type: "bridge", label: "Bridge", icon: <IconSitemap size={18} /> },
-  { type: "ovs-bridge", label: "OVS Bridge", icon: <IconTopologyStar size={18} /> }
+  { type: "host", label: "Host", icon: <DnsIcon fontSize="small" /> },
+  { type: "mgmt-net", label: "Mgmt Net", icon: <LanIcon fontSize="small" /> },
+  { type: "macvlan", label: "Macvlan", icon: <CableIcon fontSize="small" /> },
+  { type: "vxlan", label: "VXLAN", icon: <DeviceHubIcon fontSize="small" /> },
+  { type: "vxlan-stitch", label: "VXLAN Stitch", icon: <CableIcon fontSize="small" /> },
+  { type: "dummy", label: "Dummy", icon: <PowerIcon fontSize="small" /> },
+  { type: "bridge", label: "Bridge", icon: <AccountTreeIcon fontSize="small" /> },
+  { type: "ovs-bridge", label: "OVS Bridge", icon: <HubIcon fontSize="small" /> }
 ];
 
 const VALID_NODE_TYPES: Record<NodeType, true> = {
@@ -147,10 +153,8 @@ function downloadNodeTemplates(
 }
 
 const REACTFLOW_NODE_MIME_TYPE = "application/reactflow-node";
-const ACTION_HOVER_BG = "var(--vscode-list-hoverBackground)";
-const TEXT_SECONDARY = "var(--vscode-descriptionForeground)";
-const ERROR_MAIN = "var(--vscode-editorError-foreground)";
-const WARNING_MAIN = "var(--vscode-editorWarning-foreground)";
+const ACTION_HOVER_BG = "action.hover";
+const TEXT_SECONDARY = "text.secondary";
 const MONACO_PRELOAD_DELAY_MS = 750;
 const CANVAS_DRAG_FALLBACK_KEY = "__CLAB_UI_CANVAS_DRAG_DATA__";
 
@@ -176,17 +180,17 @@ const SourceEditorTab: React.FC<{
   jsonSchema?: object;
   onChange: (next: string) => void;
 }> = ({ readOnly, error, language, value, jsonSchema, onChange }) => (
-  <Box style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+  <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
-      <Text size="xs" style={{ color: ERROR_MAIN, paddingLeft: 16, paddingRight: 16, paddingTop: 4, paddingBottom: 4 }}>
+      <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
         {error}
-      </Text>
+      </Typography>
     )}
-    <Box style={{ flex: 1, minHeight: 0 }}>
+    <Box sx={{ flex: 1, minHeight: 0 }}>
       <Suspense
         fallback={
           <Box
-            style={{
+            sx={{
               alignItems: "center",
               color: TEXT_SECONDARY,
               display: "flex",
@@ -194,7 +198,7 @@ const SourceEditorTab: React.FC<{
               justifyContent: "center"
             }}
           >
-            <Text size="xs">Loading editor...</Text>
+            <Typography variant="caption">Loading editor...</Typography>
           </Box>
         }
       >
@@ -216,28 +220,24 @@ const PaletteDraggableCard: React.FC<{
   children: React.ReactNode;
 }> = ({ onDragStart, onDragEnd, children }) => (
   <Tooltip
-    label="Drag to canvas"
-    position="top"
-    openDelay={500}
-    offset={{ mainAxis: -20, crossAxis: -20 }}
+    title="Drag to canvas"
+    placement="top"
+    enterDelay={500}
+    slotProps={{ popper: { modifiers: [{ name: "offset", options: { offset: [-20, -20] } }] } }}
   >
     <Card
-      withBorder
-      padding={8}
+      variant="outlined"
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = ACTION_HOVER_BG;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "";
-      }}
-      style={{
+      sx={{
+        p: 1,
         cursor: "grab",
         display: "flex",
         alignItems: "center",
-        gap: 8
+        gap: 1,
+        "&:hover": { bgcolor: ACTION_HOVER_BG },
+        "&:active": { cursor: "grabbing" }
       }}
     >
       {children}
@@ -252,19 +252,9 @@ const SectionHeader: React.FC<{ title: string; action?: React.ReactNode }> = ({
   <>
     <Divider />
     <Box
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingLeft: 16,
-        paddingRight: 16,
-        paddingTop: 8,
-        paddingBottom: 8
-      }}
+      sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1 }}
     >
-      <Text size="sm" fw={500}>
-        {title}
-      </Text>
+      <Typography variant="subtitle2">{title}</Typography>
       {action}
     </Box>
     <Divider />
@@ -330,62 +320,56 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
 
   return (
     <PaletteDraggableCard onDragStart={onDragStart} onDragEnd={clearCanvasDragPayload}>
-      <Box style={{ flexShrink: 0 }}>
+      <Box sx={{ flexShrink: 0 }}>
         <IconPreview src={iconUrl} size={28} cornerRadius={template.iconCornerRadius} />
       </Box>
-      <Box style={{ flex: 1, minWidth: 0 }}>
-        <Text size="sm" fw={500} truncate>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{ fontWeight: (theme) => theme.typography.fontWeightMedium }}
+        >
           {template.name}
-        </Text>
-        <Text size="xs" style={{ color: TEXT_SECONDARY }} truncate>
+        </Typography>
+        <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
           {template.kind}
-        </Text>
+        </Typography>
       </Box>
-      <Box style={{ display: "flex", gap: 2 }}>
-        <Tooltip label={isDefaultNode ? "Default node" : "Set as default"}>
-          <ActionIcon
-            variant="subtle"
-            size="sm"
+      <Box sx={{ display: "flex", gap: 0.25 }}>
+        <Tooltip title={isDefaultNode ? "Default node" : "Set as default"}>
+          <IconButton
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               if (!isDefaultNode) onSetDefault?.(template.name);
             }}
-            style={{ color: isDefaultNode ? WARNING_MAIN : TEXT_SECONDARY }}
+            sx={{ color: isDefaultNode ? "warning.main" : TEXT_SECONDARY }}
           >
-            {isDefaultNode ? <IconStarFilled size={18} /> : <IconStar size={18} />}
-          </ActionIcon>
+            {isDefaultNode ? <StarIcon fontSize="small" /> : <StarOutlineIcon fontSize="small" />}
+          </IconButton>
         </Tooltip>
-        <Tooltip label="Edit">
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            color="gray"
+        <Tooltip title="Edit">
+          <IconButton
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onEdit?.(template.name);
             }}
           >
-            <IconPencil size={18} />
-          </ActionIcon>
+            <EditIcon fontSize="small" />
+          </IconButton>
         </Tooltip>
-        <Tooltip label="Delete">
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            color="gray"
+        <Tooltip title="Delete">
+          <IconButton
+            size="small"
             onClick={(e) => {
               e.stopPropagation();
               onDelete?.(template.name);
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = ERROR_MAIN;
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = "";
-            }}
+            sx={{ "&:hover": { color: "error.main" } }}
           >
-            <IconTrash size={18} />
-          </ActionIcon>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
         </Tooltip>
       </Box>
     </PaletteDraggableCard>
@@ -428,14 +412,18 @@ const PaletteSimpleDraggable: React.FC<PaletteSimpleDraggableProps> = ({
 
   return (
     <PaletteDraggableCard onDragStart={onDragStart} onDragEnd={clearCanvasDragPayload}>
-      <Box style={{ color: TEXT_SECONDARY }}>{icon}</Box>
-      <Box style={{ flex: 1, minWidth: 0 }}>
-        <Text size="sm" fw={500} truncate>
+      <Box sx={{ color: TEXT_SECONDARY }}>{icon}</Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{ fontWeight: (theme) => theme.typography.fontWeightMedium }}
+        >
           {label}
-        </Text>
-        <Text size="xs" style={{ color: TEXT_SECONDARY }} truncate>
+        </Typography>
+        <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
           {subtitle}
-        </Text>
+        </Typography>
       </Box>
     </PaletteDraggableCard>
   );
@@ -703,63 +691,55 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   }, [annotationsDraft, sessionClient]);
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Box
-        style={{
+        sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingLeft: 16,
-          paddingRight: 16,
+          px: 2,
           height: 40,
           flexShrink: 0
         }}
       >
-        <Text size="md" fw={700}>
+        <Typography
+          variant="subtitle1"
+          sx={{ fontWeight: (theme) => theme.typography.fontWeightBold }}
+        >
           {drawerTitle}
-        </Text>
+        </Typography>
         {activeTab === "edit" && onEditDelete && (
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            onClick={onEditDelete}
-            title="Delete"
-            style={{ color: ERROR_MAIN }}
-          >
-            <IconTrash size={18} />
-          </ActionIcon>
+          <IconButton size="small" onClick={onEditDelete} color="error" title="Delete">
+            <DeleteIcon fontSize="small" />
+          </IconButton>
         )}
         {activeTab === "yaml" && (
-          <Box style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
             {!isSourceReadOnly && (
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                color="gray"
+              <IconButton
+                size="small"
                 onClick={() => {
                   handleSaveYaml().catch(() => undefined);
                 }}
                 disabled={!yamlDirty}
                 title="Save"
               >
-                <IconDeviceFloppy size={18} />
-              </ActionIcon>
+                <SaveIcon fontSize="small" />
+              </IconButton>
             )}
           </Box>
         )}
         {activeTab === "json" && !isSourceReadOnly && (
-          <ActionIcon
-            variant="subtle"
-            size="sm"
-            color="gray"
+          <IconButton
+            size="small"
             onClick={() => {
               handleSaveAnnotations().catch(() => undefined);
             }}
             disabled={!annotationsDirty}
             title="Save"
           >
-            <IconDeviceFloppy size={18} />
-          </ActionIcon>
+            <SaveIcon fontSize="small" />
+          </IconButton>
         )}
       </Box>
       <Divider />
@@ -782,32 +762,36 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
         />
       </Box>
       {(activeTab === "nodes" || activeTab === "annotations") && (
-        <Box style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+        <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
           {activeTab === "nodes" && (
             <Box
-              style={
-                isLocked || isViewMode ? { pointerEvents: "none", opacity: 0.6 } : undefined
-              }
+              sx={{
+                ...(isLocked || isViewMode ? { pointerEvents: "none", opacity: 0.6 } : undefined)
+              }}
             >
-              <Box style={{ padding: 16 }}>
-                <TextInput
-                  size="sm"
+              <Box sx={{ p: 2 }}>
+                <TextField
+                  fullWidth
+                  size="small"
                   placeholder="Search nodes..."
                   value={filter}
-                  onChange={(e) => setFilter(e.currentTarget.value)}
-                  leftSection={<IconSearch size={18} />}
-                  rightSection={
-                    filter ? (
-                      <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        color="gray"
-                        onClick={() => setFilter("")}
-                      >
-                        <IconX size={18} />
-                      </ActionIcon>
-                    ) : undefined
-                  }
+                  onChange={(e) => setFilter(e.target.value)}
+                  slotProps={{
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <SearchIcon fontSize="small" />
+                        </InputAdornment>
+                      ),
+                      endAdornment: filter ? (
+                        <InputAdornment position="end">
+                          <IconButton size="small" onClick={() => setFilter("")}>
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : undefined
+                    }
+                  }}
                 />
               </Box>
 
@@ -815,37 +799,34 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 title="Node Templates"
                 action={
                   !filter ? (
-                    <Box style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                      <Tooltip label="Import templates">
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          color="gray"
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+                      <Tooltip title="Import templates">
+                        <IconButton
+                          size="small"
                           onClick={handleImportTemplates}
                           data-testid="palette-import-templates"
                         >
-                          <IconFileUpload size={18} />
-                        </ActionIcon>
+                          <FileUploadIcon fontSize="small" />
+                        </IconButton>
                       </Tooltip>
-                      <Tooltip label="Export templates">
+                      <Tooltip title="Export templates">
                         <span>
-                          <ActionIcon
-                            variant="subtle"
-                            size="sm"
-                            color="gray"
+                          <IconButton
+                            size="small"
                             onClick={handleExportTemplates}
                             disabled={customNodes.length === 0}
                             data-testid="palette-export-templates"
                           >
-                            <IconFileDownload size={18} />
-                          </ActionIcon>
+                            <FileDownloadIcon fontSize="small" />
+                          </IconButton>
                         </span>
                       </Tooltip>
                       <Button
-                        variant="subtle"
-                        size="xs"
-                        leftSection={<IconPlus size={18} />}
+                        variant="text"
+                        size="small"
+                        startIcon={<AddIcon />}
                         onClick={handleAddNewNode}
+                        sx={{ py: 0 }}
                       >
                         Add
                       </Button>
@@ -853,11 +834,11 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                   ) : undefined
                 }
               />
-              <Box style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
                 {filteredNodes.length === 0 && (
-                  <Text size="sm" style={{ color: TEXT_SECONDARY }}>
+                  <Typography variant="body2" color={TEXT_SECONDARY}>
                     {filter ? "No matching templates" : "No node templates defined"}
-                  </Text>
+                  </Typography>
                 )}
                 {filteredNodes.map((template) => (
                   <DraggableNode
@@ -873,11 +854,11 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               </Box>
 
               <SectionHeader title="Networks" />
-              <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, p: 2 }}>
                 {filteredNetworks.length === 0 ? (
-                  <Text size="sm" style={{ color: TEXT_SECONDARY }}>
+                  <Typography variant="body2" color={TEXT_SECONDARY}>
                     No matching networks
-                  </Text>
+                  </Typography>
                 ) : (
                   filteredNetworks.map((network) => (
                     <DraggableNetwork key={network.type} network={network} />
@@ -888,55 +869,55 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           )}
 
           {activeTab === "annotations" && (
-            <Box style={isLocked ? { pointerEvents: "none" } : undefined}>
+            <Box sx={{ ...(isLocked ? { pointerEvents: "none" } : undefined) }}>
               <SectionHeader title="Text" />
-              <Box style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
                 <DraggableAnnotation
                   label="Text"
                   kind="annotation"
-                  icon={<IconTypography size={18} />}
+                  icon={<TextFieldsIcon fontSize="small" />}
                   payload={{ annotationType: "text" }}
                 />
               </Box>
 
               <SectionHeader title="Shapes" />
-              <Box style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
                 <DraggableAnnotation
                   label="Rectangle"
                   kind="shape"
-                  icon={<IconSquare size={18} />}
+                  icon={<CropSquareIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "rectangle" }}
                 />
                 <DraggableAnnotation
                   label="Circle"
                   kind="shape"
-                  icon={<IconCircle size={18} />}
+                  icon={<CircleOutlinedIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "circle" }}
                 />
                 <DraggableAnnotation
                   label="Line"
                   kind="shape"
-                  icon={<IconMinus size={18} />}
+                  icon={<RemoveIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "line" }}
                 />
               </Box>
 
               <SectionHeader title="Groups" />
-              <Box style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
                 <DraggableAnnotation
                   label="Group"
                   kind="annotation"
-                  icon={<IconSelect size={18} />}
+                  icon={<SelectAllIcon fontSize="small" />}
                   payload={{ annotationType: "group" }}
                 />
               </Box>
 
               <SectionHeader title="Monitoring" />
-              <Box style={{ display: "flex", flexDirection: "column", gap: 8, padding: 16 }}>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
                 <DraggableAnnotation
                   label="Traffic Rate"
                   kind="monitor"
-                  icon={<IconGauge size={18} />}
+                  icon={<SpeedIcon fontSize="small" />}
                   payload={{ annotationType: "traffic-rate" }}
                 />
               </Box>
@@ -973,18 +954,18 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       )}
 
       {activeTab === "info" && (
-        <Box style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{infoTabContent}</Box>
+        <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>{infoTabContent}</Box>
       )}
 
       {activeTab === "edit" && (
-        <Box style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{editTabContent}</Box>
+        <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>{editTabContent}</Box>
       )}
 
       {(() => {
         const custom = customPaletteTabs?.find((t) => t.id === activeTab);
         if (custom) {
           return (
-            <Box style={{ flex: 1, overflow: "auto", minHeight: 0 }}>
+            <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
               {custom.render()}
             </Box>
           );

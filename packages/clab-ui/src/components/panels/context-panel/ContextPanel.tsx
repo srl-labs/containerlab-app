@@ -2,12 +2,20 @@
 // Context-sensitive panel with palette, info, and editor tabs.
 import React, { useCallback, useRef, useState } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
-import { IconAlertCircle, IconLock } from "@tabler/icons-react";
-import { Box, Button, Divider, Text } from "@mantine/core";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import LockIcon from "@mui/icons-material/Lock";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Divider from "@mui/material/Divider";
+import Drawer from "@mui/material/Drawer";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
 
 import { useIsLocked } from "../../../stores/topoViewerStore";
 import type { NodeData, LinkData } from "../../../hooks/ui";
-import type { SidebarView } from "../../../hooks/ui/usePanelCommands";
 import { useContextPanelContent } from "../../../hooks/ui/useContextPanelContent";
 
 import type {
@@ -17,23 +25,52 @@ import type {
 } from "./views/editorTypes";
 import { PaletteView } from "./views";
 
-const MIN_WIDTH = 320;
+const MIN_WIDTH = 500;
 function getMaxWidth() {
   return Math.floor(window.innerWidth / 2);
 }
-const ACTION_HOVER = "var(--vscode-list-hoverBackground)";
-const PANEL_BACKGROUND = "var(--clab-ui-panel-background, var(--vscode-sideBar-background))";
-const PANEL_FOREGROUND = "var(--clab-ui-editor-foreground, var(--vscode-foreground))";
-const PANEL_BORDER = "var(--clab-ui-panel-border, var(--vscode-panel-border))";
-const TEXT_SECONDARY = "var(--vscode-descriptionForeground)";
-const ERROR_MAIN = "var(--vscode-editorError-foreground)";
-const PRIMARY_MAIN = "var(--clab-ui-button-background, var(--vscode-button-background))";
-// MUI elevation 4 box-shadow, preserved for the floating panel.
-const PANEL_SHADOW =
-  "0px 2px 4px -1px rgba(0,0,0,0.2), 0px 4px 5px 0px rgba(0,0,0,0.14), 0px 1px 10px 0px rgba(0,0,0,0.12)";
+const TEXT_SECONDARY = "text.secondary";
+const ACTION_HOVER = "action.hover";
 
 type BannerRef = EditorBannerRef;
 type FooterRef = EditorFooterRef;
+
+interface SideConfig {
+  isLeft: boolean;
+  tooltipPlacement: "left" | "right";
+  positionProp: "left" | "right";
+  openIcon: typeof ChevronRightIcon;
+  closeIcon: typeof ChevronLeftIcon;
+  borderRadius: string;
+  borderZeroProp: "borderLeft" | "borderRight";
+  moveTargetLabel: "left" | "right";
+}
+
+function getSideConfig(side: "left" | "right"): SideConfig {
+  if (side === "left") {
+    return {
+      isLeft: true,
+      tooltipPlacement: "right",
+      positionProp: "left",
+      openIcon: ChevronRightIcon,
+      closeIcon: ChevronLeftIcon,
+      borderRadius: "0 4px 4px 0",
+      borderZeroProp: "borderLeft",
+      moveTargetLabel: "right"
+    };
+  }
+
+  return {
+    isLeft: false,
+    tooltipPlacement: "left",
+    positionProp: "right",
+    openIcon: ChevronLeftIcon,
+    closeIcon: ChevronRightIcon,
+    borderRadius: "4px 0 0 4px",
+    borderZeroProp: "borderRight",
+    moveTargetLabel: "left"
+  };
+}
 
 interface ContextPanelPaletteProps {
   mode?: "edit" | "view";
@@ -70,6 +107,87 @@ function renderContextPanelContent(
     />
   );
 }
+
+const ToggleHandle: React.FC<{
+  isOpen: boolean;
+  panelWidth: number;
+  isDragging: boolean;
+  side: "left" | "right";
+  onOpen: () => void;
+  onClose: () => void;
+  onBack: () => void;
+  onToggleSide: () => void;
+}> = ({ isOpen, panelWidth, isDragging, onOpen, onClose, onBack, side, onToggleSide }) => {
+  const sideConfig = getSideConfig(side);
+  const anchorOffset = isOpen ? panelWidth : 0;
+  const toggleTitle = isOpen ? "Close panel" : "Open panel";
+  const ActiveIcon = isOpen ? sideConfig.closeIcon : sideConfig.openIcon;
+  const handleToggle = useCallback(() => {
+    if (isOpen) {
+      onBack();
+      onClose();
+      return;
+    }
+
+    onOpen();
+  }, [isOpen, onBack, onClose, onOpen]);
+
+  const handleStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 20,
+    cursor: "pointer",
+    borderRadius: sideConfig.borderRadius,
+    border: 1,
+    [sideConfig.borderZeroProp]: 0,
+    borderColor: "divider",
+    bgcolor: "background.paper",
+    "&:hover": { bgcolor: ACTION_HOVER }
+  };
+
+  return (
+    <Box
+      sx={{
+        position: "absolute",
+        [sideConfig.positionProp]: anchorOffset,
+        top: "50%",
+        transform: "translateY(-50%)",
+        transition: isDragging
+          ? "none"
+          : (theme) =>
+              theme.transitions.create(sideConfig.positionProp, {
+                duration: theme.transitions.duration.short
+              }),
+        zIndex: 1201,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 0.5
+      }}
+    >
+      <Tooltip title={toggleTitle} placement={sideConfig.tooltipPlacement}>
+        <Box
+          onClick={handleToggle}
+          data-testid="panel-toggle-btn"
+          sx={{ ...handleStyle, height: 48 }}
+        >
+          <ActiveIcon sx={{ fontSize: 16, color: TEXT_SECONDARY }} />
+        </Box>
+      </Tooltip>
+      {isOpen && (
+        <Tooltip
+          title={`Move panel to ${sideConfig.moveTargetLabel}`}
+          placement={sideConfig.tooltipPlacement}
+        >
+          <Box onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
+            <SwapHorizIcon sx={{ fontSize: 14, color: TEXT_SECONDARY }} />
+          </Box>
+        </Tooltip>
+      )}
+    </Box>
+  );
+};
 
 function usePanelResize(sideRef: React.RefObject<string>) {
   const [panelWidth, setPanelWidth] = useState(MIN_WIDTH);
@@ -122,30 +240,29 @@ function hasFooterRefChanged(prev: FooterRef | null, next: FooterRef | null): bo
 export interface ContextPanelProps {
   isOpen: boolean;
   side: "left" | "right";
+  onOpen: () => void;
+  onClose: () => void;
+  onBack: () => void;
+  onToggleSide: () => void;
   rfInstance: ReactFlowInstance | null;
-  /** Active global-sidebar view; "explorer"/"files" swap the body for {@link renderExplorer}. */
-  activeView?: SidebarView;
-  /** Renders the Explorer body when the active view is "explorer" or "files". */
-  renderExplorer?: (view: SidebarView) => React.ReactNode;
   palette: ContextPanelPaletteProps;
   view: ContextPanelViewProps;
   editor: ContextPanelEditorProps;
 }
 
-// UI composition component with banner/footer/view-switch conditionals.
-/* eslint-disable complexity */
 export const ContextPanel: React.FC<ContextPanelProps> = ({
   isOpen,
   side,
-  activeView = "palette",
-  renderExplorer,
+  onOpen,
+  onClose,
+  onBack,
+  onToggleSide,
   palette,
   view,
   editor
 }) => {
   const panelView = useContextPanelContent();
   const isLocked = useIsLocked();
-  const isExplorer = activeView === "explorer" || activeView === "files";
   const isReadOnly = isLocked && panelView.hasFooter;
   const footerRef = useRef<FooterRef | null>(null);
   const bannerRef = useRef<BannerRef | null>(null);
@@ -153,7 +270,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   const isLeft = side === "left";
   const sideRef = useRef(side);
   sideRef.current = side;
-  const { panelWidth, handleResizeStart } = usePanelResize(sideRef);
+  const { panelWidth, isDragging, handleResizeStart } = usePanelResize(sideRef);
 
   const setFooterRef = useCallback((ref: FooterRef | null) => {
     const changed = hasFooterRefChanged(footerRef.current, ref);
@@ -169,8 +286,8 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   }, []);
 
   const sideLayout = isLeft
-    ? { border: "borderRight" as const, resize: "right" as const }
-    : { border: "borderLeft" as const, resize: "left" as const };
+    ? { border: "borderRight", resize: "right" }
+    : { border: "borderLeft", resize: "left" };
 
   const content = renderContextPanelContent(
     palette,
@@ -184,122 +301,115 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   const footer = footerRef.current;
   const showFooter = panelView.hasFooter && footer?.hasChanges === true;
 
-  const paperStyle: React.CSSProperties = {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    [isLeft ? "left" : "right"]: 0,
-    width: panelWidth,
-    display: isOpen ? "flex" : "none",
-    flexDirection: "column",
-    backgroundColor: PANEL_BACKGROUND,
-    color: PANEL_FOREGROUND,
-    boxShadow: PANEL_SHADOW,
-    [sideLayout.border]: `1px solid ${PANEL_BORDER}`,
-    pointerEvents: "auto"
-  };
-
   return (
-    <Box
-      data-testid="context-panel"
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 1200,
-        pointerEvents: "none"
-      }}
-    >
-      <div style={paperStyle}>
-        {isLocked && !isExplorer && (
+    <>
+      <ToggleHandle
+        isOpen={isOpen}
+        panelWidth={panelWidth}
+        isDragging={isDragging}
+        side={side}
+        onOpen={onOpen}
+        onClose={onClose}
+        onBack={onBack}
+        onToggleSide={onToggleSide}
+      />
+      <Drawer
+        variant="persistent"
+        anchor={side}
+        open={isOpen}
+        transitionDuration={250}
+        data-testid="context-panel"
+        sx={{
+          position: "absolute",
+          inset: 0,
+          zIndex: 1200,
+          pointerEvents: "none",
+          "& .MuiDrawer-paper": {
+            position: "absolute",
+            width: panelWidth,
+            boxShadow: 4,
+            [sideLayout.border]: 1,
+            borderColor: "divider",
+            pointerEvents: "auto"
+          }
+        }}
+      >
+        {isLocked && (
           <>
             <Box
               data-testid="panel-readonly-indicator"
-              style={{
+              sx={{
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
-                paddingLeft: 16,
-                paddingRight: 16,
-                paddingTop: 4,
-                paddingBottom: 4,
-                backgroundColor: ACTION_HOVER,
-                color: TEXT_SECONDARY
+                gap: 0.5,
+                px: 2,
+                py: 0.5,
+                bgcolor: "action.hover",
+                color: "text.secondary"
               }}
             >
-              <IconLock size={14} />
-              <Text size="xs">Read-only — unlock lab to edit</Text>
+              <LockIcon sx={{ fontSize: 14 }} />
+              <Typography variant="caption">Read-only — unlock lab to edit</Typography>
             </Box>
             <Divider />
           </>
         )}
 
-        {!isExplorer &&
-          bannerRef.current &&
+        {bannerRef.current &&
           bannerRef.current.errors.map((err, i) => (
             <React.Fragment key={i}>
               <Box
-                style={{
+                sx={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 4,
-                  paddingLeft: 16,
-                  paddingRight: 16,
-                  paddingTop: 4,
-                  paddingBottom: 4,
-                  backgroundColor: ACTION_HOVER,
-                  color: ERROR_MAIN
+                  gap: 0.5,
+                  px: 2,
+                  py: 0.5,
+                  bgcolor: ACTION_HOVER,
+                  color: "error.main"
                 }}
               >
-                <IconAlertCircle size={14} />
-                <Text size="xs">{err}</Text>
+                <ErrorOutlineIcon sx={{ fontSize: 14 }} />
+                <Typography variant="caption">{err}</Typography>
               </Box>
               <Divider />
             </React.Fragment>
           ))}
 
         <Box
-          style={{
+          sx={{
             flexGrow: 1,
-            minHeight: 0,
             overflow: "auto"
           }}
         >
-          {isExplorer ? renderExplorer?.(activeView) : content}
+          {content}
         </Box>
 
-        {!isExplorer && showFooter === true && !isReadOnly && (
+        {showFooter === true && !isReadOnly && (
           <>
             <Divider />
-            <Box style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: 12 }}>
-              <Button size="xs" onClick={footer.handleApply} data-testid="panel-apply-btn">
+            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, p: 1.5 }}>
+              <Button size="small" onClick={footer.handleApply} data-testid="panel-apply-btn">
                 Apply
               </Button>
             </Box>
           </>
         )}
 
-        <div
+        <Box
           onMouseDown={handleResizeStart}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = PRIMARY_MAIN;
-            e.currentTarget.style.opacity = "0.3";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.opacity = "1";
-          }}
-          style={{
+          sx={{
             position: "absolute",
             [sideLayout.resize]: 0,
             top: 0,
             bottom: 0,
             width: 4,
             cursor: "col-resize",
-            zIndex: 1
+            zIndex: 1,
+            "&:hover": { bgcolor: "primary.main", opacity: 0.3 }
           }}
         />
-      </div>
-    </Box>
+      </Drawer>
+    </>
   );
 };
-/* eslint-enable complexity */

@@ -1,6 +1,6 @@
 // Advanced tab for node editor.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import {
   InputField,
@@ -35,8 +35,8 @@ const RUNTIME_OPTIONS = [
 ];
 
 const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
-  <PanelSection title="Resource Limits" withTopDivider={false} bodySx={{ padding: 16 }}>
-    <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+  <PanelSection title="Resource Limits" withTopDivider={false} bodySx={{ p: 2 }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
       <InputField
         id="node-cpu"
         label="CPU Limit"
@@ -82,7 +82,7 @@ const TlsCertificateSection: React.FC<TlsCertificateSectionProps> = ({
   certIssue
 }) => (
   <PanelSection title="TLS Certificate">
-    <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <CheckboxField
         id="node-cert-issue"
         label="Auto-generate TLS certificate"
@@ -138,8 +138,8 @@ interface HealthCheckSectionProps {
 }
 
 const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, onUpdate }) => (
-  <PanelSection title="Health Check" bodySx={{ padding: 16 }}>
-    <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+  <PanelSection title="Health Check" bodySx={{ p: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <InputField
         id="node-healthcheck-test"
         label="Test Command"
@@ -147,7 +147,7 @@ const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, on
         onChange={(v) => onUpdate({ test: v })}
         placeholder="e.g., CMD-SHELL cat /etc/os-release"
       />
-      <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
         <InputField
           id="node-healthcheck-start-period"
           label="Start Period (s)"
@@ -191,7 +191,7 @@ const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, on
 
 const RuntimeSection: React.FC<TabProps> = ({ data, onChange }) => (
   <PanelSection title="Container Runtime">
-    <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <SelectField
         id="node-image-pull-policy"
         label="Image Pull Policy"
@@ -239,7 +239,7 @@ export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <ResourceLimitsSection data={data} onChange={onChange} />
       <PanelAddSection title="Capabilities" onAdd={handleAddCapability}>
         <DynamicList

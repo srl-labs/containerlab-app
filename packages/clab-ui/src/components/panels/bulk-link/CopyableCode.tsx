@@ -1,6 +1,6 @@
 // Inline code with click-to-copy.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { copyToClipboard } from "../../../utils/clipboard";
 
@@ -24,13 +24,14 @@ export const CopyableCode: React.FC<CopyableCodeProps> = ({ children }) => {
       component="code"
       onClick={() => void handleCopy()}
       title="Click to copy"
-      style={{
+      sx={{
         cursor: "pointer",
         userSelect: "text",
-        borderRadius: 2,
-        padding: "2px 4px",
+        borderRadius: 0.5,
+        px: 0.5,
+        py: 0.25,
         fontFamily: "monospace",
-        transition: "background-color 150ms",
+        transition: (theme) => theme.transitions.create("backgroundColor"),
         ...(copied ? { outline: "1px solid" } : {})
       }}
     >

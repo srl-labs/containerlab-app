@@ -1,6 +1,6 @@
 // Info content for the Info tab.
 import React from "react";
-import { IconInfoCircle } from "@tabler/icons-react";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
 import { useContextPanelContent } from "../../../../hooks/ui/useContextPanelContent";
 import type { NodeData, LinkData } from "../../../../hooks/ui";
@@ -17,7 +17,7 @@ export interface InfoTabContentProps {
 /** Placeholder shown when no info view is active */
 const InfoPlaceholder: React.FC = () => (
   <PanelEmptyState
-    icon={<IconInfoCircle size={48} style={{ opacity: 0.5 }} />}
+    icon={<InfoOutlinedIcon sx={{ fontSize: 48, opacity: 0.5 }} />}
     message="Select a node or link to view its properties."
   />
 );

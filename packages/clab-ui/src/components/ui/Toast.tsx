@@ -1,6 +1,7 @@
 // Notification toast.
-import React, { useState, useCallback, useEffect } from "react";
-import { Alert } from "@mantine/core";
+import React, { useState, useCallback } from "react";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
 
 export interface ToastMessage {
   id: string;
@@ -14,47 +15,25 @@ interface ToastContainerProps {
   onDismiss: (id: string) => void;
 }
 
-const TOAST_COLOR: Record<NonNullable<ToastMessage["type"]>, string> = {
-  error: "red",
-  warning: "yellow",
-  info: "blue",
-  success: "green"
-};
-
-const ToastItem: React.FC<{ toast: ToastMessage; index: number; onDismiss: (id: string) => void }> = ({
-  toast,
-  index,
-  onDismiss
-}) => {
-  useEffect(() => {
-    const timer = window.setTimeout(() => onDismiss(toast.id), toast.duration ?? 3000);
-    return () => window.clearTimeout(timer);
-  }, [toast.id, toast.duration, onDismiss]);
-
-  return (
-    <Alert
-      variant="filled"
-      color={TOAST_COLOR[toast.type ?? "info"]}
-      withCloseButton
-      onClose={() => onDismiss(toast.id)}
-      style={{
-        position: "fixed",
-        bottom: 24 + index * 60,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 2000,
-        maxWidth: "min(90vw, 480px)"
-      }}
-    >
-      {toast.message}
-    </Alert>
-  );
-};
-
 export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismiss }) => (
   <>
     {toasts.map((toast, index) => (
-      <ToastItem key={toast.id} toast={toast} index={index} onDismiss={onDismiss} />
+      <Snackbar
+        key={toast.id}
+        open
+        autoHideDuration={toast.duration ?? 3000}
+        onClose={() => onDismiss(toast.id)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        sx={{ bottom: `${24 + index * 60}px !important` }}
+      >
+        <Alert
+          onClose={() => onDismiss(toast.id)}
+          severity={toast.type ?? "info"}
+          variant="filled"
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     ))}
   </>
 );

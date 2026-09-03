@@ -1,6 +1,8 @@
 // Extended link configuration tab.
 import React from "react";
-import { Box, Paper, Text } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Paper from "@mui/material/Paper";
 
 import { KeyValueList, PanelAddSection, InputField, PanelSection } from "../../ui/form";
 
@@ -24,9 +26,9 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Endpoint Properties">
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
             id="link-source-mac"
             label={`${sourceName} MAC`}
@@ -43,7 +45,7 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
           />
         </Box>
 
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
             id="link-source-ipv4"
             label={`${sourceName} IPv4`}
@@ -60,7 +62,7 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
           />
         </Box>
 
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
             id="link-source-ipv6"
             label={`${sourceName} IPv6`}
@@ -114,14 +116,11 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
  * Info message for non-veth links
  */
 const NonVethInfo: React.FC = () => (
-  <Paper
-    withBorder
-    style={{ padding: 12, backgroundColor: "var(--mantine-color-default-hover)" }}
-  >
-    <Text size="sm">
+  <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "action.hover" }}>
+    <Typography variant="body2">
       <strong>Note:</strong> This link connects to a network node. Configure extended properties on
       the network node itself.
-    </Text>
+    </Typography>
   </Paper>
 );
 
@@ -129,11 +128,11 @@ export const ExtendedTab: React.FC<LinkTabProps> = ({ data, onChange }) => {
   const isVethLink = data.type === undefined || data.type === "veth";
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       {isVethLink ? (
         <VethLinkFields data={data} onChange={onChange} />
       ) : (
-        <Box style={{ padding: 16 }}>
+        <Box sx={{ p: 2 }}>
           <NonVethInfo />
         </Box>
       )}

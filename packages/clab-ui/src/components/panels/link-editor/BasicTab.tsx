@@ -1,6 +1,9 @@
 // Basic link configuration tab.
 import React from "react";
-import { Box, Button, Slider, Text } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Slider from "@mui/material/Slider";
+import Button from "@mui/material/Button";
 
 import { ReadOnlyBadge, InputField, PanelSection } from "../../ui/form";
 import {
@@ -29,9 +32,9 @@ const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
   if (isNetwork) {
     return (
       <Box>
-        <Text size="xs" c="dimmed" style={{ display: "block", marginBottom: 4 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
           {nodeName} Interface
-        </Text>
+        </Typography>
         <ReadOnlyBadge>{nodeName || "Unknown"}</ReadOnlyBadge>
       </Box>
     );
@@ -51,7 +54,7 @@ const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
 
 interface LabelOffsetSectionProps {
   endpointOffsetValue: number;
-  onOffsetChange: (value: number) => void;
+  onOffsetChange: (_event: Event, value: number | number[]) => void;
   onOffsetReset: () => void;
 }
 
@@ -63,12 +66,12 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
   return (
     <PanelSection
       title="Label Offset"
-      bodySx={{ display: "flex", alignItems: "center", gap: 16, paddingInline: 16, paddingBlock: 8 }}
+      bodySx={{ display: "flex", alignItems: "center", gap: 2, px: 2, py: 1 }}
     >
       <>
-        <Text size="sm" c="dimmed">
+        <Typography variant="body2" color="text.secondary">
           {ENDPOINT_LABEL_OFFSET_MIN}
-        </Text>
+        </Typography>
         <Slider
           id="link-endpoint-offset"
           value={endpointOffsetValue}
@@ -76,14 +79,14 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
           max={ENDPOINT_LABEL_OFFSET_MAX}
           step={1}
           onChange={onOffsetChange}
-          style={{ flex: 1 }}
+          valueLabelDisplay="auto"
+          sx={{ flex: 1 }}
         />
-        <Text size="sm" c="dimmed">
+        <Typography variant="body2" color="text.secondary">
           {ENDPOINT_LABEL_OFFSET_MAX}
-        </Text>
+        </Typography>
         <Button
-          variant="subtle"
-          size="xs"
+          size="small"
           onClick={onOffsetReset}
           title={`Reset to ${DEFAULT_ENDPOINT_LABEL_OFFSET}`}
         >
@@ -107,8 +110,8 @@ export const BasicTab: React.FC<LinkTabProps> = ({ data, onChange, onPreviewOffs
   const targetName = data.target.length > 0 ? data.target : "Target";
   const endpointOffsetValue = resolveEndpointOffsetValue(data.endpointLabelOffset);
 
-  const handleOffsetChange = (value: number) => {
-    const nextOffset = value;
+  const handleOffsetChange = (_event: Event, value: number | number[]) => {
+    const nextOffset = typeof value === "number" ? value : value[0];
     const nextData = {
       ...data,
       endpointLabelOffset: nextOffset,
@@ -135,9 +138,9 @@ export const BasicTab: React.FC<LinkTabProps> = ({ data, onChange, onPreviewOffs
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Endpoints" withTopDivider={false}>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <EndpointInterfaceField
             isNetwork={Boolean(data.sourceIsNetwork)}
             nodeName={sourceName}

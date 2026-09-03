@@ -1,14 +1,21 @@
 // Badge components for form fields.
 import React from "react";
-import { Badge, Box } from "@mantine/core";
+import Chip from "@mui/material/Chip";
+import Box from "@mui/material/Box";
 
 /**
  * Inheritance badge - shown when a field value comes from defaults, kinds, or groups
  */
 export const InheritanceBadge: React.FC = () => (
-  <Badge variant="outline" size="sm" style={{ marginLeft: 8 }}>
-    inherited
-  </Badge>
+  <Chip
+    label="inherited"
+    size="small"
+    variant="outlined"
+    sx={{
+      ml: 1,
+      height: 18
+    }}
+  />
 );
 
 /**
@@ -17,14 +24,12 @@ export const InheritanceBadge: React.FC = () => (
 export const ReadOnlyBadge: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Box
     component="span"
-    style={{
+    sx={{
       display: "inline-block",
-      paddingLeft: 8,
-      paddingRight: 8,
-      paddingTop: 4,
-      paddingBottom: 4,
-      borderRadius: 4,
-      backgroundColor: "var(--mantine-color-default-hover)"
+      px: 1,
+      py: 0.5,
+      borderRadius: 0.5,
+      bgcolor: "action.hover"
     }}
   >
     {children}

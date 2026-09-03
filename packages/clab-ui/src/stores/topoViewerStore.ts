@@ -60,7 +60,6 @@ export interface TopoViewerState {
   editingNode: string | null;
   editingEdge: string | null;
   editingNetwork: string | null;
-  searchMatchNodeIds: ReadonlySet<string> | null;
   isLocked: boolean;
   linkLabelMode: LinkLabelMode;
   lastNonTelemetryLinkLabelMode: NonTelemetryLinkLabelMode;
@@ -109,8 +108,6 @@ export interface TopoViewerActions {
   setDeploymentState: (state: DeploymentState) => void;
   setDirty: (dirty: boolean | undefined) => void;
   toggleLock: () => void;
-
-  setSearchMatchNodeIds: (ids: ReadonlySet<string> | null) => void;
 
   // Rendering settings
   setLinkLabelMode: (mode: LinkLabelMode) => void;
@@ -181,7 +178,6 @@ const initialState: TopoViewerState = {
   editingNode: null,
   editingEdge: null,
   editingNetwork: null,
-  searchMatchNodeIds: null,
   isLocked: true,
   linkLabelMode: "show-all",
   lastNonTelemetryLinkLabelMode: "show-all",
@@ -316,10 +312,6 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 
   selectEdge: (edgeId) => {
     set({ selectedEdge: edgeId, selectedNode: null, editingImpairment: null });
-  },
-
-  setSearchMatchNodeIds: (searchMatchNodeIds) => {
-    set({ searchMatchNodeIds });
   },
 
   // Editing (mutually exclusive, clears selection)
@@ -629,12 +621,6 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 // ============================================================================
 
 /** Get mode */
-/** True when a node search is active and this node is not among the matches. */
-export const useIsNodeSearchDimmed = (nodeId: string) =>
-  useTopoViewerStore(
-    (state) => state.searchMatchNodeIds !== null && !state.searchMatchNodeIds.has(nodeId)
-  );
-
 export const useMode = () => useTopoViewerStore((state) => state.mode);
 
 /** Get lab name */

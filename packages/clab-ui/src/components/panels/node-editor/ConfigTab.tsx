@@ -1,6 +1,6 @@
 // Configuration tab for node editor.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import {
   InputField,
@@ -61,7 +61,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Startup Configuration" withTopDivider={false}>
         <InputField
           id="node-startup-config"

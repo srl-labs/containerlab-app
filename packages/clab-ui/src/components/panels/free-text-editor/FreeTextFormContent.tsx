@@ -1,15 +1,19 @@
 /* eslint-disable import-x/max-dependencies */
 // Text annotation editor form.
 import React from "react";
-import {
-  IconAlignCenter,
-  IconAlignLeft,
-  IconAlignRight,
-  IconBold,
-  IconItalic,
-  IconUnderline
-} from "@tabler/icons-react";
-import { ActionIcon, Box, Checkbox, Divider, Select, Textarea } from "@mantine/core";
+import FormatAlignCenterIcon from "@mui/icons-material/FormatAlignCenter";
+import FormatAlignLeftIcon from "@mui/icons-material/FormatAlignLeft";
+import FormatAlignRightIcon from "@mui/icons-material/FormatAlignRight";
+import FormatBoldIcon from "@mui/icons-material/FormatBold";
+import FormatItalicIcon from "@mui/icons-material/FormatItalic";
+import FormatUnderlinedIcon from "@mui/icons-material/FormatUnderlined";
+import Box from "@mui/material/Box";
+import Checkbox from "@mui/material/Checkbox";
+import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import MuiIconButton from "@mui/material/IconButton";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
 
 import type { FreeTextAnnotation } from "../../../core/types/topology";
 import { ColorField, InputField, PanelSection } from "../../ui/form";
@@ -35,8 +39,12 @@ const FONTS = [
   "Verdana"
 ];
 
-// Static select options, hoisted so they are not rebuilt on every render
-const FONT_OPTIONS = FONTS.map((f) => ({ value: f, label: f }));
+// Static menu items, hoisted so they are not rebuilt on every render
+const FONT_MENU_ITEMS = FONTS.map((f) => (
+  <MenuItem key={f} value={f}>
+    {f}
+  </MenuItem>
+));
 
 interface Props {
   formData: FreeTextAnnotation;
@@ -50,15 +58,19 @@ const IconBtn: React.FC<{
   children: React.ReactNode;
   title?: string;
 }> = ({ active, onClick, children, title }) => (
-  <ActionIcon
+  <MuiIconButton
     title={title}
     onClick={onClick}
-    variant={active ? "filled" : "subtle"}
-    color={active ? "blue" : "gray"}
-    radius="sm"
+    size="small"
+    sx={{
+      borderRadius: 0.5,
+      color: active ? "primary.contrastText" : "text.primary",
+      bgcolor: active ? "primary.main" : "transparent",
+      "&:hover": { bgcolor: active ? "primary.dark" : "action.hover" }
+    }}
   >
     {children}
-  </ActionIcon>
+  </MuiIconButton>
 );
 
 // Formatting toolbar
@@ -73,12 +85,12 @@ const Toolbar: React.FC<{ formData: FreeTextAnnotation; updateField: Props["upda
 
   return (
     <Box
-      style={{
+      sx={{
         display: "flex",
         alignItems: "center",
-        gap: 2,
-        paddingBottom: 6,
-        borderRadius: 4
+        gap: 0.25,
+        pb: 0.75,
+        borderRadius: 0.5
       }}
     >
       <IconBtn
@@ -86,43 +98,43 @@ const Toolbar: React.FC<{ formData: FreeTextAnnotation; updateField: Props["upda
         onClick={() => updateField("fontWeight", isBold ? "normal" : "bold")}
         title="Bold"
       >
-        <IconBold size={18} />
+        <FormatBoldIcon fontSize="small" />
       </IconBtn>
       <IconBtn
         active={isItalic}
         onClick={() => updateField("fontStyle", isItalic ? "normal" : "italic")}
         title="Italic"
       >
-        <IconItalic size={18} />
+        <FormatItalicIcon fontSize="small" />
       </IconBtn>
       <IconBtn
         active={isUnderline}
         onClick={() => updateField("textDecoration", isUnderline ? "none" : "underline")}
         title="Underline"
       >
-        <IconUnderline size={18} />
+        <FormatUnderlinedIcon fontSize="small" />
       </IconBtn>
-      <Divider orientation="vertical" style={{ marginInline: 6, height: 24, alignSelf: "center" }} />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.75 }} />
       <IconBtn
         active={align === "left"}
         onClick={() => updateField("textAlign", "left")}
         title="Align Left"
       >
-        <IconAlignLeft size={18} />
+        <FormatAlignLeftIcon fontSize="small" />
       </IconBtn>
       <IconBtn
         active={align === "center"}
         onClick={() => updateField("textAlign", "center")}
         title="Align Center"
       >
-        <IconAlignCenter size={18} />
+        <FormatAlignCenterIcon fontSize="small" />
       </IconBtn>
       <IconBtn
         active={align === "right"}
         onClick={() => updateField("textAlign", "right")}
         title="Align Right"
       >
-        <IconAlignRight size={18} />
+        <FormatAlignRightIcon fontSize="small" />
       </IconBtn>
     </Box>
   );
@@ -133,18 +145,18 @@ const FontControls: React.FC<{
   formData: FreeTextAnnotation;
   updateField: Props["updateField"];
 }> = ({ formData, updateField }) => (
-  <Box style={{ display: "flex", gap: 8 }}>
-    <Select
+  <Box sx={{ display: "flex", gap: 1 }}>
+    <TextField
+      select
       label="Font Family"
-      size="sm"
-      data={FONT_OPTIONS}
+      size="small"
       value={formData.fontFamily ?? "monospace"}
-      onChange={(value) => updateField("fontFamily", value ?? "monospace")}
-      allowDeselect={false}
-      comboboxProps={{ withinPortal: true }}
-      style={{ flex: 7 }}
-    />
-    <Box style={{ flex: 3 }}>
+      onChange={(e) => updateField("fontFamily", e.target.value)}
+      sx={{ flex: 7 }}
+    >
+      {FONT_MENU_ITEMS}
+    </TextField>
+    <Box sx={{ flex: 3 }}>
       <InputField
         id="text-font-size"
         label="Font Size"
@@ -166,31 +178,34 @@ const StyleOptions: React.FC<{
 }> = ({ formData, updateField }) => {
   const isNoFill = isNoFillBackground(formData.backgroundColor);
   return (
-    <Box style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <Box style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
-        <Box style={{ flex: 1 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+        <Box sx={{ flex: 1 }}>
           <ColorField
             label="Text"
             value={formData.fontColor ?? "#FFFFFF"}
             onChange={(v) => updateField("fontColor", v)}
           />
         </Box>
-        <Box style={{ flex: 1 }}>
+        <Box sx={{ flex: 1 }}>
           <ColorField
             label="Fill"
             value={isNoFill ? DEFAULT_FILL_COLOR : (formData.backgroundColor ?? DEFAULT_FILL_COLOR)}
             onChange={(v) => updateField("backgroundColor", v)}
             disabled={isNoFill}
           />
-          <Checkbox
-            mt={8}
-            size="xs"
-            checked={isNoFill}
-            onChange={() =>
-              updateField("backgroundColor", isNoFill ? DEFAULT_FILL_COLOR : undefined)
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={isNoFill}
+                onChange={() =>
+                  updateField("backgroundColor", isNoFill ? DEFAULT_FILL_COLOR : undefined)
+                }
+              />
             }
             label="No fill"
-            styles={{ label: { fontSize: "var(--mantine-font-size-xs)" } }}
+            slotProps={{ typography: { variant: "caption" } }}
           />
         </Box>
       </Box>
@@ -210,23 +225,25 @@ const StyleOptions: React.FC<{
 
 // Main component
 export const FreeTextFormContent: React.FC<Props> = ({ formData, updateField }) => (
-  <Box style={{ display: "flex", flexDirection: "column" }}>
-    <PanelSection title="Text" withTopDivider={false} bodySx={{ padding: 16 }}>
+  <Box sx={{ display: "flex", flexDirection: "column" }}>
+    <PanelSection title="Text" withTopDivider={false} bodySx={{ p: 2 }}>
       <Toolbar formData={formData} updateField={updateField} />
-      <Textarea
+      <TextField
+        multiline
         minRows={2}
+        fullWidth
         value={formData.text}
-        onChange={(e) => updateField("text", e.currentTarget.value)}
+        onChange={(e) => updateField("text", e.target.value)}
         placeholder="Enter your text... (Markdown and fenced code blocks supported)"
-        styles={{ input: { resize: "vertical", overflow: "auto" } }}
+        sx={{ "& textarea": { resize: "vertical", overflow: "auto" } }}
       />
     </PanelSection>
 
-    <PanelSection title="Font" bodySx={{ padding: 16 }}>
+    <PanelSection title="Font" bodySx={{ p: 2 }}>
       <FontControls formData={formData} updateField={updateField} />
     </PanelSection>
 
-    <PanelSection title="Style" bodySx={{ padding: 16 }}>
+    <PanelSection title="Style" bodySx={{ p: 2 }}>
       <StyleOptions formData={formData} updateField={updateField} />
     </PanelSection>
   </Box>

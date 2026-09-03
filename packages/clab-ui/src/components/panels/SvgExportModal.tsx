@@ -2,25 +2,29 @@
 // SVG export dialog.
 import React, { useState, useCallback, useMemo } from "react";
 import type { Edge, ReactFlowInstance } from "@xyflow/react";
-import { IconBulb, IconDownload, IconSettings, IconSitemap } from "@tabler/icons-react";
-import {
-  Alert,
-  Box,
-  Button,
-  Checkbox,
-  Divider,
-  Group,
-  Loader,
-  Modal,
-  NumberInput,
-  Paper,
-  Radio,
-  Select,
-  Stack,
-  Tabs,
-  Text,
-  TextInput
-} from "@mantine/core";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import DownloadIcon from "@mui/icons-material/Download";
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import SettingsIcon from "@mui/icons-material/Settings";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import InputAdornment from "@mui/material/InputAdornment";
+import MenuItem from "@mui/material/MenuItem";
+import Paper from "@mui/material/Paper";
+import Radio from "@mui/material/Radio";
+import RadioGroup from "@mui/material/RadioGroup";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 
 import type {
   FreeTextAnnotation,
@@ -42,6 +46,7 @@ import {
 } from "../../utils/telemetryInterfaceLabels";
 import { log } from "../../utils/logger";
 import { ColorField, PREVIEW_GRID_BG_SX } from "../ui/form";
+import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
 
 import {
   applyPadding,
@@ -726,388 +731,462 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
   return (
     <>
-      <Modal
-        opened={isOpen}
+      <Dialog
+        open={isOpen}
         onClose={onClose}
-        title="Export SVG"
-        size="lg"
-        centered
+        maxWidth="sm"
+        fullWidth
         data-testid="svg-export-modal"
-        styles={{ body: { padding: 0 } }}
       >
-        <Box style={{ padding: 16 }}>
-          <TextInput
-            label="Filename"
-            value={filename}
-            onChange={(e) => setFilename(e.currentTarget.value)}
-            placeholder={defaultBaseName}
-            data-testid="svg-export-filename"
-            rightSection={
-              <Text size="xs" c="dimmed">
-                .svg
-              </Text>
-            }
-            rightSectionWidth={40}
-          />
-        </Box>
-
-        <Divider />
-        <Box style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 8, paddingBottom: 8 }}>
-          <Text size="sm" fw={600}>
-            Quality & Size
-          </Text>
-        </Box>
-        <Divider />
-        <Box style={{ padding: 16 }}>
-          <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <NumberInput
-              label="Zoom"
-              value={borderZoom}
-              onChange={(v) =>
-                setBorderZoom(
-                  Math.max(10, Math.min(300, typeof v === "number" ? v : parseFloat(v) || 0))
-                )
-              }
-              min={10}
-              max={300}
-              step={1}
-              suffix="%"
-            />
-            <NumberInput
-              label="Padding"
-              value={borderPadding}
-              onChange={(v) =>
-                setBorderPadding(Math.max(0, typeof v === "number" ? v : parseFloat(v) || 0))
-              }
-              min={0}
-              max={500}
-              step={1}
-              suffix="px"
-            />
-          </Box>
-        </Box>
-
-        <Divider />
-        <Box style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 8, paddingBottom: 8 }}>
-          <Text size="sm" fw={600}>
-            Background
-          </Text>
-        </Box>
-        <Divider />
-        <Box
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            paddingLeft: 16,
-            paddingRight: 16,
-            paddingTop: 8,
-            paddingBottom: 8
-          }}
-        >
-          <Radio.Group
-            value={backgroundOption}
-            onChange={(v) => setBackgroundOption(parseBackgroundOption(v))}
-          >
-            <Stack gap="xs">
-              <Radio value="transparent" label="Transparent" size="sm" />
-              <Radio value="custom" label="Custom" size="sm" />
-            </Stack>
-          </Radio.Group>
-          {backgroundOption === "custom" && (
-            <Box style={{ paddingLeft: 32, paddingTop: 8 }}>
-              <ColorField
-                label="Color"
-                value={customBackgroundColor}
-                onChange={setCustomBackgroundColor}
-              />
-            </Box>
-          )}
-        </Box>
-
-        <Divider />
-        <Box style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 8, paddingBottom: 8 }}>
-          <Text size="sm" fw={600}>
-            Include
-          </Text>
-        </Box>
-        <Divider />
-        <Box
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            paddingLeft: 16,
-            paddingRight: 16,
-            paddingTop: 8,
-            paddingBottom: 8
-          }}
-        >
-          <Checkbox
-            size="sm"
-            checked={includeAnnotations}
-            onChange={(e) => setIncludeAnnotations(e.currentTarget.checked)}
-            label="Annotations"
-          />
-          <Checkbox
-            size="sm"
-            checked={includeEdgeLabels}
-            onChange={(e) => setIncludeEdgeLabels(e.currentTarget.checked)}
-            label="Edge labels"
-          />
-          <Box
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8
-            }}
-          >
-            <Checkbox
-              size="sm"
-              checked={exportGrafanaBundle}
-              onChange={(e) => setExportGrafanaBundle(e.currentTarget.checked)}
-              label="Grafana bundle"
-              data-testid="svg-export-grafana-bundle"
-            />
-            <Button
-              size="xs"
-              variant="default"
-              leftSection={<IconSettings size={20} />}
-              disabled={!exportGrafanaBundle}
-              onClick={() => setIsGrafanaSettingsOpen(true)}
-              data-testid="svg-export-grafana-advanced-btn"
-            >
-              Advanced Grafana Settings
-            </Button>
-          </Box>
-        </Box>
-
-        <Divider />
-        <Box style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 8, paddingBottom: 8 }}>
-          <Text size="sm" fw={600}>
-            Preview
-          </Text>
-        </Box>
-        <Divider />
-        <Box style={{ padding: 16 }}>
-          <Box
-            style={{
-              position: "relative",
-              padding: 16,
-              borderRadius: 4,
-              overflow: "hidden",
-              border: "1px solid var(--mantine-color-default-border)"
-            }}
-          >
-            <Box
-              style={{
-                position: "absolute",
-                inset: 0,
-                opacity: 0.3,
-                ...PREVIEW_GRID_BG_SX
+        <DialogTitleWithClose title="Export SVG" onClose={onClose} />
+        <DialogContent dividers sx={{ p: 0 }}>
+          <Box sx={{ p: 2 }}>
+            <TextField
+              label="Filename"
+              size="small"
+              fullWidth
+              value={filename}
+              onChange={(e) => setFilename(e.target.value)}
+              placeholder={defaultBaseName}
+              data-testid="svg-export-filename"
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Typography variant="caption" color="text.secondary">
+                        .svg
+                      </Typography>
+                    </InputAdornment>
+                  )
+                }
               }}
             />
+          </Box>
+
+          <Divider />
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="subtitle2">Quality & Size</Typography>
+          </Box>
+          <Divider />
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+              <TextField
+                label="Zoom"
+                type="number"
+                size="small"
+                value={borderZoom}
+                onChange={(e) =>
+                  setBorderZoom(Math.max(10, Math.min(300, parseFloat(e.target.value) || 0)))
+                }
+                slotProps={{
+                  htmlInput: { min: 10, max: 300, step: 1 },
+                  input: {
+                    endAdornment: <InputAdornment position="end">%</InputAdornment>
+                  }
+                }}
+              />
+              <TextField
+                label="Padding"
+                type="number"
+                size="small"
+                value={borderPadding}
+                onChange={(e) => setBorderPadding(Math.max(0, parseFloat(e.target.value) || 0))}
+                slotProps={{
+                  htmlInput: { min: 0, max: 500, step: 1 },
+                  input: {
+                    endAdornment: <InputAdornment position="end">px</InputAdornment>
+                  }
+                }}
+              />
+            </Box>
+          </Box>
+
+          <Divider />
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="subtitle2">Background</Typography>
+          </Box>
+          <Divider />
+          <Box sx={{ display: "flex", flexDirection: "column", px: 2, py: 1 }}>
+            <RadioGroup
+              value={backgroundOption}
+              onChange={(e) => setBackgroundOption(parseBackgroundOption(e.target.value))}
+            >
+              <FormControlLabel
+                value="transparent"
+                control={<Radio size="small" />}
+                label="Transparent"
+              />
+              <FormControlLabel value="custom" control={<Radio size="small" />} label="Custom" />
+            </RadioGroup>
+            {backgroundOption === "custom" && (
+              <Box sx={{ pl: 4, pt: 1 }}>
+                <ColorField
+                  label="Color"
+                  value={customBackgroundColor}
+                  onChange={setCustomBackgroundColor}
+                />
+              </Box>
+            )}
+          </Box>
+
+          <Divider />
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="subtitle2">Include</Typography>
+          </Box>
+          <Divider />
+          <Box sx={{ display: "flex", flexDirection: "column", px: 2, py: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={includeAnnotations}
+                  onChange={(e) => setIncludeAnnotations(e.target.checked)}
+                />
+              }
+              label="Annotations"
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  size="small"
+                  checked={includeEdgeLabels}
+                  onChange={(e) => setIncludeEdgeLabels(e.target.checked)}
+                />
+              }
+              label="Edge labels"
+            />
             <Box
-              style={{
-                position: "relative",
-                zIndex: 10,
+              sx={{
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center"
+                justifyContent: "space-between",
+                gap: 1
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={exportGrafanaBundle}
+                    onChange={(e) => setExportGrafanaBundle(e.target.checked)}
+                  />
+                }
+                label="Grafana bundle"
+                data-testid="svg-export-grafana-bundle"
+              />
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<SettingsIcon />}
+                disabled={!exportGrafanaBundle}
+                onClick={() => setIsGrafanaSettingsOpen(true)}
+                data-testid="svg-export-grafana-advanced-btn"
+              >
+                Advanced Grafana Settings
+              </Button>
+            </Box>
+          </Box>
+
+          <Divider />
+          <Box sx={{ px: 2, py: 1 }}>
+            <Typography variant="subtitle2">Preview</Typography>
+          </Box>
+          <Divider />
+          <Box sx={{ p: 2 }}>
+            <Box
+              sx={{
+                position: "relative",
+                p: 2,
+                borderRadius: 1,
+                overflow: "hidden",
+                border: 1,
+                borderColor: "divider"
               }}
             >
               <Box
-                style={{
-                  width: 96,
-                  height: 64,
-                  borderRadius: 4,
-                  boxShadow: "var(--mantine-shadow-md)",
-                  border: "1px solid var(--mantine-color-default-border)",
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  opacity: 0.3,
+                  ...PREVIEW_GRID_BG_SX
+                }}
+              />
+              <Box
+                sx={{
+                  position: "relative",
+                  zIndex: 10,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  transition: "all 200ms",
-                  ...previewBackgroundSx,
-                  padding: `${Math.min(borderPadding / 20, 8)}px`,
-                  transform: `scale(${0.8 + borderZoom / 500})`
+                  justifyContent: "center"
                 }}
               >
-                <IconSitemap
-                  size={24}
-                  style={{ color: "var(--mantine-primary-color-filled)", opacity: 0.8 }}
-                />
+                <Box
+                  sx={{
+                    width: 96,
+                    height: 64,
+                    borderRadius: 1,
+                    boxShadow: 3,
+                    border: 1,
+                    borderColor: "divider",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "all 200ms",
+                    ...previewBackgroundSx,
+                    padding: `${Math.min(borderPadding / 20, 8)}px`,
+                    transform: `scale(${0.8 + borderZoom / 500})`
+                  }}
+                >
+                  <AccountTreeIcon sx={{ fontSize: 24, color: "primary.main", opacity: 0.8 }} />
+                </Box>
               </Box>
             </Box>
           </Box>
-        </Box>
 
-        <Divider />
-        <Box style={{ padding: 16 }}>
-          <Paper withBorder p="sm">
-            <Box style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <IconBulb size={14} style={{ color: "var(--mantine-color-yellow-6)" }} />
-              <Text size="xs" c="dimmed">
-                Tips
-              </Text>
-            </Box>
-            <Text size="xs" c="dimmed" component="ul" style={{ paddingLeft: 16, margin: 0 }}>
-              <li>Higher zoom = better quality, larger file</li>
-              <li>SVG files scale without quality loss</li>
-              <li>Transparent background for layering</li>
-            </Text>
-          </Paper>
-        </Box>
-
-        {exportStatus && (
-          <Box style={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}>
-            <Alert color={exportStatus.type === "success" ? "green" : "red"} variant="outline">
-              {exportStatus.message}
-            </Alert>
+          <Divider />
+          <Box sx={{ p: 2 }}>
+            <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                <LightbulbIcon sx={{ fontSize: 14, color: "warning.main" }} />
+                <Typography variant="caption" color="text.secondary">
+                  Tips
+                </Typography>
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                component="ul"
+                sx={{ pl: 2, m: 0, "& li": { mb: 0.25 } }}
+              >
+                <li>Higher zoom = better quality, larger file</li>
+                <li>SVG files scale without quality loss</li>
+                <li>Transparent background for layering</li>
+              </Typography>
+            </Paper>
           </Box>
-        )}
 
-        <Box style={{ padding: 16 }}>
+          {exportStatus && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Alert
+                severity={exportStatus.type === "success" ? "success" : "error"}
+                variant="outlined"
+                sx={{
+                  color: "text.primary",
+                  "& .MuiAlert-message": {
+                    color: "text.primary"
+                  }
+                }}
+              >
+                {exportStatus.message}
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
           <Button
             fullWidth
-            variant="subtle"
             onClick={() => void handleExport()}
             disabled={isExporting || !isExportAvailable}
-            leftSection={isExporting ? <Loader size={16} /> : <IconDownload size={20} />}
+            startIcon={
+              isExporting ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />
+            }
             data-testid="svg-export-btn"
           >
             {exportButtonLabel}
           </Button>
-        </Box>
-      </Modal>
+        </DialogActions>
+      </Dialog>
 
-      <Modal
-        opened={isGrafanaSettingsOpen}
+      <Dialog
+        open={isGrafanaSettingsOpen}
         onClose={() => setIsGrafanaSettingsOpen(false)}
-        title="Advanced Grafana Settings"
-        size="lg"
-        centered
+        maxWidth="sm"
+        fullWidth
         data-testid="svg-export-grafana-settings-modal"
       >
-        <Stack gap="md">
+        <DialogTitleWithClose
+          title="Advanced Grafana Settings"
+          onClose={() => setIsGrafanaSettingsOpen(false)}
+        />
+        <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Tabs
             value={grafanaSettingsTab}
-            onChange={(value) => setGrafanaSettingsTab(parseGrafanaSettingsTab(value))}
+            onChange={(_event, value) => setGrafanaSettingsTab(parseGrafanaSettingsTab(value))}
+            variant="fullWidth"
           >
-            <Tabs.List grow>
-              <Tabs.Tab value="general">General</Tabs.Tab>
-              <Tabs.Tab value="interface-names">Interface Names</Tabs.Tab>
-            </Tabs.List>
+            <Tab label="General" value="general" />
+            <Tab label="Interface Names" value="interface-names" />
           </Tabs>
 
           {grafanaSettingsTab === "general" && (
             <>
-              <Text size="sm" c="dimmed">
+              <Typography variant="body2" color="text.secondary">
                 Configure thresholds and topology sizing used in the exported Grafana panel.
-              </Text>
-              <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <NumberInput
+              </Typography>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 1.5
+                }}
+              >
+                <TextField
                   label="Node size"
+                  type="number"
+                  size="small"
                   value={grafanaNodeSizePx}
-                  onChange={(v) =>
+                  onChange={(e) =>
                     setGrafanaNodeSizePx(
-                      parseBoundedNumber(String(v), 12, 240, DEFAULT_GRAFANA_NODE_SIZE_PX)
+                      parseBoundedNumber(e.target.value, 12, 240, DEFAULT_GRAFANA_NODE_SIZE_PX)
                     )
                   }
-                  min={12}
-                  max={240}
-                  step={1}
-                  suffix="px"
+                  slotProps={{
+                    htmlInput: { min: 12, max: 240, step: 1 },
+                    input: {
+                      endAdornment: <InputAdornment position="end">px</InputAdornment>
+                    }
+                  }}
                 />
-                <NumberInput
+                <TextField
                   label="Interface size"
+                  type="number"
+                  size="small"
                   value={grafanaInterfaceSizePercent}
-                  onChange={(v) =>
+                  onChange={(e) =>
                     setGrafanaInterfaceSizePercent(
                       parseBoundedNumber(
-                        String(v),
+                        e.target.value,
                         40,
                         400,
                         DEFAULT_GRAFANA_INTERFACE_SIZE_PERCENT
                       )
                     )
                   }
-                  min={40}
-                  max={400}
-                  step={5}
-                  suffix="%"
+                  slotProps={{
+                    htmlInput: { min: 40, max: 400, step: 5 },
+                    input: {
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>
+                    }
+                  }}
                 />
               </Box>
-              <Text size="xs" c="dimmed">
+              <Typography variant="caption" color="text.secondary">
                 Use larger values for dense topologies with many interfaces.
-              </Text>
+              </Typography>
               <Divider />
-              <Select
+              <TextField
+                select
                 label="Traffic threshold unit"
+                size="small"
                 value={trafficThresholdUnit}
-                onChange={(v) => setTrafficThresholdUnit(parseTrafficThresholdUnit(v ?? ""))}
-                allowDeselect={false}
-                data={[
-                  { value: "kbit", label: "kbit/s" },
-                  { value: "mbit", label: "Mbit/s" },
-                  { value: "gbit", label: "Gbit/s" }
-                ]}
-              />
-              <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <NumberInput
+                onChange={(e) => setTrafficThresholdUnit(parseTrafficThresholdUnit(e.target.value))}
+              >
+                <MenuItem value="kbit">kbit/s</MenuItem>
+                <MenuItem value="mbit">Mbit/s</MenuItem>
+                <MenuItem value="gbit">Gbit/s</MenuItem>
+              </TextField>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 1.5
+                }}
+              >
+                <TextField
                   label="Green threshold"
+                  type="number"
+                  size="small"
                   value={formatThresholdForUnit(trafficThresholds.green, trafficThresholdUnit)}
-                  onChange={(v) => updateTrafficThreshold("green", String(v))}
-                  min={0}
-                  step={getThresholdUnitStep(trafficThresholdUnit)}
+                  onChange={(e) => updateTrafficThreshold("green", e.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      step: getThresholdUnitStep(trafficThresholdUnit)
+                    }
+                  }}
                 />
-                <NumberInput
+                <TextField
                   label="Yellow threshold"
+                  type="number"
+                  size="small"
                   value={formatThresholdForUnit(trafficThresholds.yellow, trafficThresholdUnit)}
-                  onChange={(v) => updateTrafficThreshold("yellow", String(v))}
-                  min={0}
-                  step={getThresholdUnitStep(trafficThresholdUnit)}
+                  onChange={(e) => updateTrafficThreshold("yellow", e.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      step: getThresholdUnitStep(trafficThresholdUnit)
+                    }
+                  }}
                 />
-                <NumberInput
+                <TextField
                   label="Orange threshold"
+                  type="number"
+                  size="small"
                   value={formatThresholdForUnit(trafficThresholds.orange, trafficThresholdUnit)}
-                  onChange={(v) => updateTrafficThreshold("orange", String(v))}
-                  min={0}
-                  step={getThresholdUnitStep(trafficThresholdUnit)}
+                  onChange={(e) => updateTrafficThreshold("orange", e.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      step: getThresholdUnitStep(trafficThresholdUnit)
+                    }
+                  }}
                 />
-                <NumberInput
+                <TextField
                   label="Red threshold"
+                  type="number"
+                  size="small"
                   value={formatThresholdForUnit(trafficThresholds.red, trafficThresholdUnit)}
-                  onChange={(v) => updateTrafficThreshold("red", String(v))}
-                  min={0}
-                  step={getThresholdUnitStep(trafficThresholdUnit)}
+                  onChange={(e) => updateTrafficThreshold("red", e.target.value)}
+                  slotProps={{
+                    htmlInput: {
+                      min: 0,
+                      step: getThresholdUnitStep(trafficThresholdUnit)
+                    }
+                  }}
                 />
               </Box>
-              <Text size="xs" c="dimmed">
+              <Typography variant="caption" color="text.secondary">
                 Values must be strictly ascending: green &lt; yellow &lt; orange &lt; red (within
                 selected unit).
-              </Text>
-              <Checkbox
-                size="sm"
-                checked={excludeNodesWithoutLinks}
-                onChange={(e) => setExcludeNodesWithoutLinks(e.currentTarget.checked)}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={excludeNodesWithoutLinks}
+                    onChange={(e) => setExcludeNodesWithoutLinks(e.target.checked)}
+                  />
+                }
                 label="Exclude nodes without any links"
               />
-              <Checkbox
-                size="sm"
-                checked={includeGrafanaLegend}
-                onChange={(e) => setIncludeGrafanaLegend(e.currentTarget.checked)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={includeGrafanaLegend}
+                    onChange={(e) => setIncludeGrafanaLegend(e.target.checked)}
+                  />
+                }
                 label="Add traffic legend (top-left)"
               />
-              <Checkbox
-                size="sm"
-                checked={trafficRatesOnHoverOnly}
-                onChange={(e) => setTrafficRatesOnHoverOnly(e.currentTarget.checked)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={trafficRatesOnHoverOnly}
+                    onChange={(e) => setTrafficRatesOnHoverOnly(e.target.checked)}
+                  />
+                }
                 label="Show traffic rates on hover only"
               />
-              <Checkbox
-                size="sm"
-                checked={includeHideRatesLegendToggle}
-                onChange={(e) => setIncludeHideRatesLegendToggle(e.currentTarget.checked)}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={includeHideRatesLegendToggle}
+                    onChange={(e) => setIncludeHideRatesLegendToggle(e.target.checked)}
+                  />
+                }
                 label='Add "hide-rates" legend toggle for rate labels'
               />
             </>
@@ -1115,51 +1194,56 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
           {grafanaSettingsTab === "interface-names" && (
             <>
-              <Text size="sm" c="dimmed">
+              <Typography variant="body2" color="text.secondary">
                 Filter links and choose which interface segment should be shown in endpoint bubbles.
-              </Text>
-              <Select
+              </Typography>
+              <TextField
+                select
+                size="small"
                 label="Global override (all interfaces)"
                 value={globalInterfaceOverrideSelection}
-                onChange={(v) => setGlobalInterfaceOverrideSelection(v ?? INTERFACE_SELECT_AUTO)}
-                allowDeselect={false}
-                data={[
-                  { value: INTERFACE_SELECT_AUTO, label: "Auto" },
-                  { value: INTERFACE_SELECT_FULL, label: "Full interface name" },
-                  ...Array.from({ length: maxInterfacePartCount }, (_, index) => index + 1).map(
-                    (partIndex) => ({
-                      value: `${GLOBAL_INTERFACE_PART_INDEX_PREFIX}${partIndex}`,
-                      label: `Part ${partIndex}`
-                    })
+                onChange={(e) => setGlobalInterfaceOverrideSelection(e.target.value)}
+              >
+                <MenuItem value={INTERFACE_SELECT_AUTO}>Auto</MenuItem>
+                <MenuItem value={INTERFACE_SELECT_FULL}>Full interface name</MenuItem>
+                {Array.from({ length: maxInterfacePartCount }, (_, index) => index + 1).map(
+                  (partIndex) => (
+                    <MenuItem
+                      key={`global-interface-part-${partIndex}`}
+                      value={`${GLOBAL_INTERFACE_PART_INDEX_PREFIX}${partIndex}`}
+                    >
+                      Part {partIndex}
+                    </MenuItem>
                   )
-                ]}
-              />
-              <Text size="xs" c="dimmed">
+                )}
+              </TextField>
+              <Typography variant="caption" color="text.secondary">
                 Default for every interface; per-link overrides below take precedence.
-              </Text>
-              <TextInput
+              </Typography>
+              <TextField
+                size="small"
                 label="Filter links"
                 placeholder="Search node or interface name"
                 value={interfaceLinkFilter}
-                onChange={(e) => setInterfaceLinkFilter(e.currentTarget.value)}
+                onChange={(e) => setInterfaceLinkFilter(e.target.value)}
               />
-              <Text size="xs" c="dimmed">
+              <Typography variant="caption" color="text.secondary">
                 {filteredInterfaceRows.length} of {interfaceRows.length} links shown
-              </Text>
+              </Typography>
               <Box
-                style={{
+                sx={{
                   maxHeight: 360,
                   overflowY: "auto",
                   display: "flex",
                   flexDirection: "column",
-                  gap: 8
+                  gap: 1
                 }}
               >
                 {filteredInterfaceRows.length === 0 ? (
-                  <Paper withBorder p="sm">
-                    <Text size="xs" c="dimmed">
+                  <Paper variant="outlined" sx={{ p: 1.5 }}>
+                    <Typography variant="caption" color="text.secondary">
                       No links match the current filter.
-                    </Text>
+                    </Typography>
                   </Paper>
                 ) : (
                   filteredInterfaceRows.map((row) => {
@@ -1167,56 +1251,68 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                     const targetParts = splitInterfaceParts(row.targetEndpoint);
 
                     return (
-                      <Paper key={row.edgeId} withBorder p="sm">
-                        <Text size="xs" c="dimmed">
+                      <Paper key={row.edgeId} variant="outlined" sx={{ p: 1.5 }}>
+                        <Typography variant="caption" color="text.secondary">
                           {row.source} ↔ {row.target}
-                        </Text>
+                        </Typography>
                         <Box
-                          style={{
-                            marginTop: 8,
+                          sx={{
+                            mt: 1,
                             display: "grid",
                             gridTemplateColumns: "1fr 1fr",
-                            gap: 8
+                            gap: 1
                           }}
                         >
-                          <Select
+                          <TextField
+                            select
+                            size="small"
                             label={row.sourceEndpoint}
                             value={getInterfaceSelectionValue(
                               row.sourceEndpoint,
                               interfaceLabelOverrides
                             )}
-                            onChange={(v) =>
-                              updateInterfaceOverride(row.sourceEndpoint, v ?? INTERFACE_SELECT_AUTO)
+                            onChange={(e) =>
+                              updateInterfaceOverride(row.sourceEndpoint, e.target.value)
                             }
-                            allowDeselect={false}
-                            data={[
-                              { value: INTERFACE_SELECT_AUTO, label: "Auto (use global)" },
-                              { value: INTERFACE_SELECT_FULL, label: `Full: ${row.sourceEndpoint}` },
-                              ...sourceParts.map((part, idx) => ({
-                                value: `${INTERFACE_SELECT_TOKEN_PREFIX}${part}`,
-                                label: `Part ${idx + 1}: ${part}`
-                              }))
-                            ]}
-                          />
-                          <Select
+                          >
+                            <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
+                            <MenuItem value={INTERFACE_SELECT_FULL}>
+                              Full: {row.sourceEndpoint}
+                            </MenuItem>
+                            {sourceParts.map((part, idx) => (
+                              <MenuItem
+                                key={`${row.edgeId}-source-${idx}-${part}`}
+                                value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
+                              >
+                                Part {idx + 1}: {part}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                          <TextField
+                            select
+                            size="small"
                             label={row.targetEndpoint}
                             value={getInterfaceSelectionValue(
                               row.targetEndpoint,
                               interfaceLabelOverrides
                             )}
-                            onChange={(v) =>
-                              updateInterfaceOverride(row.targetEndpoint, v ?? INTERFACE_SELECT_AUTO)
+                            onChange={(e) =>
+                              updateInterfaceOverride(row.targetEndpoint, e.target.value)
                             }
-                            allowDeselect={false}
-                            data={[
-                              { value: INTERFACE_SELECT_AUTO, label: "Auto (use global)" },
-                              { value: INTERFACE_SELECT_FULL, label: `Full: ${row.targetEndpoint}` },
-                              ...targetParts.map((part, idx) => ({
-                                value: `${INTERFACE_SELECT_TOKEN_PREFIX}${part}`,
-                                label: `Part ${idx + 1}: ${part}`
-                              }))
-                            ]}
-                          />
+                          >
+                            <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
+                            <MenuItem value={INTERFACE_SELECT_FULL}>
+                              Full: {row.targetEndpoint}
+                            </MenuItem>
+                            {targetParts.map((part, idx) => (
+                              <MenuItem
+                                key={`${row.edgeId}-target-${idx}-${part}`}
+                                value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
+                              >
+                                Part {idx + 1}: {part}
+                              </MenuItem>
+                            ))}
+                          </TextField>
                         </Box>
                       </Paper>
                     );
@@ -1225,13 +1321,11 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
               </Box>
             </>
           )}
-        </Stack>
-        <Group justify="flex-end" mt="md">
-          <Button variant="subtle" onClick={() => setIsGrafanaSettingsOpen(false)}>
-            Done
-          </Button>
-        </Group>
-      </Modal>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setIsGrafanaSettingsOpen(false)}>Done</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

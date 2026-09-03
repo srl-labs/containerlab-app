@@ -669,12 +669,12 @@ export function useGeoMapLayout({
         mapRef.current = map;
         setInitError(null);
       } catch (err) {
-        let message = String(err);
-        if (err instanceof Error) {
-          message = err.message;
-        } else if (isRecord(err) && typeof err.message === "string") {
-          message = err.message;
-        }
+        const message =
+          err instanceof Error
+            ? err.message
+            : isRecord(err) && typeof err.message === "string"
+              ? err.message
+              : String(err);
         log.error(`[GeoMap] Failed to initialize map: ${message}`);
         if (!cancelled) {
           setInitError(message);

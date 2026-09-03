@@ -1,6 +1,6 @@
 // Runtime tab for node editor.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import {
   InputField,
@@ -27,7 +27,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Container Settings" withTopDivider={false}>
         <InputField
           id="node-user"

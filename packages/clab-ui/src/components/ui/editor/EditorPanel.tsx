@@ -1,6 +1,6 @@
 // Shared editor panel shell (tabbed or children mode).
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { useFooterControlsRef } from "../../../hooks/ui/useFooterControlsRef";
 import type { FooterControlsRef } from "../../../hooks/ui/useFooterControlsRef";
@@ -84,9 +84,9 @@ function renderTabbedMode<TProps extends object>(
   const ActiveComponent = activeConfig?.component;
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <TabNavigation tabs={tabDefs} activeTab={activeTab} onTabChange={onTabChange} />
-      <Box style={{ flex: 1, overflow: "auto" }}>
+      <Box sx={{ flex: 1, overflow: "auto" }}>
         <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
           {ActiveComponent && tabProps !== undefined ? <ActiveComponent {...tabProps} /> : null}
         </fieldset>
@@ -97,8 +97,8 @@ function renderTabbedMode<TProps extends object>(
 
 function renderChildrenMode(children: React.ReactNode, readOnly: boolean): React.ReactElement {
   return (
-    <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <Box style={{ flex: 1, overflow: "auto" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <Box sx={{ flex: 1, overflow: "auto" }}>
         <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
           {children}
         </fieldset>

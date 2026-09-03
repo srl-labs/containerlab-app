@@ -2,7 +2,8 @@
  * KeyValueList - Dynamic key-value pairs
  */
 import React, { useRef } from "react";
-import { Box, TextInput } from "@mantine/core";
+import Box from "@mui/material/Box";
+import TextField from "@mui/material/TextField";
 
 import { AddItemButton, DeleteItemButton } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
@@ -67,7 +68,7 @@ export const KeyValueList: React.FC<KeyValueListProps> = ({
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {entries.map(([key, value], index) => (
         <KeyValueItem
           key={rowIds[index]}
@@ -112,20 +113,22 @@ const KeyValueItem: React.FC<KeyValueItemProps> = ({
   valuePlaceholder,
   disabled
 }) => (
-  <Box style={{ display: "flex", gap: 8, alignItems: "center" }}>
-    <TextInput
+  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+    <TextField
       value={itemKey}
-      onChange={(e) => onKeyChange(e.currentTarget.value)}
+      onChange={(e) => onKeyChange(e.target.value)}
       label={keyPlaceholder}
       disabled={disabled}
-      style={{ width: "33%" }}
+      size="small"
+      sx={{ width: "33%" }}
     />
-    <TextInput
+    <TextField
       value={value}
-      onChange={(e) => onValueChange(e.currentTarget.value)}
+      onChange={(e) => onValueChange(e.target.value)}
       label={valuePlaceholder}
       disabled={disabled}
-      style={{ flex: 1 }}
+      size="small"
+      sx={{ flex: 1 }}
     />
     <DeleteItemButton onRemove={onRemove} disabled={disabled} />
   </Box>

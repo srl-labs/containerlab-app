@@ -1,6 +1,6 @@
 // Basic settings tab for lab settings.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { InputField, SelectField, type SelectOption } from "../../ui/form";
 
@@ -19,7 +19,7 @@ const PREFIX_TYPE_OPTIONS: SelectOption[] = [
 ];
 
 export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode }) => (
-  <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
     {/* Lab Name */}
     <InputField
       id="lab-basic-name"

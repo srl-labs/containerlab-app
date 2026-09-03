@@ -1,6 +1,13 @@
 // Confirmation dialog for bulk link creation.
 import React from "react";
-import { Box, Button, Group, Modal, Text } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+
+import { DialogTitleWithClose } from "../../ui/dialog/DialogChrome";
 
 interface ConfirmBulkLinksModalProps {
   isOpen: boolean;
@@ -19,28 +26,37 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
   onCancel,
   onConfirm
 }) => (
-  <Modal opened={isOpen} onClose={onCancel} title="Bulk Link Creation" size="md" centered>
-    <Box style={{ padding: 8, borderRadius: 4, border: "1px solid" }}>
-      <Text size="sm">
-        Create <strong>{count}</strong> new link{count === 1 ? "" : "s"}?
-      </Text>
-      <Box style={{ marginTop: 4 }}>
-        <Text size="xs" c="dimmed">
-          Source: <code className="select-text">{sourcePattern}</code>
-        </Text>
-        <br />
-        <Text size="xs" c="dimmed">
-          Target: <code className="select-text">{targetPattern}</code>
-        </Text>
+  <Dialog open={isOpen} onClose={onCancel} maxWidth="xs" fullWidth>
+    <DialogTitleWithClose title="Bulk Link Creation" onClose={onCancel} />
+    <DialogContent dividers>
+      <Box
+        sx={{
+          p: 1,
+          borderRadius: 0.5,
+          border: 1
+        }}
+      >
+        <Typography variant="body2">
+          Create <strong>{count}</strong> new link{count === 1 ? "" : "s"}?
+        </Typography>
+        <Box sx={{ mt: 0.5 }}>
+          <Typography variant="caption" color="text.secondary">
+            Source: <code className="select-text">{sourcePattern}</code>
+          </Typography>
+          <br />
+          <Typography variant="caption" color="text.secondary">
+            Target: <code className="select-text">{targetPattern}</code>
+          </Typography>
+        </Box>
       </Box>
-    </Box>
-    <Group justify="flex-end" mt="md">
-      <Button size="xs" variant="subtle" onClick={onCancel}>
+    </DialogContent>
+    <DialogActions sx={{ px: 2, py: 1.5 }}>
+      <Button size="small" onClick={onCancel}>
         Cancel
       </Button>
-      <Button size="xs" variant="subtle" onClick={onConfirm}>
+      <Button size="small" onClick={onConfirm}>
         Create Links
       </Button>
-    </Group>
-  </Modal>
+    </DialogActions>
+  </Dialog>
 );

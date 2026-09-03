@@ -1,7 +1,12 @@
 // Management network settings tab.
 import React from "react";
-import { IconPlus } from "@tabler/icons-react";
-import { Box, Button, Checkbox, Divider, Text } from "@mantine/core";
+import AddIcon from "@mui/icons-material/Add";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Typography from "@mui/material/Typography";
 
 import { InputField, KeyValueList, SelectField, type SelectOption } from "../../ui/form";
 
@@ -36,7 +41,7 @@ const IPV6_TYPE_OPTIONS: SelectOption[] = [
 
 /** IPv4 settings section */
 const Ipv4Section: React.FC<SectionProps> = ({ mgmt, setMgmt, isViewMode }) => (
-  <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
     <SelectField
       id="lab-mgmt-ipv4-type"
       label="IPv4 Subnet"
@@ -79,7 +84,7 @@ const Ipv4Section: React.FC<SectionProps> = ({ mgmt, setMgmt, isViewMode }) => (
 
 /** IPv6 settings section */
 const Ipv6Section: React.FC<SectionProps> = ({ mgmt, setMgmt, isViewMode }) => (
-  <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
     <SelectField
       id="lab-mgmt-ipv6-type"
       label="IPv6 Subnet"
@@ -134,8 +139,8 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
         {/* Network Name */}
         <InputField
           id="lab-mgmt-network-name"
@@ -173,11 +178,15 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         />
 
         {/* External Access */}
-        <Checkbox
-          checked={mgmt.externalAccess}
-          onChange={(e) => setMgmt.setExternalAccess(e.currentTarget.checked)}
-          disabled={isViewMode}
-          size="sm"
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={mgmt.externalAccess}
+              onChange={(e) => setMgmt.setExternalAccess(e.target.checked)}
+              disabled={isViewMode}
+              size="small"
+            />
+          }
           label="Enable External Access"
         />
       </Box>
@@ -185,30 +194,23 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
       {/* Bridge Driver Options */}
       <Divider />
       <Box
-        style={{
+        sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          paddingInline: 16,
-          paddingBlock: 8
+          px: 2,
+          py: 1
         }}
       >
-        <Text size="sm" fw={600}>
-          Bridge Driver Options
-        </Text>
+        <Typography variant="subtitle2">Bridge Driver Options</Typography>
         {!isViewMode && (
-          <Button
-            variant="subtle"
-            size="xs"
-            leftSection={<IconPlus size={20} />}
-            onClick={driverOpts.add}
-          >
+          <Button size="small" startIcon={<AddIcon />} onClick={driverOpts.add} sx={{ py: 0 }}>
             ADD
           </Button>
         )}
       </Box>
       <Divider />
-      <Box style={{ padding: 16 }}>
+      <Box sx={{ p: 2 }}>
         <KeyValueList
           items={driverRecord}
           onChange={handleDriverChange}

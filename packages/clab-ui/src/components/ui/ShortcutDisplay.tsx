@@ -3,7 +3,7 @@
  * Displays detected input events as floating labels
  */
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 interface ShortcutDisplayItem {
   id: number;
@@ -20,14 +20,14 @@ export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts }) =
   return (
     <Box
       className="shortcut-display"
-      style={{
+      sx={{
         position: "fixed",
         bottom: 16,
         left: 16,
         display: "flex",
         flexDirection: "column-reverse",
         alignItems: "flex-start",
-        gap: 4,
+        gap: 0.5,
         zIndex: 100000,
         pointerEvents: "none"
       }}
@@ -36,13 +36,12 @@ export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts }) =
         <Box
           key={shortcut.id}
           className="shortcut-display-item"
-          style={{
-            paddingLeft: 16,
-            paddingRight: 16,
-            paddingTop: 6,
-            paddingBottom: 6,
-            borderRadius: 8,
-            boxShadow: "var(--mantine-shadow-md)",
+          sx={{
+            px: 2,
+            py: 0.75,
+            borderRadius: 2,
+            boxShadow: 3,
+            fontFamily: "sans-serif",
             fontSize: "0.875rem",
             letterSpacing: "0.025em",
             animation: "shortcutFade 2s ease-in-out forwards"

@@ -211,19 +211,3 @@ export interface CustomPaletteTab {
   label: string;
   render: () => React.ReactNode;
 }
-
-/**
- * A settings section a host app injects into the unified Settings modal.
- * Sections sharing a `group` title are listed together under that heading,
- * after the built-in entries; an unknown group creates a new sidebar group.
- */
-export interface CustomSettingsSection {
-  /** Stable id; also the section key and the `settings-tab-<id>` test id. */
-  id: string;
-  /** Sidebar entry label. */
-  label: string;
-  /** Sidebar group heading. Defaults to "Extensions". */
-  group?: string;
-  /** Renders the section body in the modal's content area. */
-  render: () => React.ReactNode;
-}

@@ -1,8 +1,8 @@
 site_name: clab-ui Platform Guide
 site_description: Architecture, contracts, and operational reference for clab-ui, clab-api-server, containerlab-app, and vscode-containerlab
-site_url: https://github.com/srl-labs/containerlab-app/tree/main/packages/clab-ui
-repo_name: srl-labs/containerlab-app
-repo_url: https://github.com/srl-labs/containerlab-app
+site_url: https://github.com/srl-labs/clab-ui
+repo_name: srl-labs/clab-ui
+repo_url: https://github.com/srl-labs/clab-ui
 edit_uri: edit/main/docs/
 
 docs_dir: docs

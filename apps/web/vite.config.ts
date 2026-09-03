@@ -162,8 +162,6 @@ export default defineConfig(({ command }) => {
       dedupe: [
         "react",
         "react-dom",
-        "@mantine/core",
-        "@mantine/hooks",
         "@emotion/cache",
         "@emotion/react",
         "@emotion/styled",
@@ -178,8 +176,6 @@ export default defineConfig(({ command }) => {
       include: [
         "react",
         "react-dom",
-        "@mantine/core",
-        "@mantine/hooks",
         "@emotion/cache",
         "@emotion/react",
         "@emotion/styled",

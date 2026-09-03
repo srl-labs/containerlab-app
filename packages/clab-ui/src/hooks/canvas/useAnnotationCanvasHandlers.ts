@@ -5,7 +5,7 @@
 import type { RefObject } from "react";
 import type React from "react";
 import { useCallback, useEffect } from "react";
-import type { Node, OnNodeDrag, ReactFlowInstance } from "@xyflow/react";
+import type { Node, ReactFlowInstance } from "@xyflow/react";
 
 import type { AnnotationModeState, AnnotationHandlers } from "../../components/canvas/types";
 import {
@@ -26,8 +26,8 @@ interface UseAnnotationCanvasHandlersOptions {
   reactFlowInstanceRef: RefObject<ReactFlowInstance | null>;
   baseOnPaneClick: (event: React.MouseEvent) => void;
   baseOnNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
-  baseOnNodeDragStart: OnNodeDrag;
-  baseOnNodeDragStop: OnNodeDrag;
+  baseOnNodeDragStart: (event: React.MouseEvent, node: Node) => void;
+  baseOnNodeDragStop: (event: React.MouseEvent, node: Node) => void;
   /** Callback for shift+click node creation */
   onShiftClickCreate?: (position: { x: number; y: number }) => void;
 }
@@ -35,8 +35,8 @@ interface UseAnnotationCanvasHandlersOptions {
 interface UseAnnotationCanvasHandlersReturn {
   wrappedOnPaneClick: (event: React.MouseEvent) => void;
   wrappedOnNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
-  wrappedOnNodeDragStart: OnNodeDrag;
-  wrappedOnNodeDragStop: OnNodeDrag;
+  wrappedOnNodeDragStart: (event: React.MouseEvent, node: Node) => void;
+  wrappedOnNodeDragStop: (event: React.MouseEvent, node: Node) => void;
   isInAddMode: boolean;
   addModeMessage: string | null;
 }

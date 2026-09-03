@@ -1,7 +1,10 @@
 // Read-only text field with copy button.
 import React, { useCallback } from "react";
-import { ActionIcon, TextInput, Tooltip } from "@mantine/core";
-import { IconCopy } from "@tabler/icons-react";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 
 export interface ReadOnlyCopyFieldProps {
   label: string;
@@ -21,28 +24,32 @@ export const ReadOnlyCopyField: React.FC<ReadOnlyCopyFieldProps> = ({
   }, [value]);
 
   return (
-    <TextInput
+    <TextField
       label={label}
       value={value || "N/A"}
-      readOnly
-      styles={{
+      size="small"
+      fullWidth
+      slotProps={{
         input: {
-          userSelect: "none",
-          WebkitUserSelect: "none",
-          caretColor: "transparent",
-          cursor: "default",
-          ...(mono ? { fontFamily: "monospace" } : undefined)
+          readOnly: true,
+          endAdornment: value ? (
+            <InputAdornment position="end">
+              <Tooltip title="Copy" arrow>
+                <IconButton size="small" onClick={handleCopy} edge="end" tabIndex={-1}>
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </InputAdornment>
+          ) : undefined,
+          sx: {
+            userSelect: "none",
+            WebkitUserSelect: "none",
+            caretColor: "transparent",
+            cursor: "default",
+            ...(mono ? { fontFamily: "monospace" } : undefined)
+          }
         }
       }}
-      rightSection={
-        value ? (
-          <Tooltip label="Copy" withArrow>
-            <ActionIcon variant="subtle" color="gray" onClick={handleCopy} tabIndex={-1}>
-              <IconCopy size={18} />
-            </ActionIcon>
-          </Tooltip>
-        ) : undefined
-      }
     />
   );
 };

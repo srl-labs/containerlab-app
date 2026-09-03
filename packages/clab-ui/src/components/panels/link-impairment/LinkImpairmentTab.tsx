@@ -1,5 +1,5 @@
 import type React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { InputField, PanelSection } from "../../ui/form";
 
@@ -12,7 +12,7 @@ export interface LinkImpairmentTabProps {
 
 export const LinkImpairmentTab: React.FC<LinkImpairmentTabProps> = ({ data, onChange }) => {
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Impairment Settings" withTopDivider={false}>
         <InputField
           id="delay"

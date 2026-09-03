@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from "react";
 import { shallow } from "zustand/shallow";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { TrafficRateAnnotation } from "../../../../core/types/topology";
 import { useGenericFormState } from "../../../../hooks/editor";
@@ -386,9 +386,9 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
   const resolvedFields = resolveEditorResolvedFields(formData, themeDefaults, sizeConfig);
 
   return (
-    <Box style={{ flex: 1, overflow: "auto" }}>
+    <Box sx={{ flex: 1, overflow: "auto" }}>
       <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
-        <Box style={{ display: "flex", flexDirection: "column" }}>
+        <Box sx={{ display: "flex", flexDirection: "column" }}>
           <PanelSection title="Monitor" withTopDivider={false}>
             <>
               <SelectField
@@ -435,7 +435,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
           </PanelSection>
 
           <PanelSection title="Size">
-            <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
               <InputField
                 id="traffic-rate-width"
                 label="Width"
@@ -481,7 +481,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
 
           <PanelSection
             title="Background"
-            bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 16 }}
+            bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
           >
             <>
               <ColorField
@@ -509,7 +509,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
           </PanelSection>
 
           <PanelSection title="Border">
-            <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
               <ColorField
                 label="Color"
                 value={resolvedFields.borderColorValue}
@@ -533,7 +533,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
                 clearable
               />
             </Box>
-            <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
               <SelectField
                 id="traffic-rate-border-style"
                 label="Style"
@@ -565,7 +565,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
             </Box>
           </PanelSection>
 
-          <PanelSection title="Text" bodySx={{ padding: 16 }}>
+          <PanelSection title="Text" bodySx={{ p: 2 }}>
             <ColorField
               label="Text Color"
               value={resolvedFields.textColorValue}
@@ -574,7 +574,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
           </PanelSection>
 
           {mode === "chart" && (
-            <PanelSection title="Chart" bodySx={{ padding: 16 }}>
+            <PanelSection title="Chart" bodySx={{ p: 2 }}>
               <CheckboxField
                 id="traffic-rate-show-legend"
                 label="Show legend"

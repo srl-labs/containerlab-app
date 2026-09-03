@@ -23,7 +23,6 @@ import {
   useStore,
   type Edge,
   type Node,
-  type OnNodeDrag,
   type ReactFlowInstance
 } from "@xyflow/react";
 import { shallow } from "zustand/shallow";
@@ -423,9 +422,9 @@ function useRenderConfig(
 
 /** Hook for node drag handler wrappers with helper line support */
 function useDragHandlers(
-  onNodeDrag: OnNodeDrag,
-  wrappedOnNodeDragStart: OnNodeDrag,
-  wrappedOnNodeDragStop: OnNodeDrag,
+  onNodeDrag: (event: React.MouseEvent, node: Node) => void,
+  wrappedOnNodeDragStart: (event: React.MouseEvent, node: Node) => void,
+  wrappedOnNodeDragStop: (event: React.MouseEvent, node: Node) => void,
   helperLineHandlers?: {
     updateHelperLines: (node: Node, allNodes: Node[]) => void;
     clearHelperLines: () => void;
@@ -433,16 +432,16 @@ function useDragHandlers(
     isGeoLayout: boolean;
   }
 ) {
-  const handleNodeDragStart: OnNodeDrag = useCallback(
-    (event, node, nodes) => {
-      wrappedOnNodeDragStart(event, node, nodes);
+  const handleNodeDragStart = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      wrappedOnNodeDragStart(event, node);
     },
     [wrappedOnNodeDragStart]
   );
 
-  const handleNodeDrag: OnNodeDrag = useCallback(
-    (event, node, nodes) => {
-      onNodeDrag(event, node, nodes);
+  const handleNodeDrag = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      onNodeDrag(event, node);
       // Update helper lines during drag (skip in geo layout).
       if (helperLineHandlers && !helperLineHandlers.isGeoLayout) {
         helperLineHandlers.updateHelperLines(node, helperLineHandlers.allNodes);
@@ -451,9 +450,9 @@ function useDragHandlers(
     [onNodeDrag, helperLineHandlers]
   );
 
-  const handleNodeDragStop: OnNodeDrag = useCallback(
-    (event, node, nodes) => {
-      wrappedOnNodeDragStop(event, node, nodes);
+  const handleNodeDragStop = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      wrappedOnNodeDragStop(event, node);
       // Clear helper lines when drag ends
       if (helperLineHandlers) {
         helperLineHandlers.clearHelperLines();

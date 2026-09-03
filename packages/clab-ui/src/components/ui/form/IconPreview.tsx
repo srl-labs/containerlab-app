@@ -1,5 +1,5 @@
 // Icon preview with configurable corner radius.
-import { Avatar } from "@mantine/core";
+import Avatar from "@mui/material/Avatar";
 import type { FC } from "react";
 
 interface IconPreviewProps {
@@ -11,10 +11,14 @@ interface IconPreviewProps {
 
 export const IconPreview: FC<IconPreviewProps> = ({ src, alt = "", size, cornerRadius }) => (
   <Avatar
+    variant="square"
     src={src}
     alt={alt}
-    w={size}
-    h={size}
-    radius={cornerRadius !== undefined && cornerRadius > 0 ? (cornerRadius / 48) * size : 0}
+    sx={{
+      width: size,
+      height: size,
+      borderRadius:
+        cornerRadius !== undefined && cornerRadius > 0 ? `${(cornerRadius / 48) * size}px` : 0
+    }}
   />
 );

@@ -1,7 +1,7 @@
 // Generic annotation editor view shared by the text and shape annotation editors.
 // Edits live-apply to the canvas and persist debounced — there is no Apply button.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { useGenericFormState } from "../../../../hooks/editor";
 import { FIELDSET_RESET_STYLE } from "../ContextPanelScrollArea";
@@ -60,7 +60,7 @@ export function AnnotationFormEditorView<T extends { id: string }>({
   const effectiveUpdateField: typeof updateField = readOnly ? () => {} : updateField;
 
   return (
-    <Box style={{ flex: 1, overflow: "auto" }}>
+    <Box sx={{ flex: 1, overflow: "auto" }}>
       <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
         <FormContent formData={formData} updateField={effectiveUpdateField} />
       </fieldset>

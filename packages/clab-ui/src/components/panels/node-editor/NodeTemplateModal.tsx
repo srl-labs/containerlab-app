@@ -1,10 +1,12 @@
 // Modal for creating and editing custom node templates.
 import React, { useCallback, useRef, useState } from "react";
-import { Box, Modal } from "@mantine/core";
+import Box from "@mui/material/Box";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
 
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { useCustomTemplateEditor } from "../../../hooks/editor/useCustomTemplateEditor";
-import { DialogCancelSaveActions } from "../../ui/dialog/DialogChrome";
+import { DialogCancelSaveActions, DialogTitleWithClose } from "../../ui/dialog/DialogChrome";
 import { NodeEditorView } from "../context-panel/views/NodeEditorView";
 import type { NodeEditorFooterRef } from "../context-panel/views/NodeEditorView";
 
@@ -28,49 +30,28 @@ export const NodeTemplateModal: React.FC = () => {
   const title = isNew ? "Create Node Template" : "Edit Node Template";
 
   return (
-    <Modal
-      opened={isOpen}
+    <Dialog
+      open={isOpen}
       onClose={handlers.handleClose}
-      title={title}
-      size="lg"
-      centered
-      styles={{
-        content: {
-          height: "80vh",
-          maxHeight: "80vh",
-          display: "flex",
-          flexDirection: "column"
-        },
-        body: {
-          flex: 1,
-          minHeight: 0,
-          padding: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden"
-        }
-      }}
+      maxWidth="sm"
+      fullWidth
+      slotProps={{ paper: { sx: { height: "80vh", maxHeight: "80vh" } } }}
     >
-      <Box
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden"
-        }}
-      >
-        <NodeEditorView
-          nodeData={editorData}
-          onSave={handlers.handleSave}
-          onApply={handlers.handleApply}
-          onFooterRef={setFooterRef}
-        />
-      </Box>
+      <DialogTitleWithClose title={title} onClose={handlers.handleClose} />
+      <DialogContent dividers sx={{ p: 0, overflow: "hidden" }}>
+        <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+          <NodeEditorView
+            nodeData={editorData}
+            onSave={handlers.handleSave}
+            onApply={handlers.handleApply}
+            onFooterRef={setFooterRef}
+          />
+        </Box>
+      </DialogContent>
       <DialogCancelSaveActions
         onCancel={handlers.handleClose}
         onSave={() => footerRef.current?.handleSave()}
       />
-    </Modal>
+    </Dialog>
   );
 };

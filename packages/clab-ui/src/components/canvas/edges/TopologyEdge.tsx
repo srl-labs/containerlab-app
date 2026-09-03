@@ -38,8 +38,8 @@ const LABEL_BG_COLOR = "var(--topoviewer-edge-label-background)";
 const LABEL_TEXT_COLOR = "var(--topoviewer-edge-label-foreground)";
 const LABEL_OUTLINE_COLOR = "var(--topoviewer-edge-label-outline)";
 const LABEL_PADDING = "0px 2px";
-const LABEL_FONT_FAMILY = "'Roboto', sans-serif";
-const TELEMETRY_LABEL_FONT_FAMILY = "'Roboto', sans-serif";
+const LABEL_FONT_FAMILY = '"Helvetica Neue", Helvetica, Arial, sans-serif';
+const TELEMETRY_LABEL_FONT_FAMILY = "Helvetica, Arial, sans-serif";
 
 const TELEMETRY_LABEL_FONT_SIZE_PX = 10;
 const TELEMETRY_LABEL_TEXT_COLOR = "#FFFFFF";

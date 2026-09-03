@@ -1,13 +1,13 @@
 /* eslint-disable import-x/max-dependencies */
 // Basic tab for node editor.
 import React, { useState, useMemo, useCallback, useEffect } from "react";
-import { Box, Button, Text } from "@mantine/core";
-import {
-  IconArrowsExchange,
-  IconArrowsLeftRight,
-  IconRotate2,
-  IconRotateClockwise
-} from "@tabler/icons-react";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import RotateLeftIcon from "@mui/icons-material/RotateLeft";
+import RotateRightIcon from "@mui/icons-material/RotateRight";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import SyncAltIcon from "@mui/icons-material/SyncAlt";
 
 import {
   InputField,
@@ -55,10 +55,10 @@ const NODE_LABEL_POSITION_OPTIONS = [
 ];
 
 const NODE_DIRECTION_OPTIONS = [
-  { value: "right", label: "Horizontal", icon: <IconArrowsLeftRight size={18} /> },
-  { value: "down", label: "Rotate text 90deg", icon: <IconRotateClockwise size={18} /> },
-  { value: "left", label: "Rotate text 180deg", icon: <IconArrowsExchange size={18} /> },
-  { value: "up", label: "Rotate text 270deg", icon: <IconRotate2 size={18} /> }
+  { value: "right", label: "Horizontal", icon: <SwapHorizIcon fontSize="small" /> },
+  { value: "down", label: "Rotate text 90deg", icon: <RotateRightIcon fontSize="small" /> },
+  { value: "left", label: "Rotate text 180deg", icon: <SyncAltIcon fontSize="small" /> },
+  { value: "up", label: "Rotate text 270deg", icon: <RotateLeftIcon fontSize="small" /> }
 ];
 
 const BUILTIN_NODE_TYPES: readonly NodeType[] = [
@@ -338,7 +338,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
   // Render icon option with preview
   const renderOption = useCallback(
     (option: { value: string; label: string }) => (
-      <Box style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <IconPreview
           src={getIconSource(option.value, color)}
           alt={option.label}
@@ -353,8 +353,8 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
 
   return (
     <>
-      <Box style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <Box style={{ flexShrink: 0 }}>
+      <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+        <Box sx={{ flexShrink: 0 }}>
           <IconPreview
             src={getIconSource(previewIcon, color)}
             alt="Icon preview"
@@ -362,7 +362,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
             cornerRadius={data.iconCornerRadius}
           />
         </Box>
-        <Box style={{ flex: 1 }}>
+        <Box sx={{ flex: 1 }}>
           <FilterableDropdown
             id="node-icon"
             label="Icon"
@@ -375,10 +375,9 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
           />
         </Box>
         <Button
-          variant="subtle"
-          size="xs"
+          size="small"
           onClick={() => setIsModalOpen(true)}
-          style={{ whiteSpace: "nowrap", alignSelf: "stretch" }}
+          sx={{ whiteSpace: "nowrap", alignSelf: "stretch" }}
         >
           Edit
         </Button>
@@ -405,8 +404,8 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
       : "#000000";
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
         <SelectField
           id="node-label-position"
           label="Label Position"
@@ -471,7 +470,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
   );
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       {isCustomTemplate && (
         <PanelSection title="Template" withTopDivider={false}>
           <CustomNodeTemplateFields data={data} onChange={onChange} />
@@ -498,7 +497,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
           />
         )}
 
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ImageVersionFields
             data={data}
             onChange={onChange}
@@ -512,18 +511,18 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
         </Box>
 
         {!isLoaded && (
-          <Text size="xs" c="dimmed">
+          <Typography variant="caption" color="text.secondary">
             Loading schema...
-          </Text>
+          </Typography>
         )}
       </PanelSection>
 
-      <PanelSection title="Icon" bodySx={{ padding: 16 }}>
+      <PanelSection title="Icon" bodySx={{ p: 2 }}>
         <IconField data={data} onChange={onChange} />
       </PanelSection>
 
       {!isCustomTemplate && (
-        <PanelSection title="Label & Direction" bodySx={{ padding: 16 }}>
+        <PanelSection title="Label & Direction" bodySx={{ p: 2 }}>
           <LabelAndDirectionFields data={data} onChange={onChange} />
         </PanelSection>
       )}

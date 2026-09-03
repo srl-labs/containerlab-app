@@ -1,24 +1,27 @@
-import { IconExternalLink, IconStarFilled } from "@tabler/icons-react";
-import {
-  Alert,
-  Anchor,
-  Badge,
-  Button,
-  Checkbox,
-  Container,
-  Divider,
-  Group,
-  Loader,
-  Paper,
-  Stack,
-  Text,
-  Title
-} from "@mantine/core";
+/* eslint-disable import-x/max-dependencies */
+import LaunchIcon from "@mui/icons-material/Launch";
+import StarIcon from "@mui/icons-material/Star";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import Container from "@mui/material/Container";
+import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Link from "@mui/material/Link";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
+import Paper from "@mui/material/Paper";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
+import Checkbox from "@mui/material/Checkbox";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { AppThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 import containerlabLogo from "../../assets/images/containerlab.svg";
 
@@ -106,198 +109,203 @@ export function WelcomePageApp(): React.JSX.Element {
   }, [postMessage]);
 
   return (
-    <AppThemeProvider>
-      <div
-        style={{
+    <MuiThemeProvider>
+      <Box
+        sx={{
           width: "100%",
           height: "100%",
           overflowY: "auto",
-          backgroundColor: "var(--mantine-color-body)",
-          color: "var(--mantine-color-text)"
+          backgroundColor: "background.default",
+          color: "text.primary"
         }}
       >
-        <Container size="xl" style={{ paddingTop: 24, paddingBottom: 24 }}>
-          <Paper withBorder p="lg">
-            <Stack gap={24}>
-              <Group align="flex-start" gap={16} wrap="wrap">
-                <img
+        <Container maxWidth="xl" sx={{ py: 3 }}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: { xs: 2, md: 3 },
+              borderColor: "divider",
+              backgroundColor: (theme) => theme.alpha(theme.palette.background.paper, 0.92)
+            }}
+          >
+            <Stack spacing={3}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="flex-start">
+                <Box
+                  component="img"
                   src={containerlabLogo}
                   alt="Containerlab"
-                  style={{
-                    width: 64,
-                    height: 64,
+                  sx={{
+                    width: { xs: 56, md: 64 },
+                    height: { xs: 56, md: 64 },
                     objectFit: "contain",
                     flexShrink: 0
                   }}
                 />
-                <Stack gap={8} style={{ minWidth: 0 }}>
-                  <Title order={2} style={{ lineHeight: 1.2 }}>
+                <Stack spacing={1} sx={{ minWidth: 0 }}>
+                  <Typography variant="h4" sx={{ lineHeight: 1.2 }}>
                     Welcome to Containerlab
-                  </Title>
-                  <Group gap={8} wrap="wrap">
-                    <Badge size="sm" variant="outline">{`Extension v${extensionVersion}`}</Badge>
+                  </Typography>
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    <Chip size="small" variant="outlined" label={`Extension v${extensionVersion}`} />
                     {COMMUNITY_LINKS.map((link) => (
-                      <Badge
+                      <Chip
                         key={link.label}
-                        size="sm"
-                        variant="outline"
+                        size="small"
+                        variant="outlined"
+                        label={link.label}
                         component="a"
                         href={link.href}
+                        clickable
                         target="_blank"
                         rel="noreferrer noopener"
-                        style={{ cursor: "pointer" }}
-                        leftSection={<IconExternalLink size={12} />}
-                      >
-                        {link.label}
-                      </Badge>
+                        icon={<LaunchIcon />}
+                      />
                     ))}
-                  </Group>
+                  </Stack>
                 </Stack>
-              </Group>
+              </Stack>
 
               <Divider />
 
-              <Group align="stretch" gap={24} wrap="wrap">
-                <Stack gap={24} style={{ flex: "1 1 55%", minWidth: 0 }}>
-                  <Stack gap={12}>
-                    <Title order={5}>Getting Started</Title>
-                    <Text size="sm" c="dimmed">
+              <Stack direction={{ xs: "column", lg: "row" }} spacing={3} alignItems="stretch">
+                <Stack spacing={3} sx={{ flex: "1 1 55%" }}>
+                  <Stack spacing={1.5}>
+                    <Typography variant="h6">Getting Started</Typography>
+                    <Typography variant="body2" color="text.secondary">
                       The Containerlab extension integrates containerlab directly into VS Code,
                       providing an explorer for managing labs and containers.
-                    </Text>
-                    <Text size="sm" c="dimmed">
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
                       Create, deploy, and manage network topologies with just a few clicks.
-                    </Text>
-                    <Stack gap={6} align="flex-start">
+                    </Typography>
+                    <Stack spacing={0.75} alignItems="flex-start">
                       <Button
+                        variant="contained"
                         onClick={() => {
                           postMessage({ command: "createExample" });
                         }}
                       >
                         Create Example Topology
                       </Button>
-                      <Text size="xs" c="dimmed">
+                      <Typography variant="caption" color="text.secondary">
                         Creates `example.clab.yml` in your current workspace.
-                      </Text>
+                      </Typography>
                     </Stack>
                   </Stack>
 
-                  <Stack gap={12}>
-                    <Title order={5}>Documentation and Resources</Title>
-                    <Stack gap={2}>
+                  <Stack spacing={1.5}>
+                    <Typography variant="h6">Documentation and Resources</Typography>
+                    <List dense disablePadding>
                       {RESOURCE_LINKS.map((link) => (
-                        <Anchor
-                          key={link.label}
-                          href={link.href}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          size="sm"
-                        >
-                          {link.label}
-                        </Anchor>
+                        <ListItem key={link.label} disableGutters sx={{ py: 0.25 }}>
+                          <Link href={link.href} target="_blank" rel="noreferrer noopener">
+                            {link.label}
+                          </Link>
+                        </ListItem>
                       ))}
-                    </Stack>
+                    </List>
 
-                    <Checkbox
-                      checked={dontShowAgain}
-                      onChange={(event) => {
-                        const checked = event.currentTarget.checked;
-                        setDontShowAgain(checked);
-                        postMessage({ command: "dontShowAgain", value: checked });
-                      }}
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={dontShowAgain}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setDontShowAgain(checked);
+                            postMessage({ command: "dontShowAgain", value: checked });
+                          }}
+                        />
+                      }
                       label="Don't show this page again"
                     />
                   </Stack>
                 </Stack>
 
-                <Stack gap={12} style={{ flex: "1 1 45%", minWidth: 0 }}>
-                  <Title order={5}>Popular Topologies</Title>
+                <Stack spacing={1.5} sx={{ flex: "1 1 45%", minWidth: 0 }}>
+                  <Typography variant="h6">Popular Topologies</Typography>
 
                   {usingFallback ? (
-                    <Alert color="blue" variant="outline">
+                    <Alert severity="info" variant="outlined">
                       Using cached repository data due to GitHub API limits or temporary failures.
                     </Alert>
                   ) : null}
 
                   {isLoadingRepos ? (
-                    <Group gap={12} align="center" style={{ paddingBlock: 16 }}>
-                      <Loader size={18} />
-                      <Text size="sm" c="dimmed">
-                        Loading popular repositories...
-                      </Text>
-                    </Group>
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="center"
+                      sx={{ py: 2, color: "text.secondary" }}
+                    >
+                      <CircularProgress size={18} />
+                      <Typography variant="body2">Loading popular repositories...</Typography>
+                    </Stack>
                   ) : null}
 
                   {!isLoadingRepos && repos.length === 0 ? (
-                    <Alert color="blue" variant="outline">
+                    <Alert severity="info" variant="outlined">
                       No repositories found.
                     </Alert>
                   ) : null}
 
                   {!isLoadingRepos && repos.length > 0 ? (
-                    <div
-                      style={{
+                    <List
+                      dense
+                      disablePadding
+                      sx={{
                         maxHeight: 420,
                         overflowY: "auto",
-                        border: "1px solid var(--mantine-color-default-border)",
-                        borderRadius: "var(--mantine-radius-sm)"
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1
                       }}
                     >
                       {repos.map((repo) => (
-                        <Anchor
-                          key={repo.html_url}
-                          href={repo.html_url}
-                          target="_blank"
-                          rel="noreferrer noopener"
-                          underline="never"
-                          c="inherit"
-                          style={{
-                            display: "block",
-                            padding: 8,
-                            borderBottom: "1px solid var(--mantine-color-default-border)"
-                          }}
-                        >
-                          <Stack gap={4} style={{ width: "100%", minWidth: 0 }}>
-                            <Group gap={8} align="center" style={{ minWidth: 0 }}>
-                              <Text
-                                span
-                                size="sm"
-                                style={{
-                                  fontWeight: 600,
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis"
-                                }}
-                              >
-                                {repo.name}
-                              </Text>
-                              <Badge
-                                size="sm"
-                                variant="outline"
-                                leftSection={
-                                  <IconStarFilled
-                                    size={12}
-                                    style={{ color: "var(--mantine-color-yellow-6)" }}
-                                  />
-                                }
-                              >
-                                {repo.stargazers_count}
-                              </Badge>
-                            </Group>
-                            <Text size="xs" c="dimmed">
-                              {repo.description || "No description available"}
-                            </Text>
-                          </Stack>
-                        </Anchor>
+                        <ListItem key={repo.html_url} disablePadding divider>
+                          <ListItemButton
+                            component="a"
+                            href={repo.html_url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            sx={{ alignItems: "flex-start" }}
+                          >
+                            <Stack spacing={0.5} sx={{ width: "100%", minWidth: 0 }}>
+                              <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                                <Typography
+                                  component="span"
+                                  variant="body2"
+                                  sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}
+                                >
+                                  {repo.name}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  variant="outlined"
+                                  icon={<StarIcon />}
+                                  label={repo.stargazers_count}
+                                  sx={{
+                                    "& .MuiChip-icon": {
+                                      color: "warning.main"
+                                    }
+                                  }}
+                                />
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary">
+                                {repo.description || "No description available"}
+                              </Typography>
+                            </Stack>
+                          </ListItemButton>
+                        </ListItem>
                       ))}
-                    </div>
+                    </List>
                   ) : null}
                 </Stack>
-              </Group>
+              </Stack>
             </Stack>
           </Paper>
         </Container>
-      </div>
-    </AppThemeProvider>
+      </Box>
+    </MuiThemeProvider>
   );
 }
 

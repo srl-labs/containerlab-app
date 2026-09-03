@@ -1,6 +1,6 @@
 // Network tab for node editor.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { InputField, SelectField, DynamicList, PanelAddSection, PanelSection } from "../../ui/form";
 
@@ -28,7 +28,7 @@ export const NetworkTab: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Management Network" withTopDivider={false}>
         <InputField
           id="node-mgmt-ipv4"

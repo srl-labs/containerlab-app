@@ -1,15 +1,23 @@
 /* eslint-disable import-x/max-dependencies */
 // About dialog.
 import React from "react";
-import { Anchor, Avatar, Box, Card, Divider, Group, Modal, Text } from "@mantine/core";
-import {
-  IconBook,
-  IconBrandGithub,
-  IconExternalLink,
-  IconHeartFilled,
-  IconPuzzle,
-  IconUsersGroup
-} from "@tabler/icons-react";
+import Avatar from "@mui/material/Avatar";
+import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import CardActionArea from "@mui/material/CardActionArea";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import Divider from "@mui/material/Divider";
+import Link from "@mui/material/Link";
+import Typography from "@mui/material/Typography";
+import ExtensionIcon from "@mui/icons-material/Extension";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import GitHubIcon from "@mui/icons-material/GitHub";
+import GroupsIcon from "@mui/icons-material/Groups";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+
+import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -24,36 +32,30 @@ interface AuthorCardProps {
   iconColor: string;
 }
 
-const linkCardStyle: React.CSSProperties = { textDecoration: "none", color: "inherit" };
+const TEXT_SECONDARY = "text.secondary";
 
 const AuthorCard: React.FC<AuthorCardProps> = ({ name, title, linkedIn, iconText, iconColor }) => (
-  <Card
-    withBorder
-    radius="sm"
-    padding="sm"
-    mb="xs"
-    component="a"
-    href={linkedIn}
-    target="_blank"
-    rel="noopener noreferrer"
-    style={linkCardStyle}
-  >
-    <Group wrap="nowrap" gap="sm" align="center">
-      <Avatar radius="xl" size={32} styles={{ placeholder: { backgroundColor: iconColor } }}>
+  <Card variant="outlined" sx={{ mb: 1 }}>
+    <CardActionArea
+      component="a"
+      href={linkedIn}
+      target="_blank"
+      rel="noopener noreferrer"
+      sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}
+    >
+      <Avatar sx={{ bgcolor: iconColor, width: 32, height: 32, fontSize: "0.875rem" }}>
         {iconText}
       </Avatar>
-      <div style={{ flexGrow: 1, minWidth: 0 }}>
-        <Text size="sm" fw={500}>
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="body2" fontWeight={500}>
           {name}
-        </Text>
-        <Text size="xs" c="dimmed">
+        </Typography>
+        <Typography variant="caption" color={TEXT_SECONDARY}>
           {title}
-        </Text>
-      </div>
-      <Text c="dimmed" span style={{ display: "inline-flex" }}>
-        <IconExternalLink size={18} />
-      </Text>
-    </Group>
+        </Typography>
+      </Box>
+      <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY }} />
+    </CardActionArea>
   </Card>
 );
 
@@ -65,33 +67,25 @@ interface RepoCardProps {
 }
 
 const RepoCard: React.FC<RepoCardProps> = ({ name, description, url, icon }) => (
-  <Card
-    withBorder
-    radius="sm"
-    padding="sm"
-    mb="xs"
-    component="a"
-    href={url}
-    target="_blank"
-    rel="noopener noreferrer"
-    style={linkCardStyle}
-  >
-    <Group wrap="nowrap" gap="sm" align="center">
-      <Text c="dimmed" span style={{ display: "inline-flex" }}>
-        {icon}
-      </Text>
-      <div style={{ flexGrow: 1, minWidth: 0 }}>
-        <Text size="sm" fw={500}>
+  <Card variant="outlined" sx={{ mb: 1 }}>
+    <CardActionArea
+      component="a"
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      sx={{ p: 1.5, display: "flex", alignItems: "center", gap: 1.5 }}
+    >
+      <Box sx={{ color: TEXT_SECONDARY }}>{icon}</Box>
+      <Box sx={{ flexGrow: 1 }}>
+        <Typography variant="body2" fontWeight={500}>
           {name}
-        </Text>
-        <Text size="xs" c="dimmed">
+        </Typography>
+        <Typography variant="caption" color={TEXT_SECONDARY}>
           {description}
-        </Text>
-      </div>
-      <Text c="dimmed" span style={{ display: "inline-flex" }}>
-        <IconExternalLink size={18} />
-      </Text>
-    </Group>
+        </Typography>
+      </Box>
+      <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY }} />
+    </CardActionArea>
   </Card>
 );
 
@@ -250,125 +244,143 @@ const AnimatedContainerlabLogo: React.FC = () => (
   </>
 );
 
-/** Animated flask logo beside the TopoViewer wordmark. */
-export const AboutHeading: React.FC = () => (
-  <Group gap="md" align="center">
-    <AnimatedContainerlabLogo />
-    <Text fz="h4" fw={600}>
-      TopoViewer
-    </Text>
-  </Group>
-);
-
-const SectionHeader: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <Box px="md" py="xs">
-    <Group gap="xs" align="center">
-      <Text span style={{ display: "inline-flex" }}>
-        {icon}
-      </Text>
-      <Text size="sm" fw={600}>
-        {label}
-      </Text>
-    </Group>
-  </Box>
-);
-
-/** Body of the About dialog, also rendered as the Info section of the settings modal. */
-export const AboutContent: React.FC = () => (
-  <>
-    <Box p="md">
-      <Text size="sm" c="dimmed">
-        Interactive topology visualization and editing for{" "}
-        <Anchor href="https://containerlab.dev/" target="_blank" rel="noopener noreferrer" inherit>
-          Containerlab
-        </Anchor>{" "}
-        network labs directly in VS Code.
-      </Text>
-    </Box>
-
-    <Divider />
-    <SectionHeader icon={<IconBook size={18} />} label="Documentation" />
-    <Divider />
-    <Box p="md">
-      <RepoCard
-        name="Containerlab Docs"
-        description="Full documentation"
-        url="https://containerlab.dev/"
-        icon={<IconBook size={18} />}
+export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
+  return (
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      data-testid="about-modal"
+      slotProps={{
+        paper: {
+          sx: {
+            maxHeight: "80vh"
+          }
+        }
+      }}
+    >
+      <DialogTitleWithClose
+        sx={{ py: 2 }}
+        title={
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <AnimatedContainerlabLogo />
+            <Typography variant="h5" fontWeight={600}>
+              TopoViewer
+            </Typography>
+          </Box>
+        }
+        onClose={onClose}
       />
-      <RepoCard
-        name="Extension Docs"
-        description="VS Code extension guide"
-        url="https://containerlab.dev/manual/vsc-extension/"
-        icon={<IconPuzzle size={18} />}
-      />
-    </Box>
+      <DialogContent dividers sx={{ p: 0 }}>
+        {/* Description */}
+        <Box sx={{ p: 2 }}>
+          <Typography variant="body2" color={TEXT_SECONDARY}>
+            Interactive topology visualization and editing for{" "}
+            <Link href="https://containerlab.dev/" target="_blank" rel="noopener noreferrer">
+              Containerlab
+            </Link>{" "}
+            network labs directly in VS Code.
+          </Typography>
+        </Box>
 
-    <Divider />
-    <SectionHeader icon={<IconUsersGroup size={18} />} label="Team" />
-    <Divider />
-    <Box p="md">
-      <AuthorCard
-        name="Asad Arafat"
-        title="Maintainer (Original Creator)"
-        linkedIn="https://www.linkedin.com/in/asadarafat/"
-        iconText="AA"
-        iconColor="#4CAF50"
-      />
-      <AuthorCard
-        name="Florian Schwarz"
-        title="Maintainer"
-        linkedIn="https://linkedin.com/in/florian-schwarz-812a34145"
-        iconText="FS"
-        iconColor="#2196F3"
-      />
-      <AuthorCard
-        name="Kaelem Chandra"
-        title="Maintainer"
-        linkedIn="https://linkedin.com/in/kaelem-chandra"
-        iconText="KC"
-        iconColor="#9C27B0"
-      />
-    </Box>
+        {/* Documentation Section */}
+        <Divider />
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <MenuBookIcon fontSize="small" />
+            Documentation
+          </Typography>
+        </Box>
+        <Divider />
+        <Box sx={{ p: 2 }}>
+          <RepoCard
+            name="Containerlab Docs"
+            description="Full documentation"
+            url="https://containerlab.dev/"
+            icon={<MenuBookIcon fontSize="small" />}
+          />
+          <RepoCard
+            name="Extension Docs"
+            description="VS Code extension guide"
+            url="https://containerlab.dev/manual/vsc-extension/"
+            icon={<ExtensionIcon fontSize="small" />}
+          />
+        </Box>
 
-    <Divider />
-    <SectionHeader icon={<IconBrandGithub size={18} />} label="Source Code" />
-    <Divider />
-    <Box p="md">
-      <RepoCard
-        name="vscode-containerlab"
-        description="VS Code Extension"
-        url="https://github.com/srl-labs/vscode-containerlab/"
-        icon={<IconBrandGithub size={18} />}
-      />
-      <RepoCard
-        name="topoViewer"
-        description="Original Standalone App"
-        url="https://github.com/asadarafat/topoViewer"
-        icon={<IconBrandGithub size={18} />}
-      />
-    </Box>
+        {/* Team Section */}
+        <Divider />
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <GroupsIcon fontSize="small" />
+            Team
+          </Typography>
+        </Box>
+        <Divider />
+        <Box sx={{ p: 2 }}>
+          <AuthorCard
+            name="Asad Arafat"
+            title="Maintainer (Original Creator)"
+            linkedIn="https://www.linkedin.com/in/asadarafat/"
+            iconText="AA"
+            iconColor="#4CAF50"
+          />
+          <AuthorCard
+            name="Florian Schwarz"
+            title="Maintainer"
+            linkedIn="https://linkedin.com/in/florian-schwarz-812a34145"
+            iconText="FS"
+            iconColor="#2196F3"
+          />
+          <AuthorCard
+            name="Kaelem Chandra"
+            title="Maintainer"
+            linkedIn="https://linkedin.com/in/kaelem-chandra"
+            iconText="KC"
+            iconColor="#9C27B0"
+          />
+        </Box>
 
-    <Group justify="center" gap={4} py="md" c="dimmed">
-      <Text size="xs">Made with</Text>
-      <IconHeartFilled size={14} style={{ color: "var(--mantine-color-red-6)" }} />
-      <Text size="xs">for the network community</Text>
-    </Group>
-  </>
-);
+        {/* Source Code Section */}
+        <Divider />
+        <Box sx={{ px: 2, py: 1 }}>
+          <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <GitHubIcon fontSize="small" />
+            Source Code
+          </Typography>
+        </Box>
+        <Divider />
+        <Box sx={{ p: 2 }}>
+          <RepoCard
+            name="vscode-containerlab"
+            description="VS Code Extension"
+            url="https://github.com/srl-labs/vscode-containerlab/"
+            icon={<GitHubIcon fontSize="small" />}
+          />
+          <RepoCard
+            name="topoViewer"
+            description="Original Standalone App"
+            url="https://github.com/asadarafat/topoViewer"
+            icon={<GitHubIcon fontSize="small" />}
+          />
+        </Box>
 
-export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => (
-  <Modal
-    opened={isOpen}
-    onClose={onClose}
-    title={<AboutHeading />}
-    size="lg"
-    centered
-    padding={0}
-    data-testid="about-modal"
-    styles={{ body: { padding: 0 }, header: { padding: "var(--mantine-spacing-md)" } }}
-  >
-    <Divider />
-    <AboutContent />
-  </Modal>
-);
+        {/* Footer */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 0.5,
+            py: 2,
+            color: TEXT_SECONDARY
+          }}
+        >
+          <Typography variant="caption">Made with</Typography>
+          <FavoriteIcon sx={{ fontSize: 14, color: "error.main" }} />
+          <Typography variant="caption">for the network community</Typography>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+};

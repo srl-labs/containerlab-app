@@ -178,7 +178,7 @@ function getNodeDirectionRotation(value: unknown): number {
 // Node Label Builder
 // ============================================================================
 
-const NODE_LABEL_FALLBACK_FONT_FAMILY = "'Roboto', sans-serif";
+const NODE_LABEL_FALLBACK_FONT_FAMILY = "system-ui, -apple-system, sans-serif";
 
 /**
  * Font the canvas renders node labels with. Sampled from a live label so the

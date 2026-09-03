@@ -1,19 +1,22 @@
 /* eslint-disable import-x/max-dependencies */
 // Components tab for node editor (Nokia SROS).
 import React, { useCallback, useState } from "react";
-import { IconChevronDown, IconChevronUp, IconPlus, IconTrash } from "@tabler/icons-react";
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Button,
-  Collapse,
-  Divider,
-  NumberInput,
-  Paper,
-  Tabs,
-  Text
-} from "@mantine/core";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import Collapse from "@mui/material/Collapse";
+import Divider from "@mui/material/Divider";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import Paper from "@mui/material/Paper";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 
 import { InputField, FilterableDropdown } from "../../ui/form";
 import { useSchema, type SrosComponentTypes } from "../../../hooks/editor";
@@ -62,39 +65,40 @@ const MdaEntry: React.FC<MdaEntryProps> = ({
   slotPrefix = ""
 }) => (
   <Box
-    style={{
+    sx={{
       display: "flex",
       alignItems: "center",
-      gap: 8,
-      paddingBlock: 8,
-      paddingInline: 12,
-      borderRadius: 4,
-      border: "1px solid var(--mantine-color-default-border)"
+      gap: 1,
+      py: 1,
+      px: 1.5,
+      borderRadius: 1,
+      border: 1,
+      borderColor: "divider"
     }}
   >
-    <Box style={{ flex: 2, minWidth: 0 }}>
-      <NumberInput
+    <Box sx={{ flex: 2, minWidth: 0 }}>
+      <TextField
         id={`mda-slot-${index}`}
         label="Slot"
-        size="sm"
-        min={1}
-        hideControls
-        value={mda.slot ?? ""}
-        onChange={(value) =>
-          onUpdate(index, { slot: typeof value === "number" ? value : undefined })
+        type="number"
+        size="small"
+        fullWidth
+        value={String(mda.slot ?? "")}
+        onChange={(e) =>
+          onUpdate(index, { slot: e.target.value ? parseInt(e.target.value, 10) : undefined })
         }
         placeholder="Slot"
-        leftSection={
-          slotPrefix ? (
-            <Text size="xs" style={{ whiteSpace: "nowrap" }}>
-              {slotPrefix}
-            </Text>
-          ) : undefined
-        }
-        leftSectionWidth={slotPrefix ? slotPrefix.length * 7 + 12 : undefined}
+        slotProps={{
+          htmlInput: { min: 1 },
+          input: slotPrefix
+            ? {
+                startAdornment: <InputAdornment position="start">{slotPrefix}</InputAdornment>
+              }
+            : undefined
+        }}
       />
     </Box>
-    <Box style={{ flex: 3, minWidth: 0 }}>
+    <Box sx={{ flex: 3, minWidth: 0 }}>
       <FilterableDropdown
         id={`mda-type-${index}`}
         label="Type"
@@ -104,14 +108,9 @@ const MdaEntry: React.FC<MdaEntryProps> = ({
         allowFreeText
       />
     </Box>
-    <ActionIcon
-      variant="subtle"
-      color="red"
-      onClick={() => onRemove(index)}
-      title="Remove MDA"
-    >
-      <IconTrash size={18} />
-    </ActionIcon>
+    <IconButton size="small" onClick={() => onRemove(index)} color="error" title="Remove MDA">
+      <DeleteIcon fontSize="small" />
+    </IconButton>
   </Box>
 );
 
@@ -134,7 +133,7 @@ const MdaListSection: React.FC<MdaListSectionProps> = ({
   onUpdate,
   onRemove
 }) => (
-  <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
     {mdas.map((mda, mdaIdx) => (
       <MdaEntry
         key={mdaIdx}
@@ -174,28 +173,27 @@ const MdaSectionWrapper: React.FC<MdaSectionWrapperProps> = ({
 }) => (
   <>
     <Box
-      style={{
+      sx={{
         display: "flex",
         alignItems: "center",
         justifyContent: JUSTIFY_SPACE_BETWEEN,
-        paddingInline: 16,
-        paddingBlock: 8
+        px: 2,
+        py: 1
       }}
     >
-      <Text size="sm" fw={600}>
-        MDA Components
-      </Text>
+      <Typography variant="subtitle2">MDA Components</Typography>
       <Button
-        variant="subtle"
-        size="xs"
-        leftSection={<IconPlus size={20} />}
+        variant="text"
+        size="small"
+        startIcon={<AddIcon />}
         onClick={() => onAddMda(parentIndex)}
+        sx={{ py: 0 }}
       >
         Add
       </Button>
     </Box>
     <Divider />
-    <Box style={{ padding: 16 }}>
+    <Box sx={{ p: 2 }}>
       <MdaListSection
         mdas={mdas}
         mdaTypes={mdaTypes}
@@ -226,7 +224,7 @@ const XiomTabContent: React.FC<{
 
   return (
     <>
-      <Box style={{ padding: 12 }}>
+      <Box sx={{ p: 1.5 }}>
         <FilterableDropdown
           id={`xiom-type-${index}`}
           label="Type"
@@ -292,44 +290,42 @@ const ComponentHeader: React.FC<{
   onRemove: () => void;
 }> = ({ slot, isCpm, type, mdaCount, xiomCount, isExpanded, onToggle, onRemove }) => (
   <Box
-    style={{
+    sx={{
       display: "flex",
       alignItems: "center",
       justifyContent: JUSTIFY_SPACE_BETWEEN,
-      paddingInline: 12,
-      paddingBlock: 4,
+      px: 1.5,
+      py: 0.5,
       cursor: "pointer"
     }}
     onClick={onToggle}
   >
-    <Box style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      {isExpanded ? <IconChevronUp size={18} /> : <IconChevronDown size={18} />}
-      <Badge size="sm" variant="default">
-        {slot}
-      </Badge>
-      <Text size="sm">{isCpm ? "Control Processing Module" : "Line Card"}</Text>
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+      {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+      <Chip label={slot} size="small" />
+      <Typography variant="body2">{isCpm ? "Control Processing Module" : "Line Card"}</Typography>
       {!isCpm && type !== undefined && type.length > 0 && (
-        <Text size="xs" c="dimmed">
+        <Typography variant="caption" color="text.secondary">
           ({type})
-        </Text>
+        </Typography>
       )}
       {!isCpm && (type === undefined || type.length === 0) && (mdaCount > 0 || xiomCount > 0) && (
-        <Text size="xs" c="dimmed">
+        <Typography variant="caption" color="text.secondary">
           ({mdaCount} MDA, {xiomCount} XIOM)
-        </Text>
+        </Typography>
       )}
     </Box>
-    <ActionIcon
-      variant="subtle"
-      color="red"
+    <IconButton
+      size="small"
       onClick={(e) => {
         e.stopPropagation();
         onRemove();
       }}
+      color="error"
       title="Remove component"
     >
-      <IconTrash size={18} />
-    </ActionIcon>
+      <DeleteIcon fontSize="small" />
+    </IconButton>
   </Box>
 );
 
@@ -388,24 +384,23 @@ const ComponentXiomSection: React.FC<
   return (
     <>
       <Box
-        style={{
+        sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: JUSTIFY_SPACE_BETWEEN,
-          paddingInline: 16,
-          paddingBlock: 8
+          px: 2,
+          py: 1
         }}
       >
-        <Text size="sm" fw={600}>
-          XIOM Components
-        </Text>
+        <Typography variant="subtitle2">XIOM Components</Typography>
         <Button
-          variant="subtle"
-          size="xs"
-          leftSection={<IconPlus size={20} />}
+          variant="text"
+          size="small"
+          startIcon={<AddIcon />}
           onClick={() => onAddXiom(index)}
           disabled={xioms.length >= 2}
           title={xioms.length >= 2 ? "XIOM slots x1 and x2 are already defined" : undefined}
+          sx={{ py: 0 }}
         >
           Add
         </Button>
@@ -413,32 +408,30 @@ const ComponentXiomSection: React.FC<
       <Divider />
       {xioms.length > 0 && (
         <>
-          <Box style={{ display: "flex", alignItems: "center" }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
             <Tabs
-              value={String(clampedTab)}
-              onChange={(v) => setActiveXiomTab(Number(v))}
-              style={{ flex: 1 }}
+              value={clampedTab}
+              onChange={(_, v: number) => setActiveXiomTab(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{ flex: 1 }}
             >
-              <Tabs.List style={{ flexWrap: "nowrap", overflowX: "auto" }}>
-                {xioms.map((xiom, xiomIdx) => (
-                  <Tabs.Tab key={xiomIdx} value={String(xiomIdx)}>
-                    {`x${xiom.slot ?? xiomIdx + 1}`}
-                  </Tabs.Tab>
-                ))}
-              </Tabs.List>
+              {xioms.map((xiom, xiomIdx) => (
+                <Tab key={xiomIdx} label={`x${xiom.slot ?? xiomIdx + 1}`} />
+              ))}
             </Tabs>
-            <ActionIcon
-              variant="subtle"
+            <IconButton
+              size="small"
               onClick={() => {
                 onRemoveXiom(index, clampedTab);
                 setActiveXiomTab(0);
               }}
-              color="red"
+              color="error"
               title="Remove XIOM"
-              style={{ marginRight: 8 }}
+              sx={{ mr: 1 }}
             >
-              <IconTrash size={18} />
-            </ActionIcon>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
           </Box>
           <Divider />
           <Box>
@@ -512,31 +505,30 @@ const ComponentSection: React.FC<ComponentSectionProps> = ({
   <>
     <Divider />
     <Box
-      style={{
+      sx={{
         display: "flex",
         alignItems: "center",
         justifyContent: JUSTIFY_SPACE_BETWEEN,
-        paddingInline: 16,
-        paddingBlock: 8
+        px: 2,
+        py: 1
       }}
     >
-      <Text size="sm" fw={600}>
-        {title}
-      </Text>
+      <Typography variant="subtitle2">{title}</Typography>
       <Button
-        variant="subtle"
-        size="xs"
-        leftSection={<IconPlus size={20} />}
+        variant="text"
+        size="small"
+        startIcon={<AddIcon />}
         onClick={onAdd}
         disabled={addDisabled}
         title={addDisabled === true ? addDisabledTitle : undefined}
+        sx={{ py: 0 }}
       >
         Add
       </Button>
     </Box>
     <Divider />
-    <Box style={{ margin: 16 }}>
-      <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <Box sx={{ m: 2 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {filteredComponents.map((comp) => {
           const realIndex = allComponents.indexOf(comp);
           return (
@@ -586,12 +578,12 @@ const ComponentSlotTypeRow: React.FC<ComponentSlotTypeRowProps> = ({
   padded = false
 }) => (
   <Box
-    style={{
+    sx={{
       display: "grid",
       gridTemplateColumns: onRemove ? "1fr 4fr auto" : "1fr 4fr",
-      gap: 12,
+      gap: 1.5,
       alignItems: "center",
-      ...(padded ? { padding: 12 } : {})
+      ...(padded ? { p: 1.5 } : undefined)
     }}
   >
     <InputField
@@ -610,9 +602,9 @@ const ComponentSlotTypeRow: React.FC<ComponentSlotTypeRowProps> = ({
       allowFreeText
     />
     {onRemove && (
-      <ActionIcon variant="subtle" color="red" onClick={onRemove} title={removeTitle}>
-        <IconTrash size={18} />
-      </ActionIcon>
+      <IconButton size="small" onClick={onRemove} color="error" title={removeTitle}>
+        <DeleteIcon fontSize="small" />
+      </IconButton>
     )}
   </Box>
 );
@@ -625,7 +617,7 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
 
   if (isCpm) {
     return (
-      <Paper withBorder style={{ padding: 12 }}>
+      <Paper variant="outlined" sx={{ p: 1.5 }}>
         <ComponentSlotTypeRow
           index={index}
           component={component}
@@ -643,7 +635,7 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
   const xiomCount = component.xiom?.length ?? 0;
 
   return (
-    <Paper withBorder style={{ overflow: "hidden" }}>
+    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
       <ComponentHeader
         slot={component.slot}
         isCpm={false}
@@ -716,24 +708,22 @@ const IntegratedModeSection: React.FC<IntegratedModeSectionProps> = ({
     <>
       <Divider />
       <Box
-        style={{
+        sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: JUSTIFY_SPACE_BETWEEN,
-          paddingInline: 16,
-          paddingBlock: 8
+          px: 2,
+          py: 1
         }}
       >
-        <Text size="sm" fw={600}>
-          MDA Configuration
-        </Text>
-        <Button variant="subtle" size="xs" leftSection={<IconPlus size={20} />} onClick={addMda}>
+        <Typography variant="subtitle2">MDA Configuration</Typography>
+        <Button variant="text" size="small" startIcon={<AddIcon />} onClick={addMda} sx={{ py: 0 }}>
           Add
         </Button>
       </Box>
       <Divider />
-      <Box style={{ padding: 16 }}>
-        <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           {mdas.map((mda, mdaIdx) => (
             <MdaEntry
               key={mdaIdx}
@@ -926,13 +916,11 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
 
       {/* SFM Configuration */}
       <Divider />
-      <Box style={{ paddingInline: 16, paddingBlock: 8 }}>
-        <Text size="sm" fw={600}>
-          Switch Fabric Module (SFM)
-        </Text>
+      <Box sx={{ px: 2, py: 1 }}>
+        <Typography variant="subtitle2">Switch Fabric Module (SFM)</Typography>
       </Box>
       <Divider />
-      <Box style={{ padding: 16 }}>
+      <Box sx={{ p: 2 }}>
         <FilterableDropdown
           id="sfm-type"
           label="SFM Type"
@@ -973,7 +961,7 @@ export const ComponentsTab: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       {isIntegrated ? (
         <IntegratedModeSection
           components={components}

@@ -1,8 +1,9 @@
 /**
- * CheckboxField - Checkbox with label (Mantine)
+ * CheckboxField - Checkbox with label
  */
 import React from "react";
-import { Checkbox } from "@mantine/core";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Checkbox from "@mui/material/Checkbox";
 
 interface CheckboxFieldProps {
   id: string;
@@ -18,16 +19,18 @@ export const CheckboxField: React.FC<CheckboxFieldProps> = ({
   label,
   checked,
   onChange,
-  className,
   disabled
 }) => (
-  <Checkbox
-    id={id}
-    className={className}
+  <FormControlLabel
+    control={
+      <Checkbox
+        id={id}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        size="small"
+      />
+    }
     label={label}
-    checked={checked}
-    disabled={disabled}
-    size="sm"
-    onChange={(event) => onChange(event.currentTarget.checked)}
   />
 );

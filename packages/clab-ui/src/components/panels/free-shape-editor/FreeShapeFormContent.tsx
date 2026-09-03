@@ -1,6 +1,6 @@
 // Shape annotation editor form.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { FreeShapeAnnotation } from "../../../core/types/topology";
 import {
@@ -62,7 +62,7 @@ const ShapeSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
           ]}
         />
         {!isLine && (
-          <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
             <InputField
               id="shape-width"
               label="Width"
@@ -108,7 +108,7 @@ const FillSection: React.FC<SectionProps> = ({ formData, updateField, isLine }) 
   return (
     <PanelSection
       title="Fill"
-      bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: 16 }}
+      bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
     >
       <>
         <ColorField
@@ -142,8 +142,8 @@ const BorderSection: React.FC<BorderSectionProps> = ({
 
   return (
     <PanelSection title={isLine ? "Line" : "Border"}>
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ColorField
             label={isLine ? "Line Color" : "Border Color"}
             value={formData.borderColor ?? DEFAULT_BORDER_COLOR}
@@ -161,7 +161,7 @@ const BorderSection: React.FC<BorderSectionProps> = ({
             clearable
           />
         </Box>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           {isRectangle && (
             <InputField
               id="shape-corner-radius"
@@ -198,8 +198,8 @@ const ArrowSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
 
   return (
     <PanelSection title="Arrows">
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <Box style={{ display: "flex", gap: 8 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Toggle
             active={formData.lineStartArrow ?? false}
             onClick={() => updateField("lineStartArrow", formData.lineStartArrow !== true)}
@@ -236,7 +236,7 @@ export const FreeShapeFormContent: React.FC<Props> = ({ formData, updateField })
   const isRectangle = formData.shapeType === "rectangle";
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <ShapeSection formData={formData} updateField={updateField} isLine={isLine} />
       <FillSection formData={formData} updateField={updateField} isLine={isLine} />
       <BorderSection

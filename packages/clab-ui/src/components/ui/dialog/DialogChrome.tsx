@@ -1,14 +1,18 @@
 import React from "react";
-import { ActionIcon, Button, Group, Text } from "@mantine/core";
-import { IconX } from "@tabler/icons-react";
+import CloseIcon from "@mui/icons-material/Close";
+import Button from "@mui/material/Button";
+import DialogActions from "@mui/material/DialogActions";
+import DialogTitle from "@mui/material/DialogTitle";
+import IconButton from "@mui/material/IconButton";
+import type { SxProps, Theme } from "@mui/material/styles";
 
 interface DialogTitleWithCloseProps {
   title: React.ReactNode;
   onClose: () => void;
   /** Optional data-testid applied to the close button */
   closeButtonTestId?: string;
-  /** Optional style overrides merged onto the default title styling */
-  sx?: React.CSSProperties;
+  /** Optional sx overrides merged onto the default DialogTitle styling */
+  sx?: SxProps<Theme>;
 }
 
 export const DialogTitleWithClose: React.FC<DialogTitleWithCloseProps> = ({
@@ -17,12 +21,17 @@ export const DialogTitleWithClose: React.FC<DialogTitleWithCloseProps> = ({
   closeButtonTestId,
   sx
 }) => (
-  <Group justify="space-between" align="center" style={{ paddingTop: 12, paddingBottom: 12, ...sx }}>
-    <Text fw={600}>{title}</Text>
-    <ActionIcon variant="subtle" color="gray" onClick={onClose} data-testid={closeButtonTestId}>
-      <IconX size={18} />
-    </ActionIcon>
-  </Group>
+  <DialogTitle
+    sx={[
+      { display: "flex", alignItems: "center", justifyContent: "space-between", py: 1.5 },
+      ...(Array.isArray(sx) ? sx : [sx])
+    ]}
+  >
+    {title}
+    <IconButton size="small" onClick={onClose} data-testid={closeButtonTestId}>
+      <CloseIcon fontSize="small" />
+    </IconButton>
+  </DialogTitle>
 );
 
 interface DialogCancelSaveActionsProps {
@@ -40,12 +49,12 @@ export const DialogCancelSaveActions: React.FC<DialogCancelSaveActionsProps> = (
   saveLabel = "Save",
   disableSave = false
 }) => (
-  <Group justify="flex-end" gap="sm">
-    <Button variant="subtle" size="compact-sm" onClick={onCancel}>
+  <DialogActions>
+    <Button variant="text" size="small" onClick={onCancel}>
       {cancelLabel}
     </Button>
-    <Button size="compact-sm" onClick={onSave} disabled={disableSave}>
+    <Button size="small" onClick={onSave} disabled={disableSave}>
       {saveLabel}
     </Button>
-  </Group>
+  </DialogActions>
 );

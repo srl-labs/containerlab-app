@@ -8,16 +8,18 @@
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NodeToolbar, Position } from "@xyflow/react";
-import {
-  IconAlignCenter,
-  IconAlignLeft,
-  IconAlignRight,
-  IconBold,
-  IconItalic,
-  IconUnderline,
-  IconAdjustments
-} from "@tabler/icons-react";
-import { ActionIcon, Box, Divider, Paper, Tooltip } from "@mantine/core";
+import FormatAlignCenterIcon from "@mui/icons-material/FormatAlignCenter";
+import FormatAlignLeftIcon from "@mui/icons-material/FormatAlignLeft";
+import FormatAlignRightIcon from "@mui/icons-material/FormatAlignRight";
+import FormatBoldIcon from "@mui/icons-material/FormatBold";
+import FormatItalicIcon from "@mui/icons-material/FormatItalic";
+import FormatUnderlinedIcon from "@mui/icons-material/FormatUnderlined";
+import TuneIcon from "@mui/icons-material/Tune";
+import Box from "@mui/material/Box";
+import Divider from "@mui/material/Divider";
+import MuiIconButton from "@mui/material/IconButton";
+import Paper from "@mui/material/Paper";
+import Tooltip from "@mui/material/Tooltip";
 
 import type { FreeTextAnnotation } from "../../../core/types/topology";
 import { loadMarkdownRenderer } from "../../../utils/markdownRendererLazy";
@@ -53,18 +55,22 @@ const ToolbarButton: React.FC<{
   onClick: () => void;
   children: React.ReactNode;
 }> = ({ active = false, title, testId, onClick, children }) => (
-  <Tooltip label={title}>
-    <ActionIcon
-      radius="sm"
-      variant={active ? "filled" : "subtle"}
-      color={active ? "blue" : "gray"}
+  <Tooltip title={title}>
+    <MuiIconButton
+      size="small"
       data-testid={testId}
       onClick={onClick}
       // Keep focus in the textarea so toolbar clicks don't commit the edit.
       onMouseDown={(e) => e.preventDefault()}
+      sx={{
+        borderRadius: 0.5,
+        color: active ? "primary.contrastText" : "text.primary",
+        bgcolor: active ? "primary.main" : "transparent",
+        "&:hover": { bgcolor: active ? "primary.dark" : "action.hover" }
+      }}
     >
       {children}
-    </ActionIcon>
+    </MuiIconButton>
   </Tooltip>
 );
 
@@ -134,13 +140,13 @@ const InlinePreviewCard: React.FC<{
 }> = ({ nodeId, textStyle, children }) => (
   <NodeToolbar nodeId={nodeId} isVisible position={Position.Bottom} offset={10} className="nodrag nopan">
     <Paper
-      shadow="md"
+      elevation={4}
       data-testid="free-text-inline-preview"
       // Keep focus in the textarea so touching the preview doesn't commit.
       onMouseDown={(e) => e.preventDefault()}
-      style={{ padding: 8, maxWidth: 420, overflow: "hidden" }}
+      sx={{ p: 1, maxWidth: 420, overflow: "hidden" }}
     >
-      <Box style={{ fontSize: 10, opacity: 0.6, marginBottom: 4, userSelect: "none" }}>Preview</Box>
+      <Box sx={{ fontSize: 10, opacity: 0.6, mb: 0.5, userSelect: "none" }}>Preview</Box>
       <div
         className="free-text-markdown free-text-content--auto free-text-inline-preview"
         style={{ ...textStyle, width: "100%", height: "auto", overflow: "hidden" }}
@@ -255,10 +261,10 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
       >
         <Paper
           ref={toolbarRef}
-          shadow="md"
+          elevation={4}
           data-testid="free-text-inline-toolbar"
           onKeyDown={handleKeyDown}
-          style={{ display: "flex", alignItems: "center", gap: 2, padding: 2 }}
+          sx={{ display: "flex", alignItems: "center", gap: 0.25, p: 0.25 }}
         >
           <ToolbarButton
             title="Bold"
@@ -266,7 +272,7 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
             active={isBold}
             onClick={() => onStyleChange?.({ fontWeight: isBold ? "normal" : "bold" })}
           >
-            <IconBold size={18} />
+            <FormatBoldIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Italic"
@@ -274,7 +280,7 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
             active={isItalic}
             onClick={() => onStyleChange?.({ fontStyle: isItalic ? "normal" : "italic" })}
           >
-            <IconItalic size={18} />
+            <FormatItalicIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Underline"
@@ -283,31 +289,31 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
               onStyleChange?.({ textDecoration: isUnderline ? "none" : "underline" })
             }
           >
-            <IconUnderline size={18} />
+            <FormatUnderlinedIcon fontSize="small" />
           </ToolbarButton>
-          <Divider orientation="vertical" style={{ marginInline: 4, height: 24, alignSelf: "center" }} />
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ToolbarButton
             title="Align Left"
             active={align === "left"}
             onClick={() => onStyleChange?.({ textAlign: "left" })}
           >
-            <IconAlignLeft size={18} />
+            <FormatAlignLeftIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Align Center"
             active={align === "center"}
             onClick={() => onStyleChange?.({ textAlign: "center" })}
           >
-            <IconAlignCenter size={18} />
+            <FormatAlignCenterIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Align Right"
             active={align === "right"}
             onClick={() => onStyleChange?.({ textAlign: "right" })}
           >
-            <IconAlignRight size={18} />
+            <FormatAlignRightIcon fontSize="small" />
           </ToolbarButton>
-          <Divider orientation="vertical" style={{ marginInline: 4, height: 24, alignSelf: "center" }} />
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
           <ToolbarButton title="Smaller text" onClick={() => changeFontSize(-1)}>
             <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1 }}>A−</span>
           </ToolbarButton>
@@ -322,7 +328,7 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
           </span>
           {onOpenStyleEditor && (
             <>
-              <Divider orientation="vertical" style={{ marginInline: 4, height: 24, alignSelf: "center" }} />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
               <ToolbarButton
                 title="More styling options…"
                 testId="inline-text-more"
@@ -332,7 +338,7 @@ export const FreeTextInlineEditor: React.FC<FreeTextInlineEditorProps> = ({
                   onOpenStyleEditor(textRef.current);
                 }}
               >
-                <IconAdjustments size={18} />
+                <TuneIcon fontSize="small" />
               </ToolbarButton>
             </>
           )}

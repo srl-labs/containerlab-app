@@ -1,6 +1,6 @@
 // Node info view with read-only fields.
 import React from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import { getRecordUnknown, getString } from "../../../../core/utilities/typeHelpers";
 import type { NodeData } from "../../../../hooks/ui";
@@ -57,15 +57,15 @@ export const NodeInfoView: React.FC<NodeInfoViewProps> = ({ nodeData }) => {
     extractNodeDisplayProps(nodeData);
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSectionHeader title="Node" withTopDivider={true} />
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
         <ReadOnlyCopyField label="Name" value={nodeName} />
       </Box>
 
       <PanelSectionHeader title="Properties" withTopDivider={true} />
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ReadOnlyCopyField label="Kind" value={kind} />
           <ReadOnlyCopyField label="State" value={state} />
         </Box>
@@ -73,8 +73,8 @@ export const NodeInfoView: React.FC<NodeInfoViewProps> = ({ nodeData }) => {
       </Box>
 
       <PanelSectionHeader title="Management" withTopDivider={true} />
-      <Box style={{ display: "flex", flexDirection: "column", gap: 12, padding: 16 }}>
-        <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ReadOnlyCopyField label="IPv4" value={mgmtIpv4} mono />
           <ReadOnlyCopyField label="IPv6" value={mgmtIpv6} mono />
         </Box>

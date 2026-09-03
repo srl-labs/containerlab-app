@@ -1,63 +1,60 @@
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AddIcon from "@mui/icons-material/Add";
+import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
+import BuildIcon from "@mui/icons-material/Build";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import CodeIcon from "@mui/icons-material/Code";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import CssIcon from "@mui/icons-material/Css";
+import DataObjectOutlinedIcon from "@mui/icons-material/DataObjectOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
+import FilterAltIcon from "@mui/icons-material/FilterAlt";
+import FolderIcon from "@mui/icons-material/Folder";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
+import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
+import HtmlIcon from "@mui/icons-material/Html";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import JavascriptIcon from "@mui/icons-material/Javascript";
+import LinkIcon from "@mui/icons-material/Link";
+import LinkOffIcon from "@mui/icons-material/LinkOff";
+import ManageSearchIcon from "@mui/icons-material/ManageSearch";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import NoteAddIcon from "@mui/icons-material/NoteAdd";
+import OpenInBrowserIcon from "@mui/icons-material/OpenInBrowser";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
+import SearchIcon from "@mui/icons-material/Search";
+import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
+import SourceIcon from "@mui/icons-material/Source";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
+import StopIcon from "@mui/icons-material/Stop";
+import TerminalIcon from "@mui/icons-material/Terminal";
+import TuneIcon from "@mui/icons-material/Tune";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import type { SvgIconComponent } from "@mui/icons-material";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
+import InputAdornment from "@mui/material/InputAdornment";
+import Paper from "@mui/material/Paper";
+import Snackbar from "@mui/material/Snackbar";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
+import type { Theme } from "@mui/material/styles";
 import {
-  type Icon as TablerIcon,
-  IconSitemap as AccountTreeIcon,
-  IconPlus as AddIcon,
-  IconArticle as ArticleOutlinedIcon,
-  IconTool as BuildIcon,
-  IconChevronRight as ChevronRightIcon,
-  IconCode as CodeIcon,
-  IconCopy as ContentCopyIcon,
-  IconBrandCss3 as CssIcon,
-  IconBraces as DataObjectOutlinedIcon,
-  IconFileDescription as DescriptionOutlinedIcon,
-  IconTrash as DeleteOutlineIcon,
-  IconDownload as DownloadOutlinedIcon,
-  IconChevronDown as ExpandMoreIcon,
-  IconFileUpload as FileUploadOutlinedIcon,
-  IconFilter as FilterAltIcon,
-  IconFolder as FolderIcon,
-  IconFolderOpen as FolderOpenIcon,
-  IconMessages as ForumOutlinedIcon,
-  IconTopologyStar as HubOutlinedIcon,
-  IconBrandHtml5 as HtmlIcon,
-  IconPackages as Inventory2OutlinedIcon,
-  IconBrandJavascript as JavascriptIcon,
-  IconLink as LinkIcon,
-  IconUnlink as LinkOffIcon,
-  IconListSearch as ManageSearchIcon,
-  IconDotsVertical as MoreVertIcon,
-  IconFilePlus as NoteAddIcon,
-  IconExternalLink as OpenInBrowserIcon,
-  IconExternalLink as OpenInNewIcon,
-  IconPlayerPause as PauseCircleOutlineIcon,
-  IconPlayerPlay as PlayArrowIcon,
-  IconPlayerPlay as PlayCircleOutlineIcon,
-  IconRefresh as RefreshIcon,
-  IconDeviceFloppy as SaveOutlinedIcon,
-  IconSearch as SearchIcon,
-  IconArrowsLeftRight as SettingsEthernetIcon,
-  IconCode as SourceIcon,
-  IconStarFilled as StarIcon,
-  IconStar as StarBorderIcon,
-  IconPlayerStop as StopIcon,
-  IconTerminal as TerminalIcon,
-  IconAdjustments as TuneIcon,
-  IconEye as VisibilityIcon,
-  IconEyeOff as VisibilityOffIcon
-} from "@tabler/icons-react";
-import {
-  ActionIcon,
-  Alert,
-  Box,
-  Group,
-  Paper,
-  Stack,
-  Text,
-  TextInput,
-  Tooltip
-} from "@mantine/core";
-import {
-  type CSSProperties,
   type Dispatch,
   type DragEvent,
   type MouseEvent,
@@ -97,53 +94,10 @@ import {
   withExpandedSectionItems
 } from "./explorerUiState";
 
-const COLOR_ERROR_MAIN = "var(--vscode-editorError-foreground)";
-const COLOR_TEXT_PRIMARY = "var(--clab-ui-editor-foreground, var(--vscode-foreground))";
-const COLOR_TEXT_SECONDARY = "var(--vscode-descriptionForeground)";
-const COLOR_TEXT_DISABLED = "var(--vscode-disabledForeground)";
-const COLOR_WARNING_MAIN = "var(--vscode-editorWarning-foreground)";
-const COLOR_INFO_MAIN = "var(--vscode-editorInfo-foreground)";
-const COLOR_SUCCESS_MAIN = "var(--vscode-testing-iconPassed, var(--vscode-charts-green))";
-const COLOR_PRIMARY_MAIN = "var(--clab-ui-button-background, var(--vscode-button-background))";
-const COLOR_BG_PAPER = "var(--clab-ui-panel-background, var(--vscode-sideBar-background))";
-const COLOR_ACTION_SELECTED = "var(--vscode-list-inactiveSelectionBackground)";
-const withAlpha = (color: string, opacity: number): string =>
-  `color-mix(in srgb, ${color} ${Math.round(opacity * 100)}%, transparent)`;
-
-// Hover/focus reveal behaviours that Mantine style props can't express (no
-// pseudo-selectors). Scoped to the explorer root; injected once by the view.
-const EXPLORER_INTERACTION_CSS = `
-.containerlab-explorer-root .explorer-node-actions-trigger {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.containerlab-explorer-root [data-explorer-node-row="true"]:hover .explorer-node-actions-trigger,
-.containerlab-explorer-root [data-explorer-node-row="true"]:focus-within .explorer-node-actions-trigger {
-  opacity: 1;
-  pointer-events: auto;
-}
-.containerlab-explorer-root [data-explorer-node-row="true"]:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-.containerlab-explorer-root .explorer-section-header .explorer-section-hover-actions {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms ease;
-}
-.containerlab-explorer-root .explorer-section-header:hover .explorer-section-hover-actions,
-.containerlab-explorer-root .explorer-section-header:focus-within .explorer-section-hover-actions,
-.containerlab-explorer-root .explorer-section-header.is-dragging .explorer-section-hover-actions {
-  opacity: 1;
-  pointer-events: auto;
-}
-.containerlab-explorer-root .explorer-section-header:hover {
-  background-color: var(--vscode-list-hoverBackground);
-}
-.containerlab-explorer-root .explorer-resize-divider:hover {
-  background-color: color-mix(in srgb, var(--clab-ui-button-background, var(--vscode-button-background)) 18%, transparent);
-}
-`;
+const COLOR_ERROR_MAIN = "error.main";
+const COLOR_TEXT_PRIMARY = "text.primary";
+const COLOR_TEXT_SECONDARY = "text.secondary";
+const COLOR_TEXT_DISABLED = "text.disabled";
 const FILTER_UPDATE_DEBOUNCE_MS = 250;
 const UI_STATE_UPDATE_DEBOUNCE_MS = 160;
 const DEFAULT_EXPANDED_SECTIONS = new Set<ExplorerSectionId>([
@@ -163,27 +117,24 @@ const TREE_ENDPOINT_ROW_HEIGHT_PX = 24;
 const RESIZE_DIVIDER_HEIGHT_PX = 4;
 const MIN_SECTION_BODY_HEIGHT_PX = 40;
 const FIXED_HEIGHT_SECTIONS: ReadonlySet<ExplorerSectionId> = new Set(["helpFeedback"]);
-const NATIVE_SECTION_TITLE_FONT =
-  "var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif)";
-const NATIVE_TITLE_SECTIONS: ReadonlySet<ExplorerSectionId> = new Set([
-  "runningLabs",
-  "localLabs"
-]);
 
 const STATUS_COLOR_MAP: Record<string, string> = {
-  green: COLOR_SUCCESS_MAIN,
+  green: "success.main",
   red: COLOR_ERROR_MAIN,
-  yellow: COLOR_WARNING_MAIN,
-  blue: COLOR_INFO_MAIN,
+  yellow: "warning.main",
+  blue: "info.main",
   gray: COLOR_TEXT_DISABLED
 };
 
-const TOOLBAR_ICON_BUTTON_STYLE: CSSProperties = {
+const TOOLBAR_ICON_BUTTON_SX = {
   width: 24,
   height: 24,
-  borderRadius: 4,
-  color: COLOR_TEXT_PRIMARY
-};
+  borderRadius: 1,
+  color: COLOR_TEXT_PRIMARY,
+  "&:hover": {
+    bgcolor: (theme: Theme) => theme.alpha(theme.palette.primary.main, 0.14)
+  }
+} as const;
 
 interface ExplorerNodeLabelProps {
   node: ExplorerNode;
@@ -218,7 +169,7 @@ type CommandMatcher = (command: string) => boolean;
 
 interface CommandIconRule {
   match: CommandMatcher;
-  icon: TablerIcon;
+  icon: SvgIconComponent;
 }
 
 interface CommandActionGroupRule {
@@ -280,7 +231,7 @@ const ACTION_GROUP_ORDER_BY_NODE_KIND: Record<ExplorerNodeKind, ActionGroupId[]>
   other: ACTION_GROUP_ORDER_DEFAULT
 };
 
-const ACTION_ICON_BY_COMMAND: Record<string, TablerIcon> = {
+const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.endpoint.add": AddIcon,
   "containerlab.inspectall": ManageSearchIcon,
   "containerlab.treeview.runninglabs.hidenonownedlabs": VisibilityOffIcon,
@@ -535,18 +486,18 @@ function statusColor(indicator: string | undefined): string {
   return STATUS_COLOR_MAP[indicator] || COLOR_TEXT_DISABLED;
 }
 
-function indicatorColor(indicator: ExplorerNode["statusIndicator"]): string {
+function indicatorThemeColor(theme: Theme, indicator: ExplorerNode["statusIndicator"]): string {
   switch (indicator) {
     case "green":
-      return COLOR_SUCCESS_MAIN;
+      return theme.palette.success.main;
     case "red":
-      return COLOR_ERROR_MAIN;
+      return theme.palette.error.main;
     case "yellow":
-      return COLOR_WARNING_MAIN;
+      return theme.palette.warning.main;
     case "blue":
-      return COLOR_INFO_MAIN;
+      return theme.palette.info.main;
     default:
-      return COLOR_TEXT_DISABLED;
+      return theme.palette.text.disabled;
   }
 }
 
@@ -808,7 +759,7 @@ function resolveEndpointQuickActions(
   };
 }
 
-function actionIcon(action: ExplorerAction): TablerIcon {
+function actionIcon(action: ExplorerAction): SvgIconComponent {
   const command = action.commandId.toLowerCase();
   const commandIcon = ACTION_ICON_BY_COMMAND[command];
   if (commandIcon) {
@@ -852,7 +803,7 @@ const ACTION_GROUP_LABELS: Record<ActionGroupId, string> = {
   other: "Other"
 };
 
-const ACTION_GROUP_ICONS: Record<ActionGroupId, TablerIcon> = {
+const ACTION_GROUP_ICONS: Record<ActionGroupId, SvgIconComponent> = {
   topology: FolderOpenIcon,
   graph: AccountTreeIcon,
   lifecycle: PlayArrowIcon,
@@ -879,7 +830,7 @@ function actionGroupLabel(groupId: ActionGroupId): string {
   return ACTION_GROUP_LABELS[groupId];
 }
 
-function actionGroupIcon(groupId: ActionGroupId): TablerIcon {
+function actionGroupIcon(groupId: ActionGroupId): SvgIconComponent {
   return ACTION_GROUP_ICONS[groupId];
 }
 
@@ -970,7 +921,7 @@ function isHelpFeedbackLinkNode(node: ExplorerNode, sectionId: ExplorerSectionId
   return node.primaryAction?.commandId.toLowerCase() === "containerlab.openlink";
 }
 
-function helpFeedbackIconForNode(node: ExplorerNode): TablerIcon {
+function helpFeedbackIconForNode(node: ExplorerNode): SvgIconComponent {
   const label = node.label.toLowerCase();
   if (label.includes("discord")) {
     return ForumOutlinedIcon;
@@ -991,13 +942,13 @@ function helpFeedbackIconForNode(node: ExplorerNode): TablerIcon {
 }
 
 interface ExplorerLeadingIcon {
-  Icon: TablerIcon;
+  Icon: SvgIconComponent;
   color: string;
 }
 
 interface FileIconRule {
   color: string;
-  icon: TablerIcon;
+  icon: SvgIconComponent;
   match: RegExp;
 }
 
@@ -1062,10 +1013,10 @@ function nodeLeadingIcon(
     return { Icon: HubOutlinedIcon, color: COLOR_TEXT_PRIMARY };
   }
   if (context === "containerlabInterfaceUp") {
-    return { Icon: SettingsEthernetIcon, color: COLOR_SUCCESS_MAIN };
+    return { Icon: SettingsEthernetIcon, color: "success.main" };
   }
   if (context === "containerlabInterfaceDown") {
-    return { Icon: LinkOffIcon, color: COLOR_ERROR_MAIN };
+    return { Icon: LinkOffIcon, color: "error.main" };
   }
   if (context === "containerlabFolder") {
     return { Icon: FolderIcon, color: FILE_ICON_FOLDER_COLOR };
@@ -1096,7 +1047,7 @@ function toContextMenuItem(
   return {
     id: action.id,
     label: action.label,
-    icon: <ActionIcon size={18} />,
+    icon: <ActionIcon fontSize="small" />,
     danger: Boolean(action.destructive),
     disabled: action.disabled,
     onClick: () => onInvokeAction(action)
@@ -1155,7 +1106,7 @@ function toGroupMenuItem(
   return {
     id: `group:${group.id}`,
     label: group.label,
-    icon: <GroupIcon size={18} />,
+    icon: <GroupIcon fontSize="small" />,
     children
   };
 }
@@ -1254,7 +1205,7 @@ function buildEndpointMenuItems(
     {
       id: "group:endpoint:capture",
       label: "Capture",
-      icon: <SettingsEthernetIcon size={18} />,
+      icon: <SettingsEthernetIcon fontSize="small" />,
       children: captureItems
     }
   ];
@@ -1445,7 +1396,7 @@ function ExplorerNodeMarker({
 
   return (
     <Box
-      style={{
+      sx={{
         width: markerSlotPx,
         flex: `0 0 ${markerSlotPx}px`,
         display: "flex",
@@ -1455,8 +1406,9 @@ function ExplorerNodeMarker({
     >
       {leadingIcon ? (
         <leadingIcon.Icon
-          size={isEndpointRoot ? 14 : 13}
-          style={{
+          fontSize="inherit"
+          sx={{
+            fontSize: isEndpointRoot ? 14 : 13,
             color: leadingIcon.color,
             flex: "0 0 auto"
           }}
@@ -1464,12 +1416,12 @@ function ExplorerNodeMarker({
       ) : (
         showStatusDot && (
           <Box
-            style={{
+            sx={{
               width: 8,
               height: 8,
               borderRadius: "50%",
               flex: "0 0 auto",
-              backgroundColor: statusColor(statusIndicator)
+              bgcolor: statusColor(statusIndicator)
             }}
           />
         )
@@ -1491,11 +1443,11 @@ function ExplorerNodePrimaryLabel({
   isDisconnectedPlaceholder
 }: Readonly<ExplorerNodePrimaryLabelProps>) {
   return (
-    <Text
+    <Typography
       className="explorer-node-label"
-      size="sm"
-      truncate="end"
-      style={{
+      variant="body2"
+      noWrap
+      sx={{
         flex: 1,
         minWidth: 0,
         fontWeight: isEndpointRoot || isEndpointSection ? 600 : undefined,
@@ -1510,7 +1462,7 @@ function ExplorerNodePrimaryLabel({
       }}
     >
       {label}
-    </Text>
+    </Typography>
   );
 }
 
@@ -1537,52 +1489,53 @@ function ExplorerNodeTrailingContent({
     <>
       {showFavoriteIcon && (
         <StarIcon
-          size="1em"
+          fontSize="inherit"
           className="explorer-node-inline-icon explorer-node-inline-icon-favorite"
           aria-hidden="true"
-          style={{ flexShrink: 0 }}
+          sx={{ flexShrink: 0 }}
         />
       )}
       {showSharedIcon && (
-        <ActionIcon
-          size="sm"
-          variant="subtle"
+        <IconButton
+          size="small"
           className="explorer-node-inline-icon-button"
           onClick={handleShareAction}
           aria-label={node.shareAction?.label ?? "Open shared session"}
-          style={{ flexShrink: 0, width: 18, height: 18, minWidth: 18, minHeight: 18, color: "inherit" }}
+          sx={{ flexShrink: 0 }}
         >
           <LinkIcon
-            size="1em"
+            fontSize="inherit"
             className="explorer-node-inline-icon explorer-node-inline-icon-shared"
             aria-hidden="true"
           />
-        </ActionIcon>
+        </IconButton>
       )}
       {inlineContainerStatus && (
-        <Text size="xs" c="dimmed" truncate="end" style={{ flexShrink: 0 }}>
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ flexShrink: 0 }}>
           {inlineContainerStatus}
-        </Text>
+        </Typography>
       )}
       {endpointStatus && (
         <Box
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            paddingLeft: 6,
-            paddingRight: 6,
-            borderRadius: 8,
-            color: indicatorColor(node.statusIndicator),
-            backgroundColor: withAlpha(indicatorColor(node.statusIndicator), 0.15),
-            height: 16,
-            flexShrink: 0,
-            marginLeft: 6
+          sx={(theme) => {
+            const tone = indicatorThemeColor(theme, node.statusIndicator);
+            return {
+              display: "inline-flex",
+              alignItems: "center",
+              px: "6px",
+              borderRadius: 8,
+              color: tone,
+              bgcolor: theme.alpha(tone, 0.15),
+              height: 16,
+              flexShrink: 0,
+              ml: "6px"
+            };
           }}
         >
-          <Text
-            span
-            fw={500}
-            style={{
+          <Typography
+            variant="caption"
+            fontWeight={500}
+            sx={{
               lineHeight: "16px",
               color: "inherit",
               letterSpacing: "0.03em",
@@ -1591,23 +1544,23 @@ function ExplorerNodeTrailingContent({
             }}
           >
             {endpointStatus}
-          </Text>
+          </Typography>
         </Box>
       )}
       {endpointDescription && (
-        <Text
-          size="xs"
-          c="dimmed"
-          truncate="end"
-          style={{
-            marginLeft: 8,
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          noWrap
+          sx={{
+            ml: "8px",
             maxWidth: 120,
             fontSize: "0.75rem",
             flexShrink: 0
           }}
         >
           {endpointDescription}
-        </Text>
+        </Typography>
       )}
     </>
   );
@@ -1616,7 +1569,7 @@ function ExplorerNodeTrailingContent({
 interface ExplorerEndpointActionButtonProps {
   action: ExplorerAction | undefined;
   ariaLabel: string;
-  icon: TablerIcon;
+  icon: SvgIconComponent;
   onInvokeAction: (action: ExplorerAction) => void;
 }
 
@@ -1631,11 +1584,10 @@ function ExplorerEndpointActionButton({
   }
 
   return (
-    <Tooltip label={action.label || ariaLabel} position="bottom" openDelay={300} withArrow>
-      <Box component="span" style={{ display: "inline-flex" }}>
-        <ActionIcon
-          size="sm"
-          variant="subtle"
+    <Tooltip title={action.label || ariaLabel} placement="bottom" enterDelay={300}>
+      <Box component="span" sx={{ display: "inline-flex" }}>
+        <IconButton
+          size="small"
           className="explorer-node-actions-trigger"
           disabled={action.disabled}
           onClick={(event) => {
@@ -1647,17 +1599,18 @@ function ExplorerEndpointActionButton({
             onInvokeAction(action);
           }}
           aria-label={ariaLabel}
-          style={{
+          sx={{
             width: 20,
             height: 20,
-            minWidth: 20,
-            minHeight: 20,
-            padding: 2,
-            color: COLOR_TEXT_SECONDARY
+            p: 0.25,
+            color: "text.secondary",
+            opacity: 0,
+            pointerEvents: "none",
+            transition: "opacity 120ms ease"
           }}
         >
-          <Icon size={14} />
-        </ActionIcon>
+          <Icon sx={{ fontSize: 14 }} />
+        </IconButton>
       </Box>
     </Tooltip>
   );
@@ -1718,27 +1671,31 @@ function ExplorerNodeTextBlock({
   return (
     <Box
       onClick={handlePrimaryAction}
-      style={{ minWidth: 0, flex: 1, cursor: node.primaryAction ? "pointer" : "default" }}
+      sx={{ minWidth: 0, flex: 1, cursor: node.primaryAction ? "pointer" : "default" }}
     >
       <Tooltip
-        label={node.tooltip ?? ""}
-        position="bottom"
-        openDelay={300}
-        multiline
-        disabled={!hasEntryTooltip}
-        styles={{
+        title={hasEntryTooltip ? node.tooltip : ""}
+        placement="bottom"
+        enterDelay={300}
+        disableInteractive
+        disableHoverListener={!hasEntryTooltip}
+        disableFocusListener={!hasEntryTooltip}
+        disableTouchListener={!hasEntryTooltip}
+        slotProps={{
           tooltip: {
-            maxWidth: "min(360px, calc(100vw - 24px))",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word"
+            sx: {
+              maxWidth: "min(360px, calc(100vw - 24px))",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word"
+            }
           }
         }}
       >
-        <Group
-          gap={isEndpointRoot ? 4 : 2}
-          align="center"
-          wrap="nowrap"
-          style={{ minWidth: 0, width: "100%" }}
+        <Stack
+          direction="row"
+          spacing={isEndpointRoot ? 0.45 : TREE_ROW_GAP}
+          alignItems="center"
+          sx={{ minWidth: 0, width: "100%" }}
         >
           <ExplorerNodeMarker
             leadingIcon={leadingIcon}
@@ -1761,12 +1718,12 @@ function ExplorerNodeTextBlock({
             endpointDescription={endpointDescription}
             handleShareAction={handleShareAction}
           />
-        </Group>
+        </Stack>
       </Tooltip>
       {showSecondaryLine && (
-        <Text size="xs" c="dimmed" truncate="end">
+        <Typography variant="caption" color="text.secondary" noWrap>
           {secondaryText}
-        </Text>
+        </Typography>
       )}
     </Box>
   );
@@ -1801,26 +1758,24 @@ function ExplorerNodeActions({
 
   return (
     <>
-      <ActionIcon
-        size="sm"
-        variant="subtle"
+      <IconButton
+        size="small"
         className="explorer-node-actions-trigger"
         onClick={handleMenuOpen}
         aria-label={`Actions for ${node.label}`}
         data-node-actions-trigger="true"
-        style={{
+        sx={{
           width: 20,
           height: 20,
-          minWidth: 20,
-          minHeight: 20,
-          padding: 2,
-          color: COLOR_TEXT_SECONDARY,
-          opacity: menuOpen ? 1 : undefined,
-          pointerEvents: menuOpen ? "auto" : undefined
+          p: 0.25,
+          color: "text.secondary",
+          opacity: menuOpen ? 1 : 0,
+          pointerEvents: menuOpen ? "auto" : "none",
+          transition: "opacity 120ms ease"
         }}
       >
-        <MoreVertIcon size={18} />
-      </ActionIcon>
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
       <ContextMenu
         isVisible={menuOpen}
         position={menuPosition ?? { x: 0, y: 0 }}
@@ -1883,19 +1838,27 @@ function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<Explore
   const rowMinHeight = endpointRowHeight(isEndpointRoot, isEndpointSection);
 
   return (
-    <Group
-      wrap="nowrap"
-      align="center"
-      gap={4}
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={0.55}
       onContextMenu={handleRowContextMenu}
       data-explorer-node-row="true"
-      style={{
+      sx={{
         width: "100%",
         minHeight: rowMinHeight,
-        borderRadius: 6,
-        paddingLeft: isEndpointRoot ? 3 : 1,
-        paddingRight: isEndpointRoot ? 3 : 1,
-        backgroundColor: menuOpen ? COLOR_ACTION_SELECTED : undefined
+        borderRadius: 0.75,
+        px: isEndpointRoot ? 0.35 : 0.15,
+        "&:hover": {
+          bgcolor: "action.hover"
+        },
+        ...(menuOpen && {
+          bgcolor: "action.selected"
+        }),
+        "&:hover .explorer-node-actions-trigger, &:focus-within .explorer-node-actions-trigger": {
+          opacity: 1,
+          pointerEvents: "auto"
+        }
       }}
     >
       <ExplorerNodeTextBlock
@@ -1926,7 +1889,7 @@ function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<Explore
         handleMenuClose={handleMenuClose}
         handleBackdropContextMenu={handleBackdropContextMenu}
       />
-    </Group>
+    </Stack>
   );
 }
 
@@ -1957,14 +1920,14 @@ function SectionTreeNode({
 
   return (
     <Box>
-      <Group
-        wrap="nowrap"
-        align="center"
-        gap={TREE_ROW_GAP * 8}
-        style={{ minHeight: rowMinHeight, paddingLeft: depth * TREE_DEPTH_INDENT * 8 }}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={TREE_ROW_GAP}
+        sx={{ minHeight: rowMinHeight, pl: depth * TREE_DEPTH_INDENT }}
       >
         <Box
-          style={{
+          sx={{
             width: TREE_DISCLOSURE_SLOT_PX,
             flex: `0 0 ${TREE_DISCLOSURE_SLOT_PX}px`,
             display: "flex",
@@ -1973,15 +1936,12 @@ function SectionTreeNode({
           }}
         >
           {hasChildren && (
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              style={{
+            <IconButton
+              size="small"
+              sx={{
                 width: TREE_DISCLOSURE_SLOT_PX,
                 height: TREE_DISCLOSURE_SLOT_PX,
-                minWidth: TREE_DISCLOSURE_SLOT_PX,
-                minHeight: TREE_DISCLOSURE_SLOT_PX,
-                padding: 0,
+                p: 0,
                 color: COLOR_TEXT_PRIMARY
               }}
               onClick={(event) => {
@@ -1991,8 +1951,8 @@ function SectionTreeNode({
               }}
               aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
             >
-              {isExpanded ? <ExpandMoreIcon size="1em" /> : <ChevronRightIcon size="1em" />}
-            </ActionIcon>
+              {isExpanded ? <ExpandMoreIcon fontSize="inherit" /> : <ChevronRightIcon fontSize="inherit" />}
+            </IconButton>
           )}
         </Box>
 
@@ -2005,14 +1965,14 @@ function SectionTreeNode({
             event.stopPropagation();
             onToggleExpanded(node.id);
           }}
-          style={{ flex: 1, minWidth: 0, cursor: toggleOnRowClick ? "pointer" : "default" }}
+          sx={{ flex: 1, minWidth: 0, cursor: toggleOnRowClick ? "pointer" : "default" }}
         >
           <ExplorerNodeLabel node={node} sectionId={sectionId} onInvokeAction={onInvokeAction} />
         </Box>
-      </Group>
+      </Stack>
 
       {hasChildren && isExpanded && (
-        <Stack gap={1}>
+        <Stack spacing={0.1}>
           {node.children.map((child) => (
             <SectionTreeNode
               key={child.id}
@@ -2082,14 +2042,14 @@ function SectionTree({
 
   if (section.nodes.length === 0) {
     return (
-      <Text size="sm" c="dimmed">
+      <Typography variant="body2" color="text.secondary">
         No items found.
-      </Text>
+      </Typography>
     );
   }
 
   return (
-    <Stack gap={1} style={{ minHeight: 0 }}>
+    <Stack spacing={0.05} sx={{ minHeight: 0 }}>
       {section.nodes.map((node) => (
         <SectionTreeNode
           key={node.id}
@@ -2107,17 +2067,16 @@ function SectionTree({
 
 function SectionToolbarActions({ actions, onInvokeAction }: Readonly<SectionToolbarProps>) {
   return (
-    <Group gap={1} wrap="nowrap" className="explorer-section-hover-actions">
+    <Stack direction="row" spacing={0.1} className="explorer-section-hover-actions">
       {actions.map((action) => {
         const IconComponent = actionIcon(action);
         return (
-          <Tooltip key={action.id} label={action.label} withArrow>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
+          <Tooltip key={action.id} title={action.label}>
+            <IconButton
+              size="small"
               aria-label={action.label}
               disabled={action.disabled}
-              style={TOOLBAR_ICON_BUTTON_STYLE}
+              sx={TOOLBAR_ICON_BUTTON_SX}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -2127,12 +2086,12 @@ function SectionToolbarActions({ actions, onInvokeAction }: Readonly<SectionTool
                 onInvokeAction(action);
               }}
             >
-              <IconComponent size={18} />
-            </ActionIcon>
+              <IconComponent fontSize="small" />
+            </IconButton>
           </Tooltip>
         );
       })}
-    </Group>
+    </Stack>
   );
 }
 
@@ -2145,18 +2104,20 @@ interface ResizeDividerProps {
 function ResizeDivider({ aboveId, belowId, onResizeStart }: Readonly<ResizeDividerProps>) {
   return (
     <Box
-      className="explorer-resize-divider"
       onMouseDown={(e) => {
         e.preventDefault();
         onResizeStart(aboveId, belowId, e.clientY);
       }}
-      style={{
+      sx={{
         height: RESIZE_DIVIDER_HEIGHT_PX,
         flex: `0 0 ${RESIZE_DIVIDER_HEIGHT_PX}px`,
         cursor: "row-resize",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center"
+        justifyContent: "center",
+        "&:hover": {
+          bgcolor: (theme: Theme) => theme.alpha(theme.palette.primary.main, 0.18)
+        }
       }}
     />
   );
@@ -2261,37 +2222,47 @@ function normalizeHeightRatios(
   return nextRatios;
 }
 
-function getSectionPaperSx(isDropTarget: boolean, flexStyle: string): CSSProperties {
+function getSectionPaperSx(isDropTarget: boolean, flexStyle: string) {
   return {
     flex: flexStyle,
     minHeight: 0,
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     overflow: "hidden",
     borderRadius: 0,
     border: "none",
-    backgroundColor: "transparent",
+    bgcolor: "transparent",
     boxShadow: isDropTarget
-      ? `inset 0 0 0 1px ${withAlpha(COLOR_PRIMARY_MAIN, 0.35)}`
+      ? (theme: Theme) => `inset 0 0 0 1px ${theme.alpha(theme.palette.primary.main, 0.35)}`
       : "none"
   };
 }
 
-function getSectionHeaderSx(_isCollapsed: boolean, isBeingDragged: boolean): CSSProperties {
+function getSectionHeaderSx(_isCollapsed: boolean, isBeingDragged: boolean) {
   return {
-    paddingLeft: 3,
-    paddingRight: 3,
-    paddingTop: 1,
-    paddingBottom: 1,
+    px: 0.35,
+    py: 0.1,
     height: SECTION_HEADER_HEIGHT_PX,
     minHeight: SECTION_HEADER_HEIGHT_PX,
     maxHeight: SECTION_HEADER_HEIGHT_PX,
     display: "flex",
     alignItems: "center",
-    gap: 2,
+    gap: 0.2,
     cursor: isBeingDragged ? "grabbing" : "grab",
     userSelect: "none",
-    backgroundColor: isBeingDragged ? COLOR_ACTION_SELECTED : undefined
+    bgcolor: isBeingDragged ? "action.selected" : "transparent",
+    "&:hover": {
+      bgcolor: "action.hover"
+    },
+    "& .explorer-section-hover-actions": {
+      opacity: isBeingDragged ? 1 : 0,
+      pointerEvents: isBeingDragged ? "auto" : "none",
+      transition: "opacity 120ms ease"
+    },
+    "&:hover .explorer-section-hover-actions, &:focus-within .explorer-section-hover-actions": {
+      opacity: 1,
+      pointerEvents: "auto"
+    }
   };
 }
 
@@ -2355,78 +2326,66 @@ function ExplorerSectionCard({
 
   return (
     <Paper
+      variant="outlined"
       ref={(element: HTMLDivElement | null) => {
         onSetSectionRef(section.id, element);
       }}
-      style={getSectionPaperSx(isDropTarget, flexStyle)}
+      sx={getSectionPaperSx(isDropTarget, flexStyle)}
       onDragOver={onSectionDragOver(section.id)}
       onDrop={onSectionDrop(section.id)}
     >
       {!bareTreeSection && (
         <Box
           draggable
-          className={`explorer-section-header${isBeingDragged ? " is-dragging" : ""}`}
           onDragStart={onSectionDragStart(section.id)}
           onDragEnd={onSectionDragEnd}
-          style={{ ...getSectionHeaderSx(isCollapsed, isBeingDragged), flex: "0 0 auto" }}
+          sx={{ ...getSectionHeaderSx(isCollapsed, isBeingDragged), flex: "0 0 auto" }}
         >
-          <ActionIcon
-            size="sm"
-            variant="subtle"
+          <IconButton
+            size="small"
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
               onToggleSectionCollapsed(section.id);
             }}
             aria-label={isCollapsed ? `Expand ${section.label}` : `Collapse ${section.label}`}
-            style={{ color: COLOR_TEXT_PRIMARY, padding: 2 }}
+            sx={{ color: COLOR_TEXT_PRIMARY, p: 0.25 }}
           >
-            {isCollapsed ? <ChevronRightIcon size={18} /> : <ExpandMoreIcon size={18} />}
-          </ActionIcon>
+            {isCollapsed ? <ChevronRightIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
 
           <Box
             onClick={() => onToggleSectionCollapsed(section.id)}
-            style={{
+            sx={{
               minWidth: 0,
               flex: 1,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 4
+              gap: 0.5
             }}
           >
-            <Text
-              className="explorer-section-title"
-              size="sm"
-              truncate="end"
-              style={{
-                fontFamily: NATIVE_TITLE_SECTIONS.has(section.id)
-                  ? NATIVE_SECTION_TITLE_FONT
-                  : undefined
-              }}
-            >
+            <Typography className="explorer-section-title" variant="body2" noWrap>
               {formatSectionTitle(section)}
-            </Text>
+            </Typography>
             {showSectionCount(section) && (
               <Box
                 className="explorer-section-count"
-                style={{
+                sx={(theme) => ({
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  paddingLeft: 6,
-                  paddingRight: 6,
-                  paddingTop: 1,
-                  paddingBottom: 1,
+                  px: 0.7,
+                  py: 0.05,
                   minWidth: 18,
                   borderRadius: 999,
-                  backgroundColor: withAlpha(COLOR_TEXT_PRIMARY, 0.08),
-                  color: COLOR_TEXT_SECONDARY
-                }}
+                  bgcolor: theme.alpha(theme.palette.text.primary, 0.08),
+                  color: "text.secondary"
+                })}
               >
-                <Text span style={{ color: "inherit", lineHeight: 1.3, fontWeight: 700, fontSize: "0.75rem" }}>
+                <Typography variant="caption" sx={{ color: "inherit", lineHeight: 1.3, fontWeight: 700 }}>
                   {section.count}
-                </Text>
+                </Typography>
               </Box>
             )}
           </Box>
@@ -2434,12 +2393,11 @@ function ExplorerSectionCard({
           <SectionToolbarActions actions={section.toolbarActions} onInvokeAction={onInvokeAction} />
 
           {showExpandAllControl && (
-            <Tooltip label={allExpanded ? "Collapse All" : "Expand All"} withArrow>
-              <ActionIcon
-                size="sm"
-                variant="subtle"
+            <Tooltip title={allExpanded ? "Collapse All" : "Expand All"}>
+              <IconButton
+                size="small"
                 className="explorer-section-hover-actions"
-                style={{ color: COLOR_TEXT_PRIMARY }}
+                sx={{ color: COLOR_TEXT_PRIMARY }}
                 aria-label={allExpanded ? "Collapse all" : "Expand all"}
                 onClick={(event) => {
                   event.preventDefault();
@@ -2451,8 +2409,8 @@ function ExplorerSectionCard({
                   }
                 }}
               >
-                {allExpanded ? <ChevronRightIcon size={18} /> : <ExpandMoreIcon size={18} />}
-              </ActionIcon>
+                {allExpanded ? <ChevronRightIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
             </Tooltip>
           )}
         </Box>
@@ -2460,11 +2418,9 @@ function ExplorerSectionCard({
 
       {!isCollapsed && (
         <Box
-          style={{
-            paddingLeft: bareTreeSection ? 1 : 2,
-            paddingRight: bareTreeSection ? 1 : 2,
-            paddingTop: bareTreeSection ? 1 : 2,
-            paddingBottom: bareTreeSection ? 1 : 2,
+          sx={{
+            px: bareTreeSection ? 0.15 : 0.3,
+            py: bareTreeSection ? 0.1 : 0.25,
             flex: 1,
             minHeight: 0,
             overflowY: "auto"
@@ -2491,12 +2447,7 @@ function ExplorerSectionCard({
   );
 }
 
-interface ContainerlabExplorerViewProps {
-  /** When set, only these sections are rendered (the rest stay in state but hidden). */
-  visibleSections?: readonly ExplorerSectionId[];
-}
-
-export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplorerViewProps = {}) {
+export function ContainerlabExplorerView() {
   const host = useClabUiHost();
   const [sections, setSections] = useState<ExplorerSectionSnapshot[]>([]);
   const [sectionOrder, setSectionOrder] = useState<ExplorerSectionId[]>(EXPLORER_SECTION_ORDER);
@@ -2608,14 +2559,6 @@ export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplor
   const handleErrorClose = useCallback(() => {
     setErrorOpen(false);
   }, []);
-
-  useEffect(() => {
-    if (!errorOpen) {
-      return;
-    }
-    const timer = window.setTimeout(() => setErrorOpen(false), 10000);
-    return () => window.clearTimeout(timer);
-  }, [errorOpen, errorMessage]);
 
   useMessageListener<ExplorerIncomingMessage>(
     useCallback((message) => {
@@ -2731,19 +2674,15 @@ export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplor
   }, [sections]);
 
   const orderedSections = useMemo(() => {
-    const allowed = visibleSections ? new Set(visibleSections) : null;
     const visible: ExplorerSectionSnapshot[] = [];
     for (const sectionId of sectionOrder) {
-      if (allowed && !allowed.has(sectionId)) {
-        continue;
-      }
       const section = sectionsById.get(sectionId);
       if (section) {
         visible.push(section);
       }
     }
     return visible;
-  }, [sectionOrder, sectionsById, visibleSections]);
+  }, [sectionOrder, sectionsById]);
 
   const orderedSectionIds = useMemo(() => orderedSections.map((s) => s.id), [orderedSections]);
 
@@ -2876,7 +2815,7 @@ export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplor
   return (
     <Box
       className="containerlab-explorer-root"
-      style={{
+      sx={{
         width: "100%",
         maxWidth: "100%",
         height: "100%",
@@ -2885,81 +2824,84 @@ export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplor
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
-        backgroundColor: COLOR_BG_PAPER,
+        bgcolor: "background.paper",
+        pt: 0,
+        px: 0,
+        pb: 0,
         gap: 0
       }}
     >
-      <style>{EXPLORER_INTERACTION_CSS}</style>
-      {errorOpen && errorMessage ? (
-        <Box
-          style={{
-            position: "fixed",
-            top: 8,
-            right: 8,
-            zIndex: 3000,
-            maxWidth: "min(560px, calc(100vw - 16px))"
-          }}
-        >
-          <Alert
-            variant="filled"
-            color="red"
-            withCloseButton
-            closeButtonLabel="Close"
-            onClose={handleErrorClose}
-            styles={{
-              root: { alignItems: "flex-start" },
-              message: { whiteSpace: "pre-wrap", wordBreak: "break-word" }
-            }}
-          >
-            {errorMessage}
-          </Alert>
-        </Box>
-      ) : null}
-
-      <Group
-        gap={8}
-        align="center"
-        wrap="nowrap"
-        style={{
-          paddingLeft: 6,
-          paddingRight: 6,
-          paddingTop: 4,
-          paddingBottom: 4,
-          backgroundColor: COLOR_BG_PAPER
+      <Snackbar
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+        autoHideDuration={10000}
+        open={errorOpen && Boolean(errorMessage)}
+        onClose={handleErrorClose}
+        sx={{
+          mt: 1,
+          mr: 1,
+          maxWidth: { xs: "calc(100vw - 16px)", sm: 560 }
         }}
       >
-        <TextInput
+        <Alert
+          severity="error"
+          variant="filled"
+          onClose={handleErrorClose}
+          sx={{
+            width: "100%",
+            alignItems: "flex-start",
+            "& .MuiAlert-message": {
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word"
+            }
+          }}
+        >
+          {errorMessage}
+        </Alert>
+      </Snackbar>
+
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        sx={{
+          px: 0.75,
+          py: 0.5,
+          bgcolor: "background.paper",
+          borderBottom: 1,
+          borderColor: "divider"
+        }}
+      >
+        <TextField
+          size="small"
+          fullWidth
           value={filterText}
-          placeholder="Filter"
-          onChange={(event) => handleFilterChange(event.currentTarget.value)}
-          leftSection={<SearchIcon size={18} />}
-          style={{ flex: 1 }}
-          styles={{
+          placeholder="Filter labs, nodes, interfaces"
+          onChange={(event) => handleFilterChange(event.target.value)}
+          slotProps={{
             input: {
-              height: 30,
-              minHeight: 30,
-              borderRadius: 15,
-              border: "none",
-              backgroundColor: "var(--vscode-input-background, rgba(127,127,127,0.12))",
-              fontFamily: "'Roboto', sans-serif",
-              fontSize: "1rem"
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: undefined
             }
           }}
         />
         {floatingToolbarActions.length > 0 && (
           <SectionToolbarActions actions={floatingToolbarActions} onInvokeAction={invokeAction} />
         )}
-      </Group>
+      </Stack>
 
       <Box
         ref={paneContainerRef}
-        style={{
+        sx={{
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          ...(isResizing ? { cursor: "row-resize", userSelect: "none" } : {})
+          ...(isResizing && { cursor: "row-resize", userSelect: "none" })
         }}
       >
         {orderedSections.map((section, index) => {
@@ -2974,7 +2916,7 @@ export function ContainerlabExplorerView({ visibleSections }: ContainerlabExplor
           })();
 
           return (
-            <Box key={section.id} style={{ display: "contents" }}>
+            <Box key={section.id} sx={{ display: "contents" }}>
               {isExpanded && prevExpandedId && !FIXED_HEIGHT_SECTIONS.has(section.id) && !FIXED_HEIGHT_SECTIONS.has(prevExpandedId) && (
                 <ResizeDivider
                   aboveId={prevExpandedId}

@@ -73,7 +73,7 @@ export const CONTROL_POINT_STEP_SIZE = 40;
  *  them against the live document at export time (these are the fallbacks). */
 export const EDGE_LABEL = {
   fontSize: 10,
-  fontFamily: "'Roboto', sans-serif",
+  fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
   color: "#d4d4d4",
   backgroundColor: "#1e1e1e",
   lineHeight: 1.2,
@@ -85,7 +85,7 @@ export const EDGE_LABEL = {
 export const TELEMETRY_EDGE_LABEL = {
   fontSize: 10,
   fontWeight: 600,
-  fontFamily: "'Roboto', sans-serif",
+  fontFamily: "Helvetica, Arial, sans-serif",
   color: "#FFFFFF",
   backgroundColor: "#bec8d2",
   textStrokeColor: "rgba(0, 0, 0, 0.95)",

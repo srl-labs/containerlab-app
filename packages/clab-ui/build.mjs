@@ -5,9 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
-const require = createRequire(import.meta.url);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const require = createRequire(import.meta.url);
 const distDir = path.join(__dirname, "dist");
 const cssSource = path.join(__dirname, "src/styles/global.css");
 const cssOutput = path.join(distDir, "styles/global.css");
@@ -16,10 +16,6 @@ const monacoAssetsOutput = path.join(distDir, "monaco-assets.json");
 const packageJsonPath = path.join(__dirname, "package.json");
 const tscBin = require.resolve("typescript/bin/tsc");
 const copiedCssAssets = [
-  {
-    from: path.join(__dirname, "src/theme/appTheme.css"),
-    to: [path.join(distDir, "chunks/appTheme.css")]
-  },
   {
     from: path.join(__dirname, "src/components/canvas/nodes/FreeTextNode.css"),
     to: [

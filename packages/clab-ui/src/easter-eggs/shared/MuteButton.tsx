@@ -3,6 +3,7 @@
  */
 
 import React from "react";
+import Box from "@mui/material/Box";
 
 import { BTN_VISIBLE_SX, BTN_HIDDEN_SX, BTN_BLUR } from "./buttonConstants";
 
@@ -72,11 +73,11 @@ export const MuteButton: React.FC<MuteButtonProps> = ({
   borderColor = "rgba(255, 255, 255, 0.5)"
 }) => {
   return (
-    <button
-      type="button"
+    <Box
+      component="button"
       onClick={onToggle}
-      style={{
-        padding: 12,
+      sx={{
+        p: 1.5,
         borderRadius: "50%",
         pointerEvents: "auto",
         transition: "all 0.5s",
@@ -90,6 +91,6 @@ export const MuteButton: React.FC<MuteButtonProps> = ({
       title={isMuted ? "Unmute" : "Mute"}
     >
       {isMuted ? <MutedIcon /> : <UnmutedIcon />}
-    </button>
+    </Box>
   );
 };

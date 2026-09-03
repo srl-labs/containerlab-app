@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import Box from "@mui/material/Box";
 
 import { useAquaticAmbienceAudio } from "../audio";
 import { BTN_VISIBLE_SX, BTN_HIDDEN_SX, BTN_BLUR, useNodeGlow, MuteButton } from "../shared";
@@ -126,9 +127,10 @@ const AquaticCanvas: React.FC<{
   if (!isActive) return null;
 
   return (
-    <canvas
+    <Box
+      component="canvas"
       ref={canvasRef}
-      style={{
+      sx={{
         position: "fixed",
         inset: 0,
         pointerEvents: "none",
@@ -395,8 +397,8 @@ export const AquaticAmbienceMode: React.FC<BaseModeProps> = ({
         getCurrentSection={audio.getCurrentSection}
       />
 
-      <div
-        style={{
+      <Box
+        sx={{
           position: "fixed",
           inset: 0,
           pointerEvents: "none",
@@ -404,15 +406,16 @@ export const AquaticAmbienceMode: React.FC<BaseModeProps> = ({
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "center",
-          paddingBottom: 32,
-          gap: 16
+          pb: 4,
+          gap: 2
         }}
       >
-        <button
-          type="button"
+        <Box
+          component="button"
           onClick={handleSwitch}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -431,7 +434,7 @@ export const AquaticAmbienceMode: React.FC<BaseModeProps> = ({
           title={`Current: ${modeName}`}
         >
           Switch
-        </button>
+        </Box>
         <MuteButton
           isMuted={audio.isMuted}
           onToggle={audio.toggleMute}
@@ -439,11 +442,12 @@ export const AquaticAmbienceMode: React.FC<BaseModeProps> = ({
           unmutedBackground="linear-gradient(135deg, rgba(0, 180, 200, 0.8) 0%, rgba(135, 206, 235, 0.8) 100%)"
           unmutedShadow="0 0 20px rgba(0, 180, 200, 0.5), inset 0 0 20px rgba(135, 206, 235, 0.1)"
         />
-        <button
-          type="button"
+        <Box
+          component="button"
           onClick={handleClose}
-          style={{
-            padding: "10px 24px",
+          sx={{
+            px: 3,
+            py: 1.25,
             borderRadius: "9999px",
             pointerEvents: "auto",
             transition: "all 0.5s",
@@ -461,8 +465,8 @@ export const AquaticAmbienceMode: React.FC<BaseModeProps> = ({
           }}
         >
           Surface
-        </button>
-      </div>
+        </Box>
+      </Box>
     </>
   );
 };

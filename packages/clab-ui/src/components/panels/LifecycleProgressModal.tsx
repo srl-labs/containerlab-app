@@ -1,7 +1,18 @@
 /* eslint-disable import-x/max-dependencies */
 import React from "react";
-import { IconAlertCircle, IconCircleCheck, IconRefresh } from "@tabler/icons-react";
-import { Badge, Box, Button, Group, Loader, Modal, Progress, Text } from "@mantine/core";
+import AutorenewIcon from "@mui/icons-material/Autorenew";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import LinearProgress from "@mui/material/LinearProgress";
+import Typography from "@mui/material/Typography";
 
 import type {
   LifecycleLogEntry,
@@ -50,40 +61,40 @@ function getStatusLabel(status: LifecycleStatus): string {
   return "In Progress";
 }
 
-function getStatusColor(status: LifecycleStatus): "blue" | "green" | "red" {
+function getStatusColor(status: LifecycleStatus): "primary" | "success" | "error" {
   if (status === "success") {
-    return "green";
+    return "success";
   }
   if (status === "error") {
-    return "red";
+    return "error";
   }
-  return "blue";
+  return "primary";
 }
 
 function renderStatusIcon(status: LifecycleStatus, isProcessing: boolean): React.ReactElement {
   if (isProcessing) {
-    return <Loader size={20} />;
+    return <CircularProgress size={20} thickness={5} />;
   }
   if (status === "success") {
-    return <IconCircleCheck size={22} />;
+    return <CheckCircleOutlineIcon color="success" sx={{ fontSize: 22 }} />;
   }
   if (status === "error") {
-    return <IconAlertCircle size={22} />;
+    return <ErrorOutlineIcon color="error" sx={{ fontSize: 22 }} />;
   }
-  return <IconRefresh size={20} />;
+  return <AutorenewIcon color="primary" sx={{ fontSize: 20 }} />;
 }
 
 function renderStatusChipIcon(status: LifecycleStatus, isProcessing: boolean): React.ReactElement {
   if (isProcessing) {
-    return <IconRefresh size={18} />;
+    return <AutorenewIcon fontSize="small" />;
   }
   if (status === "success") {
-    return <IconCircleCheck size={18} />;
+    return <CheckCircleOutlineIcon fontSize="small" />;
   }
   if (status === "error") {
-    return <IconAlertCircle size={18} />;
+    return <ErrorOutlineIcon fontSize="small" />;
   }
-  return <IconRefresh size={18} />;
+  return <AutorenewIcon fontSize="small" />;
 }
 
 export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
@@ -154,11 +165,11 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
   const logItems = React.useMemo(
     () =>
       logs.map((entry, index) => (
-        <Text
+        <Typography
           key={`${entry.stream}-${index}`}
           component="div"
-          size="sm"
-          style={{
+          variant="body2"
+          sx={{
             fontFamily: "SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace",
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
@@ -166,96 +177,109 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
           }}
         >
           {entry.line}
-        </Text>
+        </Typography>
       )),
     [logs]
   );
 
-  const modalTitle = (
-    <Box style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      {renderStatusIcon(status, isProcessing)}
-      <Box style={{ minWidth: 0, flex: 1 }}>
-        <Box style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Text size="lg" fw={600} style={{ lineHeight: 1.2 }}>
-            {modeLabel} lab
-          </Text>
-          <Badge
-            size="sm"
-            variant="outline"
-            color={statusColor}
-            leftSection={renderStatusChipIcon(status, isProcessing)}
-          >
-            {statusLabel}
-          </Badge>
-        </Box>
-        <Text size="sm" c="dimmed" style={{ marginTop: 2 }}>
-          {labName || "Containerlab topology"}
-        </Text>
-        <Text
-          size="xs"
-          c="dimmed"
-          style={{ display: "block", marginTop: 2 }}
-          data-testid="lifecycle-timer"
-        >
-          {timerLabel}: {formattedDuration}
-        </Text>
-      </Box>
-    </Box>
-  );
-
   return (
-    <Modal
-      opened={isOpen}
+    <Dialog
+      open={isOpen}
       onClose={isProcessing ? () => undefined : onClose}
-      closeOnEscape={!isProcessing}
-      closeOnClickOutside={!isProcessing}
-      withCloseButton={false}
-      title={modalTitle}
-      size="xl"
-      centered
+      disableEscapeKeyDown={isProcessing}
+      maxWidth="md"
+      fullWidth
       data-testid="lifecycle-progress-modal"
-      overlayProps={{ color: "#000", backgroundOpacity: 0.35, blur: 2 }}
-      styles={{ content: { overflow: "hidden" } }}
+      slotProps={{
+        backdrop: {
+          sx: {
+            backdropFilter: "blur(2px)",
+            backgroundColor: "rgba(0, 0, 0, 0.35)"
+          }
+        },
+        paper: {
+          sx: {
+            overflow: "hidden"
+          }
+        }
+      }}
     >
-      {isProcessing && <Progress value={100} animated mb="md" />}
-      {statusMessage !== undefined && statusMessage !== null && statusMessage.length > 0 && (
-        <Text size="sm" c="dimmed" style={{ display: "block", marginBottom: 8 }}>
-          {statusMessage}
-        </Text>
-      )}
-      <Text size="xs" c="dimmed" style={{ display: "block", marginBottom: 8 }}>
-        Live command output
-      </Text>
-      <Box
-        ref={logContainerRef}
-        style={{
-          border: "1px solid var(--mantine-color-default-border)",
-          borderRadius: 4,
-          backgroundColor: "var(--mantine-color-default)",
-          minHeight: 220,
-          maxHeight: 320,
-          overflowY: "auto",
-          padding: 10
-        }}
-      >
-        {logs.length === 0 && (
-          <Text size="sm" c="dimmed">
-            Waiting for command output...
-          </Text>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 1.5 }}>
+        {renderStatusIcon(status, isProcessing)}
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+              {modeLabel} lab
+            </Typography>
+            <Chip
+              size="small"
+              icon={renderStatusChipIcon(status, isProcessing)}
+              label={statusLabel}
+              color={statusColor}
+              variant="outlined"
+            />
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            {labName || "Containerlab topology"}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 0.25 }}
+            data-testid="lifecycle-timer"
+          >
+            {timerLabel}: {formattedDuration}
+          </Typography>
+        </Box>
+      </DialogTitle>
+      {isProcessing && <LinearProgress />}
+      <DialogContent dividers sx={{ pt: 2 }}>
+        {statusMessage !== undefined && statusMessage !== null && statusMessage.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            {statusMessage}
+          </Typography>
         )}
-        {logItems}
-      </Box>
-      <Group justify="flex-end" mt="md">
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          Live command output
+        </Typography>
+        <Box
+          ref={logContainerRef}
+          sx={{
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1,
+            bgcolor: "background.default",
+            minHeight: 220,
+            maxHeight: 320,
+            overflowY: "auto",
+            p: 1.25
+          }}
+        >
+          {logs.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Waiting for command output...
+            </Typography>
+          )}
+          {logItems}
+        </Box>
+      </DialogContent>
+      <DialogActions>
         {isProcessing ? (
-          <Button size="xs" color="gray" onClick={onCancel} data-testid="lifecycle-cancel-btn">
+          <Button
+            size="small"
+            color="secondary"
+            variant="contained"
+            onClick={onCancel}
+            data-testid="lifecycle-cancel-btn"
+          >
             Cancel
           </Button>
         ) : (
-          <Button size="xs" onClick={onClose} data-testid="lifecycle-ok-btn">
+          <Button size="small" variant="contained" onClick={onClose} data-testid="lifecycle-ok-btn">
             OK
           </Button>
         )}
-      </Group>
-    </Modal>
+      </DialogActions>
+    </Dialog>
   );
 };

@@ -1,6 +1,6 @@
 import React from "react";
 import { useStore } from "@xyflow/react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { HelperLinePositions } from "../../hooks/canvas/useHelperLines";
 
@@ -113,21 +113,20 @@ const HelperLinesSvg: React.FC<HelperLinesProps> = ({ lines }) => {
 
 const OverlayIndicator: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Box
-    style={{
+    sx={{
       position: "absolute",
       top: 10,
       left: "50%",
       transform: "translateX(-50%)",
-      border: "1px solid var(--mantine-color-default-border)",
-      borderRadius: "var(--mantine-radius-sm)",
-      paddingLeft: 12,
-      paddingRight: 12,
-      paddingTop: 6,
-      paddingBottom: 6,
+      border: 1,
+      borderColor: "divider",
+      borderRadius: 1,
+      px: 1.5,
+      py: 0.75,
       fontSize: 12,
-      backgroundColor: "var(--mantine-color-body)",
-      color: "var(--mantine-color-text)",
-      boxShadow: "var(--mantine-shadow-md)",
+      bgcolor: "background.paper",
+      color: "text.primary",
+      boxShadow: 4,
       zIndex: 1300,
       pointerEvents: "none"
     }}

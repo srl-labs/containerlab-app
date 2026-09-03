@@ -2,7 +2,8 @@
  * DynamicList - Array of string inputs with add/remove
  */
 import React, { useRef } from "react";
-import { Box, TextInput } from "@mantine/core";
+import Box from "@mui/material/Box";
+import TextField from "@mui/material/TextField";
 
 import { AddItemButton, DeleteItemButton } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
@@ -50,7 +51,7 @@ export const DynamicList: React.FC<DynamicListProps> = ({
   };
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {items.map((item, index) => (
         <DynamicListItem
           key={rowIds[index]}
@@ -86,13 +87,14 @@ const DynamicListItem: React.FC<DynamicListItemProps> = ({
   placeholder,
   disabled
 }) => (
-  <Box style={{ display: "flex", gap: 8, alignItems: "center" }}>
-    <TextInput
+  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+    <TextField
       value={value}
-      onChange={(e) => onChange(e.currentTarget.value)}
+      onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      style={{ flex: 1 }}
+      size="small"
+      fullWidth
     />
     <DeleteItemButton onRemove={onRemove} disabled={disabled} />
   </Box>

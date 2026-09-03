@@ -2,7 +2,6 @@
 
 // Commands
 export { useDeploymentCommands, usePanelVisibility } from "./usePanelCommands";
-export type { SidebarView } from "./usePanelCommands";
 
 // Footer Refs
 export { useFooterControlsRef } from "./useFooterControlsRef";

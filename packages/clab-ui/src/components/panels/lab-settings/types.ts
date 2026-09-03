@@ -5,16 +5,6 @@ import type { LabSettings as SharedLabSettings } from "../../../core/types/labSe
 
 export type LabSettings = SharedLabSettings;
 
-/** Sections of the unified settings modal, in sidebar order. */
-export type SettingsSection =
-  | "lab"
-  | "mgmt"
-  | "appearance"
-  | "grid"
-  | "general"
-  | "shortcuts"
-  | "info";
-
 export type PrefixType = "default" | "custom" | "no-prefix";
 export type IpType = "default" | "auto" | "custom";
 

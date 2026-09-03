@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { TopologySessionClient } from "../session/client";
-import type { ClabUiHost, CustomPaletteTab, CustomSettingsSection } from "./contracts";
+import type { ClabUiHost, CustomPaletteTab } from "./contracts";
 import type { TabConfig } from "../components/ui/editor/EditorPanel";
 import type { TabProps as NodeEditorTabProps } from "../components/panels/node-editor/types";
 
@@ -22,13 +22,6 @@ export interface ClabUiExtensions {
   }) => React.ReactNode;
   /** Replace the built-in About dialog (navbar info button) with a custom one. */
   renderAboutModal?: (context: { isOpen: boolean; onClose: () => void }) => React.ReactNode;
-  /** Extra sections injected into the unified Settings modal. */
-  customSettingsSections?: CustomSettingsSection[];
-  /** Optional light/dark control surfaced on the sidebar rail. */
-  colorScheme?: {
-    mode: "light" | "dark";
-    onToggle: () => void;
-  };
   /** Palette tab ids to hide (e.g. "json"). */
   disabledTabIds?: string[];
   /** Override built-in palette tab labels by id (e.g. { nodes: "Templates" }). */

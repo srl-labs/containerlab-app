@@ -1,6 +1,6 @@
 // Group editor for the ContextPanel.
 import React, { useCallback } from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import type { GroupStyleAnnotation } from "../../../../core/types/topology";
 import type { GroupEditorData } from "../../../../hooks/canvas";
@@ -55,7 +55,7 @@ export const GroupEditorView: React.FC<GroupEditorViewProps> = ({
   if (!formData) return null;
 
   return (
-    <Box style={{ flex: 1, overflow: "auto" }}>
+    <Box sx={{ flex: 1, overflow: "auto" }}>
       <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
         <GroupFormContent
           formData={formData}

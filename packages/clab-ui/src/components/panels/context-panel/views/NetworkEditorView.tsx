@@ -1,6 +1,6 @@
 // Network editor content for the ContextPanel.
 import React, { useCallback } from "react";
-import { Box } from "@mantine/core";
+import Box from "@mui/material/Box";
 
 import {
   InputField,
@@ -81,7 +81,7 @@ const NetworkEditorContent: React.FC<{
   );
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column" }}>
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Network Configuration" withTopDivider={false}>
         <FilterableDropdown
           id="network-type"
@@ -142,7 +142,7 @@ const NetworkEditorContent: React.FC<{
       {/* VXLAN Settings */}
       {VXLAN_TYPES.includes(formData.networkType) && (
         <PanelSection title="VXLAN Settings">
-          <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <InputField
               id="vxlan-remote"
               label="Remote"
@@ -150,7 +150,7 @@ const NetworkEditorContent: React.FC<{
               onChange={(v) => onChange({ vxlanRemote: v })}
               placeholder="Remote endpoint IP address"
             />
-            <Box style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
               <InputField
                 id="vxlan-vni"
                 label="VNI"
@@ -180,7 +180,7 @@ const NetworkEditorContent: React.FC<{
       {/* Extended Properties */}
       {supportsExtendedProps(formData.networkType) && (
         <PanelSection title="Extended Properties">
-          <Box style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <InputField
               id="network-mtu"
               label="MTU"

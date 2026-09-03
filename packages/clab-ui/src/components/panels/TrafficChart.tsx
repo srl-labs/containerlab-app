@@ -1,7 +1,9 @@
 // Real-time traffic chart for link endpoints.
 import React, { useRef, useMemo } from "react";
-import { Box, Text } from "@mantine/core";
-import { LineChart } from "@mantine/charts";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
+import { LineChart } from "@mui/x-charts/LineChart";
 
 import type { InterfaceStatsPayload, EndpointStatsHistory } from "../../core/types/topology";
 
@@ -81,6 +83,53 @@ function resolveNextTimestampSeconds(
   }
 
   return expected;
+}
+
+function resolveChartMargin(compact: boolean, showLegend: boolean, scale: number) {
+  if (!compact) {
+    return { top: 8, right: 48, bottom: 24, left: 48 };
+  }
+
+  // The legend is rendered inside the SVG bottom margin.
+  const legendHeight = showLegend ? Math.round(14 * scale) : 0;
+  return { top: 6, right: 2, bottom: legendHeight, left: 0 };
+}
+
+function resolveLegendSlotProps(compact: boolean, showLegend: boolean, scale: number) {
+  if (!showLegend) {
+    return undefined;
+  }
+
+  if (!compact) {
+    return {
+      legend: {
+        direction: "horizontal" as const,
+        position: { vertical: "bottom" as const, horizontal: "center" as const }
+      }
+    };
+  }
+
+  const fontSize = `${(0.6 * scale).toFixed(3)}rem`;
+  const markSize = `${(0.65 * scale).toFixed(2)}em`;
+
+  return {
+    legend: {
+      direction: "horizontal" as const,
+      position: { vertical: "bottom" as const, horizontal: "center" as const },
+      sx: {
+        fontSize,
+        lineHeight: 1,
+        padding: 0,
+        gap: 0.25,
+        "& .MuiChartsLegend-series": {
+          gap: 0.25
+        },
+        "& .MuiChartsLegend-mark": {
+          fontSize: markSize
+        }
+      }
+    }
+  };
 }
 
 // Global history store per endpoint key
@@ -192,28 +241,113 @@ function buildChartData(
   };
 }
 
-interface ChartPoint {
-  t: string;
-  rxBps: number;
-  txBps: number;
-  rxPps: number;
-  txPps: number;
+function buildXAxis(
+  compact: boolean,
+  xData: Date[],
+  xMin: Date | undefined,
+  xMax: Date | undefined
+) {
+  const baseAxis = {
+    data: xData,
+    scaleType: "time" as const,
+    min: xMin,
+    max: xMax,
+    disableLine: true,
+    disableTicks: true,
+    valueFormatter: (value: Date) =>
+      value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  };
+  if (compact) {
+    return [{ ...baseAxis, position: "none" as const, height: 0 }];
+  }
+  return [{ ...baseAxis, tickLabelStyle: { fontSize: 10, fill: "#cccccc" }, height: 20 }];
 }
 
-function buildPoints(
-  xData: Date[],
-  rxBpsData: number[],
-  txBpsData: number[],
-  rxPpsData: number[],
-  txPpsData: number[]
-): ChartPoint[] {
-  return xData.map((date, i) => ({
-    t: date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-    rxBps: rxBpsData[i] ?? 0,
-    txBps: txBpsData[i] ?? 0,
-    rxPps: rxPpsData[i] ?? 0,
-    txPps: txPpsData[i] ?? 0
-  }));
+function buildYAxis(compact: boolean, scale: number, unitLabel: string) {
+  if (compact) {
+    return [
+      {
+        id: "bps",
+        position: "left" as const,
+        disableTicks: true,
+        tickLabelStyle: { fontSize: Math.round(8 * scale), fill: "#9aa0a6" },
+        valueFormatter: (value: number) => `${value} ${unitLabel}`
+      },
+      {
+        id: "pps",
+        position: "none" as const,
+        width: 0
+      }
+    ];
+  }
+
+  return [
+    {
+      id: "bps",
+      label: unitLabel,
+      labelStyle: { fontSize: 11 },
+      tickLabelStyle: { fontSize: 10, fill: "#cccccc" }
+    },
+    {
+      id: "pps",
+      label: "PPS",
+      labelStyle: { fontSize: 11 },
+      tickLabelStyle: { fontSize: 10, fill: "#cccccc" }
+    }
+  ];
+}
+
+function resolveSeriesLabel(
+  compact: boolean,
+  showLegend: boolean,
+  label: string
+): string | undefined {
+  return compact && !showLegend ? undefined : label;
+}
+
+function buildSeries(params: {
+  compact: boolean;
+  showLegend: boolean;
+  unitLabel: string;
+  rxBpsData: number[];
+  txBpsData: number[];
+  rxPpsData: number[];
+  txPpsData: number[];
+}) {
+  return [
+    {
+      data: params.rxBpsData,
+      label: resolveSeriesLabel(params.compact, params.showLegend, `RX ${params.unitLabel}`),
+      color: "#4ec9b0",
+      showMark: false,
+      curve: "linear" as const,
+      yAxisId: "bps"
+    },
+    {
+      data: params.txBpsData,
+      label: resolveSeriesLabel(params.compact, params.showLegend, `TX ${params.unitLabel}`),
+      color: "#569cd6",
+      showMark: false,
+      curve: "linear" as const,
+      yAxisId: "bps"
+    },
+    {
+      data: params.rxPpsData,
+      label: resolveSeriesLabel(params.compact, params.showLegend, "RX PPS"),
+      color: "#b5cea8",
+      showMark: false,
+      curve: "linear" as const,
+      yAxisId: "pps"
+    },
+    {
+      data: params.txPpsData,
+      label: resolveSeriesLabel(params.compact, params.showLegend, "TX PPS"),
+      color: "#9cdcfe",
+      showMark: false,
+      curve: "linear" as const,
+      yAxisId: "pps"
+    }
+  ];
 }
 
 export const TrafficChart: React.FC<TrafficChartProps> = ({
@@ -222,53 +356,67 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
   height,
   compact = false,
   showLegend = !compact,
+  scale = 1,
   emptyMessage = "No traffic data available"
 }) => {
   const resolvedHeight = height ?? (compact ? "100%" : 240);
   // Track last-seen stats to avoid double-push in Strict Mode
   const lastStatsRef = useRef<InterfaceStatsPayload | undefined>(undefined);
 
-  const { xData, rxBpsData, txBpsData, rxPpsData, txPpsData, unitLabel } = useMemo(() => {
-    const history = getOrCreateHistory(endpointKey);
-    appendStatsSample(history, stats, lastStatsRef);
-    return buildChartData(history, stats);
-  }, [stats, endpointKey]);
-
-  const data = buildPoints(xData, rxBpsData, txBpsData, rxPpsData, txPpsData);
-
-  const series = [
-    { name: "rxBps", label: `RX ${unitLabel}`, color: "#4ec9b0" },
-    { name: "txBps", label: `TX ${unitLabel}`, color: "#569cd6" },
-    { name: "rxPps", label: "RX PPS", color: "#b5cea8", yAxisId: "right" },
-    { name: "txPps", label: "TX PPS", color: "#9cdcfe", yAxisId: "right" }
-  ];
+  const { xData, rxBpsData, txBpsData, rxPpsData, txPpsData, unitLabel, xMin, xMax } =
+    useMemo(() => {
+      const history = getOrCreateHistory(endpointKey);
+      appendStatsSample(history, stats, lastStatsRef);
+      return buildChartData(history, stats);
+    }, [stats, endpointKey]);
+  const margin = resolveChartMargin(compact, showLegend, scale);
+  const legendSlotProps = resolveLegendSlotProps(compact, showLegend, scale);
+  const xAxis = buildXAxis(compact, xData, xMin, xMax);
+  const yAxis = buildYAxis(compact, scale, unitLabel);
+  const series = buildSeries({
+    compact,
+    showLegend,
+    unitLabel,
+    rxBpsData,
+    txBpsData,
+    rxPpsData,
+    txPpsData
+  });
+  const chartSx: SxProps<Theme> = compact
+    ? {
+        "& .MuiChartsGrid-line": { stroke: "#3e3e42" },
+        "& .MuiChartsAxis-line": { stroke: "#3e3e42" }
+      }
+    : {
+        "& .MuiChartsGrid-line": { stroke: "#3e3e42" },
+        "& .MuiChartsAxis-line": { stroke: "#cccccc" },
+        "& .MuiChartsAxis-tick": { stroke: "#3e3e42" },
+        "& .MuiChartsAxisHighlight-root": { stroke: "#cccccc" },
+        "& .MuiChartsAxis-label": { fill: "#cccccc" }
+      };
 
   if (xData.length === 0) {
     if (emptyMessage === null) return null;
     return (
-      <Text size="sm" c="dimmed" ta="center" mt="xs">
+      <Typography
+        variant="body2"
+        sx={{ textAlign: "center", color: "text.secondary", fontSize: "0.875rem", mt: 1 }}
+      >
         {emptyMessage}
-      </Text>
+      </Typography>
     );
   }
 
   return (
-    <Box style={{ width: "100%", height: resolvedHeight }}>
+    <Box sx={{ width: "100%", height: resolvedHeight }}>
       <LineChart
-        h="100%"
-        data={data}
-        dataKey="t"
+        xAxis={xAxis}
+        yAxis={yAxis}
         series={series}
-        withRightYAxis={!compact}
-        withXAxis={!compact}
-        withYAxis={!compact}
-        withDots={false}
-        withLegend={showLegend}
-        gridAxis={compact ? "none" : "y"}
-        curveType="linear"
-        yAxisLabel={compact ? undefined : unitLabel}
-        rightYAxisLabel={compact ? undefined : "PPS"}
-        strokeWidth={1.5}
+        grid={{ horizontal: true }}
+        margin={margin}
+        slotProps={legendSlotProps}
+        sx={chartSx}
       />
     </Box>
   );
