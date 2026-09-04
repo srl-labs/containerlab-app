@@ -8,14 +8,14 @@ on:
 jobs:
   sync-schema:
     runs-on: ubuntu-latest
-    if: github.repository == 'srl-labs/clab-ui'
+    if: github.repository == 'srl-labs/containerlab-app'
     permissions:
       contents: write
       pull-requests: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fetch upstream schema
         run: |
@@ -26,24 +26,24 @@ jobs:
       - name: Update local schema when changed
         id: schema
         run: |
-          if diff -q /tmp/clab.schema.json schema/clab.schema.json > /dev/null; then
+          if diff -q /tmp/clab.schema.json packages/clab-ui/schema/clab.schema.json > /dev/null; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          mv /tmp/clab.schema.json schema/clab.schema.json
+          mv /tmp/clab.schema.json packages/clab-ui/schema/clab.schema.json
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Open pull request
         if: steps.schema.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v7
         with:
-          commit-message: "chore: sync containerlab schema"
+          commit-message: "chore(clab-ui): sync containerlab schema"
           branch: "chore/sync-clab-schema"
           delete-branch: true
-          title: "chore: sync containerlab schema from upstream"
+          title: "chore(clab-ui): sync containerlab schema from upstream"
           body: |
-            Automated sync for `schema/clab.schema.json`.
+            Automated sync for `packages/clab-ui/schema/clab.schema.json`.
 
             Upstream source:
             - https://github.com/srl-labs/containerlab/blob/main/schemas/clab.schema.json

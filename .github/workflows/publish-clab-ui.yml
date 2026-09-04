@@ -1,0 +1,53 @@
+name: Publish clab-ui
+
+on:
+  push:
+    tags:
+      - "clab-ui-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@srl-labs"
+          cache: npm
+
+      - name: Verify tag matches clab-ui version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#clab-ui-v}"
+          PACKAGE_VERSION="$(node -p "require('./packages/clab-ui/package.json').version")"
+          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match clab-ui package version ($PACKAGE_VERSION)"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck clab-ui
+        run: npm run typecheck:clab-ui
+
+      - name: Test clab-ui
+        run: npm run test:unit --workspace @srl-labs/clab-ui
+
+      - name: Preview package
+        run: npm run pack:clab-ui -- --dry-run
+
+      - name: Publish to GitHub Packages
+        run: npm publish --workspace @srl-labs/clab-ui
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

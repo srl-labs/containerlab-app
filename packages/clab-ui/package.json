@@ -14,11 +14,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/srl-labs/clab-ui.git"
+    "url": "git+https://github.com/srl-labs/containerlab-app.git",
+    "directory": "packages/clab-ui"
   },
-  "homepage": "https://github.com/srl-labs/clab-ui",
+  "homepage": "https://github.com/srl-labs/containerlab-app/tree/main/packages/clab-ui",
   "bugs": {
-    "url": "https://github.com/srl-labs/clab-ui/issues"
+    "url": "https://github.com/srl-labs/containerlab-app/issues"
   },
   "engines": {
     "node": ">=24.0.0"

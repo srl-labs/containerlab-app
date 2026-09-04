@@ -36,6 +36,8 @@
     "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin apps packages",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin apps packages --fix --fix-suggestions",
     "test:unit": "npm run test:unit --workspaces --if-present",
+    "test:browser:clab-ui": "npm run test:browser --workspace @srl-labs/clab-ui --",
+    "test:browser:clab-ui:smoke": "npm run test:browser:smoke --workspace @srl-labs/clab-ui --",
     "stress:api-bff": "node scripts/run-stress-api-bff.mjs",
     "stress:api-bff:worker": "node scripts/stress-api-bff.mjs",
     "test:e2e:web": "npm run build:clab-ui && npm run test:e2e --workspace containerlab-app-web",
