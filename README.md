@@ -1,7 +1,7 @@
 # containerlab-app
 
-This monorepo contains the Containerlab web and desktop applications together
-with the independently versioned `@srl-labs/clab-ui` package.
+This monorepo contains `containerlab-app` (web and desktop),
+`vscode-containerlab`, and the shared `@srl-labs/clab-ui` package.
 
 [![Doc](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/cmd/tools/api-server/start/)
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
@@ -180,6 +180,33 @@ macOS packaging is built with `npm run package:desktop:mac` and produces an unsi
 
 Before creating an app release tag, keep the root package version, private workspace package versions, internal workspace dependency versions, and `package-lock.json` aligned with the tag without the leading `v`. The publishable `@srl-labs/clab-ui` workspace is versioned independently. CI runs `npm run check:release-version`, so a tag such as `v0.0.2` requires app package version `0.0.2`.
 
+### VS Code Extension
+
+Run these commands from the repository root:
+
+```bash
+npm run build:vscode
+npm run dev:vscode
+npm run package:vscode
+npm run test:unit --workspace vscode-containerlab
+npm run test:e2e:vscode
+```
+
+Open this repository in VS Code and use **Debug Containerlab Extension** to launch
+an Extension Development Host. `dev:vscode` watches extension sources; rebuild
+`clab-ui` after editing shared UI sources. VSIX files are written to
+`apps/vscode-containerlab/`. Linux E2E tests need a display or `xvfb-run -a`.
+
+Extension releases use `vscode-v<version>` tags matching the version in
+`apps/vscode-containerlab/package.json`; app releases continue to use `v<version>`.
+The extension release workflow attaches the VSIX and publishes to Marketplace
+and Open VSX when `VSCE_PAT` and `OVSX_PAT` are configured in this repository.
+
+The extension was imported from the fresh clone of `https://github.com/srl-labs/vscode-containerlab.git`
+(`origin/main`, version `0.26.3`) at
+`991ab745f26b925c072e5907adc5ec27ba06ce7e`. Its source, tests, resources, license,
+and changelog are included; Git history remains in the original repository.
+
 ### Local Docker Build
 
 The GHCR image is the default way to run the web app and is published for `linux/amd64` and `linux/arm64`. Build a local image only when testing local changes; the command below builds for your current Docker platform:
@@ -224,9 +251,12 @@ Install the Playwright browser once per machine, then run the E2E suite:
 ```bash
 npx playwright install chromium
 npm run test:e2e:web
+npm run test:browser:clab-ui
 ```
 
-The Playwright config starts `npm run dev` automatically and runs tests against the Vite frontend at `https://localhost:5173`.
+The web E2E suite runs against the app at `https://localhost:5173`. The clab-ui
+browser suite starts its UI harness and exercises the topology fixtures in
+`packages/clab-ui/test/fixtures`.
 
 ---
 
@@ -235,6 +265,7 @@ The Playwright config starts `npm run dev` automatically and runs tests against 
 ```text
 apps/web                      browser deployment host and Docker image entry
 apps/desktop                  Electron host
+apps/vscode-containerlab      VS Code extension
 packages/app-server           shared Fastify BFF used by web and desktop
 packages/standalone-runtime   shared standalone renderer/runtime around clab-ui
 packages/app-contract         shared browser-facing DTO types
@@ -245,13 +276,14 @@ This repository is the `containerlab-app` monorepo and owns:
 
 - the standalone web app host and Docker image for the shared `@srl-labs/clab-ui` experience
 - the Electron desktop app host and desktop package artifacts
+- the VS Code extension and VSIX artifacts
 - the shared `@srl-labs/clab-ui` package
 - the shared app server used by web and desktop
 - standalone unit and Playwright E2E test suites
 - static resources used by the standalone app
 
-`@srl-labs/clab-ui` remains independently publishable for consumers such as
-`vscode-containerlab`.
+`@srl-labs/clab-ui` and `vscode-containerlab` are independently versioned. All
+three application hosts consume the local UI workspace through the root lockfile.
 
 ---
 

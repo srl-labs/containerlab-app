@@ -1,0 +1,9 @@
+{
+  "version": "2.0.0",
+  "tasks": [{
+    "label": "Build Containerlab Extension",
+    "type": "shell",
+    "command": "npm run build:clab-ui && npm run build:dev --workspace vscode-containerlab",
+    "problemMatcher": []
+  }]
+}

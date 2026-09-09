@@ -42,6 +42,13 @@ console.log(`Release version check passed for ${rootPackage.version}.`);
 
 function assertTagMatchesRootVersion() {
   const tagName = process.env.GITHUB_REF_NAME ?? parseTagName(process.env.GITHUB_REF);
+  if (tagName?.startsWith("vscode-v")) {
+    const extension = workspaceByName.get("vscode-containerlab");
+    if (tagName.slice("vscode-v".length) !== extension?.packageJson.version) {
+      failures.push(`git tag ${tagName} does not match VS Code extension version ${extension?.packageJson.version}`);
+    }
+    return;
+  }
   if (!tagName?.startsWith("v")) {
     return;
   }

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "paths": {
+      "@srl-labs/clab-ui": ["../../../packages/clab-ui/dist/index.d.ts"],
+      "@srl-labs/clab-ui/image-manager/catalog": [
+        "../../../packages/clab-ui/dist/image-manager/catalog.d.ts"
+      ],
+      "@srl-labs/clab-ui/*": ["../../../packages/clab-ui/dist/*/index.d.ts"]
+    }
+  }
+}
