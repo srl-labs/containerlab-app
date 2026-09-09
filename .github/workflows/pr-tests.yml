@@ -135,3 +135,9 @@ jobs:
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Check clab-ui browser test result
+        if: ${{ !cancelled() }}
+        env:
+          BROWSER_TESTS_RESULT: ${{ needs.clab-ui-browser-tests.result }}
+        run: test "$BROWSER_TESTS_RESULT" = "success"
