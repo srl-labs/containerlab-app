@@ -7,18 +7,19 @@ WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/desktop/package.json apps/desktop/package.json
+COPY apps/vscode-containerlab/package.json apps/vscode-containerlab/package.json
 COPY packages/app-contract/package.json packages/app-contract/package.json
 COPY packages/app-server/package.json packages/app-server/package.json
+COPY packages/clab-ui/package.json packages/clab-ui/package.json
 COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
 
-RUN --mount=type=secret,id=github_token,required=true \
-  GITHUB_TOKEN="$(cat /run/secrets/github_token)" npm ci
+RUN npm ci
 
 FROM deps AS build
 
 COPY . .
 
-RUN npm run build
+RUN npm run build:web && npm run build --workspace containerlab-desktop
 RUN npm prune --omit=dev
 
 FROM node:24-alpine AS runtime

@@ -1,0 +1,79 @@
+# Development infrastructure
+.vscode/**
+.github/**
+.gitignore
+.eslintrc.json
+.eslintignore
+.yarnrc
+.nvmrc
+tsconfig.json
+eslint.config.mjs
+.dependency-cruiser.cjs
+.jscpd.json
+.jscpd/**
+scripts/**
+webpack.config.js
+esbuild.config.js
+postcss.config.js
+.mocharc.json
+.prettierignore
+.prettierrc
+Makefile
+vsc-extension-quickstart.md
+
+# Source files - only bundle compiled output
+src/**
+
+# If you still need specific source files at runtime, selectively include them with:
+node_modules/**
+out/**
+
+# Build artifacts
+**/*.map
+**/*.ts
+**/*.LICENSE.txt
+*.vsix
+
+# Resources only needed for marketplace (loaded from GitHub)
+resources/screenshot.png
+
+# Test files
+test.clab.yml
+**/*.test.js
+**/__tests__/**
+**/__mocks__/**
+
+#clab files
+clab-*/
+*.clab.yml*
+*.clab.yaml*
+*.annotations.json
+labs/
+labs2/
+.clab-icons/**
+
+# Development directories
+dev/**
+dist-dev/**
+.claude/**
+legacy-backup/**
+eslint-local-rules/**
+
+# Test and coverage output
+.nyc_output/**
+playwright-report/**
+test-results/**
+mochawesome-report/**
+test/**
+
+# Documentation and scripts
+AGENTS.md
+CLAUDE.md
+patch.sh
+report/
+
+# Monorepo development configuration
+tsconfig*.json
+.dependency-cruiser*.cjs
+.oxlintrc.json
+.prettierrc.json

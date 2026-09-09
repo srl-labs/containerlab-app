@@ -1,0 +1,43 @@
+name: Sync containerlab schema
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync-schema:
+    runs-on: ubuntu-latest
+    if: github.repository == 'srl-labs/containerlab-app'
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Sync canonical schema
+        id: schema
+        run: npm run sync:schema
+
+      - name: Open pull request
+        if: steps.schema.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(clab-ui): sync containerlab schema"
+          branch: "chore/sync-clab-schema"
+          delete-branch: true
+          title: "chore(clab-ui): sync containerlab schema from upstream"
+          body: |
+            Automated sync for `packages/clab-ui/schema/clab.schema.json`.
+
+            Upstream source:
+            - https://github.com/srl-labs/containerlab/blob/main/schemas/clab.schema.json
+          labels: |
+            dependencies

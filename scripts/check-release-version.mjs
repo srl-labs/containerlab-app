@@ -42,6 +42,13 @@ console.log(`Release version check passed for ${rootPackage.version}.`);
 
 function assertTagMatchesRootVersion() {
   const tagName = process.env.GITHUB_REF_NAME ?? parseTagName(process.env.GITHUB_REF);
+  if (tagName?.startsWith("vscode-v")) {
+    const extension = workspaceByName.get("vscode-containerlab");
+    if (tagName.slice("vscode-v".length) !== extension?.packageJson.version) {
+      failures.push(`git tag ${tagName} does not match VS Code extension version ${extension?.packageJson.version}`);
+    }
+    return;
+  }
   if (!tagName?.startsWith("v")) {
     return;
   }
@@ -63,6 +70,11 @@ function assertTopLevelLockVersion() {
 }
 
 function assertWorkspaceVersion(workspacePackage) {
+  // Publishable packages such as @srl-labs/clab-ui have their own release cycle.
+  if (workspacePackage.packageJson.private === false) {
+    return;
+  }
+
   if (workspacePackage.packageJson.version !== rootPackage.version) {
     failures.push(
       `${workspacePackage.label} version ${workspacePackage.packageJson.version} does not match root version ${rootPackage.version}`

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "bundler",
+    "outDir": "../out/e2e",
+    "rootDir": "e2e",
+    "typeRoots": [
+      "../node_modules/@types",
+      "../../../node_modules/@types"
+    ],
+    "types": [
+      "mocha",
+      "node",
+      "vscode"
+    ]
+  },
+  "include": [
+    "e2e/**/*.ts"
+  ],
+  "exclude": []
+}

@@ -1,0 +1,122 @@
+:root {
+  --clab-doc-surface: #f8fafc;
+  --clab-doc-border: #dbe3ee;
+  --clab-doc-muted: #475569;
+  --clab-doc-inline-code: #eef2ff;
+  --clab-doc-inline-code-text: #1e3a8a;
+}
+
+[data-md-color-scheme="slate"] {
+  --clab-doc-surface: #132033;
+  --clab-doc-border: #334155;
+  --clab-doc-muted: #cbd5e1;
+  --clab-doc-inline-code: #1e293b;
+  --clab-doc-inline-code-text: #bfdbfe;
+}
+
+.md-main__inner {
+  max-width: 88rem;
+}
+
+.md-content__inner {
+  max-width: 52rem;
+  margin: 0 auto;
+}
+
+.md-typeset {
+  font-size: 0.81rem;
+}
+
+.md-typeset p,
+.md-typeset li {
+  line-height: 1.72;
+}
+
+.md-typeset h1 {
+  margin-bottom: 0.35rem;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h1 + p {
+  font-size: 1.04rem;
+  color: var(--clab-doc-muted);
+  max-width: 46rem;
+}
+
+.md-typeset h2 {
+  margin-top: 1.8em;
+  padding-bottom: 0.28em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset h3 {
+  margin-top: 1.35em;
+}
+
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.16em;
+}
+
+.md-typeset code {
+  border-radius: 6px;
+  background: var(--clab-doc-inline-code);
+  color: var(--clab-doc-inline-code-text);
+  padding: 0.08em 0.32em;
+}
+
+.md-typeset pre > code {
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+pre.mermaid,
+.mermaid {
+  margin: 1.2em 0;
+  padding: 1.45em 1em;
+  background: var(--clab-doc-surface);
+  border: 1px solid var(--clab-doc-border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  overflow-x: auto;
+  text-align: center;
+}
+
+[data-md-color-scheme="slate"] pre.mermaid,
+[data-md-color-scheme="slate"] .mermaid {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.md-typeset table:not([class]) {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--clab-doc-border);
+}
+
+.md-typeset table:not([class]) th {
+  background: #eef2f7;
+  font-weight: 700;
+  color: #334155;
+}
+
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background: #182436;
+  color: #d1d9e6;
+}
+
+.md-typeset .tabbed-set {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.md-typeset img {
+  border-radius: 10px;
+}

@@ -1,0 +1,1102 @@
+{
+  "name": "vscode-containerlab",
+  "publisher": "srl-labs",
+  "displayName": "Containerlab",
+  "icon": "resources/containerlab.png",
+  "description": "Manages containerlab topologies in VS Code",
+  "author": "SRL Labs",
+  "version": "0.26.3",
+  "homepage": "https://containerlab.dev/manual/vsc-extension/",
+  "engines": {
+    "vscode": "^1.105.1",
+    "node": ">=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srl-labs/containerlab-app.git",
+    "directory": "apps/vscode-containerlab"
+  },
+  "extensionPack": [
+    "hediet.vscode-drawio",
+    "redhat.vscode-yaml"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "categories": [
+    "Programming Languages",
+    "Linters",
+    "Other"
+  ],
+  "keywords": [
+    "containerlab",
+    "clab",
+    "docker",
+    "container",
+    "containers"
+  ],
+  "license": "Apache-2.0",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "containerlabViewContainer",
+          "title": "Containerlab",
+          "icon": "resources/containerlab.svg"
+        }
+      ]
+    },
+    "views": {
+      "containerlabViewContainer": [
+        {
+          "id": "containerlabActivityBadgeProxyView",
+          "name": "Running Labs Badge",
+          "visibility": "hidden"
+        },
+        {
+          "id": "containerlabExplorerWebview",
+          "name": "Explorer",
+          "type": "webview"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "containerlabExplorerWebview",
+        "contents": "Loading Containerlab explorer..."
+      }
+    ],
+    "commands": [
+      {
+        "command": "containerlab.lab.openFile",
+        "title": "Edit topology",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "containerlab.editor.topoViewerEditor.open",
+        "title": "Edit topology (TopoViewer)"
+      },
+      {
+        "command": "containerlab.lab.copyPath",
+        "title": "Copy file path",
+        "icon": "$(copy)"
+      },
+      {
+        "command": "containerlab.lab.toggleFavorite",
+        "title": "Toggle Favorite",
+        "icon": "$(star)"
+      },
+      {
+        "command": "containerlab.lab.delete",
+        "title": "Delete lab file",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "containerlab.lab.deploy",
+        "title": "Deploy",
+        "icon": "$(play)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.deploy.cleanup",
+        "title": "Deploy (cleanup)",
+        "icon": "$(play)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.deploy.specificFile",
+        "title": "Deploy lab file",
+        "icon": "$(plus)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.deployPopular",
+        "title": "Deploy popular lab",
+        "icon": "$(star)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.redeploy",
+        "title": "Redeploy",
+        "icon": "$(refresh)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.redeploy.cleanup",
+        "title": "Redeploy (cleanup)",
+        "icon": "$(refresh)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.apply",
+        "title": "Apply topology",
+        "icon": "$(play)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.destroy",
+        "title": "Destroy",
+        "icon": "$(trash)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.destroy.cleanup",
+        "title": "Destroy (cleanup)",
+        "icon": "$(trash)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.start",
+        "title": "Start nodes",
+        "icon": "$(play)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.stop",
+        "title": "Stop nodes",
+        "icon": "$(stop)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.restart",
+        "title": "Restart nodes",
+        "icon": "$(refresh)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.save",
+        "title": "Save configs",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.inspectAll",
+        "title": "Inspect (All Labs)",
+        "category": "Containerlab",
+        "icon": "$(info)"
+      },
+      {
+        "command": "containerlab.images.manage",
+        "title": "Manage Images",
+        "category": "Containerlab",
+        "icon": "$(package)"
+      },
+      {
+        "command": "containerlab.inspectOneLab",
+        "title": "Inspect",
+        "category": "Containerlab",
+        "icon": "$(info)"
+      },
+      {
+        "command": "containerlab.lab.graph.drawio.horizontal",
+        "title": "Graph (draw.io, Horizontal)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.graph.drawio.vertical",
+        "title": "Graph (draw.io, Vertical)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.graph.drawio.interactive",
+        "title": "Graph (draw.io, Interactive)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.graph.topoViewer",
+        "title": "Graph (TopoViewer)",
+        "icon": "$(graph-line)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.editor.topoViewerEditor",
+        "title": "New topology file",
+        "icon": "$(new-file)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.cloneRepo",
+        "title": "Clone repository from git",
+        "icon": "$(repo-clone)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.clonePopularRepo",
+        "title": "Clone popular lab",
+        "icon": "$(star)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.addToWorkspace",
+        "title": "Add to Workspace",
+        "category": "Containerlab",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "containerlab.lab.openFolderInNewWindow",
+        "title": "Open Folder in New Window",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "containerlab.lab.sshToAllNodes",
+        "title": "SSH (All nodes)"
+      },
+      {
+        "command": "containerlab.node.start",
+        "title": "Start"
+      },
+      {
+        "command": "containerlab.node.stop",
+        "title": "Stop"
+      },
+      {
+        "command": "containerlab.node.restart",
+        "title": "Restart"
+      },
+      {
+        "command": "containerlab.node.pause",
+        "title": "Pause"
+      },
+      {
+        "command": "containerlab.node.unpause",
+        "title": "Unpause"
+      },
+      {
+        "command": "containerlab.node.save",
+        "title": "Save config"
+      },
+      {
+        "command": "containerlab.node.attachShell",
+        "title": "Attach shell",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "containerlab.node.ssh",
+        "title": "Connect (SSH)",
+        "icon": "$(remote)"
+      },
+      {
+        "command": "containerlab.node.telnet",
+        "title": "Connect (Telnet)"
+      },
+      {
+        "command": "containerlab.node.showLogs",
+        "title": "View logs",
+        "icon": "$(list-unordered)"
+      },
+      {
+        "command": "containerlab.node.manageImpairments",
+        "title": "Link Impairments",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.node.copyIPv4Address",
+        "title": "IPv4 Address"
+      },
+      {
+        "command": "containerlab.node.copyIPv6Address",
+        "title": "IPv6 Address"
+      },
+      {
+        "command": "containerlab.node.copyName",
+        "title": "Name"
+      },
+      {
+        "command": "containerlab.node.copyID",
+        "title": "Container ID"
+      },
+      {
+        "command": "containerlab.node.copyKind",
+        "title": "Kind"
+      },
+      {
+        "command": "containerlab.node.copyImage",
+        "title": "Image"
+      },
+      {
+        "command": "containerlab.interface.capture",
+        "title": "Capture interface",
+        "icon": {
+          "light": "resources/icons/wireshark_light.svg",
+          "dark": "resources/icons/wireshark_dark.svg"
+        }
+      },
+      {
+        "command": "containerlab.interface.captureWithEdgeshark",
+        "title": "Capture interface (Edgeshark)"
+      },
+      {
+        "command": "containerlab.interface.captureWithEdgesharkVNC",
+        "title": "Capture interface (Edgeshark VNC)"
+      },
+      {
+        "command": "containerlab.interface.setDelay",
+        "title": "Set delay"
+      },
+      {
+        "command": "containerlab.interface.setJitter",
+        "title": "Set jitter"
+      },
+      {
+        "command": "containerlab.interface.setLoss",
+        "title": "Set packet loss"
+      },
+      {
+        "command": "containerlab.interface.setRate",
+        "title": "Set rate-limit"
+      },
+      {
+        "command": "containerlab.interface.setCorruption",
+        "title": "Set corruption"
+      },
+      {
+        "command": "containerlab.interface.copyMACAddress",
+        "title": "Copy MAC address"
+      },
+      {
+        "command": "containerlab.install.edgeshark",
+        "title": "Install Edgeshark",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.uninstall.edgeshark",
+        "title": "Uninstall Edgeshark",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.capture.killAllWiresharkVNC",
+        "title": "Kill all Wireshark VNC containers",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.set.sessionHostname",
+        "title": "Configure hostname for this session",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.node.openBrowser",
+        "title": "Open Port in Browser",
+        "icon": "$(globe)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.openLink",
+        "title": "Open Link"
+      },
+      {
+        "command": "containerlab.lab.sshx.attach",
+        "title": "Share Lab (attach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.sshx.detach",
+        "title": "Share Lab (detach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.sshx.reattach",
+        "title": "Share Lab (reattach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.sshx.copyLink",
+        "title": "Copy SSHX link"
+      },
+      {
+        "command": "containerlab.lab.gotty.attach",
+        "title": "Share Lab (attach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.gotty.detach",
+        "title": "Share Lab (detach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.gotty.reattach",
+        "title": "Share Lab (reattach)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.gotty.copyLink",
+        "title": "Copy GoTTY link"
+      },
+      {
+        "command": "containerlab.lab.fcli.bgpPeers",
+        "title": "bgp-peers",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.bgpRib",
+        "title": "bgp-rib",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.ipv4Rib",
+        "title": "ipv4-rib",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.lldp",
+        "title": "lldp",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.mac",
+        "title": "mac",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.ni",
+        "title": "ni",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.subif",
+        "title": "subif",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.sysInfo",
+        "title": "sys-info",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.fcli.custom",
+        "title": "custom",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.treeView.runningLabs.hideNonOwnedLabs",
+        "title": "Hide non-owned"
+      },
+      {
+        "command": "containerlab.treeView.runningLabs.showNonOwnedLabs",
+        "title": "Show non-owned"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "containerlab.submenu.lab.graph.drawio",
+        "label": "Graph (draw.io)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.graph.topoViewer",
+          "group": "navigation@0"
+        }
+      ],
+      "editor/title/run": [
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.apply",
+          "group": "navigation@0"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy",
+          "group": "navigation@1"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy.cleanup",
+          "group": "navigation@2"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy",
+          "group": "navigation@3"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy.cleanup",
+          "group": "navigation@4"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy",
+          "group": "navigation@5"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy.cleanup",
+          "group": "navigation@6"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.start",
+          "group": "navigation@7"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.stop",
+          "group": "navigation@8"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.restart",
+          "group": "navigation@9"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.apply",
+          "group": "clabLabActions@0"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy",
+          "group": "clabLabActions@1"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy.cleanup",
+          "group": "clabLabActions@2"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy",
+          "group": "clabLabActions@3"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy.cleanup",
+          "group": "clabLabActions@4"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy",
+          "group": "clabLabActions@5"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy.cleanup",
+          "group": "clabLabActions@6"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.start",
+          "group": "clabLabActions@7"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.stop",
+          "group": "clabLabActions@8"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.restart",
+          "group": "clabLabActions@9"
+        },
+        {
+          "submenu": "containerlab.submenu.lab.graph.drawio",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@0"
+        },
+        {
+          "command": "containerlab.lab.graph.topoViewer",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.apply",
+          "group": "clabLabActions@0"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy",
+          "group": "clabLabActions@1"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.deploy.cleanup",
+          "group": "clabLabActions@2"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy",
+          "group": "clabLabActions@3"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.redeploy.cleanup",
+          "group": "clabLabActions@4"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy",
+          "group": "clabLabActions@5"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.destroy.cleanup",
+          "group": "clabLabActions@6"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.start",
+          "group": "clabLabActions@7"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.stop",
+          "group": "clabLabActions@8"
+        },
+        {
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "command": "containerlab.lab.restart",
+          "group": "clabLabActions@9"
+        },
+        {
+          "submenu": "containerlab.submenu.lab.graph.drawio",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@0"
+        },
+        {
+          "command": "containerlab.lab.graph.topoViewer",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "containerlab.lab.deploy",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.deploy.cleanup",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.redeploy",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.redeploy.cleanup",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.apply",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.destroy",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.destroy.cleanup",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.start",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.stop",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.restart",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.graph.drawio.horizontal",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.graph.drawio.vertical",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.graph.drawio.interactive",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.install.edgeshark",
+          "when": "true"
+        },
+        {
+          "command": "containerlab.uninstall.edgeshark",
+          "when": "true"
+        }
+      ],
+      "containerlab.submenu.lab.graph.drawio": [
+        {
+          "command": "containerlab.lab.graph.drawio.horizontal",
+          "group": "graph@0"
+        },
+        {
+          "command": "containerlab.lab.graph.drawio.vertical",
+          "group": "graph@0"
+        },
+        {
+          "command": "containerlab.lab.graph.drawio.interactive",
+          "group": "graph@0"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "key": "ctrl+alt+d",
+        "mac": "cmd+alt+d",
+        "command": "containerlab.lab.deploy"
+      },
+      {
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "command": "containerlab.lab.redeploy"
+      },
+      {
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "command": "containerlab.lab.apply"
+      },
+      {
+        "key": "ctrl+alt+k",
+        "mac": "cmd+alt+k",
+        "command": "containerlab.lab.destroy"
+      },
+      {
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "command": "containerlab.lab.graph.topoViewer"
+      }
+    ],
+    "configuration": [
+      {
+        "title": "General",
+        "order": 1,
+        "properties": {
+          "containerlab.showWelcomePage": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show the welcome page when the extension activates."
+          },
+          "containerlab.skipUpdateCheck": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Skip checking for containerlab updates during activation."
+          },
+          "containerlab.binaryPath": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "The absolute file path to the Containerlab binary."
+          },
+          "containerlab.skipCleanupWarning": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, skip the warning popup for cleanup commands (redeploy/destroy cleanup)."
+          },
+          "containerlab.deploy.extraArgs": {
+            "type": "string",
+            "default": "",
+            "description": "Additional command-line options appended to all 'containerlab deploy' and 'containerlab redeploy' commands."
+          },
+          "containerlab.destroy.extraArgs": {
+            "type": "string",
+            "default": "",
+            "description": "Additional command-line options appended to all 'containerlab destroy' commands."
+          },
+          "containerlab.drawioDefaultTheme": {
+            "type": "string",
+            "enum": [
+              "nokia_modern",
+              "nokia",
+              "grafana"
+            ],
+            "default": "nokia_modern",
+            "description": "Default theme to use when generating DrawIO graphs."
+          },
+          "containerlab.gotty.port": {
+            "type": "number",
+            "default": 8080,
+            "description": "Port for GoTTY web terminal."
+          },
+          "containerlab.runtime": {
+            "type": "string",
+            "default": "docker",
+            "description": "Container runtime to use (docker, podman)."
+          },
+          "containerlab.dockerSocketPath": {
+            "type": "string",
+            "default": "/var/run/docker.sock",
+            "description": "Path to the Docker or Podman socket (e.g., /run/user/1000/podman/podman.sock for Podman)."
+          },
+          "containerlab.refreshMode": {
+            "type": "string",
+            "enum": [
+              "events",
+              "polling"
+            ],
+            "default": "events",
+            "markdownDescription": "How to refresh lab data. `events` uses real-time containerlab events. `polling` uses periodic `containerlab inspect` calls."
+          },
+          "containerlab.pollInterval": {
+            "type": "number",
+            "default": 5000,
+            "minimum": 1000,
+            "markdownDescription": "Polling interval in milliseconds when using `polling` refresh mode."
+          },
+          "containerlab.enableInterfaceStats": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Enable interface statistics (RX/TX bytes, packets, etc.) in the explorer. Disable to reduce resource usage."
+          }
+        }
+      },
+      {
+        "title": "TopoViewer",
+        "order": 2,
+        "properties": {
+          "containerlab.editor.customNodes": {
+            "type": "array",
+            "default": [
+              {
+                "name": "SRLinux Latest",
+                "kind": "nokia_srlinux",
+                "type": "ixr-d1",
+                "image": "ghcr.io/nokia/srlinux:latest",
+                "icon": "router",
+                "baseName": "srl",
+                "interfacePattern": "e1-{n}",
+                "setDefault": true
+              },
+              {
+                "name": "Network Multitool",
+                "kind": "linux",
+                "image": "ghcr.io/srl-labs/network-multitool:latest",
+                "icon": "client",
+                "baseName": "client",
+                "interfacePattern": "eth{n}",
+                "setDefault": false
+              }
+            ],
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "image": {
+                  "type": "string"
+                },
+                "icon": {
+                  "type": "string"
+                },
+                "baseName": {
+                  "type": "string"
+                },
+                "interfacePattern": {
+                  "type": "string"
+                },
+                "setDefault": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "kind"
+              ],
+              "additionalProperties": true
+            },
+            "markdownDescription": "Custom node templates available in the TopoViewer add-node menu. Can store full node configurations including startup-config, binds, env vars, etc."
+          },
+          "containerlab.editor.updateLinkEndpointsOnKindChange": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "When enabled, changing a node's kind updates connected link endpoints to match the new kind's interface pattern."
+          },
+          "containerlab.editor.lockLabByDefault": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Lock the lab canvas by default to prevent accidental modifications. Disable to start new sessions unlocked."
+          }
+        }
+      },
+      {
+        "title": "Node actions",
+        "order": 2,
+        "properties": {
+          "containerlab.node.execCommandMapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "markdownDescription": "Change the default exec action for node when using the 'attach' command. Enter in the mapping between the kind and command.\n\nFor example: `{\"nokia_srlinux\": \"sr_cli\"}` means that `docker exec -it <container> sr_cli` will be executed if `<container>` is the `nokia_srlinux` kind."
+          },
+          "containerlab.node.sshUserMapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "default": {},
+            "markdownDescription": "Custom SSH users for different node kinds. Enter the mapping between the kind and SSH username.\n\nFor example: `{\"nokia_srlinux\": \"clab\"}` means that `ssh clab@<container>` will be used if `<container>` is the `nokia_srlinux` kind."
+          },
+          "containerlab.node.telnetPort": {
+            "type": "number",
+            "default": 5000,
+            "description": "Port to connect when telnetting to the node with 'docker exec -it <node> telnet 127.0.0.1 <port>'"
+          },
+          "containerlab.extras.fcli.extraDockerArgs": {
+            "type": "string",
+            "default": "",
+            "description": "Additional docker (or podman) arguments to append to the fcli command"
+          }
+        }
+      },
+      {
+        "title": "Packet Capture",
+        "order": 4,
+        "properties": {
+          "containerlab.capture.remoteHostname": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Hostname or IP address for **Edgeshark packet capture** connections. Can be either DNS resolvable hostname, or an IPv4/6 address. This setting tells Edgeshark where to connect for capturing packets.\n\n**Note:** A configured hostname for *this session of VS Code* takes precedence. (Command palette: **Containerlab: Configure session hostname**)"
+          },
+          "containerlab.capture.packetflixPort": {
+            "type": "number",
+            "default": 5001,
+            "markdownDescription": "Port for the **Packetflix WebSocket endpoint** used by Edgeshark packet capture. This is where Edgeshark connects to stream captured packets."
+          },
+          "containerlab.capture.preferredAction": {
+            "type": "string",
+            "default": "Wireshark VNC",
+            "enum": [
+              "Edgeshark",
+              "Wireshark VNC"
+            ],
+            "description": "The preferred capture method when using the capture interface quick action on the interface tree item"
+          },
+          "containerlab.capture.wireshark.dockerImage": {
+            "type": "string",
+            "default": "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+            "description": "The docker image to use for Wireshark/Edgeshark VNC capture. Requires full image name + tag"
+          },
+          "containerlab.capture.wireshark.pullPolicy": {
+            "type": "string",
+            "default": "always",
+            "enum": [
+              "always",
+              "missing",
+              "never"
+            ],
+            "description": "The pull policy of the Wireshark docker image"
+          },
+          "containerlab.capture.wireshark.theme": {
+            "type": "string",
+            "default": "Follow VS Code theme",
+            "enum": [
+              "Follow VS Code theme",
+              "Dark",
+              "Light"
+            ],
+            "description": "The theme, or colour scheme of the wireshark application."
+          },
+          "containerlab.capture.wireshark.stayOpenInBackground": {
+            "type": "boolean",
+            "default": "true",
+            "description": "Keep Wireshark VNC sessions alive, even when the capture tab is not active. Enabling this will consume more memory on both the client and remote containerlab host system."
+          },
+          "containerlab.capture.wireshark.vncCaptureHostname": {
+            "type": "string",
+            "default": "",
+            "markdownDescription": "Override the hostname used in the generation for packetflix URI for VNC captures only."
+          },
+          "containerlab.capture.edgeshark.extraEnvironmentVars": {
+            "type": "string",
+            "default": "HTTP_PROXY=, http_proxy=",
+            "description": "Comma-separated environment variables to inject into edgeshark containers (e.g., 'HTTP_PROXY=, http_proxy=, NO_PROXY=localhost'). Each variable will be added to the environment section of both gostwire and packetflix services."
+          }
+        }
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "typecheck": "tsc --noEmit",
+    "typecheck:local-ui": "tsc --noEmit -p tsconfig.local-ui.json",
+    "build": "node esbuild.config.js",
+    "build:watch": "node esbuild.config.js --watch",
+    "build:dev": "node esbuild.config.js --dev",
+    "build:local-ui": "CLAB_UI_SOURCE=local node esbuild.config.js",
+    "bundle": "node esbuild.config.js",
+    "package": "rm -rf dist && npm run lint && vsce package --no-dependencies",
+    "package:local-ui": "rm -rf dist && CLAB_UI_SOURCE=local npm run lint:local-ui && CLAB_UI_SOURCE=local vsce package --no-dependencies",
+    "vscode:prepublish": "node esbuild.config.js",
+    "lint": "npm run typecheck && (npm run lint:ts & p1=$!; npm run lint:circular & p2=$!; npm run lint:deps & p3=$!; npm run lint:cpd & p4=$!; npm run lint:barrels & p5=$!; npm run lint:prettier & p6=$!; wait $p1; s1=$?; wait $p2; s2=$?; wait $p3; s3=$?; wait $p4; s4=$?; wait $p5; s5=$?; wait $p6; s6=$?; [ $s1 -eq 0 ] && [ $s2 -eq 0 ] && [ $s3 -eq 0 ] && [ $s4 -eq 0 ] && [ $s5 -eq 0 ] && [ $s6 -eq 0 ])",
+    "lint:local-ui": "npm run typecheck:local-ui && (npm run lint:ts:local-ui & p1=$!; npm run lint:circular:local-ui & p2=$!; npm run lint:deps:local-ui & p3=$!; npm run lint:cpd & p4=$!; npm run lint:barrels & p5=$!; npm run lint:prettier & p6=$!; wait $p1; s1=$?; wait $p2; s2=$?; wait $p3; s3=$?; wait $p4; s4=$?; wait $p5; s5=$?; wait $p6; s6=$?; [ $s1 -eq 0 ] && [ $s2 -eq 0 ] && [ $s3 -eq 0 ] && [ $s4 -eq 0 ] && [ $s5 -eq 0 ] && [ $s6 -eq 0 ])",
+    "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts:local-ui": "oxlint --tsconfig tsconfig.local-ui.json --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts:fix": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
+    "lint:prettier": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "lint:prettier:fix": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "npm run lint:ts:fix && npm run lint:prettier:fix",
+    "lint:circular": "depcruise src --config .dependency-cruiser.cjs --output-type err",
+    "lint:circular:local-ui": "depcruise src --config .dependency-cruiser.local-ui.cjs --output-type err",
+    "lint:deps": "depcruise src --config .dependency-cruiser.cjs",
+    "lint:deps:local-ui": "depcruise src --config .dependency-cruiser.local-ui.cjs",
+    "lint:cpd": "jscpd src/",
+    "lint:barrels": "node scripts/check-barrel-exports.js",
+    "test": "npm run test:compile && mocha --exit --extension js --reporter mochawesome \"out/test/**/*.test.js\"",
+    "test:compile": "rm -rf out/test && tsc -p test/tsconfig.mocha.json",
+    "test:e2e": "npm run build && npm run test:e2e:compile && node ./out/e2e/run.js",
+    "test:e2e:compile": "rm -rf out/e2e && tsc -p test/tsconfig.e2e.json",
+    "test:unit": "npm test"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.3",
+    "@types/dockerode": "^4.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@types/sinon": "^22.0.0",
+    "@types/vscode": "1.105.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.9.2",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "autoprefixer": "^10.5.4",
+    "chai": "^6.2.2",
+    "dependency-cruiser": "^18.2.0",
+    "dockerode": "^5.0.1",
+    "esbuild": "^0.28.2",
+    "jscpd": "^5.0.15",
+    "mocha": "^11.8.0",
+    "mochawesome": "^8.0.1",
+    "oxlint": "^1.78.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "postcss": "^8.5.26",
+    "postcss-cli": "^11.0.1",
+    "postcss-import": "^17.0.0",
+    "prettier": "^3.9.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sinon": "^22.1.0",
+    "typescript": "^6.0.3",
+    "yaml": "^2.9.0",
+    "chokidar": "^3.6.0"
+  },
+  "private": false,
+  "bugs": {
+    "url": "https://github.com/srl-labs/containerlab-app/issues"
+  },
+  "dependencies": {
+    "@srl-labs/clab-ui": "0.3.1"
+  }
+}

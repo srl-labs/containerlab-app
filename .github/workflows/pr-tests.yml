@@ -35,6 +35,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Preview clab-ui package
+        run: npm run pack:clab-ui -- --dry-run
+
       - name: Install Playwright headless shell
         run: npx playwright install --with-deps --only-shell chromium
 
@@ -49,3 +52,92 @@ jobs:
           path: apps/web/playwright-report/
           if-no-files-found: ignore
           retention-days: 30
+
+  clab-ui-browser-tests:
+    name: clab-ui browser tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          install-dependencies: true
+
+      - name: Run clab-ui browser harness
+        env:
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: npm run test:browser:clab-ui -- --shard=${{ matrix.shard }}/4
+
+      - name: Upload clab-ui Playwright blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clab-ui-blob-report-${{ matrix.shard }}-${{ github.run_attempt }}
+          path: packages/clab-ui/blob-report/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  clab-ui-browser-report:
+    if: ${{ !cancelled() }}
+    needs: [clab-ui-browser-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download clab-ui Playwright blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-clab-ui-blob-reports
+          pattern: clab-ui-blob-report-*-${{ github.run_attempt }}
+          merge-multiple: true
+
+      - name: Merge clab-ui Playwright reports
+        run: npx playwright merge-reports --reporter html ./all-clab-ui-blob-reports
+
+      - name: Upload clab-ui Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clab-ui-playwright-report-${{ github.run_number }}-${{ github.run_attempt }}
+          path: playwright-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Check clab-ui browser test result
+        if: ${{ !cancelled() }}
+        env:
+          BROWSER_TESTS_RESULT: ${{ needs.clab-ui-browser-tests.result }}
+        run: test "$BROWSER_TESTS_RESULT" = "success"

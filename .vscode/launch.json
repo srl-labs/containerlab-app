@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "Debug Containerlab Extension",
+    "type": "extensionHost",
+    "request": "launch",
+    "runtimeExecutable": "${execPath}",
+    "args": ["--extensionDevelopmentPath=${workspaceFolder}/apps/vscode-containerlab"],
+    "outFiles": ["${workspaceFolder}/apps/vscode-containerlab/dist/**/*.js"],
+    "preLaunchTask": "Build Containerlab Extension",
+    "cwd": "${workspaceFolder}/apps/vscode-containerlab"
+  }]
+}

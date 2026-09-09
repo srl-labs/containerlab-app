@@ -60,6 +60,10 @@ function assertWorkspaceDependencyPolicy(dependencyName) {
   for (const workspacePackage of workspacePackages) {
     const packageJsonPath = path.join(workspacePackage.path, "package.json");
     const packageJson = readJson(packageJsonPath);
+    if (packageJson.name === dependencyName) {
+      continue;
+    }
+
     const importFiles = findImportFiles(workspacePackage.path, dependencyName);
     const fields = declaredFields(packageJson, dependencyName);
     const packageLabel = `${packageJson.name ?? workspacePackage.relativePath} (${workspacePackage.relativePath})`;

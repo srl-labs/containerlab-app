@@ -11,3 +11,8 @@ playwright-report
 test-results
 *.log
 *.tgz
+
+*.vsix
+.vscode
+mochawesome-report
+.vscode-test

@@ -1,0 +1,161 @@
+{
+  "name": "@srl-labs/clab-ui",
+  "version": "0.3.1",
+  "private": false,
+  "description": "Shared UI package for containerlab webviews and topology editing.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "dist-viewer"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srl-labs/containerlab-app.git",
+    "directory": "packages/clab-ui"
+  },
+  "homepage": "https://github.com/srl-labs/containerlab-app/tree/main/packages/clab-ui",
+  "bugs": {
+    "url": "https://github.com/srl-labs/containerlab-app/issues"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./host": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
+    },
+    "./session": {
+      "types": "./dist/session/index.d.ts",
+      "import": "./dist/session/index.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "import": "./dist/theme/index.js"
+    },
+    "./explorer": {
+      "types": "./dist/explorer/index.d.ts",
+      "import": "./dist/explorer/index.js"
+    },
+    "./image-manager": {
+      "types": "./dist/image-manager/index.d.ts",
+      "import": "./dist/image-manager/index.js"
+    },
+    "./image-manager/catalog": {
+      "types": "./dist/image-manager/catalog.d.ts",
+      "import": "./dist/image-manager/catalog.js"
+    },
+    "./inspect": {
+      "types": "./dist/inspect/index.d.ts",
+      "import": "./dist/inspect/index.js"
+    },
+    "./welcome": {
+      "types": "./dist/welcome/index.d.ts",
+      "import": "./dist/welcome/index.js"
+    },
+    "./node-impairments": {
+      "types": "./dist/node-impairments/index.d.ts",
+      "import": "./dist/node-impairments/index.js"
+    },
+    "./wireshark-vnc": {
+      "types": "./dist/wireshark-vnc/index.d.ts",
+      "import": "./dist/wireshark-vnc/index.js"
+    },
+    "./viewer": {
+      "types": "./dist/viewer/index.d.ts",
+      "import": "./dist/viewer/index.js"
+    },
+    "./viewer/static/*": "./dist-viewer/*",
+    "./monaco/core": {
+      "types": "./dist/monaco/core.d.ts",
+      "import": "./dist/monaco/core.js"
+    },
+    "./monaco/editor-worker": {
+      "types": "./dist/monaco/editor-worker.d.ts",
+      "import": "./dist/monaco/editor-worker.js"
+    },
+    "./monaco/json-worker": {
+      "types": "./dist/monaco/json-worker.d.ts",
+      "import": "./dist/monaco/json-worker.js"
+    },
+    "./monaco/yaml-worker": {
+      "types": "./dist/monaco/yaml-worker.d.ts",
+      "import": "./dist/monaco/yaml-worker.js"
+    },
+    "./monaco-assets.json": "./dist/monaco-assets.json",
+    "./styles/global.css": "./dist/styles/global.css"
+  },
+  "scripts": {
+    "build": "node ./build.mjs && npm run build:viewer",
+    "build:viewer": "vite build --config vite.viewer.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "npm run typecheck && npm run lint:ts",
+    "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
+    "test:unit": "node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'",
+    "dev:ui-harness": "vite --host 127.0.0.1 --config test/ui-harness/vite.config.ts",
+    "test:browser": "playwright test --config test/ui-harness/playwright.config.ts",
+    "test:browser:smoke": "playwright test --config test/ui-harness/playwright.config.ts test/ui-harness/specs/canvas-interactions.spec.ts test/ui-harness/specs/node-creation-workflow.spec.ts test/ui-harness/specs/source-editor-monaco.spec.ts test/ui-harness/specs/file-io-persistence.spec.ts --project=chromium",
+    "pack:preview": "npm pack --dry-run",
+    "publish:ui": "npm publish",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/roboto": "^5.2.10",
+    "@mui/icons-material": "^7.3.10",
+    "@mui/material": "^7.3.10",
+    "@mui/x-charts": "^8.28.2",
+    "@xyflow/react": "^12.10.2",
+    "ajv": "^8.18.0",
+    "d3-force": "^3.0.0",
+    "dompurify": "^3.4.1",
+    "elkjs": "^0.11.1",
+    "highlight.js": "^11.11.1",
+    "maplibre-gl": "^5.24.0",
+    "markdown-it": "^14.1.1",
+    "markdown-it-emoji": "^3.0.0",
+    "monaco-editor": "^0.55.1",
+    "monaco-yaml": "^5.4.1",
+    "yaml": "^2.8.3",
+    "zustand": "^4.5.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/d3-force": "^3.0.10",
+    "@types/markdown-it": "^14.1.2",
+    "@types/markdown-it-emoji": "^3.0.1",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/vscode": "^1.116.0",
+    "autoprefixer": "^10.5.0",
+    "esbuild": "^0.27.7",
+    "oxlint": "^1.61.0",
+    "oxlint-tsgolint": "^0.18.1",
+    "postcss": "^8.5.10",
+    "postcss-import": "^16.1.1",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
+}
