@@ -103,6 +103,8 @@
                         "ciena_saos",
                         "ext-container",
                         "rare",
+                        "frr",
+                        "frrouting",
                         "cisco_xrd",
                         "cisco_xrd_vrouter",
                         "cisco_c8000",
@@ -190,6 +192,16 @@
                     },
                     "uniqueItems": true
                 },
+                "volumes": {
+                    "type": "array",
+                    "description": "list of volumes to attach",
+                    "markdownDescription": "list of [volumes](https://containerlab.dev/manual/nodes/#volumes) to attach",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    },
+                    "uniqueItems": true
+                },
                 "ports": {
                     "type": "array",
                     "description": "list of port mappings",
@@ -250,6 +262,12 @@
                             "minimum": 0
                         }
                     ]
+                },
+                "hostname": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "hostname configured inside the container",
+                    "markdownDescription": "container [hostname](https://containerlab.dev/manual/nodes/#hostname); defaults to the topology node name"
                 },
                 "entrypoint": {
                     "type": "string",
@@ -1264,6 +1282,47 @@
                         "type": "string"
                     },
                     "uniqueItems": true
+                },
+                "frr": {
+                    "type": "object",
+                    "description": "FRRouting-specific extra options",
+                    "markdownDescription": "[FRRouting-specific extra options](https://containerlab.dev/manual/kinds/frr/#daemons)",
+                    "properties": {
+                        "daemons": {
+                            "type": "array",
+                            "description": "list of FRR routing daemons to enable; when omitted, all daemons are enabled",
+                            "markdownDescription": "list of [FRR routing daemons](https://containerlab.dev/manual/kinds/frr/#daemons) to enable; when omitted, all daemons are enabled",
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "bgpd",
+                                    "ospfd",
+                                    "ospf6d",
+                                    "ripd",
+                                    "ripngd",
+                                    "isisd",
+                                    "pimd",
+                                    "pim6d",
+                                    "ldpd",
+                                    "nhrpd",
+                                    "eigrpd",
+                                    "babeld",
+                                    "sharpd",
+                                    "pbrd",
+                                    "bfdd",
+                                    "fabricd",
+                                    "vrrpd",
+                                    "pathd",
+                                    "zebra",
+                                    "staticd",
+                                    "mgmtd",
+                                    "watchfrr"
+                                ]
+                            },
+                            "uniqueItems": true
+                        }
+                    },
+                    "additionalProperties": false
                 }
             },
             "additionalProperties": false
@@ -2219,6 +2278,12 @@
                             "$ref": "#/definitions/node-config"
                         },
                         "rare": {
+                            "$ref": "#/definitions/node-config"
+                        },
+                        "frr": {
+                            "$ref": "#/definitions/node-config"
+                        },
+                        "frrouting": {
                             "$ref": "#/definitions/node-config"
                         },
                         "nvidia_cumulusvx": {

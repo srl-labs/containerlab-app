@@ -49,7 +49,8 @@
     "build:vscode": "npm run build:clab-ui && npm run build --workspace vscode-containerlab",
     "dev:vscode": "npm run build:clab-ui && npm run build:watch --workspace vscode-containerlab",
     "package:vscode": "npm run build:clab-ui && npm run package --workspace vscode-containerlab",
-    "test:e2e:vscode": "npm run build:clab-ui && npm run test:e2e --workspace vscode-containerlab"
+    "test:e2e:vscode": "npm run build:clab-ui && npm run test:e2e --workspace vscode-containerlab",
+    "sync:schema": "node scripts/sync-clab-schema.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

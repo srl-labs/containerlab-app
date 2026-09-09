@@ -17,22 +17,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Fetch upstream schema
-        run: |
-          curl -fsSL \
-            https://raw.githubusercontent.com/srl-labs/containerlab/main/schemas/clab.schema.json \
-            -o /tmp/clab.schema.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
-      - name: Update local schema when changed
+      - name: Sync canonical schema
         id: schema
-        run: |
-          if diff -q /tmp/clab.schema.json packages/clab-ui/schema/clab.schema.json > /dev/null; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          mv /tmp/clab.schema.json packages/clab-ui/schema/clab.schema.json
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+        run: npm run sync:schema
 
       - name: Open pull request
         if: steps.schema.outputs.changed == 'true'

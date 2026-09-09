@@ -168,3 +168,12 @@ test("schema completions suggest enum and kind-specific type values", () => {
   assert(typeLabels.includes("ixr-d2"));
   assert(typeLabels.includes("ixr-h4"));
 });
+
+test("schema completions include upstream hostname, volumes and FRRouting kinds", () => {
+  const nodeLabels = completionLabels("topology:\n  nodes:\n    router:\n      ", 4, 7);
+  assert(nodeLabels.includes("hostname"));
+  assert(nodeLabels.includes("volumes"));
+  const kindLabels = completionLabels("topology:\n  nodes:\n    router:\n      kind: ", 4, 13);
+  assert(kindLabels.includes("frr"));
+  assert(kindLabels.includes("frrouting"));
+});

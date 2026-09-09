@@ -55,7 +55,7 @@ import type { TabDefinition } from "../../ui/editor";
 import { TabNavigation } from "../../ui/editor/TabNavigation";
 import { IconPreview } from "../../ui/form";
 import { executeTopologyCommand } from "../../../services/topologyHostCommands";
-import clabSchema from "../../../../schema/clab.schema.json";
+import { containerlabSchema } from "../../../core/schema/bundledSchema";
 import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
 
 interface PaletteSectionProps {
@@ -932,7 +932,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           error={yamlError}
           language="yaml"
           value={yamlDraft}
-          jsonSchema={yamlSchema ?? clabSchema}
+          jsonSchema={yamlSchema ?? containerlabSchema}
           onChange={(next) => {
             setYamlDraft(next);
             setYamlDirty(true);
