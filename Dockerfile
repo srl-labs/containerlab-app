@@ -19,8 +19,7 @@ FROM deps AS build
 
 COPY . .
 
-RUN npm run build:web && npm run build --workspace containerlab-desktop
-RUN npm prune --omit=dev
+RUN npm run build:web
 
 FROM node:24-alpine AS runtime
 
@@ -31,9 +30,6 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY --from=build --chown=node:node /app/package.json ./package.json
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 
 USER node
