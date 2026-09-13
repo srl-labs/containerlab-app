@@ -15,6 +15,7 @@
     "build": "pnpm -r --if-present run build",
     "build:clab-ui": "pnpm --filter @srl-labs/clab-ui run build",
     "build:web": "pnpm run build:clab-ui && pnpm --filter containerlab-app-web run build",
+    "build:sandbox": "VITE_PUBLIC_BASE_PATH=/ pnpm run build:pages",
     "build:pages": "pnpm run build:clab-ui && pnpm --filter containerlab-app-web run build:pages",
     "build:desktop": "pnpm run build:clab-ui && pnpm --filter containerlab-desktop run build",
     "package:desktop": "pnpm run build:clab-ui && pnpm --filter containerlab-desktop run package",
