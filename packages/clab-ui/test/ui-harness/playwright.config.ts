@@ -45,7 +45,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run dev:ui-harness",
+    command: "pnpm run dev:ui-harness",
     url: "http://127.0.0.1:5184",
     reuseExistingServer: !isCI,
     timeout: isCI ? 180000 : 120000,

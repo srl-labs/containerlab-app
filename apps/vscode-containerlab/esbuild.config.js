@@ -3,16 +3,6 @@ const path = require("path");
 const fs = require("fs");
 const { execSync } = require("child_process");
 
-const localClabUiRoot = path.resolve(__dirname, "../../packages/clab-ui");
-const localClabUiDistRoot = path.join(localClabUiRoot, "dist");
-const useLocalClabUi =
-  process.env.CLAB_UI_SOURCE === "local" &&
-  fs.existsSync(path.join(localClabUiDistRoot, "index.js"));
-const clabUiEntry = (relativePath, packageSubpath) =>
-  useLocalClabUi
-    ? path.join(localClabUiDistRoot, relativePath)
-    : require.resolve(packageSubpath);
-
 const reactTopoViewerEntry = path.join(__dirname, "src/webviews/reactTopoViewer/entry.tsx");
 const explorerWebviewEntry = path.join(__dirname, "src/webviews/explorer/entry.tsx");
 const inspectWebviewEntry = path.join(__dirname, "src/webviews/inspect/entry.tsx");
@@ -20,7 +10,7 @@ const imageManagerWebviewEntry = path.join(__dirname, "src/webviews/imageManager
 const welcomeWebviewEntry = path.join(__dirname, "src/webviews/welcome/entry.tsx");
 const nodeImpairmentsWebviewEntry = path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx");
 const wiresharkVncWebviewEntry = path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx");
-const clabUiGlobalCss = clabUiEntry("styles/global.css", "@srl-labs/clab-ui/styles/global.css");
+const clabUiGlobalCss = require.resolve("@srl-labs/clab-ui/styles/global.css");
 
 function findPackageRootFromEntry(entryPath) {
   let current = path.dirname(entryPath);
@@ -37,9 +27,7 @@ function findPackageRootFromEntry(entryPath) {
   }
 }
 
-const clabUiPackageRoot = useLocalClabUi
-  ? localClabUiRoot
-  : findPackageRootFromEntry(clabUiGlobalCss);
+const clabUiPackageRoot = findPackageRootFromEntry(clabUiGlobalCss);
 
 const fallbackMonacoAssets = {
   workers: {
@@ -68,7 +56,7 @@ const fallbackMonacoAssets = {
 
 function loadClabUiMonacoAssets() {
   try {
-    const manifestPath = clabUiEntry("monaco-assets.json", "@srl-labs/clab-ui/monaco-assets.json");
+    const manifestPath = require.resolve("@srl-labs/clab-ui/monaco-assets.json");
     return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   } catch {
     return fallbackMonacoAssets;
@@ -96,57 +84,6 @@ const monacoCodiconFontPath =
       }
     })
     .find((candidate) => candidate !== null) ?? null;
-
-const localClabUiEntrypoints = new Map([
-  ["@srl-labs/clab-ui", path.join(localClabUiDistRoot, "index.js")],
-  ["@srl-labs/clab-ui/host", path.join(localClabUiDistRoot, "host/index.js")],
-  ["@srl-labs/clab-ui/session", path.join(localClabUiDistRoot, "session/index.js")],
-  ["@srl-labs/clab-ui/theme", path.join(localClabUiDistRoot, "theme/index.js")],
-  ["@srl-labs/clab-ui/explorer", path.join(localClabUiDistRoot, "explorer/index.js")],
-  [
-    "@srl-labs/clab-ui/image-manager",
-    path.join(localClabUiDistRoot, "image-manager/index.js")
-  ],
-  [
-    "@srl-labs/clab-ui/image-manager/catalog",
-    path.join(localClabUiDistRoot, "image-manager/catalog.js")
-  ],
-  ["@srl-labs/clab-ui/inspect", path.join(localClabUiDistRoot, "inspect/index.js")],
-  ["@srl-labs/clab-ui/welcome", path.join(localClabUiDistRoot, "welcome/index.js")],
-  [
-    "@srl-labs/clab-ui/node-impairments",
-    path.join(localClabUiDistRoot, "node-impairments/index.js")
-  ],
-  [
-    "@srl-labs/clab-ui/wireshark-vnc",
-    path.join(localClabUiDistRoot, "wireshark-vnc/index.js")
-  ],
-  [
-    "@srl-labs/clab-ui/styles/global.css",
-    path.join(localClabUiDistRoot, "styles/global.css")
-  ],
-  [
-    "@srl-labs/clab-ui/monaco-assets.json",
-    path.join(localClabUiDistRoot, "monaco-assets.json")
-  ]
-]);
-
-const clabUiLocalAliasPlugin = {
-  name: "clab-ui-local-alias",
-  setup(build) {
-    if (!useLocalClabUi) {
-      return;
-    }
-
-    build.onResolve({ filter: /^@srl-labs\/clab-ui(?:\/.*)?$/ }, (args) => {
-      const resolved = localClabUiEntrypoints.get(args.path) ?? null;
-      if (!resolved) {
-        return null;
-      }
-      return { path: resolved };
-    });
-  }
-};
 
 const reactSingletonAliasPlugin = {
   name: "react-singleton-alias",
@@ -232,7 +169,7 @@ async function copyMapLibreWorker() {
 async function buildCss() {
   console.log("Building CSS with PostCSS...");
   execSync(
-    `npx postcss "${clabUiGlobalCss}" --config "${path.join(__dirname, "postcss.config.js")}" -o dist/reactTopoViewerStyles.css`,
+    `pnpm exec postcss "${clabUiGlobalCss}" --config "${path.join(__dirname, "postcss.config.js")}" -o dist/reactTopoViewerStyles.css`,
     {
       stdio: "inherit"
     }
@@ -281,7 +218,7 @@ async function build() {
     format: "cjs",
     external: ["vscode"],
     outfile: "dist/extension.js",
-    plugins: [nativeNodeModulesPlugin, clabUiLocalAliasPlugin, reactSingletonAliasPlugin]
+    plugins: [nativeNodeModulesPlugin, reactSingletonAliasPlugin]
   });
 
   // Build webview (Browser) - CSS handled separately.
@@ -298,7 +235,6 @@ async function build() {
     chunkNames: "topoviewer-chunks/[name]-[hash]",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -317,7 +253,6 @@ async function build() {
     outfile: "dist/containerlabExplorerView.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -336,7 +271,6 @@ async function build() {
     outfile: "dist/welcomePageWebview.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -355,7 +289,6 @@ async function build() {
     outfile: "dist/inspectWebview.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -374,7 +307,6 @@ async function build() {
     outfile: "dist/imageManagerWebview.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -393,7 +325,6 @@ async function build() {
     outfile: "dist/nodeImpairmentsWebview.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -412,7 +343,6 @@ async function build() {
     outfile: "dist/wiresharkVncWebview.js",
     plugins: [
       ignoreCssPlugin,
-      clabUiLocalAliasPlugin,
       reactSingletonAliasPlugin
     ],
     jsx: "automatic",
@@ -463,7 +393,7 @@ async function build() {
       format: "cjs",
       external: ["vscode"],
       outfile: "dist/extension.js",
-      plugins: [nativeNodeModulesPlugin, clabUiLocalAliasPlugin, reactSingletonAliasPlugin]
+      plugins: [nativeNodeModulesPlugin, reactSingletonAliasPlugin]
     });
 
     const webCtx = await esbuild.context({
@@ -477,7 +407,6 @@ async function build() {
       chunkNames: "topoviewer-chunks/[name]-[hash]",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -493,7 +422,6 @@ async function build() {
       outfile: "dist/containerlabExplorerView.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -509,7 +437,6 @@ async function build() {
       outfile: "dist/welcomePageWebview.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -525,7 +452,6 @@ async function build() {
       outfile: "dist/inspectWebview.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -541,7 +467,6 @@ async function build() {
       outfile: "dist/imageManagerWebview.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -557,7 +482,6 @@ async function build() {
       outfile: "dist/nodeImpairmentsWebview.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -573,7 +497,6 @@ async function build() {
       outfile: "dist/wiresharkVncWebview.js",
       plugins: [
         ignoreCssPlugin,
-        clabUiLocalAliasPlugin,
         reactSingletonAliasPlugin
       ],
       jsx: "automatic",
@@ -587,7 +510,7 @@ async function build() {
       format: "iife",
       target: ["es2020", "chrome90", "firefox90", "safari14.1"],
       outdir: "dist",
-      plugins: [ignoreCssPlugin, clabUiLocalAliasPlugin]
+      plugins: [ignoreCssPlugin]
     });
 
     await Promise.all([
@@ -603,9 +526,7 @@ async function build() {
     ]);
 
     // Watch CSS files and rebuild
-    const cssWatchRoot = useLocalClabUi
-      ? path.join(localClabUiDistRoot, "styles")
-      : path.dirname(clabUiGlobalCss);
+    const cssWatchRoot = path.dirname(clabUiGlobalCss);
     const cssWatcher = watch(path.join(cssWatchRoot, "**/*.css"), {
       ignoreInitial: true
     });

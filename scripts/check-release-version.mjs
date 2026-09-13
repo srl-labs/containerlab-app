@@ -1,183 +1,73 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import YAML from "yaml";
+import {
+  projectRoot,
+  readJson,
+  workspacePackages,
+  resolveCatalog,
+  workspaceConfig,
+} from "./workspace-config.mjs";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, "..");
-const dependencyFields = [
-  "dependencies",
-  "devDependencies",
-  "peerDependencies",
-  "optionalDependencies"
-];
-
-const rootPackage = readJson(path.join(projectRoot, "package.json"));
-const packageLock = readJson(path.join(projectRoot, "package-lock.json"));
-const workspacePackages = expandWorkspaces(rootPackage.workspaces ?? []);
-const workspaceByName = new Map(workspacePackages.map((workspacePackage) => [
-  workspacePackage.packageJson.name,
-  workspacePackage
-]));
+const root = readJson("package.json");
+const lock = YAML.parse(
+  fs.readFileSync(path.join(projectRoot, "pnpm-lock.yaml"), "utf8"),
+);
+const byName = new Map(
+  workspacePackages.map((pkg) => [pkg.packageJson.name, pkg]),
+);
 const failures = [];
-
-assertTagMatchesRootVersion();
-assertTopLevelLockVersion();
-assertLockPackage("", rootPackage);
-
-for (const workspacePackage of workspacePackages) {
-  assertWorkspaceVersion(workspacePackage);
-  assertWorkspaceDependencyVersions(workspacePackage);
-  assertLockPackage(workspacePackage.relativePath, workspacePackage.packageJson);
+const tag = process.env.GITHUB_REF?.startsWith("refs/tags/")
+  ? process.env.GITHUB_REF.slice(10)
+  : undefined;
+if (tag) {
+  const releases = [
+    ["vscode-v", byName.get("vscode-containerlab").packageJson.version],
+    ["clab-ui-v", byName.get("@srl-labs/clab-ui").packageJson.version],
+    ["v", root.version],
+  ];
+  const release = releases.find(([prefix]) => tag.startsWith(prefix));
+  if (release && tag.slice(release[0].length) !== release[1])
+    failures.push(`Tag ${tag} does not match version ${release[1]}`);
 }
-
-if (failures.length > 0) {
-  console.error("Release version check failed:");
-  for (const failure of failures) {
-    console.error(`- ${failure}`);
+for (const pkg of [
+  { relativePath: ".", packageJson: root },
+  ...workspacePackages,
+]) {
+  const manifest = pkg.packageJson;
+  if (manifest.private && manifest.version !== root.version)
+    failures.push(`${manifest.name} must match app version ${root.version}`);
+  const importer = lock.importers?.[pkg.relativePath];
+  if (!importer) {
+    failures.push(`Missing lockfile importer ${pkg.relativePath}`);
+    continue;
   }
+  for (const field of [
+    "dependencies",
+    "devDependencies",
+    "optionalDependencies",
+  ]) {
+    for (const [name, spec] of Object.entries(manifest[field] ?? {})) {
+      if (byName.has(name) && spec !== "workspace:*")
+        failures.push(`${manifest.name}: ${name} must use workspace:*`);
+      const entry = importer[field]?.[name];
+      if (entry?.specifier !== (workspaceConfig.overrides?.[name] ?? spec))
+        failures.push(
+          `${manifest.name}: lockfile specifier for ${name} is stale`,
+        );
+      if (byName.has(name)) {
+        const expected = `link:${path.relative(pkg.relativePath, byName.get(name).relativePath).replaceAll("\\", "/")}`;
+        if (entry?.version !== expected)
+          failures.push(
+            `${manifest.name}: ${name} must resolve to ${expected}`,
+          );
+      } else if (!resolveCatalog(name, spec))
+        failures.push(`${manifest.name}: missing catalog entry for ${name}`);
+    }
+  }
+}
+if (failures.length) {
+  console.error(failures.join("\n"));
   process.exit(1);
 }
-
-console.log(`Release version check passed for ${rootPackage.version}.`);
-
-function assertTagMatchesRootVersion() {
-  const tagName = process.env.GITHUB_REF_NAME ?? parseTagName(process.env.GITHUB_REF);
-  if (tagName?.startsWith("vscode-v")) {
-    const extension = workspaceByName.get("vscode-containerlab");
-    if (tagName.slice("vscode-v".length) !== extension?.packageJson.version) {
-      failures.push(`git tag ${tagName} does not match VS Code extension version ${extension?.packageJson.version}`);
-    }
-    return;
-  }
-  if (!tagName?.startsWith("v")) {
-    return;
-  }
-
-  const tagVersion = tagName.slice(1);
-  if (tagVersion !== rootPackage.version) {
-    failures.push(
-      `git tag ${tagName} does not match root package version ${rootPackage.version}`
-    );
-  }
-}
-
-function assertTopLevelLockVersion() {
-  if (packageLock.version !== rootPackage.version) {
-    failures.push(
-      `package-lock.json version ${packageLock.version} does not match root package version ${rootPackage.version}`
-    );
-  }
-}
-
-function assertWorkspaceVersion(workspacePackage) {
-  // Publishable packages such as @srl-labs/clab-ui have their own release cycle.
-  if (workspacePackage.packageJson.private === false) {
-    return;
-  }
-
-  if (workspacePackage.packageJson.version !== rootPackage.version) {
-    failures.push(
-      `${workspacePackage.label} version ${workspacePackage.packageJson.version} does not match root version ${rootPackage.version}`
-    );
-  }
-}
-
-function assertWorkspaceDependencyVersions(workspacePackage) {
-  for (const field of dependencyFields) {
-    const dependencies = workspacePackage.packageJson[field] ?? {};
-    for (const [dependencyName, dependencyVersion] of Object.entries(dependencies)) {
-      const dependencyWorkspace = workspaceByName.get(dependencyName);
-      if (!dependencyWorkspace) {
-        continue;
-      }
-
-      if (dependencyVersion !== dependencyWorkspace.packageJson.version) {
-        failures.push(
-          `${workspacePackage.label} declares ${dependencyName}@${dependencyVersion} in ${field}, expected ${dependencyWorkspace.packageJson.version}`
-        );
-      }
-    }
-  }
-}
-
-function assertLockPackage(relativePath, packageJson) {
-  const lockPackage = packageLock.packages?.[relativePath];
-  const label = relativePath === "" ? "root lockfile package" : `${packageJson.name} lockfile package`;
-
-  if (!lockPackage) {
-    failures.push(`${label} is missing from package-lock.json`);
-    return;
-  }
-
-  if (lockPackage.version !== packageJson.version) {
-    failures.push(
-      `${label} version ${lockPackage.version} does not match package.json version ${packageJson.version}`
-    );
-  }
-
-  for (const field of dependencyFields) {
-    const dependencies = packageJson[field] ?? {};
-    const lockDependencies = lockPackage[field] ?? {};
-    for (const [dependencyName, dependencyVersion] of Object.entries(dependencies)) {
-      if (!workspaceByName.has(dependencyName)) {
-        continue;
-      }
-
-      if (lockDependencies[dependencyName] !== dependencyVersion) {
-        failures.push(
-          `${label} has ${dependencyName}@${lockDependencies[dependencyName] ?? "<missing>"} in ${field}, expected ${dependencyVersion}`
-        );
-      }
-    }
-  }
-}
-
-function expandWorkspaces(workspaces) {
-  const workspacePatterns = Array.isArray(workspaces) ? workspaces : workspaces.packages ?? [];
-  const packages = [];
-
-  for (const pattern of workspacePatterns) {
-    if (!pattern.endsWith("/*")) {
-      throw new Error(`Unsupported workspace pattern: ${pattern}`);
-    }
-
-    const parentDir = path.join(projectRoot, pattern.slice(0, -2));
-    for (const entry of fs.readdirSync(parentDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-
-      const workspacePath = path.join(parentDir, entry.name);
-      const packageJsonPath = path.join(workspacePath, "package.json");
-      if (!fs.existsSync(packageJsonPath)) {
-        continue;
-      }
-
-      const packageJson = readJson(packageJsonPath);
-      packages.push({
-        packageJson,
-        path: workspacePath,
-        relativePath: toPackageLockPath(path.relative(projectRoot, workspacePath)),
-        label: `${packageJson.name ?? entry.name} (${toPackageLockPath(path.relative(projectRoot, workspacePath))})`
-      });
-    }
-  }
-
-  return packages.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
-}
-
-function parseTagName(ref) {
-  const tagPrefix = "refs/tags/";
-  if (!ref?.startsWith(tagPrefix)) {
-    return undefined;
-  }
-  return ref.slice(tagPrefix.length);
-}
-
-function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-
-function toPackageLockPath(filePath) {
-  return filePath.replaceAll("\\", "/");
-}
+console.log(`Release and workspace link checks passed for ${root.version}.`);

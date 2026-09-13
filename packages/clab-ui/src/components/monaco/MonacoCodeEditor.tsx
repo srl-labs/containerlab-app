@@ -19,7 +19,7 @@ import {
   getSchemaHoverInfo,
   getYamlCompletionRange,
   getYamlPathAtLine
-} from "./yamlLanguageSupport";
+} from "../../yaml";
 
 declare global {
   interface Window {

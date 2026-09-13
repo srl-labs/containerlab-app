@@ -9,7 +9,7 @@ import {
   extractTopologyNodeNames,
   getContainerlabYamlCompletionContext,
   getYamlCompletionRange
-} from "./monaco/yamlLanguageSupport";
+} from "../yaml";
 import { containerlabSchema } from "../core/schema";
 
 const SAMPLE_YAML = `name: demo

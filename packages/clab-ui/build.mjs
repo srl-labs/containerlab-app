@@ -28,6 +28,7 @@ const copiedCssAssets = [
 
 const entryPoints = {
   index: "src/index.ts",
+  "yaml/index": "src/yaml/index.ts",
   "host/index": "src/host/index.ts",
   "session/index": "src/session/index.ts",
   "theme/index": "src/theme/index.ts",
