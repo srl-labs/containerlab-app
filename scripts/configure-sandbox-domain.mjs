@@ -10,11 +10,16 @@ export async function configureSandboxDomain(env = process.env, request = fetch)
   const account = required("CLOUDFLARE_ACCOUNT_ID");
   const zone = required("CLOUDFLARE_ZONE_ID");
   const project = required("PROJECT_NAME");
-  const branch = required("SANDBOX_BRANCH");
-  if (!/^[a-f0-9]{40}-pr$/.test(branch)) {
-    throw new Error("SANDBOX_BRANCH must be a full commit SHA followed by -pr");
+  const commit = required("SANDBOX_COMMIT_SHA");
+  if (!/^[a-f0-9]{40}$/.test(commit)) {
+    throw new Error("SANDBOX_COMMIT_SHA must be a full commit SHA");
   }
-  const hostname = `${branch}.containerlab.app`;
+  const preview = new URL(required("PAGES_PREVIEW_URL"));
+  if (preview.protocol !== "https:" || preview.port || preview.username || preview.password ||
+      preview.pathname !== "/" || preview.search || preview.hash) {
+    throw new Error("PAGES_PREVIEW_URL must be an HTTPS preview origin");
+  }
+  const hostname = `${commit}-pr.containerlab.app`;
   const projectPath = `/accounts/${encodeURIComponent(account)}/pages/projects/${encodeURIComponent(project)}`;
   const dnsPath = `/zones/${encodeURIComponent(zone)}/dns_records`;
   const api = async (path, method = "GET", body) => {
@@ -37,10 +42,11 @@ export async function configureSandboxDomain(env = process.env, request = fetch)
   if (!/^[a-z0-9-]+\.pages\.dev$/.test(details.subdomain)) {
     throw new Error("Cloudflare returned an invalid Pages project subdomain");
   }
-  if (details.production_branch === branch) {
-    throw new Error("The commit preview branch must not be the production branch");
+  const target = preview.hostname;
+  const suffix = `.${details.subdomain}`;
+  if (!target.endsWith(suffix) || !/^[a-z0-9-]+$/.test(target.slice(0, -suffix.length))) {
+    throw new Error("PAGES_PREVIEW_URL must be a preview alias belonging to the Pages project");
   }
-  const target = `${branch}.${details.subdomain}`;
   const readRecord = async () => {
     const records = await api(`${dnsPath}?name=${encodeURIComponent(hostname)}`);
     if (records.length > 1 || records.some((record) =>

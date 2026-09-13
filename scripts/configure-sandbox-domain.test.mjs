@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { configureSandboxDomain } from "./configure-sandbox-domain.mjs";
 
-const branch = `${"a".repeat(40)}-pr`;
-const hostname = `${branch}.containerlab.app`;
+const commit = "a".repeat(40);
+const branch = `${commit.slice(0, 12)}-pr`;
+const hostname = `${commit}-pr.containerlab.app`;
 const target = `${branch}.sandbox-123.pages.dev`;
 const env = {
   CLOUDFLARE_API_TOKEN: "test-token",
   CLOUDFLARE_ACCOUNT_ID: "account",
   CLOUDFLARE_ZONE_ID: "zone",
   PROJECT_NAME: "sandbox",
-  SANDBOX_BRANCH: branch,
+  PAGES_PREVIEW_URL: `https://${target}`,
+  SANDBOX_COMMIT_SHA: commit,
 };
 
 function fixture({ records = [], domains = [], autoDns = false, fail = false } = {}) {
@@ -78,8 +80,24 @@ test("fails on API errors instead of reporting a configured URL", async () => {
   await assert.rejects(configureSandboxDomain(env, api.request), /HTTP 403/);
 });
 
-test("rejects missing configuration and non-commit preview names before API access", async () => {
+test("rejects missing configuration and invalid commit IDs before API access", async () => {
   const request = () => assert.fail("API must not be called");
   await assert.rejects(configureSandboxDomain({ ...env, CLOUDFLARE_ZONE_ID: "" }, request), /Missing CLOUDFLARE_ZONE_ID/);
-  await assert.rejects(configureSandboxDomain({ ...env, SANDBOX_BRANCH: "main" }, request), /full commit SHA/);
+  await assert.rejects(configureSandboxDomain({ ...env, SANDBOX_COMMIT_SHA: "main" }, request), /full commit SHA/);
+});
+
+test("uses the official action's alias even when Cloudflare changes its format", async () => {
+  const api = fixture();
+  const returnedAlias = "cloudflare-generated-alias.sandbox-123.pages.dev";
+  await configureSandboxDomain({ ...env, PAGES_PREVIEW_URL: `https://${returnedAlias}` }, api.request);
+  assert.equal(api.writes[1].body.content, returnedAlias);
+  assert.equal(api.writes[1].body.name, hostname);
+});
+
+test("rejects production URLs and other projects before changing DNS", async () => {
+  for (const url of ["https://sandbox-123.pages.dev", "https://preview.other.pages.dev"]) {
+    const api = fixture();
+    await assert.rejects(configureSandboxDomain({ ...env, PAGES_PREVIEW_URL: url }, api.request), /preview alias belonging/);
+    assert.equal(api.writes.length, 0);
+  }
 });

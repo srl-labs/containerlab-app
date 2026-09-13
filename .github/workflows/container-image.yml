@@ -1,7 +1,7 @@
 name: Container image
 
 on:
-  pull_request:
+  workflow_call:
   push:
     branches:
       - main
@@ -10,7 +10,7 @@ on:
       - "!vscode-v*"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: container-image-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:

@@ -1,0 +1,145 @@
+name: Desktop builds
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  build-linux:
+    name: Build Linux packages
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install Linux package tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Verify release version
+        run: pnpm run check:release-version
+
+      - name: Build desktop packages
+        run: pnpm run package:desktop:linux
+
+      - name: Verify Linux artifacts
+        run: |
+          test -n "$(find apps/desktop/release -maxdepth 1 -name '*.AppImage' -print -quit)"
+          test -n "$(find apps/desktop/release -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$(find apps/desktop/release -maxdepth 1 -name '*.rpm' -print -quit)"
+
+      - name: Upload Linux package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
+
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build desktop installer
+        run: pnpm run package:desktop:win
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify Windows artifact
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path apps/desktop/release -Filter *.exe
+          if (-not $installer) {
+            throw "No Windows installer was produced"
+          }
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          if-no-files-found: error
+          path: apps/desktop/release/*.exe
+
+  build-macos:
+    name: Build macOS package
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Build desktop package
+        run: pnpm run package:desktop:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Verify macOS artifact
+        run: |
+          test -n "$(find apps/desktop/release -maxdepth 1 -name '*.dmg' -print -quit)"
+
+      - name: Upload macOS package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          if-no-files-found: error
+          path: apps/desktop/release/*.dmg
+

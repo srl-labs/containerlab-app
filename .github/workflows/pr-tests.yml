@@ -196,3 +196,30 @@ jobs:
           path: |
             apps/vscode-containerlab/*.vsix
             apps/vscode-containerlab/out/e2e/
+
+  container-image:
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/container-image.yml
+
+  desktop-packages:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/desktop-builds.yml
+
+  sandbox:
+    name: Deploy browser sandbox
+    needs:
+      - test
+      - clab-ui-browser-tests
+      - clab-ui-browser-report
+      - extension
+      - container-image
+      - desktop-packages
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.CLOUDFLARE_PAGES_PROJECT_NAME != ''
+    uses: ./.github/workflows/sandbox.yml
+    secrets:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
