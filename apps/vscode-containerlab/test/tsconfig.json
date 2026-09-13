@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../out/test",
+    "resolveJsonModule": true,
+    "typeRoots": [
+      "../src/topoViewer/webview/types",
+      "../node_modules/@types",
+      "../../../node_modules/@types"
+    ]
+  },
+  "include": [
+    "**/*.ts",
+    "../src/**/*.ts"
+  ],
+  "exclude": [
+    "e2e/**/*"
+  ]
+}

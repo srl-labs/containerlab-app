@@ -1,0 +1,105 @@
+site_name: clab-ui Platform Guide
+site_description: Architecture, contracts, and operational reference for clab-ui, clab-api-server, containerlab-app, and vscode-containerlab
+site_url: https://github.com/srl-labs/clab-ui
+repo_name: srl-labs/clab-ui
+repo_url: https://github.com/srl-labs/clab-ui
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: docs-site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mermaid-config.js
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+
+plugins:
+  - search
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      slide_effect: slide
+      width: 100%
+      height: auto
+      zoomable: true
+      draggable: true
+  - panzoom:
+      always_show_hint: true
+      full_screen: true
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Overview:
+      - 0. Platform Deep Dive: 00-platform-deep-dive.md
+      - 1. Big Picture: 01-big-picture.md
+      - 2. End-to-End Flows: 02-end-to-end-flows.md
+  - Repo Guides:
+      - 3. clab-ui Package: 03-clab-ui.md
+      - 4. clab-api-server: 04-clab-api-server.md
+      - 5. containerlab-app: 05-containerlab-app.md
+      - 6. vscode-containerlab: 06-vscode-containerlab.md
+  - Workflows:
+      - 7. Local Dev and Release: 07-local-dev-and-release.md
+      - 8. Security and Operations: 08-security-and-operations.md
+      - 9. Troubleshooting: 09-troubleshooting.md
+      - 10. Reference Matrix: 10-reference-matrix.md
+  - Reference:
+      - 11. Web Route and Proxy Matrix: 11-web-route-and-proxy-matrix.md
+      - 12. API Endpoint Taxonomy: 12-api-endpoint-taxonomy.md
+      - 13. VS Code Bridge Contract: 13-vscode-bridge-contract.md
+      - 14. clab-ui Contract Spec: 14-clab-ui-contract-spec.md
+      - 15. Failure Mode Atlas: 15-failure-mode-atlas.md

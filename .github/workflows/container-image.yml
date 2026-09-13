@@ -1,12 +1,17 @@
 name: Container image
 
 on:
-  pull_request:
+  workflow_call:
   push:
     branches:
       - main
     tags:
       - "v*.*.*"
+      - "!vscode-v*"
+
+concurrency:
+  group: container-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -23,8 +28,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Verify release version
-        run: npm run check:release-version
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter containerlab-app --ignore-scripts
+      - run: pnpm run check:release-version
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -61,7 +74,5 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          secrets: |
-            github_token=${{ github.token }}
+          cache-from: type=gha,scope=containerlab-web
+          cache-to: type=gha,mode=max,scope=containerlab-web

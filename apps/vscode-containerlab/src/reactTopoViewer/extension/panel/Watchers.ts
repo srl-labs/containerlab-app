@@ -1,0 +1,255 @@
+/**
+ * Watchers - Handles file system and docker image watching for ReactTopoViewer
+ */
+
+import * as vscode from "vscode";
+
+import { log } from "../services/logger";
+import { createTopologySyncController } from "@srl-labs/clab-ui/host";
+import { nodeFsAdapter } from "../shared/io";
+import { onDockerImagesUpdated } from "../../../utils/docker/images";
+
+/**
+ * Callback for loading topology data
+ */
+export type SnapshotLoader = () => Promise<unknown>;
+
+/**
+ * Callback for posting topology data to webview
+ */
+export type SnapshotPoster = (data: unknown) => void;
+
+/**
+ * Callback for getting/setting internal update flag
+ */
+export interface InternalUpdateController {
+  isInternalUpdate: () => boolean;
+}
+
+/**
+ * Manages file system watchers and subscriptions for ReactTopoViewer
+ */
+export class WatcherManager {
+  private fileWatcher: vscode.FileSystemWatcher | undefined;
+  private annotationsWatcher: vscode.FileSystemWatcher | undefined;
+  private saveListener: vscode.Disposable | undefined;
+  private dockerImagesSubscription: vscode.Disposable | undefined;
+  private lastYamlContent: string | undefined;
+  private lastAnnotationsContent: string | undefined;
+  private snapshotRefreshController = createTopologySyncController({
+    debounceMs: 0,
+    refresh: async () => {}
+  });
+
+  /**
+   * Dispose all watchers and listeners
+   */
+  dispose(): void {
+    if (this.fileWatcher) {
+      this.fileWatcher.dispose();
+      this.fileWatcher = undefined;
+    }
+    if (this.annotationsWatcher) {
+      this.annotationsWatcher.dispose();
+      this.annotationsWatcher = undefined;
+    }
+    if (this.saveListener) {
+      this.saveListener.dispose();
+      this.saveListener = undefined;
+    }
+    if (this.dockerImagesSubscription) {
+      this.dockerImagesSubscription.dispose();
+      this.dockerImagesSubscription = undefined;
+    }
+    this.snapshotRefreshController.dispose();
+  }
+
+  /**
+   * Set up filesystem watcher for YAML changes outside the webview
+   */
+  setupFileWatcher(
+    yamlFilePath: string,
+    updateController: InternalUpdateController,
+    loadSnapshot: SnapshotLoader,
+    postSnapshot: SnapshotPoster
+  ): void {
+    if (!yamlFilePath) return;
+
+    this.fileWatcher?.dispose();
+    this.annotationsWatcher?.dispose();
+    this.snapshotRefreshController.dispose();
+    this.snapshotRefreshController = createTopologySyncController({
+      debounceMs: 0,
+      refresh: async () => {
+        const snapshot = await loadSnapshot();
+        if (snapshot !== undefined && snapshot !== null) {
+          postSnapshot(snapshot);
+        }
+      }
+    });
+    const fileUri = vscode.Uri.file(yamlFilePath);
+    this.fileWatcher = vscode.workspace.createFileSystemWatcher(fileUri.fsPath);
+
+    // Initialize content caches to prevent false-positive external change detection
+    void this.refreshContentCaches(yamlFilePath);
+
+    this.fileWatcher.onDidChange(() => {
+      void this.handleExternalYamlChange(
+        "change",
+        yamlFilePath,
+        updateController,
+        loadSnapshot,
+        postSnapshot
+      );
+    });
+
+    const annotationsPath = `${yamlFilePath}.annotations.json`;
+    this.annotationsWatcher = vscode.workspace.createFileSystemWatcher(annotationsPath);
+    const handleAnnotations = (trigger: "change" | "create" | "delete") => {
+      void this.handleExternalAnnotationsChange(
+        trigger,
+        annotationsPath,
+        updateController,
+        loadSnapshot,
+        postSnapshot
+      );
+    };
+    this.annotationsWatcher.onDidChange(() => handleAnnotations("change"));
+    this.annotationsWatcher.onDidCreate(() => handleAnnotations("create"));
+    this.annotationsWatcher.onDidDelete(() => handleAnnotations("delete"));
+  }
+
+  /**
+   * Refresh content caches with current file contents.
+   * Used to prevent internal saves from being detected as external changes.
+   */
+  async refreshContentCaches(yamlFilePath: string): Promise<void> {
+    if (!yamlFilePath) return;
+    try {
+      this.lastYamlContent = await nodeFsAdapter.readFile(yamlFilePath);
+    } catch {
+      this.lastYamlContent = undefined;
+    }
+
+    const annotationsPath = `${yamlFilePath}.annotations.json`;
+    try {
+      this.lastAnnotationsContent = await nodeFsAdapter.readFile(annotationsPath);
+    } catch {
+      // Use empty string to match handleExternalAnnotationsChange fallback
+      this.lastAnnotationsContent = "";
+    }
+  }
+
+  /**
+   * Set up save listener for in-editor YAML edits
+   */
+  setupSaveListener(
+    yamlFilePath: string,
+    updateController: InternalUpdateController,
+    loadSnapshot: SnapshotLoader,
+    postSnapshot: SnapshotPoster
+  ): void {
+    if (!yamlFilePath) return;
+
+    this.saveListener?.dispose();
+    this.saveListener = vscode.workspace.onDidSaveTextDocument((doc) => {
+      if (doc.uri.fsPath !== yamlFilePath) return;
+      void this.handleExternalYamlChange(
+        "save",
+        yamlFilePath,
+        updateController,
+        loadSnapshot,
+        postSnapshot
+      );
+    });
+  }
+
+  /**
+   * Set up docker images subscription for real-time updates
+   */
+  setupDockerImagesSubscription(panel: vscode.WebviewPanel): void {
+    this.dockerImagesSubscription?.dispose();
+    this.dockerImagesSubscription = onDockerImagesUpdated((images) => {
+      panel.webview.postMessage({
+        type: "docker-images-updated",
+        dockerImages: images
+      });
+      log.info(`[ReactTopoViewer] Docker images updated, found ${images.length} images`);
+    });
+  }
+
+  /**
+   * Reload topology data after external YAML edits and push to webview
+   */
+  private async handleExternalYamlChange(
+    trigger: "change" | "save",
+    yamlFilePath: string,
+    updateController: InternalUpdateController,
+    _loadSnapshot: SnapshotLoader,
+    _postSnapshot: SnapshotPoster
+  ): Promise<void> {
+    if (!yamlFilePath) return;
+    if (updateController.isInternalUpdate()) {
+      log.debug(`[ReactTopoViewer] Ignoring ${trigger} event during internal update`);
+      void this.refreshContentCaches(yamlFilePath);
+      return;
+    }
+
+    try {
+      const currentContent = await nodeFsAdapter.readFile(yamlFilePath);
+      if (this.lastYamlContent === currentContent) {
+        log.debug(
+          `[ReactTopoViewer] YAML ${trigger} detected but content unchanged, skipping refresh`
+        );
+        return;
+      }
+
+      log.info(`[ReactTopoViewer] YAML ${trigger} detected, refreshing topology`);
+      this.lastYamlContent = currentContent;
+      await this.snapshotRefreshController.refresh({ externalChange: true });
+    } catch (err) {
+      log.error(`[ReactTopoViewer] Failed to refresh after YAML ${trigger}: ${String(err)}`);
+    }
+  }
+
+  /**
+   * Reload topology data after external annotations edits and push to webview
+   */
+  private async handleExternalAnnotationsChange(
+    trigger: "change" | "create" | "delete",
+    annotationsPath: string,
+    updateController: InternalUpdateController,
+    _loadSnapshot: SnapshotLoader,
+    _postSnapshot: SnapshotPoster
+  ): Promise<void> {
+    if (!annotationsPath) return;
+    if (updateController.isInternalUpdate()) {
+      log.debug(`[ReactTopoViewer] Ignoring annotations ${trigger} during internal update`);
+      const yamlPath = annotationsPath.replace(/\.annotations\.json$/, "");
+      void this.refreshContentCaches(yamlPath);
+      return;
+    }
+
+    try {
+      let currentContent = "";
+      try {
+        currentContent = await nodeFsAdapter.readFile(annotationsPath);
+      } catch {
+        currentContent = "";
+      }
+
+      if (this.lastAnnotationsContent === currentContent) {
+        log.debug(
+          `[ReactTopoViewer] Annotations ${trigger} detected but content unchanged, skipping refresh`
+        );
+        return;
+      }
+
+      log.info(`[ReactTopoViewer] Annotations ${trigger} detected, refreshing topology`);
+      this.lastAnnotationsContent = currentContent;
+      await this.snapshotRefreshController.refresh({ externalChange: true });
+    } catch (err) {
+      log.error(`[ReactTopoViewer] Failed to refresh after annotations ${trigger}: ${String(err)}`);
+    }
+  }
+}

@@ -1,0 +1,144 @@
+/**
+ * PanelManager - Handles webview panel lifecycle and HTML generation
+ */
+
+import * as crypto from "crypto";
+import * as fs from "fs";
+
+import * as vscode from "vscode";
+
+/**
+ * Configuration for creating a webview panel
+ */
+export interface PanelConfig {
+  viewType: string;
+  title: string;
+  column?: vscode.ViewColumn;
+  extensionUri: vscode.Uri;
+}
+
+/**
+ * Options for webview panel creation
+ */
+export interface WebviewPanelOptions {
+  enableScripts: boolean;
+  retainContextWhenHidden: boolean;
+  localResourceRoots: vscode.Uri[];
+}
+
+/**
+ * Creates a webview panel with the given configuration
+ */
+export function createPanel(config: PanelConfig): vscode.WebviewPanel {
+  const options: WebviewPanelOptions = {
+    enableScripts: true,
+    retainContextWhenHidden: true,
+    localResourceRoots: [
+      vscode.Uri.joinPath(config.extensionUri, "dist"),
+      vscode.Uri.joinPath(config.extensionUri, "resources")
+    ]
+  };
+
+  const panel = vscode.window.createWebviewPanel(
+    config.viewType,
+    config.title,
+    config.column ?? vscode.ViewColumn.One,
+    options
+  );
+
+  // Set icon (same as legacy TopoViewer)
+  panel.iconPath = vscode.Uri.joinPath(config.extensionUri, "resources", "containerlab.png");
+
+  return panel;
+}
+
+/**
+ * Generate a nonce for CSP using crypto
+ */
+export function generateNonce(): string {
+  return crypto.randomBytes(16).toString("base64");
+}
+
+/**
+ * Data required to generate webview HTML
+ */
+export interface WebviewHtmlData {
+  webview: vscode.Webview;
+  extensionUri: vscode.Uri;
+  bootstrapData: unknown;
+}
+
+/**
+ * Generates the HTML content for the React TopoViewer webview
+ */
+export function generateWebviewHtml(data: WebviewHtmlData): string {
+  const { webview, extensionUri, bootstrapData } = data;
+
+  // Get URIs for resources
+  const scriptUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "reactTopoViewerWebview.js")
+  );
+  const scriptUriString = scriptUri.toString();
+  const styleUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "reactTopoViewerStyles.css")
+  );
+  const styleUriString = styleUri.toString();
+  const maplibreWorkerUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "maplibre-gl-csp-worker.js")
+  );
+  const maplibreWorkerSourceBase64 = (() => {
+    try {
+      const workerPath = vscode.Uri.joinPath(extensionUri, "dist", "maplibre-gl-csp-worker.js");
+      const workerSource = fs.readFileSync(workerPath.fsPath, "utf8");
+      return Buffer.from(workerSource, "utf8").toString("base64");
+    } catch {
+      return "";
+    }
+  })();
+  const monacoEditorWorkerUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "monaco-editor-worker.js")
+  );
+  const monacoJsonWorkerUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "monaco-json-worker.js")
+  );
+  const monacoYamlWorkerUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, "dist", "monaco-yaml-worker.js")
+  );
+
+  // CSP nonce for security
+  const nonce = generateNonce();
+
+  // Serialize initial data
+  const initialDataJson = JSON.stringify(bootstrapData ?? {});
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'nonce-${nonce}' 'unsafe-eval'; img-src ${webview.cspSource} https: data:; font-src ${webview.cspSource}; connect-src ${webview.cspSource} https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com https://tile.openstreetmap.org; worker-src ${webview.cspSource} blob:;">
+  <link href="${styleUriString}" rel="stylesheet">
+  <title>TopoViewer (React)</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script nonce="${nonce}">
+    // Acquire VS Code API for webview communication
+    if (!window.vscode) {
+      try {
+        window.vscode = acquireVsCodeApi();
+      } catch {
+        // Ignore duplicate-acquire errors and keep using the cached instance.
+      }
+    }
+    window.__INITIAL_DATA__ = ${initialDataJson};
+    window.maplibreWorkerUrl = "${maplibreWorkerUri.toString()}";
+    window.maplibreWorkerSourceBase64 = "${maplibreWorkerSourceBase64}";
+    window.monacoEditorWorkerUrl = "${monacoEditorWorkerUri.toString()}";
+    window.monacoJsonWorkerUrl = "${monacoJsonWorkerUri.toString()}";
+    window.monacoYamlWorkerUrl = "${monacoYamlWorkerUri.toString()}";
+  </script>
+  <script type="module" nonce="${nonce}" src="${scriptUriString}"></script>
+</body>
+</html>`;
+}

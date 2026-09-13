@@ -1,0 +1,99 @@
+name: VS Code extension release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Only run on the main repository, not on forks
+    if: github.repository == 'srl-labs/containerlab-app' && startsWith(github.event.release.tag_name, 'vscode-v')
+    permissions:
+      contents: write
+      packages: read
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate version
+        id: version
+        run: |
+          pnpm run check:release-version
+          echo "package=$(node -p "require('./apps/vscode-containerlab/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Build shared UI
+        run: pnpm run build:clab-ui
+
+      - name: Run linter
+        run: pnpm --filter vscode-containerlab run lint
+
+      - name: Run type check
+        run: pnpm --filter vscode-containerlab run typecheck
+
+      - name: Run tests
+        run: pnpm --filter vscode-containerlab test
+
+      - name: Build extension
+        run: pnpm run build:vscode
+
+      - name: Package extension
+        working-directory: apps/vscode-containerlab
+        run: node scripts/package-vsix.mjs "vscode-containerlab-${{ steps.version.outputs.package }}.vsix"
+
+      - name: Check for publish tokens
+        id: check-pat
+        run: |
+          if [ -n "${{ secrets.VSCE_PAT }}" ]; then
+            echo "has_vsce_pat=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_vsce_pat=false" >> $GITHUB_OUTPUT
+            echo "⚠️ VSCE_PAT secret not configured - skipping marketplace publish"
+          fi
+
+          if [ -n "${{ secrets.OVSX_PAT }}" ]; then
+            echo "has_ovsx_pat=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_ovsx_pat=false" >> $GITHUB_OUTPUT
+            echo "⚠️ OVSX_PAT secret not configured - skipping Open VSX publish"
+          fi
+
+      - name: Publish to VS Code Marketplace
+        if: steps.check-pat.outputs.has_vsce_pat == 'true'
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        working-directory: apps/vscode-containerlab
+        run: pnpm exec vsce publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$VSCE_PAT"
+
+      - name: Publish to Open VSX Registry
+        if: steps.check-pat.outputs.has_ovsx_pat == 'true'
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        working-directory: apps/vscode-containerlab
+        run: pnpm exec ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT"
+
+      - name: Upload VSIX to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            apps/vscode-containerlab/vscode-containerlab-${{ steps.version.outputs.package }}.vsix
+          fail_on_unmatched_files: true

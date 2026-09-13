@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "paths": {
+      "@webview/*": ["./src/*"],
+      "@webviews/*": ["./src/webviews/*"],
+      "@shared/*": ["./src/core/*"],
+      "@srl-labs/clab-ui": ["./src/index.ts"],
+      "@srl-labs/clab-ui/*": ["./src/*"]
+    }
+  }
+}

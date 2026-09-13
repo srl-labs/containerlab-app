@@ -1,0 +1,113 @@
+packages:
+  - apps/*
+  - packages/*
+catalog:
+  "@emotion/react": 11.14.0
+  "@emotion/styled": 11.14.1
+  "@fastify/cookie": 11.1.2
+  "@fastify/cors": 10.1.0
+  "@fastify/static": 8.3.0
+  "@fastify/websocket": 11.3.0
+  "@fontsource/roboto": 5.2.10
+  "@mui/icons-material": 7.3.11
+  "@mui/material": 7.3.11
+  "@mui/system": 7.3.11
+  "@mui/x-charts": 8.29.3
+  "@playwright/test": 1.60.0
+  "@types/chai": 5.2.3
+  "@types/d3-force": 3.0.10
+  "@types/dockerode": 4.0.1
+  "@types/markdown-it": 14.2.0
+  "@types/markdown-it-emoji": 3.0.1
+  "@types/mocha": 10.0.10
+  "@types/node": 25.6.0
+  "@types/react": 19.2.14
+  "@types/react-dom": 19.2.3
+  "@types/sinon": 22.0.0
+  "@types/three": 0.184.0
+  "@types/vscode": 1.134.0
+  "@types/ws": 8.18.1
+  "@vitejs/plugin-react": 5.2.0
+  "@vscode/test-electron": 3.1.0
+  "@vscode/vsce": 3.9.2
+  "@xterm/addon-fit": 0.11.0
+  "@xterm/xterm": 6.0.0
+  "@xyflow/react": 12.10.2
+  ajv: 8.20.0
+  ajv-formats: 3.0.1
+  autoprefixer: 10.5.0
+  chai: 6.2.2
+  chokidar: 3.6.0
+  concurrently: 9.2.1
+  d3-force: 3.0.0
+  dependency-cruiser: 18.2.0
+  dockerode: 5.0.1
+  dompurify: 3.4.13
+  electron: 41.5.0
+  electron-builder: 26.8.1
+  elkjs: 0.11.1
+  esbuild: 0.27.7
+  fastify: 5.11.3
+  highlight.js: 11.11.1
+  jscpd: 5.2.0
+  maplibre-gl: 5.24.0
+  markdown-it: 14.1.1
+  markdown-it-emoji: 3.0.0
+  mocha: 11.8.0
+  mochawesome: 8.0.1
+  monaco-editor: 0.55.1
+  monaco-yaml: 5.4.1
+  ovsx: 1.2.0
+  oxlint: 1.61.0
+  oxlint-tsgolint: 0.18.1
+  postcss: 8.5.10
+  postcss-cli: 11.0.1
+  postcss-import: 16.1.1
+  prettier: 3.9.6
+  react: 19.2.8
+  react-dom: 19.2.8
+  sinon: 22.1.0
+  three: 0.184.0
+  tsx: 4.21.0
+  typescript: 6.0.3
+  vite: 7.3.2
+  ws: 8.21.3
+  yaml: 2.9.0
+  zustand: 4.5.7
+# Preserve the imported extension toolchain while upgrading it independently.
+catalogs:
+  vscode:
+    "@types/node": 26.5.0
+    "@types/react": 19.2.18
+    "@types/react-dom": 19.2.7
+    "@types/vscode": 1.105.0
+    autoprefixer: 10.5.5
+    esbuild: 0.28.2
+    oxlint: 1.82.0
+    oxlint-tsgolint: 7.0.2001
+    postcss: 8.5.28
+    postcss-import: 17.0.0
+  peers:
+    react: ^19.2.5
+    react-dom: ^19.2.5
+catalogMode: strict
+saveExact: true
+sharedWorkspaceLockfile: true
+linkWorkspacePackages: false
+strictPeerDependencies: true
+nodeOptions: --max-old-space-size=4096
+overrides:
+  diff: 9.0.0
+  dompurify: 3.4.13
+  serialize-javascript: 7.1.0
+  uuid: 14.0.1
+allowBuilds:
+  esbuild: true
+  electron: true
+  "@vscode/vsce-sign": true
+  electron-winstaller: true
+  protobufjs: true
+  ssh2: true
+  cpu-features: false
+  keytar: false
+  fsevents: false

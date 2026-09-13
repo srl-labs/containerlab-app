@@ -1,0 +1,24 @@
+{
+  "workers": {
+    "monaco-editor-worker": {
+      "package": "monaco-editor",
+      "path": "esm/vs/editor/editor.worker.js"
+    },
+    "monaco-json-worker": {
+      "package": "monaco-editor",
+      "path": "esm/vs/language/json/json.worker.js"
+    },
+    "monaco-yaml-worker": {
+      "package": "monaco-yaml",
+      "path": "yaml.worker.js"
+    }
+  },
+  "codiconFont": {
+    "package": "monaco-editor",
+    "candidates": [
+      "min/vs/base/browser/ui/codicons/codicon/codicon.ttf",
+      "esm/vs/base/browser/ui/codicons/codicon/codicon.ttf",
+      "dev/vs/base/browser/ui/codicons/codicon/codicon.ttf"
+    ]
+  }
+}
