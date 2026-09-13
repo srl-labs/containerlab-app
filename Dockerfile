@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24.18.0-alpine AS deps
+# The build emits portable JavaScript and static assets for both runtime architectures.
+FROM --platform=$BUILDPLATFORM node:24.18.0-alpine AS deps
 
 WORKDIR /app
+
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable
@@ -19,7 +22,12 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lo
 
 FROM deps AS build
 
-COPY . .
+COPY tsconfig.base.json ./
+COPY apps/web ./apps/web
+COPY packages/app-contract ./packages/app-contract
+COPY packages/app-server ./packages/app-server
+COPY packages/clab-ui ./packages/clab-ui
+COPY packages/standalone-runtime ./packages/standalone-runtime
 
 RUN pnpm run build:web
 

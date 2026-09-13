@@ -27,3 +27,10 @@ mochawesome-report
 **/test-results
 **/playwright-report
 **/mochawesome-report
+
+**/blob-report
+**/.github
+packages/clab-ui/docs
+packages/clab-ui/test
+packages/clab-ui/*.md
+apps/web/test

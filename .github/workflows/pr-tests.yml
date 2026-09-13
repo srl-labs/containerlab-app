@@ -5,9 +5,16 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
 jobs:
   test:
@@ -38,7 +45,15 @@ jobs:
         run: pnpm run typecheck
 
       - name: Unit tests
-        run: pnpm run test:unit
+        run: pnpm -r --if-present run test:unit
+
+      - name: Upload VS Code unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-unit-report
+          path: apps/vscode-containerlab/mochawesome-report/
+          if-no-files-found: ignore
 
       - name: Validate packed clab-ui consumer
         run: node scripts/check-packed-clab-ui.mjs
@@ -47,7 +62,7 @@ jobs:
         run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Web E2E
-        run: pnpm run test:e2e:web
+        run: pnpm --filter containerlab-app-web run test:e2e
 
       - name: Upload Playwright report
         if: always()
@@ -130,7 +145,7 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter containerlab-app --ignore-scripts
 
       - name: Download clab-ui Playwright blob reports
         uses: actions/download-artifact@v4
@@ -156,3 +171,28 @@ jobs:
         env:
           BROWSER_TESTS_RESULT: ${{ needs.clab-ui-browser-tests.result }}
         run: test "$BROWSER_TESTS_RESULT" = "success"
+
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run package:vscode
+      - run: pnpm --filter vscode-containerlab run test:e2e:compile
+      - run: xvfb-run -a node apps/vscode-containerlab/out/e2e/run.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vscode-extension
+          path: |
+            apps/vscode-containerlab/*.vsix
+            apps/vscode-containerlab/out/e2e/
