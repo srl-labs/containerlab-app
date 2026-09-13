@@ -16,3 +16,14 @@ test-results
 .vscode
 mochawesome-report
 .vscode-test
+
+# Exclude generated files in every workspace.
+**/node_modules
+**/dist
+**/dist-viewer
+**/out
+**/release
+**/.vite
+**/test-results
+**/playwright-report
+**/mochawesome-report

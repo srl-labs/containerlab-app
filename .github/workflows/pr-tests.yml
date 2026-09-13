@@ -20,29 +20,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Unit tests
-        run: npm run test:unit
+        run: pnpm run test:unit
 
-      - name: Preview clab-ui package
-        run: npm run pack:clab-ui -- --dry-run
+      - name: Validate packed clab-ui consumer
+        run: node scripts/check-packed-clab-ui.mjs
 
       - name: Install Playwright headless shell
-        run: npx playwright install --with-deps --only-shell chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
 
       - name: Web E2E
-        run: npm run test:e2e:web
+        run: pnpm run test:e2e:web
 
       - name: Upload Playwright report
         if: always()
@@ -69,14 +74,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Install Chrome
         id: setup-chrome
@@ -87,7 +97,7 @@ jobs:
       - name: Run clab-ui browser harness
         env:
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: npm run test:browser:clab-ui -- --shard=${{ matrix.shard }}/4
+        run: pnpm run test:browser:clab-ui --shard=${{ matrix.shard }}/4
 
       - name: Upload clab-ui Playwright blob report
         if: ${{ !cancelled() }}
@@ -108,14 +118,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 24
-          cache: npm
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Download clab-ui Playwright blob reports
         uses: actions/download-artifact@v4
@@ -125,7 +140,7 @@ jobs:
           merge-multiple: true
 
       - name: Merge clab-ui Playwright reports
-        run: npx playwright merge-reports --reporter html ./all-clab-ui-blob-reports
+        run: pnpm exec playwright merge-reports --reporter html ./all-clab-ui-blob-reports
 
       - name: Upload clab-ui Playwright report
         if: ${{ !cancelled() }}

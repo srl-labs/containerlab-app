@@ -21,39 +21,44 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name }}
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Validate version
         id: version
         run: |
-          npm run check:release-version
+          pnpm run check:release-version
           echo "package=$(node -p "require('./apps/vscode-containerlab/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Build shared UI
-        run: npm run build:clab-ui
+        run: pnpm run build:clab-ui
 
       - name: Run linter
-        run: npm run lint --workspace vscode-containerlab
+        run: pnpm --filter vscode-containerlab run lint
 
       - name: Run type check
-        run: npm run typecheck --workspace vscode-containerlab
+        run: pnpm --filter vscode-containerlab run typecheck
 
       - name: Run tests
-        run: npm test --workspace vscode-containerlab
+        run: pnpm --filter vscode-containerlab test
 
       - name: Build extension
-        run: npm run build:vscode
+        run: pnpm run build:vscode
 
       - name: Package extension
         working-directory: apps/vscode-containerlab
-        run: npx vsce package --no-dependencies -o "vscode-containerlab-${{ steps.version.outputs.package }}.vsix"
+        run: node scripts/package-vsix.mjs "vscode-containerlab-${{ steps.version.outputs.package }}.vsix"
 
       - name: Check for publish tokens
         id: check-pat
@@ -77,14 +82,14 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         working-directory: apps/vscode-containerlab
-        run: npx vsce publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$VSCE_PAT"
+        run: pnpm exec vsce publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$VSCE_PAT"
 
       - name: Publish to Open VSX Registry
         if: steps.check-pat.outputs.has_ovsx_pat == 'true'
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         working-directory: apps/vscode-containerlab
-        run: npx ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT"
+        run: pnpm exec ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT"
 
       - name: Upload VSIX to release
         uses: softprops/action-gh-release@v2

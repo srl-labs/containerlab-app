@@ -26,14 +26,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Verify release version
-        run: npm run check:release-version
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install Linux package tooling
         run: |
@@ -41,12 +43,15 @@ jobs:
           sudo apt-get install -y rpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
+      - name: Verify release version
+        run: pnpm run check:release-version
+
       - name: Build desktop packages
-        run: npm run package:desktop:linux
+        run: pnpm run package:desktop:linux
 
       - name: Verify Linux artifacts
         run: |
@@ -72,22 +77,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Verify release version
-        run: npm run check:release-version
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build desktop installer
-        run: npm run package:desktop:win
+        run: pnpm run package:desktop:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
@@ -114,22 +121,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Verify release version
-        run: npm run check:release-version
+          node-version-file: package.json
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build desktop package
-        run: npm run package:desktop:mac
+        run: pnpm run package:desktop:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
