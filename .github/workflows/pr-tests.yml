@@ -218,6 +218,9 @@ jobs:
       - container-image
       - desktop-packages
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.CLOUDFLARE_PAGES_PROJECT_NAME != ''
+    permissions:
+      contents: read
+      pull-requests: write
     uses: ./.github/workflows/sandbox.yml
     secrets:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
