@@ -29,7 +29,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Select commit preview
-        run: echo "SANDBOX_BRANCH=$(git rev-parse HEAD)-pr" >> "$GITHUB_ENV"
+        run: |
+          COMMIT_SHA=$(git rev-parse HEAD)
+          echo "SANDBOX_COMMIT_SHA=$COMMIT_SHA" >> "$GITHUB_ENV"
+          echo "SANDBOX_BRANCH=${COMMIT_SHA:0:12}-pr" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
