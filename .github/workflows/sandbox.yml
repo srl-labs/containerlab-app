@@ -71,7 +71,7 @@ jobs:
           wranglerVersion: "4.131.1"
           packageManager: npm
           workingDirectory: ${{ runner.temp }}/cloudflare-sandbox
-          command: pages deploy "${{ github.workspace }}/apps/web/dist/client" --project-name=${{ env.PROJECT_NAME }} --branch=${{ env.SANDBOX_BRANCH }} --commit-hash=${{ github.event.pull_request.head.sha }}
+          command: pages deploy "${{ github.workspace }}/apps/web-public/dist/client" --project-name=${{ env.PROJECT_NAME }} --branch=${{ env.SANDBOX_BRANCH }} --commit-hash=${{ github.event.pull_request.head.sha }}
 
       - name: Comment sandbox URL on PR
         uses: actions/github-script@v9

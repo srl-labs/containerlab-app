@@ -56,7 +56,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: apps/web/dist/client
+          path: apps/web-public/dist/client
 
   deploy:
     runs-on: ubuntu-latest

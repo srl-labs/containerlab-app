@@ -43,6 +43,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   "apps/web": {
     entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]
   },
+  "apps/web-public": {
+    entry: ["src/main.tsx"]
+  },
   "apps/vscode-containerlab": {
     entry: ["src/webviews/*/entry.tsx", "test/**/*.test.ts"],
     ignoreDependencies: [

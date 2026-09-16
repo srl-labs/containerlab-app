@@ -11,6 +11,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable
 COPY scripts/check-package-manager.mjs scripts/check-package-manager.mjs
 COPY apps/web/package.json apps/web/package.json
+COPY apps/web-public/package.json apps/web-public/package.json
 COPY apps/desktop/package.json apps/desktop/package.json
 COPY apps/vscode-containerlab/package.json apps/vscode-containerlab/package.json
 COPY packages/app-contract/package.json packages/app-contract/package.json

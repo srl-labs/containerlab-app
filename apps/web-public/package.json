@@ -1,0 +1,51 @@
+{
+  "name": "containerlab-app-web-public",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Public hosted static web app (topology editor, no runtime backend) built on @containerlab/clab-ui.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "build": "vite build --config vite.config.ts",
+    "preview": "vite preview --config vite.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "pnpm run typecheck && pnpm run lint:ts",
+    "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions"
+  },
+  "dependencies": {
+    "@emotion/react": "catalog:",
+    "@emotion/styled": "catalog:",
+    "@mui/icons-material": "catalog:",
+    "@mui/material": "catalog:",
+    "@containerlab/clab-ui": "workspace:*",
+    "@srl-labs/containerlab-app-contract": "workspace:*",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "ajv": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "three": "catalog:",
+    "yaml": "catalog:",
+    "zustand": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/three": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "autoprefixer": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "postcss": "catalog:",
+    "postcss-import": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}
