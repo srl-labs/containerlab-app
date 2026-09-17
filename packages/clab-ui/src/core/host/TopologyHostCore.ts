@@ -705,7 +705,8 @@ export class TopologyHostCore implements TopologyHost {
     let annotationsContent = initialAnnotationsContent;
 
     let annotations = loadedAnnotations;
-    if (migrateGeneratedNetworkNodeAnnotations(annotations)) {
+    const topologyNodeIds = new Set(Object.keys(parsed.topology?.nodes ?? {}));
+    if (migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds)) {
       await this.annotationsIO.saveAnnotations(this.yamlFilePath, annotations);
       annotationsContent = await this.readAnnotationsContent();
       this.logger.info("[TopologyHost] Migrated generated network node annotations");
@@ -870,7 +871,10 @@ export class TopologyHostCore implements TopologyHost {
       const nodeAnnotations = annotations.nodeAnnotations ?? [];
       const annotationIds = new Set(nodeAnnotations.map((n) => n.id));
       const missingIds = [...yamlNodeIds].filter((id) => !annotationIds.has(id));
-      const orphanAnnotations = nodeAnnotations.filter((n) => !yamlNodeIds.has(n.id));
+      const networkNodeIds = new Set(annotations.networkNodeAnnotations?.map((n) => n.id));
+      const orphanAnnotations = nodeAnnotations.filter(
+        (n) => !yamlNodeIds.has(n.id) && !networkNodeIds.has(n.id)
+      );
 
       if (missingIds.length === 1 && orphanAnnotations.length > 0) {
         const newId = missingIds[0];

@@ -15,7 +15,7 @@
  * can use both interchangeably.
  */
 import type { Node, Edge } from "@xyflow/react";
-import { isLayoutableNode, applyPositionMap } from "./types";
+import { isLayoutParticipant, applyPositionMap } from "./types";
 import type { LayoutOptions } from "./types";
 import {
   classifyComponent,
@@ -33,11 +33,11 @@ export function applyRadialLayout(
   const { padding = 80, nodeSpacing = 110 } = options;
   const ringSpacing = nodeSpacing * 1.4; // radial distance between depth rings
 
-  const layoutNodes = nodes.filter(isLayoutableNode);
+  const layoutNodes = nodes.filter(isLayoutParticipant);
   if (layoutNodes.length === 0) return { nodes, edges };
 
   const nodeIds = new Set(layoutNodes.map((n) => n.id));
-  const { adj, topoEdges } = buildAdjacency(nodeIds, edges);
+  const { adj, topoEdges } = buildAdjacency(nodeIds, edges.filter((edge) => edge.hidden !== true));
 
   const degree = new Map<string, number>();
   for (const [id, nb] of adj) degree.set(id, nb.length);
@@ -182,12 +182,13 @@ export function applyRadialLayout(
 
   // Stamp layer metadata and topology type on nodes/edges
   const laidNodes = applyPositionMap(nodes, positions).map((node) => {
-    if (!isLayoutableNode(node)) return node;
+    if (!isLayoutParticipant(node)) return node;
     const l = layerMap.get(node.id) ?? 0;
     return { ...node, data: { ...node.data, layer: l } };
   });
 
   const laidEdges = edges.map((edge) => {
+    if (edge.hidden === true || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) return edge;
     const isMeshEdge = meshNodeIds.has(edge.source) || meshNodeIds.has(edge.target);
     return { ...edge, data: { ...edge.data, topologyType: isMeshEdge ? "mesh" : "hierarchical" } };
   });

@@ -119,18 +119,27 @@ test("savePositions stores generated macvlan nodes as network annotations", asyn
   assert.deepEqual(result, { success: true });
 
   const saved = await loadSavedAnnotations(fs, annotationsPath);
-  assert.deepEqual(saved.networkNodeAnnotations?.find((entry) => entry.id === "macvlan:ens33"), {
-    id: "macvlan:ens33",
-    type: "macvlan",
-    label: "uplink",
-    position: { x: 120, y: 220 },
-    geoCoordinates: { lat: 48, lng: 11 }
-  });
-  assert.equal(saved.nodeAnnotations?.some((entry) => entry.id === "macvlan:ens33"), false);
-  assert.deepEqual(saved.nodeAnnotations?.find((entry) => entry.id === "spine1"), {
-    id: "spine1",
-    position: { x: 10, y: 20 }
-  });
+  assert.deepEqual(
+    saved.networkNodeAnnotations?.find((entry) => entry.id === "macvlan:ens33"),
+    {
+      id: "macvlan:ens33",
+      type: "macvlan",
+      label: "uplink",
+      position: { x: 120, y: 220 },
+      geoCoordinates: { lat: 48, lng: 11 }
+    }
+  );
+  assert.equal(
+    saved.nodeAnnotations?.some((entry) => entry.id === "macvlan:ens33"),
+    false
+  );
+  assert.deepEqual(
+    saved.nodeAnnotations?.find((entry) => entry.id === "spine1"),
+    {
+      id: "spine1",
+      position: { x: 10, y: 20 }
+    }
+  );
 });
 
 test("migrateGeneratedNetworkNodeAnnotations converts stale macvlan node annotations", () => {
@@ -166,4 +175,67 @@ test("migrateGeneratedNetworkNodeAnnotations converts stale macvlan node annotat
       position: { x: 1240, y: 200 }
     }
   ]);
+});
+
+test("migrating dummy positions preserves membership and visual metadata and is idempotent", () => {
+  const annotations: TopologyAnnotations = {
+    nodeAnnotations: [
+      { id: "dummy0", position: { x: 21.5, y: -21.5 }, groupId: "group-1", labelPosition: "top" },
+      { id: "dummy1", groupId: "group-1" },
+      { id: "dummy-router", position: { x: 100, y: 200 }, icon: "router" }
+    ],
+    networkNodeAnnotations: [{ id: "dummy1", type: "dummy", position: { x: 300, y: 400 } }]
+  };
+  const topologyNodeIds = new Set(["dummy-router"]);
+
+  assert.equal(migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds), true);
+  assert.deepEqual(annotations.nodeAnnotations, [
+    { id: "dummy0", groupId: "group-1", labelPosition: "top" },
+    { id: "dummy1", groupId: "group-1" },
+    { id: "dummy-router", position: { x: 100, y: 200 }, icon: "router" }
+  ]);
+  assert.deepEqual(
+    annotations.networkNodeAnnotations?.find((node) => node.id === "dummy0")?.position,
+    { x: 21.5, y: -21.5 }
+  );
+  assert.equal(
+    annotations.networkNodeAnnotations.some((node) => node.id === "dummy-router"),
+    false
+  );
+  assert.equal(migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds), false);
+});
+
+test("savePositions preserves dummy group membership and treats declared dummy-router as a regular node", async () => {
+  const { fs, annotationsIO, topologyIO, yamlPath } = createTopologyIoHarness();
+  topologyIO.initialize(
+    YAML.parseDocument("topology:\n  nodes:\n    dummy-router:\n      kind: linux\n"),
+    yamlPath
+  );
+  const annotationsPath = annotationsIO.getAnnotationsFilePath(yamlPath);
+  await fs.writeFile(
+    annotationsPath,
+    JSON.stringify({
+      nodeAnnotations: [
+        { id: "dummy0", groupId: "group-1" },
+        { id: "dummy-router", icon: "router" }
+      ]
+    })
+  );
+
+  assert.deepEqual(
+    await topologyIO.savePositions([
+      { id: "dummy0", position: { x: 21.5, y: -21.5 } },
+      { id: "dummy-router", position: { x: 100, y: 200 } }
+    ]),
+    { success: true }
+  );
+  const saved = await loadSavedAnnotations(fs, annotationsPath);
+  assert.deepEqual(saved.nodeAnnotations, [
+    { id: "dummy0", groupId: "group-1" },
+    { id: "dummy-router", icon: "router", position: { x: 100, y: 200 } }
+  ]);
+  assert.deepEqual(
+    saved.networkNodeAnnotations?.map((node) => node.id),
+    ["dummy0"]
+  );
 });

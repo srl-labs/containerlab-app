@@ -29,6 +29,67 @@ export function isTopoEdgeLike(value: unknown): value is TopoEdge {
 }
 
 /**
+ * Identifies dummy endpoint nodes.
+ *
+ * Dummy endpoints are emitted as network nodes by the parser, either from a literal
+ * `dummy*` endpoint or from a synthesized `dummyN` id for `type: dummy` links. Matching
+ * on `nodeType` rather than the id prefix avoids catching topology nodes merely named
+ * something like `dummy-router`.
+ */
+export function isDummyNode(node: { type?: string; data?: unknown }): boolean {
+  if (node.type !== "network-node") return false;
+  if (typeof node.data !== "object" || node.data === null) return false;
+  return Reflect.get(node.data, "nodeType") === "dummy";
+}
+
+/** Collect the ids of every dummy endpoint node in the graph. */
+export function collectDummyNodeIds(
+  nodes: Array<{ id: string; type?: string; data?: unknown }>
+): Set<string> {
+  const ids = new Set<string>();
+  for (const node of nodes) {
+    if (isDummyNode(node)) ids.add(node.id);
+  }
+  return ids;
+}
+
+/**
+ * Stamp `hidden` on the dummy nodes themselves.
+ *
+ * Elements are flagged rather than removed: layout writes the rendered node array back to
+ * the graph store, and annotation/group-membership payloads are rebuilt by walking that
+ * store, so dropping nodes would delete them along with their annotations.
+ */
+export function markDummyNodesHidden<T extends { id: string }>(
+  nodes: T[],
+  dummyNodeIds: Set<string>,
+  showDummyLinks: boolean
+): T[] {
+  if (dummyNodeIds.size === 0) return nodes;
+  return nodes.map((node) =>
+    dummyNodeIds.has(node.id) ? { ...node, hidden: !showDummyLinks } : node
+  );
+}
+
+/**
+ * Stamp `hidden` on every link with a dummy endpoint.
+ *
+ * React Flow does not cascade `hidden` from a node to its edges, so edges are stamped too.
+ */
+export function markDummyEdgesHidden<T extends { source: string; target: string }>(
+  edges: T[],
+  dummyNodeIds: Set<string>,
+  showDummyLinks: boolean
+): T[] {
+  if (dummyNodeIds.size === 0) return edges;
+  return edges.map((edge) =>
+    dummyNodeIds.has(edge.source) || dummyNodeIds.has(edge.target)
+      ? { ...edge, hidden: !showDummyLinks }
+      : edge
+  );
+}
+
+/**
  * Search nodes by a query string (matches id, label, kind, or role)
  * Case-insensitive substring matching
  */

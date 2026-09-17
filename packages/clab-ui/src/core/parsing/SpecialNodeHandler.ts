@@ -92,6 +92,9 @@ function registerEndpoint(
 ): void {
   if (!isEndpointInput(end)) return;
   const { node, iface } = splitEndpoint(end);
+  // Explicit topology nodes can have names such as dummy-router. They already
+  // have a graph node and must not also become dummy endpoint nodes.
+  if (topologyNodeNames?.has(node)) return;
   const info = determineSpecialNode(node, iface);
   if (info) {
     specialNodes.set(info.id, { id: info.id, type: info.type, label: info.label });

@@ -5,6 +5,12 @@ import { useEffect, useRef } from "react";
 
 import { log } from "../../utils/logger";
 import { useGraphStore } from "../../stores/graphStore";
+import { useTopoViewerStore } from "../../stores/topoViewerStore";
+import {
+  collectDummyNodeIds,
+  markDummyEdgesHidden,
+  markDummyNodesHidden
+} from "../../utils/graphQueryUtils";
 import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
@@ -452,9 +458,7 @@ function handleCreateGroup(
 
 /**
  * Handle Ctrl+A: Select all nodes
- * Note: Selection is now handled by ReactFlow natively via its built-in select all
- * Returns true when the shortcut is recognized (but doesn't prevent default),
- * false when the key combination doesn't match.
+ * Select only visible elements and suppress native text selection.
  */
 function handleSelectAll(event: KeyboardEvent): boolean {
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") return false;
@@ -467,8 +471,20 @@ function handleSelectAll(event: KeyboardEvent): boolean {
   }
 
   const { nodes, edges, setNodes, setEdges } = useGraphStore.getState();
-  setNodes(nodes.map((n) => ({ ...n, selected: true })));
-  setEdges(edges.map((e) => ({ ...e, selected: true })));
+  // Derive dummy visibility from the current preference, since the rendered flags
+  // can be newer than the last snapshot or layout stored in the graph.
+  const dummiesShown = useTopoViewerStore.getState().showDummyLinks;
+  const dummyNodeIds = collectDummyNodeIds(nodes);
+  const canvasNodes = markDummyNodesHidden(nodes, dummyNodeIds, dummiesShown);
+  const canvasEdges = markDummyEdgesHidden(edges, dummyNodeIds, dummiesShown);
+  const hiddenNodeIds = new Set(
+    canvasNodes.filter((node) => node.hidden === true).map((node) => node.id)
+  );
+  const isHiddenEdge = (edge: { hidden?: boolean; source: string; target: string }): boolean =>
+    edge.hidden === true || hiddenNodeIds.has(edge.source) || hiddenNodeIds.has(edge.target);
+
+  setNodes(canvasNodes.map((n) => ({ ...n, selected: !hiddenNodeIds.has(n.id) })));
+  setEdges(canvasEdges.map((e) => ({ ...e, selected: !isHiddenEdge(e) })));
 
   log.info("[Keyboard] Select all nodes and edges");
   event.preventDefault();
