@@ -22,16 +22,16 @@ jobs:
       RELEASE_TAG: ${{ github.event.release.tag_name }}
       RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name || github.ref }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           registry-url: https://registry.npmjs.org
@@ -58,7 +58,7 @@ jobs:
       - name: Validate the release tarball with npm consumers
         run: node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: clab-ui-npm-package
           path: artifacts/clab-ui.tgz

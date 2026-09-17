@@ -32,7 +32,14 @@ const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
   if (isNetwork) {
     return (
       <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: "block",
+            mb: 0.5
+          }}
+        >
           {nodeName} Interface
         </Typography>
         <ReadOnlyBadge>{nodeName || "Unknown"}</ReadOnlyBadge>
@@ -69,7 +76,12 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
       bodySx={{ display: "flex", alignItems: "center", gap: 2, px: 2, py: 1 }}
     >
       <>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           {ENDPOINT_LABEL_OFFSET_MIN}
         </Typography>
         <Slider
@@ -82,7 +94,12 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
           valueLabelDisplay="auto"
           sx={{ flex: 1 }}
         />
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           {ENDPOINT_LABEL_OFFSET_MAX}
         </Typography>
         <Button

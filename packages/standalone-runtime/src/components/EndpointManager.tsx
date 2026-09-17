@@ -15,13 +15,13 @@ import {
   TextField,
   Typography
 } from "@mui/material";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import MemoryIcon from "@mui/icons-material/Memory";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
+import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import SpeedIcon from "@mui/icons-material/Speed";
@@ -36,11 +36,7 @@ import {
   type EndpointHealthMetrics
 } from "../endpointHealth";
 import type { EndpointUiAction } from "../endpointActions";
-import {
-  endpointStatusHint,
-  endpointStatusLabel,
-  endpointStatusSeverity
-} from "../endpointStatus";
+import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../endpointStatus";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
@@ -139,7 +135,9 @@ function formatEndpointImportResult(result: EndpointImportResult): string {
     result.added ? `${result.added} added` : null,
     result.updated ? `${result.updated} updated` : null,
     result.unchanged ? `${result.unchanged} unchanged` : null,
-    result.duplicates ? `${result.duplicates} duplicate ${result.duplicates === 1 ? "entry" : "entries"} merged` : null
+    result.duplicates
+      ? `${result.duplicates} duplicate ${result.duplicates === 1 ? "entry" : "entries"} merged`
+      : null
   ].filter((value): value is string => value !== null);
 
   return `Imported ${result.total} endpoint ${result.total === 1 ? "profile" : "profiles"}${
@@ -208,18 +206,45 @@ function EndpointHealthMetric(props: {
   value: string;
 }) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        alignItems: "center",
+        minWidth: 0,
+        flex: 1
+      }}
+    >
       <Box sx={{ color: "text.secondary", display: "inline-flex", flexShrink: 0 }}>
         {props.icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: "block"
+          }}
+        >
           {props.label}
         </Typography>
-        <Typography variant="body2" fontWeight={600} noWrap>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            fontWeight: 600
+          }}
+        >
           {props.value}
         </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+        <Typography
+          variant="caption"
+          noWrap
+          sx={{
+            color: "text.secondary",
+            display: "block"
+          }}
+        >
           {props.detail}
         </Typography>
       </Box>
@@ -257,15 +282,18 @@ function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
   );
 }
 
-function EndpointHealthStats(props: {
-  endpoint: EndpointConfig;
-  state?: EndpointHealthState;
-}) {
+function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: EndpointHealthState }) {
   const { endpoint, state } = props;
 
   if (endpoint.status !== "connected") {
     return (
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          display: "block"
+        }}
+      >
         Reconnect to view health stats.
       </Typography>
     );
@@ -273,9 +301,20 @@ function EndpointHealthStats(props: {
 
   if (!state || state.status === "loading") {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: "center"
+        }}
+      >
         <CircularProgress size={14} />
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           Loading health stats...
         </Typography>
       </Stack>
@@ -284,7 +323,13 @@ function EndpointHealthStats(props: {
 
   if (state.status === "error") {
     return (
-      <Typography variant="caption" color="warning.main" sx={{ display: "block" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "warning.main",
+          display: "block"
+        }}
+      >
         Health stats unavailable.
       </Typography>
     );
@@ -321,7 +366,13 @@ function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
           flexShrink: 0
         }}
       />
-      <Typography variant="caption" fontWeight={700} sx={{ color: "inherit" }}>
+      <Typography
+        variant="caption"
+        sx={{
+          fontWeight: 700,
+          color: "inherit"
+        }}
+      >
         {endpointStatusLabel(status)}
       </Typography>
     </Box>
@@ -381,30 +432,50 @@ function ManagedEndpointList(props: {
             <Stack spacing={1.25} divider={<Divider flexItem />}>
               <Stack
                 direction="row"
-                justifyContent="space-between"
-                alignItems="flex-start"
                 spacing={1}
+                sx={{
+                  justifyContent: "space-between",
+                  alignItems: "flex-start"
+                }}
               >
                 <Box sx={{ minWidth: 0, flex: 1 }}>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="subtitle2" fontWeight={600} noWrap>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "center"
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      noWrap
+                      sx={{
+                        fontWeight: 600
+                      }}
+                    >
                       {endpoint.label}
                     </Typography>
                     <EndpointStatusPill status={endpoint.status} />
                   </Stack>
                   <Typography
                     variant="caption"
-                    color="text.secondary"
+                    noWrap
                     sx={{
+                      color: "text.secondary",
                       fontFamily: "monospace",
                       fontSize: "0.75rem",
                       display: "block"
                     }}
-                    noWrap
                   >
                     {endpoint.url}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      display: "block"
+                    }}
+                  >
                     {endpointStatusHint(endpoint.status)}
                   </Typography>
                 </Box>
@@ -440,12 +511,17 @@ function ManagedEndpointList(props: {
                 </Stack>
               </Stack>
               {props.healthStatsEnabled ? (
-                <EndpointHealthStats endpoint={endpoint} state={props.endpointHealth[endpoint.id]} />
+                <EndpointHealthStats
+                  endpoint={endpoint}
+                  state={props.endpointHealth[endpoint.id]}
+                />
               ) : null}
               <Stack
                 direction={{ xs: "column", sm: "row" }}
                 spacing={1}
-                alignItems={{ xs: "stretch", sm: "flex-start" }}
+                sx={{
+                  alignItems: { xs: "stretch", sm: "flex-start" }
+                }}
               >
                 <TextField
                   label="Keep signed in"
@@ -500,12 +576,15 @@ function useEndpointSessionDurationDrafts(sortedEndpoints: EndpointConfig[]) {
     });
   }, [sortedEndpoints]);
 
-  const handleDraftChange = useCallback((endpointId: string, nextValue: EndpointSessionDuration) => {
-    setDrafts((current) => ({
-      ...current,
-      [endpointId]: nextValue
-    }));
-  }, []);
+  const handleDraftChange = useCallback(
+    (endpointId: string, nextValue: EndpointSessionDuration) => {
+      setDrafts((current) => ({
+        ...current,
+        [endpointId]: nextValue
+      }));
+    },
+    []
+  );
 
   return { drafts, handleDraftChange };
 }
@@ -547,7 +626,10 @@ function useEndpointHealthState(
             ...current,
             [endpointId]: {
               status: "error",
-              message: loadError instanceof Error ? loadError.message : "Failed to load endpoint health stats"
+              message:
+                loadError instanceof Error
+                  ? loadError.message
+                  : "Failed to load endpoint health stats"
             }
           }));
         });
@@ -584,7 +666,8 @@ function useRequestedEndpointActionDialog(input: {
       return;
     }
 
-    const endpoint = sortedEndpoints.find((entry) => entry.id === requestedAction.endpointId) ?? null;
+    const endpoint =
+      sortedEndpoints.find((entry) => entry.id === requestedAction.endpointId) ?? null;
     if (!endpoint) {
       onRequestedActionHandled?.();
       return;
@@ -634,7 +717,11 @@ function useAddEndpointForm(
 
   const sessionDurationValid = isValidEndpointSessionDuration(sessionDuration);
   const submitDisabled =
-    busyKey !== null || !url.trim() || !username.trim() || !password.trim() || !sessionDurationValid;
+    busyKey !== null ||
+    !url.trim() ||
+    !username.trim() ||
+    !password.trim() ||
+    !sessionDurationValid;
 
   const submit = useCallback(async () => {
     if (submitDisabled) {
@@ -658,7 +745,17 @@ function useAddEndpointForm(
     } finally {
       setBusyKey(null);
     }
-  }, [label, onAddEndpoint, password, sessionDuration, setBusyKey, setError, submitDisabled, url, username]);
+  }, [
+    label,
+    onAddEndpoint,
+    password,
+    sessionDuration,
+    setBusyKey,
+    setError,
+    submitDisabled,
+    url,
+    username
+  ]);
 
   return {
     label,
@@ -693,12 +790,15 @@ function useReconnectEndpointDialog(
   );
   const submitDisabled = busyKey !== null || !username.trim() || !password.trim();
 
-  const open = useCallback((nextEndpoint: EndpointConfig) => {
-    setEndpointId(nextEndpoint.id);
-    setUsername(nextEndpoint.username);
-    setPassword("");
-    setError(null);
-  }, [setError]);
+  const open = useCallback(
+    (nextEndpoint: EndpointConfig) => {
+      setEndpointId(nextEndpoint.id);
+      setUsername(nextEndpoint.username);
+      setPassword("");
+      setError(null);
+    },
+    [setError]
+  );
 
   const submit = useCallback(async () => {
     if (!endpoint || submitDisabled) {
@@ -722,7 +822,17 @@ function useReconnectEndpointDialog(
     }
   }, [endpoint, onReconnectEndpoint, password, setBusyKey, setError, submitDisabled, username]);
 
-  return { endpoint, open, password, setEndpointId, setPassword, setUsername, submit, submitDisabled, username };
+  return {
+    endpoint,
+    open,
+    password,
+    setEndpointId,
+    setPassword,
+    setUsername,
+    submit,
+    submitDisabled,
+    username
+  };
 }
 
 function useRemoveEndpointDialog(
@@ -738,10 +848,13 @@ function useRemoveEndpointDialog(
     [endpointId, sortedEndpoints]
   );
 
-  const open = useCallback((nextEndpoint: EndpointConfig) => {
-    setEndpointId(nextEndpoint.id);
-    setError(null);
-  }, [setError]);
+  const open = useCallback(
+    (nextEndpoint: EndpointConfig) => {
+      setEndpointId(nextEndpoint.id);
+      setError(null);
+    },
+    [setError]
+  );
 
   const submit = useCallback(async () => {
     if (!endpoint) {
@@ -796,14 +909,17 @@ function useEditEndpointDialog(
     !sessionDurationValid ||
     !hasChanges;
 
-  const open = useCallback((nextEndpoint: EndpointConfig) => {
-    setEndpointId(nextEndpoint.id);
-    setUrl(nextEndpoint.url);
-    setLabel(nextEndpoint.label);
-    setUsername(nextEndpoint.username);
-    setSessionDuration(nextEndpoint.sessionDuration);
-    setError(null);
-  }, [setError]);
+  const open = useCallback(
+    (nextEndpoint: EndpointConfig) => {
+      setEndpointId(nextEndpoint.id);
+      setUrl(nextEndpoint.url);
+      setLabel(nextEndpoint.label);
+      setUsername(nextEndpoint.username);
+      setSessionDuration(nextEndpoint.sessionDuration);
+      setError(null);
+    },
+    [setError]
+  );
 
   const submit = useCallback(async () => {
     if (!endpoint || submitDisabled) {
@@ -826,7 +942,17 @@ function useEditEndpointDialog(
     } finally {
       setBusyKey(null);
     }
-  }, [endpoint, label, onUpdateEndpoint, sessionDuration, setBusyKey, setError, submitDisabled, url, username]);
+  }, [
+    endpoint,
+    label,
+    onUpdateEndpoint,
+    sessionDuration,
+    setBusyKey,
+    setError,
+    submitDisabled,
+    url,
+    username
+  ]);
 
   return {
     endpoint,
@@ -871,7 +997,10 @@ export function EndpointManager({
     [endpoints]
   );
   const connectedEndpointIds = useMemo(
-    () => sortedEndpoints.filter((endpoint) => endpoint.status === "connected").map((endpoint) => endpoint.id),
+    () =>
+      sortedEndpoints
+        .filter((endpoint) => endpoint.status === "connected")
+        .map((endpoint) => endpoint.id),
     [sortedEndpoints]
   );
   const connectedEndpointKey = connectedEndpointIds.join("|");
@@ -927,7 +1056,9 @@ export function EndpointManager({
     setNotice(null);
     try {
       downloadEndpointExport(onExportEndpoints());
-      setNotice(`Exported ${sortedEndpoints.length} endpoint ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`);
+      setNotice(
+        `Exported ${sortedEndpoints.length} endpoint ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`
+      );
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : String(exportError));
     }
@@ -958,7 +1089,14 @@ export function EndpointManager({
   return (
     <Stack spacing={2.5}>
       {onImportEndpoints || onExportEndpoints ? (
-        <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            justifyContent: "flex-end",
+            flexWrap: "wrap"
+          }}
+        >
           {onImportEndpoints ? (
             <Button
               variant="outlined"
@@ -1013,10 +1151,20 @@ export function EndpointManager({
       >
         <Stack spacing={2}>
           <Box>
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: 600
+              }}
+            >
               Add Endpoint
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary"
+              }}
+            >
               {endpointAddDescription(mode)}
             </Typography>
           </Box>
@@ -1260,14 +1408,28 @@ export function EndpointManager({
           <Stack spacing={2}>
             {reconnectDialog.endpoint ? (
               <>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
                   {`Reconnect "${reconnectDialog.endpoint.label}" to restore access for this endpoint.`}
                 </Typography>
-                <Alert severity={endpointStatusSeverity(reconnectDialog.endpoint.status)} variant="outlined">
+                <Alert
+                  severity={endpointStatusSeverity(reconnectDialog.endpoint.status)}
+                  variant="outlined"
+                >
                   {endpointStatusHint(reconnectDialog.endpoint.status)}
                 </Alert>
-                <Typography variant="body2" color="text.secondary">
-                  Keep signed in: {endpointSessionDurationLabel(reconnectDialog.endpoint.sessionDuration)}
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
+                  Keep signed in:{" "}
+                  {endpointSessionDurationLabel(reconnectDialog.endpoint.sessionDuration)}
                 </Typography>
               </>
             ) : null}
@@ -1321,7 +1483,12 @@ export function EndpointManager({
         <DialogTitle>Remove Endpoint</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary"
+              }}
+            >
               {`Remove "${removeDialog.endpoint?.label ?? "endpoint"}" from this standalone session?`}
             </Typography>
             <Divider />

@@ -753,7 +753,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                 input: {
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary"
+                        }}
+                      >
                         .svg
                       </Typography>
                     </InputAdornment>
@@ -948,15 +953,24 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
             <Paper variant="outlined" sx={{ p: 1.5 }}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
                 <LightbulbIcon sx={{ fontSize: 14, color: "warning.main" }} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
                   Tips
                 </Typography>
               </Box>
               <Typography
                 variant="caption"
-                color="text.secondary"
                 component="ul"
-                sx={{ pl: 2, m: 0, "& li": { mb: 0.25 } }}
+                sx={{
+                  color: "text.secondary",
+                  pl: 2,
+                  m: 0,
+                  "& li": { mb: 0.25 }
+                }}
               >
                 <li>Higher zoom = better quality, larger file</li>
                 <li>SVG files scale without quality loss</li>
@@ -1020,7 +1034,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
           {grafanaSettingsTab === "general" && (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Configure thresholds and topology sizing used in the exported Grafana panel.
               </Typography>
               <Box
@@ -1070,7 +1089,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   }}
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Use larger values for dense topologies with many interfaces.
               </Typography>
               <Divider />
@@ -1145,7 +1169,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   }}
                 />
               </Box>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Values must be strictly ascending: green &lt; yellow &lt; orange &lt; red (within
                 selected unit).
               </Typography>
@@ -1194,7 +1223,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
           {grafanaSettingsTab === "interface-names" && (
             <>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Filter links and choose which interface segment should be shown in endpoint bubbles.
               </Typography>
               <TextField
@@ -1217,7 +1251,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   )
                 )}
               </TextField>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Default for every interface; per-link overrides below take precedence.
               </Typography>
               <TextField
@@ -1227,7 +1266,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                 value={interfaceLinkFilter}
                 onChange={(e) => setInterfaceLinkFilter(e.target.value)}
               />
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 {filteredInterfaceRows.length} of {interfaceRows.length} links shown
               </Typography>
               <Box
@@ -1241,7 +1285,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
               >
                 {filteredInterfaceRows.length === 0 ? (
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary"
+                      }}
+                    >
                       No links match the current filter.
                     </Typography>
                   </Paper>
@@ -1252,7 +1301,12 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
                     return (
                       <Paper key={row.edgeId} variant="outlined" sx={{ p: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary"
+                          }}
+                        >
                           {row.source} ↔ {row.target}
                         </Typography>
                         <Box

@@ -324,7 +324,14 @@ function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Ele
   }
 
   return (
-    <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap">
+    <Stack
+      direction="row"
+      spacing={0.5}
+      useFlexGap
+      sx={{
+        flexWrap: "wrap"
+      }}
+    >
       {row.ports.map((port) => {
         const key = `${row.containerId}-${port.port}-${port.protocol}`;
         return (
@@ -399,7 +406,10 @@ function InspectGroupPanel({
             {group.rows.map((row) => {
               const stateColor = stateToColorToken(row.state);
               return (
-                <TableRow key={`${group.labName}-${row.containerId || row.containerName}-${row.network}`} hover>
+                <TableRow
+                  key={`${group.labName}-${row.containerId || row.containerName}-${row.network}`}
+                  hover
+                >
                   <TableCell sx={{ whiteSpace: "nowrap" }}>{row.containerName || "-"}</TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>{row.kind || "-"}</TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>{row.type || "-"}</TableCell>
@@ -548,7 +558,14 @@ export function InspectApp(): React.JSX.Element {
             Containerlab Inspect
           </Typography>
 
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 260 }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "center",
+              minWidth: 260
+            }}
+          >
             <TextField
               fullWidth
               value={searchText}

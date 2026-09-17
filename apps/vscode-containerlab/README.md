@@ -189,7 +189,7 @@ Labs deployed with containerlab versions older than `0.64.0` may require a redep
 
 ## Development and Tests
 
-From the `containerlab-app` repository root, use Node.js 24.18.0 and the pinned pnpm version:
+From the `containerlab-app` repository root, use Node.js 24.21.0 and the pinned pnpm version:
 
 ```bash
 corepack enable
@@ -201,6 +201,12 @@ pnpm vsix
 ```
 
 The extension consumes the local `@containerlab/clab-ui` workspace. Rebuild with `pnpm ui` after editing shared UI sources. Open the monorepo in VS Code and run **Debug Containerlab Extension** for an Extension Development Host. Linux E2E tests need a display or `xvfb-run -a`.
+
+The extension keeps its VS Code 1.105.1 minimum and matching API types for compatibility
+with editors based on older VS Code releases. E2E tests use that minimum by default;
+set `VSCODE_TEST_VERSION` to test another release. Unit tests are checked with TypeScript 7
+using the extension's bundler resolution, then emitted separately as CommonJS for Mocha.
+The emit step uses `--noCheck` only after the full typecheck succeeds.
 
 Publish a GitHub Release tagged `vscode-v<version>` to produce the VSIX and publish it to Marketplace and Open VSX when their secrets are configured. See the [release guide](https://github.com/srl-labs/containerlab-app/blob/main/RELEASING.md).
 

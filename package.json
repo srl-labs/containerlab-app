@@ -1,12 +1,12 @@
 {
   "name": "containerlab-app",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": true,
   "description": "Monorepo for Containerlab web, desktop, VS Code extension, and shared UI.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": "24.18.0"
+    "node": "24.21.0"
   },
   "scripts": {
     "ui": "pnpm --filter @containerlab/clab-ui run build",
@@ -54,5 +54,5 @@
     "vite": "catalog:",
     "yaml": "catalog:"
   },
-  "packageManager": "pnpm@11.17.0"
+  "packageManager": "pnpm@12.4.2"
 }

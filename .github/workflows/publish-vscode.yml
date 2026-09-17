@@ -22,17 +22,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.release.tag_name }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
@@ -100,7 +100,7 @@ jobs:
         run: pnpm exec ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT" --skip-duplicate
 
       - name: Upload VSIX to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             apps/vscode-containerlab/vscode-containerlab-${{ steps.version.outputs.package }}.vsix

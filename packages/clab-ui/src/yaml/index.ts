@@ -147,7 +147,7 @@ export function buildMonacoYamlOptions(schema?: object): MonacoYamlOptions {
   return {
     completion: true,
     enableSchemaRequest: false,
-    format: true,
+    format: { enable: true },
     hover: true,
     validate: true,
     yamlVersion: "1.2",

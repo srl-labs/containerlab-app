@@ -14,7 +14,8 @@ const cssOutput = path.join(distDir, "styles/global.css");
 const monacoAssetsSource = path.join(__dirname, "src/monaco/assets.json");
 const monacoAssetsOutput = path.join(distDir, "monaco-assets.json");
 const packageJsonPath = path.join(__dirname, "package.json");
-const tscBin = require.resolve("typescript/bin/tsc");
+const typescriptPackagePath = require.resolve("typescript/package.json");
+const tscBin = path.resolve(path.dirname(typescriptPackagePath), require(typescriptPackagePath).bin.tsc);
 const copiedCssAssets = [
   {
     from: path.join(__dirname, "src/components/canvas/nodes/FreeTextNode.css"),

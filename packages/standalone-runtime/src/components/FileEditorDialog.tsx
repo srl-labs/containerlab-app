@@ -185,7 +185,7 @@ export function FileEditorDialog() {
             {fileEditor.title}
             {dirty ? " *" : ""}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{ color: "text.secondary" }}>
             Lab workspace/{fileEditor.path}
           </Typography>
         </Stack>

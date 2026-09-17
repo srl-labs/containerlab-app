@@ -1,9 +1,9 @@
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -50,17 +50,10 @@ import Typography from "@mui/material/Typography";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
-import {
-  ClabUiRuntimeProvider,
-  useClabUiHost,
-  type ClabUiRuntime
-} from "../host";
+import { ClabUiRuntimeProvider, useClabUiHost, type ClabUiRuntime } from "../host";
 import { useSchema } from "../hooks/editor/useSchema";
 import { MuiThemeProvider } from "../theme/index";
-import {
-  buildKindImageCatalog,
-  pullableImagesForEntry
-} from "./catalog";
+import { buildKindImageCatalog, pullableImagesForEntry } from "./catalog";
 import { isPlaceholderImageReference } from "./kindGuidance";
 import type {
   ContainerImageSummary,
@@ -137,7 +130,10 @@ function textFromHtmlMarkup(value: string): string {
     }
   }
 
-  return value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizeNotificationMessage(value: unknown, fallback: string): string {
@@ -226,10 +222,7 @@ function chipToneSx(tone: ChipTone, extra: Record<string, unknown> = {}): Record
   const color = chipToneColor(tone);
   return {
     color: "text.primary",
-    bgcolor:
-      tone === "default"
-        ? "transparent"
-        : `color-mix(in srgb, ${color} 16%, transparent)`,
+    bgcolor: tone === "default" ? "transparent" : `color-mix(in srgb, ${color} 16%, transparent)`,
     borderColor:
       tone === "default"
         ? "divider"
@@ -379,10 +372,11 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
           </Typography>
           <Typography
             variant="caption"
-            color="text.secondary"
             sx={{
-              fontFamily:
-                "var(--clab-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+              color: "text.secondary",
+
+              fontFamily: "var(--clab-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+
               wordBreak: "break-all"
             }}
           >
@@ -399,7 +393,12 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
             />
           </Box>
           {entry.types.length > 0 ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary"
+              }}
+            >
               {entry.types.length} type{entry.types.length === 1 ? "" : "s"}
             </Typography>
           ) : null}
@@ -408,7 +407,15 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
 
       <TableCell sx={{ minWidth: 380 }}>
         <Stack spacing={1}>
-          <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack
+            direction="row"
+            spacing={0.75}
+            useFlexGap
+            sx={{
+              alignItems: "center",
+              flexWrap: "wrap"
+            }}
+          >
             <Chip
               size="small"
               color="default"
@@ -455,15 +462,32 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
               </Link>
             ) : null}
           </Stack>
-          <Typography variant="body2" color="text.primary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.primary"
+            }}
+          >
             {entry.guidance.guidance}
           </Typography>
           {entry.guidance.recommendedImages.length === 0 ? null : (
             <Stack spacing={0.5}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 600
+                }}
+              >
                 Recommended
               </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={0.75}>
+              <Stack
+                direction="row"
+                sx={{
+                  flexWrap: "wrap",
+                  gap: 0.75
+                }}
+              >
                 {entry.guidance.recommendedImages.map((image) => {
                   const placeholder = isPlaceholderImageReference(image);
                   return (
@@ -486,10 +510,22 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
           )}
           {entry.references.length > 0 ? (
             <Stack spacing={0.5}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                  fontWeight: 600
+                }}
+              >
                 Used in topology
               </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={0.75}>
+              <Stack
+                direction="row"
+                sx={{
+                  flexWrap: "wrap",
+                  gap: 0.75
+                }}
+              >
                 {entry.references.slice(0, 6).map((reference) => (
                   <ImageRefChip
                     key={`${entry.kind}:ref:${reference.label}:${reference.image}`}
@@ -506,11 +542,7 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
                   />
                 ))}
                 {entry.references.length > 6 ? (
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={`+${entry.references.length - 6}`}
-                  />
+                  <Chip size="small" variant="outlined" label={`+${entry.references.length - 6}`} />
                 ) : null}
               </Stack>
             </Stack>
@@ -520,11 +552,22 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
 
       <TableCell sx={{ minWidth: 280 }}>
         {entry.localImages.length === 0 ? (
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             None on this endpoint
           </Typography>
         ) : (
-          <Stack direction="row" flexWrap="wrap" gap={0.75}>
+          <Stack
+            direction="row"
+            sx={{
+              flexWrap: "wrap",
+              gap: 0.75
+            }}
+          >
             {visibleLocalImages.map((image) => {
               const name = imageDisplayName(image);
               return (
@@ -548,7 +591,13 @@ function KindRow({ entry, actionBusy, onPull, onRemove }: KindRowProps): React.J
       </TableCell>
 
       <TableCell align="right" sx={{ width: 132, whiteSpace: "nowrap" }}>
-        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+        <Stack
+          direction="row"
+          spacing={0.5}
+          sx={{
+            justifyContent: "flex-end"
+          }}
+        >
           <Tooltip title={pullTooltip} arrow>
             <span>
               <IconButton
@@ -586,7 +635,15 @@ interface SummaryStatsProps {
 
 function SummaryStats({ total, local, notLocal }: SummaryStatsProps): React.JSX.Element {
   return (
-    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+    <Stack
+      direction="row"
+      spacing={1}
+      useFlexGap
+      sx={{
+        alignItems: "center",
+        flexWrap: "wrap"
+      }}
+    >
       <Chip size="small" variant="outlined" label={`${total} kinds`} sx={{ fontWeight: 500 }} />
       <Chip
         size="small"
@@ -718,7 +775,14 @@ export function ContainerlabImageManager({
     } finally {
       setLoading(false);
     }
-  }, [endpointId, formatError, imageHost, schema.kinds, schema.srosComponentTypes, schema.typesByKind]);
+  }, [
+    endpointId,
+    formatError,
+    imageHost,
+    schema.kinds,
+    schema.srosComponentTypes,
+    schema.typesByKind
+  ]);
 
   React.useEffect(() => {
     if (schema.isLoaded) {
@@ -823,7 +887,13 @@ export function ContainerlabImageManager({
       <TableRow>
         <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
           <CircularProgress size={20} />
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              ml: 1
+            }}
+          >
             Loading images…
           </Typography>
         </TableCell>
@@ -833,7 +903,12 @@ export function ContainerlabImageManager({
     tableRows = (
       <TableRow>
         <TableCell colSpan={4} align="center" sx={{ py: 6 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             No image entries match the current filters.
           </Typography>
         </TableCell>
@@ -878,18 +953,37 @@ export function ContainerlabImageManager({
           disableGutters
           sx={{ px: 2, gap: 1.25, minHeight: 56, flexWrap: "wrap" }}
         >
-          <Stack direction="row" spacing={1.25} alignItems="center" sx={{ minWidth: 0, flex: 1 }}>
+          <Stack
+            direction="row"
+            spacing={1.25}
+            sx={{
+              alignItems: "center",
+              minWidth: 0,
+              flex: 1
+            }}
+          >
             <Inventory2OutlinedIcon color="primary" />
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="subtitle1" sx={{ lineHeight: 1.2, fontWeight: 600 }}>
                 Image Manager
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Pull, inspect and remove container images for containerlab kinds
               </Typography>
             </Box>
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: "center"
+            }}
+          >
             {endpointOptions.length > 1 ? (
               <FormControl size="small" sx={{ minWidth: 200 }}>
                 <InputLabel id="image-manager-endpoint-label">Endpoint</InputLabel>
@@ -976,7 +1070,13 @@ export function ContainerlabImageManager({
           {CATALOG_FILTER_OPTIONS.map(({ value, label }) => (
             <ToggleButton key={value} value={value}>
               {label}
-              <Typography component="span" variant="caption" color="text.secondary">
+              <Typography
+                component="span"
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 {filterCounts[value]}
               </Typography>
             </ToggleButton>
@@ -1056,19 +1156,38 @@ export function ContainerlabImageManager({
             }}
           >
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ flex: 1 }}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: "center",
+                  flex: 1
+                }}
+              >
                 <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                   Other local images
                 </Typography>
                 <Chip size="small" variant="outlined" label={otherLocalImages.length} />
-                <Typography variant="caption" color="text.secondary">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
                   Not associated with any known kind
                 </Typography>
               </Stack>
             </AccordionSummary>
             <AccordionDetails sx={{ pt: 0 }}>
               {otherLocalImages.length > OTHER_LOCAL_IMAGE_DISPLAY_LIMIT ? (
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    display: "block",
+                    mb: 0.5
+                  }}
+                >
                   Showing the first {OTHER_LOCAL_IMAGE_DISPLAY_LIMIT} of {otherLocalImages.length}.
                 </Typography>
               ) : null}
@@ -1083,57 +1202,59 @@ export function ContainerlabImageManager({
                   overflow: "auto"
                 }}
               >
-                {otherLocalImages.slice(0, OTHER_LOCAL_IMAGE_DISPLAY_LIMIT).map((image, index, arr) => {
-                  const name = imageDisplayName(image);
-                  return (
-                    <React.Fragment key={image.id}>
-                      <ListItem
-                        secondaryAction={
-                          <Stack direction="row" spacing={0.25}>
-                            <Tooltip title="Copy reference" arrow>
-                              <IconButton
-                                size="small"
-                                onClick={() => copyToClipboard(name)}
-                              >
-                                <ContentCopyIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Remove image" arrow>
-                              <span>
-                                <IconButton
-                                  size="small"
-                                  edge="end"
-                                  disabled={actionBusy}
-                                  onClick={() => void handleRemove(name)}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" />
+                {otherLocalImages
+                  .slice(0, OTHER_LOCAL_IMAGE_DISPLAY_LIMIT)
+                  .map((image, index, arr) => {
+                    const name = imageDisplayName(image);
+                    return (
+                      <React.Fragment key={image.id}>
+                        <ListItem
+                          secondaryAction={
+                            <Stack direction="row" spacing={0.25}>
+                              <Tooltip title="Copy reference" arrow>
+                                <IconButton size="small" onClick={() => copyToClipboard(name)}>
+                                  <ContentCopyIcon fontSize="small" />
                                 </IconButton>
-                              </span>
-                            </Tooltip>
-                          </Stack>
-                        }
-                      >
-                        <ListItemText
-                          primary={name}
-                          secondary={imageSecondaryText(image) || image.id}
-                          primaryTypographyProps={{
-                            noWrap: true,
-                            variant: "body2",
-                            sx: {
-                              fontFamily:
-                                "var(--clab-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"
-                            }
-                          }}
-                          secondaryTypographyProps={{
-                            noWrap: true,
-                            variant: "caption"
-                          }}
-                        />
-                      </ListItem>
-                      {index < arr.length - 1 ? <Divider component="li" /> : null}
-                    </React.Fragment>
-                  );
-                })}
+                              </Tooltip>
+                              <Tooltip title="Remove image" arrow>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    edge="end"
+                                    disabled={actionBusy}
+                                    onClick={() => void handleRemove(name)}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Stack>
+                          }
+                        >
+                          <ListItemText
+                            primary={name}
+                            secondary={imageSecondaryText(image) || image.id}
+                            slotProps={{
+                              primary: {
+                                noWrap: true,
+                                variant: "body2",
+                                sx: {
+                                  fontFamily:
+                                    "var(--clab-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)"
+                                }
+                              },
+
+                              secondary: {
+                                noWrap: true,
+                                variant: "caption"
+                              }
+                            }}
+                          />
+                        </ListItem>
+                        {index < arr.length - 1 ? <Divider component="li" /> : null}
+                      </React.Fragment>
+                    );
+                  })}
               </List>
             </AccordionDetails>
           </Accordion>
@@ -1155,12 +1276,14 @@ export function ContainerlabImageManagerDialog({
       onClose={onClose}
       maxWidth="xl"
       fullWidth
-      PaperProps={{
-        sx: {
-          height: "min(86vh, 880px)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden"
+      slotProps={{
+        paper: {
+          sx: {
+            height: "min(86vh, 880px)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }
         }
       }}
     >

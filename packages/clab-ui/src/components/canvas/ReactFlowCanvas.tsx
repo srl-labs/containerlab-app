@@ -422,9 +422,9 @@ function useRenderConfig(
 
 /** Hook for node drag handler wrappers with helper line support */
 function useDragHandlers(
-  onNodeDrag: (event: React.MouseEvent, node: Node) => void,
-  wrappedOnNodeDragStart: (event: React.MouseEvent, node: Node) => void,
-  wrappedOnNodeDragStop: (event: React.MouseEvent, node: Node) => void,
+  onNodeDrag: (event: MouseEvent | TouchEvent, node: Node) => void,
+  wrappedOnNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void,
+  wrappedOnNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void,
   helperLineHandlers?: {
     updateHelperLines: (node: Node, allNodes: Node[]) => void;
     clearHelperLines: () => void;
@@ -433,14 +433,14 @@ function useDragHandlers(
   }
 ) {
   const handleNodeDragStart = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (event: MouseEvent | TouchEvent, node: Node) => {
       wrappedOnNodeDragStart(event, node);
     },
     [wrappedOnNodeDragStart]
   );
 
   const handleNodeDrag = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (event: MouseEvent | TouchEvent, node: Node) => {
       onNodeDrag(event, node);
       // Update helper lines during drag (skip in geo layout).
       if (helperLineHandlers && !helperLineHandlers.isGeoLayout) {
@@ -451,7 +451,7 @@ function useDragHandlers(
   );
 
   const handleNodeDragStop = useCallback(
-    (event: React.MouseEvent, node: Node) => {
+    (event: MouseEvent | TouchEvent, node: Node) => {
       wrappedOnNodeDragStop(event, node);
       // Clear helper lines when drag ends
       if (helperLineHandlers) {

@@ -63,7 +63,11 @@ import {
   resolveTerminalWheelZoomDelta
 } from "../runtimeTerminalZoomShortcuts";
 
-function scoreNodeMatch(labName: string, container: ContainerState, requestedNodeName: string): number {
+function scoreNodeMatch(
+  labName: string,
+  container: ContainerState,
+  requestedNodeName: string
+): number {
   const normalizedRequested = requestedNodeName.trim().toLowerCase();
   if (!normalizedRequested) {
     return 0;
@@ -239,7 +243,11 @@ function resolveTerminalTheme(element: HTMLElement | null) {
   return {
     background,
     foreground,
-    cursor: readCssColor(rootStyles, "--clab-ui-focus-border", darkBackground ? "#93c5fd" : "#2563eb"),
+    cursor: readCssColor(
+      rootStyles,
+      "--clab-ui-focus-border",
+      darkBackground ? "#93c5fd" : "#2563eb"
+    ),
     selectionBackground: readCssColor(
       rootStyles,
       "--clab-ui-selection-background",
@@ -274,7 +282,9 @@ function hasTerminalDomFocus(root: HTMLDivElement | null): boolean {
   return activeElement instanceof Node && root.contains(activeElement);
 }
 
-function activePaneForGroup(group: RuntimeTerminalGroup | undefined): RuntimeTerminalPane | undefined {
+function activePaneForGroup(
+  group: RuntimeTerminalGroup | undefined
+): RuntimeTerminalPane | undefined {
   return group?.panes.find((pane) => pane.id === group.activePaneId) ?? group?.panes[0];
 }
 
@@ -389,7 +399,9 @@ export function RuntimeTerminalPaneView({
     requestAnimationFrame(() => fitAddon.fit());
     if (isOutputTerminal) {
       const output = (paneState.initialOutput ?? "").trim();
-      term.write(output.length > 0 ? `${normalizeTerminalOutput(output)}\r\n` : "No output returned.\r\n");
+      term.write(
+        output.length > 0 ? `${normalizeTerminalOutput(output)}\r\n` : "No output returned.\r\n"
+      );
       runtimeUiActions.setTerminalReady(paneState.id);
     } else {
       term.write(`Opening ${paneState.protocol} terminal for ${paneState.nodeName}...\r\n`);
@@ -551,7 +563,10 @@ export function RuntimeTerminalPaneView({
     }
 
     sessionClosedRef.current = false;
-    const socket = connectTerminalSessionWebSocket(paneState.terminalSessionId, paneState.endpointId);
+    const socket = connectTerminalSessionWebSocket(
+      paneState.terminalSessionId,
+      paneState.endpointId
+    );
     websocketRef.current = socket;
 
     socket.onmessage = (event) => {
@@ -576,7 +591,11 @@ export function RuntimeTerminalPaneView({
     socket.onclose = () => {
       websocketRef.current = null;
       const latestPane = latestPaneRef.current;
-      if (!sessionClosedRef.current && latestPane.state !== "exited" && latestPane.state !== "error") {
+      if (
+        !sessionClosedRef.current &&
+        latestPane.state !== "exited" &&
+        latestPane.state !== "error"
+      ) {
         runtimeUiActions.setTerminalExited(
           latestPane.id,
           latestPane.exitCode,
@@ -624,7 +643,10 @@ export function RuntimeTerminalPaneView({
       }
       const content = extractTerminalText(term, scope);
       if (content.length === 0) {
-        runtimeUiActions.notify(`Terminal ${scope === "screen" ? "screen" : "log"} is empty.`, "warning");
+        runtimeUiActions.notify(
+          `Terminal ${scope === "screen" ? "screen" : "log"} is empty.`,
+          "warning"
+        );
         return;
       }
       const filename = createTerminalExportFileName({
@@ -831,8 +853,19 @@ export function RuntimeTerminalPaneView({
             <Typography variant="overline" sx={{ lineHeight: 1.1 }}>
               Font
             </Typography>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.25 }}>
-              <Typography variant="caption" sx={{ fontWeight: 600 }} data-testid="runtime-terminal-font-value">
+            <Stack
+              direction="row"
+              sx={{
+                alignItems: "center",
+                justifyContent: "space-between",
+                mt: 0.25
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{ fontWeight: 600 }}
+                data-testid="runtime-terminal-font-value"
+              >
                 {fontSizePreview} px
               </Typography>
               <Button
@@ -859,7 +892,15 @@ export function RuntimeTerminalPaneView({
               data-testid="runtime-terminal-font-slider"
               sx={{ mt: 0.5 }}
             />
-            <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.5 }}>
+            <Stack
+              direction="row"
+              spacing={0.75}
+              useFlexGap
+              sx={{
+                flexWrap: "wrap",
+                mt: 0.5
+              }}
+            >
               {TERMINAL_FONT_SIZE_PRESETS.map((preset) => (
                 <Chip
                   key={preset}
@@ -873,9 +914,16 @@ export function RuntimeTerminalPaneView({
                 />
               ))}
             </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.75 }}>
-              Applies to all open/new terminals. Use Alt+Up, Alt+Down, Alt+0 for reliable zoom/reset.
-              Ctrl/Cmd shortcuts are best effort in browsers.
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                display: "block",
+                mt: 0.75
+              }}
+            >
+              Applies to all open/new terminals. Use Alt+Up, Alt+Down, Alt+0 for reliable
+              zoom/reset. Ctrl/Cmd shortcuts are best effort in browsers.
             </Typography>
           </Box>
           <Divider />
@@ -1001,7 +1049,8 @@ function TerminalShell({
   } | null>(null);
   const activeTerminalGroupId = useRuntimeUiStore((state) => state.activeTerminalGroupId);
   const [actionsAnchorElement, setActionsAnchorElement] = useState<HTMLElement | null>(null);
-  const activeGroup = terminals.find((group) => group.id === activeTerminalGroupId) ?? terminals.at(-1);
+  const activeGroup =
+    terminals.find((group) => group.id === activeTerminalGroupId) ?? terminals.at(-1);
   const activePane = activePaneForGroup(activeGroup);
   const actionsPopoverOpen = actionsAnchorElement !== null;
 
@@ -1149,7 +1198,13 @@ function TerminalShell({
           userSelect: "none"
         }}
       >
-        <Stack direction="row" alignItems="center" spacing={0.75}>
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{
+            alignItems: "center"
+          }}
+        >
           <Stack sx={{ flex: 1, minWidth: 0 }}>
             <Typography
               variant="caption"
@@ -1207,7 +1262,11 @@ function TerminalShell({
             aria-label={shell.minimized ? "Restore terminal shell" : "Minimize terminal shell"}
             data-testid="runtime-terminal-minimize-shell"
           >
-            {shell.minimized ? <RestoreIcon fontSize="inherit" /> : <MinimizeIcon fontSize="inherit" />}
+            {shell.minimized ? (
+              <RestoreIcon fontSize="inherit" />
+            ) : (
+              <MinimizeIcon fontSize="inherit" />
+            )}
           </IconButton>
           <Tooltip title="Close Terminal Window">
             <IconButton
@@ -1249,7 +1308,9 @@ function TerminalShell({
                   <MemoTerminalPaneView
                     key={pane.id}
                     actionsAnchorElement={actionsAnchorElement}
-                    actionsOpen={actionsPopoverOpen && groupActive && pane.id === group.activePaneId}
+                    actionsOpen={
+                      actionsPopoverOpen && groupActive && pane.id === group.activePaneId
+                    }
                     active={groupActive && pane.id === group.activePaneId}
                     hidden={!groupActive || shell.minimized}
                     onCloseActions={handleCloseActions}

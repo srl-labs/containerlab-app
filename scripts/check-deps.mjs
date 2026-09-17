@@ -58,6 +58,12 @@ const desktopPackage = readJson(path.join(projectRoot, "apps/desktop/package.jso
 if (desktopPackage.build.electronVersion !== resolveCatalog("electron", desktopPackage.devDependencies.electron)) {
   failures.push("Desktop electronVersion must match the catalog pin");
 }
+const extensionPackage = readJson(path.join(projectRoot, "apps/vscode-containerlab/package.json"));
+const vscodeApiVersion = extensionPackage.engines.vscode.match(/^\^(\d+\.\d+)\.\d+$/)?.[1];
+const vscodeTypesVersion = resolveCatalog("@types/vscode", extensionPackage.devDependencies["@types/vscode"]);
+if (!vscodeApiVersion || !vscodeTypesVersion.startsWith(`${vscodeApiVersion}.`)) {
+  failures.push("VS Code API types must match the extension's minimum VS Code version");
+}
 
 if (failures.length > 0) {
   console.error("Dependency policy check failed:");

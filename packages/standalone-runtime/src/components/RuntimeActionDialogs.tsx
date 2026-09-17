@@ -191,7 +191,11 @@ function inspectStateColor(state: string): "default" | "error" | "success" | "wa
   return "default";
 }
 
-function scoreNodeMatch(labName: string, container: ContainerState, requestedNodeName: string): number {
+function scoreNodeMatch(
+  labName: string,
+  container: ContainerState,
+  requestedNodeName: string
+): number {
   const normalizedRequested = requestedNodeName.trim().toLowerCase();
   if (!normalizedRequested) {
     return 0;
@@ -264,7 +268,8 @@ function sortedInterfaceRows(container: ContainerState | undefined): NetemInterf
     .filter((iface) => iface.name !== "lo")
     .map((iface) => ({
       name: iface.name,
-      label: iface.alias && iface.alias !== iface.name ? `${iface.alias} (${iface.name})` : iface.name
+      label:
+        iface.alias && iface.alias !== iface.name ? `${iface.alias} (${iface.name})` : iface.name
     }))
     .sort((left, right) => left.label.localeCompare(right.label));
 }
@@ -338,7 +343,12 @@ function InspectDialogView(props: {
   setInspectFilter: (value: string) => void;
 }) {
   return (
-    <Dialog open={props.inspectRequest !== null} onClose={props.closeInspect} maxWidth="lg" fullWidth>
+    <Dialog
+      open={props.inspectRequest !== null}
+      onClose={props.closeInspect}
+      maxWidth="lg"
+      fullWidth
+    >
       <DialogTitle>{props.inspectRequest?.title ?? "Inspect"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
@@ -351,7 +361,9 @@ function InspectDialogView(props: {
           />
           {props.inspectLoading ? <Typography>Loading inspect data...</Typography> : null}
           {props.inspectError ? <Alert severity="error">{props.inspectError}</Alert> : null}
-          {!props.inspectLoading && !props.inspectError && props.filteredInspectGroups.length === 0 ? (
+          {!props.inspectLoading &&
+          !props.inspectError &&
+          props.filteredInspectGroups.length === 0 ? (
             <Alert severity="info">No matching running lab data.</Alert>
           ) : null}
           {props.filteredInspectGroups.map((group) => (
@@ -454,7 +466,11 @@ function LogsDialogView(props: {
             >
               Refresh
             </Button>
-            <Button variant="outlined" onClick={props.exportLogs} disabled={!props.filteredLogsContent}>
+            <Button
+              variant="outlined"
+              onClick={props.exportLogs}
+              disabled={!props.filteredLogsContent}
+            >
               Export
             </Button>
             <FormControlLabel
@@ -492,7 +508,8 @@ function LogsDialogView(props: {
                 wordBreak: "break-word"
               }}
             >
-              {props.filteredLogsContent || (props.logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
+              {props.filteredLogsContent ||
+                (props.logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
             </Typography>
           </Paper>
         </Stack>
@@ -598,7 +615,11 @@ function NetemDialogView(props: {
                   return (
                     <TableRow key={row.name}>
                       <TableCell>{row.label}</TableCell>
-                      {(["delay", "jitter", "loss", "rate", "corruption"] as Array<keyof NetemFields>).map((fieldKey) => (
+                      {(
+                        ["delay", "jitter", "loss", "rate", "corruption"] as Array<
+                          keyof NetemFields
+                        >
+                      ).map((fieldKey) => (
                         <TableCell key={`${row.name}:${fieldKey}`}>
                           <TextField
                             size="small"
@@ -617,7 +638,13 @@ function NetemDialogView(props: {
                         </TableCell>
                       ))}
                       <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          sx={{
+                            justifyContent: "flex-end"
+                          }}
+                        >
                           <Button
                             size="small"
                             variant="outlined"
@@ -663,7 +690,13 @@ function renderEndpointOptionMenuItem(option: EndpointSelectionOption) {
           {option.label}
         </Typography>
         {option.description ? (
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {option.description}
           </Typography>
         ) : null}
@@ -701,9 +734,7 @@ function CloneRepoEndpointField(props: {
 }) {
   if (props.endpointOptions.length <= 1) {
     return (
-      <Typography variant="body2">
-        Endpoint: {props.endpointOptions[0]?.label ?? ""}
-      </Typography>
+      <Typography variant="body2">Endpoint: {props.endpointOptions[0]?.label ?? ""}</Typography>
     );
   }
   return (
@@ -774,11 +805,21 @@ function CloneRepoDialogView(props: {
 }) {
   const request = props.cloneRepoDialog?.request;
   return (
-    <Dialog open={props.cloneRepoDialog !== null} onClose={() => props.closeCloneRepoDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open={props.cloneRepoDialog !== null}
+      onClose={() => props.closeCloneRepoDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request?.title ?? "Clone Repository"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {request?.message}
           </Typography>
           <CloneRepoEndpointField
@@ -806,7 +847,9 @@ function CloneRepoDialogView(props: {
               labelId="clone-repo-target-label"
               label="Action"
               value={props.cloneRepoTarget}
-              onChange={(event) => props.setCloneRepoTarget(event.target.value as CloneRepoDialogTarget)}
+              onChange={(event) =>
+                props.setCloneRepoTarget(event.target.value as CloneRepoDialogTarget)
+              }
             >
               <MenuItem value="deploy">Deploy now</MenuItem>
               <MenuItem value="undeployed">Clone to undeployed labs</MenuItem>
@@ -837,7 +880,11 @@ function CloneRepoDialogView(props: {
       </DialogContent>
       <DialogActions>
         <Button onClick={() => props.closeCloneRepoDialog(undefined)}>Cancel</Button>
-        <Button variant="contained" onClick={props.submitCloneRepoDialog} disabled={!props.cloneRepoCanSubmit}>
+        <Button
+          variant="contained"
+          onClick={props.submitCloneRepoDialog}
+          disabled={!props.cloneRepoCanSubmit}
+        >
           {request?.confirmLabel ?? "Deploy"}
         </Button>
       </DialogActions>
@@ -858,11 +905,21 @@ function CreateTopologyDialogView(props: {
 }) {
   const request = props.createTopologyDialog?.request;
   return (
-    <Dialog open={props.createTopologyDialog !== null} onClose={() => props.closeCreateTopologyDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open={props.createTopologyDialog !== null}
+      onClose={() => props.closeCreateTopologyDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {request?.message}
           </Typography>
           <CloneRepoEndpointField
@@ -891,7 +948,9 @@ function CreateTopologyDialogView(props: {
         <Button
           variant="contained"
           onClick={props.submitCreateTopologyDialog}
-          disabled={!props.createTopologyEndpointIsValid || !props.trimmedCreateTopologyFileNameInput}
+          disabled={
+            !props.createTopologyEndpointIsValid || !props.trimmedCreateTopologyFileNameInput
+          }
         >
           {request?.confirmLabel ?? "Create"}
         </Button>
@@ -910,11 +969,21 @@ function TopologyFileNameDialogView(props: {
 }) {
   const request = props.topologyFileNameDialog?.request;
   return (
-    <Dialog open={props.topologyFileNameDialog !== null} onClose={() => props.closeTopologyFileNameDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open={props.topologyFileNameDialog !== null}
+      onClose={() => props.closeTopologyFileNameDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {request?.message}
           </Typography>
           <TextField
@@ -957,11 +1026,21 @@ function EndpointSelectionDialogView(props: {
 }) {
   const request = props.endpointSelectionDialog?.request;
   return (
-    <Dialog open={props.endpointSelectionDialog !== null} onClose={() => props.closeEndpointSelectionDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open={props.endpointSelectionDialog !== null}
+      onClose={() => props.closeEndpointSelectionDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request?.title ?? "Select Endpoint"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {request?.message}
           </Typography>
           <EndpointOptionSelect
@@ -975,7 +1054,11 @@ function EndpointSelectionDialogView(props: {
       </DialogContent>
       <DialogActions>
         <Button onClick={() => props.closeEndpointSelectionDialog(undefined)}>Cancel</Button>
-        <Button variant="contained" onClick={props.submitEndpointSelectionDialog} disabled={!props.endpointSelectionIsValid}>
+        <Button
+          variant="contained"
+          onClick={props.submitEndpointSelectionDialog}
+          disabled={!props.endpointSelectionIsValid}
+        >
           {request?.confirmLabel ?? "Continue"}
         </Button>
       </DialogActions>
@@ -1043,12 +1126,23 @@ function RuntimeTextInputDialogView(props: {
   const request = props.runtimeTextInputDialog.request;
 
   return (
-    <Dialog open onClose={() => props.closeRuntimeTextInputDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open
+      onClose={() => props.closeRuntimeTextInputDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request.title}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {request.message ? (
-            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line" }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                whiteSpace: "pre-line"
+              }}
+            >
               {request.message}
             </Typography>
           ) : null}
@@ -1100,11 +1194,22 @@ function RuntimeOptionSelectionDialogView(props: {
   const request = props.runtimeOptionSelectionDialog.request;
 
   return (
-    <Dialog open onClose={() => props.closeRuntimeOptionSelectionDialog(undefined)} maxWidth="sm" fullWidth>
+    <Dialog
+      open
+      onClose={() => props.closeRuntimeOptionSelectionDialog(undefined)}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>{request.title}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-line" }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              whiteSpace: "pre-line"
+            }}
+          >
             {request.message}
           </Typography>
           <EndpointOptionSelect
@@ -1210,15 +1315,22 @@ export function RuntimeActionDialogs() {
   const [netemLoading, setNetemLoading] = useState(false);
   const [netemError, setNetemError] = useState<string | null>(null);
   const [netemContainerName, setNetemContainerName] = useState("");
-  const [netemFieldsByInterface, setNetemFieldsByInterface] = useState<Record<string, NetemFields>>({});
+  const [netemFieldsByInterface, setNetemFieldsByInterface] = useState<Record<string, NetemFields>>(
+    {}
+  );
   const [netemPendingInterface, setNetemPendingInterface] = useState<string | null>(null);
-  const [topologyFileNameDialog, setTopologyFileNameDialog] = useState<TopologyFileNameDialogState | null>(null);
+  const [topologyFileNameDialog, setTopologyFileNameDialog] =
+    useState<TopologyFileNameDialogState | null>(null);
   const [topologyFileNameInput, setTopologyFileNameInput] = useState(DEFAULT_TOPOLOGY_FILE_NAME);
-  const [endpointSelectionDialog, setEndpointSelectionDialog] = useState<EndpointSelectionDialogState | null>(null);
+  const [endpointSelectionDialog, setEndpointSelectionDialog] =
+    useState<EndpointSelectionDialogState | null>(null);
   const [endpointSelectionValue, setEndpointSelectionValue] = useState("");
-  const [createTopologyDialog, setCreateTopologyDialog] = useState<CreateTopologyDialogState | null>(null);
+  const [createTopologyDialog, setCreateTopologyDialog] =
+    useState<CreateTopologyDialogState | null>(null);
   const [createTopologyEndpointValue, setCreateTopologyEndpointValue] = useState("");
-  const [createTopologyFileNameInput, setCreateTopologyFileNameInput] = useState(DEFAULT_TOPOLOGY_FILE_NAME);
+  const [createTopologyFileNameInput, setCreateTopologyFileNameInput] = useState(
+    DEFAULT_TOPOLOGY_FILE_NAME
+  );
   const [cloneRepoDialog, setCloneRepoDialog] = useState<CloneRepoDialogState | null>(null);
   const [cloneRepoEndpointValue, setCloneRepoEndpointValue] = useState("");
   const [cloneRepoMode, setCloneRepoMode] = useState<"url" | "popular">("url");
@@ -1228,8 +1340,10 @@ export function RuntimeActionDialogs() {
   );
   const [cloneRepoPopularValue, setCloneRepoPopularValue] = useState("");
   const [cloneRepoLabNameOverrideInput, setCloneRepoLabNameOverrideInput] = useState("");
-  const [runtimeConfirmDialog, setRuntimeConfirmDialog] = useState<RuntimeConfirmDialogState | null>(null);
-  const [runtimeTextInputDialog, setRuntimeTextInputDialog] = useState<RuntimeTextInputDialogState | null>(null);
+  const [runtimeConfirmDialog, setRuntimeConfirmDialog] =
+    useState<RuntimeConfirmDialogState | null>(null);
+  const [runtimeTextInputDialog, setRuntimeTextInputDialog] =
+    useState<RuntimeTextInputDialogState | null>(null);
   const [runtimeTextInputValue, setRuntimeTextInputValue] = useState("");
   const [runtimeOptionSelectionDialog, setRuntimeOptionSelectionDialog] =
     useState<RuntimeOptionSelectionDialogState | null>(null);
@@ -1291,7 +1405,9 @@ export function RuntimeActionDialogs() {
   const endpointSelectionIsValid = useMemo(
     () =>
       endpointSelectionDialog
-        ? endpointSelectionDialog.request.options.some((option) => option.value === endpointSelectionValue)
+        ? endpointSelectionDialog.request.options.some(
+            (option) => option.value === endpointSelectionValue
+          )
         : false,
     [endpointSelectionDialog, endpointSelectionValue]
   );
@@ -1307,14 +1423,18 @@ export function RuntimeActionDialogs() {
   const cloneRepoEndpointIsValid = useMemo(
     () =>
       cloneRepoDialog
-        ? cloneRepoDialog.request.endpointOptions.some((option) => option.value === cloneRepoEndpointValue)
+        ? cloneRepoDialog.request.endpointOptions.some(
+            (option) => option.value === cloneRepoEndpointValue
+          )
         : false,
     [cloneRepoDialog, cloneRepoEndpointValue]
   );
   const cloneRepoPopularIsValid = useMemo(
     () =>
       cloneRepoDialog
-        ? cloneRepoDialog.request.popularOptions.some((option) => option.value === cloneRepoPopularValue)
+        ? cloneRepoDialog.request.popularOptions.some(
+            (option) => option.value === cloneRepoPopularValue
+          )
         : false,
     [cloneRepoDialog, cloneRepoPopularValue]
   );
@@ -1362,13 +1482,14 @@ export function RuntimeActionDialogs() {
   }, [runtimeOptionSelectionDialog]);
 
   useEffect(() => {
-    const cleanup = setTopologyFileNameDialogRequester((request) =>
-      new Promise((resolve) => {
-        setTopologyFileNameDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setTopologyFileNameDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setTopologyFileNameDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1377,13 +1498,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setEndpointSelectionDialogRequester((request) =>
-      new Promise((resolve) => {
-        setEndpointSelectionDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setEndpointSelectionDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setEndpointSelectionDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1392,13 +1514,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setCreateTopologyDialogRequester((request) =>
-      new Promise((resolve) => {
-        setCreateTopologyDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setCreateTopologyDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setCreateTopologyDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1407,13 +1530,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setCloneRepoDialogRequester((request) =>
-      new Promise((resolve) => {
-        setCloneRepoDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setCloneRepoDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setCloneRepoDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1422,13 +1546,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setRuntimeConfirmDialogRequester((request) =>
-      new Promise((resolve) => {
-        setRuntimeConfirmDialog((current) => {
-          current?.resolve(false);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setRuntimeConfirmDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setRuntimeConfirmDialog((current) => {
+            current?.resolve(false);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1437,13 +1562,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setRuntimeTextInputDialogRequester((request) =>
-      new Promise((resolve) => {
-        setRuntimeTextInputDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setRuntimeTextInputDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setRuntimeTextInputDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1452,13 +1578,14 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    const cleanup = setRuntimeOptionSelectionDialogRequester((request) =>
-      new Promise((resolve) => {
-        setRuntimeOptionSelectionDialog((current) => {
-          current?.resolve(undefined);
-          return { request, resolve };
-        });
-      })
+    const cleanup = setRuntimeOptionSelectionDialogRequester(
+      (request) =>
+        new Promise((resolve) => {
+          setRuntimeOptionSelectionDialog((current) => {
+            current?.resolve(undefined);
+            return { request, resolve };
+          });
+        })
     );
     return () => {
       cleanup();
@@ -1560,37 +1687,40 @@ export function RuntimeActionDialogs() {
     };
   }, [inspectRequest]);
 
-  const fetchLogs = useCallback(async (tailValue: string, showLoading: boolean): Promise<void> => {
-    if (!logsRequest) {
-      return;
-    }
-    const requestId = ++logsFetchRequestIdRef.current;
-    if (showLoading) {
-      setLogsLoading(true);
-    }
-    setLogsError(null);
-    try {
-      const response = await fetchNodeLogs({
-        sessionId: logsRequest.sessionId,
-        topologyRef: logsRequest.topologyRef,
-        nodeName: logsRequest.nodeName,
-        tail: tailValue
-      });
-      if (requestId !== logsFetchRequestIdRef.current) {
+  const fetchLogs = useCallback(
+    async (tailValue: string, showLoading: boolean): Promise<void> => {
+      if (!logsRequest) {
         return;
       }
-      setLogsContent(response.logs);
-    } catch (error) {
-      if (requestId !== logsFetchRequestIdRef.current) {
-        return;
+      const requestId = ++logsFetchRequestIdRef.current;
+      if (showLoading) {
+        setLogsLoading(true);
       }
-      setLogsError(error instanceof Error ? error.message : String(error));
-    } finally {
-      if (showLoading && requestId === logsFetchRequestIdRef.current) {
-        setLogsLoading(false);
+      setLogsError(null);
+      try {
+        const response = await fetchNodeLogs({
+          sessionId: logsRequest.sessionId,
+          topologyRef: logsRequest.topologyRef,
+          nodeName: logsRequest.nodeName,
+          tail: tailValue
+        });
+        if (requestId !== logsFetchRequestIdRef.current) {
+          return;
+        }
+        setLogsContent(response.logs);
+      } catch (error) {
+        if (requestId !== logsFetchRequestIdRef.current) {
+          return;
+        }
+        setLogsError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (showLoading && requestId === logsFetchRequestIdRef.current) {
+          setLogsLoading(false);
+        }
       }
-    }
-  }, [logsRequest]);
+    },
+    [logsRequest]
+  );
 
   useEffect(() => {
     if (!logsRequest) {
@@ -1666,10 +1796,7 @@ export function RuntimeActionDialogs() {
 
     const load = async () => {
       try {
-        const [version, check] = await Promise.all([
-          fetchVersionInfo(),
-          fetchVersionCheck()
-        ]);
+        const [version, check] = await Promise.all([fetchVersionInfo(), fetchVersionCheck()]);
         if (cancelled) {
           return;
         }
@@ -1813,15 +1940,18 @@ export function RuntimeActionDialogs() {
     closeEndpointSelectionDialog(endpointSelectionValue);
   }, [closeEndpointSelectionDialog, endpointSelectionIsValid, endpointSelectionValue]);
 
-  const closeCreateTopologyDialog = useCallback((value: CreateTopologyDialogResult | undefined): void => {
-    setCreateTopologyDialog((current) => {
-      if (!current) {
-        return current;
-      }
-      current.resolve(value);
-      return null;
-    });
-  }, []);
+  const closeCreateTopologyDialog = useCallback(
+    (value: CreateTopologyDialogResult | undefined): void => {
+      setCreateTopologyDialog((current) => {
+        if (!current) {
+          return current;
+        }
+        current.resolve(value);
+        return null;
+      });
+    },
+    []
+  );
 
   const submitCreateTopologyDialog = useCallback((): void => {
     if (!createTopologyEndpointIsValid || !trimmedCreateTopologyFileNameInput) {
@@ -1892,11 +2022,7 @@ export function RuntimeActionDialogs() {
       return;
     }
     closeRuntimeTextInputDialog(trimmedRuntimeTextInputValue);
-  }, [
-    closeRuntimeTextInputDialog,
-    runtimeTextInputValueCanSubmit,
-    trimmedRuntimeTextInputValue
-  ]);
+  }, [closeRuntimeTextInputDialog, runtimeTextInputValueCanSubmit, trimmedRuntimeTextInputValue]);
 
   const closeRuntimeOptionSelectionDialog = useCallback((value: string | undefined): void => {
     setRuntimeOptionSelectionDialog((current) => {

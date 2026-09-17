@@ -28,7 +28,7 @@ Use the package name followed by the subpath above. Deep `src/*` and `core/*` im
 
 ## Contribute
 
-From the monorepo root, with Node.js 24.18.0:
+From the monorepo root, with Node.js 24.21.0:
 
 ```sh
 corepack enable

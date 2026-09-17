@@ -253,11 +253,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
               minHeight: 40
             }}
           >
-            <Typography
-              id="show-rate-labels-label"
-              variant="body2"
-              sx={{ minWidth: 0 }}
-            >
+            <Typography id="show-rate-labels-label" variant="body2" sx={{ minWidth: 0 }}>
               Show rate labels
             </Typography>
             <Switch
@@ -307,7 +303,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
                 disabled={isReadOnly}
                 onChange={(e) => setInterfaceLinkFilter(e.target.value)}
               />
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 {filteredInterfaceRows.length} of {interfaceRows.length} links shown
               </Typography>
               <Box
@@ -321,7 +322,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
               >
                 {filteredInterfaceRows.length === 0 ? (
                   <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color: "text.secondary"
+                      }}
+                    >
                       No links match the current filter.
                     </Typography>
                   </Paper>
@@ -331,7 +337,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
                     const targetParts = splitInterfaceParts(row.targetEndpoint);
                     return (
                       <Paper key={row.edgeId} variant="outlined" sx={{ p: 1.5 }}>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary"
+                          }}
+                        >
                           {row.source} {"<->"} {row.target}
                         </Typography>
                         <Box
@@ -418,7 +429,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           data-testid="lab-settings-grid-settings"
           sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
         >
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Stroke Width
           </Typography>
           <Slider
@@ -437,7 +453,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             valueLabelDisplay="auto"
           />
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Grid Style
           </Typography>
           <ToggleButtonGroup
@@ -478,7 +499,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             </ToggleButton>
           </ToggleButtonGroup>
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Grid Color
           </Typography>
           <ColorField
@@ -487,7 +513,12 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             onChange={(value) => onGridColorChange(value)}
           />
 
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Background Color
           </Typography>
           <ColorField

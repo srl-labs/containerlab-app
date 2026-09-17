@@ -662,7 +662,7 @@ export function useGeoMapLayout({
           setIsReady(true);
         });
 
-        map.on("error", (event: { error?: Error }) => {
+        map.on("error", (event) => {
           const message = event.error?.message ?? "Unknown map error";
           log.error(`[GeoMap] MapLibre error: ${message}`);
         });

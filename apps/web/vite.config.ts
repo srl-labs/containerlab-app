@@ -47,6 +47,9 @@ export default defineConfig(({ command }) => {
       ]
     },
     optimizeDeps: {
+      // Scan the shared UI's lazy chunks before serving pages so discovering a
+      // panel does not invalidate optimized dependencies in other open tabs.
+      entries: ["*.html", "../../packages/clab-ui/dist/**/*.js"],
       include: [
         "react",
         "react-dom",
@@ -102,7 +105,7 @@ export default defineConfig(({ command }) => {
     },
     build: {
       outDir: path.resolve(__dirname, "dist/client"),
-      rollupOptions: {
+      rolldownOptions: {
         input: {
           main: path.resolve(__dirname, "index.html"),
           terminal: path.resolve(__dirname, "terminal.html"),

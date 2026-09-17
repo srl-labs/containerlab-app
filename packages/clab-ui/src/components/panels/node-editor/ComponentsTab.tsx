@@ -305,12 +305,22 @@ const ComponentHeader: React.FC<{
       <Chip label={slot} size="small" />
       <Typography variant="body2">{isCpm ? "Control Processing Module" : "Line Card"}</Typography>
       {!isCpm && type !== undefined && type.length > 0 && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           ({type})
         </Typography>
       )}
       {!isCpm && (type === undefined || type.length === 0) && (mdaCount > 0 || xiomCount > 0) && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           ({mdaCount} MDA, {xiomCount} XIOM)
         </Typography>
       )}

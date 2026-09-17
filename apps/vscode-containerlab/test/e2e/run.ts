@@ -25,6 +25,9 @@ function writeSmokeTopology(workspacePath: string): string {
 
 async function main(): Promise<void> {
   const extensionDevelopmentPath = path.resolve(__dirname, "../..");
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(extensionDevelopmentPath, "package.json"), "utf8")
+  ) as { engines: { vscode: string } };
   const extensionTestsPath = path.resolve(__dirname, "suite");
   const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-containerlab-e2e-"));
   const topologyPath = writeSmokeTopology(workspacePath);
@@ -34,6 +37,7 @@ async function main(): Promise<void> {
   process.env.VSCODE_CONTAINERLAB_E2E_TOPOLOGY = topologyPath;
 
   await runTests({
+    version: process.env.VSCODE_TEST_VERSION ?? manifest.engines.vscode.replace(/^\^/, ""),
     extensionDevelopmentPath,
     extensionTestsPath,
     launchArgs: [

@@ -4,7 +4,7 @@ All TypeScript products now live in the `containerlab-app` pnpm workspace. The G
 
 ## Setup
 
-From the monorepo root, using Node.js 24.18.0:
+From the monorepo root, using Node.js 24.21.0:
 
 ```sh
 corepack enable

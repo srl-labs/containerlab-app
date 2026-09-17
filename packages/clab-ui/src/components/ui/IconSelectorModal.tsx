@@ -430,7 +430,13 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                     py: 2
                   }}
                 >
-                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      fontStyle: "italic"
+                    }}
+                  >
                     No custom icons uploaded yet.
                   </Typography>
                   <Button fullWidth size="small" onClick={handleUploadIcon}>

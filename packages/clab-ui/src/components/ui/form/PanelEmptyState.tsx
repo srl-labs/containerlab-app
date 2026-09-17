@@ -21,7 +21,12 @@ export const PanelEmptyState: React.FC<PanelEmptyStateProps> = ({ icon, message 
     }}
   >
     {icon}
-    <Typography variant="body2" textAlign="center">
+    <Typography
+      variant="body2"
+      sx={{
+        textAlign: "center"
+      }}
+    >
       {message}
     </Typography>
   </Box>

@@ -511,7 +511,12 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
         </Box>
 
         {!isLoaded && (
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Loading schema...
           </Typography>
         )}

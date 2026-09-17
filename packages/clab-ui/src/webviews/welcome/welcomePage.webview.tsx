@@ -129,7 +129,13 @@ export function WelcomePageApp(): React.JSX.Element {
             }}
           >
             <Stack spacing={3}>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="flex-start">
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={2}
+                sx={{
+                  alignItems: "flex-start"
+                }}
+              >
                 <Box
                   component="img"
                   src={containerlabLogo}
@@ -145,8 +151,19 @@ export function WelcomePageApp(): React.JSX.Element {
                   <Typography variant="h4" sx={{ lineHeight: 1.2 }}>
                     Welcome to Containerlab
                   </Typography>
-                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                    <Chip size="small" variant="outlined" label={`Extension v${extensionVersion}`} />
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    useFlexGap
+                    sx={{
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Extension v${extensionVersion}`}
+                    />
                     {COMMUNITY_LINKS.map((link) => (
                       <Chip
                         key={link.label}
@@ -167,18 +184,39 @@ export function WelcomePageApp(): React.JSX.Element {
 
               <Divider />
 
-              <Stack direction={{ xs: "column", lg: "row" }} spacing={3} alignItems="stretch">
+              <Stack
+                direction={{ xs: "column", lg: "row" }}
+                spacing={3}
+                sx={{
+                  alignItems: "stretch"
+                }}
+              >
                 <Stack spacing={3} sx={{ flex: "1 1 55%" }}>
                   <Stack spacing={1.5}>
                     <Typography variant="h6">Getting Started</Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "text.secondary"
+                      }}
+                    >
                       The Containerlab extension integrates containerlab directly into VS Code,
                       providing an explorer for managing labs and containers.
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: "text.secondary"
+                      }}
+                    >
                       Create, deploy, and manage network topologies with just a few clicks.
                     </Typography>
-                    <Stack spacing={0.75} alignItems="flex-start">
+                    <Stack
+                      spacing={0.75}
+                      sx={{
+                        alignItems: "flex-start"
+                      }}
+                    >
                       <Button
                         variant="contained"
                         onClick={() => {
@@ -187,7 +225,12 @@ export function WelcomePageApp(): React.JSX.Element {
                       >
                         Create Example Topology
                       </Button>
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary"
+                        }}
+                      >
                         Creates `example.clab.yml` in your current workspace.
                       </Typography>
                     </Stack>
@@ -234,8 +277,11 @@ export function WelcomePageApp(): React.JSX.Element {
                     <Stack
                       direction="row"
                       spacing={1.5}
-                      alignItems="center"
-                      sx={{ py: 2, color: "text.secondary" }}
+                      sx={{
+                        alignItems: "center",
+                        py: 2,
+                        color: "text.secondary"
+                      }}
                     >
                       <CircularProgress size={18} />
                       <Typography variant="body2">Loading popular repositories...</Typography>
@@ -270,11 +316,22 @@ export function WelcomePageApp(): React.JSX.Element {
                             sx={{ alignItems: "flex-start" }}
                           >
                             <Stack spacing={0.5} sx={{ width: "100%", minWidth: 0 }}>
-                              <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                sx={{
+                                  alignItems: "center",
+                                  minWidth: 0
+                                }}
+                              >
                                 <Typography
                                   component="span"
                                   variant="body2"
-                                  sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}
+                                  sx={{
+                                    fontWeight: 600,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis"
+                                  }}
                                 >
                                   {repo.name}
                                 </Typography>
@@ -290,7 +347,12 @@ export function WelcomePageApp(): React.JSX.Element {
                                   }}
                                 />
                               </Stack>
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary"
+                                }}
+                              >
                                 {repo.description || "No description available"}
                               </Typography>
                             </Stack>

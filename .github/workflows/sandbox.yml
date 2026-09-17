@@ -29,7 +29,7 @@ jobs:
       - name: Validate project name
         run: '[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$ || "$PROJECT_NAME" =~ ^[a-z0-9]$ ]]'
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -39,12 +39,12 @@ jobs:
           echo "SANDBOX_COMMIT_SHA=$COMMIT_SHA" >> "$GITHUB_ENV"
           echo "SANDBOX_BRANCH=${COMMIT_SHA:0:12}-pr" >> "$GITHUB_ENV"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm

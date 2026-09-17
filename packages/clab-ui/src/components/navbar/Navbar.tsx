@@ -170,13 +170,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   } | null>(null);
   const linkLabelMenuOpen = Boolean(linkLabelMenuPosition);
 
-  const handleLinkLabelClick = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!isTopologyActive) return;
-    const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
-    if (anchorPosition) {
-      setLinkLabelMenuPosition(anchorPosition);
-    }
-  }, [isTopologyActive]);
+  const handleLinkLabelClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!isTopologyActive) return;
+      const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
+      if (anchorPosition) {
+        setLinkLabelMenuPosition(anchorPosition);
+      }
+    },
+    [isTopologyActive]
+  );
 
   const handleLinkLabelClose = React.useCallback(() => {
     setLinkLabelMenuPosition(null);
@@ -197,13 +200,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   } | null>(null);
   const deployMenuOpen = Boolean(deployMenuPosition);
 
-  const handleDeployMenuOpen = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
-    if (!isTopologyActive) return;
-    const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
-    if (anchorPosition) {
-      setDeployMenuPosition(anchorPosition);
-    }
-  }, [isTopologyActive]);
+  const handleDeployMenuOpen = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (!isTopologyActive) return;
+      const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
+      if (anchorPosition) {
+        setDeployMenuPosition(anchorPosition);
+      }
+    },
+    [isTopologyActive]
+  );
 
   const handleDeployMenuClose = React.useCallback(() => {
     setDeployMenuPosition(null);
@@ -281,13 +287,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   } | null>(null);
   const layoutMenuOpen = Boolean(layoutMenuPosition);
 
-  const handleLayoutClick = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
-    if (!isTopologyActive) return;
-    const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
-    if (anchorPosition) {
-      setLayoutMenuPosition(anchorPosition);
-    }
-  }, [isTopologyActive]);
+  const handleLayoutClick = React.useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!isTopologyActive) return;
+      const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
+      if (anchorPosition) {
+        setLayoutMenuPosition(anchorPosition);
+      }
+    },
+    [isTopologyActive]
+  );
 
   const handleLayoutClose = React.useCallback(() => {
     setLayoutMenuPosition(null);
@@ -341,10 +350,13 @@ export const Navbar: React.FC<NavbarProps> = ({
         </IconButton>
         <Typography
           variant="h5"
-          fontWeight={500}
-          ml={0.5}
-          sx={{ lineHeight: 1, flexGrow: 1 }}
           data-testid="navbar-lab-name"
+          sx={{
+            fontWeight: 500,
+            ml: 0.5,
+            lineHeight: 1,
+            flexGrow: 1
+          }}
         >
           {labName || "TopoViewer"}
         </Typography>
@@ -563,7 +575,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 disabled={!isTopologyActive || isLocked}
                 data-testid="navbar-bulk-link"
               >
-                <LinkIcon fontSize="small" />
+                <LinkIcon
+                  sx={{
+                    fontSize: "small"
+                  }}
+                />
               </IconButton>
             </span>
           </Tooltip>

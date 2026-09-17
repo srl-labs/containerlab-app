@@ -25,15 +25,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
@@ -52,7 +52,7 @@ jobs:
 
       - name: Upload VS Code unit test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: vscode-unit-report
           path: apps/vscode-containerlab/mochawesome-report/
@@ -69,7 +69,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: containerlab-app-playwright-report-${{ github.run_number }}
           path: apps/web/playwright-report/
@@ -90,15 +90,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
@@ -119,7 +119,7 @@ jobs:
 
       - name: Upload clab-ui Playwright blob report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clab-ui-blob-report-${{ matrix.shard }}-${{ github.run_attempt }}
           path: packages/clab-ui/blob-report/
@@ -134,15 +134,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
@@ -151,7 +151,7 @@ jobs:
         run: pnpm install --frozen-lockfile --filter containerlab-app --ignore-scripts
 
       - name: Download clab-ui Playwright blob reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: all-clab-ui-blob-reports
           pattern: clab-ui-blob-report-*-${{ github.run_attempt }}
@@ -162,7 +162,7 @@ jobs:
 
       - name: Upload clab-ui Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: clab-ui-playwright-report-${{ github.run_number }}-${{ github.run_attempt }}
           path: playwright-report/
@@ -179,12 +179,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           run_install: false
           standalone: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
@@ -192,7 +192,7 @@ jobs:
       - run: pnpm vsix
       - run: pnpm --filter vscode-containerlab run test:e2e:compile
       - run: xvfb-run -a node apps/vscode-containerlab/out/e2e/run.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: vscode-extension

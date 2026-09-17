@@ -1,8 +1,8 @@
 /* eslint-disable import-x/max-dependencies */
 import React from "react";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -186,7 +186,6 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
     <Dialog
       open={isOpen}
       onClose={isProcessing ? () => undefined : onClose}
-      disableEscapeKeyDown={isProcessing}
       maxWidth="md"
       fullWidth
       data-testid="lifecycle-progress-modal"
@@ -219,14 +218,23 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
               variant="outlined"
             />
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 0.25
+            }}
+          >
             {labName || "Containerlab topology"}
           </Typography>
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ display: "block", mt: 0.25 }}
             data-testid="lifecycle-timer"
+            sx={{
+              color: "text.secondary",
+              display: "block",
+              mt: 0.25
+            }}
           >
             {timerLabel}: {formattedDuration}
           </Typography>
@@ -235,11 +243,25 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
       {isProcessing && <LinearProgress />}
       <DialogContent dividers sx={{ pt: 2 }}>
         {statusMessage !== undefined && statusMessage !== null && statusMessage.length > 0 && (
-          <Typography variant="body2" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              display: "block",
+              mb: 1
+            }}
+          >
             {statusMessage}
           </Typography>
         )}
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+            display: "block",
+            mb: 1
+          }}
+        >
           Live command output
         </Typography>
         <Box
@@ -256,7 +278,12 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
           }}
         >
           {logs.length === 0 && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary"
+              }}
+            >
               Waiting for command output...
             </Typography>
           )}

@@ -40,11 +40,21 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
           Create <strong>{count}</strong> new link{count === 1 ? "" : "s"}?
         </Typography>
         <Box sx={{ mt: 0.5 }}>
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Source: <code className="select-text">{sourcePattern}</code>
           </Typography>
           <br />
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             Target: <code className="select-text">{targetPattern}</code>
           </Typography>
         </Box>

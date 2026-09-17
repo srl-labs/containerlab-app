@@ -1,88 +1,58 @@
-# containerlab-app
+# Containerlab Apps
 
-This monorepo contains `containerlab-app` (web and desktop),
-`vscode-containerlab`, and the shared `@containerlab/clab-ui` package.
+Build, run, and explore your [containerlab](https://containerlab.dev/) network labs in **VS Code**, **a web browser**, or **a desktop app**. Create topologies visually, work with your existing lab files, and go from a network diagram to running devices you can inspect and troubleshoot.
 
-[![Doc](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/cmd/tools/api-server/start/)
+All three apps share the same topology editor, so you can choose the environment that fits how you work.
+
+[![Docs](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/)
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
 [![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
 
-## Try It In Your Browser
+![The shared Containerlab interface with the lab explorer and visual topology editor](apps/web/resources/screenshot.png)
 
-Want to try the UI, create `*.clab.yml` files, or visualize containerlab topologies without installing anything? Open the GitHub Pages sandbox:
+## Choose your app
 
-https://srl-labs.github.io/containerlab-app/
-
-The sandbox runs entirely in your browser and stores its workspace in browser storage. It is meant for editing and visualization; deploying, destroying, and inspecting real labs require the web or desktop app connected to a reachable `clab-api-server`.
-
----
-
-`containerlab-app` provides graphical applications for [containerlab](https://containerlab.dev/). It ships the same standalone UI in two forms:
-
-- **Web app:** a containerized web service you open in a browser.
-- **Desktop app:** an Electron app for Linux, macOS, and Windows.
-
-Both apps connect to a reachable `clab-api-server` and use it to authenticate, list topologies, deploy labs, destroy labs, stream events, and open interactive sessions. The web and desktop apps do not start or manage `clab-api-server`; run it on the machine that owns your container runtime and lab files.
-
-![screenshot](apps/web/resources/screenshot.png)
-
----
-
-## Which App Should I Use?
-
-| Option | Use it when | Install artifact |
+| App | How you work | Get started |
 | --- | --- | --- |
-| Web app | You want one shared UI reachable from a browser, often on a lab server or VM. | Container image |
-| Desktop app | You want a local application window on your workstation. | `.deb`, `.rpm`, AppImage, `.dmg`, or `.exe` |
+| **VS Code** | Edit topology files and manage labs alongside your code, locally on Linux or through WSL or Remote SSH. | [Install the extension](#vs-code-extension) |
+| **Web** | Open your lab environment in a browser, with the app hosted on a server or VM. | [Run the web app](#web-app) |
+| **Desktop** | Use a dedicated application on Linux, macOS, or Windows to connect to your lab hosts. | [Download the desktop app](#desktop-app) |
 
-Both options can connect to local or remote `clab-api-server` endpoints. The API endpoint is selected at login, so one app installation can work with multiple lab hosts.
+> [!TIP]
+> [Try the browser sandbox](https://srl-labs.github.io/containerlab-app/) without installing anything. You can edit and visualize topologies, with your workspace saved in browser storage. Deploying and interacting with real labs requires one of the apps below.
 
----
+## From topology to running lab
 
-## 1. Install `clab-api-server`
+Start with an existing `.clab.yml` or `.clab.yaml` file, or create a new topology in the visual editor. Add nodes and links, arrange your network, and use the lab tools to bring it to life:
 
-Install `clab-api-server` on the Linux host where containerlab and the container runtime run:
+- **Design your network:** edit topologies on the canvas or in YAML, with groups and annotations to explain the layout.
+- **Manage your labs:** deploy, destroy, and redeploy labs, and follow their status as it changes.
+- **Work with your devices:** open terminals and SSH sessions, inspect containers, and view logs.
+- **Troubleshoot traffic:** capture packets with Wireshark and test how your network behaves with delay, loss, and other link impairments.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo bash -s -- install
-```
+## VS Code extension
 
-This will:
-- Download the binary to `/usr/local/bin/clab-api-server`
-- Create a default configuration at `/etc/clab-api-server/clab-api-server.env`
-- Create a systemd unit at `/etc/systemd/system/clab-api-server.service`
-- Create the default Linux groups `clab_api` and `clab_admins` if they do not exist
-- Generate a random `JWT_SECRET` for new installations
+Keep your topology files, device configurations, and running labs together in your editor. The Containerlab extension discovers labs in your workspace and gives you a lab explorer, the visual topology editor, and lab and device actions directly in VS Code.
 
-Review the configuration and add users to the API group before starting the service:
+1. Install **Containerlab** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=srl-labs.vscode-containerlab) or [Open VSX](https://open-vsx.org/extension/srl-labs/vscode-containerlab).
+2. Open a folder containing your topology files, or clone a lab from the extension's welcome page.
+3. Select the **Containerlab** icon in the Activity Bar to find your labs.
+4. Open a lab in the topology viewer, or right-click a lab or device for actions such as **Deploy**, **Destroy**, and opening a shell.
 
-```bash
-sudoedit /etc/clab-api-server/clab-api-server.env
-sudo usermod -aG clab_api <username>
-sudo systemctl enable --now clab-api-server
-```
+The extension runs containerlab directly in a Linux environment. On Windows, use WSL.
 
-For an immediate start with the generated defaults, use `install --start`.
+> [!TIP]
+> Your editor and your labs can run on different machines. Connect to a Linux lab host with VS Code Remote SSH and install the Containerlab extension there. You can use this setup from Linux, macOS, or Windows.
 
-Authentication uses Linux/PAM accounts on the API server host, not app-local users. Each allowed user must exist on that host, sign in with their Linux password, and belong to `clab_api` or your configured `API_USER_GROUP`; `clab_admins` or `SUPERUSER_GROUP` grants elevated API permissions.
+The extension can help install containerlab and set up the required `clab_admins` group membership. With Docker, your user also needs access through the `docker` group.
 
-For full API server setup and security details, see the [`clab-api-server` README](https://github.com/srl-labs/clab-api-server/blob/main/README.md).
+See the [extension guide](apps/vscode-containerlab/README.md) for settings, packet capture setup, and more ways to work with labs.
 
-The systemd service runs as `root` because the API server controls host container runtime resources, network namespaces, Linux users, and lab files.
+## Web app
 
-For temporary local trials, Containerlab's `containerlab tools api-server start` command can also start the API server. For regular use, prefer the installed service.
+Access your labs from a browser, with the same topology editor and lab tools available on any workstation that can reach the web app. You can connect to multiple lab hosts from one installation.
 
-Topology files created through the app are stored by `clab-api-server` on the API host. By default that is the authenticated user's `~/.clab` directory. To use another server-side root, set `CLAB_LABS_ROOT=/absolute/path` in the API server configuration; files are then stored under `$CLAB_LABS_ROOT/<username>/`. For the Containerlab tools helper, use `containerlab tools api-server start --labs-dir /absolute/path`.
-
-On macOS, run `clab-api-server` in the Linux environment that owns containerlab and the Docker daemon, such as an OrbStack VM, Docker Desktop VM, devcontainer, or a remote Linux lab host. The app then connects to that API endpoint from the browser or desktop app.
-
----
-
-## 2A. Install The Web App
-
-The web app is published as a multi-arch container image for `linux/amd64` and `linux/arm64`. The current image name is `ghcr.io/srl-labs/containerlab-web`.
-
-Start the web app:
+First, [set up access to your lab host](#connect-the-web-and-desktop-apps-to-your-lab-host). Then run the web app on a Linux server or VM with Docker:
 
 ```bash
 docker run -d --name containerlab-app \
@@ -91,171 +61,98 @@ docker run -d --name containerlab-app \
   ghcr.io/srl-labs/containerlab-web:latest
 ```
 
-Open `https://localhost:3001`, accept the self-signed development certificate if your browser asks, and log in with an allowed Linux/PAM user from the API server host.
+Open **`https://<web-app-host>:3001`**, or **`https://localhost:3001`** when browsing on that host. The app generates a self-signed HTTPS certificate by default, so your browser may ask you to accept it.
 
-The web app can connect to multiple `clab-api-server` endpoints. If the API server runs on the same host, use the default `https://localhost:8090` endpoint. For remote lab hosts, enter their DNS name or IP address, for example `https://lab-host.example.com:8090`.
+At login, enter the API URL for your lab host and its Linux username and password. If the API server runs on the same host as the web app, use `https://localhost:8090`. Otherwise, use an address such as `https://lab-host.example.com:8090`.
 
+> [!NOTE]
+> In the web app's API address, `localhost` refers to the server running the web app. A remote API address must be reachable from that server, even when you open the app in a browser on another machine.
 
----
+The container image supports Linux AMD64 and ARM64. Certificate and port options are listed under [configuration](#configuration).
 
-## 2B. Install The Desktop App
+## Desktop app
 
-Download the desktop package for your platform from the GitHub release assets.
+Use the Containerlab interface in its own application window on your workstation. The desktop app connects to your lab hosts over the API, so your labs can run on another machine while you work from Linux, macOS, or Windows.
 
-| Platform | Artifact | Install |
+Download a package from the [latest desktop release](https://github.com/srl-labs/containerlab-app/releases/latest):
+
+| Platform | Package | Installation |
 | --- | --- | --- |
-| Debian / Ubuntu | `containerlab-desktop-<version>-amd64.deb` | `sudo apt install ./containerlab-desktop-<version>-amd64.deb` |
-| Fedora / RHEL | `containerlab-desktop-<version>-x86_64.rpm` | `sudo dnf install ./containerlab-desktop-<version>-x86_64.rpm` |
-| Other Linux | `containerlab-desktop-<version>-x86_64.AppImage` | `chmod +x ./containerlab-desktop-<version>-x86_64.AppImage && ./containerlab-desktop-<version>-x86_64.AppImage` |
-| macOS | `containerlab-desktop-<version>-universal.dmg` | Open the DMG and move the app to Applications |
-| Windows | `containerlab-desktop-<version>-x64-setup.exe` | Run the installer |
+| Debian / Ubuntu | `.deb` | Install with your package manager. |
+| Fedora / RHEL | `.rpm` | Install with your package manager. |
+| Other Linux | AppImage | Make the file executable, then run it. |
+| macOS | Universal `.dmg` | Open the disk image and move Containerlab to Applications. |
+| Windows | `.exe` installer | Run the installer. |
 
-Launch the desktop app, enter the `clab-api-server` URL, and log in with an allowed Linux/PAM user from the API server host.
+[Set up access to your lab host](#connect-the-web-and-desktop-apps-to-your-lab-host), launch the app, and enter the API URL and your Linux credentials for that host. For a remote host, use an address such as `https://lab-host.example.com:8090`.
 
-The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Windows SmartScreen may show warnings until signing and notarization are added.
+> [!NOTE]
+> The macOS and Windows packages are currently unsigned, so Gatekeeper or SmartScreen may show a warning when you open them.
 
----
+## Connect the web and desktop apps to your lab host
+
+The web and desktop apps connect to `clab-api-server`, which manages labs on a Linux host with your container runtime. That host can be your Linux workstation, a VM, or a remote server. On macOS and Windows, run the API server in the Linux environment where your labs run.
+
+If your lab host already has an API server, you only need its URL and an allowed Linux account. To set one up, run these commands on the lab host:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo bash -s -- install
+sudoedit /etc/clab-api-server/clab-api-server.env
+sudo usermod -aG clab_api <username>
+sudo systemctl enable --now clab-api-server
+```
+
+Replace `<username>` with an existing Linux user on that host. Sign in to the app with that user's Linux password. By default, members of `clab_api` can sign in, and members of `clab_admins` have elevated permissions.
+
+The API server uses HTTPS on port `8090` by default. See the [API server setup guide](https://github.com/srl-labs/clab-api-server/blob/main/README.md) for configuration, alternative installation methods, and changing the lab storage directory.
+
+### Good to know
+
+- **Your login belongs to your lab host.** Use the Linux account allowed to access its API server; there is no separate app account to create.
+- **Your lab files stay with your labs.** Topologies created through web or desktop are saved on the API host, in your user's `~/.clab` directory by default. VS Code works with files in the workspace you opened.
+- **One app can reach several hosts.** Web and desktop let you add multiple API endpoints, each with its own login, so you can work with different lab environments from one app.
 
 ## Configuration
 
-### Web App
+In VS Code, open Settings and search for `containerlab`. The [extension settings reference](apps/vscode-containerlab/README.md#extension-settings) covers node defaults, topology editing, packet capture, and more.
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `PORT` | `3001` | Web server port |
-| `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
-| `WEB_TLS_ENABLE` | `true` | Serve the web app over HTTPS |
-| `WEB_TLS_AUTO_CERT` | `true` | Generate/reuse a local self-signed web certificate when cert/key files are unset |
-| `WEB_TLS_CERT_FILE` | unset | Path to a web TLS certificate |
-| `WEB_TLS_KEY_FILE` | unset | Path to a web TLS private key |
-| `WEB_TLS_HOST` | auto-detected | Hostname used when generating a local certificate |
-| `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Interface stats interval requested from the API event stream |
+The web and desktop apps let you choose your API endpoint at login. Additional options are available through environment variables:
 
-### Desktop App
+<details>
+<summary>Web and desktop environment variables</summary>
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `CLAB_API_TLS_VERIFY` | `false` | Verify upstream API TLS certificates |
-| `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local loopback port for the embedded app server |
-| `CONTAINERLAB_DESKTOP_DEBUG` | unset | Enable desktop app-server debug logging |
+For the web container, pass variables with `docker run -e NAME=value` before the image name. Certificate paths must refer to files mounted inside the container. For desktop, set variables in the environment used to launch the app.
 
----
+| Variable | Default | Applies to | Purpose |
+| --- | --- | --- | --- |
+| `CLAB_API_TLS_VERIFY` | `false` | Web, desktop | Verify the API server's TLS certificate. |
+| `PORT` | `3001` | Web | Port used to serve the web app. |
+| `WEB_TLS_ENABLE` | `true` | Web | Serve the app over HTTPS. |
+| `WEB_TLS_AUTO_CERT` | `true` | Web | Generate a self-signed certificate when no certificate files are supplied. |
+| `WEB_TLS_CERT_FILE` | unset | Web | Path to your HTTPS certificate. |
+| `WEB_TLS_KEY_FILE` | unset | Web | Path to your HTTPS private key. |
+| `WEB_TLS_HOST` | auto-detected | Web | Hostname to include in the generated certificate. |
+| `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | Web, desktop | Interface statistics interval requested from the API. |
+| `CONTAINERLAB_DESKTOP_PORT` | `32180` | Desktop | Preferred local port for the app's embedded server. |
+| `CONTAINERLAB_DESKTOP_DEBUG` | unset | Desktop | Enable app-server debug logging. |
+
+</details>
+
+## Help and feedback
+
+For questions and lab ideas, join the [Containerlab Discord](https://discord.gg/vAyddtaEV9). To report a bug or suggest a feature, [open an issue](https://github.com/srl-labs/containerlab-app/issues) and mention whether you're using VS Code, web, or desktop.
+
+The [containerlab documentation](https://containerlab.dev/) covers topology files, supported node kinds, and lab examples.
 
 ## Development
 
-Use Node.js `24.18.0` and pnpm `11.17.0` (pinned in `package.json`). Local web development also needs `openssl` for HTTPS certificates.
+Use Node.js `24.21.0` and pnpm `12.4.2`, as pinned in `package.json`. From the repository root:
 
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-pnpm web:local
 ```
 
-Run these commands from the monorepo root:
+Run `pnpm web:local` or `pnpm desktop:local` to launch an app, `pnpm vsix` to package the VS Code extension, or `pnpm pages:local` to work on the browser sandbox.
 
-| Product | Build/package | Local development |
-| --- | --- | --- |
-| Shared UI library | `pnpm ui` | `pnpm ui:local` — UI harness with source hot reload |
-| VS Code | `pnpm vsix` | `pnpm vsix:local` — same VSIX built from the working tree |
-| Web | `pnpm web` | `pnpm web:local` — API-backed Vite development server |
-| Desktop | `pnpm desktop` | `pnpm desktop:local` — build and launch Electron |
-| Browser sandbox | `pnpm pages` | `pnpm pages:local` — local sandbox without an API server |
-
-**Every app uses the checked-out `packages/clab-ui` workspace, including uncommitted edits.** Build/package and app development commands rebuild its public `dist/` exports first. Nothing downloads a published UI package, and no sibling checkout is needed. `vsix:local` is an explicit alias for `vsix`.
-
-For rapid UI-only edits, use `pnpm ui:local`; its harness reads source directly and hot reloads changes. Running web/desktop/extension hosts consume built UI exports. After another UI edit, rerun their command to rebuild, or run `pnpm ui` in a second terminal and reload the host. The app commands do not watch UI source themselves.
-
-The web development frontend is at `https://localhost:5173`; the app server also serves it through `https://localhost:3001`. Log in against your running `clab-api-server`. The standalone UI harness uses `http://127.0.0.1:5184`.
-
-### Desktop packaging
-
-`pnpm desktop` packages for the current platform. Select a target explicitly when needed:
-
-```sh
-pnpm desktop --linux
-pnpm desktop --mac dmg --universal
-pnpm desktop --win nsis --x64
-pnpm desktop --dir
-```
-
-Build installers on the appropriate OS. Outputs go to `apps/desktop/release/`. Linux produces AppImage, `.deb`, and `.rpm` and needs `rpmbuild`. macOS and Windows installers are unsigned. `--dir` produces an unpacked app for local inspection. The Linux launcher uses X11/Ozone.
-
-### VS Code extension
-
-`pnpm vsix` writes `apps/vscode-containerlab/vscode-containerlab-<version>.vsix`. Install it with **Extensions → Install from VSIX**. For debugging, open this repository in VS Code and use **Debug Containerlab Extension**; its pre-launch task builds the local UI and extension.
-
-For extension-only build watching after `pnpm ui`, use `pnpm --filter vscode-containerlab run build:watch`. Rebuild the UI after shared source edits.
-
-The extension identity remains `srl-labs.vscode-containerlab`. It was imported from `srl-labs/vscode-containerlab` at commit `991ab745f26b925c072e5907adc5ec27ba06ce7e` (version `0.26.3`); its original Git history remains there.
-
-### UI tarball and releases
-
-`pnpm ui` builds the shared library used by the apps. `pnpm ui:pack` also builds the standalone iframe viewer and writes the complete npm package to `artifacts/clab-ui.tgz`. `pnpm test:package` validates a freshly built tarball in an isolated npm consumer.
-
-Publishing is separate from building. See [RELEASING.md](RELEASING.md) for independent product tags, npm Trusted Publishing, GitHub Latest, and extension store secrets.
-
-### Local Docker build
-
-```sh
-docker build -t containerlab-web .
-```
-
-This builds the checked-out workspace for your current Docker platform. Run it using the environment in the web app install section, with image name `containerlab-web`.
-
-## Testing
-
-```sh
-pnpm check         # dependency and release-version policies
-pnpm typecheck     # build UI, check policies, typecheck all workspaces
-pnpm lint
-pnpm test          # all unit suites and release-routing tests
-pnpm test:package  # strict public API and npm tarball validation
-```
-
-Install Playwright's browser once, then select a browser suite:
-
-```sh
-pnpm exec playwright install chromium
-pnpm test:ui
-pnpm test:web
-pnpm test:vscode
-```
-
-UI and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
-
-Package-specific checks remain available through `pnpm --filter <package> run <script>`. Maintenance scripts can be invoked directly, e.g. `node scripts/run-stress-api-bff.mjs` for the API stress runner. Schema synchronization remains `pnpm sync:schema`.
-
----
-
-## Workspace
-
-```text
-apps/web                      browser deployment host and Docker image entry
-apps/desktop                  Electron host
-apps/vscode-containerlab      VS Code extension
-packages/app-server           shared Fastify BFF used by web and desktop
-packages/standalone-runtime   shared standalone renderer/runtime around clab-ui
-packages/app-contract         shared browser-facing DTO types
-packages/clab-ui              shared publishable topology UI package
-```
-
-This repository is the `containerlab-app` monorepo and owns:
-
-- the standalone web app host and Docker image for the shared `@containerlab/clab-ui` experience
-- the Electron desktop app host and desktop package artifacts
-- the VS Code extension and VSIX artifacts
-- the shared `@containerlab/clab-ui` package
-- the shared app server used by web and desktop
-- standalone unit and Playwright E2E test suites
-- static resources used by the standalone app
-
-UI, extension, web, and desktop are independently versioned. All
-three application hosts consume the local UI workspace through the root lockfile.
-
----
-
-## Feedback and Contributions
-
-- **GitHub Issues:** [Create an issue](https://github.com/srl-labs/containerlab-app/issues)
-- **Pull Requests:** Contributions are welcome
-- **Discord:** Join the [containerlab Discord](https://discord.gg/vAyddtaEV9)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, and [RELEASING.md](RELEASING.md) for publishing.
