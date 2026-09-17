@@ -28,6 +28,8 @@ A file reference and inline YAML cannot be combined. Missing files, malformed YA
 
 Boolean options accept `true` or `false` in Markdown. In HTML, an empty attribute means true, and `controls="false"` means false. See [customization recipes](customize.md) for combinations.
 
+Try these options in the [customization studio](customize.md#playground). Switch among five labs, recolor their annotations, toggle groups and callouts, and export a matching Markdown + CSS recipe with the customized JSON.
+
 ## Add it to another Zensical site
 
 The Markdown extension lives in `tools/clab_docs` and installs with this repository's Python project. It emits `<clab-topology>` elements containing escaped YAML and static highlighted source. The browser component and renderer ship in the UI package's `dist-viewer/` directory.

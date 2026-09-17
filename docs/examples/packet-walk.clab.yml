@@ -1,0 +1,25 @@
+# Ready to ping: client -> router -> server, across two IPv4 subnets.
+name: packet-walk
+
+topology:
+  defaults:
+    kind: linux
+    image: ghcr.io/srl-labs/network-multitool:latest
+  nodes:
+    client:
+      exec:
+        - ip address add 10.10.1.2/24 dev eth1
+        - ip route add 10.10.2.0/24 via 10.10.1.1
+    router:
+      sysctls:
+        net.ipv4.ip_forward: "1"
+      exec:
+        - ip address add 10.10.1.1/24 dev eth1
+        - ip address add 10.10.2.1/24 dev eth2
+    server:
+      exec:
+        - ip address add 10.10.2.2/24 dev eth1
+        - ip route add 10.10.1.0/24 via 10.10.2.1
+  links:
+    - endpoints: [client:eth1, router:eth1]
+    - endpoints: [router:eth2, server:eth1]

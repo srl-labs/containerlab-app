@@ -1,0 +1,246 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "outside",
+      "position": {
+        "x": 55,
+        "y": 210
+      },
+      "icon": "cloud",
+      "iconColor": "#c17a54",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "untrusted"
+    },
+    {
+      "id": "gateway",
+      "position": {
+        "x": 325,
+        "y": 210
+      },
+      "icon": "dcgw",
+      "iconColor": "#d78b50",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "dmz"
+    },
+    {
+      "id": "frontend",
+      "position": {
+        "x": 325,
+        "y": 400
+      },
+      "icon": "server",
+      "iconColor": "#d78b50",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "dmz"
+    },
+    {
+      "id": "api",
+      "position": {
+        "x": 605,
+        "y": 210
+      },
+      "icon": "server",
+      "iconColor": "#a18bd5",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "private"
+    },
+    {
+      "id": "database",
+      "position": {
+        "x": 805,
+        "y": 210
+      },
+      "icon": "server",
+      "iconColor": "#a18bd5",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "private"
+    },
+    {
+      "id": "admin",
+      "position": {
+        "x": 710,
+        "y": 400
+      },
+      "icon": "client",
+      "iconColor": "#a18bd5",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "private"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "untrusted",
+      "name": "UNTRUSTED",
+      "level": "L1",
+      "position": {
+        "x": 5,
+        "y": 145
+      },
+      "width": 170,
+      "height": 385,
+      "backgroundColor": "#f6e8dc",
+      "backgroundOpacity": 85,
+      "borderColor": "#dabfa8",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#885839",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "dmz",
+      "name": "DMZ / PUBLIC SERVICES",
+      "level": "L1",
+      "position": {
+        "x": 245,
+        "y": 145
+      },
+      "width": 215,
+      "height": 385,
+      "backgroundColor": "#fff1d5",
+      "backgroundOpacity": 85,
+      "borderColor": "#d7b98b",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#906328",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "private",
+      "name": "PRIVATE / APPLICATION",
+      "level": "L1",
+      "position": {
+        "x": 550,
+        "y": 145
+      },
+      "width": 350,
+      "height": 385,
+      "backgroundColor": "#ede7f6",
+      "backgroundOpacity": 85,
+      "borderColor": "#c8b9df",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#725992",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "security-heading",
+      "text": "**Draw the trust boundary.**",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "width": 900,
+      "height": 65,
+      "fontSize": 34,
+      "fontColor": "#493b36",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "security-subtitle",
+      "text": "Three zones. One deliberate path into the application.",
+      "position": {
+        "x": 2,
+        "y": 62
+      },
+      "width": 800,
+      "height": 45,
+      "fontSize": 17,
+      "fontColor": "#8d7464",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "dmz-rule",
+      "text": "**01**  Entry point",
+      "position": {
+        "x": 270,
+        "y": 325
+      },
+      "width": 180,
+      "height": 35,
+      "fontSize": 14,
+      "fontColor": "#926025",
+      "backgroundColor": "#fff8eb",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "private-rule",
+      "text": "**02**  App \u2192 data",
+      "position": {
+        "x": 650,
+        "y": 325
+      },
+      "width": 195,
+      "height": 35,
+      "fontSize": 14,
+      "fontColor": "#735990",
+      "backgroundColor": "#f8f4fd",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "policy-note",
+      "text": "POLICY EXERCISE \u00b7 Configure forwarding and filtering after deployment.",
+      "position": {
+        "x": 5,
+        "y": 576
+      },
+      "width": 900,
+      "height": 38,
+      "fontSize": 14,
+      "fontColor": "#886b59",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "boundary",
+      "shapeType": "line",
+      "position": {
+        "x": 505,
+        "y": 120
+      },
+      "endPosition": {
+        "x": 505,
+        "y": 545
+      },
+      "borderColor": "#c3a990",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "lineEndArrow": false,
+      "lineArrowSize": 10,
+      "zIndex": -2
+    }
+  ],
+  "viewerSettings": {
+    "linkLabelMode": "hide",
+    "gridColor": "#dfd1bd",
+    "gridLineWidth": 0.5
+  }
+}

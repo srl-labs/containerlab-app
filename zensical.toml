@@ -10,7 +10,7 @@ site_dir = "site"
 # External fence inputs must invalidate Markdown cached by Zensical.
 watch = ["docs/examples", "tools/clab_docs/topology.py"]
 copyright = "Containerlab Apps · Open source. Built for network people."
-extra_css = ["assets/stylesheets/site.css", "assets/viewer/component.css"]
+extra_css = ["assets/stylesheets/site.css", "assets/viewer/component.css", "assets/stylesheets/customization.css"]
 # The template loads this asynchronously in the head, ahead of the docs bundle.
 extra_javascript = []
 nav = [
@@ -43,7 +43,7 @@ nav = [
     { "Standalone clab-ui" = [
       { "Overview" = "viewer/standalone.md" },
       { "Zensical integration" = "viewer/index.md" },
-      { "Customization" = "viewer/customize.md" },
+      { "Customization studio" = "viewer/customize.md" },
       { "Component reference" = "viewer/reference.md" },
     ] },
     { "Contribute to the docs" = "contributing.md" },

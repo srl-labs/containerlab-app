@@ -1,0 +1,20 @@
+# Connectivity exercise. Zone labels describe intended policy, not installed rules.
+name: security-zones
+
+topology:
+  defaults:
+    kind: linux
+    image: ghcr.io/srl-labs/network-multitool:latest
+  nodes:
+    outside: {}
+    gateway: {}
+    frontend: {}
+    api: {}
+    database: {}
+    admin: {}
+  links:
+    - endpoints: [outside:eth1, gateway:eth1]
+    - endpoints: [gateway:eth2, frontend:eth1]
+    - endpoints: [gateway:eth3, api:eth1]
+    - endpoints: [api:eth2, database:eth1]
+    - endpoints: [admin:eth1, gateway:eth4]
