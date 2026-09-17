@@ -3,6 +3,7 @@ import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
+import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
 import { parseStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 
 interface WiresharkVncInitialData {
@@ -36,7 +37,7 @@ function withEndpointParam(urlPath: string, endpointId?: string): string {
 
 function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): void {
   const closePath = withEndpointParam(
-    `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/close`,
+    standaloneServerUrl(`/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/close`),
     endpointId
   );
 
@@ -102,7 +103,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const fallbackVncPath = `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/vnc/`;
+  const fallbackVncPath = standaloneServerUrl(`/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/vnc/`);
   const initialData: WiresharkVncInitialData = {
     iframeUrl: withEndpointParam(fallbackVncPath, endpointId),
     showVolumeTip
@@ -128,7 +129,10 @@ async function main(): Promise<void> {
           return;
         }
 
-        const vncUrl = withEndpointParam(readyPayload.url || fallbackVncPath, endpointId);
+        const vncUrl = withEndpointParam(
+          new URL(readyPayload.url || fallbackVncPath, resolveStandaloneServerOrigin()).toString(),
+          endpointId
+        );
         if (readyPayload.ready) {
           postIncomingMessage({ type: "vnc-ready", url: vncUrl });
           return;
