@@ -119,7 +119,7 @@ export interface NodeSaveData {
 export interface NodeAnnotationData {
   label?: string | null;
   icon?: string;
-  iconColor?: string;
+  iconColor?: string | null;
   iconCornerRadius?: number;
   labelPosition?: string | null;
   direction?: string | null;
@@ -586,7 +586,13 @@ export function applyAnnotationData(
   data?: NodeAnnotationData
 ): void {
   if (!data) return;
-  const nullableKeys = ["label", "labelPosition", "direction", "labelBackgroundColor"] as const;
+  const nullableKeys = [
+    "label",
+    "iconColor",
+    "labelPosition",
+    "direction",
+    "labelBackgroundColor"
+  ] as const;
   for (const key of nullableKeys) {
     const value = data[key];
     if (value === null) {
@@ -596,7 +602,7 @@ export function applyAnnotationData(
     }
   }
 
-  const nonEmptyKeys = ["icon", "iconColor", "interfacePattern", "groupId"] as const;
+  const nonEmptyKeys = ["icon", "interfacePattern", "groupId"] as const;
   for (const key of nonEmptyKeys) {
     const value = data[key];
     if (value !== undefined && value.length > 0) {

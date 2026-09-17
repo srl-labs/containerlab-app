@@ -668,7 +668,7 @@ export function convertEditorDataToNodeSaveData(
     ...yamlExtraData,
     // Annotation properties (saved to annotations.json, not YAML)
     topoViewerRole: data.icon,
-    iconColor: data.iconColor,
+    iconColor: data.iconColor ?? null,
     iconCornerRadius: data.iconCornerRadius,
     interfacePattern: data.interfacePattern,
     labelPosition,
