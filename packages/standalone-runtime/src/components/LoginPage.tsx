@@ -96,10 +96,22 @@ function ReconnectCard({
       }}
     >
       <Stack spacing={1.5}>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: "center"
+          }}
+        >
           <SettingsEthernetIcon fontSize="small" sx={{ color: "#858585" }} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle2" fontWeight={600} noWrap>
+            <Typography
+              variant="subtitle2"
+              noWrap
+              sx={{
+                fontWeight: 600
+              }}
+            >
               {endpoint.label}
             </Typography>
             <Typography
@@ -121,7 +133,11 @@ function ReconnectCard({
           </Alert>
         )}
 
-        <Alert severity={endpointStatusSeverity(endpoint.status)} variant="outlined" sx={{ py: 0.25 }}>
+        <Alert
+          severity={endpointStatusSeverity(endpoint.status)}
+          variant="outlined"
+          sx={{ py: 0.25 }}
+        >
           {endpointStatusLabel(endpoint.status)}. {endpointStatusHint(endpoint.status)}
         </Alert>
 
@@ -135,7 +151,13 @@ function ReconnectCard({
           />
         </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="flex-start">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: "flex-start"
+          }}
+        >
           <TextField
             size="small"
             label="Password"
@@ -162,7 +184,12 @@ function ReconnectCard({
           <Button
             variant="contained"
             onClick={handleReconnect}
-            disabled={busy || !username.trim() || !password.trim() || !endpointNeedsReconnect(endpoint.status)}
+            disabled={
+              busy ||
+              !username.trim() ||
+              !password.trim() ||
+              !endpointNeedsReconnect(endpoint.status)
+            }
             sx={{ textTransform: "none", flexShrink: 0 }}
           >
             {busy ? "Connecting..." : "Connect"}
@@ -241,7 +268,11 @@ export function LoginPage({
 
         {hasPersistedEndpoints && !showAddForm ? (
           <Stack spacing={2}>
-            {error ? <Alert severity="error" variant="outlined">{error}</Alert> : null}
+            {error ? (
+              <Alert severity="error" variant="outlined">
+                {error}
+              </Alert>
+            ) : null}
             {disconnectedEndpoints.map((endpoint) => (
               <ReconnectCard
                 key={endpoint.id}

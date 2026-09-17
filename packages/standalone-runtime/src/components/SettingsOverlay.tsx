@@ -172,7 +172,13 @@ const SETTINGS_SECTIONS: Array<{
     key: "capture",
     label: "Capture",
     description: "Edgeshark and packet capture helpers",
-    icon: <LinkIcon fontSize="small" />
+    icon: (
+      <LinkIcon
+        sx={{
+          fontSize: "small"
+        }}
+      />
+    )
   },
   {
     key: "about",
@@ -195,10 +201,7 @@ function normalizeSettingsSectionForMode(
 function accentSx(theme: Theme, color: "info" | "success" | "warning" | "error") {
   return {
     borderColor: `${color}.main`,
-    backgroundColor:
-      theme.palette.mode === "dark"
-        ? "rgba(255,255,255,0.03)"
-        : "rgba(0,0,0,0.015)",
+    backgroundColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)",
     boxShadow: "none"
   };
 }
@@ -221,10 +224,20 @@ function SectionCard(props: {
     >
       <Stack spacing={2.5}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontWeight: 600
+            }}
+          >
             {title}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary"
+            }}
+          >
             {description}
           </Typography>
         </Box>
@@ -354,7 +367,12 @@ function CaptureSettingsSection(props: {
     <Stack spacing={3}>
       <Box>
         <Typography variant="h6">Capture</Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
           Manage Edgeshark availability for packet capture and Wireshark noVNC sessions.
         </Typography>
       </Box>
@@ -411,14 +429,24 @@ function CaptureSettingsSection(props: {
           slotProps={{ input: { readOnly: true } }}
           data-testid="standalone-settings-capture-status"
         />
-        <Stack direction="row" spacing={1.25} flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{
+            flexWrap: "wrap"
+          }}
+        >
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
             onClick={() => {
               void props.refreshCaptureStatus();
             }}
-            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            disabled={
+              !props.captureEndpoint ||
+              props.captureStatusLoading ||
+              props.captureActionLoading !== null
+            }
             data-testid="standalone-settings-capture-refresh"
           >
             Refresh
@@ -427,7 +455,11 @@ function CaptureSettingsSection(props: {
             variant="outlined"
             startIcon={<DownloadIcon />}
             onClick={() => runCaptureAction("install")}
-            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            disabled={
+              !props.captureEndpoint ||
+              props.captureStatusLoading ||
+              props.captureActionLoading !== null
+            }
             data-testid="standalone-settings-capture-install"
           >
             Install
@@ -437,15 +469,24 @@ function CaptureSettingsSection(props: {
             color="warning"
             startIcon={<UploadIcon />}
             onClick={() => runCaptureAction("uninstall")}
-            disabled={!props.captureEndpoint || props.captureStatusLoading || props.captureActionLoading !== null}
+            disabled={
+              !props.captureEndpoint ||
+              props.captureStatusLoading ||
+              props.captureActionLoading !== null
+            }
             data-testid="standalone-settings-capture-uninstall"
           >
             Uninstall
           </Button>
         </Stack>
-        <Typography variant="caption" color="text.secondary">
-          Capture defaults (image, pull policy, packetflix host/port) are controlled on the
-          API server via environment variables.
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary"
+          }}
+        >
+          Capture defaults (image, pull policy, packetflix host/port) are controlled on the API
+          server via environment variables.
         </Typography>
       </SectionCard>
       <SectionCard
@@ -478,7 +519,10 @@ function CaptureSettingsSection(props: {
           <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
             Wireshark VNC
           </ToggleButton>
-          <ToggleButton value="edgeshark" data-testid="standalone-settings-capture-default-edgeshark">
+          <ToggleButton
+            value="edgeshark"
+            data-testid="standalone-settings-capture-default-edgeshark"
+          >
             Edgeshark
           </ToggleButton>
         </ToggleButtonGroup>
@@ -491,7 +535,13 @@ function CaptureSettingsSection(props: {
           helperText="Used for packetflix URI generation on the selected endpoint in this browser session only."
           data-testid="standalone-settings-capture-session-hostname"
         />
-        <Stack direction="row" spacing={1.25} flexWrap="wrap">
+        <Stack
+          direction="row"
+          spacing={1.25}
+          sx={{
+            flexWrap: "wrap"
+          }}
+        >
           <Button
             variant="outlined"
             onClick={props.applyCaptureSessionHostname}
@@ -534,10 +584,12 @@ export function SettingsOverlay({
   const pagesMode = isPagesRuntimeMode();
   const [panelOpen, setPanelOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(
-    () => normalizeSettingsSectionForMode("endpoints", isPagesRuntimeMode())
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(() =>
+    normalizeSettingsSectionForMode("endpoints", isPagesRuntimeMode())
   );
-  const [requestedEndpointAction, setRequestedEndpointAction] = useState<EndpointUiAction | null>(null);
+  const [requestedEndpointAction, setRequestedEndpointAction] = useState<EndpointUiAction | null>(
+    null
+  );
   const [sshUserMappingText, setSshUserMappingText] = useState("");
   const [telnetPortText, setTelnetPortText] = useState("");
   const [fontSizeText, setFontSizeText] = useState("");
@@ -546,7 +598,9 @@ export function SettingsOverlay({
   const [versionInfo, setVersionInfo] = useState("");
   const [versionCheck, setVersionCheck] = useState("");
   const [captureStatusLoading, setCaptureStatusLoading] = useState(false);
-  const [captureActionLoading, setCaptureActionLoading] = useState<"install" | "uninstall" | null>(null);
+  const [captureActionLoading, setCaptureActionLoading] = useState<"install" | "uninstall" | null>(
+    null
+  );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState<EdgeSharkStatusResponse | null>(null);
   const [capturePreferences, setCapturePreferences] = useState<CapturePreferences>(() =>
@@ -561,9 +615,10 @@ export function SettingsOverlay({
   const captureEndpoint = captureSettingsEndpoint(endpoints, captureEndpointId);
   const captureEndpointLabel = captureSettingsEndpointLabel(captureEndpoint);
   const settingsSections = useMemo(
-    () => pagesMode
-      ? SETTINGS_SECTIONS.filter((section) => !PAGES_HIDDEN_SETTINGS_SECTIONS.has(section.key))
-      : SETTINGS_SECTIONS,
+    () =>
+      pagesMode
+        ? SETTINGS_SECTIONS.filter((section) => !PAGES_HIDDEN_SETTINGS_SECTIONS.has(section.key))
+        : SETTINGS_SECTIONS,
     [pagesMode]
   );
 
@@ -667,19 +722,22 @@ export function SettingsOverlay({
     void refreshCaptureStatus();
   }, [activeSection, captureEndpoint?.id, dialogOpen, refreshCaptureStatus]);
 
-  const handlePreferredCaptureActionChange = useCallback((
-    _event: React.MouseEvent<HTMLElement>,
-    nextAction: CapturePreferredAction | null
-  ) => {
-    if (!nextAction) {
-      return;
-    }
-    const persisted = persistCapturePreferences({
-      ...capturePreferences,
-      preferredAction: nextAction
-    }, captureEndpoint?.id);
-    setCapturePreferences(persisted);
-  }, [captureEndpoint?.id, capturePreferences]);
+  const handlePreferredCaptureActionChange = useCallback(
+    (_event: React.MouseEvent<HTMLElement>, nextAction: CapturePreferredAction | null) => {
+      if (!nextAction) {
+        return;
+      }
+      const persisted = persistCapturePreferences(
+        {
+          ...capturePreferences,
+          preferredAction: nextAction
+        },
+        captureEndpoint?.id
+      );
+      setCapturePreferences(persisted);
+    },
+    [captureEndpoint?.id, capturePreferences]
+  );
 
   const applyCaptureSessionHostname = useCallback(() => {
     const next = setSessionHostnameOverride(captureSessionHostname, captureEndpoint?.id);
@@ -731,7 +789,12 @@ export function SettingsOverlay({
           <Stack spacing={3}>
             <Box>
               <Typography variant="h6">Endpoints</Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Configure every `clab-api-server` session that should appear in the explorer. The
                 selected target endpoint is resolved per action from endpoint context or a picker.
               </Typography>
@@ -757,7 +820,12 @@ export function SettingsOverlay({
           <Stack spacing={3}>
             <Box>
               <Typography variant="h6">General</Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
                 Standalone preferences live here so lab editing settings can stay in their own
                 dedicated flow.
               </Typography>
@@ -792,13 +860,25 @@ export function SettingsOverlay({
                 }}
               >
                 <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "center"
+                    }}
+                  >
                     <DarkModeIcon fontSize="small" />
                     <span>Dark</span>
                   </Stack>
                 </ToggleButton>
                 <ToggleButton value="light" data-testid="standalone-settings-theme-light">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      alignItems: "center"
+                    }}
+                  >
                     <LightModeIcon fontSize="small" />
                     <span>Light</span>
                   </Stack>
@@ -812,8 +892,14 @@ export function SettingsOverlay({
           <Stack spacing={3}>
             <Box>
               <Typography variant="h6">Terminal</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Configure standalone defaults for SSH username resolution, telnet access, and terminal font sizing.
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
+                Configure standalone defaults for SSH username resolution, telnet access, and
+                terminal font sizing.
               </Typography>
             </Box>
             <SectionCard
@@ -877,7 +963,14 @@ export function SettingsOverlay({
                 }}
                 data-testid="standalone-settings-font-size"
               />
-              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              <Stack
+                direction="row"
+                spacing={0.75}
+                useFlexGap
+                sx={{
+                  flexWrap: "wrap"
+                }}
+              >
                 {TERMINAL_FONT_SIZE_PRESETS.map((preset) => (
                   <Chip
                     key={preset}
@@ -890,9 +983,14 @@ export function SettingsOverlay({
                   />
                 ))}
               </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Font size is global for all terminals. In terminal windows, use Actions or Alt+Up, Alt+Down,
-                Alt+0 for quick adjustment.
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary"
+                }}
+              >
+                Font size is global for all terminals. In terminal windows, use Actions or Alt+Up,
+                Alt+Down, Alt+0 for quick adjustment.
               </Typography>
               {terminalDraft.error === null ? (
                 <Alert
@@ -1005,7 +1103,13 @@ export function SettingsOverlay({
           }}
         >
           <Stack spacing={1.5}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack
+              direction="row"
+              sx={{
+                justifyContent: "space-between",
+                alignItems: "center"
+              }}
+            >
               <Typography variant="subtitle2">Quick Settings</Typography>
               <IconButton size="small" onClick={handleClosePanel} aria-label="Close quick settings">
                 <CloseIcon fontSize="small" />
@@ -1093,7 +1197,9 @@ export function SettingsOverlay({
                     {index > 0 ? <Divider /> : null}
                     <ListItemButton
                       selected={section.key === activeSection}
-                      onClick={() => setActiveSection(normalizeSettingsSectionForMode(section.key, pagesMode))}
+                      onClick={() =>
+                        setActiveSection(normalizeSettingsSectionForMode(section.key, pagesMode))
+                      }
                       data-testid={`standalone-settings-nav-${section.key}`}
                       sx={{
                         alignItems: "flex-start",
@@ -1119,9 +1225,10 @@ export function SettingsOverlay({
                       <ListItemText
                         primary={section.label}
                         secondary={section.description}
-                        primaryTypographyProps={{ fontWeight: 600, color: "inherit" }}
-                        secondaryTypographyProps={{ sx: { mt: 0.25, color: "text.secondary" } }}
-                      />
+                        slotProps={{
+                          primary: { sx: { fontWeight: 600, color: "inherit" } },
+                          secondary: { sx: { mt: 0.25, color: "text.secondary" } }
+                        }} />
                     </ListItemButton>
                   </React.Fragment>
                 ))}

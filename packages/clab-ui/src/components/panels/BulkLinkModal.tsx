@@ -56,11 +56,22 @@ const EXAMPLES: readonly ExampleDefinition[] = [
 
 const ExampleRow: React.FC<{ index: number; def: ExampleDefinition }> = ({ index, def }) => (
   <Box sx={{ display: "flex", alignItems: FLEX_START, gap: 1 }}>
-    <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+    <Typography
+      variant="body2"
+      sx={{
+        color: "text.secondary",
+        flexShrink: 0
+      }}
+    >
       {index}.
     </Typography>
     <Box>
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary"
+        }}
+      >
         {def.title}
       </Typography>
       <Box sx={{ mt: 0.25 }}>
@@ -72,7 +83,13 @@ const ExampleRow: React.FC<{ index: number; def: ExampleDefinition }> = ({ index
 
 const ExamplesSection: React.FC = () => (
   <Alert severity="info" variant="outlined" icon={false}>
-    <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+    <Typography
+      variant="subtitle2"
+      sx={{
+        fontWeight: 600,
+        mb: 1
+      }}
+    >
       Examples
     </Typography>
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, fontSize: "0.875rem" }}>
@@ -81,7 +98,13 @@ const ExamplesSection: React.FC = () => (
       ))}
     </Box>
     <Divider sx={{ my: 1 }} />
-    <Typography variant="body2" color="text.secondary" component="div">
+    <Typography
+      variant="body2"
+      component="div"
+      sx={{
+        color: "text.secondary"
+      }}
+    >
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 1.5, rowGap: 0.25 }}>
         <Box>
           <CopyableCode>*</CopyableCode> any chars
@@ -166,7 +189,15 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
       setPendingCandidates,
       onClose
     });
-  }, [addEdge, canApply, getCurrentEdges, getCurrentNodes, onClose, pendingCandidates, sessionClient]);
+  }, [
+    addEdge,
+    canApply,
+    getCurrentEdges,
+    getCurrentNodes,
+    onClose,
+    pendingCandidates,
+    sessionClient
+  ]);
 
   return (
     <>
@@ -184,7 +215,12 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
         />
         <DialogContent dividers>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary"
+              }}
+            >
               Create multiple links by matching node names with patterns.
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>

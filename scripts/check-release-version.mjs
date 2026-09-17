@@ -11,9 +11,14 @@ import {
 } from "./workspace-config.mjs";
 
 const root = readJson("package.json");
-const lock = YAML.parse(
+// pnpm 12 separates lockfile metadata and dependency resolutions into YAML documents.
+const lockDocuments = YAML.parseAllDocuments(
   fs.readFileSync(path.join(projectRoot, "pnpm-lock.yaml"), "utf8"),
 );
+for (const document of lockDocuments) {
+  if (document.errors.length > 0) throw document.errors[0];
+}
+const lock = Object.assign({}, ...lockDocuments.map((document) => document.toJSON()));
 const byName = new Map(
   workspacePackages.map((pkg) => [pkg.packageJson.name, pkg]),
 );

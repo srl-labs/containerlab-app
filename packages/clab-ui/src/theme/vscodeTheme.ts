@@ -186,49 +186,51 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
   // explicit, theme-aware colors from VS Code's purpose-built validation vars.
   MuiAlert: {
     styleOverrides: {
-      standardError: {
-        backgroundColor: "var(--vscode-inputValidation-errorBackground)",
-        color: "var(--vscode-inputValidation-errorForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-errorBorder)",
-        "& .MuiAlert-icon": { color: EDITOR_ERROR_FOREGROUND }
-      },
-      filledError: {
-        backgroundColor: "var(--vscode-inputValidation-errorBackground)",
-        color: "var(--vscode-inputValidation-errorForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-errorBorder)"
-      },
-      standardWarning: {
-        backgroundColor: "var(--vscode-inputValidation-warningBackground)",
-        color: "var(--vscode-inputValidation-warningForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-warningBorder)",
-        "& .MuiAlert-icon": { color: EDITOR_WARNING_FOREGROUND }
-      },
-      filledWarning: {
-        backgroundColor: "var(--vscode-inputValidation-warningBackground)",
-        color: "var(--vscode-inputValidation-warningForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-warningBorder)"
-      },
-      standardInfo: {
-        backgroundColor: "var(--vscode-inputValidation-infoBackground)",
-        color: "var(--vscode-inputValidation-infoForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-infoBorder)",
-        "& .MuiAlert-icon": { color: EDITOR_INFO_FOREGROUND }
-      },
-      filledInfo: {
-        backgroundColor: "var(--vscode-inputValidation-infoBackground)",
-        color: "var(--vscode-inputValidation-infoForeground, var(--vscode-foreground))",
-        border: "1px solid var(--vscode-inputValidation-infoBorder)"
-      },
-      standardSuccess: {
-        backgroundColor: vscodePalette.background.paper,
-        color: vscodePalette.text.primary,
-        border: `1px solid ${TESTING_ICON_PASSED}`,
-        "& .MuiAlert-icon": { color: TESTING_ICON_PASSED }
-      },
-      filledSuccess: {
-        backgroundColor: vscodePalette.background.paper,
-        color: vscodePalette.text.primary,
-        border: `1px solid ${TESTING_ICON_PASSED}`
+      root: {
+        "&.MuiAlert-standard.MuiAlert-colorError": {
+          backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+          color: "var(--vscode-inputValidation-errorForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-errorBorder)",
+          "& .MuiAlert-icon": { color: EDITOR_ERROR_FOREGROUND }
+        },
+        "&.MuiAlert-filled.MuiAlert-colorError": {
+          backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+          color: "var(--vscode-inputValidation-errorForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-errorBorder)"
+        },
+        "&.MuiAlert-standard.MuiAlert-colorWarning": {
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-warningBorder)",
+          "& .MuiAlert-icon": { color: EDITOR_WARNING_FOREGROUND }
+        },
+        "&.MuiAlert-filled.MuiAlert-colorWarning": {
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          color: "var(--vscode-inputValidation-warningForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-warningBorder)"
+        },
+        "&.MuiAlert-standard.MuiAlert-colorInfo": {
+          backgroundColor: "var(--vscode-inputValidation-infoBackground)",
+          color: "var(--vscode-inputValidation-infoForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-infoBorder)",
+          "& .MuiAlert-icon": { color: EDITOR_INFO_FOREGROUND }
+        },
+        "&.MuiAlert-filled.MuiAlert-colorInfo": {
+          backgroundColor: "var(--vscode-inputValidation-infoBackground)",
+          color: "var(--vscode-inputValidation-infoForeground, var(--vscode-foreground))",
+          border: "1px solid var(--vscode-inputValidation-infoBorder)"
+        },
+        "&.MuiAlert-standard.MuiAlert-colorSuccess": {
+          backgroundColor: vscodePalette.background.paper,
+          color: vscodePalette.text.primary,
+          border: `1px solid ${TESTING_ICON_PASSED}`,
+          "& .MuiAlert-icon": { color: TESTING_ICON_PASSED }
+        },
+        "&.MuiAlert-filled.MuiAlert-colorSuccess": {
+          backgroundColor: vscodePalette.background.paper,
+          color: vscodePalette.text.primary,
+          border: `1px solid ${TESTING_ICON_PASSED}`
+        }
       }
     }
   },

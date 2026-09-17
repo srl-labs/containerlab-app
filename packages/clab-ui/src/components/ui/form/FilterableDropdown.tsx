@@ -62,7 +62,9 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
         if (typeof option === "string") return option;
         return option.label;
       }}
-      isOptionEqualToValue={(option, val) => option.value === val.value}
+      isOptionEqualToValue={(option, val) =>
+        option.value === (typeof val === "string" ? val : val.value)
+      }
       freeSolo={allowFreeText}
       disabled={disabled}
       size="small"

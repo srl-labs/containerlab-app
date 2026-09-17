@@ -4,7 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
+import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlined";
 import LockIcon from "@mui/icons-material/Lock";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import Box from "@mui/material/Box";

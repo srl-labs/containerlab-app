@@ -1,6 +1,6 @@
 {
   "name": "@containerlab/clab-ui",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "private": false,
   "description": "Shared UI package for containerlab webviews and topology editing.",
   "license": "Apache-2.0",
@@ -139,12 +139,11 @@
     "zustand": "catalog:",
     "@mui/system": "catalog:",
     "@types/d3-force": "catalog:",
-    "@types/geojson": "catalog:"
+    "@types/geojson": "catalog:",
+    "use-sync-external-store": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
-    "@types/markdown-it": "catalog:",
-    "@types/markdown-it-emoji": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

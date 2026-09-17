@@ -3,7 +3,6 @@
  * ============================================================================= */
 
 /* Third-party CSS imports */
-/* Use explicit paths so Madge can resolve these imports (lint:circular). */
 @import "monaco-editor/min/vs/editor/editor.main.css";
 @import "maplibre-gl/dist/maplibre-gl.css";
 @import "@xyflow/react/dist/style.css";

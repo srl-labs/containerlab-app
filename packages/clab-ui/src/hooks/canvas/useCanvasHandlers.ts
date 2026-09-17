@@ -121,9 +121,9 @@ interface CanvasHandlers {
   onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
   onEdgeContextMenu: (event: React.MouseEvent, edge: Edge) => void;
   onPaneContextMenu: (event: MouseEvent | React.MouseEvent) => void;
-  onNodeDragStart: NodeMouseHandler;
-  onNodeDrag: NodeMouseHandler;
-  onNodeDragStop: NodeMouseHandler;
+  onNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void;
+  onNodeDrag: (event: MouseEvent | TouchEvent, node: Node) => void;
+  onNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void;
   contextMenu: ContextMenuState;
   closeContextMenu: () => void;
 }
@@ -444,10 +444,7 @@ function flushScheduledGroupMove(
   flushPendingGroupMove();
 }
 
-function persistPositionChanges(
-  sessionClient: TopologySessionClient,
-  changes: NodeChange[]
-) {
+function persistPositionChanges(sessionClient: TopologySessionClient, changes: NodeChange[]) {
   const currentNodes = useGraphStore.getState().nodes;
   const nodeTypeMap = new Map(currentNodes.map((n) => [n.id, n.type]));
   const movedPositions = changes
@@ -536,7 +533,7 @@ function useNodeDragHandlers(
     });
   }, [flushPendingGroupMove]);
 
-  const onNodeDragStart: NodeMouseHandler = useCallback(
+  const onNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void = useCallback(
     (_event, node) => {
       if (isLockedRef.current || !nodes) return;
 
@@ -558,7 +555,7 @@ function useNodeDragHandlers(
   );
 
   // Called during drag - moves members with group using direct state update
-  const onNodeDrag: NodeMouseHandler = useCallback(
+  const onNodeDrag: (event: MouseEvent | TouchEvent, node: Node) => void = useCallback(
     (_event, node) => {
       if (isLockedRef.current || !setNodes) return;
 
@@ -592,7 +589,7 @@ function useNodeDragHandlers(
     [isLockedRef, setNodes, flushPendingGroupMove, scheduleGroupMoveFlush]
   );
 
-  const onNodeDragStop: NodeMouseHandler = useCallback(
+  const onNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void = useCallback(
     (_event, node) => {
       if (isLockedRef.current) return;
 

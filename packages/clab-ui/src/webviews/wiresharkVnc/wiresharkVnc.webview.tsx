@@ -111,7 +111,9 @@ export function WiresharkVncApp(): React.JSX.Element {
 
   return (
     <MuiThemeProvider>
-      <Box sx={{ position: "relative", width: "100%", height: "100%", bgcolor: "background.default" }}>
+      <Box
+        sx={{ position: "relative", width: "100%", height: "100%", bgcolor: "background.default" }}
+      >
         <Box
           component="iframe"
           title="Wireshark VNC"
@@ -162,7 +164,12 @@ export function WiresharkVncApp(): React.JSX.Element {
                 bgcolor: (theme) => theme.alpha(theme.palette.background.paper, 0.92)
               }}
             >
-              <Stack spacing={1.5} alignItems="center">
+              <Stack
+                spacing={1.5}
+                sx={{
+                  alignItems: "center"
+                }}
+              >
                 <CircularProgress size={24} />
                 <Typography variant="subtitle1">Loading Wireshark...</Typography>
                 {showVolumeTip ? (
@@ -171,7 +178,12 @@ export function WiresharkVncApp(): React.JSX.Element {
                   </Alert>
                 ) : null}
                 {retryInfo ? (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary"
+                    }}
+                  >
                     {retryInfo}
                   </Typography>
                 ) : null}

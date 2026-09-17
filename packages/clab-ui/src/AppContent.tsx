@@ -76,11 +76,7 @@ import {
   useTopoViewerStore
 } from "./stores";
 import type { TopoViewerState } from "./stores";
-import {
-  executeTopologyCommand,
-  getCustomIconMap,
-  saveViewerSettings
-} from "./services";
+import { executeTopologyCommand, getCustomIconMap, saveViewerSettings } from "./services";
 import { useClabUiHost, useTopologySessionClient, useClabUiRuntime } from "./host";
 import {
   PENDING_NETEM_KEY,
@@ -358,8 +354,8 @@ function useGraphNodeById(nodeId: string | null): TopoNode | null {
       (graphState) =>
         nodeId != null && nodeId.length > 0
           ? (graphState.nodes.find(
-            (node): node is TopoNode => node.id === nodeId && isTopoNode(node)
-          ) ?? null)
+              (node): node is TopoNode => node.id === nodeId && isTopoNode(node)
+            ) ?? null)
           : null,
       [nodeId]
     ),
@@ -373,8 +369,8 @@ function useGraphEdgeById(edgeId: string | null): TopoEdge | null {
       (graphState) =>
         edgeId != null && edgeId.length > 0
           ? (graphState.edges.find(
-            (edge): edge is TopoEdge => edge.id === edgeId && isTopoEdge(edge)
-          ) ?? null)
+              (edge): edge is TopoEdge => edge.id === edgeId && isTopoEdge(edge)
+            ) ?? null)
           : null,
       [edgeId]
     ),
@@ -1430,11 +1426,13 @@ export const AppContent: React.FC<AppContentProps> = ({
     <MuiThemeProvider>
       <Box
         data-testid="topoviewer-app"
-        display="flex"
-        flexDirection="column"
-        height="100%"
-        width="100%"
-        overflow="hidden"
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          width: "100%",
+          overflow: "hidden"
+        }}
       >
         <AnnotationRuntimeBridge
           rfInstance={rfInstance}
@@ -1500,9 +1498,9 @@ export const AppContent: React.FC<AppContentProps> = ({
                   "&:hover": { bgcolor: "primary.main", opacity: 0.3 },
                   ...(isDevExplorerDragging
                     ? {
-                      bgcolor: "primary.main",
-                      opacity: 0.28
-                    }
+                        bgcolor: "primary.main",
+                        opacity: 0.28
+                      }
                     : {})
                 }}
               />

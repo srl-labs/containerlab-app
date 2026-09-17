@@ -4,10 +4,10 @@ Publish one GitHub Release for the product you want to ship. The tag selects the
 
 | Product | Manifest | Prepared version/tag | Result |
 | --- | --- | --- | --- |
-| Shared UI | `packages/clab-ui/package.json` | `0.3.2` for the first manual publish; later `clab-ui-v<version>` | `@containerlab/clab-ui` on npmjs.org |
-| VS Code extension | `apps/vscode-containerlab/package.json` | `vscode-v0.26.4` | VSIX, Marketplace, Open VSX |
-| Web app | `apps/web/package.json` | `web-v0.2.3` | `ghcr.io/srl-labs/containerlab-web:0.2.3` |
-| Desktop app | `apps/desktop/package.json` | `desktop-v0.2.3` | Linux, macOS, Windows installers |
+| Shared UI | `packages/clab-ui/package.json` | `0.4.0` for the first manual publish; later `clab-ui-v<version>` | `@containerlab/clab-ui` on npmjs.org |
+| VS Code extension | `apps/vscode-containerlab/package.json` | `vscode-v0.27.0` | VSIX, Marketplace, Open VSX |
+| Web app | `apps/web/package.json` | `web-v0.3.0` | `ghcr.io/srl-labs/containerlab-web:0.3.0` |
+| Desktop app | `apps/desktop/package.json` | `desktop-v0.3.0` | Linux, macOS, Windows installers |
 
 Only `@containerlab/clab-ui` is a public npm package. Internal libraries and application manifests stay private. Their versions do not have to match the root or each other. Applications bundle their workspace UI from the release commit; a UI-only npm release does not update installed applications.
 
@@ -38,7 +38,7 @@ npm login --registry=https://registry.npmjs.org
 npm publish ./artifacts/clab-ui.tgz --access public
 ```
 
-This publishes the actual built package (currently 0.3.2), not a placeholder. Then configure the trusted publisher above. The next automated release must use a new manifest version, for example **0.3.3** with tag **`clab-ui-v0.3.3`**. Publishing the bootstrap version again will fail the immutable-version check. All later npm releases can run through GitHub Releases without an npm token. The first-publication limitation is also tracked in [npm's documentation issue](https://github.com/npm/documentation/issues/1926).
+This publishes the actual built package (currently 0.4.0), not a placeholder. Then configure the trusted publisher above. The next automated release must use a new manifest version, for example **0.4.1** with tag **`clab-ui-v0.4.1`**. Publishing the bootstrap version again will fail the immutable-version check. All later npm releases can run through GitHub Releases without an npm token. The first-publication limitation is also tracked in [npm's documentation issue](https://github.com/npm/documentation/issues/1926).
 
 ### GitHub secrets for other products
 
@@ -55,7 +55,7 @@ Missing store tokens skip their respective stores; the workflow still produces a
 
 ## GitHub Latest and registry tags
 
-Keep the existing `v0.2.2` release and its tag. It can remain **Latest** until the next stable desktop release is ready. Mark that release (for example `desktop-v0.2.3`) as Latest; do not move or rename old Git tags. This keeps the repository's `/releases/latest` link pointing to desktop downloads.
+Keep the existing `v0.2.2` release and its tag. It can remain **Latest** until the next stable desktop release is ready. Mark that release (for example `desktop-v0.3.0`) as Latest; do not move or rename old Git tags. This keeps the repository's `/releases/latest` link pointing to desktop downloads.
 
 | Channel | What updates it |
 | --- | --- |
@@ -73,7 +73,7 @@ These are independent. UI, VS Code, and web GitHub Releases should have **Set as
 3. In GitHub, choose **Releases → Draft a new release**, create the product tag at the reviewed commit, and enter product-specific release notes. Alternatively, use `gh release create <tag> --target <commit> --title '<product> <version>' --notes-file <notes.md> --latest=false`.
 4. Publish the release. The matching workflow builds and publishes only that product. Use **Set as the latest release** only for stable desktop releases; other product releases should leave it unchecked. GitHub's Latest designation is shared by the whole repository.
 
-Examples: after bootstrapping and bumping the UI to 0.3.3, publishing `clab-ui-v0.3.3` ships only the UI to npm; publishing `vscode-v0.26.4` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
+Examples: after bootstrapping and bumping the UI to 0.4.1, publishing `clab-ui-v0.4.1` ships only the UI to npm; publishing `vscode-v0.27.0` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
 
 | Product | Useful checks |
 | --- | --- |

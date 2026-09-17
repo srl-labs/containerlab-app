@@ -47,7 +47,12 @@ const AuthorCard: React.FC<AuthorCardProps> = ({ name, title, linkedIn, iconText
         {iconText}
       </Avatar>
       <Box sx={{ flexGrow: 1 }}>
-        <Typography variant="body2" fontWeight={500}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 500
+          }}
+        >
           {name}
         </Typography>
         <Typography variant="caption" color={TEXT_SECONDARY}>
@@ -77,7 +82,12 @@ const RepoCard: React.FC<RepoCardProps> = ({ name, description, url, icon }) => 
     >
       <Box sx={{ color: TEXT_SECONDARY }}>{icon}</Box>
       <Box sx={{ flexGrow: 1 }}>
-        <Typography variant="body2" fontWeight={500}>
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 500
+          }}
+        >
           {name}
         </Typography>
         <Typography variant="caption" color={TEXT_SECONDARY}>
@@ -265,7 +275,12 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
         title={
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <AnimatedContainerlabLogo />
-            <Typography variant="h5" fontWeight={600}>
+            <Typography
+              variant="h5"
+              sx={{
+                fontWeight: 600
+              }}
+            >
               TopoViewer
             </Typography>
           </Box>

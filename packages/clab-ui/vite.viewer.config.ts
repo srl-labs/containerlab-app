@@ -15,7 +15,7 @@ export default defineConfig({
   build: {
     outDir: "dist-viewer",
     emptyOutDir: true,
-    rollupOptions: {
+    rolldownOptions: {
       input: path.resolve(__dirname, "viewer.html"),
       onwarn(warning, warn) {
         // This viewer runs entirely in the browser; dependency RSC client

@@ -103,7 +103,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
       </Typography>
 
       {hasDescription ? (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: mbInput }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: mbInput
+          }}
+        >
           {description}
         </Typography>
       ) : null}
@@ -171,9 +177,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
         ) : null}
         <Typography
           variant="caption"
-          color="text.secondary"
           component="ul"
-          sx={{ pl: 2, m: 0, "& li": { mb: 0.25 } }}
+          sx={{
+            color: "text.secondary",
+            pl: 2,
+            m: 0,
+            "& li": { mb: 0.25 }
+          }}
         >
           <li>
             Use <code>*</code> for wildcard (e.g., <code>srl*</code>)

@@ -143,7 +143,12 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 
 ## Development
 
-Use Node.js `24.18.0` and pnpm `11.17.0` (pinned in `package.json`). Local web development also needs `openssl` for HTTPS certificates.
+Use Node.js `24.21.0` and pnpm `12.4.2` (pinned in `package.json`). Local web development also needs `openssl` for HTTPS certificates.
+
+Builds and typechecks use TypeScript 7. The dependency catalog is shared across all hosts;
+Node type declarations follow the Node 24 LTS runtime.
+VS Code API types stay on 1.105 to match the extension's minimum and support editor forks.
+Monaco remains on 0.55.1 until the YAML worker supports the export paths introduced in 0.56.
 
 ```sh
 corepack enable

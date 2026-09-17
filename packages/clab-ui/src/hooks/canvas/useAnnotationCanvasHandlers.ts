@@ -26,8 +26,8 @@ interface UseAnnotationCanvasHandlersOptions {
   reactFlowInstanceRef: RefObject<ReactFlowInstance | null>;
   baseOnPaneClick: (event: React.MouseEvent) => void;
   baseOnNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
-  baseOnNodeDragStart: (event: React.MouseEvent, node: Node) => void;
-  baseOnNodeDragStop: (event: React.MouseEvent, node: Node) => void;
+  baseOnNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void;
+  baseOnNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void;
   /** Callback for shift+click node creation */
   onShiftClickCreate?: (position: { x: number; y: number }) => void;
 }
@@ -35,8 +35,8 @@ interface UseAnnotationCanvasHandlersOptions {
 interface UseAnnotationCanvasHandlersReturn {
   wrappedOnPaneClick: (event: React.MouseEvent) => void;
   wrappedOnNodeDoubleClick: (event: React.MouseEvent, node: Node) => void;
-  wrappedOnNodeDragStart: (event: React.MouseEvent, node: Node) => void;
-  wrappedOnNodeDragStop: (event: React.MouseEvent, node: Node) => void;
+  wrappedOnNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void;
+  wrappedOnNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void;
   isInAddMode: boolean;
   addModeMessage: string | null;
 }

@@ -157,12 +157,18 @@ async function copyFonts() {
   }
 }
 
-// Copy MapLibre CSP worker to dist for webview CSP compatibility
+// Bundle the MapLibre module worker and its shared chunk for webview CSP compatibility.
 async function copyMapLibreWorker() {
-  const srcPath = require.resolve("maplibre-gl/dist/maplibre-gl-csp-worker.js", { paths: [clabUiPackageRoot] });
+  const srcPath = require.resolve("maplibre-gl/dist/maplibre-gl-worker.mjs", { paths: [clabUiPackageRoot] });
   const destPath = path.join(__dirname, "dist/maplibre-gl-csp-worker.js");
-  if (!fs.existsSync(srcPath)) return;
-  await fs.promises.copyFile(srcPath, destPath);
+  await esbuild.build({
+    entryPoints: [srcPath],
+    outfile: destPath,
+    bundle: true,
+    format: "esm",
+    platform: "browser",
+    target: "es2022"
+  });
 }
 
 // Build CSS with PostCSS
@@ -383,7 +389,7 @@ async function build() {
 
   // Watch mode
   if (isWatch) {
-    const { watch } = require("chokidar");
+    const { watch } = await import("chokidar");
 
     // Watch extension and webview with esbuild
     const extCtx = await esbuild.context({
@@ -527,8 +533,9 @@ async function build() {
 
     // Watch CSS files and rebuild
     const cssWatchRoot = path.dirname(clabUiGlobalCss);
-    const cssWatcher = watch(path.join(cssWatchRoot, "**/*.css"), {
-      ignoreInitial: true
+    const cssWatcher = watch(cssWatchRoot, {
+      ignoreInitial: true,
+      ignored: (filePath, stats) => stats?.isFile() && !filePath.endsWith(".css")
     });
     cssWatcher.on("change", () => {
       console.log("CSS changed, rebuilding...");

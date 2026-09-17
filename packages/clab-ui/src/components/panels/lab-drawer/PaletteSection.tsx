@@ -21,7 +21,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import SelectAllIcon from "@mui/icons-material/SelectAll";
 import SpeedIcon from "@mui/icons-material/Speed";
 import StarIcon from "@mui/icons-material/Star";
-import StarOutlineIcon from "@mui/icons-material/StarOutline";
+import StarOutlineIcon from "@mui/icons-material/StarOutlined";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";

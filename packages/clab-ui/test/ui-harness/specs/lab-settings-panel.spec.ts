@@ -53,15 +53,8 @@ test.describe("Lab Settings Modal", () => {
   }
 
   async function expectMuiSelectDisabled(modal: any, labelText: string) {
-    const trigger = muiSelectTriggerByLabel(modal, labelText);
-    await expect
-      .poll(async () => {
-        const ariaDisabled = await trigger.getAttribute("aria-disabled");
-        const tabIndex = await trigger.getAttribute("tabindex");
-        const cls = (await trigger.getAttribute("class")) ?? "";
-        return ariaDisabled === "true" || tabIndex === "-1" || cls.includes("Mui-disabled");
-      })
-      .toBe(true);
+    const trigger = modal.getByRole("combobox", { name: labelText, exact: true });
+    await expect(trigger).toBeDisabled();
   }
 
   async function chooseOption(page: any, optionText: string | RegExp) {

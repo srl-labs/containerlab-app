@@ -5,6 +5,7 @@ out/
 apps/desktop/release/
 
 # Test output
+.vscode-test/
 coverage/
 test-results/
 playwright-report/
