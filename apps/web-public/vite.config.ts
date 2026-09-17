@@ -5,25 +5,49 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
+const clabUiSrc = path.resolve(workspaceRoot, "packages/clab-ui/src");
 // GitHub Pages serves under /<repo>/; Cloudflare sandbox overrides to "/".
 const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? "/containerlab-app/";
 
-export default defineConfig({
+const clabUiSubpathAliases = [
+  ["styles/global.css", "styles/global.css"],
+  ["monaco/editor-worker", "monaco/editor-worker.ts"],
+  ["monaco/json-worker", "monaco/json-worker.ts"],
+  ["monaco/yaml-worker", "monaco/yaml-worker.ts"],
+  ["monaco/core", "monaco/core.ts"],
+  ["image-manager", "image-manager/index.ts"],
+  ["explorer", "explorer/index.ts"],
+  ["session", "session/index.ts"],
+  ["theme", "theme/index.ts"],
+  ["host", "host/index.ts"],
+  ["yaml", "yaml/index.ts"]
+] as const;
+
+function clabUiDevAliases(): Array<{ find: string | RegExp; replacement: string }> {
+  return [
+    ...clabUiSubpathAliases.map(([subpath, file]) => ({
+      find: `@containerlab/clab-ui/${subpath}`,
+      replacement: path.join(clabUiSrc, file)
+    })),
+    {
+      find: /^@containerlab\/clab-ui$/,
+      replacement: path.join(clabUiSrc, "index.ts")
+    }
+  ];
+}
+
+export default defineConfig(({ command }) => ({
   plugins: [
     react({
       include: /\.(?:jsx|tsx)$/
     })
   ],
-  define: {
-    "import.meta.env.VITE_CLAB_RUNTIME_MODE": JSON.stringify("pages"),
-    // No API server in the public app; requests are served by the in-browser shim.
-    "import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN": JSON.stringify("")
-  },
   base: publicBasePath,
   root: __dirname,
   publicDir: path.resolve(__dirname, "resources"),
   resolve: {
     alias: [
+      ...(command === "serve" ? clabUiDevAliases() : []),
       {
         find: /^monaco-editor$/,
         replacement: "@containerlab/clab-ui/monaco/core"
@@ -72,4 +96,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));

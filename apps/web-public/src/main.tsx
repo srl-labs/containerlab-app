@@ -1,21 +1,17 @@
 /**
- * Lightweight standalone entry point.
+ * Topology editor entry point.
  *
- * Installs the in-browser sandbox shim, then boots the full TopoViewer runtime.
- * The public sandbox always runs against a single fixed in-browser endpoint, so
- * there is no login/connect step — the editor mounts immediately.
+ * The sandbox has no API server. Workspace I/O goes through SandboxBackend
+ * (localStorage + in-memory topology sessions). The editor mounts immediately.
  */
 import { useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import { installPagesSandboxRuntime } from "./pagesSandboxRuntime";
 import type * as StandaloneAppModule from "./standaloneApp";
 
 let bootstrapRoot: Root | null = null;
 let standaloneMountStarted = false;
 let standaloneRuntimeModulePromise: Promise<typeof StandaloneAppModule> | null = null;
-
-installPagesSandboxRuntime();
 
 function LoadingScreen() {
   return (

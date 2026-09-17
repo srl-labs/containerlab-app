@@ -120,7 +120,7 @@ function SectionCard(props: {
     >
       <Stack spacing={2.5}>
         <Box>
-          <Typography variant="subtitle1" fontWeight={600}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             {title}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -283,13 +283,13 @@ export function SettingsOverlay({
                 }}
               >
                 <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <DarkModeIcon fontSize="small" />
                     <span>Dark</span>
                   </Stack>
                 </ToggleButton>
                 <ToggleButton value="light" data-testid="standalone-settings-theme-light">
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <LightModeIcon fontSize="small" />
                     <span>Light</span>
                   </Stack>
@@ -368,7 +368,7 @@ export function SettingsOverlay({
                 }}
                 data-testid="standalone-settings-font-size"
               />
-              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
+              <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
                 {TERMINAL_FONT_SIZE_PRESETS.map((preset) => (
                   <Chip
                     key={preset}
@@ -466,7 +466,7 @@ export function SettingsOverlay({
           }}
         >
           <Stack spacing={1.5}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
               <Typography variant="subtitle2">Quick Settings</Typography>
               <IconButton size="small" onClick={handleClosePanel} aria-label="Close quick settings">
                 <CloseIcon fontSize="small" />
@@ -570,8 +570,10 @@ export function SettingsOverlay({
                       <ListItemText
                         primary={section.label}
                         secondary={section.description}
-                        primaryTypographyProps={{ fontWeight: 600, color: "inherit" }}
-                        secondaryTypographyProps={{ sx: { mt: 0.25, color: "text.secondary" } }}
+                        slotProps={{
+                          primary: { sx: { fontWeight: 600, color: "inherit" } },
+                          secondary: { sx: { mt: 0.25, color: "text.secondary" } }
+                        }}
                       />
                     </ListItemButton>
                   </React.Fragment>

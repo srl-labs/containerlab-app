@@ -3,7 +3,7 @@ import {
   serializeEndpointProfiles,
   type EndpointImportResult
 } from "../endpointTransfer";
-import { SANDBOX_ENDPOINT } from "../pagesSandboxRuntime";
+import { SANDBOX_ENDPOINT } from "../sandboxBackend";
 import {
   useEndpointStore,
   type EndpointConfig,

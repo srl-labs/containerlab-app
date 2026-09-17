@@ -1,5 +1,3 @@
-import { standaloneServerUrl } from "./standaloneServerOrigin";
-
 export interface EndpointHealthMetrics {
   serverInfo: {
     version: string;
@@ -33,32 +31,22 @@ export interface EndpointHealthMetrics {
   };
 }
 
-async function readEndpointHealthError(response: Response): Promise<string> {
-  const payload = (await response.json().catch(() => ({}))) as { error?: unknown; message?: unknown };
-  if (typeof payload.error === "string" && payload.error.trim().length > 0) {
-    return payload.error;
-  }
-  if (typeof payload.message === "string" && payload.message.trim().length > 0) {
-    return payload.message;
-  }
-  return `Health stats request failed (${response.status})`;
-}
-
 export async function fetchEndpointHealthMetrics(
-  endpointId: string,
-  signal?: AbortSignal
+  _endpointId: string,
+  _signal?: AbortSignal
 ): Promise<EndpointHealthMetrics> {
-  const response = await fetch(
-    standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/metrics`),
-    {
-      credentials: "include",
-      signal
-    }
-  );
-  if (!response.ok) {
-    throw new Error(await readEndpointHealthError(response));
-  }
-  return (await response.json()) as EndpointHealthMetrics;
+  return {
+    serverInfo: {
+      version: "topology editor",
+      uptime: "local",
+      startTime: "browser",
+    },
+    metrics: {
+      cpu: { usagePercent: 0, numCPU: 1 },
+      mem: { totalMem: 1, usedMem: 0, availableMem: 1, usagePercent: 0 },
+      disk: { path: "localStorage", totalDisk: 1, usedDisk: 0, freeDisk: 1, usagePercent: 0 },
+    },
+  };
 }
 
 export function formatEndpointHealthPercent(value: number | undefined): string {

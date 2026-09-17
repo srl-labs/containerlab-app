@@ -57,7 +57,6 @@ for (const mode of ["production", "development"] as const) {
             process.env.PORT = new URL(address).port;
             process.env.WEB_TLS_ENABLE = "false";
             process.env.WEB_BASE_PATH = basePath;
-            process.env.VITE_CLAB_RUNTIME_MODE = "standalone";
             delete process.env.VITE_PUBLIC_BASE_PATH;
             vite = await createServer({
               configFile: path.join(webRoot, "vite.config.ts"),
@@ -69,7 +68,7 @@ for (const mode of ["production", "development"] as const) {
             if (viteAddress == null || typeof viteAddress === "string") throw new Error("Vite did not listen");
             appUrl = `http://127.0.0.1:${viteAddress.port}${basePath}/`;
           } finally {
-            for (const name of ["PORT", "WEB_TLS_ENABLE", "WEB_BASE_PATH", "VITE_CLAB_RUNTIME_MODE", "VITE_PUBLIC_BASE_PATH"]) {
+            for (const name of ["PORT", "WEB_TLS_ENABLE", "WEB_BASE_PATH", "VITE_PUBLIC_BASE_PATH"]) {
               if (previousEnv[name] === undefined) delete process.env[name];
               else process.env[name] = previousEnv[name];
             }

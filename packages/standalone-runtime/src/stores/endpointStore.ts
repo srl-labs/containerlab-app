@@ -8,9 +8,9 @@ import {
   type EndpointProfile,
   type EndpointSessionDuration
 } from "../endpointTransfer";
-import { PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 const STORAGE_KEY = "clab-standalone-endpoints";
+const LEGACY_PAGES_SANDBOX_ENDPOINT_ID = "pages-sandbox";
 
 export type EndpointStatus = "connected" | "session_expired" | "offline" | "saved";
 export {
@@ -68,7 +68,7 @@ function buildBrowserEndpointId(): string {
 function persistEndpoints(endpoints: Map<string, EndpointConfig>): void {
   try {
     const serialized: PersistedEndpointConfig[] = Array.from(endpoints.values())
-      .filter((endpoint) => endpoint.id !== PAGES_SANDBOX_ENDPOINT_ID)
+      .filter((endpoint) => endpoint.id !== LEGACY_PAGES_SANDBOX_ENDPOINT_ID)
       .map((endpoint) => ({
         id: endpoint.id,
         url: endpoint.url,
@@ -96,7 +96,7 @@ function loadPersistedEndpoints(): EndpointConfig[] {
       .filter(
         (entry): entry is PersistedEndpointConfig =>
           typeof entry?.id === "string" &&
-          entry.id !== PAGES_SANDBOX_ENDPOINT_ID &&
+          entry.id !== LEGACY_PAGES_SANDBOX_ENDPOINT_ID &&
           typeof entry?.url === "string" &&
           typeof entry?.label === "string" &&
           typeof entry?.username === "string"

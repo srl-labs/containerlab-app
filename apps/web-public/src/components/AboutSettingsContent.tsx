@@ -124,8 +124,10 @@ function LinkList(props: { links: AboutLink[] }) {
             <ListItemText
               primary={link.label}
               secondary={link.description}
-              primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
-              secondaryTypographyProps={{ variant: "caption", color: TEXT_SECONDARY }}
+              slotProps={{
+                primary: { variant: "body2", sx: { fontWeight: 600 } },
+                secondary: { variant: "caption", color: TEXT_SECONDARY }
+              }}
             />
             <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
           </ListItemButton>
@@ -156,8 +158,10 @@ function AuthorList() {
             <ListItemText
               primary={author.name}
               secondary={author.title}
-              primaryTypographyProps={{ variant: "body2", fontWeight: 600 }}
-              secondaryTypographyProps={{ variant: "caption", color: TEXT_SECONDARY }}
+              slotProps={{
+                primary: { variant: "body2", sx: { fontWeight: 600 } },
+                secondary: { variant: "caption", color: TEXT_SECONDARY }
+              }}
             />
             <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
           </ListItemButton>
@@ -180,7 +184,7 @@ export function AboutSettingsContent() {
       <Stack
         direction={{ xs: "column", sm: "row" }}
         spacing={2}
-        alignItems={{ xs: "flex-start", sm: "center" }}
+        sx={{ alignItems: { xs: "flex-start", sm: "center" } }}
       >
         <Box
           component="img"
@@ -189,7 +193,7 @@ export function AboutSettingsContent() {
           sx={{ width: 56, height: 56, flexShrink: 0 }}
         />
         <Box>
-          <Typography variant="h5" fontWeight={600}>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
             TopoViewer
           </Typography>
           <Typography variant="body2" color={TEXT_SECONDARY}>
@@ -199,7 +203,7 @@ export function AboutSettingsContent() {
         </Box>
       </Stack>
 
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2.5} alignItems="stretch">
+      <Stack direction={{ xs: "column", md: "row" }} spacing={2.5} sx={{ alignItems: "stretch" }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <AboutSection title="Documentation" icon={<MenuBookIcon fontSize="small" />}>
             <LinkList links={documentationLinks} />

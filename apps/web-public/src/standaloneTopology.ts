@@ -13,6 +13,7 @@ import {
 } from "@containerlab/clab-ui/session";
 
 import { fetchUiIcons } from "./runtimeApi";
+import { getSandboxBackend } from "./sandboxBackend";
 import {
   getRuntimeContainersForTopology,
   runtimeContainersEqual,
@@ -22,13 +23,11 @@ import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standalone
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
 import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
-import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
   extractEndpointIdFromTopologyId,
   type DeploymentState,
   type ExplorerTreeItem,
   type LoadTopologyTarget,
-  type TopologyDocEventMessage,
   type TopologyFileEntry,
   type TopologySourcePreference,
   firstArgAsTopologyRef,
@@ -102,12 +101,8 @@ export function createStandaloneTopologyManager(
   let currentSessionId: string | null = null;
   let currentTopologyRef: TopologyRef | null = null;
   let currentSourcePreference: TopologySourcePreference = "api-file";
-  let standaloneAuthenticated = false;
   const fileListCache = new Map<string, { entries: TopologyFileEntry[]; fetchedAt: number }>();
   const fileListInFlight = new Map<string, Promise<TopologyFileEntry[]>>();
-  let topologyEventSource: EventSource | null = null;
-  let topologyEventStreamEndpointId: string | null = null;
-  let topologyEventStreamSessionId: string | null = null;
   let pendingRuntimeStatsContainers: HostRuntimeContainer[] | null = null;
   let runtimeStatsGraphUpdateTimer: number | null = null;
 
@@ -148,12 +143,7 @@ export function createStandaloneTopologyManager(
     fileListInFlight.clear();
   }
 
-  function closeTopologyEventStream(): void {
-    topologyEventSource?.close();
-    topologyEventSource = null;
-    topologyEventStreamEndpointId = null;
-    topologyEventStreamSessionId = null;
-  }
+  function closeTopologyEventStream(): void {}
 
   function clearPendingRuntimeStatsGraphUpdate(): void {
     if (runtimeStatsGraphUpdateTimer !== null) {
@@ -315,28 +305,8 @@ export function createStandaloneTopologyManager(
     return resolveEntryFromNameAndPathMatches(candidateFiles, labNameHint, aggregate);
   }
 
-  function withEndpointHeaders(endpointId: string | undefined, init: RequestInit = {}): RequestInit {
-    if (!endpointId) {
-      return init;
-    }
-    const headers = new Headers(init.headers);
-    headers.set("x-endpoint-id", endpointId);
-    return {
-      ...init,
-      headers
-    };
-  }
-
-  async function fetchTopologyFilesForEndpoint(endpointId: string): Promise<TopologyFileEntry[]> {
-    try {
-      const response = await fetch(standaloneServerUrl("/files"), withEndpointHeaders(endpointId, { credentials: "include" }));
-      if (!response.ok) {
-        return [];
-      }
-      return (await response.json()) as TopologyFileEntry[];
-    } catch {
-      return [];
-    }
+  async function fetchTopologyFilesForEndpoint(_endpointId: string): Promise<TopologyFileEntry[]> {
+    return getSandboxBackend().listTopologyFiles();
   }
 
   async function listTopologyFilesForEndpoint(endpointId: string): Promise<TopologyFileEntry[]> {
@@ -382,28 +352,14 @@ export function createStandaloneTopologyManager(
     return filesByEndpoint.flat();
   }
 
-  async function destroyTopologySession(
-    sessionId: string | null,
-    endpointId: string | null = currentEndpointId
-  ): Promise<void> {
+  async function destroyTopologySession(sessionId: string | null): Promise<void> {
     if (!sessionId) {
       return;
     }
-    try {
-      await fetch(
-        `/api/topology/sessions/${encodeURIComponent(sessionId)}`,
-        withEndpointHeaders(endpointId ?? undefined, {
-          method: "DELETE",
-          credentials: "include"
-        })
-      );
-    } catch {
-      // Ignore transient teardown failures; server-side TTL cleanup is a fallback.
-    }
+    getSandboxBackend().disposeSession(sessionId);
   }
 
   async function disposeCurrentSession(): Promise<void> {
-    const endpointId = currentEndpointId;
     const sessionId = currentSessionId;
     currentSessionId = null;
     currentEndpointId = null;
@@ -411,7 +367,7 @@ export function createStandaloneTopologyManager(
     clearPendingRuntimeStatsGraphUpdate();
     closeTopologyEventStream();
     useTopoViewerStore.getState().setCustomIcons([]);
-    await destroyTopologySession(sessionId, endpointId);
+    await destroyTopologySession(sessionId);
   }
 
   async function clearActiveTopology(): Promise<void> {
@@ -441,7 +397,7 @@ export function createStandaloneTopologyManager(
 
   async function createTopologySession(
     topologyRef: TopologyRef,
-    hostOptions: HostContextOptions = {},
+    _hostOptions: HostContextOptions = {},
     endpointIdOverride?: string
   ): Promise<{ endpointId: string; sessionId: string; topologyRef: TopologyRef }> {
     const endpointId = resolveTopologyEndpointId(topologyRef, endpointIdOverride);
@@ -449,49 +405,11 @@ export function createStandaloneTopologyManager(
       throw new Error("No endpoint is available for this topology.");
     }
 
-    const deploymentState =
-      hostOptions.deploymentState ??
-      (isTopologyRunning(topologyRef, options.getLabs()) ? "deployed" : "undeployed");
-    const mode =
-      hostOptions.mode ?? modeForSourcePreference(hostOptions.sourcePreference ?? "api-file");
-    const runtimeContainers = getRuntimeContainersForTopology(topologyRef, options.getLabs());
-
-    const response = await fetch(
-      "/api/topology/sessions",
-      withEndpointHeaders(endpointId, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          topologyRef,
-          mode,
-          deploymentState,
-          sourcePreference: hostOptions.sourcePreference ?? "api-file",
-          runtimeContainers
-        })
-      })
-    );
-
-    if (!response.ok) {
-      throw new Error(`Failed to create topology session: ${response.status} ${response.statusText}`);
-    }
-
-    const payload = (await response.json()) as {
-      sessionId?: unknown;
-      topologyRef?: TopologyRef;
-    };
-    if (typeof payload.sessionId !== "string" || payload.sessionId.trim().length === 0) {
-      throw new Error("Topology session response is invalid");
-    }
-    const canonicalTopologyRef =
-      payload.topologyRef && typeof payload.topologyRef === "object"
-        ? payload.topologyRef
-        : topologyRef;
-
+    const session = getSandboxBackend().createSession(topologyRef);
     return {
-      endpointId: resolveTopologyEndpointId(canonicalTopologyRef, endpointId) ?? endpointId,
-      sessionId: payload.sessionId,
-      topologyRef: canonicalTopologyRef
+      endpointId: resolveTopologyEndpointId(session.topologyRef, endpointId) ?? endpointId,
+      sessionId: session.sessionId,
+      topologyRef: session.topologyRef
     };
   }
 
@@ -517,64 +435,6 @@ export function createStandaloneTopologyManager(
     currentEndpointId = session.endpointId;
     currentSourcePreference = hostOptions.sourcePreference ?? "api-file";
     return currentSessionId;
-  }
-
-  function handleTopologyDocumentEvent(event: TopologyDocEventMessage): void {
-    invalidateTopologyFileListCache(currentEndpointId ?? undefined);
-    options.onTopologyFilesChanged();
-
-    const currentRevision = useTopoViewerStore.getState().documentRevision;
-    if (event.revision && event.revision === currentRevision) {
-      return;
-    }
-    topologySyncController.schedule(0, { externalChange: true });
-  }
-
-  function ensureTopologyEventStream(): void {
-    const sessionId = currentSessionId?.trim() ?? "";
-    const endpointId = currentEndpointId?.trim() ?? "";
-    if (
-      !standaloneAuthenticated ||
-      sessionId.length === 0 ||
-      endpointId.length === 0 ||
-      currentSourcePreference === "running-lab-doc"
-    ) {
-      closeTopologyEventStream();
-      return;
-    }
-
-    if (
-      topologyEventSource &&
-      topologyEventStreamSessionId === sessionId &&
-      topologyEventStreamEndpointId === endpointId
-    ) {
-      return;
-    }
-
-    closeTopologyEventStream();
-    const url = new URL(standaloneServerUrl("/api/topology/events"));
-    url.searchParams.set("sessionId", sessionId);
-    url.searchParams.set("endpointId", endpointId);
-    const source = new EventSource(url, { withCredentials: true });
-    topologyEventSource = source;
-    topologyEventStreamEndpointId = endpointId;
-    topologyEventStreamSessionId = sessionId;
-
-    source.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data) as TopologyDocEventMessage;
-        if (data.type !== "topology-doc") {
-          return;
-        }
-        handleTopologyDocumentEvent(data);
-      } catch {
-        // Ignore malformed topology events.
-      }
-    };
-
-    source.onerror = () => {
-      // EventSource reconnects automatically.
-    };
   }
 
   function syncHostContext(hostOptions: HostContextOptions = {}): void {
@@ -681,7 +541,6 @@ export function createStandaloneTopologyManager(
       mode: initialMode,
       sourcePreference
     }, canonicalEndpointId);
-    ensureTopologyEventStream();
     syncHostContext({
       deploymentState: initialDeploymentState,
       mode: initialMode
@@ -771,7 +630,6 @@ export function createStandaloneTopologyManager(
       topologySyncController.schedule(delay);
     },
     setAuthenticated(isAuthenticated) {
-      standaloneAuthenticated = isAuthenticated;
       if (!isAuthenticated) {
         currentEndpointId = null;
         currentTopologyRef = null;
@@ -779,7 +637,6 @@ export function createStandaloneTopologyManager(
         useTopoViewerStore.getState().setCustomIcons([]);
         void disposeCurrentSession();
       }
-      ensureTopologyEventStream();
     },
     syncHostContext
   };

@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { App, useTopoViewerStore } from "@containerlab/clab-ui";
-import { createApiClabUiHost, createClabUiRuntime } from "@containerlab/clab-ui/host";
+import {
+  createWindowClabUiHost,
+  createClabUiRuntime
+} from "@containerlab/clab-ui/host";
 import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import {
   EXPORT_COMMANDS,
@@ -21,7 +24,7 @@ export {
   MSG_SVG_EXPORT_RESULT,
   MuiThemeProvider,
   applyThemeVars,
-  createApiClabUiHost,
+  createWindowClabUiHost,
   createClabUiRuntime,
   createPortal,
   createRoot,

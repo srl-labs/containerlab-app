@@ -101,7 +101,6 @@ import {
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
-import { isPagesRuntimeMode } from "./runtimeMode";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -646,8 +645,6 @@ const explorerBridge = createStandaloneExplorerBridge({
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache:
     topologyManager.invalidateTopologyFileListCache,
-  defaultExpandExplorerTrees: isPagesRuntimeMode(),
-  lifecycleActionsAvailable: !isPagesRuntimeMode(),
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
   openFileEditor: openWorkspaceFileInTab,
@@ -1237,21 +1234,11 @@ function setupStandaloneUiHost(): void {
     }
 
     if (msg.command === MSG_CANCEL_LAB_LIFECYCLE) {
-      if (isPagesRuntimeMode()) {
-        return;
-      }
       lifecycleManager.cancel();
       return;
     }
 
     if (isStandaloneLifecycleCommand(msg.command)) {
-      if (isPagesRuntimeMode()) {
-        runtimeUiActions.notify(
-          "Deploy is not available in GitHub Pages mode.",
-          "warning",
-        );
-        return;
-      }
       const lifecycleCommand = msg.command;
       void lifecycleManager.run(lifecycleCommand).catch((error: unknown) => {
         console.error(`[Standalone] lifecycle command failed:`, error);
@@ -1321,14 +1308,6 @@ function setupStandaloneUiHost(): void {
       revision,
       command,
     );
-    if (isPagesRuntimeMode() && response.type === "topology-host:ack") {
-      const endpointId =
-        extractEndpointIdFromTopologyId(context.topologyRef?.topologyId) ??
-        topologyManager.getCurrentEndpointId() ??
-        getDefaultEndpointId();
-      topologyManager.invalidateTopologyFileListCache(endpointId);
-      explorerBridge.invalidateFileExplorerCache(endpointId);
-    }
     return response;
   };
 
@@ -1420,7 +1399,7 @@ function StandaloneApp() {
     return activeTab?.kind ?? null;
   });
   const runtimeChromeReady = useDeferredRuntimeChrome();
-  const runtimeDialogsReady = isPagesRuntimeMode() || runtimeChromeReady;
+  const runtimeDialogsReady = runtimeChromeReady;
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -1668,7 +1647,6 @@ function StandaloneApp() {
       <App
         initialData={initialData}
         runtime={standaloneRuntime!}
-        lifecycleActionsAvailable={!isPagesRuntimeMode()}
         slots={{
           header: (
             <StandaloneLabTabs

@@ -6,7 +6,6 @@ import {
   isValidEndpointSessionDuration,
   useEndpointStore
 } from "./endpointStore";
-import { PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -103,7 +102,7 @@ test("hydratePersisted defaults missing sessionDuration to 24h", () => {
 test("pages sandbox endpoint is never persisted or hydrated as a real endpoint", () => {
   const store = useEndpointStore.getState();
   store.addEndpoint({
-    id: PAGES_SANDBOX_ENDPOINT_ID,
+    id: "pages-sandbox",
     url: "local://containerlab-pages",
     label: "Local workspace",
     username: "local",
@@ -131,7 +130,7 @@ test("pages sandbox endpoint is never persisted or hydrated as a real endpoint",
     "clab-standalone-endpoints",
     JSON.stringify([
       {
-        id: PAGES_SANDBOX_ENDPOINT_ID,
+        id: "pages-sandbox",
         url: "local://containerlab-pages",
         label: "Local workspace",
         username: "local"

@@ -1,8 +1,6 @@
 /**
- * Standalone app entry point.
- *
- * Modeled on dev/main.tsx but connects to the real clab-api-server
- * through the Fastify backend instead of using mock data.
+ * Public topology editor. Workspace I/O is SandboxBackend (localStorage),
+ * not the API-backed web app.
  */
 import "@containerlab/clab-ui/styles/global.css";
 import * as EditorWorkerModule from "@containerlab/clab-ui/monaco/editor-worker?worker";
@@ -17,7 +15,7 @@ import {
   MSG_SVG_EXPORT_RESULT,
   MuiThemeProvider,
   applyThemeVars,
-  createApiClabUiHost,
+  createWindowClabUiHost,
   createClabUiRuntime,
   createPortal,
   createRoot,
@@ -32,9 +30,8 @@ import {
   type TopologySnapshot,
 } from "./mainUiDependencies";
 
+import { LabTabsBar } from "./components/LabTabsBar";
 import {
-  LabTabsBar,
-  createStandaloneLifecycleManager,
   createStandaloneTopologyManager,
   extractEndpointIdFromTopologyId,
   isStandaloneLifecycleCommand,
@@ -55,7 +52,6 @@ import {
   fetchUiCustomNodes,
   fetchUiIcons,
   importUiIcons,
-  inspectLab,
   pullRuntimeImage,
   isFileLabTab,
   loadTerminalPreferences,
@@ -86,6 +82,7 @@ import {
   parseCustomNodeTemplatesExportFile,
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
+import { getSandboxBackend } from "./sandboxBackend";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -400,39 +397,6 @@ function createEmptyTopologySnapshot(): TopologySnapshot {
   };
 }
 
-function removeLabFromRuntimeStore(
-  topologyRef: Pick<TopologyRef, "labName" | "topologyId" | "yamlPath">,
-): void {
-  useLabStore.getState().removeLabByTopology({
-    endpointId: extractEndpointIdFromTopologyId(topologyRef.topologyId),
-    labName: topologyRef.labName,
-    topologyPath: topologyRef.yamlPath,
-  });
-}
-
-async function refreshRuntimeStoreForTopology(target: {
-  sessionId?: string;
-  topologyRef: TopologyRef;
-}): Promise<void> {
-  const endpointId = extractEndpointIdFromTopologyId(target.topologyRef.topologyId);
-  if (!endpointId) {
-    return;
-  }
-
-  const containers = await inspectLab({
-    endpointId,
-    sessionId: target.sessionId,
-    topologyRef: target.topologyRef,
-  });
-
-  useLabStore.getState().replaceLabSnapshot({
-    endpointId,
-    labName: target.topologyRef.labName,
-    topologyPath: target.topologyRef.yamlPath,
-    containers,
-  });
-}
-
 let scheduleExplorerSnapshot = (_delay?: number) => {};
 let standaloneRuntime: ReturnType<typeof createClabUiRuntime> | null = null;
 
@@ -615,19 +579,6 @@ async function refreshCustomIconsForCurrentTopology(): Promise<void> {
   applyCustomIcons(response.icons);
 }
 
-const lifecycleManager = createStandaloneLifecycleManager({
-  getCurrentSessionId: topologyManager.getCurrentSessionId,
-  getCurrentTopologyRef: topologyManager.getCurrentTopologyRef,
-  invalidateTopologyFileListCache:
-    topologyManager.invalidateTopologyFileListCache,
-  removeLabFromRuntimeStore,
-  refreshRuntimeStore: refreshRuntimeStoreForTopology,
-  scheduleExplorerSnapshot: (delay) => scheduleExplorerSnapshot(delay),
-  scheduleTopologySnapshotRefresh: (delay) =>
-    topologyManager.scheduleSnapshotRefresh(delay),
-  syncHostContext: topologyManager.syncHostContext,
-});
-
 const explorerBridge = createStandaloneExplorerBridge({
   debounceMs: EXPLORER_REFRESH_DEBOUNCE_MS,
   getEndpoints: getConfiguredEndpoints,
@@ -646,7 +597,12 @@ const explorerBridge = createStandaloneExplorerBridge({
   resolveApiTopologyPath: topologyManager.resolveApiTopologyPath,
   resolveDeploymentState: topologyManager.resolveDeploymentState,
   resolveTopologyRef: topologyManager.resolveTopologyRef,
-  runLifecycle: lifecycleManager.runTarget,
+  runLifecycle: async () => {
+    runtimeUiActions.notify(
+      "Deploy is not available in the topology editor.",
+      "warning",
+    );
+  },
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
@@ -909,75 +865,7 @@ const IGNORED_STANDALONE_MESSAGE_COMMANDS = new Set([
   "topoViewerLog",
 ]);
 
-const PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS = [
-  'button[data-testid="navbar-deploy"]',
-  'button[data-testid="navbar-deploy-menu"]',
-] as const;
-
-function hidePagesLifecycleElement(element: HTMLElement): void {
-  if (!element.hidden) {
-    element.hidden = true;
-  }
-  if (element.style.display !== "none") {
-    element.style.display = "none";
-  }
-  if (element.getAttribute("aria-hidden") !== "true") {
-    element.setAttribute("aria-hidden", "true");
-  }
-}
-
-function hidePagesLifecycleButtons(): void {
-  for (const selector of PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS) {
-    const button = document.querySelector<HTMLButtonElement>(selector);
-    if (!button) {
-      continue;
-    }
-    if (!button.disabled) {
-      button.disabled = true;
-    }
-    if (button.getAttribute("aria-disabled") !== "true") {
-      button.setAttribute("aria-disabled", "true");
-    }
-    if (button.title !== "Deploy is not available in GitHub Pages mode.") {
-      button.title = "Deploy is not available in GitHub Pages mode.";
-    }
-    button.tabIndex = -1;
-    let elementToHide: HTMLElement = button;
-    if (
-      !selector.includes("navbar-deploy-menu") &&
-      button.parentElement?.tagName === "SPAN"
-    ) {
-      elementToHide = button.parentElement;
-    }
-    hidePagesLifecycleElement(elementToHide);
-  }
-}
-
-function usePagesLifecycleControlsHidden(): void {
-  useEffect(() => {
-    hidePagesLifecycleButtons();
-    const observer = new MutationObserver(hidePagesLifecycleButtons);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: [
-        "aria-disabled",
-        "aria-hidden",
-        "disabled",
-        "hidden",
-        "style",
-        "title",
-      ],
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-}
-
-// Standalone host bridge - explicit UI host with API-backed topology transport.
+// Editor host: clab-ui talks to SandboxBackend, not the web app HTTP API.
 function setupStandaloneUiHost(): void {
   const warnedCommands = new Set<string>();
 
@@ -996,7 +884,7 @@ function setupStandaloneUiHost(): void {
 
     if (isStandaloneLifecycleCommand(msg.command)) {
       runtimeUiActions.notify(
-        "Deploy is not available in GitHub Pages mode.",
+        "This action is not available in the topology editor.",
         "warning",
       );
       return;
@@ -1014,7 +902,7 @@ function setupStandaloneUiHost(): void {
     }
   };
 
-  const apiHost = createApiClabUiHost({
+  const apiHost = createWindowClabUiHost({
     explorer: explorerBridge.explorer,
     images: {
       async listImages(options): Promise<ContainerImageSummary[]> {
@@ -1044,46 +932,35 @@ function setupStandaloneUiHost(): void {
       isDevMock: true,
       disableDevMockTraffic: true,
     },
-  });
-  const requestSnapshot: typeof apiHost.topology.requestSnapshot = async (
-    context,
-    requestOptions,
-  ) => {
-    if (!hasActiveConnectedTopologySession()) {
-      return createEmptyTopologySnapshot();
-    }
-    return apiHost.topology.requestSnapshot(context, requestOptions);
-  };
-  const dispatchCommand: typeof apiHost.topology.dispatchCommand = async (
-    context,
-    revision,
-    command,
-  ) => {
-    const response = await apiHost.topology.dispatchCommand(
-      context,
-      revision,
-      command,
-    );
-    if (response.type === "topology-host:ack") {
-      const endpointId =
-        extractEndpointIdFromTopologyId(context.topologyRef?.topologyId) ??
-        topologyManager.getCurrentEndpointId() ??
-        getDefaultEndpointId();
-      topologyManager.invalidateTopologyFileListCache(endpointId);
-      explorerBridge.invalidateFileExplorerCache(endpointId);
-    }
-    return response;
-  };
-
-  standaloneRuntime = createClabUiRuntime({
-    host: {
-      ...apiHost,
-      topology: {
-        ...apiHost.topology,
-        dispatchCommand,
-        requestSnapshot,
+    topology: {
+      async requestSnapshot(context, requestOptions) {
+        if (!hasActiveConnectedTopologySession()) {
+          return createEmptyTopologySnapshot();
+        }
+        return getSandboxBackend().getSnapshot(context.sessionId, {
+          externalChange: requestOptions?.externalChange,
+        });
+      },
+      async dispatchCommand(context, revision, command) {
+        const response = await getSandboxBackend().dispatchCommand(
+          context.sessionId,
+          revision,
+          command,
+        );
+        if (response.type === "topology-host:ack") {
+          const endpointId =
+            extractEndpointIdFromTopologyId(context.topologyRef?.topologyId) ??
+            topologyManager.getCurrentEndpointId() ??
+            getDefaultEndpointId();
+          topologyManager.invalidateTopologyFileListCache(endpointId);
+          explorerBridge.invalidateFileExplorerCache(endpointId);
+        }
+        return response;
       },
     },
+  });
+  standaloneRuntime = createClabUiRuntime({
+    host: apiHost,
   });
 }
 
@@ -1583,7 +1460,6 @@ function StandaloneApp() {
     return activeTab?.kind ?? null;
   });
   const runtimeDialogsReady = true;
-  usePagesLifecycleControlsHidden();
 
   const handleWorkspaceFileEvent = useCallback(
     (endpointId: string, event: WorkspaceFileEvent) => {
@@ -1729,7 +1605,11 @@ function StandaloneApp() {
       {activeLabTabKind === "file" ? (
         <style>{FILE_TAB_TOPOLOGY_CHROME_CSS}</style>
       ) : null}
-      <App initialData={initialData} runtime={standaloneRuntime!} />
+      <App
+        initialData={initialData}
+        runtime={standaloneRuntime!}
+        lifecycleActionsAvailable={false}
+      />
       <StandaloneLabTabsMount />
       <StandaloneFileEditorTabMount />
       <StandaloneLabEmptyStateMount />

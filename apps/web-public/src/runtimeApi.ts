@@ -5,11 +5,12 @@ import type {
   TopologyRef,
 } from "@containerlab/clab-ui/session";
 
-import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
-import { standaloneServerUrl } from "./standaloneServerOrigin";
-import { useEndpointStore } from "./stores/endpointStore";
-import { useLabStore } from "./stores/labStore";
-import { SANDBOX_ENDPOINT_ID } from "./pagesSandboxRuntime";
+import {
+  getSandboxBackend,
+  type SandboxCustomNodes,
+  type SandboxFileDocument,
+  type SandboxFileExplorerEntry,
+} from "./sandboxBackend";
 
 export interface RuntimeTargetRequest {
   endpointId?: string;
@@ -130,24 +131,8 @@ export interface RuntimeImageActionResponse {
   output?: string;
 }
 
-export interface FileExplorerEntry {
-  endpointId: string;
-  name: string;
-  path: string;
-  kind: "file" | "directory";
-  size?: number;
-  modifiedAt?: string;
-  hasChildren?: boolean;
-  labName?: string;
-  deploymentState?: string;
-  topologyRef?: TopologyRef;
-}
-
-export interface FileExplorerDocument {
-  endpointId: string;
-  path: string;
-  content: string;
-}
+export type FileExplorerEntry = SandboxFileExplorerEntry;
+export type FileExplorerDocument = SandboxFileDocument;
 
 export type LabArchiveFormat = "zip" | "tar.gz";
 
@@ -211,709 +196,20 @@ export interface CaptureCloseAllResponse {
   closed: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+function notAnEditorFeature(): never {
+  throw new Error("This action is not available in the topology editor.");
 }
 
-function toStringValue(value: unknown): string | undefined {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value);
-  }
-  return undefined;
-}
-
-function pickString(record: Record<string, unknown>, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = toStringValue(record[key]);
-    if (value !== undefined) {
-      return value;
-    }
-  }
-  return "";
-}
-
-function normalizeInspectContainer(value: unknown): InspectContainerInfo {
-  const record = isRecord(value) ? value : {};
+function asCustomNodes(result: SandboxCustomNodes): CustomNodesResponse {
   return {
-    name: pickString(record, "name"),
-    containerId: pickString(record, "containerId", "container_id", "id"),
-    image: pickString(record, "image"),
-    kind: pickString(record, "kind"),
-    state: pickString(record, "state"),
-    status: pickString(record, "status"),
-    ipv4Address: pickString(
-      record,
-      "ipv4Address",
-      "ipv4_address",
-      "IPv4Address",
-      "mgmtIpv4Address",
-      "mgmt_ipv4"
-    ),
-    ipv6Address: pickString(
-      record,
-      "ipv6Address",
-      "ipv6_address",
-      "IPv6Address",
-      "mgmtIpv6Address",
-      "mgmt_ipv6"
-    ),
-    labName: pickString(record, "labName", "lab_name"),
-    labPath: pickString(record, "labPath", "lab_path"),
-    absLabPath: pickString(record, "absLabPath", "abs_lab_path"),
-    nodeName: pickString(record, "nodeName", "node_name", "clab-node-name"),
-    group: pickString(record, "group"),
-    owner: pickString(record, "owner")
+    customNodes: result.customNodes as CustomNodeTemplate[],
+    defaultNode: result.defaultNode,
   };
-}
-
-function normalizeInspectContainerList(value: unknown): InspectLabResponse {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.map((entry) => normalizeInspectContainer(entry));
-}
-
-function normalizeInspectAllLabsPayload(value: unknown): InspectAllLabsResponse {
-  if (!isRecord(value)) {
-    return {};
-  }
-  const normalized: InspectAllLabsResponse = {};
-  for (const [labName, containers] of Object.entries(value)) {
-    normalized[labName] = normalizeInspectContainerList(containers);
-  }
-  return normalized;
-}
-
-function resolveEndpointId(
-  target?: RuntimeTargetRequest | { endpointId?: string }
-): string | undefined {
-  return target?.endpointId;
-}
-
-function resolveTargetEndpointId(target?: RuntimeTargetRequest): string | undefined {
-  return (
-    resolveEndpointId(target) ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId)
-  );
-}
-
-function withEndpointHeaders(init: RequestInit = {}, endpointId?: string): RequestInit {
-  if (!endpointId) {
-    return init;
-  }
-  const headers = new Headers(init.headers);
-  headers.set("x-endpoint-id", endpointId);
-  return {
-    ...init,
-    headers
-  };
-}
-
-async function readError(response: Response): Promise<string> {
-  const fallback = `${response.status} ${response.statusText}`.trim();
-  const text = await response.text().catch(() => fallback);
-  if (!text) {
-    return fallback;
-  }
-  try {
-    const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
-    if (typeof parsed.error === "string" && parsed.error.trim().length > 0) {
-      return parsed.error;
-    }
-    if (typeof parsed.message === "string" && parsed.message.trim().length > 0) {
-      return parsed.message;
-    }
-  } catch {
-    // Fall back to raw text.
-  }
-  return text;
-}
-
-function markEndpointUnavailable(
-  endpointId: string | undefined,
-  status: "offline" | "session_expired"
-): void {
-  if (!endpointId) {
-    return;
-  }
-  if (endpointId === SANDBOX_ENDPOINT_ID) {
-    return;
-  }
-  useLabStore.getState().setConnected(endpointId, false);
-  useEndpointStore.getState().setStatus(endpointId, status);
-}
-
-const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i;
-
-export function resolveRuntimeRequestUrl(
-  input: string,
-  toStandaloneServerUrl: (path: string) => string = standaloneServerUrl
-): string {
-  return ABSOLUTE_OR_PROTOCOL_RELATIVE_URL.test(input) ? input : toStandaloneServerUrl(input);
-}
-
-async function requestJson<T>(input: string, init?: RequestInit, endpointId?: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(resolveRuntimeRequestUrl(input), {
-      credentials: "include",
-      ...init
-    });
-  } catch (error) {
-    markEndpointUnavailable(endpointId, "offline");
-    throw error;
-  }
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      markEndpointUnavailable(endpointId, "session_expired");
-    }
-    throw new Error(await readError(response));
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
-}
-
-function filenameFromContentDisposition(header: string | null, fallback: string): string {
-  if (!header) {
-    return fallback;
-  }
-  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
-  if (encoded) {
-    try {
-      return decodeURIComponent(encoded);
-    } catch {
-      return encoded;
-    }
-  }
-  const quoted = /filename="([^"]+)"/i.exec(header)?.[1];
-  if (quoted) {
-    return quoted;
-  }
-  const bare = /filename=([^;]+)/i.exec(header)?.[1]?.trim();
-  return bare || fallback;
-}
-
-async function requestBlob(
-  input: string,
-  fallbackFilename: string,
-  init?: RequestInit,
-  endpointId?: string
-): Promise<BinaryDownloadResult> {
-  let response: Response;
-  try {
-    response = await fetch(resolveRuntimeRequestUrl(input), {
-      credentials: "include",
-      ...init
-    });
-  } catch (error) {
-    markEndpointUnavailable(endpointId, "offline");
-    throw error;
-  }
-
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      markEndpointUnavailable(endpointId, "session_expired");
-    }
-    throw new Error(await readError(response));
-  }
-
-  return {
-    blob: await response.blob(),
-    contentType: response.headers.get("content-type") ?? "application/octet-stream",
-    filename: filenameFromContentDisposition(
-      response.headers.get("content-disposition"),
-      fallbackFilename
-    )
-  };
-}
-
-function asJsonBody(body: unknown, endpointId?: string): RequestInit {
-  return withEndpointHeaders(
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    },
-    endpointId
-  );
-}
-
-export async function inspectAllLabs(endpointId?: string): Promise<InspectAllLabsResponse> {
-  const payload = await requestJson<unknown>(
-    "/api/runtime/inspect/all",
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
-  return normalizeInspectAllLabsPayload(payload);
-}
-
-export async function inspectLab(target: RuntimeTargetRequest): Promise<InspectLabResponse> {
-  const endpointId = resolveTargetEndpointId(target);
-  const payload = await requestJson<unknown>(
-    "/api/runtime/inspect/lab",
-    asJsonBody(target, endpointId),
-    endpointId
-  );
-  return normalizeInspectContainerList(payload);
-}
-
-export async function saveLabConfigs(
-  input: RuntimeTargetRequest & {
-    nodeName?: string;
-  }
-): Promise<SaveConfigResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<SaveConfigResponse>(
-    "/api/runtime/save",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function controlNodeLifecycle(
-  input: RuntimeTargetRequest & {
-    nodeName: string;
-    action: NodeLifecycleAction;
-  }
-): Promise<void> {
-  const endpointId = resolveTargetEndpointId(input);
-  await requestJson<{ success: boolean }>(
-    `/api/runtime/nodes/${encodeURIComponent(input.action)}`,
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function fetchNodeBrowserPorts(
-  input: RuntimeTargetRequest & {
-    nodeName: string;
-  }
-): Promise<NodeBrowserPortsResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<NodeBrowserPortsResponse>(
-    "/api/runtime/nodes/browser-ports",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function runSshxShareAction(
-  input: RuntimeTargetRequest & {
-    action: ShareToolAction;
-  }
-): Promise<ShareToolResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<ShareToolResponse>(
-    `/api/runtime/share/sshx/${encodeURIComponent(input.action)}`,
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function runGottyShareAction(
-  input: RuntimeTargetRequest & {
-    action: ShareToolAction;
-    port?: number;
-  }
-): Promise<ShareToolResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<ShareToolResponse>(
-    `/api/runtime/share/gotty/${encodeURIComponent(input.action)}`,
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function runFcliCommand(
-  input: RuntimeTargetRequest & {
-    command: string;
-  }
-): Promise<FcliCommandResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<FcliCommandResponse>(
-    "/api/runtime/fcli",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function generateDrawioGraph(
-  input: RuntimeTargetRequest & {
-    layout: "horizontal" | "vertical" | "interactive";
-    theme?: string;
-  }
-): Promise<DrawioGenerateResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<DrawioGenerateResponse>(
-    "/api/runtime/labs/graph/drawio",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function fetchRuntimeImages(endpointId?: string): Promise<RuntimeImagesResponse> {
-  return await requestJson<RuntimeImagesResponse>(
-    "/api/runtime/images",
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
-}
-
-export async function pullRuntimeImage(
-  input: RuntimeTargetRequest & {
-    image: string;
-  }
-): Promise<RuntimeImageActionResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<RuntimeImageActionResponse>(
-    "/api/runtime/images/pull",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function removeRuntimeImage(
-  input: RuntimeTargetRequest & {
-    reference: string;
-    force?: boolean;
-  }
-): Promise<RuntimeImageActionResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<RuntimeImageActionResponse>(
-    "/api/runtime/images/remove",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function installEdgeShark(endpointId?: string): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/capture/edgeshark/install",
-    withEndpointHeaders({ method: "POST" }, endpointId),
-    endpointId
-  );
-}
-
-export async function uninstallEdgeShark(endpointId?: string): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/capture/edgeshark/uninstall",
-    withEndpointHeaders({ method: "POST" }, endpointId),
-    endpointId
-  );
-}
-
-export async function listFileExplorerDirectory(
-  endpointId: string,
-  pathValue = ""
-): Promise<FileExplorerEntry[]> {
-  const params = new URLSearchParams();
-  if (pathValue) {
-    params.set("path", pathValue);
-  }
-  const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return await requestJson<FileExplorerEntry[]>(
-    `/api/runtime/file-explorer/tree${suffix}`,
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
-}
-
-export async function readFileExplorerFile(
-  endpointId: string,
-  pathValue: string
-): Promise<FileExplorerDocument> {
-  return await requestJson<FileExplorerDocument>(
-    `/api/runtime/file-explorer/file?path=${encodeURIComponent(pathValue)}`,
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
 }
 
 function safeDownloadFallbackName(pathValue: string): string {
   const segments = pathValue.split(/[\\/]/).filter(Boolean);
   return segments.at(-1) || "download";
-}
-
-export async function downloadFileExplorerFile(
-  endpointId: string,
-  pathValue: string
-): Promise<BinaryDownloadResult> {
-  return await requestBlob(
-    `/api/runtime/file-explorer/download?path=${encodeURIComponent(pathValue)}`,
-    safeDownloadFallbackName(pathValue),
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
-}
-
-export async function uploadFileExplorerFile(input: {
-  endpointId: string;
-  file?: File;
-  files?: readonly File[];
-  path: string;
-  targetKind?: "directory" | "file";
-}): Promise<void> {
-  const files = input.files ?? (input.file ? [input.file] : []);
-  if (files.length === 0) {
-    throw new Error("Select at least one file to upload.");
-  }
-  const form = new FormData();
-  form.set("path", input.path);
-  if (input.targetKind) {
-    form.set("targetKind", input.targetKind);
-  }
-  for (const file of files) {
-    form.append("file", file, file.name);
-  }
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/file-explorer/upload",
-    withEndpointHeaders(
-      {
-        method: "POST",
-        body: form
-      },
-      input.endpointId
-    ),
-    input.endpointId
-  );
-}
-
-export async function writeFileExplorerFile(input: {
-  endpointId: string;
-  path: string;
-  content: string;
-}): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    `/api/runtime/file-explorer/file?path=${encodeURIComponent(input.path)}`,
-    withEndpointHeaders(
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: input.path, content: input.content })
-      },
-      input.endpointId
-    ),
-    input.endpointId
-  );
-}
-
-export async function deleteFileExplorerPath(
-  endpointId: string,
-  pathValue: string,
-  options: { recursive?: boolean } = {}
-): Promise<void> {
-  const params = new URLSearchParams({ path: pathValue });
-  if (options.recursive) {
-    params.set("recursive", "true");
-  }
-  await requestJson<{ success: boolean }>(
-    `/api/runtime/file-explorer/file?${params.toString()}`,
-    withEndpointHeaders({ method: "DELETE" }, endpointId),
-    endpointId
-  );
-}
-
-export async function renameFileExplorerPath(input: {
-  endpointId: string;
-  oldPath: string;
-  newPath: string;
-}): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/file-explorer/file/rename",
-    asJsonBody({ oldPath: input.oldPath, newPath: input.newPath }, input.endpointId),
-    input.endpointId
-  );
-}
-
-export async function createFileExplorerDirectory(
-  endpointId: string,
-  pathValue: string
-): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/file-explorer/directory",
-    asJsonBody({ path: pathValue }, endpointId),
-    endpointId
-  );
-}
-
-export async function downloadLabArchive(input: {
-  endpointId: string;
-  format: LabArchiveFormat;
-  path: string;
-}): Promise<BinaryDownloadResult> {
-  const params = new URLSearchParams({
-    format: input.format,
-    path: input.path
-  });
-  const extension = input.format === "zip" ? "zip" : "tar.gz";
-  return await requestBlob(
-    `/api/runtime/labs/archive?${params.toString()}`,
-    `${safeDownloadFallbackName(input.path)}.${extension}`,
-    withEndpointHeaders({}, input.endpointId),
-    input.endpointId
-  );
-}
-
-export async function deployLabFromUrl(
-  input: RuntimeTargetRequest & {
-    topologySourceUrl: string;
-    labNameOverride?: string;
-  }
-): Promise<DeployLabFromUrlResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<DeployLabFromUrlResponse>(
-    "/api/runtime/labs/deploy-from-url",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function importTopologyFromUrl(
-  input: RuntimeTargetRequest & {
-    topologySourceUrl: string;
-    labNameOverride?: string;
-  }
-): Promise<ImportTopologyFromUrlResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<ImportTopologyFromUrlResponse>(
-    "/api/runtime/topology-file/import-from-url",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function buildPacketflixCapture(
-  input: RuntimeTargetRequest & {
-    targets: CaptureTarget[];
-    remoteHostname?: string;
-  }
-): Promise<CapturePacketflixResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<CapturePacketflixResponse>(
-    "/api/runtime/capture/packetflix",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function createWiresharkVncSessions(
-  input: RuntimeTargetRequest & {
-    targets: CaptureTarget[];
-    theme?: string;
-  }
-): Promise<CaptureWiresharkVncCreateResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<CaptureWiresharkVncCreateResponse>(
-    "/api/runtime/capture/wireshark-vnc-sessions",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function closeAllWiresharkVncSessions(
-  endpointId?: string
-): Promise<CaptureCloseAllResponse> {
-  return await requestJson<CaptureCloseAllResponse>(
-    "/api/runtime/capture/wireshark-vnc-sessions/close-all",
-    withEndpointHeaders({ method: "POST" }, endpointId),
-    endpointId
-  );
-}
-
-export async function fetchUiCustomNodes(endpointId?: string): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(
-    "/api/runtime/ui/custom-nodes",
-    withEndpointHeaders({}, endpointId),
-    endpointId
-  );
-}
-
-export async function saveUiCustomNode(
-  data: Record<string, unknown>,
-  endpointId?: string
-): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(
-    "/api/runtime/ui/custom-nodes",
-    asJsonBody(data, endpointId),
-    endpointId
-  );
-}
-
-export async function replaceUiCustomNodes(
-  customNodes: CustomNodeTemplate[],
-  endpointId?: string
-): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(
-    "/api/runtime/ui/custom-nodes",
-    withEndpointHeaders(
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customNodes })
-      },
-      endpointId
-    ),
-    endpointId
-  );
-}
-
-export async function deleteUiCustomNode(
-  name: string,
-  endpointId?: string
-): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(
-    `/api/runtime/ui/custom-nodes/${encodeURIComponent(name)}`,
-    withEndpointHeaders({ method: "DELETE" }, endpointId),
-    endpointId
-  );
-}
-
-export async function setDefaultUiCustomNode(
-  name: string,
-  endpointId?: string
-): Promise<CustomNodesResponse> {
-  return await requestJson<CustomNodesResponse>(
-    "/api/runtime/ui/custom-nodes/default",
-    asJsonBody({ name }, endpointId),
-    endpointId
-  );
-}
-
-export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconListResponse> {
-  const endpointId = resolveTargetEndpointId(target);
-  return await requestJson<IconListResponse>(
-    "/api/runtime/ui/icons/list",
-    asJsonBody(target, endpointId),
-    endpointId
-  );
-}
-
-async function deleteUiIconIfExists(iconName: string, endpointId?: string): Promise<void> {
-  let response: Response;
-  try {
-    response = await fetch(
-      resolveRuntimeRequestUrl(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`),
-      withEndpointHeaders({ method: "DELETE" }, endpointId)
-    );
-  } catch (error) {
-    markEndpointUnavailable(endpointId, "offline");
-    throw error;
-  }
-
-  if (response.ok || response.status === 404) {
-    return;
-  }
-  if (response.status === 401 || response.status === 403) {
-    markEndpointUnavailable(endpointId, "session_expired");
-  }
-  throw new Error(await readError(response));
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -926,36 +222,6 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-async function uploadUiIconPayload(
-  request: IconUploadRequest,
-  endpointId?: string
-): Promise<IconUploadResponse> {
-  return await requestJson<IconUploadResponse>(
-    "/api/runtime/ui/icons",
-    asJsonBody(request, endpointId),
-    endpointId
-  );
-}
-
-export async function uploadUiIcon(file: File, endpointId?: string): Promise<IconUploadResponse> {
-  return await uploadUiIconPayload(
-    {
-      fileName: file.name,
-      contentType: file.type || undefined,
-      dataBase64: await fileToBase64(file),
-    },
-    endpointId
-  );
-}
-
-export async function deleteUiIcon(iconName: string, endpointId?: string): Promise<void> {
-  await requestJson<{ success: boolean }>(
-    `/api/runtime/ui/icons/${encodeURIComponent(iconName)}`,
-    withEndpointHeaders({ method: "DELETE" }, endpointId),
-    endpointId
-  );
-}
-
 function iconUploadRequestFromExportIcon(icon: CustomNodeTemplateExportIcon): IconUploadRequest {
   const match = /^data:([^;,]+);base64,([\s\S]*)$/.exec(icon.dataUri);
   if (!match) {
@@ -964,7 +230,7 @@ function iconUploadRequestFromExportIcon(icon: CustomNodeTemplateExportIcon): Ic
   const expectedContentType = icon.format === "png" ? "image/png" : "image/svg+xml";
   if (match[1].toLowerCase() !== expectedContentType) {
     throw new Error(
-      `Icon "${icon.name}" has MIME type ${match[1]}, expected ${expectedContentType}`
+      `Icon "${icon.name}" has MIME type ${match[1]}, expected ${expectedContentType}`,
     );
   }
   return {
@@ -974,21 +240,248 @@ function iconUploadRequestFromExportIcon(icon: CustomNodeTemplateExportIcon): Ic
   };
 }
 
-function canDeleteUiIconName(iconName: string): boolean {
-  return /^[a-z0-9_-]+$/.test(iconName);
+export async function inspectAllLabs(_endpointId?: string): Promise<InspectAllLabsResponse> {
+  return {};
+}
+
+export async function inspectLab(_target: RuntimeTargetRequest): Promise<InspectLabResponse> {
+  return [];
+}
+
+export async function saveLabConfigs(
+  _input: RuntimeTargetRequest & { nodeName?: string },
+): Promise<SaveConfigResponse> {
+  notAnEditorFeature();
+}
+
+export async function controlNodeLifecycle(
+  _input: RuntimeTargetRequest & { nodeName: string; action: NodeLifecycleAction },
+): Promise<void> {
+  notAnEditorFeature();
+}
+
+export async function fetchNodeBrowserPorts(
+  _input: RuntimeTargetRequest & { nodeName: string },
+): Promise<NodeBrowserPortsResponse> {
+  notAnEditorFeature();
+}
+
+export async function runSshxShareAction(
+  _input: RuntimeTargetRequest & { action: ShareToolAction },
+): Promise<ShareToolResponse> {
+  notAnEditorFeature();
+}
+
+export async function runGottyShareAction(
+  _input: RuntimeTargetRequest & { action: ShareToolAction; port?: number },
+): Promise<ShareToolResponse> {
+  notAnEditorFeature();
+}
+
+export async function runFcliCommand(
+  _input: RuntimeTargetRequest & { command: string },
+): Promise<FcliCommandResponse> {
+  notAnEditorFeature();
+}
+
+export async function generateDrawioGraph(
+  _input: RuntimeTargetRequest & { layout: "horizontal" | "vertical" | "interactive"; theme?: string },
+): Promise<DrawioGenerateResponse> {
+  notAnEditorFeature();
+}
+
+export async function fetchRuntimeImages(_endpointId?: string): Promise<RuntimeImagesResponse> {
+  return { runtime: "browser", images: [] };
+}
+
+export async function pullRuntimeImage(
+  _input: RuntimeTargetRequest & { image: string },
+): Promise<RuntimeImageActionResponse> {
+  notAnEditorFeature();
+}
+
+export async function removeRuntimeImage(
+  _input: RuntimeTargetRequest & { reference: string; force?: boolean },
+): Promise<RuntimeImageActionResponse> {
+  notAnEditorFeature();
+}
+
+export async function installEdgeShark(_endpointId?: string): Promise<void> {
+  notAnEditorFeature();
+}
+
+export async function uninstallEdgeShark(_endpointId?: string): Promise<void> {
+  notAnEditorFeature();
+}
+
+export async function listFileExplorerDirectory(
+  _endpointId: string,
+  pathValue = "",
+): Promise<FileExplorerEntry[]> {
+  return getSandboxBackend().listDirectory(pathValue);
+}
+
+export async function readFileExplorerFile(
+  _endpointId: string,
+  pathValue: string,
+): Promise<FileExplorerDocument> {
+  return await getSandboxBackend().readFile(pathValue);
+}
+
+export async function downloadFileExplorerFile(
+  _endpointId: string,
+  pathValue: string,
+): Promise<BinaryDownloadResult> {
+  const document = await getSandboxBackend().readFile(pathValue);
+  return {
+    blob: new Blob([document.content], { type: "text/plain;charset=utf-8" }),
+    contentType: "text/plain;charset=utf-8",
+    filename: safeDownloadFallbackName(pathValue),
+  };
+}
+
+export async function uploadFileExplorerFile(input: {
+  endpointId: string;
+  file?: File;
+  files?: readonly File[];
+  path: string;
+  targetKind?: "directory" | "file";
+}): Promise<void> {
+  const files = input.files ?? (input.file ? [input.file] : []);
+  const uploaded = await Promise.all(
+    files.map(async (file) => ({ name: file.name, content: await file.text() })),
+  );
+  await getSandboxBackend().uploadFiles(input.path, uploaded, input.targetKind ?? "directory");
+}
+
+export async function writeFileExplorerFile(input: {
+  endpointId: string;
+  path: string;
+  content: string;
+}): Promise<void> {
+  await getSandboxBackend().writeFile(input.path, input.content);
+}
+
+export async function deleteFileExplorerPath(
+  _endpointId: string,
+  pathValue: string,
+  options: { recursive?: boolean } = {},
+): Promise<void> {
+  await getSandboxBackend().deletePath(pathValue, options.recursive === true);
+}
+
+export async function renameFileExplorerPath(input: {
+  endpointId: string;
+  oldPath: string;
+  newPath: string;
+}): Promise<void> {
+  await getSandboxBackend().renamePath(input.oldPath, input.newPath);
+}
+
+export async function createFileExplorerDirectory(
+  _endpointId: string,
+  pathValue: string,
+): Promise<void> {
+  getSandboxBackend().createDirectory(pathValue);
+}
+
+export async function downloadLabArchive(_input: {
+  endpointId: string;
+  format: LabArchiveFormat;
+  path: string;
+}): Promise<BinaryDownloadResult> {
+  notAnEditorFeature();
+}
+
+export async function deployLabFromUrl(
+  _input: RuntimeTargetRequest & { topologySourceUrl: string; labNameOverride?: string },
+): Promise<DeployLabFromUrlResponse> {
+  notAnEditorFeature();
+}
+
+export async function importTopologyFromUrl(
+  _input: RuntimeTargetRequest & { topologySourceUrl: string; labNameOverride?: string },
+): Promise<ImportTopologyFromUrlResponse> {
+  notAnEditorFeature();
+}
+
+export async function buildPacketflixCapture(
+  _input: RuntimeTargetRequest & { targets: CaptureTarget[]; remoteHostname?: string },
+): Promise<CapturePacketflixResponse> {
+  notAnEditorFeature();
+}
+
+export async function createWiresharkVncSessions(
+  _input: RuntimeTargetRequest & { targets: CaptureTarget[]; theme?: string },
+): Promise<CaptureWiresharkVncCreateResponse> {
+  notAnEditorFeature();
+}
+
+export async function closeAllWiresharkVncSessions(
+  _endpointId?: string,
+): Promise<CaptureCloseAllResponse> {
+  notAnEditorFeature();
+}
+
+export async function fetchUiCustomNodes(_endpointId?: string): Promise<CustomNodesResponse> {
+  return asCustomNodes(getSandboxBackend().getCustomNodes());
+}
+
+export async function saveUiCustomNode(
+  data: Record<string, unknown>,
+  _endpointId?: string,
+): Promise<CustomNodesResponse> {
+  return asCustomNodes(getSandboxBackend().saveCustomNode(data));
+}
+
+export async function replaceUiCustomNodes(
+  customNodes: CustomNodeTemplate[],
+  _endpointId?: string,
+): Promise<CustomNodesResponse> {
+  return asCustomNodes(getSandboxBackend().replaceCustomNodes(customNodes));
+}
+
+export async function deleteUiCustomNode(
+  name: string,
+  _endpointId?: string,
+): Promise<CustomNodesResponse> {
+  return asCustomNodes(getSandboxBackend().deleteCustomNode(name));
+}
+
+export async function setDefaultUiCustomNode(
+  name: string,
+  _endpointId?: string,
+): Promise<CustomNodesResponse> {
+  return asCustomNodes(getSandboxBackend().setDefaultCustomNode(name));
+}
+
+export async function fetchUiIcons(_target: RuntimeTargetRequest): Promise<IconListResponse> {
+  return { icons: getSandboxBackend().listIcons() };
+}
+
+export async function uploadUiIcon(file: File, _endpointId?: string): Promise<IconUploadResponse> {
+  const result = getSandboxBackend().uploadIcon({
+    fileName: file.name,
+    contentType: file.type || undefined,
+    dataBase64: await fileToBase64(file),
+  });
+  return { success: true, iconName: result.iconName };
+}
+
+export async function deleteUiIcon(iconName: string, _endpointId?: string): Promise<void> {
+  getSandboxBackend().deleteIcon(iconName);
 }
 
 export async function importUiIcons(
   icons: CustomNodeTemplateExportIcon[],
-  endpointId?: string
+  _endpointId?: string,
 ): Promise<IconImportResponse> {
+  const backend = getSandboxBackend();
   const renamed: Record<string, string> = {};
   for (const icon of icons) {
     const request = iconUploadRequestFromExportIcon(icon);
-    if (canDeleteUiIconName(icon.name)) {
-      await deleteUiIconIfExists(icon.name, endpointId);
-    }
-    const response = await uploadUiIconPayload(request, endpointId);
+    backend.deleteIcon(icon.name);
+    const response = backend.uploadIcon(request);
     if (response.iconName !== icon.name) {
       renamed[icon.name] = response.iconName;
     }
@@ -997,40 +490,25 @@ export async function importUiIcons(
 }
 
 export async function reconcileUiIcons(
-  input: RuntimeTargetRequest & {
-    usedIcons: string[];
-  }
-): Promise<void> {
-  const endpointId = resolveTargetEndpointId(input);
-  await requestJson<{ success: boolean }>(
-    "/api/runtime/ui/icons/reconcile",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
+  _input: RuntimeTargetRequest & { usedIcons: string[] },
+): Promise<void> {}
 
 export async function createTopologyFile(input: {
   content?: string;
   endpointId?: string;
   fileName: string;
 }): Promise<{ success: boolean; topologyRef: TopologyRef }> {
-  const endpointId = resolveEndpointId(input);
-  return await requestJson<{ success: boolean; topologyRef: TopologyRef }>(
-    "/api/runtime/topology-file/create",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
+  const topologyRef = await getSandboxBackend().createTopologyFile(input.fileName, input.content);
+  return { success: true, topologyRef };
 }
 
 export async function deleteTopologyFile(target: RuntimeTargetRequest): Promise<{
   path: string;
   success: boolean;
 }> {
-  const endpointId = resolveTargetEndpointId(target);
-  return await requestJson<{ path: string; success: boolean }>(
-    "/api/runtime/topology-file/delete",
-    asJsonBody(target, endpointId),
-    endpointId
-  );
+  if (!target.topologyRef) {
+    throw new Error("Missing topologyRef");
+  }
+  const path = await getSandboxBackend().deleteTopologyFile(target.topologyRef);
+  return { path, success: true };
 }
-
