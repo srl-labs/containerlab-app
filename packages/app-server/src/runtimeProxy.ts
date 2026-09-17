@@ -1309,7 +1309,7 @@ export function registerRuntimeProxy(
         );
         return reply.send({
           ...payload,
-          url: `/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}/vnc/`
+          url: `${app.prefix}/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}/vnc/`
         });
       } catch (error) {
         return handleRouteError(reply, error);

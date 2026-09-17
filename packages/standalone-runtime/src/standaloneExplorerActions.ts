@@ -1,4 +1,5 @@
 import type { TopologyRef } from "@containerlab/clab-ui/session";
+import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
   runGottyShareAction,
   runSshxShareAction,
@@ -370,7 +371,7 @@ function normalizePopularRepos(value: unknown): PopularLabRepo[] {
 
 export async function fetchPopularRepos(): Promise<PopularLabRepo[]> {
   try {
-    const response = await fetch("/api/runtime/popular-repos", {
+    const response = await fetch(standaloneServerUrl("/api/runtime/popular-repos"), {
       credentials: "include"
     });
     if (!response.ok) {

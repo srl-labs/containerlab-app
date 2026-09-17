@@ -37,6 +37,27 @@ export function resolveStandaloneServerOrigin(
   return normalizeOrigin(configuredOrigin) ?? location.origin;
 }
 
-export function standaloneServerUrl(path: string): string {
-  return new URL(path, resolveStandaloneServerOrigin()).toString();
+function documentBaseUri(): string {
+  return typeof document === "undefined" ? "/" : document.baseURI;
+}
+
+export function resolveAppBasePath(baseUri: string = documentBaseUri()): string {
+  try {
+    // A document without a base tag may be an HTML entrypoint served by Vite.
+    // Resolve its containing directory instead of treating the filename as a path prefix.
+    return new URL(".", baseUri).pathname;
+  } catch {
+    return "/";
+  }
+}
+
+export function standaloneServerUrl(
+  path: string,
+  origin = resolveStandaloneServerOrigin(),
+  basePath = resolveAppBasePath(),
+  runtimeMode: StandaloneRuntimeMode = standaloneRuntimeMode()
+): string {
+  // Pages handles these routes in the browser, independently of the static site path.
+  const apiBasePath = runtimeMode === "pages" ? "/" : basePath;
+  return new URL(path.replace(/^\/+/, ""), `${origin}${apiBasePath}`).toString();
 }

@@ -127,6 +127,7 @@ For the web container, pass variables with `docker run -e NAME=value` before the
 | --- | --- | --- | --- |
 | `CLAB_API_TLS_VERIFY` | `false` | Web, desktop | Accept self-signed API certificates by default; set `true` to verify them. Applies only to API connections. |
 | `PORT` | `3001` | Web | Port used to serve the web app. |
+| `WEB_BASE_PATH` | unset | Web | Serve the app, assets, and API under a path such as `/web`. Configure your reverse proxy to preserve this prefix. |
 | `WEB_TLS_ENABLE` | `true` | Web | Serve the app over HTTPS. |
 | `WEB_TLS_AUTO_CERT` | `true` | Web | Generate a self-signed certificate when no certificate files are supplied. |
 | `WEB_TLS_CERT_FILE` | unset | Web | Path to your HTTPS certificate. |
@@ -137,6 +138,8 @@ For the web container, pass variables with `docker run -e NAME=value` before the
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Desktop | Enable app-server debug logging. |
 
 </details>
+
+For example, `WEB_BASE_PATH=/web` serves the app at `https://your-host/web/` using the same container image. Forward `/web/` requests, including WebSocket upgrades, to the web server without stripping the prefix. This setting also applies to `pnpm web:local`.
 
 ## Help and feedback
 

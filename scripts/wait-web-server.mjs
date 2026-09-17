@@ -1,9 +1,11 @@
+import { normalizeBasePath } from "../packages/app-server/src/basePath.ts";
+
 const port = process.env.PORT || "3001";
 const tlsEnabled = !["0", "false", "no", "off"].includes(
   (process.env.WEB_TLS_ENABLE || "true").trim().toLowerCase()
 );
 const protocol = tlsEnabled ? "https" : "http";
-const url = `${protocol}://localhost:${port}/api/config`;
+const url = `${protocol}://localhost:${port}${normalizeBasePath(process.env.WEB_BASE_PATH)}/api/config`;
 const deadline = Date.now() + 30_000;
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";

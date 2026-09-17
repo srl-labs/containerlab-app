@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { parseBooleanEnv } from "../../packages/app-server/src/env.ts";
 import { resolveWebTlsConfig } from "../../packages/app-server/src/tlsConfig.ts";
+import { normalizeBasePath } from "../../packages/app-server/src/basePath.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
@@ -13,13 +14,26 @@ const pagesMode = runtimeMode === "pages";
 const apiServerPort = process.env.PORT ?? "3001";
 const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
 const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
-const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? (pagesMode ? "/containerlab-app/" : "/");
+const serverBasePath = normalizeBasePath(process.env.WEB_BASE_PATH);
 
 export default defineConfig(({ command }) => {
   const webTls = command === "serve" ? resolveWebTlsConfig() : undefined;
+  const standaloneBasePath = command === "serve" ? `${serverBasePath}/` : "./";
+  const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? (
+    pagesMode ? "/containerlab-app/" : standaloneBasePath
+  );
 
   return {
     plugins: [
+      {
+        name: "app-document-base",
+        apply: "serve",
+        transformIndexHtml: () => [{
+          tag: "base",
+          attrs: { href: publicBasePath },
+          injectTo: "head-prepend"
+        }]
+      },
       react({
         include: /\.(?:jsx|tsx)$/
       })
@@ -88,16 +102,16 @@ export default defineConfig(({ command }) => {
         ]
       },
       proxy: {
-        "/auth": {
+        [`${serverBasePath}/auth`]: {
           target: apiServerTarget,
           secure: false
         },
-        "/api": {
+        [`${serverBasePath}/api`]: {
           target: apiServerTarget,
           secure: false,
           ws: true
         },
-        "/files": {
+        [`${serverBasePath}/files`]: {
           target: apiServerTarget,
           secure: false
         }
