@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import undici, { Response } from "undici";
 
 import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient";
 
@@ -27,7 +28,7 @@ test("getHttpErrorStatus maps wrapped clab-api-server network failures to bad ga
 
 for (const status of [401, 403, 500]) {
   test(`file existence checks propagate ${status} instead of treating the file as missing`, async (t) => {
-    t.mock.method(globalThis, "fetch", () => Promise.resolve(new Response(null, { status })));
+    t.mock.method(undici, "fetch", () => Promise.resolve(new Response(null, { status })));
     const client = new ClabApiClient({ baseUrl: "https://api.test" });
     await assert.rejects(client.headFile("token", "demo", "demo.clab.yml"), { status });
   });
@@ -35,7 +36,7 @@ for (const status of [401, 403, 500]) {
 
 test("file existence checks distinguish missing files from existing ones", async (t) => {
   const client = new ClabApiClient({ baseUrl: "https://api.test" });
-  const mock = t.mock.method(globalThis, "fetch", () =>
+  const mock = t.mock.method(undici, "fetch", () =>
     Promise.resolve(new Response(null, { status: 404 }))
   );
   assert.equal(await client.headFile("token", "demo", "demo.clab.yml"), false);

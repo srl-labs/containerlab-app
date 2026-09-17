@@ -1,3 +1,5 @@
+import type { Response } from "undici";
+
 import type {
   SaveConfigResponse,
   SSHAccessResponse,

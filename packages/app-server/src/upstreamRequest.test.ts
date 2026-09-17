@@ -1,14 +1,29 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
 import https from "node:https";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { apiFetch } from "./upstreamRequest.ts";
 import { resolveWebTlsConfig } from "./tlsConfig.ts";
 import { shouldVerifyApiTls } from "./upstreamTls.ts";
+
+async function listen(t: TestContext, handler: http.RequestListener): Promise<string> {
+  const server = http.createServer(handler);
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve()))
+    );
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address !== null && typeof address !== "string");
+  return `http://127.0.0.1:${address.port}`;
+}
 
 test("self-signed API certificates work by default without weakening other HTTPS requests", async (t) => {
   const originalSetting = process.env.CLAB_API_TLS_VERIFY;
@@ -34,46 +49,81 @@ test("self-signed API certificates work by default without weakening other HTTPS
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
-  assert.ok(address && typeof address !== "string");
+  assert.ok(address !== null && typeof address !== "string");
   const url = `https://127.0.0.1:${address.port}`;
   assert.equal(shouldVerifyApiTls(), false);
   assert.equal(await (await apiFetch(url)).text(), "ok");
   assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, originalGlobalSetting);
   if (originalGlobalSetting !== "0") await assert.rejects(fetch(url));
   process.env.CLAB_API_TLS_VERIFY = "true";
-  await assert.rejects(apiFetch(url));
+  await assert.rejects(apiFetch(url), (error: unknown) => {
+    assert.ok(error instanceof TypeError && error.cause instanceof Error && "code" in error.cause);
+    assert.equal(error.cause.code, "DEPTH_ZERO_SELF_SIGNED_CERT");
+    return true;
+  });
+});
+
+test("both TLS modes preserve request bodies and reject redirects", async (t) => {
+  const originalSetting = process.env.CLAB_API_TLS_VERIFY;
+  t.after(() => {
+    if (originalSetting === undefined) delete process.env.CLAB_API_TLS_VERIFY;
+    else process.env.CLAB_API_TLS_VERIFY = originalSetting;
+  });
+  let redirectedRequests = 0;
+  const url = await listen(t, (request, response) => {
+    if (request.url === "/redirect") {
+      response.writeHead(302, { location: "/target" }).end();
+      return;
+    }
+    if (request.url === "/target") redirectedRequests++;
+    response.setHeader("x-request-method", request.method ?? "");
+    response.setHeader("x-request-authorization", request.headers.authorization ?? "");
+    request.pipe(response);
+  });
+  for (const verify of ["false", "true"]) {
+    process.env.CLAB_API_TLS_VERIFY = verify;
+    const response = await apiFetch(url, {
+      method: "POST",
+      headers: { authorization: "Bearer test-token" },
+      body: "request body"
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("x-request-method"), "POST");
+    assert.equal(response.headers.get("x-request-authorization"), "Bearer test-token");
+    assert.equal(await response.text(), "request body");
+    await assert.rejects(apiFetch(`${url}/redirect`), { name: "TypeError" });
+  }
+  assert.equal(redirectedRequests, 0);
 });
 
 test("ordinary API requests abort at their deadline", async (t) => {
-  const hold = setTimeout(() => {}, 1000);
-  t.after(() => clearTimeout(hold));
-  t.mock.method(
-    globalThis,
-    "fetch",
-    (_url: string, init: RequestInit) =>
-      new Promise((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
-      })
-  );
-  await assert.rejects(apiFetch("https://api.test", {}, { timeoutMs: 10 }), {
+  const url = await listen(t, () => {});
+  await assert.rejects(apiFetch(url, {}, { timeoutMs: 50 }), {
     name: "TimeoutError"
   });
 });
 
 test("opening a stream bounds connection time but leaves its body alive", async (t) => {
-  let signal: AbortSignal | null | undefined;
-  t.mock.method(globalThis, "fetch", (_url: string, init: RequestInit) => {
-    signal = init.signal;
-    return Promise.resolve(new Response("stream"));
+  const url = await listen(t, (request, response) => {
+    if (request.url === "/pending") return;
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.write("data: ready\n\n");
+  });
+  await assert.rejects(apiFetch(`${url}/pending`, {}, { stream: true, timeoutMs: 50 }), {
+    name: "TimeoutError"
   });
   const caller = new AbortController();
-  await apiFetch(
-    "https://api.test/events",
+  const response = await apiFetch(
+    `${url}/events`,
     { signal: caller.signal },
-    { stream: true, timeoutMs: 10 }
+    { stream: true, timeoutMs: 250 }
   );
-  await delay(30);
-  assert.equal(signal?.aborted, false);
+  const reader = response.body?.getReader();
+  assert.ok(reader);
+  await delay(300);
+  const chunk = await reader.read();
+  assert.equal(chunk.done, false);
+  assert.equal(new TextDecoder().decode(chunk.value), "data: ready\n\n");
   caller.abort();
-  assert.equal(signal?.aborted, true);
+  await assert.rejects(reader.read(), { name: "AbortError" });
 });

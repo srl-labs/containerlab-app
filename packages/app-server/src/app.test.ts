@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
+import undici, { Headers, type Request, Response } from "undici";
 
 import { createStandaloneApp } from "./app";
 
@@ -13,8 +14,8 @@ interface FetchCall {
 }
 
 type FetchHandler = (call: FetchCall) => Response | Promise<Response>;
-type FetchInput = Parameters<typeof fetch>[0];
-type FetchInit = Parameters<typeof fetch>[1];
+type FetchInput = Parameters<typeof undici.fetch>[0];
+type FetchInit = Parameters<typeof undici.fetch>[1];
 
 function isRequestObject(input: FetchInput): input is Request {
   return typeof input !== "string" && !(input instanceof URL);
@@ -66,7 +67,7 @@ class FetchMock {
     });
   }
 
-  fetch: typeof fetch = async (input, init) => {
+  fetch: typeof undici.fetch = async (input, init) => {
     const call: FetchCall = {
       body: bodyToString(init?.body),
       headers: fetchInputHeaders(input, init),
@@ -178,9 +179,8 @@ test("auth startup bounds an unresponsive endpoint and still reports healthy end
 });
 
 async function createTestContext(t: TestContext): Promise<TestAppContext> {
-  const originalFetch = globalThis.fetch;
   const fetchMock = new FetchMock();
-  globalThis.fetch = fetchMock.fetch;
+  t.mock.method(undici, "fetch", fetchMock.fetch);
 
   const app = await createStandaloneApp({
     defaultClabApiUrl: "https://default-api.test:8080",
@@ -190,7 +190,6 @@ async function createTestContext(t: TestContext): Promise<TestAppContext> {
   });
 
   t.after(async () => {
-    globalThis.fetch = originalFetch;
     await app.close();
   });
 

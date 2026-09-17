@@ -1,4 +1,4 @@
-import { Agent } from "undici";
+import undici, { Agent, type RequestInit, type Response } from "undici";
 
 import { shouldVerifyApiTls } from "./upstreamTls.ts";
 
@@ -27,7 +27,7 @@ export async function apiFetch(
       )
     : undefined;
   timer?.unref();
-  const request = {
+  const request: RequestInit = {
     ...init,
     // Never forward credentials through a redirect to another origin.
     redirect: "error",
@@ -35,9 +35,7 @@ export async function apiFetch(
     signal: init.signal ? AbortSignal.any([init.signal, deadline]) : deadline
   };
   try {
-    // Node and the explicit undici package can ship different declaration versions.
-    // Their dispatch protocol is compatible; keep that boundary in one place.
-    return await fetch(url, request as unknown as RequestInit);
+    return await undici.fetch(url, request);
   } finally {
     if (timer) clearTimeout(timer);
   }
