@@ -113,6 +113,12 @@ try {
   `);
   run(process.execPath, ["bundle.mjs"]);
   run(process.execPath, ["consumer.ts"]);
+  run(process.execPath, ["--input-type=commonjs", "-e", `
+    const assert = require("node:assert/strict");
+    const { FilterUtils } = require("@containerlab/clab-ui/explorer/filter");
+    assert.equal(FilterUtils.createFilter("lab*")("lab-demo"), true);
+    assert.equal(FilterUtils.createFilter("lab*")("other"), false);
+  `]);
   console.log(
     "Packed clab-ui: all public declarations, browser bundle, and Node runtime checks passed.",
   );

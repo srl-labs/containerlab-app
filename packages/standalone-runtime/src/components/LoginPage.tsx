@@ -116,7 +116,11 @@ function ReconnectCard({
             </Typography>
             <Typography
               variant="caption"
-              sx={{ color: "#858585", fontFamily: "monospace", fontSize: "0.75rem" }}
+              sx={{
+                color: "#858585",
+                fontFamily: "monospace",
+                fontSize: "0.75rem"
+              }}
               noWrap
             >
               {endpointUrl} &middot; {endpoint.username}
@@ -183,7 +187,9 @@ function ReconnectCard({
           />
           <Button
             variant="contained"
-            onClick={handleReconnect}
+            onClick={() => {
+              void handleReconnect();
+            }}
             disabled={
               busy ||
               !username.trim() ||
@@ -284,7 +290,11 @@ export function LoginPage({
               variant="text"
               size="small"
               onClick={() => setShowAddForm(true)}
-              sx={{ alignSelf: "center", textTransform: "none", color: "#858585" }}
+              sx={{
+                alignSelf: "center",
+                textTransform: "none",
+                color: "#858585"
+              }}
             >
               Manage saved endpoints
             </Button>
@@ -308,7 +318,11 @@ export function LoginPage({
                 variant="text"
                 size="small"
                 onClick={() => setShowAddForm(false)}
-                sx={{ alignSelf: "center", textTransform: "none", color: "#858585" }}
+                sx={{
+                  alignSelf: "center",
+                  textTransform: "none",
+                  color: "#858585"
+                }}
               >
                 Back to reconnect
               </Button>

@@ -127,7 +127,9 @@ async function mockStandaloneApi(page: Page): Promise<void> {
   await page.route("**/api/topology/sessions", (route) =>
     fulfillJson(route, { sessionId: "topo-session-e2e", topologyRef: TOPOLOGY_REF })
   );
-  await page.route("**/api/topology/snapshot", (route) => fulfillJson(route, { snapshot: SNAPSHOT }));
+  await page.route("**/api/topology/snapshot", (route) =>
+    fulfillJson(route, { snapshot: SNAPSHOT })
+  );
   await page.route("**/api/topology/command", (route) =>
     fulfillJson(route, { type: "topology-host:ack", snapshot: SNAPSHOT })
   );
@@ -213,11 +215,13 @@ async function selectEditorRange(
 }
 
 async function selectedTextBackgrounds(page: Page): Promise<string[]> {
-  return page.locator(".monaco-editor .selected-text").evaluateAll((elements) =>
-    elements
-      .map((element) => window.getComputedStyle(element).backgroundColor)
-      .filter((background) => background !== "" && background !== "rgba(0, 0, 0, 0)")
-  );
+  return page
+    .locator(".monaco-editor .selected-text")
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => window.getComputedStyle(element).backgroundColor)
+        .filter((background) => background !== "" && background !== "rgba(0, 0, 0, 0)")
+    );
 }
 
 async function markerMessages(page: Page): Promise<string[]> {
@@ -249,7 +253,12 @@ test.describe("standalone Monaco YAML editor", () => {
     await openYamlEditor(page);
     await expect(page.getByTestId("source-editor-suggestions-toggle")).toHaveCount(0);
 
-    await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n", 4, 26);
+    await setEditorValue(
+      page,
+      "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n",
+      4,
+      26
+    );
     await selectEditorRange(page, {
       startLineNumber: 4,
       startColumn: 13,
@@ -320,12 +329,7 @@ test.describe("standalone Monaco YAML editor", () => {
     await expect(page.locator(".suggest-widget")).toContainText("nokia_srlinux");
 
     await page.keyboard.press("Escape");
-    await setEditorValue(
-      page,
-      "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n",
-      4,
-      9
-    );
+    await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n", 4, 9);
     await page.evaluate(() => window.__clabMonacoDebug?.triggerHover());
     await expect(page.locator(".monaco-hover")).toBeVisible({ timeout: 5000 });
     await expect(page.locator(".monaco-hover")).toContainText("Allowed values");
@@ -431,4 +435,39 @@ test.describe("standalone Monaco YAML editor", () => {
       .toBe(`${text} `);
     await expect(page.locator(".suggest-widget")).toBeHidden({ timeout: 1000 });
   });
+});
+
+test("workspace file tabs replace the canvas and restore topology controls when closed", async ({
+  page
+}) => {
+  await mockStandaloneApi(page);
+  await page.route("**/api/runtime/file-explorer/tree**", (route) =>
+    fulfillJson(route, [
+      { endpointId: ENDPOINT.id, name: "notes.txt", path: "notes.txt", kind: "file" }
+    ])
+  );
+  await page.route("**/api/runtime/file-explorer/file?**", (route) =>
+    fulfillJson(route, {
+      endpointId: ENDPOINT.id,
+      path: "notes.txt",
+      content: "workspace notes\n"
+    })
+  );
+  await openYamlEditor(page);
+  const expandFiles = page.getByLabel("Expand File Explorer", { exact: true });
+  if (await expandFiles.count()) await expandFiles.click();
+  await page.getByLabel("Expand Test Endpoint", { exact: true }).last().click();
+  await page.getByText("notes.txt", { exact: true }).dblclick();
+  await expect(page.getByTestId("file-editor-tab-panel")).toBeVisible();
+  await expect(page.getByTestId("navbar-lock")).toHaveCount(0);
+  await expect(page.locator(".react-flow")).toBeHidden();
+  const tabs = await page.getByTestId("lab-tabs").boundingBox();
+  const editor = await page.getByTestId("file-editor-tab-panel").boundingBox();
+  expect(tabs).not.toBeNull();
+  expect(editor).not.toBeNull();
+  expect(editor!.y).toBeGreaterThanOrEqual(tabs!.y + tabs!.height - 1);
+  await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
+  await expect(page.getByTestId("file-editor-tab-panel")).toHaveCount(0);
+  await expect(page.getByTestId("navbar-lock")).toBeVisible();
+  await expect(page.locator(".react-flow")).toBeVisible();
 });

@@ -920,8 +920,12 @@ export function ContainerlabImageManager({
         key={entry.kind}
         entry={entry}
         actionBusy={actionBusy}
-        onPull={handlePull}
-        onRemove={handleRemove}
+        onPull={(image, kind) => {
+          void handlePull(image, kind);
+        }}
+        onRemove={(reference) => {
+          void handleRemove(reference);
+        }}
       />
     ));
   }

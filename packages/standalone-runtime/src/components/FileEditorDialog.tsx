@@ -211,7 +211,9 @@ export function FileEditorDialog() {
         </Button>
         <Button
           variant="contained"
-          onClick={handleSave}
+          onClick={() => {
+            void handleSave();
+          }}
           disabled={!dirty || fileEditor.saving}
         >
           {fileEditor.saving ? "Saving..." : "Save"}

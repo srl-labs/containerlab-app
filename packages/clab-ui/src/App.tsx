@@ -19,17 +19,24 @@ import {
   useTopoViewerMessageSubscription,
   useTopologyHostInitialization
 } from "./hooks/app";
-import { AppContent } from "./AppContent";
+import { AppContent, type AppLayoutOptions } from "./AppContent";
 
 /** Chrome level: "full" shows the editor navbar + side panel; "viewer" renders the canvas only. */
 export type AppChrome = "full" | "viewer";
 
-interface AppRootProps {
+export type { AppLayoutOptions } from "./AppContent";
+
+interface AppRootProps extends AppLayoutOptions {
   initialData?: InitialGraphData;
   chrome?: AppChrome;
 }
 
-function AppRoot({ initialData, chrome }: AppRootProps): React.JSX.Element {
+function AppRoot({
+  initialData,
+  chrome,
+  slots,
+  lifecycleActionsAvailable
+}: AppRootProps): React.JSX.Element {
   const reactFlowRef = React.useRef<ReactFlowCanvasRef>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
   const layoutCanvasRef: React.RefObject<CanvasRef | null> = reactFlowRef;
@@ -50,19 +57,28 @@ function AppRoot({ initialData, chrome }: AppRootProps): React.JSX.Element {
       layoutControls={layoutControls}
       onInit={setRfInstance}
       chrome={chrome}
+      slots={slots}
+      lifecycleActionsAvailable={lifecycleActionsAvailable}
     />
   );
 }
 
 /** Main App component - initializes stores and subscriptions */
-export const App: React.FC<{
-  initialData?: InitialGraphData;
-  runtime: ClabUiRuntime;
-  chrome?: AppChrome;
-}> = ({ initialData, runtime, chrome }) => {
+export const App: React.FC<
+  AppLayoutOptions & {
+    initialData?: InitialGraphData;
+    runtime: ClabUiRuntime;
+    chrome?: AppChrome;
+  }
+> = ({ initialData, runtime, chrome, slots, lifecycleActionsAvailable }) => {
   return (
     <ClabUiRuntimeProvider runtime={runtime}>
-      <AppRoot initialData={initialData} chrome={chrome} />
+      <AppRoot
+        initialData={initialData}
+        chrome={chrome}
+        slots={slots}
+        lifecycleActionsAvailable={lifecycleActionsAvailable}
+      />
     </ClabUiRuntimeProvider>
   );
 };

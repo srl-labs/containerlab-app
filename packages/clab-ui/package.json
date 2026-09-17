@@ -96,6 +96,11 @@
     "./yaml": {
       "types": "./dist/yaml/index.d.ts",
       "import": "./dist/yaml/index.js"
+    },
+    "./explorer/filter": {
+      "types": "./dist/utils/filterUtils.d.ts",
+      "import": "./dist/explorer/filter.js",
+      "default": "./dist/explorer/filter.js"
     }
   },
   "scripts": {
@@ -103,7 +108,7 @@
     "build:viewer": "vite build --config vite.viewer.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
-    "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
     "test:unit": "node --import tsx --test 'src/**/*.test.ts' 'src/**/*.test.tsx'",
     "dev:ui-harness": "vite --host 127.0.0.1 --config test/ui-harness/vite.config.ts",

@@ -286,7 +286,7 @@ export async function createStandaloneApp(
     const endpoint = endpointId
       ? (session.endpoints.get(endpointId) ?? null)
       : (Array.from(session.endpoints.values())[0] ?? null);
-    if (!endpoint) {
+    if (!endpoint?.token) {
       return null;
     }
 

@@ -4,6 +4,8 @@
 
 import * as YAML from "yaml";
 
+import { runDocumentOperation } from "./documentQueue";
+
 import type {
   ClabTopology,
   DeploymentState,
@@ -34,6 +36,8 @@ import { isNonEmptyString, toFiniteNumber, toPosition } from "../../annotations/
 interface TopologyHostCoreOptions {
   fs: FileSystemAdapter;
   yamlFilePath: string;
+  /** Stable identity shared by sessions editing the same backing document. */
+  documentKey?: string;
   mode: "edit" | "view";
   deploymentState: DeploymentState;
   /**
@@ -85,6 +89,8 @@ const noopLogger: IOLogger = {
 
 export class TopologyHostCore implements TopologyHost {
   private yamlFilePath: string;
+  private readonly documentKey: string;
+  private documentBaseline: HistoryEntry | null = null;
   private mode: "edit" | "view";
   private deploymentState: DeploymentState;
   private dirty: boolean | undefined;
@@ -110,6 +116,7 @@ export class TopologyHostCore implements TopologyHost {
   constructor(options: TopologyHostCoreOptions) {
     this.baseFs = options.fs;
     this.yamlFilePath = options.yamlFilePath;
+    this.documentKey = options.documentKey ?? options.yamlFilePath;
     this.mode = options.mode;
     this.deploymentState = options.deploymentState;
     this.dirty = options.dirty;
@@ -163,15 +170,42 @@ export class TopologyHostCore implements TopologyHost {
     }
   }
 
-  async getSnapshot(): Promise<TopologySnapshot> {
+  getSnapshot(): Promise<TopologySnapshot> {
+    return runDocumentOperation(this.documentKey, () => this.getSnapshotUnlocked());
+  }
+
+  private async getSnapshotUnlocked(): Promise<TopologySnapshot> {
     if (this.snapshot) {
       return this.snapshot;
     }
+    const previous = this.documentBaseline;
+    this.baseFs.invalidateCache?.();
     this.snapshot = await this.buildSnapshot();
+    if (
+      previous &&
+      this.documentBaseline &&
+      (previous.yamlContent !== this.documentBaseline.yamlContent ||
+        previous.annotationsContent !== this.documentBaseline.annotationsContent)
+    ) {
+      this.revision += 1;
+      this.past = [];
+      this.future = [];
+      this.snapshot = { ...this.snapshot, revision: this.revision, canUndo: false, canRedo: false };
+      this.markDirtyIfYamlChanged(previous.yamlContent, this.snapshot);
+    }
     return this.snapshot;
   }
 
-  async applyCommand(
+  applyCommand(
+    command: TopologyHostCommand,
+    baseRevision: number
+  ): Promise<TopologyHostResponseMessage> {
+    return runDocumentOperation(this.documentKey, () =>
+      this.applyCommandUnlocked(command, baseRevision)
+    );
+  }
+
+  private async applyCommandUnlocked(
     command: TopologyHostCommand,
     baseRevision: number
   ): Promise<TopologyHostResponseMessage> {
@@ -180,7 +214,28 @@ export class TopologyHostCore implements TopologyHost {
       this.logger.warn(
         `[TopologyHost] Rejecting ${commandName}: stale baseRevision ${baseRevision} (current ${this.revision})`
       );
-      const snapshot = await this.getSnapshot();
+      const snapshot = await this.getSnapshotUnlocked();
+      return {
+        type: "topology-host:reject",
+        protocolVersion: TOPOLOGY_HOST_PROTOCOL_VERSION,
+        requestId: "",
+        revision: this.revision,
+        snapshot,
+        reason: "stale"
+      };
+    }
+
+    // A session revision cannot detect a write by another session. Compare the
+    // actual document with the last snapshot while holding the document queue.
+    if (!this.documentBaseline) await this.getSnapshotUnlocked();
+    this.baseFs.invalidateCache?.();
+    const beforeState = await this.captureHistoryEntry();
+    if (
+      this.documentBaseline &&
+      (beforeState.yamlContent !== this.documentBaseline.yamlContent ||
+        beforeState.annotationsContent !== this.documentBaseline.annotationsContent)
+    ) {
+      const snapshot = await this.onExternalChangeUnlocked();
       return {
         type: "topology-host:reject",
         protocolVersion: TOPOLOGY_HOST_PROTOCOL_VERSION,
@@ -200,8 +255,6 @@ export class TopologyHostCore implements TopologyHost {
       return this.handleUndoRedo("redo");
     }
 
-    const beforeState = await this.captureHistoryEntry();
-
     try {
       this.logger.debug(`[TopologyHost] Applying ${commandName} @ revision ${this.revision}`);
       this.setInternalUpdate?.(true);
@@ -212,6 +265,10 @@ export class TopologyHostCore implements TopologyHost {
       this.annotationsIO.clearCache();
     } catch (err) {
       this.transactionalFs.rollbackTransaction();
+      this.annotationsIO.clearCache();
+      this.baseFs.invalidateCache?.();
+      this.snapshot = null;
+      await this.reloadFromDisk().catch(() => undefined);
       const message = err instanceof Error ? err.message : String(err);
       this.logger.error(`[TopologyHost] Command ${commandName} failed: ${message}`);
       this.historyMergeUntil = null;
@@ -252,8 +309,13 @@ export class TopologyHostCore implements TopologyHost {
     };
   }
 
-  async onExternalChange(): Promise<TopologySnapshot> {
-    const previousYamlContent = this.snapshot?.yamlContent;
+  onExternalChange(): Promise<TopologySnapshot> {
+    return runDocumentOperation(this.documentKey, () => this.onExternalChangeUnlocked());
+  }
+
+  private async onExternalChangeUnlocked(): Promise<TopologySnapshot> {
+    this.baseFs.invalidateCache?.();
+    const previousYamlContent = this.documentBaseline?.yamlContent;
     this.past = [];
     this.future = [];
     this.revision += 1;
@@ -565,7 +627,7 @@ export class TopologyHostCore implements TopologyHost {
   private async handleUndoRedo(direction: "undo" | "redo"): Promise<TopologyHostResponseMessage> {
     const stack = direction === "undo" ? this.past : this.future;
     if (stack.length === 0) {
-      const snapshot = await this.getSnapshot();
+      const snapshot = await this.getSnapshotUnlocked();
       return {
         type: TOPOLOGY_HOST_ACK,
         protocolVersion: TOPOLOGY_HOST_PROTOCOL_VERSION,
@@ -576,18 +638,19 @@ export class TopologyHostCore implements TopologyHost {
     }
 
     const current = await this.captureHistoryEntry();
-    const entry = stack.pop()!;
-
-    if (direction === "undo") {
-      this.future.push(current);
-    } else {
-      this.past.push(current);
-    }
+    const entry = stack[stack.length - 1];
 
     try {
       this.setInternalUpdate?.(true);
       await this.restoreHistoryEntry(entry);
+      stack.pop();
+      if (direction === "undo") this.future.push(current);
+      else this.past.push(current);
     } catch (err) {
+      this.transactionalFs.rollbackTransaction();
+      this.snapshot = null;
+      this.baseFs.invalidateCache?.();
+      await this.reloadFromDisk().catch(() => undefined);
       const message = err instanceof Error ? err.message : String(err);
       return {
         type: "topology-host:error",
@@ -650,6 +713,7 @@ export class TopologyHostCore implements TopologyHost {
     const annotationsUpdated = await this.reconcileAnnotationsForRenamedNodes(parsed);
     if (annotationsUpdated) {
       annotations = await this.annotationsIO.loadAnnotations(this.yamlFilePath, true);
+      annotationsContent = await this.readAnnotationsContent();
     }
     const legacyMigration = migrateLegacyAnnotations(annotations);
     if (legacyMigration.modified) {
@@ -687,6 +751,7 @@ export class TopologyHostCore implements TopologyHost {
       this.annotationsIO.getAnnotationsFilePath(this.yamlFilePath)
     );
 
+    this.documentBaseline = { yamlContent, annotationsContent };
     return {
       revision: this.revision,
       nodes: topology.nodes,

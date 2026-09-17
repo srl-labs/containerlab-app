@@ -19,7 +19,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "typecheck:local-ui": "pnpm run typecheck",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
-    "lint:ts": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin .",
+    "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
     "test:e2e": "playwright test --config test/e2e/playwright.config.ts",
     "test:e2e:local-ui": "pnpm run test:e2e",

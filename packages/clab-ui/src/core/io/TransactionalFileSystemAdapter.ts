@@ -1,9 +1,9 @@
 /**
  * TransactionalFileSystemAdapter
  *
- * Buffers writes/deletes in memory and commits them atomically (best-effort)
- * using temp files + rename. This allows multi-file updates (YAML + annotations)
- * to behave as a single transaction from the host's perspective.
+ * Buffers writes/deletes and restores the original files if a commit fails.
+ * Individual renames are atomic where supported; a multi-file commit is not
+ * crash-atomic. Backups are retained if recovery itself fails.
  */
 
 import type { FileSystemAdapter } from "./types";
@@ -129,36 +129,39 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
     return this.base.join(dir, `.${prefix}-${this.generateId()}-${base}`);
   }
 
-  private async writeTempFiles(entries: PendingEntry[]): Promise<Map<string, string>> {
-    const tempFiles = new Map<string, string>();
+  private async writeTempFiles(
+    entries: PendingEntry[],
+    tempFiles: Map<string, string>
+  ): Promise<void> {
     for (const entry of entries) {
       if (entry.content === null) continue;
       const dir = this.base.dirname(entry.path);
       const base = this.base.basename(entry.path);
       const tempPath = this.buildTempPath(dir, base, "tmp");
-      await this.base.writeFile(tempPath, entry.content);
       tempFiles.set(entry.path, tempPath);
+      await this.base.writeFile(tempPath, entry.content);
     }
-    return tempFiles;
   }
 
-  private async createBackups(entries: PendingEntry[]): Promise<Map<string, string>> {
-    const backups = new Map<string, string>();
+  private async createBackups(
+    entries: PendingEntry[],
+    backups: Map<string, string>
+  ): Promise<void> {
     for (const entry of entries) {
       const exists = await this.base.exists(entry.path);
       if (!exists) continue;
       const dir = this.base.dirname(entry.path);
       const base = this.base.basename(entry.path);
       const backupPath = this.buildTempPath(dir, base, "bak");
-      await this.base.rename(entry.path, backupPath);
       backups.set(entry.path, backupPath);
+      await this.base.rename(entry.path, backupPath);
     }
-    return backups;
   }
 
   private async applyWrites(
     entries: PendingEntry[],
-    tempFiles: Map<string, string>
+    tempFiles: Map<string, string>,
+    attemptedWrites: Set<string>
   ): Promise<void> {
     for (const entry of entries) {
       if (entry.content === null) continue;
@@ -166,26 +169,48 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
       if (tempPath === undefined || tempPath.length === 0) {
         throw new Error(`Missing temp file for ${entry.path}`);
       }
+      attemptedWrites.add(entry.path);
       await this.base.rename(tempPath, entry.path);
     }
   }
 
   private async cleanupBackups(backups: Map<string, string>): Promise<void> {
     for (const backupPath of backups.values()) {
-      await this.base.unlink(backupPath);
+      try {
+        await this.base.unlink(backupPath);
+      } catch {
+        // The commit has succeeded. Keep a leftover backup rather than report
+        // a failed save after some of the other backups have been deleted.
+      }
     }
   }
 
-  private async restoreBackups(backups: Map<string, string>): Promise<void> {
+  private async restoreBackups(
+    backups: Map<string, string>,
+    attemptedWrites: Set<string>
+  ): Promise<void> {
+    const errors: Error[] = [];
+    for (const targetPath of attemptedWrites) {
+      if (backups.has(targetPath)) continue;
+      try {
+        await this.base.unlink(targetPath);
+      } catch (cause) {
+        errors.push(new Error(`Could not remove incomplete file ${targetPath}`, { cause }));
+      }
+    }
     for (const [targetPath, backupPath] of backups) {
       try {
-        const stillMissing = !(await this.base.exists(targetPath));
-        if (stillMissing) {
-          await this.base.rename(backupPath, targetPath);
-        }
-      } catch {
-        // ignore rollback errors
+        if (!(await this.base.exists(backupPath))) continue;
+        // Replace in place: running topology documents cannot be unlinked.
+        await this.base.rename(backupPath, targetPath);
+      } catch (cause) {
+        errors.push(
+          new Error(`Could not restore ${targetPath}; backup retained at ${backupPath}`, { cause })
+        );
       }
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, errors.map((error) => error.message).join("; "));
     }
   }
 
@@ -202,26 +227,38 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
   private async commitEntries(entries: PendingEntry[]): Promise<void> {
     if (entries.length === 0) return;
 
-    let tempFiles = new Map<string, string>();
-    let backups = new Map<string, string>();
+    const tempFiles = new Map<string, string>();
+    const backups = new Map<string, string>();
+    const attemptedWrites = new Set<string>();
 
     try {
       // 1) Write temp files for all writes.
-      tempFiles = await this.writeTempFiles(entries);
+      await this.writeTempFiles(entries, tempFiles);
 
       // 2) Move existing targets to backups.
-      backups = await this.createBackups(entries);
+      await this.createBackups(entries, backups);
 
-      // 3) Apply writes (rename temp -> target). Deletes are handled by backup cleanup.
-      await this.applyWrites(entries, tempFiles);
+      // 3) Apply writes (rename temp -> target).
+      await this.applyWrites(entries, tempFiles, attemptedWrites);
 
-      // 4) Clean up backups (delete original files that were replaced or deleted).
-      await this.cleanupBackups(backups);
+      // Some remote adapters defer removal when moving a document to a backup.
+      // Complete deletions before cleanup so failures can still be rolled back.
+      for (const entry of entries) {
+        if (entry.content === null) await this.base.unlink(entry.path);
+      }
     } catch (err) {
-      // Best-effort rollback: restore backups and clean temp files.
-      await this.restoreBackups(backups);
-      await this.cleanupTempFiles(tempFiles);
+      try {
+        await this.restoreBackups(backups, attemptedWrites);
+      } catch (recoveryError) {
+        throw new AggregateError(
+          [err, recoveryError],
+          `Save failed and recovery was incomplete: ${String(recoveryError)}`
+        );
+      } finally {
+        await this.cleanupTempFiles(tempFiles);
+      }
       throw err;
     }
+    await this.cleanupBackups(backups);
   }
 }

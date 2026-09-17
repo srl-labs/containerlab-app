@@ -873,7 +873,13 @@ function useRemoveEndpointDialog(
     }
   }, [endpoint, onRemoveEndpoint, setBusyKey, setError]);
 
-  return { endpoint, open, setEndpointId, submitDisabled: busyKey !== null, submit };
+  return {
+    endpoint,
+    open,
+    setEndpointId,
+    submitDisabled: busyKey !== null,
+    submit
+  };
 }
 
 function useEditEndpointDialog(
@@ -1303,7 +1309,9 @@ export function EndpointManager({
 
           <Button
             variant="contained"
-            onClick={addForm.submit}
+            onClick={() => {
+              void addForm.submit();
+            }}
             disabled={addForm.submitDisabled}
             sx={{
               alignSelf: "flex-start",
@@ -1388,7 +1396,9 @@ export function EndpointManager({
         <DialogActions>
           <Button onClick={() => editDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={editDialog.submit}
+            onClick={() => {
+              void editDialog.submit();
+            }}
             variant="contained"
             disabled={editDialog.submitDisabled}
           >
@@ -1465,7 +1475,9 @@ export function EndpointManager({
         <DialogActions>
           <Button onClick={() => reconnectDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={reconnectDialog.submit}
+            onClick={() => {
+              void reconnectDialog.submit();
+            }}
             variant="contained"
             disabled={reconnectDialog.submitDisabled}
           >
@@ -1500,7 +1512,9 @@ export function EndpointManager({
         <DialogActions>
           <Button onClick={() => removeDialog.setEndpointId(null)}>Cancel</Button>
           <Button
-            onClick={removeDialog.submit}
+            onClick={() => {
+              void removeDialog.submit();
+            }}
             color="error"
             variant="contained"
             disabled={removeDialog.submitDisabled}

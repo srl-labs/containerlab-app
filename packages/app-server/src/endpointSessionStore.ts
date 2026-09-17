@@ -2,22 +2,14 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-export type EndpointSessionDuration = string;
-
-const ENDPOINT_SESSION_DURATION_PATTERN =
-  /^(?:(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))|(?:\d+(?:\.\d+)?(?:d|w)))+$/i;
-
-export const DEFAULT_ENDPOINT_SESSION_DURATION: EndpointSessionDuration = "24h";
-
-export function normalizeEndpointSessionDuration(value: unknown): EndpointSessionDuration {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : DEFAULT_ENDPOINT_SESSION_DURATION;
-}
-
-export function isValidEndpointSessionDuration(value: string): boolean {
-  return ENDPOINT_SESSION_DURATION_PATTERN.test(value.trim());
-}
+import { isValidEndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
+import type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
+export {
+  DEFAULT_ENDPOINT_SESSION_DURATION,
+  normalizeEndpointSessionDuration,
+  isValidEndpointSessionDuration
+} from "@srl-labs/containerlab-app-contract";
+export type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
 
 export interface EndpointEntry {
   id: string;
@@ -48,7 +40,10 @@ export interface EndpointSessionStore {
   clearSession(sessionId: string): void;
   dispose(): void;
   getSession(sessionId: string): EndpointSession | null;
-  removeEndpoint(sessionId: string, endpointId: string): { removed: EndpointEntry | null; sessionEmpty: boolean };
+  removeEndpoint(
+    sessionId: string,
+    endpointId: string
+  ): { removed: EndpointEntry | null; sessionEmpty: boolean };
   replaceSession(sessionId: string, entries: EndpointEntry[]): EndpointSession;
   upsertEndpoint(sessionId: string, entry: EndpointEntry): EndpointSession;
 }
@@ -95,7 +90,9 @@ function serializeSessions(sessions: Iterable<EndpointSession>): PersistedEndpoi
     sessions: Array.from(sessions, (session) => ({
       sessionId: session.sessionId,
       lastAccess: session.lastAccess,
-      endpoints: Array.from(session.endpoints.values(), (entry) => ({ ...entry }))
+      endpoints: Array.from(session.endpoints.values(), (entry) => ({
+        ...entry
+      }))
     }))
   };
 }
@@ -156,7 +153,10 @@ function writePersistedSessions(
   const payload = JSON.stringify(serializeSessions(sessions), null, 2);
   const temporaryFile = `${persistenceFile}.${process.pid}.tmp`;
   try {
-    fs.mkdirSync(path.dirname(persistenceFile), { mode: 0o700, recursive: true });
+    fs.mkdirSync(path.dirname(persistenceFile), {
+      mode: 0o700,
+      recursive: true
+    });
     fs.writeFileSync(temporaryFile, payload, { encoding: "utf8", mode: 0o600 });
     fs.chmodSync(temporaryFile, 0o600);
     fs.renameSync(temporaryFile, persistenceFile);

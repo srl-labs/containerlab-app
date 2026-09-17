@@ -1,3 +1,65 @@
+import type {
+  SaveConfigResponse,
+  SSHAccessResponse,
+  TerminalProtocol,
+  TerminalSessionInfo,
+  LogsResponse,
+  VersionResponse,
+  VersionCheckResponse,
+  CustomNodesResponse,
+  IconListResponse,
+  IconUploadRequest,
+  IconUploadResponse,
+  NetemShowResponse,
+  CaptureTarget,
+  CapturePacketflixResponse,
+  CaptureWiresharkVncCreateResponse,
+  CaptureWiresharkVncReadyResponse,
+  EdgeSharkStatusResponse,
+  RuntimeImagesResponse,
+  RuntimeImageActionResponse,
+  NodeBrowserPortsResponse,
+  ShareToolAction,
+  ShareToolResponse,
+  FcliCommandResponse,
+  DrawioGenerateResponse,
+  CaptureCloseAllResponse,
+} from "@srl-labs/containerlab-app-contract";
+export type {
+  SaveConfigResponse,
+  SSHAccessResponse,
+  TerminalProtocol,
+  TerminalSessionInfo,
+  LogsResponse,
+  VersionResponse,
+  VersionCheckResponse,
+  CustomNodesResponse,
+  IconListResponse,
+  IconUploadRequest,
+  IconUploadResponse,
+  NetemInterfaceInfo,
+  NetemShowResponse,
+  CaptureTarget,
+  CapturePacketflixURI,
+  CapturePacketflixResponse,
+  CaptureWiresharkVncSession,
+  CaptureWiresharkVncCreateResponse,
+  CaptureWiresharkVncReadyResponse,
+  EdgeSharkStatusResponse,
+  RuntimeImageSummary,
+  RuntimeImagesResponse,
+  RuntimeImageActionResponse,
+  NodeBrowserPort,
+  NodeBrowserPortsResponse,
+  ShareToolAction,
+  ShareToolResponse,
+  FcliCommandResponse,
+  DrawioGenerateResponse,
+  CaptureCloseAllResponse,
+} from "@srl-labs/containerlab-app-contract";
+
+import { apiFetch } from "./upstreamRequest.ts";
+
 /**
  * Typed HTTP client for clab-api-server REST endpoints.
  */
@@ -66,48 +128,6 @@ export interface InspectContainerInfo {
 export type InspectAllLabsResponse = Record<string, InspectContainerInfo[]>;
 export type InspectLabResponse = InspectContainerInfo[];
 
-export interface SaveConfigResponse {
-  message: string;
-  output: string;
-}
-
-export interface SSHAccessResponse {
-  port: number;
-  host: string;
-  username: string;
-  expiration: string;
-  command: string;
-}
-
-export type TerminalProtocol = "ssh" | "shell" | "telnet";
-
-export interface TerminalSessionInfo {
-  sessionId: string;
-  username: string;
-  labName: string;
-  nodeName: string;
-  protocol: TerminalProtocol;
-  state: string;
-  createdAt: string;
-  expiresAt: string;
-  lastActivity: string;
-  exitCode?: number | null;
-  error?: string;
-}
-
-export interface LogsResponse {
-  containerName: string;
-  logs: string;
-}
-
-export interface VersionResponse {
-  versionInfo: string;
-}
-
-export interface VersionCheckResponse {
-  checkResult: string;
-}
-
 export interface HealthMetricsResponse {
   serverInfo: {
     version: string;
@@ -143,31 +163,11 @@ export interface HealthMetricsResponse {
 
 export type CustomNodeTemplate = Record<string, unknown>;
 
-export interface CustomNodesResponse {
-  customNodes: CustomNodeTemplate[];
-  defaultNode: string;
-}
-
 export interface CustomIconInfo {
   name: string;
   source: "workspace" | "global";
   dataUri: string;
   format: "svg" | "png";
-}
-
-export interface IconListResponse {
-  icons: CustomIconInfo[];
-}
-
-export interface IconUploadRequest {
-  fileName: string;
-  contentType?: string;
-  dataBase64: string;
-}
-
-export interface IconUploadResponse {
-  success: boolean;
-  iconName: string;
 }
 
 export interface NetemSetRequest {
@@ -185,17 +185,6 @@ export interface NetemResetRequest {
   interface: string;
 }
 
-export interface NetemInterfaceInfo {
-  interface: string;
-  delay: string;
-  jitter: string;
-  packet_loss: number;
-  rate: number;
-  corruption?: number;
-}
-
-export type NetemShowResponse = Record<string, NetemInterfaceInfo[]>;
-
 export interface TopologyDocEvent {
   type: "topology-doc";
   labName: string;
@@ -205,117 +194,8 @@ export interface TopologyDocEvent {
   revision: string;
 }
 
-export interface CaptureTarget {
-  containerName: string;
-  interfaceName: string;
-}
-
-export interface CapturePacketflixURI {
-  containerName: string;
-  interfaceNames: string[];
-  packetflixUri: string;
-}
-
-export interface CapturePacketflixResponse {
-  captures: CapturePacketflixURI[];
-}
-
-export interface CaptureWiresharkVncSession {
-  sessionId: string;
-  labName: string;
-  containerName: string;
-  interfaceNames: string[];
-  vncPath: string;
-  showVolumeTip: boolean;
-  createdAt: string;
-  expiresAt: string;
-}
-
-export interface CaptureWiresharkVncCreateResponse {
-  sessions: CaptureWiresharkVncSession[];
-}
-
-export interface CaptureWiresharkVncReadyResponse {
-  ready: boolean;
-  url: string;
-}
-
-export interface EdgeSharkStatusResponse {
-  running: boolean;
-  version?: string;
-  packetflixPort: number;
-  runtime: string;
-}
-
-export interface RuntimeImageSummary {
-  id: string;
-  shortId?: string;
-  repoTags: string[];
-  repoDigests: string[];
-  created?: number;
-  createdAt?: string;
-  size?: number | string;
-  virtualSize?: number | string;
-}
-
-export interface RuntimeImagesResponse {
-  runtime: string;
-  images: RuntimeImageSummary[];
-}
-
-export interface RuntimeImageActionResponse {
-  success: boolean;
-  image?: string;
-  message?: string;
-  output?: string;
-}
-
 export type NodeLifecycleAction =
-  | "start"
-  | "stop"
-  | "restart"
-  | "pause"
-  | "unpause";
-
-export interface NodeBrowserPort {
-  hostIp?: string;
-  hostPort: number;
-  containerPort: number;
-  protocol?: string;
-  description?: string;
-}
-
-export interface NodeBrowserPortsResponse {
-  nodeName: string;
-  containerName: string;
-  ports: NodeBrowserPort[];
-}
-
-export type ShareToolAction = "attach" | "detach" | "reattach";
-
-export interface ShareToolResponse {
-  message: string;
-  link?: string;
-  output?: string;
-}
-
-export interface FcliCommandResponse {
-  command: string;
-  output: string;
-}
-
-export interface DrawioGenerateResponse {
-  fileName: string;
-  content: string;
-  layout: string;
-  message?: string;
-  output?: string;
-}
-
-export interface CaptureCloseAllResponse {
-  message: string;
-  closed: number;
-}
+  "start" | "stop" | "restart" | "pause" | "unpause";
 
 export interface ImportTopologyFromUrlResponse {
   success: boolean;
@@ -325,13 +205,7 @@ export interface ImportTopologyFromUrlResponse {
 }
 
 type LifecycleEndpoint =
-  | "deploy"
-  | "destroy"
-  | "redeploy"
-  | "apply"
-  | "start"
-  | "stop"
-  | "restart";
+  "deploy" | "destroy" | "redeploy" | "apply" | "start" | "stop" | "restart";
 
 export class ClabApiClient {
   private readonly baseUrl: string;
@@ -354,7 +228,7 @@ export class ClabApiClient {
       body.sessionDuration = sessionDuration;
     }
 
-    const res = await fetch(`${this.baseUrl}/login`, {
+    const res = await apiFetch(`${this.baseUrl}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -474,10 +348,14 @@ export class ClabApiClient {
     token: string,
     requestOptions: StreamRequestOptions = {},
   ): Promise<Response> {
-    const res = await fetch(`${this.baseUrl}/api/v1/labs/workspace/events`, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: requestOptions.signal,
-    });
+    const res = await apiFetch(
+      `${this.baseUrl}/api/v1/labs/workspace/events`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: requestOptions.signal,
+      },
+      { stream: true },
+    );
     if (!res.ok) {
       throw new Error(
         `Failed to open workspace event stream: ${res.status} ${res.statusText}`,
@@ -570,14 +448,20 @@ export class ClabApiClient {
     labName: string,
     filePath: string,
   ): Promise<boolean> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/file?path=${encodeURIComponent(filePath)}`,
       {
         method: "HEAD",
         headers: { Authorization: `Bearer ${token}` },
       },
     );
-    return res.ok;
+    if (res.status === 404) return false;
+    if (!res.ok) {
+      const error: HttpError = new Error(`HEAD ${filePath} failed (${res.status})`);
+      error.status = res.status;
+      throw error;
+    }
+    return true;
   }
 
   async getTopologyDocumentRevision(
@@ -585,7 +469,7 @@ export class ClabApiClient {
     labName: string,
     filePath: string,
   ): Promise<string | undefined> {
-    const res = await fetch(
+    const res = await apiFetch(
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/file?path=${encodeURIComponent(filePath)}`,
       {
         method: "HEAD",
@@ -818,12 +702,16 @@ export class ClabApiClient {
 
     let res: Response;
     try {
-      res = await fetch(`${this.baseUrl}${path}?${params.toString()}`, {
-        method,
-        headers,
-        body,
-        signal: requestOptions.signal,
-      });
+      res = await apiFetch(
+        `${this.baseUrl}${path}?${params.toString()}`,
+        {
+          method,
+          headers,
+          body,
+          signal: requestOptions.signal,
+        },
+        { stream: true },
+      );
     } catch (error) {
       throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
     }
@@ -1068,8 +956,11 @@ export class ClabApiClient {
     return (await res.json()) as DrawioGenerateResponse;
   }
 
-  async getVersion(token: string): Promise<VersionResponse> {
-    const res = await this.get("/api/v1/version", token);
+  async getVersion(
+    token: string,
+    timeoutMs?: number,
+  ): Promise<VersionResponse> {
+    const res = await this.get("/api/v1/version", token, timeoutMs);
     return (await res.json()) as VersionResponse;
   }
 
@@ -1357,10 +1248,14 @@ export class ClabApiClient {
     }
     const qs = params.toString();
     const url = `${this.baseUrl}/api/v1/events${qs ? `?${qs}` : ""}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: requestOptions.signal,
-    });
+    const res = await apiFetch(
+      url,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: requestOptions.signal,
+      },
+      { stream: true },
+    );
     if (!res.ok) {
       throw new Error(
         `Failed to open event stream: ${res.status} ${res.statusText}`,
@@ -1378,10 +1273,14 @@ export class ClabApiClient {
     const url =
       `${this.baseUrl}/api/v1/labs/${enc(labName)}/topology/events` +
       `?path=${encodeURIComponent(filePath)}`;
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-      signal: requestOptions.signal,
-    });
+    const res = await apiFetch(
+      url,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: requestOptions.signal,
+      },
+      { stream: true },
+    );
     if (!res.ok) {
       throw new Error(
         `Failed to open topology event stream: ${res.status} ${res.statusText}`,
@@ -1390,10 +1289,18 @@ export class ClabApiClient {
     return res;
   }
 
-  private async get(path: string, token: string): Promise<Response> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+  private async get(
+    path: string,
+    token: string,
+    timeoutMs?: number,
+  ): Promise<Response> {
+    const res = await apiFetch(
+      `${this.baseUrl}${path}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      { timeoutMs },
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
       const err: HttpError = new Error(
@@ -1418,11 +1325,16 @@ export class ClabApiClient {
     if (contentType) {
       headers["Content-Type"] = contentType;
     }
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers,
-      body,
-    });
+    const res = await apiFetch(
+      `${this.baseUrl}${path}`,
+      {
+        method,
+        headers,
+        body,
+      },
+      // Image downloads and lab operations can take several minutes.
+      { timeoutMs: 10 * 60_000 },
+    );
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
       const err: HttpError = new Error(
