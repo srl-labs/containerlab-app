@@ -1,11 +1,13 @@
 /* Scoped to the standalone viewer document; never changes the editor's appearance. */
 html[data-clab-theme="dark"] {
+  color-scheme: dark;
   --vscode-editor-background: #101823 !important;
   --vscode-editor-foreground: #d6e1f0 !important;
   --vscode-sideBar-background: #141e2b !important;
   --vscode-panel-border: #283749 !important;
 }
 html[data-clab-theme="light"] {
+  color-scheme: light;
   --vscode-editor-background: #f7f9fc !important;
   --vscode-editor-foreground: #24354a !important;
   --vscode-sideBar-background: #ffffff !important;
@@ -42,6 +44,16 @@ html[data-clab-theme="light"] {
 html[data-clab-selected] .react-flow__node.clab-viewer-selected {
   filter: drop-shadow(0 0 9px #48bce077);
 }
+/* A canvas-only embed inherits the page underneath the transparent iframe. */
+html[data-clab-borderless="true"] {
+  --vscode-editor-background: transparent !important;
+  background: transparent !important;
+}
+html[data-clab-borderless="true"] body,
+html[data-clab-borderless="true"] #root { background: transparent !important; }
+html[data-clab-borderless="true"] .react-flow__background,
+html[data-clab-borderless="true"] .react-flow__controls { display: none; }
+html[data-clab-borderless="true"] .topology-node-label { text-shadow: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

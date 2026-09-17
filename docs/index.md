@@ -8,8 +8,6 @@ hide:
 ---
 
 <div class="home-hero" markdown>
-<div class="hero-eyebrow"><span></span> VS CODE · DESKTOP · WEB</div>
-
 # The GUI<br> for containerlab.
 
 Design, deploy, and troubleshoot your containerlab networks in one visual workspace. In VS Code, on your desktop, or in your browser.
@@ -19,56 +17,44 @@ Design, deploy, and troubleshoot your containerlab networks in one visual worksp
 [Find your app :lucide-arrow-right:](getting-started/index.md){ .hero-button .hero-button-secondary }
 </div>
 
-<div class="hero-caption"><span class="hero-line"></span> REAL TOPOLOGIES. RIGHT HERE IN THE DOCS.<span class="hero-line"></span></div>
 </div>
 
-```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="A small fabric. A whole world to explore." view="split" height="420"
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="420"
 ```
 
-<div class="demo-caption"><span>Go ahead, explore.</span> Select a node. Follow a link. Switch to YAML. This is the actual topology viewer.</div>
-
-<div class="home-platforms" markdown>
-<span>ONE WORKSPACE. YOUR CHOICE OF HOME.</span>
-<div markdown>
-
-:material-microsoft-visual-studio-code: VS Code &nbsp;&nbsp;&nbsp;&nbsp; :lucide-monitor: Desktop &nbsp;&nbsp;&nbsp;&nbsp; :lucide-globe: Browser
-
-</div>
-</div>
+<div class="demo-caption">Select a node to inspect its configuration and find it in the YAML.</div>
 
 <div class="home-section-heading" markdown>
-<span class="section-eyebrow">FROM AN IDEA TO A RUNNING NETWORK</span>
+## Get started
 
-## Less setup. More discovery.
-
-Everything you need to move from a topology file to a lab you can explore.
+Choose an app, create a topology, and run your first lab.
 </div>
 
 <div class="home-cards" markdown>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-panels-top-left:</span><span class="card-number">01 / GET STARTED</span>
+<span class="card-icon">:lucide-panels-top-left:</span>
 
-### Make yourself at home
+### Choose your app
 
-Choose the app that fits your workflow. Connect a lab host and pick up where you left off.
+Use VS Code, the desktop app, or your browser. Connect to a Linux host to run your labs.
 
 [Choose your app :lucide-arrow-up-right:](getting-started/index.md){ .card-link }
 </div>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-workflow:</span><span class="card-number">02 / DESIGN</span>
+<span class="card-icon">:lucide-workflow:</span>
 
-### Think in topologies
+### Design a topology
 
-Build visually or work in YAML. Add nodes, connect interfaces, and make your network make sense.
+Add nodes and connect interfaces on the canvas, or edit the topology YAML directly.
 
 [Explore the canvas :lucide-arrow-up-right:](guides/topologies.md){ .card-link }
 </div>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-flask-conical:</span><span class="card-number">03 / EXPERIMENT</span>
+<span class="card-icon">:lucide-flask-conical:</span>
 
-### Follow your curiosity
+### Explore examples
 
-Explore working examples. Read the YAML behind every connection. Download a lab and make it yours.
+Inspect a topology, read its YAML, and download the lab to run it yourself.
 
 [Browse the gallery :lucide-arrow-up-right:](examples/index.md){ .card-link }
 </div>
@@ -76,8 +62,8 @@ Explore working examples. Read the YAML behind every connection. Download a lab 
 
 <div class="home-bottom" markdown>
 <div markdown>
-### Built for the way you lab.
-Open source tools. Real network operating systems. Room to experiment.
+### Run your first lab
+Create a two-node network and test the connection between its devices.
 </div>
-[Let's build something :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
+[Follow the tutorial :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
 </div>

@@ -30,7 +30,7 @@ class TopologyPreprocessor(Preprocessor):
         return path.read_text(encoding="utf-8")
 
     def component(self, options, body):
-        allowed = {"title", "file", "annotations", "view", "height", "filename"}
+        allowed = {"title", "file", "annotations", "view", "height", "filename", "borderless"}
         unknown = options.keys() - allowed
         if unknown:
             raise ValueError(f"Unknown clab fence options: {', '.join(sorted(unknown))}")
@@ -45,12 +45,19 @@ class TopologyPreprocessor(Preprocessor):
         view = options.get("view", "topology")
         if view not in {"topology", "yaml", "split"}:
             raise ValueError(f"Unknown topology view: {view}")
+        borderless = options.get("borderless", "false")
+        if borderless not in {"true", "false"}:
+            raise ValueError("borderless must be true or false")
+        if borderless == "true" and view != "topology":
+            raise ValueError("A borderless canvas requires view=topology")
         height = int(options.get("height", "460"))
         if not 240 <= height <= 1000:
             raise ValueError("Topology height must be between 240 and 1000 pixels")
         title = options.get("title", str(data.get("name", "Network topology")))
         filename = options.get("filename", Path(options.get("file", "topology.clab.yml")).name)
         attrs = {"title": title, "view": view, "filename": filename, "height": str(height)}
+        if borderless == "true":
+            attrs["borderless"] = ""
         if "annotations" in options:
             annotations = self.read_asset(options["annotations"])
             if not isinstance(json.loads(annotations), dict):

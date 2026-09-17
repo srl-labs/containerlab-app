@@ -4,10 +4,12 @@ A `.clab.yml` file describes the nodes and links in your network. The apps turn 
 
 ## Follow the connections
 
-This fabric has two spines, three leaves, and three clients. Each leaf connects to both spines. Select a device and use **Show in YAML** to find its definition.
+This fabric has two spines, three leaves, and three clients. Each leaf connects to both spines. Scroll over the diagram to zoom, or drag the canvas to pan.
 
-```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="From a file to a fabric" height="460"
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="400" borderless="true"
 ```
+
+[Open the fabric example](../examples/fabric.md) to inspect nodes alongside their YAML and download the topology.
 
 ## Topology editor
 

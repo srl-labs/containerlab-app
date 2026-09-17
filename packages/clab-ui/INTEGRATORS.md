@@ -664,6 +664,8 @@ Monorepo hosts resolve `@containerlab/clab-ui` through `workspace:*` and consume
 
 For read-only documentation embeds, use the standalone viewer and `<clab-topology>` component described in the [component reference](../../docs/viewer/reference.md). The static assets ship under `@containerlab/clab-ui/viewer/static/*`; an iframe per topology isolates its stores from the host application and other diagrams.
 
+Add the boolean `borderless` attribute to show only the canvas on a transparent background, with no grid or surrounding controls. In Zensical Markdown, use `borderless="true"` on the `clab` fence. Both presentations support mouse-wheel and pinch zoom.
+
 You can rely on:
 
 - the package name

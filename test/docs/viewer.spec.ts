@@ -7,6 +7,7 @@ test("landing example renders the real graph and links a selected node to its YA
   await page.goto("./");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab.");
   await expect(page.getByText("Diagrams that speak YAML", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".hero-eyebrow, .hero-caption")).toHaveCount(0);
   const component = page.locator("clab-topology");
   await expect(component).toHaveAttribute("data-loaded", "true");
   const viewer = component.frameLocator("iframe");
@@ -174,7 +175,96 @@ test("YAML stays readable without JavaScript", async ({ browser }) => {
   await page.goto("http://127.0.0.1:8011/containerlab-app/docs/getting-started/first-lab/");
   await expect(page.locator("clab-topology .clab-source")).toBeVisible();
   await expect(page.locator("clab-topology .clab-source")).toContainText("10.10.10.1/24");
+  await page.goto("http://127.0.0.1:8011/containerlab-app/docs/guides/topologies/");
+  await expect(page.locator("clab-topology[borderless] .clab-source")).toBeVisible();
+  await expect(page.locator("clab-topology[borderless] .clab-source")).toContainText("name: fabric");
   await context.close();
+});
+
+for (const route of ["examples/linux/", "guides/topologies/"]) {
+  test(`mouse-wheel zoom works inside the canvas on ${route}`, async ({ page }) => {
+    await page.goto(route);
+    const component = page.locator("clab-topology");
+    await component.scrollIntoViewIfNeeded();
+    await expect(component).toHaveAttribute("data-loaded", "true");
+    const viewer = component.frameLocator("iframe");
+    await expect(viewer.locator(".react-flow__node").first()).toBeVisible();
+    const viewport = viewer.locator(".react-flow__viewport");
+    const zoom = () => viewport.evaluate((element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a);
+    // Let the initial fit settle before measuring wheel-driven changes.
+    await page.waitForTimeout(300);
+    const before = await zoom();
+    const scroll = await page.evaluate(() => window.scrollY);
+    const box = (await component.locator("iframe").boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, -300);
+    await expect.poll(zoom).toBeGreaterThan(before * 1.1);
+    const enlarged = await zoom();
+    await page.mouse.wheel(0, 300);
+    await expect.poll(zoom).toBeLessThan(enlarged);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+  });
+}
+
+test("borderless diagrams show only a transparent canvas in both themes", async ({ page }) => {
+  await page.goto("guides/topologies/");
+  const component = page.locator("clab-topology[borderless]");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  await expect(component.getByRole("region", { name: "Leaf–spine fabric" })).toBeVisible();
+  for (const selector of [".clab-component-heading", ".clab-toolbar", ".clab-inspector", ".clab-component-footer"]) {
+    await expect(component.locator(selector)).toBeHidden();
+  }
+  await expect(component).toHaveCSS("border-width", "0px");
+  await expect(component).toHaveCSS("box-shadow", "none");
+  await expect(component).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const viewer = component.frameLocator("iframe");
+  await expect(viewer.locator(".react-flow__controls")).toBeHidden();
+  await expect(viewer.locator(".react-flow__background")).toBeHidden();
+  for (const mode of ["dark", "light"]) {
+    if (mode === "light") await page.locator('label[title="Switch to light mode"]').click();
+    await expect(viewer.locator("html")).toHaveAttribute("data-clab-theme", mode);
+    await expect(viewer.locator("html")).toHaveCSS("color-scheme", mode);
+    await expect(component.locator("iframe")).toHaveCSS("color-scheme", mode);
+    const opaqueAncestors = await viewer.locator(".react-flow").evaluate((element) => {
+      const opaque = [];
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        if (getComputedStyle(node).backgroundColor !== "rgba(0, 0, 0, 0)") opaque.push(node.className || node.tagName);
+      }
+      return opaque;
+    });
+    expect(opaqueAncestors).toEqual([]);
+    await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
+  }
+});
+
+test("a failed borderless viewer exposes readable YAML and can retry", async ({ page }) => {
+  await page.goto("viewer/reference/");
+  await page.evaluate(() => {
+    const element = document.createElement("clab-topology");
+    element.setAttribute("borderless", "");
+    const pre = document.createElement("pre");
+    pre.textContent = "name: missing-topology";
+    element.append(pre);
+    document.querySelector("article")!.prepend(element);
+  });
+  const component = page.locator("clab-topology");
+  await expect(component.locator(".clab-load-error")).toContainText("topology.nodes");
+  await expect(component.locator(".clab-source")).toBeVisible();
+  await expect(component.locator(".clab-source")).toContainText("name: missing-topology");
+  await component.getByRole("button", { name: "Retry viewer" }).click();
+  await expect(component.locator(".clab-load-error")).toContainText("topology.nodes");
+  await expect(component.locator(".clab-source")).toBeVisible();
+});
+
+test("the page outline tracks the current section", async ({ page }) => {
+  await page.goto("guides/topologies/");
+  const toc = page.locator(".md-sidebar--secondary");
+  await toc.getByRole("link", { name: "Topology editor", exact: true }).click();
+  await expect(page).toHaveURL(/#topology-editor$/);
+  await expect(toc.getByRole("link", { name: "Topology editor", exact: true })).toHaveClass(/md-nav__link--active/);
+  await expect(page.locator("#topology-editor")).toBeInViewport();
+  await toc.getByRole("link", { name: "Follow the connections", exact: true }).click();
+  await expect(toc.getByRole("link", { name: "Follow the connections", exact: true })).toHaveClass(/md-nav__link--active/);
 });
 
 test("full screen and read-only interactions preserve the topology", async ({ page }) => {

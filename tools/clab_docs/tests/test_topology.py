@@ -44,6 +44,8 @@ class TopologyTests(unittest.TestCase):
             '```clab view="bad"\n' + SOURCE + '```',
             '```clab heigth="300"\n' + SOURCE + '```',
             '```clab height="10000"\n' + SOURCE + '```',
+            '```clab borderless="yes"\n' + SOURCE + '```',
+            '```clab borderless="true" view="split"\n' + SOURCE + '```',
             '```clab\nname: no-topology\n```',
             '```clab\ntopology: [\n```',
             '```clab\n' + SOURCE,
@@ -52,6 +54,14 @@ class TopologyTests(unittest.TestCase):
         ]:
             with self.subTest(content=content), self.assertRaises((ValueError, OSError, yaml.YAMLError)):
                 self.render(content)
+
+    def test_borderless_preserves_source_and_accessible_title(self):
+        html = self.render('```clab borderless="true" title="Inline network"\n' + SOURCE + '```')
+        self.assertIn('borderless=""', html)
+        self.assertIn('title="Inline network"', html)
+        self.assertIn('name: hello', html)
+        self.assertIn('<pre class="clab-source">', html)
+        self.assertNotIn('borderless=', self.render('```clab borderless="false"\n' + SOURCE + '```'))
 
     def test_multiple_components_and_normal_markdown(self):
         html = self.render('# Examples\n\n```clab\n' + SOURCE + '```\n\nSome text.\n\n```clab\n' + SOURCE + '```')

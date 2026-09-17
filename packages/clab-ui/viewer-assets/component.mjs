@@ -54,6 +54,7 @@ export class ClabTopology extends HTMLElement {
 
   build() {
     this.built = true;
+    this.borderless = this.hasAttribute("borderless");
     this.classList.add("no-copy");
     const id = `clab-${++sequence}`;
     const source = this.querySelector("[data-clab-source]");
@@ -75,7 +76,7 @@ export class ClabTopology extends HTMLElement {
         <div class="clab-code"><div class="clab-file-label">${icon("yaml")}<span></span></div></div>
       </div>
       <div class="clab-inspector"><label><span class="clab-sr-only">Inspect a node</span><select aria-label="Inspect a node"><option value="">Inspect a node…</option></select></label><span class="clab-node-detail">Select a node to explore its configuration.</span><button type="button" data-action="source" hidden>Show in YAML ↗</button></div>
-      <div class="clab-component-footer"><span class="clab-counts">YAML → topology</span><span class="clab-hint">Drag to pan · Pinch to zoom</span><span class="clab-feedback" role="status" aria-live="polite"></span></div>`;
+      <div class="clab-component-footer"><span class="clab-counts">YAML → topology</span><span class="clab-hint">Drag to pan · Scroll to zoom</span><span class="clab-feedback" role="status" aria-live="polite"></span></div>`;
     this.querySelector(".clab-component-heading strong").textContent = this.getAttribute("title") || "Network topology";
     this.querySelector(".clab-file-label span").textContent = this.getAttribute("filename") || "topology.clab.yml";
     this.pre = pre ?? document.createElement("pre");
@@ -98,7 +99,12 @@ export class ClabTopology extends HTMLElement {
     this.pre.setAttribute("aria-label", "Topology YAML source");
     this.querySelector(".clab-code").append(this.pre);
     if (!this.requestFullscreen) this.querySelector('[data-action="expand"]').hidden = true;
-    this.setView(this.getAttribute("view") || "topology");
+    this.setView(this.borderless ? "topology" : this.getAttribute("view") || "topology");
+    if (this.borderless) {
+      const panel = this.querySelector(".clab-panels");
+      panel.setAttribute("role", "region");
+      panel.setAttribute("aria-label", this.getAttribute("title") || "Network topology");
+    }
   }
 
   setView(view) {
@@ -108,7 +114,7 @@ export class ClabTopology extends HTMLElement {
       const selected = tab.dataset.view === view;
       tab.setAttribute("aria-selected", String(selected));
       tab.tabIndex = selected ? 0 : -1;
-      if (selected) this.querySelector('[role="tabpanel"]').setAttribute("aria-labelledby", tab.id);
+      if (selected && !this.borderless) this.querySelector(".clab-panels").setAttribute("aria-labelledby", tab.id);
     }
     this.querySelector(".clab-graph").hidden = view === "yaml";
     this.querySelector(".clab-code").hidden = view === "topology";
@@ -122,6 +128,8 @@ export class ClabTopology extends HTMLElement {
     url.searchParams.set("parentOrigin", location.origin);
     this.frameOrigin = url.origin;
     this.frame = document.createElement("iframe");
+    // Matching schemes prevents browsers from painting an opaque iframe backdrop.
+    this.frame.style.colorScheme = theme();
     this.frame.title = `${this.getAttribute("title") || "Network"} — interactive topology`;
     this.frame.src = url.href;
     this.frame.setAttribute("allow", "fullscreen");
@@ -131,6 +139,9 @@ export class ClabTopology extends HTMLElement {
   }
 
   loading(message, error = false) {
+    this.toggleAttribute("data-error", error);
+    // Preserve readable YAML if a canvas-only embed fails to render.
+    if (this.borderless) this.setView(error ? "split" : "topology");
     const loader = this.querySelector(".clab-loading");
     loader.hidden = false;
     loader.classList.toggle("clab-load-error", error);
@@ -150,7 +161,7 @@ export class ClabTopology extends HTMLElement {
 
   receive(message) {
     if (message.type === "clab-viewer:ready") {
-      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme() });
+      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(), borderless: this.borderless });
     } else if (message.type === "clab-viewer:loaded") {
       clearTimeout(this.loadTimeout);
       this.ready = true;
@@ -260,7 +271,11 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 new MutationObserver(() => {
-  for (const instance of instances) instance.send({ type: "clab-viewer:theme", theme: theme() });
+  const nextTheme = theme();
+  for (const instance of instances) {
+    if (instance.frame) instance.frame.style.colorScheme = nextTheme;
+    instance.send({ type: "clab-viewer:theme", theme: nextTheme });
+  }
 }).observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
 if (!customElements.get("clab-topology")) customElements.define("clab-topology", ClabTopology);

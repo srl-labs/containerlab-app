@@ -10,6 +10,7 @@ Use a `clab` code fence at the top level of a Markdown page. Option values conta
 | `file` | Inline fence content | YAML file relative to `docs/` |
 | `annotations` | Automatic layout | Annotations JSON file relative to `docs/` |
 | `view` | `topology` | `topology`, `yaml`, or `split` |
+| `borderless` | `false` | `true` shows only the canvas, with a transparent background and no surrounding controls; requires `view="topology"` |
 | `height` | `460` | Panel height in pixels, from 240 to 1000 |
 | `filename` | File basename or `topology.clab.yml` | Name used when downloading |
 
@@ -66,7 +67,7 @@ Attributes are read when the element is first connected. To change the topology,
 
 ## Standalone viewer messages
 
-The iframe first sends `clab-viewer:ready`. Its parent replies with `clab-viewer:render`, including `yaml`, optional raw JSON `annotations`, and `theme` (`light` or `dark`).
+The iframe first sends `clab-viewer:ready`. Its parent replies with `clab-viewer:render`, including `yaml`, optional raw JSON `annotations`, `theme` (`light` or `dark`), and optional `borderless` (a boolean). Mouse-wheel and pinch zoom are enabled. With `borderless: true`, the viewer has a transparent background and hides the grid and zoom buttons.
 
 | Message | Direction | Purpose |
 | --- | --- | --- |

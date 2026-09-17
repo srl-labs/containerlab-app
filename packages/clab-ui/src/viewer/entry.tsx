@@ -11,7 +11,7 @@ import { mountViewer } from "./mountViewer";
 // The host page sends the topology over postMessage; we render it read-only. A handshake is used so
 // the host knows when to send: on load we post "clab-viewer:ready", then await "clab-viewer:render".
 //
-// Message in:  { type: "clab-viewer:render", yaml: string, annotations?: string, theme?: "light"|"dark" }
+// Message in:  { type: "clab-viewer:render", yaml: string, annotations?: string, theme?: "light"|"dark", borderless?: boolean }
 // Message out: { type: "clab-viewer:ready" }
 //
 // For direct embedding/tests, set window.__CLAB_VIEWER__ = { yaml, annotations, theme } before load.
@@ -23,6 +23,7 @@ interface RenderMessage {
   yaml: string;
   annotations?: string;
   theme?: "light" | "dark";
+  borderless?: boolean;
 }
 
 interface ViewerWindow extends Window {
@@ -38,7 +39,8 @@ function isRenderMessage(data: unknown): data is RenderMessage {
     (data as { type?: unknown }).type === "clab-viewer:render" &&
     typeof (data as { yaml?: unknown }).yaml === "string" &&
     ((data as { annotations?: unknown }).annotations === undefined || typeof (data as { annotations?: unknown }).annotations === "string") &&
-    ((data as { theme?: unknown }).theme === undefined || ["light", "dark"].includes(String((data as { theme?: unknown }).theme)))
+    ((data as { theme?: unknown }).theme === undefined || ["light", "dark"].includes(String((data as { theme?: unknown }).theme))) &&
+    ((data as { borderless?: unknown }).borderless === undefined || typeof (data as { borderless?: unknown }).borderless === "boolean")
   );
 }
 
@@ -100,10 +102,11 @@ function selectNode(id: string | null): void {
   send({ type: "clab-viewer:select", id });
 }
 
-function render(msg: { yaml: string; annotations?: string; theme?: "light" | "dark" }): void {
+function render(msg: Omit<RenderMessage, "type">): void {
   try {
     const description = describeTopology(msg.yaml);
     if (msg.annotations !== undefined) JSON.parse(msg.annotations);
+    document.documentElement.dataset.clabBorderless = String(msg.borderless === true);
     root?.unmount();
     flow = null;
     root = mountViewer(container as Element, {
@@ -111,7 +114,7 @@ function render(msg: { yaml: string; annotations?: string; theme?: "light" | "da
       annotations: msg.annotations,
       theme: msg.theme,
       viewerOptions: {
-        zoomOnScroll: false,
+        zoomOnScroll: true,
         onNodeSelect: selectNode,
         onInit: (instance) => {
           flow = instance;

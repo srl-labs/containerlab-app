@@ -49,12 +49,26 @@ For examples that you also run, reference the YAML directly. Paths are relative 
 
 Export an annotations file from the app to preserve a deliberate layout. Without annotations, the viewer arranges the nodes automatically.
 
+## Borderless diagrams
+
+Set `borderless="true"` to place just the canvas between paragraphs. The transparent background blends into the page in either theme. There is no title bar, tab strip, grid, inspector, or toolbar. Readers can still drag to pan and use the mouse wheel or pinch to zoom.
+
+````markdown
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="360" borderless="true"
+```
+````
+
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="360" borderless="true"
+```
+
+The title still names the diagram for assistive technology. Use the regular component when readers need YAML tabs, downloads, or node details. In plain HTML, add the boolean `borderless` attribute to `<clab-topology>`. Without JavaScript, the source remains readable; a viewer error also reveals the YAML.
+
 ## Made for reading
 
 - **Topology, YAML, or both.** Keyboard accessible tabs with arrow-key navigation.
 - **Inspect a node.** Click a device or choose it from the node menu. Reveal its source lines with **Show in YAML**.
 - **Take the lab with you.** Copy or download the original YAML, including comments.
-- **Give the diagram room.** Pan, pinch to zoom, fit the network, or expand the example to full screen.
+- **Give the diagram room.** Drag to pan, scroll or pinch to zoom, fit the network, or expand the example to full screen.
 - **Follow the page theme.** Light and dark modes update the mounted graph.
 - **Load when needed.** Offscreen diagrams and examples starting in YAML view do not load the viewer until needed.
 
