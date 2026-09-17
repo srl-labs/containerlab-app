@@ -407,6 +407,37 @@ function installSandboxFetch(
   });
 }
 
+test("undeployed labs hide dot-prefixed filenames but keep visible files in dot-prefixed folders", async (t) => {
+  installSandboxFetch(t, {});
+  const bridge = createExplorerBridge({
+    endpoints: [SANDBOX_ENDPOINT],
+    topologyFiles: [
+      topologyFile(".state.clab.yaml", "state"),
+      topologyFile("labs/.hidden.clab.yml", "hidden"),
+      { ...topologyFile("labs/.state.clab.yaml", "nested-state"), filename: "" },
+      topologyFile("visible.clab.yaml", "visible-yaml"),
+      topologyFile("labs/visible.clab.yml", "visible-yml"),
+      topologyFile(".clab/visible.clab.yml", "visible-in-hidden-folder"),
+    ],
+  });
+
+  const snapshot = await waitForExplorerSnapshot(bridge);
+  const section = sectionById(snapshot, "runningLabs");
+  const localLabs = findNode(
+    section.nodes,
+    `endpoint-section:local:${SANDBOX_ENDPOINT.id}`,
+  );
+  assert.ok(localLabs, "expected undeployed labs group");
+  assert.deepEqual(
+    localLabs.children.map((node) => node.id).sort(),
+    [
+      `local-lab:${SANDBOX_ENDPOINT.id}:visible.clab.yaml`,
+      `local-lab:${SANDBOX_ENDPOINT.id}:labs/visible.clab.yml`,
+      `local-lab:${SANDBOX_ENDPOINT.id}:.clab/visible.clab.yml`,
+    ].sort(),
+  );
+});
+
 test("pages sandbox default expansion opens endpoint and file explorer trees", async (t) => {
   installSandboxFetch(t, {
     "": [
