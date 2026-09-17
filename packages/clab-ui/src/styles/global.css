@@ -40,3 +40,18 @@ body,
 .react-flow-canvas.maplibre-moving #react-topoviewer-geo-map .maplibregl-canvas {
   will-change: transform;
 }
+/* Rotation sampling keeps the target selected while highlighting the source. */
+[data-rotation-picking] .react-flow,
+[data-rotation-picking] .react-flow * {
+  cursor: crosshair !important;
+}
+[data-rotation-source] .react-flow__edge-path {
+  stroke: var(--vscode-focusBorder, #60a5fa) !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 4px var(--vscode-focusBorder, #60a5fa));
+}
+.react-flow__node[data-rotation-source] {
+  outline: 2px solid var(--vscode-focusBorder, #60a5fa);
+  outline-offset: 5px;
+  border-radius: 4px;
+}

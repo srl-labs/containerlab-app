@@ -8,6 +8,7 @@ import { getString } from "../../../../core/utilities/typeHelpers";
 import type { TabDefinition } from "../../../ui/editor";
 import { TabNavigation } from "../../../ui/editor/TabNavigation";
 import { PanelSectionHeader, ReadOnlyCopyField } from "../../../ui/form";
+import { LinkRotationControl } from "../../rotation/LinkRotationControl";
 
 const LazyTrafficChart = React.lazy(async () => {
   const module = await import("../../TrafficChart");
@@ -123,6 +124,7 @@ export const LinkInfoView: React.FC<LinkInfoViewProps> = ({ linkData }) => {
       />
 
       <Box sx={{ flex: 1, overflow: "auto" }}>
+        <LinkRotationControl edgeId={linkData.id} />
         <PanelSectionHeader title="Endpoint" withTopDivider={true} />
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
