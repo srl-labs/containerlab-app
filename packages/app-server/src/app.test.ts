@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
+import undici, { Headers, type Request, Response } from "undici";
 import WebSocket, { WebSocketServer } from "ws";
 
 import { createStandaloneApp } from "./app";
@@ -22,8 +23,8 @@ interface FetchCall {
 }
 
 type FetchHandler = (call: FetchCall) => Response | Promise<Response>;
-type FetchInput = Parameters<typeof fetch>[0];
-type FetchInit = Parameters<typeof fetch>[1];
+type FetchInput = Parameters<typeof undici.fetch>[0];
+type FetchInit = Parameters<typeof undici.fetch>[1];
 
 function isRequestObject(input: FetchInput): input is Request {
   return typeof input !== "string" && !(input instanceof URL);
@@ -75,7 +76,7 @@ class FetchMock {
     });
   }
 
-  fetch: typeof fetch = async (input, init) => {
+  fetch: typeof undici.fetch = async (input, init) => {
     const call: FetchCall = {
       body: bodyToString(init?.body),
       headers: fetchInputHeaders(input, init),
@@ -188,9 +189,8 @@ test("auth startup bounds an unresponsive endpoint and still reports healthy end
 });
 
 async function createTestContext(t: TestContext, basePath = ""): Promise<TestAppContext> {
-  const originalFetch = globalThis.fetch;
   const fetchMock = new FetchMock();
-  globalThis.fetch = fetchMock.fetch;
+  t.mock.method(undici, "fetch", fetchMock.fetch);
 
   const app = await createStandaloneApp({
     basePath,
@@ -201,7 +201,6 @@ async function createTestContext(t: TestContext, basePath = ""): Promise<TestApp
   });
 
   t.after(async () => {
-    globalThis.fetch = originalFetch;
     await app.close();
   });
 
@@ -1984,8 +1983,11 @@ test("all HTML entrypoints and assets work under a nested base", async (t) => {
 });
 
 test("development proxy and redirects honor the configured prefix", async (t) => {
-  const { app, fetchMock } = await createTestContext(t, "/tools/clab");
-  fetchMock.on("GET", "http://vite.test/tools/clab/terminal.html", () => textResponse("dev terminal"));
+  const { app } = await createTestContext(t, "/tools/clab");
+  t.mock.method(globalThis, "fetch", (url: string) => {
+    assert.equal(url, "http://vite.test/tools/clab/terminal.html");
+    return Promise.resolve(new globalThis.Response("dev terminal"));
+  });
   const terminal = await app.inject("/tools/clab/terminal.html");
   assert.equal(terminal.statusCode, 200);
   assert.equal(terminal.body, "dev terminal");
