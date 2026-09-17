@@ -5,15 +5,15 @@ catalog:
   "@emotion/react": 11.14.0
   "@emotion/styled": 11.14.1
   "@fastify/cookie": 11.1.2
-  "@fastify/cors": 10.1.0
-  "@fastify/static": 8.3.0
+  "@fastify/cors": 11.3.0
+  "@fastify/static": 10.1.3
   "@fastify/websocket": 11.3.0
-  "@fontsource/roboto": 5.2.10
+  "@fontsource/roboto": 5.3.0
   "@mui/icons-material": 7.3.11
   "@mui/material": 7.3.11
   "@mui/system": 7.3.11
-  "@mui/x-charts": 8.29.3
-  "@playwright/test": 1.60.0
+  "@mui/x-charts": 9.13.0
+  "@playwright/test": 1.63.0
   "@types/chai": 5.2.3
   "@types/d3-force": 3.0.10
   "@types/geojson": 7946.0.16
@@ -21,60 +21,60 @@ catalog:
   "@types/markdown-it": 14.2.0
   "@types/markdown-it-emoji": 3.0.1
   "@types/mocha": 10.0.10
-  "@types/node": 25.6.0
-  "@types/react": 19.2.14
+  "@types/node": 26.5.1
+  "@types/react": 19.3.0
   "@types/react-dom": 19.2.3
   "@types/sinon": 22.0.0
-  "@types/three": 0.184.0
-  "@types/vscode": 1.134.0
+  "@types/three": 0.186.0
+  "@types/vscode": 1.137.0
   "@types/ws": 8.18.1
   "@vitejs/plugin-react": 5.2.0
   "@vscode/test-electron": 3.1.0
   "@vscode/vsce": 3.9.2
   "@xterm/addon-fit": 0.11.0
   "@xterm/xterm": 6.0.0
-  "@xyflow/react": 12.10.2
+  "@xyflow/react": 12.11.6
   ajv: 8.20.0
   ajv-formats: 3.0.1
-  autoprefixer: 10.5.0
+  autoprefixer: 10.6.0
   chai: 6.2.2
-  chokidar: 3.6.0
-  concurrently: 9.2.1
+  chokidar: 5.0.0
+  concurrently: 10.0.5
   d3-force: 3.0.0
-  dependency-cruiser: 18.2.0
+  dependency-cruiser: 18.3.0
   dockerode: 5.0.1
-  dompurify: 3.4.13
-  electron: 41.5.0
-  electron-builder: 26.8.1
-  elkjs: 0.11.1
-  esbuild: 0.27.7
-  fastify: 5.11.3
-  highlight.js: 11.11.1
+  dompurify: 3.4.15
+  electron: 44.3.0
+  electron-builder: 26.15.3
+  elkjs: 0.12.0
+  esbuild: 0.28.2
+  fastify: 5.12.4
+  highlight.js: 11.12.0
   jscpd: 5.2.0
-  maplibre-gl: 5.24.0
-  markdown-it: 14.1.1
-  markdown-it-emoji: 3.0.0
-  mocha: 11.8.0
-  mochawesome: 8.0.1
-  monaco-editor: 0.55.1
-  monaco-yaml: 5.4.1
+  maplibre-gl: 6.9.0
+  markdown-it: 15.0.2
+  markdown-it-emoji: 3.1.0
+  mocha: 12.0.1
+  mochawesome: 8.1.0
+  monaco-editor: 0.56.0
+  monaco-yaml: 5.5.1
   ovsx: 1.2.0
-  oxlint: 1.61.0
-  oxlint-tsgolint: 0.18.1
-  postcss: 8.5.10
-  postcss-cli: 11.0.1
-  postcss-import: 16.1.1
+  oxlint: 1.82.0
+  oxlint-tsgolint: 7.0.2001
+  postcss: 8.5.28
+  postcss-cli: 12.0.0
+  postcss-import: 17.0.0
   prettier: 3.9.6
-  react: 19.2.8
+  react: 19.3.0
   react-dom: 19.2.8
   sinon: 22.1.0
-  three: 0.184.0
-  tsx: 4.21.0
-  typescript: 6.0.3
-  vite: 7.3.2
+  three: 0.186.0
+  tsx: 4.23.13
+  typescript: 7.0.2
+  vite: 8.3.0
   ws: 8.21.3
-  yaml: 2.9.0
-  zustand: 4.5.7
+  yaml: 2.9.1
+  zustand: 5.0.15
 # Preserve the imported extension toolchain while upgrading it independently.
 catalogs:
   vscode:
@@ -99,7 +99,7 @@ strictPeerDependencies: true
 nodeOptions: --max-old-space-size=4096
 overrides:
   diff: 9.0.0
-  dompurify: 3.4.13
+  dompurify: 3.4.15
   serialize-javascript: 7.1.0
   uuid: 14.0.1
 allowBuilds:
