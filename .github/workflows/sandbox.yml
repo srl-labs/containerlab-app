@@ -29,7 +29,7 @@ jobs:
       - name: Validate project name
         run: '[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$ || "$PROJECT_NAME" =~ ^[a-z0-9]$ ]]'
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
