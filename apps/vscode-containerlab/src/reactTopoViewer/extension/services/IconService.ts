@@ -35,13 +35,13 @@ const GLOBAL_ICONS_FOLDER = ".clab/icons";
 /**
  * Result of an icon operation
  */
-export interface IconOperationResult {
+interface IconOperationResult {
   success: boolean;
   error?: string;
   icons?: CustomIconInfo[];
 }
 
-export interface IconImportResult {
+interface IconImportResult {
   added: number;
   replaced: number;
 }
@@ -49,7 +49,7 @@ export interface IconImportResult {
 /**
  * Service for managing custom icons in React TopoViewer
  */
-export class IconService {
+class IconService {
   /**
    * Get the global icons directory path
    */

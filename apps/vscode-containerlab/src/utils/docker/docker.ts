@@ -134,19 +134,3 @@ export async function runContainerAction(
     vscode.window.showErrorMessage(msg);
   }
 }
-
-export async function startContainer(containerId: string): Promise<void> {
-  return runContainerAction(containerId, ContainerAction.Start);
-}
-
-export async function stopContainer(containerId: string): Promise<void> {
-  return runContainerAction(containerId, ContainerAction.Stop);
-}
-
-export async function pauseContainer(containerId: string): Promise<void> {
-  return runContainerAction(containerId, ContainerAction.Pause);
-}
-
-export async function unpauseContainer(containerId: string): Promise<void> {
-  return runContainerAction(containerId, ContainerAction.Unpause);
-}

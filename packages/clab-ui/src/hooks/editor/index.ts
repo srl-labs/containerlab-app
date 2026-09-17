@@ -16,7 +16,6 @@ export type { NodeCreationState } from "./useEditorHandlers";
 
 // Generic form utilities
 export { useGenericFormState } from "./useGenericFormState";
-export { useEditorHandlersWithFooterRef } from "./useEditorHandlersWithFooterRef";
 
 // Editor data helpers
 export { useSchema } from "./useSchema";

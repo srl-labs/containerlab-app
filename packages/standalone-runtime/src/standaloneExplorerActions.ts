@@ -27,13 +27,13 @@ import {
   stripTopologySuffix
 } from "./standaloneHostShared";
 
-export const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
+const SHOW_NON_OWNED_LABS_STORAGE_KEY = "clab-standalone-show-non-owned-labs";
 
 export type ShareActionKind = "sshx" | "gotty";
 
 export type ShareLifecycleAction = "attach" | "detach" | "reattach";
 
-export function loadShowNonOwnedLabsSetting(): boolean {
+function loadShowNonOwnedLabsSetting(): boolean {
   try {
     const raw = localStorage.getItem(SHOW_NON_OWNED_LABS_STORAGE_KEY);
     return raw !== "false";
@@ -220,7 +220,7 @@ export function persistShareLink(input: {
   }
 }
 
-export function shareActionCanOpenLink(action: ShareLifecycleAction): boolean {
+function shareActionCanOpenLink(action: ShareLifecycleAction): boolean {
   return action === "attach" || action === "reattach";
 }
 
@@ -314,7 +314,7 @@ export interface PopularLabRepo {
   stars: number;
 }
 
-export const FALLBACK_POPULAR_REPOS: PopularLabRepo[] = [
+const FALLBACK_POPULAR_REPOS: PopularLabRepo[] = [
   {
     name: "srl-telemetry-lab",
     htmlUrl: "https://github.com/srl-labs/srl-telemetry-lab",
@@ -347,7 +347,7 @@ export const FALLBACK_POPULAR_REPOS: PopularLabRepo[] = [
   }
 ];
 
-export function normalizePopularRepos(value: unknown): PopularLabRepo[] {
+function normalizePopularRepos(value: unknown): PopularLabRepo[] {
   if (typeof value !== "object" || value === null) {
     return [];
   }

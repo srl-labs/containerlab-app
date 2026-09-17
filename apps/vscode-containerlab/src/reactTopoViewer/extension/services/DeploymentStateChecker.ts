@@ -15,7 +15,7 @@ function hasNonEmptyString(value: unknown): value is string {
 /**
  * Checks deployment state of containerlab labs by querying inspect data.
  */
-export class DeploymentStateChecker {
+class DeploymentStateChecker {
   /**
    * Check if a lab is deployed by querying containerlab.
    */

@@ -23,7 +23,7 @@ import type {
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse,
+  CaptureCloseAllResponse
 } from "@srl-labs/containerlab-app-contract";
 export type {
   SaveConfigResponse,
@@ -37,25 +37,20 @@ export type {
   IconListResponse,
   IconUploadRequest,
   IconUploadResponse,
-  NetemInterfaceInfo,
   NetemShowResponse,
   CaptureTarget,
-  CapturePacketflixURI,
   CapturePacketflixResponse,
-  CaptureWiresharkVncSession,
   CaptureWiresharkVncCreateResponse,
   CaptureWiresharkVncReadyResponse,
   EdgeSharkStatusResponse,
-  RuntimeImageSummary,
   RuntimeImagesResponse,
   RuntimeImageActionResponse,
-  NodeBrowserPort,
   NodeBrowserPortsResponse,
   ShareToolAction,
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse,
+  CaptureCloseAllResponse
 } from "@srl-labs/containerlab-app-contract";
 
 import { apiFetch } from "./upstreamRequest.ts";
@@ -163,13 +158,6 @@ export interface HealthMetricsResponse {
 
 export type CustomNodeTemplate = Record<string, unknown>;
 
-export interface CustomIconInfo {
-  name: string;
-  source: "workspace" | "global";
-  dataUri: string;
-  format: "svg" | "png";
-}
-
 export interface NetemSetRequest {
   containerName: string;
   interface: string;
@@ -183,15 +171,6 @@ export interface NetemSetRequest {
 export interface NetemResetRequest {
   containerName: string;
   interface: string;
-}
-
-export interface TopologyDocEvent {
-  type: "topology-doc";
-  labName: string;
-  path: string;
-  documentKind: "yaml" | "annotations";
-  action: "create" | "change" | "delete" | "rename";
-  revision: string;
 }
 
 export type NodeLifecycleAction =

@@ -76,9 +76,3 @@ export function getEndpointIdFromRequest(request: FastifyRequest): string | unde
     ? fromQuery.trim()
     : undefined;
 }
-
-export async function requireAuth(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!getSessionIdFromRequest(request)) {
-    reply.status(401).send({ error: "Not authenticated" });
-  }
-}

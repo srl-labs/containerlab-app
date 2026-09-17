@@ -11,7 +11,7 @@ import { extractEndpointIdFromTopologyId } from "../standaloneHostShared";
 
 export type RuntimeTerminalProtocol = ApiTerminalProtocol | "output";
 
-export interface RuntimeInspectRequest {
+interface RuntimeInspectRequest {
   mode: "all" | "lab";
   target?: RuntimeTargetRequest;
   title: string;
@@ -34,7 +34,7 @@ export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
   initialOutput?: string;
 }
 
-export type RuntimeTerminalPaneState = "creating" | "connecting" | "ready" | "exited" | "error";
+type RuntimeTerminalPaneState = "creating" | "connecting" | "ready" | "exited" | "error";
 
 export interface RuntimeTerminalPane extends RuntimeTerminalRequest {
   id: string;
@@ -43,8 +43,6 @@ export interface RuntimeTerminalPane extends RuntimeTerminalRequest {
   exitCode?: number | null;
   error?: string;
 }
-
-export type RuntimeTerminalWindow = RuntimeTerminalPane;
 
 export interface RuntimeTerminalGroup {
   activePaneId: string;
@@ -63,7 +61,7 @@ export interface RuntimeTerminalShell {
   minimized: boolean;
 }
 
-export interface RuntimeFileEditor extends FileExplorerDocument {
+interface RuntimeFileEditor extends FileExplorerDocument {
   title: string;
   originalContent: string;
   saving: boolean;

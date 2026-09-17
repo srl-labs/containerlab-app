@@ -14,7 +14,7 @@ import {
 } from "./endpointSessionStore.ts";
 import { clearLegacySessionCookies, clearSessionCookie, normalizeApiUrl } from "./middleware.ts";
 
-export interface EndpointPublicInfo {
+interface EndpointPublicInfo {
   id: string;
   url: string;
   label: string;

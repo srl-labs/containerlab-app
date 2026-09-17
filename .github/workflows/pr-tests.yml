@@ -47,6 +47,9 @@ jobs:
       - name: Lint workspaces
         run: pnpm -r --if-present run lint
 
+      - name: Check unused code and dependencies
+        run: pnpm knip
+
       - name: Release routing tests
         run: node --test scripts/release-targets.test.mjs
 

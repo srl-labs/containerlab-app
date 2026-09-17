@@ -68,7 +68,7 @@ export function defaultWebTlsPaths(env: NodeJS.ProcessEnv = process.env): {
   };
 }
 
-export function defaultWebTlsHosts(env: NodeJS.ProcessEnv = process.env): string[] {
+function defaultWebTlsHosts(env: NodeJS.ProcessEnv = process.env): string[] {
   return normalizeHosts([
     "localhost",
     "127.0.0.1",

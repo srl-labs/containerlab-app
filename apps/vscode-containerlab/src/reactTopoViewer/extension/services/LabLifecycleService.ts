@@ -97,7 +97,7 @@ function isLabActionName(value: string): value is LabActionName {
  * Service for handling lab lifecycle operations (deploy, destroy, redeploy).
  * Executes containerlab commands via VS Code command palette.
  */
-export class LabLifecycleService {
+class LabLifecycleService {
   /**
    * Handles lab lifecycle endpoint requests.
    * @param endpointName The action to perform (deployLab, destroyLab, etc.)

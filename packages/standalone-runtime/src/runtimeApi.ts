@@ -1,6 +1,5 @@
 import type {
   SaveConfigResponse,
-  SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   LogsResponse,
@@ -10,7 +9,6 @@ import type {
   IconListResponse,
   IconUploadRequest,
   IconUploadResponse,
-  NetemShowResponse,
   CaptureTarget,
   CapturePacketflixResponse,
   CaptureWiresharkVncCreateResponse,
@@ -27,7 +25,6 @@ import type {
 } from "@srl-labs/containerlab-app-contract";
 export type {
   SaveConfigResponse,
-  SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   LogsResponse,
@@ -35,21 +32,14 @@ export type {
   VersionCheckResponse,
   CustomNodesResponse,
   IconListResponse,
-  IconUploadRequest,
   IconUploadResponse,
-  NetemInterfaceInfo,
-  NetemShowResponse,
   CaptureTarget,
-  CapturePacketflixURI,
   CapturePacketflixResponse,
-  CaptureWiresharkVncSession,
   CaptureWiresharkVncCreateResponse,
   CaptureWiresharkVncReadyResponse,
   EdgeSharkStatusResponse,
-  RuntimeImageSummary,
   RuntimeImagesResponse,
   RuntimeImageActionResponse,
-  NodeBrowserPort,
   NodeBrowserPortsResponse,
   ShareToolAction,
   ShareToolResponse,
@@ -107,11 +97,6 @@ export interface NetemFields {
   loss: string;
   rate: string;
   corruption: string;
-}
-
-export interface NetemShowResult {
-  containerName: string;
-  impairments: NetemShowResponse;
 }
 
 export interface FileExplorerEntry {
@@ -421,21 +406,6 @@ export async function saveLabConfigs(
   );
 }
 
-export async function requestNodeSsh(
-  input: RuntimeTargetRequest & {
-    nodeName: string;
-    duration?: string;
-    sshUsername?: string;
-  }
-): Promise<SSHAccessResponse> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<SSHAccessResponse>(
-    "/api/runtime/ssh",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
 export async function openTerminalSession(
   input: RuntimeTargetRequest & {
     nodeName: string;
@@ -450,17 +420,6 @@ export async function openTerminalSession(
   return await requestJson<TerminalSessionInfo>(
     "/api/runtime/terminal-sessions",
     asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
-export async function fetchTerminalSession(
-  sessionId: string,
-  endpointId?: string
-): Promise<TerminalSessionInfo> {
-  return await requestJson<TerminalSessionInfo>(
-    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`,
-    withEndpointHeaders({}, endpointId),
     endpointId
   );
 }
@@ -1077,19 +1036,6 @@ export async function reconcileUiIcons(
   );
 }
 
-export async function fetchNetem(
-  input: RuntimeTargetRequest & {
-    nodeName: string;
-  }
-): Promise<NetemShowResult> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson<NetemShowResult>(
-    "/api/runtime/netem/show",
-    asJsonBody(input, endpointId),
-    endpointId
-  );
-}
-
 export async function setNetem(
   input: RuntimeTargetRequest & {
     nodeName: string;
@@ -1146,27 +1092,6 @@ export async function deleteTopologyFile(target: RuntimeTargetRequest): Promise<
     asJsonBody(target, endpointId),
     endpointId
   );
-}
-
-export function netemFieldsFromShowResponse(
-  response: NetemShowResponse,
-  containerName: string
-): Record<string, NetemFields> {
-  const result: Record<string, NetemFields> = {};
-  const entries = response[containerName] ?? [];
-  for (const entry of entries) {
-    result[entry.interface] = {
-      delay: entry.delay ?? "",
-      jitter: entry.jitter ?? "",
-      loss: Number.isFinite(entry.packet_loss) ? String(entry.packet_loss) : "",
-      rate: Number.isFinite(entry.rate) ? String(entry.rate) : "",
-      corruption:
-        typeof entry.corruption === "number" && Number.isFinite(entry.corruption)
-          ? String(entry.corruption)
-          : ""
-    };
-  }
-  return result;
 }
 
 export function normalizeNetemFields(value: unknown): NetemFields {

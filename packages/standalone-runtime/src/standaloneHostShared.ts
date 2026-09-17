@@ -157,11 +157,6 @@ export function topologyPathsLikelyMatch(leftPath: string, rightPath: string): b
   return hasPathBoundarySuffix(left, right) || hasPathBoundarySuffix(right, left);
 }
 
-export function isAbsolutePath(pathValue: string): boolean {
-  const normalized = normalizePathValue(pathValue);
-  return normalized.startsWith("/") || normalized.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(normalized);
-}
-
 export function topologyEntryLabName(entry: TopologyFileEntry): string {
   if (entry.topologyRef?.labName) {
     return entry.topologyRef.labName;
@@ -195,7 +190,7 @@ export function extractEndpointIdFromTopologyId(topologyId: string | undefined):
   return endpointId.length > 0 ? endpointId : undefined;
 }
 
-export function buildEndpointScopedTopologyId(yamlPath: string, endpointId: string): string {
+function buildEndpointScopedTopologyId(yamlPath: string, endpointId: string): string {
   return `standalone:${endpointId}${ENDPOINT_TOPOLOGY_ID_SEPARATOR}${normalizePathValue(yamlPath)}`;
 }
 

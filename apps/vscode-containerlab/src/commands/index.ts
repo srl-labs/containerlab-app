@@ -2,16 +2,6 @@
  * Commands barrel file - re-exports from sub-barrels
  */
 
-// Base command classes and utilities
-export { Command, execCommandInTerminal, execCommandInOutput, ClabCommand } from "./base";
-export type {
-  SpinnerOptions,
-  TerminalOptions,
-  CmdOptions,
-  SpinnerMsg,
-  CommandFailureHandler
-} from "./base";
-
 // Lifecycle commands (deploy, destroy, redeploy, apply, save)
 export {
   apply,
@@ -26,8 +16,7 @@ export {
   redeploy,
   redeployCleanup,
   saveLab,
-  saveNode,
-  runClabAction
+  saveNode
 } from "./lifecycle";
 
 // Node-related commands
@@ -59,7 +48,6 @@ export {
   captureInterfaceWithPacketflix,
   captureEdgesharkVNC,
   killAllWiresharkVNCCtrs,
-  getHostname,
   setSessionHostname,
   setLinkDelay,
   setLinkJitter,
@@ -67,10 +55,6 @@ export {
   setLinkRate,
   setLinkCorruption,
   setImpairment,
-  getEdgesharkInstallCmd,
-  getEdgesharkUninstallCmd,
-  EDGESHARK_INSTALL_CMD,
-  EDGESHARK_UNINSTALL_CMD,
   installEdgeshark,
   uninstallEdgeshark
 } from "./network";
@@ -100,14 +84,10 @@ export {
   graphDrawIOVertical,
   graphDrawIOInteractive,
   graphTopoviewer,
-  getCurrentTopoViewer,
-  notifyCurrentTopoViewerOfCommandSuccess,
-  notifyCurrentTopoViewerOfCommandFailure,
   inspectAllLabs,
   inspectOneLab,
   openBrowser,
   cloneRepo,
-  cloneRepoFromUrl,
   deployPopularLab,
   clonePopularRepo,
   openLink,

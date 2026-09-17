@@ -33,7 +33,7 @@ const MIN_HEIGHT = 20;
  * shifts and the box height jumps when entering/leaving edit mode. Must match
  * the `1lh` paragraph gap in FreeTextNode.css and the SVG export text style.
  */
-export const TEXT_LINE_HEIGHT = 1.5;
+const TEXT_LINE_HEIGHT = 1.5;
 
 /** Build wrapper style for the node */
 function buildWrapperStyle(rotation: number, selected: boolean): React.CSSProperties {

@@ -1,14 +1,11 @@
 import { useEffect, useRef } from "react";
 
-import {
-  useEndpointStore,
-  type EndpointConfig
-} from "../stores/endpointStore";
+import { useEndpointStore, type EndpointConfig } from "../stores/endpointStore";
 import { useLabStore, type EventData } from "../stores/labStore";
 import { standaloneServerUrl } from "../standaloneServerOrigin";
 import { isPagesRuntimeMode } from "../runtimeMode";
 
-export function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
+function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
   const processEvent = useLabStore((state) => state.processEvent);
   const setLabConnected = useLabStore((state) => state.setConnected);
   const setEndpointStatus = useEndpointStore((state) => state.setStatus);

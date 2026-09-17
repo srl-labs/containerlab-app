@@ -10,10 +10,7 @@ import type {
   KindImageGuidance,
   KindImageReference
 } from "./types";
-import {
-  getKindImageGuidance,
-  isPlaceholderImageReference
-} from "./kindGuidance";
+import { getKindImageGuidance, isPlaceholderImageReference } from "./kindGuidance";
 import { isRecord } from "../core/utilities/typeHelpers";
 
 function cleanString(value: unknown): string {
@@ -556,15 +553,5 @@ export function runtimeImageSummaryFromCliRecord(record: Record<string, string>)
   };
 }
 
-// This file backs the published dist/image-manager/catalog.d.ts (the runtime JS
-// for the subpath is bundled from catalog-entry.ts) — keep this type re-export
-// in sync with catalog-entry.ts so the public type surface matches the runtime.
-export type {
-  ContainerImageSummary,
-  ImageActionResult,
-  ImageManagerTargetOptions,
-  ImagePinRequest,
-  ImagePullRequest,
-  ImageRemoveRequest,
-  KindImageReference
-} from "./types";
+// Internal catalog consumers use these types; catalog-entry.ts exposes the public API.
+export type { ContainerImageSummary, KindImageReference } from "./types";

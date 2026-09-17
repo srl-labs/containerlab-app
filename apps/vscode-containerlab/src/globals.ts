@@ -35,8 +35,6 @@ export interface RunningLabsProviderInterface {
   discoverInspectLabs(): Promise<Record<string, unknown> | undefined>;
 }
 
-// HelpFeedbackProvider doesn't need specific methods exposed in globals
-
 /** Our global output channel */
 export let outputChannel: vscode.LogOutputChannel;
 export let username: string;
@@ -46,7 +44,6 @@ export let extensionContext: vscode.ExtensionContext;
 // Provider types use minimal interfaces to avoid circular imports
 export let localLabsProvider: LocalLabsProviderInterface;
 export let runningLabsProvider: RunningLabsProviderInterface;
-export let helpFeedbackProvider: unknown;
 export let sshxSessions: Map<string, string> = new Map();
 export let gottySessions: Map<string, string> = new Map();
 
@@ -100,10 +97,6 @@ export function setLocalLabsProvider(provider: LocalLabsProviderInterface) {
 
 export function setRunningLabsProvider(provider: RunningLabsProviderInterface) {
   runningLabsProvider = provider;
-}
-
-export function setHelpFeedbackProvider(provider: unknown) {
-  helpFeedbackProvider = provider;
 }
 
 export function setHideNonOwnedLabsState(hide: boolean) {

@@ -3,7 +3,6 @@ import { createLifecycleCommandController } from "@containerlab/clab-ui/host";
 import {
   MSG_LAB_LIFECYCLE_LOG,
   MSG_LAB_LIFECYCLE_STATUS,
-  MSG_CANCEL_LAB_LIFECYCLE,
   type LifecycleCommand as ExtensionLifecycleCommand,
   type TopologyRef
 } from "@containerlab/clab-ui/session";
@@ -752,5 +751,3 @@ export function createStandaloneLifecycleManager(
     }
   };
 }
-
-export { MSG_CANCEL_LAB_LIFECYCLE };

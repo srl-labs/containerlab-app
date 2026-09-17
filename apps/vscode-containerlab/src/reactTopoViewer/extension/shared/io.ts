@@ -7,7 +7,7 @@ function isErrnoException(value: unknown): value is NodeJS.ErrnoException {
   return value instanceof Error && "code" in value;
 }
 
-export class NodeFsAdapter implements FileSystemAdapter {
+class NodeFsAdapter implements FileSystemAdapter {
   async readFile(filePath: string): Promise<string> {
     return fs.promises.readFile(filePath, "utf8");
   }

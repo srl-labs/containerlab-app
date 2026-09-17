@@ -211,7 +211,7 @@ async function pollOnce(runtime: string): Promise<void> {
 /**
  * Start polling for lab data
  */
-export function startPolling(runtime: string, intervalMs: number = DEFAULT_POLL_INTERVAL_MS): void {
+function startPolling(runtime: string, intervalMs: number = DEFAULT_POLL_INTERVAL_MS): void {
   if (isPolling) {
     return;
   }
@@ -252,7 +252,7 @@ export function getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
 /**
  * Force an immediate update
  */
-export async function forceUpdate(runtime: string): Promise<void> {
+async function forceUpdate(runtime: string): Promise<void> {
   const newData = await fetchInspectData(runtime);
   rawInspectData = newData;
   scheduleDataChanged();
@@ -281,20 +281,6 @@ export function onDataChanged(listener: DataListener): () => void {
   return () => {
     dataListeners.delete(listener);
   };
-}
-
-/**
- * Reset for testing
- */
-export function resetForTests(): void {
-  stopPolling();
-  rawInspectData = undefined;
-  dataListeners.clear();
-  interfaceCache.clear();
-  if (dataChangedTimer) {
-    clearTimeout(dataChangedTimer);
-    dataChangedTimer = null;
-  }
 }
 
 // Interface cache: key is `labPath::containerName`, value is cached interfaces
@@ -421,11 +407,4 @@ export function getInterfaceSnapshot(
   });
 
   return interfaces;
-}
-
-/**
- * Get interface version (always 0 for fallback since we don't track versions)
- */
-export function getInterfaceVersion(_containerShortId: string): number {
-  return 0;
 }

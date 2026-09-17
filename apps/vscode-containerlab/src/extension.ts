@@ -21,7 +21,6 @@ import {
   setFavoriteLabs,
   setLocalLabsProvider,
   setRunningLabsProvider,
-  setHelpFeedbackProvider,
   setHideNonOwnedLabsState
 } from "./globals";
 import { WelcomePage } from "./welcomePage";
@@ -632,7 +631,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const newHelpProvider = new HelpFeedbackProvider();
   setLocalLabsProvider(newLocalProvider);
   setRunningLabsProvider(newRunningProvider);
-  setHelpFeedbackProvider(newHelpProvider);
 
   // Webview views are resolved lazily, so we keep a hidden tree view badge proxy
   // to show running lab count on the activity icon before the explorer is opened.

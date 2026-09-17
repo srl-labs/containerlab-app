@@ -3,7 +3,7 @@ import type { TopologyRef } from "@containerlab/clab-ui/session";
 import { publicAssetUrl } from "./publicAssetUrl";
 import type { RuntimeTerminalProtocol, RuntimeTerminalRequest } from "./stores/runtimeUiStore";
 
-export const DETACHED_TERMINAL_TARGET_PARAM = "target";
+const DETACHED_TERMINAL_TARGET_PARAM = "target";
 
 const VALID_TERMINAL_PROTOCOLS = new Set<RuntimeTerminalProtocol>(["ssh", "shell", "telnet", "output"]);
 

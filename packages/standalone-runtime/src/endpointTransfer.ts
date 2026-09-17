@@ -7,8 +7,7 @@ import type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contrac
 export {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   isValidEndpointSessionDuration,
-  normalizeEndpointSessionDuration,
-  normalizeApiUrl as normalizeEndpointProfileUrl
+  normalizeEndpointSessionDuration
 } from "@srl-labs/containerlab-app-contract";
 export type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
 
@@ -25,7 +24,7 @@ export interface EndpointProfile {
   username: string;
 }
 
-export interface EndpointExportDocument {
+interface EndpointExportDocument {
   endpoints: EndpointProfile[];
   kind: typeof ENDPOINT_EXPORT_KIND;
   version: typeof ENDPOINT_EXPORT_VERSION;
@@ -106,7 +105,7 @@ export function normalizeEndpointProfile(input: unknown, index = 0): EndpointPro
   };
 }
 
-export function buildEndpointExportDocument(
+function buildEndpointExportDocument(
   endpoints: Iterable<EndpointProfile>
 ): EndpointExportDocument {
   return {
