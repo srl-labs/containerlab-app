@@ -4,7 +4,7 @@ import path from "node:path";
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { projectRoot, resolveCatalog, workspacePackages } from "../../../scripts/workspace-config.mjs";
+import { resolveCatalog, workspacePackages } from "../../../scripts/workspace-config.mjs";
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -32,12 +32,12 @@ try {
     "dist",
     "resources",
     "CHANGELOG.md",
+    "README.md",
     "LICENSE",
     ".vscodeignore"
   ]) {
     fs.cpSync(path.join(root, file), path.join(stage, file), { recursive: true });
   }
-  fs.copyFileSync(path.join(projectRoot, "README.md"), path.join(stage, "README.md"));
   fs.writeFileSync(path.join(stage, "package.json"), JSON.stringify(manifest, null, 2));
   const output = path.resolve(
     root,
@@ -47,8 +47,9 @@ try {
     process.execPath,
     [
       require.resolve("@vscode/vsce/vsce"), "package", "--no-dependencies", "--out", output,
-      "--baseContentUrl", "https://github.com/srl-labs/containerlab-app/blob/main/",
-      "--baseImagesUrl", "https://raw.githubusercontent.com/srl-labs/containerlab-app/main/"
+      ...(process.env.RELEASE_PRERELEASE === "true" ? ["--pre-release"] : []),
+      "--baseContentUrl", "https://github.com/srl-labs/containerlab-app/blob/main/apps/vscode-containerlab/",
+      "--baseImagesUrl", "https://raw.githubusercontent.com/srl-labs/containerlab-app/main/apps/vscode-containerlab/"
     ],
     { cwd: stage, stdio: "inherit" }
   );

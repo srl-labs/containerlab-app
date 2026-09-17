@@ -1,4 +1,4 @@
-import * as monaco from "@srl-labs/clab-ui/monaco/core";
+import * as monaco from "@containerlab/clab-ui/monaco/core";
 import {
   Alert,
   Box,

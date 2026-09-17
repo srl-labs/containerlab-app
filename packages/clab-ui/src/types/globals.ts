@@ -1,3 +1,4 @@
+/// <reference types="geojson" preserve="true" />
 import type { ReactFlowInstance } from "@xyflow/react";
 import type { StyleSpecification } from "maplibre-gl";
 

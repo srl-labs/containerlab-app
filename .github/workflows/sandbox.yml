@@ -53,7 +53,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build browser sandbox
-        run: pnpm run build:sandbox
+        run: pnpm pages
+        env:
+          VITE_PUBLIC_BASE_PATH: /
 
       - name: Prepare Cloudflare CLI directory
         run: |

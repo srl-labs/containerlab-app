@@ -17,7 +17,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 
 import type { NetemDataMap, NetemFields, NodeImpairmentsInitialData } from "./types";

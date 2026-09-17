@@ -4,7 +4,7 @@
 
 import type * as vscode from "vscode";
 
-import type { CustomIconInfo, CustomNodeTemplate } from "@srl-labs/clab-ui/session";
+import type { CustomIconInfo, CustomNodeTemplate } from "@containerlab/clab-ui/session";
 import { getDockerImages } from "../../../utils/docker/images";
 import { getCustomNodesFromConfig } from "../services/schema";
 import { iconService } from "../services/IconService";

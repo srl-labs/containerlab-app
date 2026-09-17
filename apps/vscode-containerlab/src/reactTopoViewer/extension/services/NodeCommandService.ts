@@ -12,7 +12,7 @@ import {
   flattenContainers
 } from "../../../treeView/common";
 import { runningLabsProvider } from "../../../globals";
-import type { EndpointResult } from "@srl-labs/clab-ui/session";
+import type { EndpointResult } from "@containerlab/clab-ui/session";
 
 import { formatErrorMessage, log } from "./logger";
 
@@ -62,7 +62,7 @@ function createDefaultContainerNode(nodeName: string): ClabContainerTreeNode {
     labPath: { absolute: "", relative: "" },
     IPv4Address: "",
     IPv6Address: ""
-  } as ClabContainerTreeNode;
+  };
 }
 
 /**
@@ -84,7 +84,7 @@ function createInterfaceObject(
     mtu: 0,
     ifIndex: 0,
     state: ""
-  } as ClabInterfaceTreeNode;
+  };
 }
 
 /**

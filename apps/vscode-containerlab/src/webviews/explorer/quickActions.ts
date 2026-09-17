@@ -1,4 +1,4 @@
-import type { ExplorerAction } from "@srl-labs/clab-ui/explorer";
+import type { ExplorerAction } from "@containerlab/clab-ui/explorer";
 
 const CONTAINER_QUICK_ACTION_COMMANDS = ["containerlab.node.attachShell", "containerlab.node.ssh"];
 const LAB_QUICK_ACTION_COMMANDS = ["containerlab.lab.openFile"];

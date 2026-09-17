@@ -38,10 +38,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Verify release version
-        run: pnpm run check:release-version
+        run: node scripts/check-release-version.mjs
 
       - name: Build desktop packages
-        run: pnpm run package:desktop:linux
+        run: pnpm desktop --linux
 
       - name: Verify Linux artifacts
         run: |
@@ -84,7 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build desktop installer
-        run: pnpm run package:desktop:win
+        run: pnpm desktop --win nsis --x64
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
@@ -128,7 +128,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build desktop package
-        run: pnpm run package:desktop:mac
+        run: pnpm desktop --mac dmg --universal
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 

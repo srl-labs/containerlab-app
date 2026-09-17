@@ -3,8 +3,8 @@ import type {
   HostRuntimeInterface,
   HostRuntimeInterfaceStats,
   HostRuntimeNetemState
-} from "@srl-labs/clab-ui/host";
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/host";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { InterfaceState, LabState } from "./stores/labStore";
 import { findLabStateForTopology } from "./standaloneHostShared";
 

@@ -14,11 +14,11 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      "@srl-labs/clab-ui": path.resolve(__dirname, "../../src/index.ts"),
-      "@srl-labs/clab-ui/host": path.resolve(__dirname, "../../src/host/index.ts"),
-      "@srl-labs/clab-ui/session": path.resolve(__dirname, "../../src/session/index.ts"),
-      "@srl-labs/clab-ui/theme": path.resolve(__dirname, "../../src/theme/index.ts"),
-      "@srl-labs/clab-ui/styles/global.css": path.resolve(__dirname, "../../src/styles/global.css")
+      "@containerlab/clab-ui": path.resolve(__dirname, "../../src/index.ts"),
+      "@containerlab/clab-ui/host": path.resolve(__dirname, "../../src/host/index.ts"),
+      "@containerlab/clab-ui/session": path.resolve(__dirname, "../../src/session/index.ts"),
+      "@containerlab/clab-ui/theme": path.resolve(__dirname, "../../src/theme/index.ts"),
+      "@containerlab/clab-ui/styles/global.css": path.resolve(__dirname, "../../src/styles/global.css")
     }
   }
 });

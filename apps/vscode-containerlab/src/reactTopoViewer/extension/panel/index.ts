@@ -19,13 +19,13 @@ export { buildBootstrapData } from "./BootstrapDataBuilder";
 export type { BootstrapData, BootstrapDataInput } from "./BootstrapDataBuilder";
 
 // Schema types and functions
-export type { CustomNodeTemplate, SchemaData } from "@srl-labs/clab-ui/session";
+export type { CustomNodeTemplate, SchemaData } from "@containerlab/clab-ui/session";
 export {
   extractKindsFromSchema,
   extractTypesByKindFromSchema,
   extractSrosComponentTypes,
   parseSchemaData
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 // Service adapters
 export { getCustomNodesFromConfig } from "../services/schema";

@@ -73,7 +73,7 @@ describe("copyLabPath command", () => {
 
   // Should error when no node is provided.
   it("shows an error when node is undefined", () => {
-    copyLabPath(undefined as any);
+    copyLabPath(undefined);
     const spy = vscodeStub.window.showErrorMessage as sinon.SinonSpy;
     expect(spy.calledOnceWith("No lab node selected.")).to.be.true;
   });
@@ -170,7 +170,7 @@ describe("other copy commands", () => {
 
     // Should emit an error if no node is provided at all.
     it(`shows an error when node is undefined for ${field}`, () => {
-      fn(undefined as any);
+      fn(undefined);
       const spy = vscodeStub.window.showErrorMessage as sinon.SinonSpy;
       expect(spy.calledOnceWith("No lab node selected.")).to.be.true;
     });
@@ -190,7 +190,7 @@ describe("other copy commands", () => {
 
   // Should show an error when no interface node is provided.
   it("shows an error when interface node is undefined", () => {
-    copyMACAddress(undefined as any);
+    copyMACAddress(undefined);
     const spy = vscodeStub.window.showErrorMessage as sinon.SinonSpy;
     expect(spy.calledOnceWith("No interface node selected.")).to.be.true;
   });

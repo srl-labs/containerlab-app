@@ -7,7 +7,7 @@ const projectRoot = path.resolve(__dirname, "..");
 
 import { workspaceConfig, resolveCatalog } from "./workspace-config.mjs";
 
-const managedDependencies = ["@srl-labs/clab-ui"];
+const managedDependencies = ["@containerlab/clab-ui"];
 const dependencyFields = [
   "dependencies",
   "devDependencies",

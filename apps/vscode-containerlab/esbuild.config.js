@@ -10,7 +10,7 @@ const imageManagerWebviewEntry = path.join(__dirname, "src/webviews/imageManager
 const welcomeWebviewEntry = path.join(__dirname, "src/webviews/welcome/entry.tsx");
 const nodeImpairmentsWebviewEntry = path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx");
 const wiresharkVncWebviewEntry = path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx");
-const clabUiGlobalCss = require.resolve("@srl-labs/clab-ui/styles/global.css");
+const clabUiGlobalCss = require.resolve("@containerlab/clab-ui/styles/global.css");
 
 function findPackageRootFromEntry(entryPath) {
   let current = path.dirname(entryPath);
@@ -56,7 +56,7 @@ const fallbackMonacoAssets = {
 
 function loadClabUiMonacoAssets() {
   try {
-    const manifestPath = require.resolve("@srl-labs/clab-ui/monaco-assets.json");
+    const manifestPath = require.resolve("@containerlab/clab-ui/monaco-assets.json");
     return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   } catch {
     return fallbackMonacoAssets;

@@ -4,7 +4,7 @@
 
 import * as vscode from "vscode";
 
-import type { CustomNodeTemplate } from "@srl-labs/clab-ui/session";
+import type { CustomNodeTemplate } from "@containerlab/clab-ui/session";
 import { normalizeCustomNodeTemplates } from "./customNodeTypes";
 
 const CONFIG_SECTION = "containerlab.editor";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type * as monaco from "@srl-labs/clab-ui/monaco/core";
+import type * as monaco from "@containerlab/clab-ui/monaco/core";
 import { attachContainerlabYamlSupport } from "./containerlabYamlFileEditorSupport.ts";
 
 test("file editor shares schema completions and scopes providers to attached models", () => {

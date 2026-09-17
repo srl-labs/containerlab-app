@@ -15,13 +15,13 @@ import type {
   TopologyHostCommand,
   TopologyHostResponseMessage,
   TopologySnapshot
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 import {
   buildRuntimeEdgeStatsUpdates,
   buildRuntimeNodeUpdates,
   createRuntimeContainerDataProvider
-} from "@srl-labs/clab-ui/session";
-import type { HostRuntimeContainer, HostRuntimeInterface } from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/session";
+import type { HostRuntimeContainer, HostRuntimeInterface } from "@containerlab/clab-ui/host";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import {
   extractEndpointIdFromTopologyId,

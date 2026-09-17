@@ -202,7 +202,7 @@ function buildUpdatedInterfaceRecord(
     base.state = "";
   }
 
-  return base as InterfaceRecord;
+  return base;
 }
 
 function assignSnapshotFields(entry: MutableSnapshotEntry, iface: InterfaceRecord): void {
@@ -232,7 +232,7 @@ function toInterfaceSnapshotEntry(iface: InterfaceRecord): ClabInterfaceSnapshot
 
   assignSnapshotFields(entry, iface);
 
-  return entry as ClabInterfaceSnapshotEntry;
+  return entry;
 }
 
 interface NodeSnapshot {
@@ -1114,8 +1114,8 @@ function applyInterfaceEvent(event: ContainerlabEvent): void {
     return;
   }
 
-  const ifaceName = typeof attributes.ifname === "string" ? attributes.ifname : undefined;
-  if (ifaceName === undefined || ifaceName === "") {
+  const ifaceName = attributes.ifname;
+  if (typeof ifaceName !== "string" || ifaceName === "") {
     return;
   }
 

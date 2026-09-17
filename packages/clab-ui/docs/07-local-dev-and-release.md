@@ -1,87 +1,45 @@
-# 7. Local Dev and Release
+# Local development and releases
 
-This page is the practical workflow for iterating across the sibling repos without guessing which artifact a consumer is actually using.
+All TypeScript products now live in the `containerlab-app` pnpm workspace. The Go API server remains separate.
 
-## Fastest loop when changing `clab-ui`
+## Setup
 
-1. Build `clab-ui`.
-2. Start the consumer in its local-ui mode.
-3. Rebuild `clab-ui` every time you change the shared package.
+From the monorepo root, using Node.js 24.18.0:
 
-### Step 1: build the shared package
-
-```bash
-cd /home/flschwar/projects/clab/clab-ui
-npm install
-npm run build
+```sh
+corepack enable
+corepack pnpm install --frozen-lockfile
+pnpm web:local
+# or: pnpm pages:local
+# or: pnpm desktop:local
+# or: pnpm vsix:local
 ```
 
-### Step 2A: run `containerlab-app` against the local package
+The applications consume `@containerlab/clab-ui` through `workspace:*`. Their root commands build the UI before starting. Rebuild with `pnpm ui` after UI edits; the app commands do not watch UI source. Use `pnpm ui:local` for source hot reload in the UI harness; no sibling checkout is needed.
 
-```bash
-cd /home/flschwar/projects/clab/containerlab-app
-npm install
-npm run dev:web:local
+## Validation
+
+```sh
+pnpm typecheck
+pnpm test
+pnpm test:package
+pnpm test:web
+pnpm test:vscode
 ```
 
-`dev:local` already enables local-ui mode and fails early if `../clab-ui/dist` is missing.
+The package test installs the packed artifact with npm outside the workspace and validates all public declarations, browser bundling, and Node-compatible APIs.
 
-### Step 2B: build or package `vscode-containerlab` against the local package
+## Independent releases
 
-```bash
-cd /home/flschwar/projects/clab/vscode-containerlab
-npm install
-npm run build:local-ui
-npm run package:local-ui
-```
+Publish a GitHub Release at a reviewed commit. The tag chooses the product and must match its manifest:
 
-These scripts also set local-ui mode for you.
+| Tag | Manifest | Destination |
+| --- | --- | --- |
+| `clab-ui-v<version>` | `packages/clab-ui/package.json` | npmjs.org: `@containerlab/clab-ui` |
+| `vscode-v<version>` | `apps/vscode-containerlab/package.json` | Marketplace, Open VSX, VSIX |
+| `web-v<version>` | `apps/web/package.json` | GHCR |
+| `desktop-v<version>` | `apps/desktop/package.json` | GitHub installer assets |
 
-## When to rebuild `clab-ui`
+A tag push alone does not publish. Only desktop releases should be marked GitHub **Latest**. A shared UI release does not update previously shipped applications.
 
-Rebuild whenever you change anything that affects published output, including:
-
-- React UI components
-- host contracts or runtime helpers
-- session or message types
-- feature entrypoints
-- shared styles
-
-If a consumer still shows old behavior after a rebuild, restart that consumer too.
-
-## Published-package flow
-
-Use the published package flow when you want to test the same artifact other repos will consume from GitHub Packages.
-
-1. Bump the version in `clab-ui/package.json`.
-2. Commit and push.
-3. Create a matching tag `vX.Y.Z`.
-4. Push the tag.
-5. Let `.github/workflows/publish-package.yml` publish the package.
-6. Bump dependencies in `containerlab-app` and `vscode-containerlab`.
-
-## Environment variables you are likely to touch
-
-| Variable | Used in | Purpose |
-|---|---|---|
-| `CLAB_UI_SOURCE=local` | local consumer builds | switch imports from published package to sibling `../clab-ui/dist` |
-| `CLAB_API_URL` | `containerlab-app` server | default API endpoint offered by the browser host |
-| `GITHUB_TOKEN` | local npm install flows | GitHub Packages authentication |
-| `NODE_AUTH_TOKEN` | publish workflow | package publish authentication |
-| `JWT_SECRET` | `clab-api-server` | secure JWT signing |
-
-## Recommended order when debugging integration regressions
-
-1. Confirm `clab-ui/dist` was rebuilt.
-2. Confirm the consumer is actually using local-ui mode when you expect it to.
-3. Confirm the host-specific bridge still matches the package contract.
-4. Only then investigate deeper auth, ownership, or runtime problems.
-
-## Sanity commands per repo
-
-```bash
-cd /home/flschwar/projects/clab/clab-ui && npm run build && npm run lint && npm run test:unit
-cd /home/flschwar/projects/clab/containerlab-app && npm run build && npm run test:unit
-cd /home/flschwar/projects/clab/vscode-containerlab && npm run lint && npm test
-cd /home/flschwar/projects/clab/clab-api-server && task && task test
-```
+The full maintainer instructions, required secrets, and prerelease rules are in [RELEASING.md](https://github.com/srl-labs/containerlab-app/blob/main/RELEASING.md).

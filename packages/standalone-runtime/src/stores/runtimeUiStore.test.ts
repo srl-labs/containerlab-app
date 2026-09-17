@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { useRuntimeUiStore } from "./runtimeUiStore";
 

@@ -1,6 +1,6 @@
 import Ajv from "ajv";
-import type * as monaco from "@srl-labs/clab-ui/monaco/core";
-import { containerlabSchema } from "@srl-labs/clab-ui/session";
+import type * as monaco from "@containerlab/clab-ui/monaco/core";
+import { containerlabSchema } from "@containerlab/clab-ui/session";
 import {
   buildContainerlabSchemaCompletionItems,
   buildNodeNameCompletionItems,
@@ -10,7 +10,7 @@ import {
   getSchemaHoverInfo,
   getYamlCompletionRange,
   getYamlPathAtLine
-} from "@srl-labs/clab-ui/yaml";
+} from "@containerlab/clab-ui/yaml";
 import * as YAML from "yaml";
 
 type MonacoApi = typeof monaco;

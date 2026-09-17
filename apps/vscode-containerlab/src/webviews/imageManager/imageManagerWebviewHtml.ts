@@ -1,5 +1,5 @@
 import type { Uri, Webview } from "vscode";
-import type { ImageManagerInitialData } from "@srl-labs/clab-ui/image-manager";
+import type { ImageManagerInitialData } from "@containerlab/clab-ui/image-manager";
 
 import { createReactWebviewHtml } from "../shared/reactWebviewHtml";
 

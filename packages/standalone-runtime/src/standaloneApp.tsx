@@ -4,10 +4,10 @@
  * Modeled on dev/main.tsx but connects to the real clab-api-server
  * through the Fastify backend instead of using mock data.
  */
-import "@srl-labs/clab-ui/styles/global.css";
-import * as EditorWorkerModule from "@srl-labs/clab-ui/monaco/editor-worker?worker";
-import * as JsonWorkerModule from "@srl-labs/clab-ui/monaco/json-worker?worker";
-import * as YamlWorkerModule from "@srl-labs/clab-ui/monaco/yaml-worker?worker";
+import "@containerlab/clab-ui/styles/global.css";
+import * as EditorWorkerModule from "@containerlab/clab-ui/monaco/editor-worker?worker";
+import * as JsonWorkerModule from "@containerlab/clab-ui/monaco/json-worker?worker";
+import * as YamlWorkerModule from "@containerlab/clab-ui/monaco/yaml-worker?worker";
 import { lazy, Suspense } from "react";
 import {
   App,
@@ -86,16 +86,16 @@ import {
   type FileLabTab,
   type TerminalPreferences,
 } from "./mainApiDependencies";
-import type * as ImageManagerExports from "@srl-labs/clab-ui/image-manager";
+import type * as ImageManagerExports from "@containerlab/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
   ImageActionResult,
   KindImageReference,
-} from "@srl-labs/clab-ui/image-manager";
+} from "@containerlab/clab-ui/image-manager";
 import {
   mergeCustomNodeTemplates,
   parseCustomNodeTemplatesExportFile,
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { isPagesRuntimeMode } from "./runtimeMode";
@@ -105,7 +105,7 @@ type ImageManagerModule = typeof ImageManagerExports;
 let imageManagerModulePromise: Promise<ImageManagerModule> | null = null;
 
 function loadImageManagerModule(): Promise<ImageManagerModule> {
-  imageManagerModulePromise ??= import("@srl-labs/clab-ui/image-manager");
+  imageManagerModulePromise ??= import("@containerlab/clab-ui/image-manager");
   return imageManagerModulePromise;
 }
 

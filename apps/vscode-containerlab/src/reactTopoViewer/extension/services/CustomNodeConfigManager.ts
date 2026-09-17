@@ -5,7 +5,7 @@ import {
   parseCustomNodeTemplatesExportFile,
   type CustomNodeTemplate,
   type EndpointResult
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import { formatErrorMessage, log } from "./logger";
 import { normalizeCustomNodeTemplate, normalizeCustomNodeTemplates } from "./customNodeTypes";

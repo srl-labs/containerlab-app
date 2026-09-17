@@ -1,87 +1,48 @@
-# clab-ui
+# @containerlab/clab-ui
 
-Shared UI package for containerlab webviews and topology editing.
+Shared React UI, topology editing, and host/session helpers for Containerlab web, desktop, and VS Code applications. Source lives in `packages/clab-ui` in the [containerlab-app monorepo](https://github.com/srl-labs/containerlab-app).
 
-Consumers:
+## Install
 
-- [`vscode-containerlab`](https://github.com/srl-labs/vscode-containerlab)
-- [`containerlab-app`](https://github.com/srl-labs/containerlab-app)
-
-## What This Repo Contains
-
-- React UI and topology editing logic used by containerlab consumers
-- Shared parsing, host, session, and runtime helpers
-- Package build tooling that emits the published `dist/` output
-
-This repository no longer contains the standalone browser host. That runtime
-now lives in `containerlab-app`.
-
-## Requirements
-
-- Node.js `>= 24`
-- npm
-
-Install dependencies:
-
-```bash
-npm install
+```sh
+npm install @containerlab/clab-ui react react-dom
 ```
 
-## Common Commands
+Use Node.js >=24 and React 19.2.5 or newer within React 19. The public npm package does not require a GitHub token. Consumers migrating from `@srl-labs/clab-ui` must update the dependency name and import paths.
 
-| Command | Description |
+## Public entrypoints
+
+| Entrypoint | Purpose |
 | --- | --- |
-| `npm run build` | Build the published package into `dist/` |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm run lint` | Typecheck + `oxlint` |
-| `npm run test:unit` | Run package unit tests |
-| `npm run pack:preview` | Preview package contents |
-| `npm run publish:ui` | Publish `@srl-labs/clab-ui` manually |
+| `@containerlab/clab-ui` | Topology UI and store |
+| `/host`, `/session` | Host integration and topology sessions |
+| `/theme`, `/styles/global.css` | Theme and shared styles |
+| `/explorer` | Explorer UI and snapshots |
+| `/image-manager`, `/image-manager/catalog` | Image UI and catalog helpers |
+| `/inspect`, `/welcome`, `/node-impairments`, `/wireshark-vnc` | Auxiliary webviews |
+| `/viewer`, `/viewer/static/*` | Embeddable viewer and static assets |
+| `/monaco/core`, `/monaco/editor-worker`, `/monaco/json-worker`, `/monaco/yaml-worker`, `/monaco-assets.json` | Editor integration |
+| `/yaml` | YAML completion and hover helpers |
 
-## Public Package Surface
+Use the package name followed by the subpath above. Deep `src/*` and `core/*` imports are unsupported. See [INTEGRATORS.md](INTEGRATORS.md) for examples.
 
-Supported exports:
+## Contribute
 
-- `@srl-labs/clab-ui`
-- `@srl-labs/clab-ui/host`
-- `@srl-labs/clab-ui/session`
-- `@srl-labs/clab-ui/theme`
-- `@srl-labs/clab-ui/explorer`
-- `@srl-labs/clab-ui/inspect`
-- `@srl-labs/clab-ui/welcome`
-- `@srl-labs/clab-ui/node-impairments`
-- `@srl-labs/clab-ui/wireshark-vnc`
-- `@srl-labs/clab-ui/styles/global.css`
+From the monorepo root, with Node.js 24.18.0:
 
-Deep `core/*`, `services/*`, and `src/*` imports are not part of the supported
-public API.
-
-Integrator-facing guidance for these exports lives in
-[`INTEGRATORS.md`](INTEGRATORS.md). If you are embedding this package into your
-own app, start there.
-
-## Local Consumer Workflow
-
-When another local repo wants to consume this checkout directly, build it first:
-
-```bash
-npm install
-npm run build
+```sh
+corepack enable
+corepack pnpm install --frozen-lockfile
+pnpm ui
+pnpm --filter @containerlab/clab-ui run typecheck
+pnpm --filter @containerlab/clab-ui run test:unit
+pnpm test:package
 ```
 
-`vscode-containerlab` can then opt into its local override mode and resolve
-against this repo's `dist/` output.
+Hosts use the local workspace's built `dist/` exports. Rebuild the UI after source changes. `pnpm ui` builds this library; `pnpm ui:pack` also builds the standalone iframe viewer in `dist-viewer/` and packs both outputs. The isolated package test checks every public entrypoint with TypeScript, bundles a browser consumer, and runs the Node-compatible APIs against the packed npm artifact.
 
-## Publishing
+## Release
 
-`@srl-labs/clab-ui` is published to GitHub Packages through
-`.github/workflows/publish-package.yml`.
+Bump `packages/clab-ui/package.json`, validate the package, and publish a GitHub Release tagged `clab-ui-v<version>`. `.github/workflows/publish-clab-ui.yml` publishes the tested tarball to npmjs.org. Pushing a tag alone does not publish. Other applications are released independently.
 
-Release flow:
-
-1. Bump `package.json` version.
-2. Commit and push.
-3. Create tag `v<version>` matching the package version.
-4. Push the tag to trigger publish.
-
-Detailed steps: [`PUBLISHING.md`](PUBLISHING.md)
+See the monorepo [release guide](https://github.com/srl-labs/containerlab-app/blob/main/RELEASING.md) for secrets, channels, and first-publication setup.

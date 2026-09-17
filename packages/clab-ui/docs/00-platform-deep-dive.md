@@ -14,7 +14,7 @@ This is the fastest full-system explanation of how the four repos fit together, 
 
 | Component | Primary role | Typical consumer-facing surface |
 |---|---|---|
-| `clab-ui` | Shared package and contracts | `@srl-labs/clab-ui` exports |
+| `clab-ui` | Shared package and contracts | `@containerlab/clab-ui` exports |
 | `containerlab-app` | Browser SPA host, endpoint-session manager, gateway | `/auth/*`, `/files`, `/api/*` |
 | `clab-api-server` | Authenticated control plane and runtime access | `/login`, `/api/v1/*` |
 | `vscode-containerlab` | Extension host and webview bridge | VS Code commands, `postMessage` bridge |
@@ -25,7 +25,7 @@ This is the fastest full-system explanation of how the four repos fit together, 
 flowchart LR
     Browser["Browser user"]
     VSCode["VS Code user"]
-    UI["@srl-labs/clab-ui"]
+    UI["@containerlab/clab-ui"]
     WebHost["containerlab-app"]
     Extension["vscode-containerlab"]
     API["clab-api-server"]
@@ -97,7 +97,7 @@ sequenceDiagram
 
 | Contract | Producer | Consumer |
 |---|---|---|
-| Export map for `@srl-labs/clab-ui/*` | `clab-ui` | web and VS Code hosts |
+| Export map for `@containerlab/clab-ui/*` | `clab-ui` | web and VS Code hosts |
 | `ClabUiHost` and topology session semantics | `clab-ui` | host implementations |
 | Browser-facing gateway routes | `containerlab-app` | browser app code and `clab-ui` API host usage |
 | `/api/v1/*` semantics | `clab-api-server` | `containerlab-app` |
@@ -141,41 +141,40 @@ Status codes you will see often:
 
 ## Local development contract
 
-The local sibling-repo flow is strict on purpose.
-
-1. Build `clab-ui` so `dist/` exists and matches current source.
-2. Start a consumer in its local-ui mode.
-3. Rebuild `clab-ui` whenever you change the shared package.
+All TypeScript products live in the monorepo. Both normal and `:local` app commands rebuild `packages/clab-ui` and resolve its workspace exports. Uncommitted UI changes are included; npm publication is not part of local testing.
 
 ```mermaid
 flowchart LR
-    Build["Build clab-ui dist"] --> WebLocal["containerlab-app: npm run dev:web:local"]
-    Build --> VscLocal["vscode-containerlab: npm run build:local-ui or package:local-ui"]
+    Source["packages/clab-ui/src"] --> UI["pnpm ui:local (hot reload)"]
+    Source --> Build["Build workspace UI dist"]
+    Build --> Web["pnpm web / web:local"]
+    Build --> VSIX["pnpm vsix / vsix:local"]
+    Build --> Desktop["pnpm desktop / desktop:local"]
 ```
+
+Rerun the app command after further UI edits, or run `pnpm ui` and reload the host. The UI harness watches source directly; other hosts consume built exports.
 
 ## Release contract
 
 | Step | Source of truth |
-|---|---|
-| Package version | `clab-ui/package.json` |
-| Release trigger | tag `vX.Y.Z` matching package version |
-| Publish workflow | `clab-ui/.github/workflows/publish-package.yml` |
-| Consumer adoption | dependency bump in `containerlab-app` and `vscode-containerlab` |
+| --- | --- |
+| UI package version | `packages/clab-ui/package.json` |
+| UI release trigger | Published GitHub Release tagged `clab-ui-vX.Y.Z` |
+| Publish workflow | `.github/workflows/publish-clab-ui.yml`, npm Trusted Publishing |
+| Bundled application UI | Workspace code from that application's release commit |
 
-## Quick operator commands
+Each product has its own release version. GitHub Latest is reserved for stable desktop releases; npm and GHCR have their own independent latest tags. See [RELEASING.md](https://github.com/srl-labs/containerlab-app/blob/main/RELEASING.md).
 
-```bash
-# Build the shared package
-cd /home/flschwar/projects/clab/clab-ui
-npm run build
+## Quick contributor commands
 
-# Run the browser host against the local shared package
-cd /home/flschwar/projects/clab/containerlab-app
-npm run dev:web:local
+From the monorepo root:
 
-# Build the VS Code extension against the local shared package
-cd /home/flschwar/projects/clab/vscode-containerlab
-npm run build:local-ui
+```sh
+pnpm ui:local
+pnpm web:local
+pnpm vsix:local
+pnpm desktop:local
+pnpm test:package
 ```
 
 ## Deeper references

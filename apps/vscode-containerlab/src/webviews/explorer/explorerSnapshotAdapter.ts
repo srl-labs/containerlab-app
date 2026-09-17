@@ -155,7 +155,7 @@ function getExtensionContributes(
     return undefined;
   }
 
-  return contributes as ExtensionContributes;
+  return contributes;
 }
 
 function getPackageContributionItems(menuId: string): ParsedContributedMenuItem[] {

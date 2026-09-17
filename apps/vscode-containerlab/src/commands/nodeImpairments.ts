@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import type { NetemFields } from "@srl-labs/clab-ui/node-impairments";
+import type { NetemFields } from "@containerlab/clab-ui/node-impairments";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { outputChannel, containerlabBinaryPath } from "../globals";

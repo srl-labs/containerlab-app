@@ -1,5 +1,3 @@
-import type * as vscode from "vscode";
-
 import {
   EXPLORER_SECTION_LABELS,
   EXPLORER_SECTION_ORDER,
@@ -12,14 +10,22 @@ import {
 } from "./shared/explorer/types";
 
 interface ExplorerTreeProvider {
-  getChildren(element?: unknown): vscode.ProviderResult<vscode.TreeItem[] | undefined>;
+  getChildren(element?: unknown):
+    | ExplorerTreeItemLike[]
+    | null
+    | undefined
+    | PromiseLike<ExplorerTreeItemLike[] | null | undefined>;
 }
 
 type RunningLabTreeDataProvider = ExplorerTreeProvider;
 type LocalLabTreeDataProvider = ExplorerTreeProvider;
 type HelpFeedbackProvider = ExplorerTreeProvider;
 
-type ExplorerTreeItemLike = vscode.TreeItem & {
+interface ExplorerTreeItemLike {
+  label?: string | { label: string };
+  description?: string | boolean;
+  tooltip?: string | { value: string };
+  collapsibleState?: number;
   id?: string;
   contextValue?: string;
   endpointId?: string;
@@ -27,7 +33,7 @@ type ExplorerTreeItemLike = vscode.TreeItem & {
   state?: string;
   status?: string;
   link?: string;
-};
+}
 
 interface LabShareInfo {
   kind: "sshx" | "gotty";
@@ -221,7 +227,7 @@ const EMPTY_PROVIDER: ExplorerTreeProvider = {
   }
 };
 
-function labelToText(label: string | vscode.TreeItemLabel | undefined): string {
+function labelToText(label: ExplorerTreeItemLike["label"]): string {
   if (!label) {
     return "";
   }
@@ -235,7 +241,7 @@ function descriptionToText(description: string | boolean | undefined): string | 
   return undefined;
 }
 
-function tooltipToText(tooltip: vscode.MarkdownString | string | undefined): string | undefined {
+function tooltipToText(tooltip: ExplorerTreeItemLike["tooltip"]): string | undefined {
   if (typeof tooltip === "string") {
     return tooltip;
   }

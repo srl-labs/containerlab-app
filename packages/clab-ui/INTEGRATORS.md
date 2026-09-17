@@ -1,6 +1,6 @@
-# `@srl-labs/clab-ui` Integrator Guide
+# `@containerlab/clab-ui` Integrator Guide
 
-This guide is for teams embedding `@srl-labs/clab-ui` into another product.
+This guide is for teams embedding `@containerlab/clab-ui` into another product.
 
 If you are trying to:
 
@@ -12,7 +12,7 @@ start here.
 
 ## What This Package Is
 
-`@srl-labs/clab-ui` is the shared topology UI package used by the current
+`@containerlab/clab-ui` is the shared topology UI package used by the current
 containerlab consumers. It owns:
 
 - the React UI
@@ -32,16 +32,16 @@ It does not own your product runtime. The embedding app still owns:
 
 Supported imports:
 
-- `@srl-labs/clab-ui`
-- `@srl-labs/clab-ui/host`
-- `@srl-labs/clab-ui/session`
-- `@srl-labs/clab-ui/theme`
-- `@srl-labs/clab-ui/explorer`
-- `@srl-labs/clab-ui/inspect`
-- `@srl-labs/clab-ui/welcome`
-- `@srl-labs/clab-ui/node-impairments`
-- `@srl-labs/clab-ui/wireshark-vnc`
-- `@srl-labs/clab-ui/styles/global.css`
+- `@containerlab/clab-ui`
+- `@containerlab/clab-ui/host`
+- `@containerlab/clab-ui/session`
+- `@containerlab/clab-ui/theme`
+- `@containerlab/clab-ui/explorer`
+- `@containerlab/clab-ui/inspect`
+- `@containerlab/clab-ui/welcome`
+- `@containerlab/clab-ui/node-impairments`
+- `@containerlab/clab-ui/wireshark-vnc`
+- `@containerlab/clab-ui/styles/global.css`
 
 Do not import from `src/*`, `core/*`, or `services/*`. Those are internal repo
 paths, not a supported consumer API.
@@ -54,19 +54,13 @@ Requirements:
 - npm
 - `react`
 - `react-dom`
-- `GITHUB_TOKEN` for GitHub Packages installs
 
-Consumer `.npmrc`:
-
-```ini
-@srl-labs:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
+The public package is distributed on npmjs.org. No GitHub token or custom registry mapping is needed. Existing consumers of `@srl-labs/clab-ui` must update their dependency and imports to `@containerlab/clab-ui`; previously published GitHub Packages versions remain separate.
 
 Install:
 
 ```bash
-npm install @srl-labs/clab-ui react react-dom
+npm install @containerlab/clab-ui react react-dom
 ```
 
 ## 5-Minute Quickstart
@@ -76,11 +70,11 @@ This is the minimum useful browser integration.
 ```tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "@srl-labs/clab-ui";
-import { createApiClabUiHost, createClabUiRuntime } from "@srl-labs/clab-ui/host";
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
-import { MuiThemeProvider, applyThemeVars } from "@srl-labs/clab-ui/theme";
-import "@srl-labs/clab-ui/styles/global.css";
+import { App } from "@containerlab/clab-ui";
+import { createApiClabUiHost, createClabUiRuntime } from "@containerlab/clab-ui/host";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
+import { MuiThemeProvider, applyThemeVars } from "@containerlab/clab-ui/theme";
+import "@containerlab/clab-ui/styles/global.css";
 
 async function main(): Promise<void> {
   applyThemeVars(document.documentElement, "dark");
@@ -189,9 +183,9 @@ Typical usage:
 ```tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { App, subscribeToWebviewMessages } from "@srl-labs/clab-ui";
-import { createClabUiRuntime, createWindowClabUiHost } from "@srl-labs/clab-ui/host";
-import "@srl-labs/clab-ui/styles/global.css";
+import { App, subscribeToWebviewMessages } from "@containerlab/clab-ui";
+import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
+import "@containerlab/clab-ui/styles/global.css";
 
 const runtime = createClabUiRuntime({ host: createWindowClabUiHost() });
 const initialData = (window as Record<string, unknown>).__INITIAL_DATA__ ?? {};
@@ -237,7 +231,7 @@ transport. Your app still has to create and destroy topology sessions.
 
 Use this only if the exported host helpers do not fit your transport model.
 
-If you do this, implement the contracts from `@srl-labs/clab-ui/host`
+If you do this, implement the contracts from `@containerlab/clab-ui/host`
 intentionally. Do not copy private code from this repository.
 
 ## Bootstrap Data Contract
@@ -282,7 +276,7 @@ provide `schemaData` when they want to override that bundled default, for
 example with a newer or custom schema. Use the exported schema helper:
 
 ```ts
-import { parseSchemaData } from "@srl-labs/clab-ui/session";
+import { parseSchemaData } from "@containerlab/clab-ui/session";
 
 const schemaData = parseSchemaData(rawSchemaJson as Record<string, unknown>);
 ```
@@ -625,7 +619,7 @@ If your product embeds the explorer UI, use:
 
 - `ContainerlabExplorerView`
 - `buildExplorerSnapshot`
-- explorer message/state types from `@srl-labs/clab-ui/explorer`
+- explorer message/state types from `@containerlab/clab-ui/explorer`
 
 If you already have a product-specific explorer backend, prefer wiring it
 through the exported explorer controller/helpers rather than duplicating logic.
@@ -634,22 +628,21 @@ through the exported explorer controller/helpers rather than duplicating logic.
 
 Recommended package usage:
 
-- import `@srl-labs/clab-ui/styles/global.css` once
+- import `@containerlab/clab-ui/styles/global.css` once
 - wrap with `MuiThemeProvider`
 - apply CSS variables with `applyThemeVars(...)` if your host controls theme mode
 
-## Local Sibling-Checkout Workflow
+## Local Workspace and External Consumer Checks
 
-If your consumer repo lives next to a local `clab-ui` checkout, build the UI
-package first and consume its published surface from `dist/`:
+From the `containerlab-app` repository root:
 
 ```bash
-cd ../clab-ui
-npm install
-npm run build
+corepack pnpm install --frozen-lockfile
+pnpm ui
+pnpm test:package
 ```
 
-Consumers should resolve against `dist/`, not against `src/`.
+Monorepo hosts resolve `@containerlab/clab-ui` through `workspace:*` and consume its public `dist/` exports. Rebuild after UI changes. For a separate consumer, use `pnpm ui:pack`, then install that tarball with npm in the consumer project. No sibling checkout or `CLAB_UI_SOURCE` override is required.
 
 ## Stability Rules
 

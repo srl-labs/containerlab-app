@@ -4,7 +4,7 @@
 
 ## Runtime shape
 
-- Frontend: Vite SPA using `@srl-labs/clab-ui`
+- Frontend: Vite SPA using `@containerlab/clab-ui`
 - Backend: Fastify server with explicit route modules
 - Desktop: Electron host reusing the shared app server and built web assets
 - Production: Fastify serves built assets and browser-facing API routes from one process
@@ -44,18 +44,16 @@ A browser app cannot safely own the full runtime contract by itself.
 
 ## Development commands
 
-```bash
-npm install
-npm run dev:web
-npm run dev:web:local
-npm run build
-npm run start
+From the monorepo root:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm web:local
+pnpm web
+pnpm --filter containerlab-app-web run start
 ```
 
-Notes:
-
-- `npm run dev:web:local` checks for a built sibling `../clab-ui/dist` and sets local-ui mode automatically.
-- `CLAB_API_URL` controls the default API endpoint the web host offers to the browser.
+Both builds and local development rebuild the checked-out `packages/clab-ui` first. `CLAB_API_URL` controls the default API endpoint offered to the browser.
 
 ## Operational reality
 

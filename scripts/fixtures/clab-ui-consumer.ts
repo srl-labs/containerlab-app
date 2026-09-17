@@ -1,13 +1,19 @@
 import {
   buildContainerlabSchemaCompletionItems,
   getSchemaHoverInfo,
-} from "@srl-labs/clab-ui/yaml";
+} from "@containerlab/clab-ui/yaml";
 import {
   getKindImageGuidance,
   isPlaceholderImageReference,
-} from "@srl-labs/clab-ui/image-manager/catalog";
+} from "@containerlab/clab-ui/image-manager/catalog";
 
-// Exercise the YAML entrypoint without importing host-specific session declarations.
+import { containerlabSchema as bundledSchema } from "@containerlab/clab-ui/session";
+import { createClabUiRuntime } from "@containerlab/clab-ui/host";
+
+if (typeof bundledSchema !== "object" || typeof createClabUiRuntime !== "function")
+  throw new Error("Missing host/session runtime exports");
+
+// Check the standalone YAML helpers against a minimal schema as well.
 const containerlabSchema = {
   type: "object",
   properties: {

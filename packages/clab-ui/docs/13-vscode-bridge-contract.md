@@ -69,11 +69,7 @@ The explorer path is separate from the topology-host protocol. It uses explorer-
 
 ## Local shared-package mode
 
-| Condition | Behavior |
-|---|---|
-| `CLAB_UI_SOURCE=local` and `../clab-ui/dist/index.js` exists | `esbuild.config.js` aliases `@srl-labs/clab-ui/*` to the local `dist/` tree |
-| `CLAB_UI_SOURCE=local` but local `dist/` is missing | local build fails fast |
-| env var absent | published package resolution is used |
+The extension always consumes the local `@containerlab/clab-ui` workspace's public `dist/` exports. The root build/package commands build the UI first. Rebuild after UI edits; no environment flag or sibling checkout is needed.
 
 ## High-signal source anchors
 

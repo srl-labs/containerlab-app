@@ -1,3 +1,4 @@
+/// <reference types="geojson" preserve="true" />
 /**
  * useGeoMapLayout - MapLibre integration for GeoMap layout
  */
@@ -669,12 +670,14 @@ export function useGeoMapLayout({
         mapRef.current = map;
         setInitError(null);
       } catch (err) {
-        const message =
-          err instanceof Error
-            ? err.message
-            : isRecord(err) && typeof err.message === "string"
-              ? err.message
-              : String(err);
+        let message: string;
+        if (err instanceof Error) {
+          message = err.message;
+        } else if (isRecord(err) && typeof err.message === "string") {
+          message = err.message;
+        } else {
+          message = String(err);
+        }
         log.error(`[GeoMap] Failed to initialize map: ${message}`);
         if (!cancelled) {
           setInitError(message);

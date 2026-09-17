@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: publish-vscode
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -11,9 +15,10 @@ jobs:
     if: github.repository == 'srl-labs/containerlab-app' && startsWith(github.event.release.tag_name, 'vscode-v')
     permissions:
       contents: write
-      packages: read
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
 
     steps:
       - name: Checkout repository
@@ -38,11 +43,11 @@ jobs:
       - name: Validate version
         id: version
         run: |
-          pnpm run check:release-version
+          node scripts/check-release-version.mjs vscode
           echo "package=$(node -p "require('./apps/vscode-containerlab/package.json').version")" >> "$GITHUB_OUTPUT"
 
       - name: Build shared UI
-        run: pnpm run build:clab-ui
+        run: pnpm ui
 
       - name: Run linter
         run: pnpm --filter vscode-containerlab run lint
@@ -54,7 +59,7 @@ jobs:
         run: pnpm --filter vscode-containerlab test
 
       - name: Build extension
-        run: pnpm run build:vscode
+        run: pnpm --filter vscode-containerlab run build
 
       - name: Package extension
         working-directory: apps/vscode-containerlab
@@ -63,33 +68,36 @@ jobs:
       - name: Check for publish tokens
         id: check-pat
         run: |
-          if [ -n "${{ secrets.VSCE_PAT }}" ]; then
+          if [ -n "$VSCE_PAT" ]; then
             echo "has_vsce_pat=true" >> $GITHUB_OUTPUT
           else
             echo "has_vsce_pat=false" >> $GITHUB_OUTPUT
             echo "⚠️ VSCE_PAT secret not configured - skipping marketplace publish"
           fi
 
-          if [ -n "${{ secrets.OVSX_PAT }}" ]; then
+          if [ -n "$OVSX_PAT" ]; then
             echo "has_ovsx_pat=true" >> $GITHUB_OUTPUT
           else
             echo "has_ovsx_pat=false" >> $GITHUB_OUTPUT
             echo "⚠️ OVSX_PAT secret not configured - skipping Open VSX publish"
           fi
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
       - name: Publish to VS Code Marketplace
         if: steps.check-pat.outputs.has_vsce_pat == 'true'
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         working-directory: apps/vscode-containerlab
-        run: pnpm exec vsce publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$VSCE_PAT"
+        run: pnpm exec vsce publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$VSCE_PAT" --skip-duplicate
 
       - name: Publish to Open VSX Registry
         if: steps.check-pat.outputs.has_ovsx_pat == 'true'
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         working-directory: apps/vscode-containerlab
-        run: pnpm exec ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT"
+        run: pnpm exec ovsx publish --packagePath "vscode-containerlab-${{ steps.version.outputs.package }}.vsix" -p "$OVSX_PAT" --skip-duplicate
 
       - name: Upload VSIX to release
         uses: softprops/action-gh-release@v2
@@ -97,3 +105,4 @@ jobs:
           files: |
             apps/vscode-containerlab/vscode-containerlab-${{ steps.version.outputs.package }}.vsix
           fail_on_unmatched_files: true
+          make_latest: false

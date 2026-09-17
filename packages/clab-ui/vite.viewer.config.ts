@@ -16,7 +16,19 @@ export default defineConfig({
     outDir: "dist-viewer",
     emptyOutDir: true,
     rollupOptions: {
-      input: path.resolve(__dirname, "viewer.html")
+      input: path.resolve(__dirname, "viewer.html"),
+      onwarn(warning, warn) {
+        // This viewer runs entirely in the browser; dependency RSC client
+        // boundaries have no effect here. Keep all other warnings visible.
+        if (
+          warning.code === "MODULE_LEVEL_DIRECTIVE" &&
+          warning.id?.replaceAll("\\", "/").includes("/node_modules/") &&
+          warning.message.includes('"use client"')
+        ) {
+          return;
+        }
+        warn(warning);
+      }
     }
   }
 });

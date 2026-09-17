@@ -86,7 +86,7 @@ flowchart LR
 
 ## Preventive controls
 
-1. Treat the public `@srl-labs/clab-ui` exports as the only supported integration surface.
+1. Treat the public `@containerlab/clab-ui` exports as the only supported integration surface.
 2. Keep browser endpoint-session and topology-session logging explicit enough to diagnose selection drift.
 3. Keep local-ui workflows strict so stale `dist/` is obvious.
 4. Revalidate web route mappings whenever the API server route surface changes.

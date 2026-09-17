@@ -11,7 +11,7 @@ Use this page for first-pass triage before diving into the deeper route and cont
 | API returns `404` for a resource that "should" exist | ownership concealment or stale topology reference | `clab-api-server/internal/api/helpers.go`, web topology/session state |
 | Terminal or VNC closes immediately | stale runtime session or capture-session mapping | `containerlab-app/packages/app-server/src/terminalStreamProxy.ts`, `captureVncStreamProxy.ts` |
 | VS Code webview action does nothing | message router or command mapping drift | `vscode-containerlab/src/reactTopoViewer/extension/panel/MessageRouter.ts`, `src/extension.ts` |
-| Local `clab-ui` change does not show up in a consumer | stale `dist/` or consumer not using local-ui mode | rebuild `clab-ui`, then restart the consumer |
+| Local `clab-ui` change does not show up in a consumer | stale workspace `dist/` | rebuild `clab-ui`, then restart the consumer |
 
 ## Fast triage order
 
@@ -23,34 +23,18 @@ Use this page for first-pass triage before diving into the deeper route and cont
 
 ## Quick checks for the browser host
 
-```bash
-cd /home/flschwar/projects/clab/containerlab-app
-npm run dev:web
-```
-
-Then verify:
+From the monorepo root, run `pnpm web:local`. Then verify:
 
 - `GET /api/config` returns a sane default API URL and current endpoint list
 - `GET /auth/me` reflects the expected browser session state
 - the endpoint you think is active is actually the endpoint being used
 - topology-session ids are current if the failure is topology-specific
 
-## Quick checks for the local shared package flow
+## Quick checks for local shared UI changes
 
-```bash
-cd /home/flschwar/projects/clab/clab-ui
-npm run build
-```
+The UI lives at `packages/clab-ui/src`. `pnpm web:local`, `pnpm desktop:local`, and `pnpm vsix:local` rebuild it before using it. Rerun the appropriate command after edits. For an already running host, rebuild with `pnpm ui` and reload; use `pnpm ui:local` for source hot reload in the standalone UI harness.
 
-Then restart the relevant consumer:
-
-```bash
-cd /home/flschwar/projects/clab/containerlab-app
-npm run dev:web:local
-
-cd /home/flschwar/projects/clab/vscode-containerlab
-npm run build:local-ui
-```
+If the public API fails outside the monorepo, run `pnpm test:package` to validate the built tarball without workspace dependency resolution.
 
 ## How to read `401`, `403`, and `404`
 

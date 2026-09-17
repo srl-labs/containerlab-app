@@ -4,25 +4,47 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*.*.*"
-      - "!vscode-v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: read
 
-env:
-  NODE_VERSION: "24"
+concurrency:
+  group: desktop-packages
+  cancel-in-progress: false
 
 jobs:
+  validate:
+    if: github.event_name != 'release' || (github.repository == 'srl-labs/containerlab-app' && startsWith(github.event.release.tag_name, 'desktop-v'))
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter containerlab-app --ignore-scripts
+      - run: node scripts/check-release-version.mjs ${{ github.event_name == 'release' && 'desktop' || '' }}
+
   desktop-packages:
+    needs: validate
     uses: ./.github/workflows/desktop-builds.yml
 
   publish-release:
     name: Publish release assets
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'release'
     needs: desktop-packages
     runs-on: ubuntu-latest
     permissions:
@@ -39,6 +61,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           mapfile -t artifacts < <(find release-assets -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.dmg' -o -name '*.exe' \) -print)
           if [ "${#artifacts[@]}" -eq 0 ]; then
@@ -46,8 +69,4 @@ jobs:
             exit 1
           fi
 
-          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "Containerlab desktop package artifacts for $GITHUB_REF_NAME."
-          fi
-
-          gh release upload "$GITHUB_REF_NAME" "${artifacts[@]}" --clobber
+          gh release upload "$RELEASE_TAG" "${artifacts[@]}" --clobber

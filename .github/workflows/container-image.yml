@@ -5,12 +5,11 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*.*.*"
-      - "!vscode-v*"
+  release:
+    types: [published]
 
 concurrency:
-  group: container-image-${{ github.event.pull_request.number || github.ref }}
+  group: container-image-${{ github.event.pull_request.number || 'publish' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -22,11 +21,17 @@ env:
 
 jobs:
   build:
+    if: github.event_name != 'release' || (github.repository == 'srl-labs/containerlab-app' && startsWith(github.event.release.tag_name, 'web-v'))
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
@@ -37,7 +42,9 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile --filter containerlab-app --ignore-scripts
-      - run: pnpm run check:release-version
+      - name: Validate version
+        id: version
+        run: node scripts/check-release-version.mjs ${{ github.event_name == 'release' && 'web' || '' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -60,10 +67,10 @@ jobs:
           images: ${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.event_name == 'release' }}
             type=sha,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && steps.version.outputs.prerelease == 'false' }}
+            type=raw,value=next,enable=${{ github.event_name == 'release' && steps.version.outputs.prerelease == 'true' }}
 
       - name: Build and publish image
         uses: docker/build-push-action@v6

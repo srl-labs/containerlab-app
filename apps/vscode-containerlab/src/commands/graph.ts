@@ -7,7 +7,7 @@ import type { ClabLabTreeNode } from "../treeView/common";
 import type { ReactTopoViewer } from "../reactTopoViewer";
 import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
-import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@srl-labs/clab-ui/session";
+import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
 
 import { ClabCommand } from "./clabCommand";
 

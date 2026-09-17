@@ -15,7 +15,7 @@ import * as vscode from "vscode";
 
 import { containerlabBinaryPath, outputChannel } from "../globals";
 import type { ClabDetailedJSON } from "../treeView/common";
-import type { ClabInterfaceSnapshot, ClabInterfaceSnapshotEntry } from "../types/containerlab";
+import type { ClabInterfaceSnapshot } from "../types/containerlab";
 
 const execAsync = promisify(exec);
 
@@ -374,18 +374,15 @@ function toInterfaceSnapshot(raw: ClabInspectInterfaceJSON[]): ClabInterfaceSnap
 
   return raw.map((item) => ({
     name: item.name,
-    interfaces: item.interfaces.map(
-      (iface) =>
-        ({
-          name: iface.name,
-          type: iface.type || "",
-          state: iface.state || "",
-          alias: iface.alias || "",
-          mac: iface.mac || "",
-          mtu: iface.mtu || 0,
-          ifindex: iface.ifindex || 0
-        }) as ClabInterfaceSnapshotEntry
-    )
+    interfaces: item.interfaces.map((iface) => ({
+      name: iface.name,
+      type: iface.type || "",
+      state: iface.state || "",
+      alias: iface.alias || "",
+      mac: iface.mac || "",
+      mtu: iface.mtu || 0,
+      ifindex: iface.ifindex || 0
+    }))
   }));
 }
 

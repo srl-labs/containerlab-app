@@ -60,7 +60,7 @@ describe("openLabFile command", () => {
 
   // Should show an error message when no node is provided.
   it("shows an error when node is undefined", () => {
-    openLabFile(undefined as any);
+    openLabFile(undefined);
     const spy = vscodeStub.window.showErrorMessage as sinon.SinonSpy;
     expect(spy.calledOnceWith("No lab node selected.")).to.be.true;
   });

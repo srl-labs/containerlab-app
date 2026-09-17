@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createRuntimeContainerDataProvider } from "@srl-labs/clab-ui/session";
+import { createRuntimeContainerDataProvider } from "@containerlab/clab-ui/session";
 
 import type { ClabApiClient } from "./clabApiClient";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager";

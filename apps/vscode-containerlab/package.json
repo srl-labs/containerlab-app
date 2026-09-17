@@ -5,7 +5,7 @@
   "icon": "resources/containerlab.png",
   "description": "Manages containerlab topologies in VS Code",
   "author": "SRL Labs",
-  "version": "0.26.3",
+  "version": "0.26.4",
   "homepage": "https://containerlab.dev/manual/vsc-extension/",
   "engines": {
     "vscode": "^1.105.1",
@@ -1094,11 +1094,11 @@
     "chokidar": "catalog:",
     "ovsx": "catalog:"
   },
-  "private": false,
+  "private": true,
   "bugs": {
     "url": "https://github.com/srl-labs/containerlab-app/issues"
   },
   "dependencies": {
-    "@srl-labs/clab-ui": "workspace:*"
+    "@containerlab/clab-ui": "workspace:*"
   }
 }

@@ -37,7 +37,7 @@ import {
   type TopologyHost,
   type TopologyHostResponseMessage,
   type TopologySnapshot
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 import { nodeFsAdapter } from "../shared/io";
 import { cancelActiveCommand } from "../../../commands/command";
 

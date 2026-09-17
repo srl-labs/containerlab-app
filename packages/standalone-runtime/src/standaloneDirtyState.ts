@@ -6,8 +6,8 @@
  * server also stamps the result onto its topology sessions so subsequent
  * snapshots carry the same flag.
  */
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 

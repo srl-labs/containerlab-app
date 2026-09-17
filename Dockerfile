@@ -29,7 +29,7 @@ COPY packages/app-server ./packages/app-server
 COPY packages/clab-ui ./packages/clab-ui
 COPY packages/standalone-runtime ./packages/standalone-runtime
 
-RUN pnpm run build:web
+RUN pnpm web
 
 FROM node:24.18.0-alpine AS runtime
 

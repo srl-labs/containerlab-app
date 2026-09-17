@@ -24,8 +24,8 @@ import {
   buildTopologySnapshotMessage,
   type TopoEdge,
   type TopologySnapshot
-} from "@srl-labs/clab-ui/session";
-import type { HostRuntimeContainer } from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/session";
+import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
 import { nodeFsAdapter } from "./shared/io";
 
 import { formatErrorMessage, log } from "./services/logger";

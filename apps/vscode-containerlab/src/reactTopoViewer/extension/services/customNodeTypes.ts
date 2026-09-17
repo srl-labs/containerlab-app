@@ -1,4 +1,4 @@
-import type { CustomNodeTemplate } from "@srl-labs/clab-ui/session";
+import type { CustomNodeTemplate } from "@containerlab/clab-ui/session";
 
 const DEPRECATED_SRLINUX_TYPE_ALIASES: Readonly<Partial<Record<string, string>>> = {
   ixsa1: "ixs-a1",

@@ -1,6 +1,6 @@
 {
   "name": "containerlab-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Manage and inspect containerlab topologies from a desktop application.",
   "license": "Apache-2.0",
@@ -37,7 +37,7 @@
     "dev": "pnpm --filter containerlab-app-web run build && pnpm run build && pnpm run start",
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "package": "pnpm run package:linux",
+    "package": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --publish never",
     "package:linux": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux --publish never",
     "package:appimage": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux AppImage --publish never",
     "package:deb": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux deb --publish never",

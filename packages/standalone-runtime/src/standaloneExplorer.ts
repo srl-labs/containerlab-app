@@ -1,12 +1,12 @@
-import { createExplorerController } from "@srl-labs/clab-ui/host";
+import { createExplorerController } from "@containerlab/clab-ui/host";
 import type {
   ExplorerAction,
   ExplorerIncomingMessage,
   ExplorerSectionId,
   ExplorerSnapshotProviders,
   ExplorerUiState,
-} from "@srl-labs/clab-ui/explorer";
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/explorer";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { dispatchEndpointUiAction } from "./endpointActions";
 import {

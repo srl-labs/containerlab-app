@@ -8,7 +8,7 @@ import {
   type ImagePullRequest,
   type ImageRemoveRequest,
   type KindImageReference
-} from "@srl-labs/clab-ui/image-manager/catalog";
+} from "@containerlab/clab-ui/image-manager/catalog";
 
 import { getImageManagerWebviewHtml } from "../webviews/imageManager/imageManagerWebviewHtml";
 import { pullDockerImage } from "../utils/docker/docker";

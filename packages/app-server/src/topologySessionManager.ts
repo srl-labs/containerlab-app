@@ -2,7 +2,7 @@ import {
   TopologySessionCore,
   type createRuntimeContainerDataProvider,
   type TopologyRef
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import type { ClabApiClient } from "./clabApiClient.ts";

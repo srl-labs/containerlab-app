@@ -2,10 +2,9 @@ import * as vscode from "vscode";
 import {
   type ExplorerOutgoingMessage,
   type ExplorerSnapshotOptions,
-  type ExplorerSnapshotProviders,
   type ExplorerUiState
-} from "@srl-labs/clab-ui/explorer";
-import { createExplorerController } from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/explorer";
+import { createExplorerController } from "@containerlab/clab-ui/host";
 
 import { hideNonOwnedLabsState } from "../../globals";
 import type {
@@ -77,7 +76,7 @@ export class ContainerlabExplorerViewProvider
       initialFilterText: this.filterText,
       initialUiState: context.workspaceState.get<ExplorerUiState>(UI_STATE_KEY, {}),
       debounceMs: REFRESH_DEBOUNCE_MS,
-      buildProviders: async () => this.providers as ExplorerSnapshotProviders,
+      buildProviders: async () => this.providers,
       getSnapshotOptions: async () => {
         this.options.hideNonOwnedLabs = hideNonOwnedLabsState;
         this.options.commandMetadata = await getExplorerCommandMetadata();

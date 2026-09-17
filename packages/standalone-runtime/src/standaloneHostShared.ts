@@ -1,4 +1,4 @@
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { ContainerState, InterfaceState, LabState } from "./stores/labStore";

@@ -16,7 +16,7 @@
     "@emotion/styled": "catalog:",
     "@mui/icons-material": "catalog:",
     "@mui/material": "catalog:",
-    "@srl-labs/clab-ui": "workspace:*",
+    "@containerlab/clab-ui": "workspace:*",
     "@srl-labs/containerlab-app-contract": "workspace:*",
     "@xterm/addon-fit": "catalog:",
     "@xterm/xterm": "catalog:",

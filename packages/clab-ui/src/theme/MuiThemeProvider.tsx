@@ -1,3 +1,4 @@
+import "../types/assets";
 // MUI ThemeProvider wrapper — static theme with CSS var() palette.
 import React from "react";
 import { ThemeProvider } from "@mui/material/styles";

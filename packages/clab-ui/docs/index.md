@@ -51,7 +51,7 @@ flowchart LR
     U2["VS Code user"]
     WEB["containerlab-app\nSPA host and Fastify gateway"]
     VSC["vscode-containerlab\nExtension host and webviews"]
-    UI["@srl-labs/clab-ui\nShared package"]
+    UI["@containerlab/clab-ui\nShared package"]
     API["clab-api-server\nAuthenticated API v1"]
     RT["Container runtime and containerlab"]
 
@@ -75,8 +75,8 @@ flowchart LR
 
 ## Stable boundaries you should treat as contracts
 
-- The `@srl-labs/clab-ui` export map in `clab-ui/package.json`
-- The `ClabUiHost` and topology session contracts in `@srl-labs/clab-ui/host` and `@srl-labs/clab-ui/session`
+- The `@containerlab/clab-ui` export map in `clab-ui/package.json`
+- The `ClabUiHost` and topology session contracts in `@containerlab/clab-ui/host` and `@containerlab/clab-ui/session`
 - The browser-facing route surface implemented by `containerlab-app`
 - The `/api/v1/*` semantics exposed by `clab-api-server`
 - The VS Code command and message bridge implemented by `vscode-containerlab`

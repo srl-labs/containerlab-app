@@ -24,16 +24,16 @@ The supported integration boundary is the export map in `package.json`.
 
 | Export | What it is for |
 |---|---|
-| `@srl-labs/clab-ui` | main `App`, message subscription helper, and shared store helpers |
-| `@srl-labs/clab-ui/host` | host contracts, runtime factories, runtime context hooks, controller helpers |
-| `@srl-labs/clab-ui/session` | `TopologyRef`, topology session client, message constants, schema helpers, topology runtime helpers |
-| `@srl-labs/clab-ui/theme` | `MuiThemeProvider` plus theme-variable helpers |
-| `@srl-labs/clab-ui/explorer` | explorer view exports and snapshot-building helpers |
-| `@srl-labs/clab-ui/inspect` | inspect webview bootstrapper and related types |
-| `@srl-labs/clab-ui/welcome` | welcome-page bootstrapper |
-| `@srl-labs/clab-ui/node-impairments` | node impairments webview bootstrapper and types |
-| `@srl-labs/clab-ui/wireshark-vnc` | Wireshark/VNC webview bootstrapper and types |
-| `@srl-labs/clab-ui/styles/global.css` | shared global stylesheet |
+| `@containerlab/clab-ui` | main `App`, message subscription helper, and shared store helpers |
+| `@containerlab/clab-ui/host` | host contracts, runtime factories, runtime context hooks, controller helpers |
+| `@containerlab/clab-ui/session` | `TopologyRef`, topology session client, message constants, schema helpers, topology runtime helpers |
+| `@containerlab/clab-ui/theme` | `MuiThemeProvider` plus theme-variable helpers |
+| `@containerlab/clab-ui/explorer` | explorer view exports and snapshot-building helpers |
+| `@containerlab/clab-ui/inspect` | inspect webview bootstrapper and related types |
+| `@containerlab/clab-ui/welcome` | welcome-page bootstrapper |
+| `@containerlab/clab-ui/node-impairments` | node impairments webview bootstrapper and types |
+| `@containerlab/clab-ui/wireshark-vnc` | Wireshark/VNC webview bootstrapper and types |
+| `@containerlab/clab-ui/styles/global.css` | shared global stylesheet |
 
 !!! warning "Unsupported imports"
     Do not import from `src/*`, `core/*`, `services/*`, or other repo-internal paths. Those are implementation details, not compatibility promises.
@@ -73,37 +73,15 @@ The host is expected to keep that state aligned with authoritative topology stat
 
 ```bash
 npm install
-npm run build
-npm run typecheck
-npm run lint
-npm run test:unit
-npm run pack:preview
+pnpm --filter @containerlab/clab-ui run build
+pnpm --filter @containerlab/clab-ui run typecheck
+pnpm --filter @containerlab/clab-ui run lint
+pnpm --filter @containerlab/clab-ui run test:unit
+pnpm --filter @containerlab/clab-ui run pack:preview
 ```
 
-## Publish flow
+## Publishing and local development
 
-```bash
-npm run publish:ui
-```
+The package is developed at `packages/clab-ui` in the `containerlab-app` pnpm workspace and published on npmjs.org as `@containerlab/clab-ui`.
 
-In normal release flow, publishing is triggered by the repository workflow rather than by a manual local publish.
-
-1. Bump the version in `package.json`.
-2. Commit and push.
-3. Create a matching `vX.Y.Z` tag.
-4. Push the tag so `.github/workflows/publish-package.yml` runs.
-
-## Local consumer workflow
-
-If another local repo should consume this checkout directly:
-
-```bash
-cd /home/flschwar/projects/clab/clab-ui
-npm install
-npm run build
-```
-
-After that:
-
-- `containerlab-app` can use `npm run dev:web:local`
-- `vscode-containerlab` can use `npm run build:local-ui` or `npm run package:local-ui`
+From the workspace root use `ppnpm --filter @containerlab/clab-ui run build:clab-ui` and `ppnpm --filter @containerlab/clab-ui run test:package:clab-ui`. Publish a GitHub Release tagged `clab-ui-v<version>` matching `packages/clab-ui/package.json` to publish the tested package. See [Local development and releases](07-local-dev-and-release.md).

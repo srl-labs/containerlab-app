@@ -5,7 +5,7 @@
 import * as vscode from "vscode";
 
 import { log } from "../services/logger";
-import { createTopologySyncController } from "@srl-labs/clab-ui/host";
+import { createTopologySyncController } from "@containerlab/clab-ui/host";
 import { nodeFsAdapter } from "../shared/io";
 import { onDockerImagesUpdated } from "../../../utils/docker/images";
 

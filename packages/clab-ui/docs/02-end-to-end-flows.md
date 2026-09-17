@@ -51,19 +51,20 @@ What matters here:
 - The extension host owns file access, runtime access, and panel lifecycle.
 - The webview remains a presentation layer plus message client.
 
-## Local development flow with sibling `clab-ui`
+## Local workspace development
 
 ```mermaid
 flowchart LR
-    Build["Build ../clab-ui/dist"]
-    WebLocal["containerlab-app: npm run dev:web:local"]
-    VscLocal["vscode-containerlab: npm run build:local-ui or package:local-ui"]
-
-    Build --> WebLocal
-    Build --> VscLocal
+    Source["Edit packages/clab-ui/src"] --> Web["pnpm web:local"]
+    Source --> VSIX["pnpm vsix:local"]
+    Source --> Desktop["pnpm desktop:local"]
+    Source --> UI["pnpm ui:local (source hot reload)"]
+    Web --> Dist["Build local UI dist, then build/run host"]
+    VSIX --> Dist
+    Desktop --> Dist
 ```
 
-The key rule is simple: if you changed `clab-ui`, rebuild it before expecting the consumers to reflect that change.
+All commands run from the monorepo root. The host commands rebuild the workspace UI before starting; rerun them after further shared UI edits. The UI harness watches source directly. No npm publication is required for local testing.
 
 ## Runtime behavior classes
 

@@ -1,8 +1,8 @@
 {
   "name": "containerlab-app-web",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
-  "description": "Browser host for containerlab-app built on @srl-labs/clab-ui.",
+  "description": "Browser host for containerlab-app built on @containerlab/clab-ui.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

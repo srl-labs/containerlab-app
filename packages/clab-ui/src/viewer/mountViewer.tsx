@@ -1,3 +1,4 @@
+import "../types/assets";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 

@@ -1,3 +1,4 @@
+import "../../../types/assets";
 /**
  * FreeTextNode - Custom React Flow node for free text annotations
  * Supports markdown rendering via markdown-it

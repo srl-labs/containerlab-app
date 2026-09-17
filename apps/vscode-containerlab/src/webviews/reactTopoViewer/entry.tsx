@@ -1,9 +1,9 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 
-import { App, subscribeToWebviewMessages, log } from "@srl-labs/clab-ui";
-import { createClabUiRuntime, createWindowClabUiHost } from "@srl-labs/clab-ui/host";
-import "@srl-labs/clab-ui/styles/global.css";
+import { App, subscribeToWebviewMessages, log } from "@containerlab/clab-ui";
+import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
+import "@containerlab/clab-ui/styles/global.css";
 
 type TopoViewerWindow = Window & {
   __SCHEMA_DATA__?: unknown;

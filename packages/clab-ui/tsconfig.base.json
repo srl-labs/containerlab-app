@@ -16,8 +16,8 @@
       "@webview/*": ["./src/*"],
       "@webviews/*": ["./src/webviews/*"],
       "@shared/*": ["./src/core/*"],
-      "@srl-labs/clab-ui": ["./src/index.ts"],
-      "@srl-labs/clab-ui/*": ["./src/*"]
+      "@containerlab/clab-ui": ["./src/index.ts"],
+      "@containerlab/clab-ui/*": ["./src/*"]
     }
   }
 }

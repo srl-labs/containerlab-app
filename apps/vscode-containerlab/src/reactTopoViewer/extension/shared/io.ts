@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import type { FileSystemAdapter } from "@srl-labs/clab-ui/session";
+import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 function isErrnoException(value: unknown): value is NodeJS.ErrnoException {
   return value instanceof Error && "code" in value;

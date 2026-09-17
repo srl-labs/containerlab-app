@@ -1,6 +1,6 @@
-import { bootstrapWiresharkVncWebview } from "@srl-labs/clab-ui/wireshark-vnc";
-import { createClabUiRuntime, createWindowClabUiHost } from "@srl-labs/clab-ui/host";
-import { applyThemeVars } from "@srl-labs/clab-ui/theme";
+import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
+import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
+import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { parseStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";

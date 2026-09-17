@@ -3,7 +3,7 @@
   "tasks": [{
     "label": "Build Containerlab Extension",
     "type": "shell",
-    "command": "pnpm run build:clab-ui && pnpm --filter vscode-containerlab run build:dev",
+    "command": "pnpm ui && pnpm --filter vscode-containerlab run build:dev",
     "problemMatcher": []
   }]
 }

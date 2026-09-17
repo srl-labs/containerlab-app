@@ -1,21 +1,21 @@
 # 14. clab-ui Contract Spec
 
-This page is the contract-level reference for integrating `@srl-labs/clab-ui` into a host product.
+This page is the contract-level reference for integrating `@containerlab/clab-ui` into a host product.
 
 ## Public export surface
 
 | Export key | Purpose |
 |---|---|
-| `@srl-labs/clab-ui` | main `App`, message subscription helper, and store helpers |
-| `@srl-labs/clab-ui/host` | host contracts, runtime factories, runtime context hooks, controller helpers |
-| `@srl-labs/clab-ui/session` | `TopologyRef`, session client, message constants, schema helpers, runtime helpers |
-| `@srl-labs/clab-ui/theme` | `MuiThemeProvider`, theme variable helpers |
-| `@srl-labs/clab-ui/explorer` | explorer view and explorer snapshot helpers |
-| `@srl-labs/clab-ui/inspect` | inspect bootstrapper |
-| `@srl-labs/clab-ui/welcome` | welcome bootstrapper |
-| `@srl-labs/clab-ui/node-impairments` | node-impairments bootstrapper |
-| `@srl-labs/clab-ui/wireshark-vnc` | Wireshark/VNC bootstrapper |
-| `@srl-labs/clab-ui/styles/global.css` | shared stylesheet |
+| `@containerlab/clab-ui` | main `App`, message subscription helper, and store helpers |
+| `@containerlab/clab-ui/host` | host contracts, runtime factories, runtime context hooks, controller helpers |
+| `@containerlab/clab-ui/session` | `TopologyRef`, session client, message constants, schema helpers, runtime helpers |
+| `@containerlab/clab-ui/theme` | `MuiThemeProvider`, theme variable helpers |
+| `@containerlab/clab-ui/explorer` | explorer view and explorer snapshot helpers |
+| `@containerlab/clab-ui/inspect` | inspect bootstrapper |
+| `@containerlab/clab-ui/welcome` | welcome bootstrapper |
+| `@containerlab/clab-ui/node-impairments` | node-impairments bootstrapper |
+| `@containerlab/clab-ui/wireshark-vnc` | Wireshark/VNC bootstrapper |
+| `@containerlab/clab-ui/styles/global.css` | shared stylesheet |
 
 !!! warning "Compatibility rule"
     Consumers should import only public subpaths from the export map. Repo-internal paths are not compatibility promises.

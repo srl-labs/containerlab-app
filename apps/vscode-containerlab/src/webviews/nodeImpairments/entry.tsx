@@ -1,5 +1,5 @@
-import { createClabUiRuntime, createWindowClabUiHost } from "@srl-labs/clab-ui/host";
-import { bootstrapNodeImpairmentsWebview } from "@srl-labs/clab-ui/node-impairments";
+import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
+import { bootstrapNodeImpairmentsWebview } from "@containerlab/clab-ui/node-impairments";
 
 const runtime = createClabUiRuntime({ host: createWindowClabUiHost() });
 

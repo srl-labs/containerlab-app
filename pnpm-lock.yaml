@@ -51,6 +51,9 @@ catalogs:
     '@types/dockerode':
       specifier: 4.0.1
       version: 4.0.1
+    '@types/geojson':
+      specifier: 7946.0.16
+      version: 7946.0.16
     '@types/markdown-it':
       specifier: 14.2.0
       version: 14.2.0
@@ -75,9 +78,6 @@ catalogs:
     '@types/three':
       specifier: 0.184.0
       version: 0.184.0
-    '@types/vscode':
-      specifier: 1.134.0
-      version: 1.134.0
     '@types/ws':
       specifier: 8.18.1
       version: 8.18.1
@@ -349,7 +349,7 @@ importers:
 
   apps/vscode-containerlab:
     dependencies:
-      '@srl-labs/clab-ui':
+      '@containerlab/clab-ui':
         specifier: workspace:*
         version: link:../../packages/clab-ui
     devDependencies:
@@ -579,6 +579,9 @@ importers:
 
   packages/app-server:
     dependencies:
+      '@containerlab/clab-ui':
+        specifier: workspace:*
+        version: link:../clab-ui
       '@fastify/cookie':
         specifier: 'catalog:'
         version: 11.1.2
@@ -591,9 +594,6 @@ importers:
       '@fastify/websocket':
         specifier: 'catalog:'
         version: 11.3.0
-      '@srl-labs/clab-ui':
-        specifier: workspace:*
-        version: link:../clab-ui
       '@srl-labs/containerlab-app-contract':
         specifier: workspace:*
         version: link:../app-contract
@@ -640,6 +640,12 @@ importers:
       '@mui/x-charts':
         specifier: 'catalog:'
         version: 8.29.3(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@mui/material@7.3.11(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(@mui/system@7.3.11(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@types/d3-force':
+        specifier: 'catalog:'
+        version: 3.0.10
+      '@types/geojson':
+        specifier: 'catalog:'
+        version: 7946.0.16
       '@xyflow/react':
         specifier: 'catalog:'
         version: 12.10.2(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -683,9 +689,6 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.60.0
-      '@types/d3-force':
-        specifier: 'catalog:'
-        version: 3.0.10
       '@types/markdown-it':
         specifier: 'catalog:'
         version: 14.2.0
@@ -701,9 +704,6 @@ importers:
       '@types/react-dom':
         specifier: 'catalog:'
         version: 19.2.3(@types/react@19.2.14)
-      '@types/vscode':
-        specifier: 'catalog:'
-        version: 1.134.0
       autoprefixer:
         specifier: 'catalog:'
         version: 10.5.0(postcss@8.5.10)
@@ -740,6 +740,9 @@ importers:
 
   packages/standalone-runtime:
     dependencies:
+      '@containerlab/clab-ui':
+        specifier: workspace:*
+        version: link:../clab-ui
       '@emotion/react':
         specifier: 'catalog:'
         version: 11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1)
@@ -752,9 +755,6 @@ importers:
       '@mui/material':
         specifier: 'catalog:'
         version: 7.3.11(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react@19.2.8)(supports-color@8.1.1))(@types/react@19.2.14)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@srl-labs/clab-ui':
-        specifier: workspace:*
-        version: link:../clab-ui
       '@srl-labs/containerlab-app-contract':
         specifier: workspace:*
         version: link:../app-contract
@@ -2689,9 +2689,6 @@ packages:
 
   '@types/vscode@1.105.0':
     resolution: {integrity: sha512-Lotk3CTFlGZN8ray4VxJE7axIyLZZETQJVWi/lYoUVQuqfRxlQhVOfoejsD2V3dVXPSbS15ov5ZyowMAzgUqcw==}
-
-  '@types/vscode@1.134.0':
-    resolution: {integrity: sha512-NDEu0hg4sF7+vvFsADsktqUJ6f80LHSZvVK2Ovo1XiQ0/VHck1O3zst+ZZyVA/uvz6vo6LcuoqU2q48YMqOwWw==}
 
   '@types/webxr@0.5.24':
     resolution: {integrity: sha512-h8fgEd/DpoS9CBrjEQXR+dIDraopAEfu4wYVNY2tEPwk60stPWhvZMf4Foo5FakuQ7HFZoa8WceaWFervK2Ovg==}
@@ -7406,8 +7403,6 @@ snapshots:
     optional: true
 
   '@types/vscode@1.105.0': {}
-
-  '@types/vscode@1.134.0': {}
 
   '@types/webxr@0.5.24': {}
 

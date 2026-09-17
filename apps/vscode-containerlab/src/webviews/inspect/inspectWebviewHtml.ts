@@ -1,5 +1,5 @@
 import type { Uri, Webview } from "vscode";
-import type { InspectWebviewInitialData } from "@srl-labs/clab-ui/inspect";
+import type { InspectWebviewInitialData } from "@containerlab/clab-ui/inspect";
 
 import { createReactWebviewHtml } from "../shared/reactWebviewHtml";
 

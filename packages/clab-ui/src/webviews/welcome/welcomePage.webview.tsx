@@ -21,7 +21,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 import containerlabLogo from "../../assets/images/containerlab.svg";
 
@@ -70,7 +70,7 @@ const RESOURCE_LINKS: ReadonlyArray<{ label: string; href: string }> = [
 const COMMUNITY_LINKS: ReadonlyArray<{ label: string; href: string }> = [
   {
     label: "Extension Releases",
-    href: "https://github.com/srl-labs/vscode-containerlab/releases/"
+    href: "https://github.com/srl-labs/containerlab-app/releases/"
   },
   {
     label: "Containerlab Latest Release",

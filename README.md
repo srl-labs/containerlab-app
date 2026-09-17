@@ -1,7 +1,7 @@
 # containerlab-app
 
 This monorepo contains `containerlab-app` (web and desktop),
-`vscode-containerlab`, and the shared `@srl-labs/clab-ui` package.
+`vscode-containerlab`, and the shared `@containerlab/clab-ui` package.
 
 [![Doc](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/cmd/tools/api-server/start/)
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
@@ -143,120 +143,87 @@ The macOS and Windows packages are currently unsigned. macOS Gatekeeper and Wind
 
 ## Development
 
-Use the development workflow when contributing to this repository, building a custom web image, or packaging the desktop app.
+Use Node.js `24.18.0` and pnpm `11.17.0` (pinned in `package.json`). Local web development also needs `openssl` for HTTPS certificates.
 
-This project requires Node.js `>= 24`, npm, and `openssl` for local HTTPS certificate generation. Building Linux desktop packages locally also requires `rpmbuild` for the `.rpm` artifact.
-
-```bash
-npm install
-npm run dev:web
+```sh
+corepack enable
+corepack pnpm install --frozen-lockfile
+pnpm web:local
 ```
 
-The dev server starts the local web server and Vite frontend over HTTPS. Open `https://localhost:3001`, then log in against your running `clab-api-server`.
+Run these commands from the monorepo root:
 
-Useful contributor commands:
+| Product | Build/package | Local development |
+| --- | --- | --- |
+| Shared UI library | `pnpm ui` | `pnpm ui:local` — UI harness with source hot reload |
+| VS Code | `pnpm vsix` | `pnpm vsix:local` — same VSIX built from the working tree |
+| Web | `pnpm web` | `pnpm web:local` — API-backed Vite development server |
+| Desktop | `pnpm desktop` | `pnpm desktop:local` — build and launch Electron |
+| Browser sandbox | `pnpm pages` | `pnpm pages:local` — local sandbox without an API server |
 
-```bash
-npm run build:web
-npm run build:desktop
-npm run package:desktop
-npm run package:desktop:linux
-npm run package:desktop:mac
-npm run package:desktop:win
-npm run typecheck
-npm run test:unit
-npm run test:e2e:web
+**Every app uses the checked-out `packages/clab-ui` workspace, including uncommitted edits.** Build/package and app development commands rebuild its public `dist/` exports first. Nothing downloads a published UI package, and no sibling checkout is needed. `vsix:local` is an explicit alias for `vsix`.
+
+For rapid UI-only edits, use `pnpm ui:local`; its harness reads source directly and hot reloads changes. Running web/desktop/extension hosts consume built UI exports. After another UI edit, rerun their command to rebuild, or run `pnpm ui` in a second terminal and reload the host. The app commands do not watch UI source themselves.
+
+The web development frontend is at `https://localhost:5173`; the app server also serves it through `https://localhost:3001`. Log in against your running `clab-api-server`. The standalone UI harness uses `http://127.0.0.1:5184`.
+
+### Desktop packaging
+
+`pnpm desktop` packages for the current platform. Select a target explicitly when needed:
+
+```sh
+pnpm desktop --linux
+pnpm desktop --mac dmg --universal
+pnpm desktop --win nsis --x64
+pnpm desktop --dir
 ```
 
-Run the Electron host locally after building the web assets:
+Build installers on the appropriate OS. Outputs go to `apps/desktop/release/`. Linux produces AppImage, `.deb`, and `.rpm` and needs `rpmbuild`. macOS and Windows installers are unsigned. `--dir` produces an unpacked app for local inspection. The Linux launcher uses X11/Ozone.
 
-```bash
-npm run dev:desktop
-```
+### VS Code extension
 
-On Linux, the desktop launcher forces Electron onto the X11/Ozone backend so it starts reliably under Ubuntu Wayland sessions. `npm run package:desktop` builds the Linux desktop artifacts by default: AppImage, `.deb`, and `.rpm`. All desktop package outputs are written to `apps/desktop/release/`.
+`pnpm vsix` writes `apps/vscode-containerlab/vscode-containerlab-<version>.vsix`. Install it with **Extensions → Install from VSIX**. For debugging, open this repository in VS Code and use **Debug Containerlab Extension**; its pre-launch task builds the local UI and extension.
 
-macOS packaging is built with `npm run package:desktop:mac` and produces an unsigned universal `.dmg`. Windows packaging is built with `npm run package:desktop:win` and produces an unsigned NSIS `.exe` installer. Version tag builds (`v*.*.*`) publish the AppImage, `.deb`, `.rpm`, `.dmg`, and `.exe` files as GitHub release assets.
+For extension-only build watching after `pnpm ui`, use `pnpm --filter vscode-containerlab run build:watch`. Rebuild the UI after shared source edits.
 
-Before creating an app release tag, keep the root package version, private workspace package versions, internal workspace dependency versions, and `package-lock.json` aligned with the tag without the leading `v`. The publishable `@srl-labs/clab-ui` workspace is versioned independently. CI runs `npm run check:release-version`, so a tag such as `v0.0.2` requires app package version `0.0.2`.
+The extension identity remains `srl-labs.vscode-containerlab`. It was imported from `srl-labs/vscode-containerlab` at commit `991ab745f26b925c072e5907adc5ec27ba06ce7e` (version `0.26.3`); its original Git history remains there.
 
-### VS Code Extension
+### UI tarball and releases
 
-Run these commands from the repository root:
+`pnpm ui` builds the shared library used by the apps. `pnpm ui:pack` also builds the standalone iframe viewer and writes the complete npm package to `artifacts/clab-ui.tgz`. `pnpm test:package` validates a freshly built tarball in an isolated npm consumer.
 
-```bash
-npm run build:vscode
-npm run dev:vscode
-npm run package:vscode
-npm run test:unit --workspace vscode-containerlab
-npm run test:e2e:vscode
-```
+Publishing is separate from building. See [RELEASING.md](RELEASING.md) for independent product tags, npm Trusted Publishing, GitHub Latest, and extension store secrets.
 
-Open this repository in VS Code and use **Debug Containerlab Extension** to launch
-an Extension Development Host. `dev:vscode` watches extension sources; rebuild
-`clab-ui` after editing shared UI sources. VSIX files are written to
-`apps/vscode-containerlab/`. Linux E2E tests need a display or `xvfb-run -a`.
+### Local Docker build
 
-Extension releases use `vscode-v<version>` tags matching the version in
-`apps/vscode-containerlab/package.json`; app releases continue to use `v<version>`.
-The extension release workflow attaches the VSIX and publishes to Marketplace
-and Open VSX when `VSCE_PAT` and `OVSX_PAT` are configured in this repository.
-
-The extension was imported from the fresh clone of `https://github.com/srl-labs/vscode-containerlab.git`
-(`origin/main`, version `0.26.3`) at
-`991ab745f26b925c072e5907adc5ec27ba06ce7e`. Its source, tests, resources, license,
-and changelog are included; Git history remains in the original repository.
-
-### Local Docker Build
-
-The GHCR image is the default way to run the web app and is published for `linux/amd64` and `linux/arm64`. Build a local image only when testing local changes; the command below builds for your current Docker platform:
-
-```bash
+```sh
 docker build -t containerlab-web .
 ```
 
-Run the locally built image with the same environment shown in the web app install section, replacing the image name with `containerlab-web`.
-
-### Local `clab-ui` Mode
-
-`@srl-labs/clab-ui` lives in `packages/clab-ui`. Standard app commands build the
-workspace package before consuming it. For a Vite development loop that aliases
-the package directly to its TypeScript source, run:
-
-```bash
-npm run dev:pages:local
-```
-
-To run the API-backed development server against the local package boundary:
-
-```bash
-npm run dev:web:local
-```
-
-Use `npm run build:clab-ui`, `npm run typecheck:clab-ui`, and
-`npm run pack:clab-ui` to build, validate, or package the UI independently.
-
----
+This builds the checked-out workspace for your current Docker platform. Run it using the environment in the web app install section, with image name `containerlab-web`.
 
 ## Testing
 
-Run unit tests:
-
-```bash
-npm run test:unit
+```sh
+pnpm check         # dependency and release-version policies
+pnpm typecheck     # build UI, check policies, typecheck all workspaces
+pnpm lint
+pnpm test          # all unit suites and release-routing tests
+pnpm test:package  # strict public API and npm tarball validation
 ```
 
-Install the Playwright browser once per machine, then run the E2E suite:
+Install Playwright's browser once, then select a browser suite:
 
-```bash
-npx playwright install chromium
-npm run test:e2e:web
-npm run test:browser:clab-ui
+```sh
+pnpm exec playwright install chromium
+pnpm test:ui
+pnpm test:web
+pnpm test:vscode
 ```
 
-The web E2E suite runs against the app at `https://localhost:5173`. The clab-ui
-browser suite starts its UI harness and exercises the topology fixtures in
-`packages/clab-ui/test/fixtures`.
+UI and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
+
+Package-specific checks remain available through `pnpm --filter <package> run <script>`. Maintenance scripts can be invoked directly, e.g. `node scripts/run-stress-api-bff.mjs` for the API stress runner. Schema synchronization remains `pnpm sync:schema`.
 
 ---
 
@@ -274,15 +241,15 @@ packages/clab-ui              shared publishable topology UI package
 
 This repository is the `containerlab-app` monorepo and owns:
 
-- the standalone web app host and Docker image for the shared `@srl-labs/clab-ui` experience
+- the standalone web app host and Docker image for the shared `@containerlab/clab-ui` experience
 - the Electron desktop app host and desktop package artifacts
 - the VS Code extension and VSIX artifacts
-- the shared `@srl-labs/clab-ui` package
+- the shared `@containerlab/clab-ui` package
 - the shared app server used by web and desktop
 - standalone unit and Playwright E2E test suites
 - static resources used by the standalone app
 
-`@srl-labs/clab-ui` and `vscode-containerlab` are independently versioned. All
+UI, extension, web, and desktop are independently versioned. All
 three application hosts consume the local UI workspace through the root lockfile.
 
 ---

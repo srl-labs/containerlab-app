@@ -13,7 +13,7 @@
     "@fastify/cors": "catalog:",
     "@fastify/static": "catalog:",
     "@fastify/websocket": "catalog:",
-    "@srl-labs/clab-ui": "workspace:*",
+    "@containerlab/clab-ui": "workspace:*",
     "@srl-labs/containerlab-app-contract": "workspace:*",
     "fastify": "catalog:",
     "ws": "catalog:"

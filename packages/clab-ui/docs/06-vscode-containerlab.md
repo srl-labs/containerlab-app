@@ -42,19 +42,9 @@ That means:
 | Node impairments | `src/commands/nodeImpairments.ts`, `src/webviews/nodeImpairments/*` |
 | Capture and Wireshark VNC | `src/commands/capture.ts`, `src/webviews/wiresharkVnc/*` |
 
-## Local `clab-ui` mode
+## Local UI workspace
 
-The build config supports a strict sibling-repo override:
-
-- if `CLAB_UI_SOURCE=local` and `../clab-ui/dist/index.js` exists, imports such as `@srl-labs/clab-ui/*` are rewritten to the local `dist/` tree
-- otherwise the published package is used
-
-In day-to-day usage you normally call the scripts that already set this flag for you:
-
-```bash
-npm run build:local-ui
-npm run package:local-ui
-```
+The extension lives in `apps/vscode-containerlab` and resolves `@containerlab/clab-ui` through the monorepo workspace. Run `pnpm ui && pnpm --filter vscode-containerlab run build` or `pnpm vsix` at the root. Rebuild the shared UI after source edits. There is no sibling repository fallback.
 
 ## How this differs from the browser host
 

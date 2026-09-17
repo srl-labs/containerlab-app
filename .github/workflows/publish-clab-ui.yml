@@ -1,58 +1,76 @@
-name: Publish clab-ui
+name: Publish clab-ui to npm
 
 on:
-  push:
-    tags:
-      - "clab-ui-v*"
+  release:
+    types: [published]
   workflow_dispatch:
+
+concurrency:
+  group: publish-clab-ui
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  packages: write
+  id-token: write
 
 jobs:
   publish:
+    if: github.repository == 'srl-labs/containerlab-app' && (github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'clab-ui-v'))
     runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
           run_install: false
           standalone: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
-          registry-url: https://npm.pkg.github.com
-          scope: "@srl-labs"
+          registry-url: https://registry.npmjs.org
           cache: pnpm
 
-      - name: Verify tag matches clab-ui version
-        if: startsWith(github.ref, 'refs/tags/')
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate release target and version
+        id: version
+        run: node scripts/check-release-version.mjs ${{ github.event_name == 'release' && 'clab-ui' || '' }}
+
+      - name: Check version is unpublished
+        if: github.event_name == 'release'
+        run: node scripts/check-npm-version.mjs
+
+      - name: Lint and test UI
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#clab-ui-v}"
-          PACKAGE_VERSION="$(node -p "require('./packages/clab-ui/package.json').version")"
-          if [ "$TAG_VERSION" != "$PACKAGE_VERSION" ]; then
-            echo "Tag version ($TAG_VERSION) does not match clab-ui package version ($PACKAGE_VERSION)"
-            exit 1
-          fi
+          pnpm --filter @containerlab/clab-ui run lint
+          pnpm --filter @containerlab/clab-ui run test:unit
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Build and pack UI
+        run: pnpm ui:pack
 
-      - name: Typecheck clab-ui
-        run: pnpm run typecheck:clab-ui
+      - name: Validate the release tarball with npm consumers
+        run: node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz
 
-      - name: Test clab-ui
-        run: pnpm --filter @srl-labs/clab-ui run test:unit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clab-ui-npm-package
+          path: artifacts/clab-ui.tgz
+          if-no-files-found: error
 
-      - name: Preview package
-        run: pnpm run pack:clab-ui --dry-run
-
-      - name: Publish to GitHub Packages
-        run: pnpm --filter @srl-labs/clab-ui publish --no-git-checks
+      - name: Publish tested tarball
+        if: github.event_name == 'release'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_DIST_TAG: ${{ steps.version.outputs.channel }}
+        # npm uses GitHub OIDC and generates provenance automatically.
+        run: npm publish ./artifacts/clab-ui.tgz --access public --tag "$NPM_DIST_TAG"
+
+      - name: Manual run result
+        if: github.event_name == 'workflow_dispatch'
+        run: echo 'Validated the npm artifact. Publish a clab-ui-v<version> GitHub Release to publish it.' >> "$GITHUB_STEP_SUMMARY"

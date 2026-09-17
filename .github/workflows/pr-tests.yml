@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+      - name: Release routing tests
+        run: node --test scripts/release-targets.test.mjs
+
       - name: Unit tests
         run: pnpm -r --if-present run test:unit
 
@@ -112,7 +115,7 @@ jobs:
       - name: Run clab-ui browser harness
         env:
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: pnpm run test:browser:clab-ui --shard=${{ matrix.shard }}/4
+        run: pnpm test:ui --shard=${{ matrix.shard }}/4
 
       - name: Upload clab-ui Playwright blob report
         if: ${{ !cancelled() }}
@@ -186,7 +189,7 @@ jobs:
           node-version-file: package.json
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run package:vscode
+      - run: pnpm vsix
       - run: pnpm --filter vscode-containerlab run test:e2e:compile
       - run: xvfb-run -a node apps/vscode-containerlab/out/e2e/run.js
       - uses: actions/upload-artifact@v4

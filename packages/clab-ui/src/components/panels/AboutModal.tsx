@@ -354,7 +354,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose }) => {
           <RepoCard
             name="vscode-containerlab"
             description="VS Code Extension"
-            url="https://github.com/srl-labs/vscode-containerlab/"
+            url="https://github.com/srl-labs/containerlab-app/"
             icon={<GitHubIcon fontSize="small" />}
           />
           <RepoCard

@@ -113,7 +113,7 @@ describe("LocalLabTreeDataProvider", () => {
     expect(nodes).to.have.lengthOf(1);
     const folder = nodes![0];
     expect(folder.label).to.equal("a");
-    const children = await provider.getChildren(folder as any);
+    const children = await provider.getChildren(folder);
     expect(children).to.have.lengthOf(1);
     const node = children![0] as ClabLabTreeNode;
     expect(node.label).to.equal("lab1.clab.yml");
@@ -149,7 +149,7 @@ describe("LocalLabTreeDataProvider", () => {
     expect(firstFolder.label).to.equal("a");
     const secondFolder = nodes![1];
     expect(secondFolder.label).to.equal("b");
-    const children = await provider.getChildren(secondFolder as any);
+    const children = await provider.getChildren(secondFolder);
     const favChild = children![0] as ClabLabTreeNode;
     expect(favChild.contextValue).to.equal("containerlabLabUndeployedFavorite");
     expect(favChild.favorite).to.be.true;
@@ -187,12 +187,12 @@ describe("LocalLabTreeDataProvider", () => {
     const folderA = rootNodes![0];
     expect(folderA.label).to.equal("a");
 
-    const nestedNodes = await provider.getChildren(folderA as any);
+    const nestedNodes = await provider.getChildren(folderA);
     expect(nestedNodes).to.have.lengthOf(1);
     const nestedFolder = nestedNodes![0];
     expect(nestedFolder.label).to.equal("nested");
 
-    const labs = await provider.getChildren(nestedFolder as any);
+    const labs = await provider.getChildren(nestedFolder);
     expect(labs).to.have.lengthOf(1);
     expect(labs![0].label).to.equal("lab1.clab.yml");
   });

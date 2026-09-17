@@ -13,7 +13,7 @@ type ModuleWithResolve = typeof Module & { _resolveFilename: Function };
 const moduleWithResolve = Module as unknown as ModuleWithResolve;
 const originalResolve = moduleWithResolve._resolveFilename;
 const ROUTER_DEP_REQUESTS = new Set([
-  "@srl-labs/clab-ui/session",
+  "@containerlab/clab-ui/session",
   "../services/logger",
   "../services/LabLifecycleService",
   "../shared/io",

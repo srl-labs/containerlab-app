@@ -35,7 +35,7 @@ export default defineConfig(({ command }) => {
       alias: [
         {
           find: /^monaco-editor$/,
-          replacement: "@srl-labs/clab-ui/monaco/core"
+          replacement: "@containerlab/clab-ui/monaco/core"
         }
       ],
       dedupe: [
@@ -58,7 +58,7 @@ export default defineConfig(({ command }) => {
         "three",
         "zustand"
       ],
-      exclude: ["@srl-labs/clab-ui"]
+      exclude: ["@containerlab/clab-ui"]
     },
     css: {
       postcss: path.resolve(__dirname, "postcss.config.cjs")

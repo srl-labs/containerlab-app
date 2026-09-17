@@ -1,6 +1,6 @@
 import type { ClabLabTreeNode } from "../../../treeView/common";
 import { flattenContainers } from "../../../treeView/common";
-import type { HostRuntimeContainer, HostRuntimeInterface } from "@srl-labs/clab-ui/host";
+import type { HostRuntimeContainer, HostRuntimeInterface } from "@containerlab/clab-ui/host";
 
 function treeItemLabelText(label: unknown): string | undefined {
   if (typeof label === "string") {

@@ -1,13 +1,13 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 
-import { ContainerlabExplorerView } from "@srl-labs/clab-ui/explorer";
+import { ContainerlabExplorerView } from "@containerlab/clab-ui/explorer";
 import {
   ClabUiRuntimeProvider,
   createClabUiRuntime,
   createWindowClabUiHost
-} from "@srl-labs/clab-ui/host";
-import { MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+} from "@containerlab/clab-ui/host";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 
 const runtime = createClabUiRuntime({ host: createWindowClabUiHost() });
 

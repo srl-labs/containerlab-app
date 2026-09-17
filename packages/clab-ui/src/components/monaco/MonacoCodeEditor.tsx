@@ -1,3 +1,4 @@
+import "../../types/assets";
 import React, { useCallback, useEffect, useRef } from "react";
 import * as monaco from "monaco-editor";
 import "monaco-editor/min/vs/editor/editor.main.css";

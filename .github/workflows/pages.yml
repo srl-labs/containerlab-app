@@ -49,7 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Build static sandbox
-        run: pnpm run build:pages
+        run: pnpm pages
         env:
           VITE_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}/
 

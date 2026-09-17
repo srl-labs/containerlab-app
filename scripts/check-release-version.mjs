@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
+import { resolveRelease } from "./release-targets.mjs";
 import {
   projectRoot,
   readJson,
@@ -17,26 +18,24 @@ const byName = new Map(
   workspacePackages.map((pkg) => [pkg.packageJson.name, pkg]),
 );
 const failures = [];
-const tag = process.env.GITHUB_REF?.startsWith("refs/tags/")
+const tag = process.env.RELEASE_TAG || (process.env.GITHUB_REF?.startsWith("refs/tags/")
   ? process.env.GITHUB_REF.slice(10)
-  : undefined;
+  : undefined);
+let release;
 if (tag) {
-  const releases = [
-    ["vscode-v", byName.get("vscode-containerlab").packageJson.version],
-    ["clab-ui-v", byName.get("@srl-labs/clab-ui").packageJson.version],
-    ["v", root.version],
-  ];
-  const release = releases.find(([prefix]) => tag.startsWith(prefix));
-  if (release && tag.slice(release[0].length) !== release[1])
-    failures.push(`Tag ${tag} does not match version ${release[1]}`);
+  try {
+    release = resolveRelease(tag, readJson, process.argv[2], process.env.RELEASE_PRERELEASE || undefined);
+  } catch (error) {
+    failures.push(error.message);
+  }
+} else if (process.argv[2]) {
+  failures.push("A target-specific release check requires RELEASE_TAG or a Git tag ref.");
 }
 for (const pkg of [
   { relativePath: ".", packageJson: root },
   ...workspacePackages,
 ]) {
   const manifest = pkg.packageJson;
-  if (manifest.private && manifest.version !== root.version)
-    failures.push(`${manifest.name} must match app version ${root.version}`);
   const importer = lock.importers?.[pkg.relativePath];
   if (!importer) {
     failures.push(`Missing lockfile importer ${pkg.relativePath}`);
@@ -70,4 +69,7 @@ if (failures.length) {
   console.error(failures.join("\n"));
   process.exit(1);
 }
-console.log(`Release and workspace link checks passed for ${root.version}.`);
+if (release && process.env.GITHUB_OUTPUT) {
+  fs.appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(release).map(([key, value]) => `${key}=${value}\n`).join(""));
+}
+console.log(`Workspace checks passed${release ? ` for ${release.target} ${release.version}` : ""}.`);
