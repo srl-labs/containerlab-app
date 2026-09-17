@@ -88,7 +88,7 @@ body { -webkit-font-smoothing: antialiased; }
 .home-hero { text-align: center; padding: 36px 0 24px; position: relative; }
 .md-typeset .home-hero h1 { color: var(--site-heading); font-size: clamp(44px, 5.5vw, 72px); line-height: 1.06; font-weight: 600; letter-spacing: -.065em; margin: 0 0 20px; }
 .home-hero > p { max-width: 535px; margin: 0 auto; color: var(--site-muted); font-size: 15px; line-height: 1.8; letter-spacing: -.01em; }
-.hero-actions { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 28px; }
+.hero-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 14px; margin-top: 28px; }
 .hero-actions > p { margin: 0; display: contents; }
 .md-typeset .hero-button { display: inline-flex; justify-content: center; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 7px; font-size: 12px; font-weight: 600; line-height: 1.5; transition: background .15s, transform .15s; }
 .md-typeset .hero-button-primary { color: #132c3c; background: #a0d5ef; border: 1px solid #a0d5ef; box-shadow: inset 0 1px 0 #ffffff45, 0 4px 15px #00000010; }

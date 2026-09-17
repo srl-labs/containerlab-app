@@ -221,7 +221,7 @@ jobs:
     uses: ./.github/workflows/desktop-builds.yml
 
   sandbox:
-    name: Deploy browser sandbox
+    name: Deploy docs and sandbox preview
     needs:
       - test
       - clab-ui-browser-tests

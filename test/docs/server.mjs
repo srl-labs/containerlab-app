@@ -4,7 +4,7 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 
 const root = path.resolve(import.meta.dirname, "../../site");
-const prefix = "/containerlab-app/docs/";
+const prefix = process.env.DOCS_TEST_PREFIX ?? "/containerlab-app/docs/";
 const types = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".woff2": "font/woff2", ".png": "image/png", ".gif": "image/gif" };
 createServer(async (request, response) => {
   try {

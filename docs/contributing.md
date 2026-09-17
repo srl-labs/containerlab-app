@@ -36,6 +36,10 @@ The same file feeds the topology, YAML view, copy button, and download. There is
 
 ## Publishing
 
-The existing GitHub Pages workflow builds both the browser sandbox and documentation. The sandbox remains at `/containerlab-app/`; these docs live at `/containerlab-app/docs/`. Pull requests build and test the docs without deploying them.
+The GitHub Pages workflow builds both the browser sandbox and documentation. The sandbox remains at `/containerlab-app/`; these docs live at `/containerlab-app/docs/`.
+
+Pull requests from this repository deploy a combined Cloudflare Pages preview after the required PR checks pass. Documentation opens at `/`, and the sandbox from the same commit is available at `/sandbox/`. The existing PR preview comment links to both. Fork pull requests still build and test the docs without deploying them.
+
+Run `pnpm preview:build` and `pnpm preview:test` to build and check that combined site locally. The build produces `site/` and changes sandbox links in the generated docs to `/sandbox/`. CI sets `PREVIEW_SITE_URL` to the commit's Cloudflare branch URL; the local default is `http://127.0.0.1:8011/`.
 
 The initial app guides and screenshots came from the containerlab repository. See [documentation sources](SOURCES.md) for provenance. The core CLI and node-kind reference stays on [containerlab.dev](https://containerlab.dev/).

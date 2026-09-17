@@ -15,6 +15,7 @@ Design, deploy, and troubleshoot your containerlab networks in one visual worksp
 <div class="hero-actions" markdown>
 [Build your first lab :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
 [Find your app :lucide-arrow-right:](getting-started/index.md){ .hero-button .hero-button-secondary }
+[Try the sandbox :lucide-arrow-up-right:](https://srl-labs.github.io/containerlab-app/){ .hero-button .hero-button-secondary }
 </div>
 
 </div>
