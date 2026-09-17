@@ -35,8 +35,17 @@ import type {
   TopoViewerState
 } from "../stores/topoViewerStore";
 import { useCanvasStore } from "../stores/canvasStore";
-import { applyForceLayout, hasPresetPositions } from "../components/canvas/layout";
+import {
+  applyForceLayout,
+  hasPresetPositions,
+  normalizeLayoutableNodePositions
+} from "../components/canvas/layout";
 import { snapToGrid } from "../utils/grid";
+import {
+  collectDummyNodeIds,
+  markDummyEdgesHidden,
+  markDummyNodesHidden
+} from "../utils/graphQueryUtils";
 import {
   clampTelemetryInterfaceSizePercent,
   clampTelemetryNodeSizePx
@@ -49,7 +58,6 @@ export interface ApplySnapshotOptions {
   isInitialLoad?: boolean;
 }
 
-const LAYOUTABLE_NODE_TYPES = new Set(["topology-node", "network-node"]);
 const LEGACY_GROUP_PADDING = 40;
 const LEGACY_NODE_WIDTH = 100;
 const LEGACY_NODE_HEIGHT = 100;
@@ -324,33 +332,6 @@ function syncUndoRedo(snapshot: TopologySnapshot): void {
     canUndo: snapshot.canUndo,
     canRedo: snapshot.canRedo
   });
-}
-
-function isLayoutableNode(node: Node): boolean {
-  return LAYOUTABLE_NODE_TYPES.has(node.type ?? "");
-}
-
-function snapLayoutPositions(nodes: Node[]): {
-  nodes: Node[];
-  positions: Array<{ id: string; position: { x: number; y: number } }>;
-} {
-  const positions: Array<{ id: string; position: { x: number; y: number } }> = [];
-  const snappedNodes = nodes.map((node) => {
-    if (!isLayoutableNode(node)) {
-      return node;
-    }
-    const snappedPosition = snapToGrid(node.position);
-    positions.push({ id: node.id, position: snappedPosition });
-    if (snappedPosition.x === node.position.x && snappedPosition.y === node.position.y) {
-      return node;
-    }
-    return {
-      ...node,
-      position: snappedPosition
-    };
-  });
-
-  return { nodes: snappedNodes, positions };
 }
 
 async function persistLayoutPositions(
@@ -686,6 +667,7 @@ function buildInitialTopoViewerData(
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,
+    showDummyLinks: viewerSettings.showDummyLinks !== false,
     ...(resolvedLinkLabelMode !== null ? { linkLabelMode: resolvedLinkLabelMode } : {}),
     ...(resolvedLastNonTelemetryLinkLabelMode !== null
       ? { lastNonTelemetryLinkLabelMode: resolvedLastNonTelemetryLinkLabelMode }
@@ -716,11 +698,21 @@ export function applySnapshotToStores(
     annotations.trafficRateAnnotations
   );
 
+  // Stamp dummy visibility before layout runs, so hidden dummies do not reserve space in
+  // the auto-layout of a lab that has no stored positions yet.
+  const showDummyLinks = annotations.viewerSettings.showDummyLinks !== false;
+  const dummyNodeIds = collectDummyNodeIds(mergedNodes);
+  mergedNodes = markDummyNodesHidden(mergedNodes, dummyNodeIds, showDummyLinks);
+  const markedEdges = markDummyEdgesHidden(edges, dummyNodeIds, showDummyLinks);
+
   // Apply force layout when no preset positions exist and geo coordinates are not driving layout.
   // This handles the case when annotation.json doesn't exist or positions were cleared (e.g. undo).
   if (!hasPresetPositions(mergedNodes) && !hasGeoCoordinates(annotations)) {
-    const layoutNodes = applyForceLayout(mergedNodes, edges);
-    const { nodes: snappedNodes, positions } = snapLayoutPositions(layoutNodes);
+    const layoutNodes = applyForceLayout(mergedNodes, markedEdges);
+    const { nodes: snappedNodes, positions } = normalizeLayoutableNodePositions(
+      layoutNodes,
+      snapToGrid
+    );
     mergedNodes = snappedNodes;
     void persistLayoutPositions(positions, client);
   }
@@ -728,7 +720,7 @@ export function applySnapshotToStores(
   const cleanedEdgeAnnotations = pruneEdgeAnnotations(annotations.edgeAnnotations, edges);
 
   const graphStore = useGraphStore.getState();
-  graphStore.setGraph(mergedNodes, edges);
+  graphStore.setGraph(mergedNodes, markedEdges);
 
   const initialData = buildInitialTopoViewerData(
     snapshot,

@@ -264,6 +264,7 @@ export interface TopologyAnnotations {
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;
+    showDummyLinks?: boolean;
     autoCreateTrafficRateAnnotations?: boolean;
   };
   [key: string]: unknown;

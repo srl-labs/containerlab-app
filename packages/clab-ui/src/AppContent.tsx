@@ -42,7 +42,7 @@ import {
   useIconReconciliation,
   useUndoRedoControls
 } from "./hooks/app";
-import { useFilteredGraphElements, useSelectionData } from "./hooks/app/useAppContentHelpers";
+import { useDummyVisibility, useSelectionData } from "./hooks/app/useAppContentHelpers";
 import {
   DEV_EXPLORER_MIN_WIDTH,
   getDevExplorerMaxWidth,
@@ -436,15 +436,15 @@ const GraphCanvasMain: React.FC<GraphCanvasMainProps> = React.memo(
     const graphEdges = React.useMemo(() => edges.filter(isTopoEdge), [edges]);
     useIconReconciliation();
 
-    const { filteredNodes, filteredEdges } = useFilteredGraphElements(
+    const { canvasNodes, canvasEdges } = useDummyVisibility(
       graphNodes,
       graphEdges,
       showDummyLinks
     );
 
     const renderedEdges = React.useMemo(() => {
-      if (filteredEdges.length === 0) return filteredEdges;
-      return filteredEdges.map((edge) => {
+      if (canvasEdges.length === 0) return canvasEdges;
+      return canvasEdges.map((edge) => {
         const data = edge.data;
         if (data == null) return edge;
         const sourceEndpoint = data.sourceEndpoint;
@@ -479,13 +479,13 @@ const GraphCanvasMain: React.FC<GraphCanvasMainProps> = React.memo(
           }
         };
       });
-    }, [filteredEdges, edgeAnnotationLookup, endpointLabelOffset, endpointLabelOffsetEnabled]);
+    }, [canvasEdges, edgeAnnotationLookup, endpointLabelOffset, endpointLabelOffsetEnabled]);
 
     return (
       <ReactFlowCanvas
         ref={canvasRef}
         {...canvasProps}
-        nodes={filteredNodes}
+        nodes={canvasNodes}
         edges={renderedEdges}
       />
     );
@@ -1417,6 +1417,12 @@ export const AppContent: React.FC<AppContentProps> = ({
     [sessionClient, topoActions]
   );
 
+  const handleToggleDummyLinks = React.useCallback(() => {
+    const next = !useTopoViewerStore.getState().showDummyLinks;
+    topoActions.setShowDummyLinks(next);
+    void saveViewerSettings(sessionClient, { showDummyLinks: next });
+  }, [sessionClient, topoActions]);
+
   let aboutModal: React.ReactNode = null;
   if (panelVisibility.showAboutPanel) {
     if (renderAboutModal) {
@@ -1469,6 +1475,8 @@ export const AppContent: React.FC<AppContentProps> = ({
             onShowBulkLink={panelVisibility.handleShowBulkLink}
             linkLabelMode={state.linkLabelMode}
             onLinkLabelModeChange={handleLinkLabelModeChange}
+            showDummyLinks={state.showDummyLinks}
+            onToggleDummyLinks={handleToggleDummyLinks}
             shortcutDisplayEnabled={shortcutDisplay.isEnabled}
             onToggleShortcutDisplay={shortcutDisplay.toggle}
             canUndo={undoRedo.canUndo}

@@ -50,8 +50,18 @@ const LAYOUTABLE_NODE_TYPES = ["topology-node", "network-node"];
 /**
  * Check if a node should be included in layout
  */
-export function isLayoutableNode(node: Node): boolean {
+function isLayoutableNode(node: Node): boolean {
   return LAYOUTABLE_NODE_TYPES.includes(node.type ?? "");
+}
+
+/**
+ * Check if a node should feed into a layout algorithm.
+ *
+ * Hidden nodes (e.g. dummy endpoints while they are toggled off) keep their stored
+ * positions but must not reserve space in the generated layout.
+ */
+export function isLayoutParticipant(node: Node): boolean {
+  return isLayoutableNode(node) && node.hidden !== true;
 }
 
 /**
@@ -82,7 +92,7 @@ export function normalizeLayoutableNodePositions(
   const positions: LayoutPositionEntry[] = [];
   const normalizedNodes = nodes.map((node) => {
     if (!isLayoutableNode(node)) return node;
-    const normalizedPosition = normalizePosition(node.position);
+    const normalizedPosition = node.hidden === true ? node.position : normalizePosition(node.position);
     const position = { x: normalizedPosition.x, y: normalizedPosition.y };
     positions.push({ id: node.id, position });
     if (position.x === node.position.x && position.y === node.position.y) return node;
@@ -96,7 +106,7 @@ export function normalizeLayoutableNodePositions(
  * Check if layoutable nodes have preset positions (non-zero coordinates)
  */
 export function hasPresetPositions(nodes: Node[]): boolean {
-  const layoutNodes = nodes.filter(isLayoutableNode);
+  const layoutNodes = nodes.filter(isLayoutParticipant);
   if (layoutNodes.length === 0) return false;
   return layoutNodes.some((node) => node.position.x !== 0 || node.position.y !== 0);
 }

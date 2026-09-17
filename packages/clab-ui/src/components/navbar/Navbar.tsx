@@ -104,6 +104,8 @@ export interface NavbarProps {
   onLogoClick?: () => void;
   linkLabelMode: LinkLabelMode;
   onLinkLabelModeChange: (mode: LinkLabelMode) => void;
+  showDummyLinks?: boolean;
+  onToggleDummyLinks?: () => void;
   renderDeployMenuItems?: (context: {
     isViewerMode: boolean;
     closeMenu: () => void;
@@ -136,6 +138,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isPartyMode = false,
   linkLabelMode,
   onLinkLabelModeChange,
+  showDummyLinks = true,
+  onToggleDummyLinks,
   renderDeployMenuItems
 }) => {
   const isTopologyActive = hasActiveTopology;
@@ -686,13 +690,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </Tooltip>
 
-        {/* Link Labels Dropdown */}
-        <Tooltip title="Link Labels">
+        {/* Links Dropdown */}
+        <Tooltip title="Links">
           <span>
             <IconButton
               size="small"
               onClick={handleLinkLabelClick}
               disabled={!isTopologyActive}
+              aria-label="Links"
+              aria-haspopup="menu"
+              aria-controls={linkLabelMenuOpen ? "navbar-links-menu" : undefined}
+              aria-expanded={linkLabelMenuOpen}
               data-testid="navbar-link-labels"
             >
               <LabelIcon fontSize="small" />
@@ -700,6 +708,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </Tooltip>
         <Menu
+          id="navbar-links-menu"
           open={linkLabelMenuOpen}
           onClose={handleLinkLabelClose}
           anchorReference="anchorPosition"
@@ -713,7 +722,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <ListItemIcon>
               {linkLabelMode === "show-all" && <CheckIcon fontSize="small" />}
             </ListItemIcon>
-            <ListItemText>Show All</ListItemText>
+            <ListItemText>Show All Labels</ListItemText>
           </MenuItem>
           <MenuItem
             onClick={() => handleLinkLabelSelect("on-select")}
@@ -722,7 +731,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <ListItemIcon>
               {linkLabelMode === "on-select" && <CheckIcon fontSize="small" />}
             </ListItemIcon>
-            <ListItemText>On Select</ListItemText>
+            <ListItemText>Labels on Select</ListItemText>
           </MenuItem>
           <MenuItem
             onClick={() => handleLinkLabelSelect("hide")}
@@ -731,7 +740,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             <ListItemIcon>
               {linkLabelMode === "hide" && <CheckIcon fontSize="small" />}
             </ListItemIcon>
-            <ListItemText>Hide</ListItemText>
+            <ListItemText>Hide Labels</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem
+            role="menuitemcheckbox"
+            aria-checked={!showDummyLinks}
+            onClick={() => {
+              onToggleDummyLinks?.();
+              handleLinkLabelClose();
+            }}
+            disabled={!onToggleDummyLinks}
+            data-testid="navbar-hide-dummy-links"
+          >
+            <ListItemIcon>{!showDummyLinks && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemText>Hide Dummy Links</ListItemText>
           </MenuItem>
         </Menu>
 

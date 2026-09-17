@@ -231,3 +231,128 @@ for (const refreshFirst of [false, true]) {
     assert.equal(await fs.readFile(yamlFilePath), CHANGED_YAML);
   });
 }
+
+test("setViewerSettings merges showDummyLinks without clobbering sibling settings", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlPath = "/labs/demo.clab.yml";
+  await fs.writeFile(yamlPath, BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: yamlPath,
+    mode: "edit",
+    deploymentState: "undeployed",
+    dirty: false
+  });
+
+  const initial = await host.getSnapshot();
+  // Absent from the sidecar, dummy links stay visible.
+  assert.equal(initial.annotations.viewerSettings?.showDummyLinks, undefined);
+
+  const seeded = await apply(host, initial.revision, {
+    command: "setViewerSettings",
+    payload: { linkLabelMode: "on-select", showRateLabels: true }
+  });
+
+  const hidden = await apply(host, seeded.revision, {
+    command: "setViewerSettings",
+    payload: { showDummyLinks: false }
+  });
+
+  const viewerSettings = hidden.snapshot.annotations.viewerSettings;
+  assert.equal(viewerSettings?.showDummyLinks, false);
+  // The per-field merge must leave the other view options alone.
+  assert.equal(viewerSettings.linkLabelMode, "on-select");
+  assert.equal(viewerSettings.showRateLabels, true);
+
+  // And it must survive a round-trip through the annotations file on disk.
+  const annotationsOnDisk: unknown = JSON.parse(await fs.readFile(`${yamlPath}.annotations.json`));
+  const persisted = (annotationsOnDisk as { viewerSettings?: Record<string, unknown> })
+    .viewerSettings;
+  assert.equal(persisted?.showDummyLinks, false);
+  assert.equal(persisted.linkLabelMode, "on-select");
+
+  const shown = await apply(host, hidden.revision, {
+    command: "setViewerSettings",
+    payload: { showDummyLinks: true }
+  });
+  assert.equal(shown.snapshot.annotations.viewerSettings?.showDummyLinks, true);
+});
+
+test("dummy endpoints preserve their group while real dummy-prefixed nodes keep their interfaces", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/dummies.clab.yml";
+  await fs.writeFile(
+    yamlFilePath,
+    `name: dummies
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    dummy-router:
+      kind: linux
+  links:
+    - endpoints: ["srl1:e1-1", "dummy1"]
+    - type: dummy
+      endpoint:
+        node: srl1
+        interface: e1-2
+    - endpoints: ["srl1:e1-3", "dummy-router:eth1"]
+`
+  );
+  await fs.writeFile(
+    `${yamlFilePath}.annotations.json`,
+    JSON.stringify({
+      nodeAnnotations: [
+        { id: "srl1", position: { x: 10, y: 20 } },
+        { id: "dummy0", groupId: "group-1" }
+      ],
+      networkNodeAnnotations: [{ id: "dummy0", type: "dummy", position: { x: 21.5, y: -21.5 } }],
+      groupStyleAnnotations: [
+        {
+          id: "group-1",
+          name: "Dummies",
+          level: "1",
+          position: { x: 0, y: 0 },
+          width: 300,
+          height: 300
+        }
+      ],
+      viewerSettings: { showDummyLinks: false }
+    })
+  );
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath,
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+  const snapshot = await host.getSnapshot();
+
+  assert.equal(snapshot.nodes.length, 4);
+  assert.equal(snapshot.nodes.find((node) => node.id === "dummy-router")?.type, "topology-node");
+  assert.equal(
+    snapshot.edges.find((edge) => edge.target === "dummy-router")?.data?.targetEndpoint,
+    "eth1"
+  );
+  assert.deepEqual(
+    snapshot.annotations.nodeAnnotations?.find((node) => node.id === "dummy0"),
+    { id: "dummy0", groupId: "group-1" }
+  );
+
+  const saved = await apply(host, snapshot.revision, {
+    command: "savePositions",
+    payload: [
+      { id: "dummy0", position: { x: 21.5, y: -21.5 } },
+      { id: "dummy-router", position: { x: 300, y: 400 } }
+    ]
+  });
+  assert.deepEqual(
+    saved.snapshot.annotations.nodeAnnotations?.find((node) => node.id === "dummy0"),
+    { id: "dummy0", groupId: "group-1" }
+  );
+  assert.deepEqual(
+    saved.snapshot.annotations.nodeAnnotations.find((node) => node.id === "dummy-router")
+      ?.position,
+    { x: 300, y: 400 }
+  );
+});

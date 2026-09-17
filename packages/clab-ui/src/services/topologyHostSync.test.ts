@@ -179,3 +179,56 @@ test("applySnapshotToStores does not reuse the clean YAML baseline across topolo
   assert.equal(state.isDirty, undefined);
   assert.equal(state.cleanYamlContent, undefined);
 });
+
+test("applySnapshotToStores restores showDummyLinks and hides dummy elements", () => {
+  useGraphStore.getState().setGraph([], []);
+  useTopoViewerStore.setState({ showDummyLinks: true });
+
+  const nodes: TopoNode[] = [
+    {
+      id: "spine1",
+      type: "topology-node",
+      position: { x: 40, y: 40 },
+      data: { label: "spine1", role: "router" }
+    },
+    {
+      id: "dummy0",
+      type: "network-node",
+      position: { x: 80, y: 80 },
+      data: { label: "dummy0", nodeType: "dummy" }
+    }
+  ];
+
+  applySnapshotToStores(
+    {
+      ...createSnapshot(nodes),
+      edges: [{ id: "spine1-dummy0", source: "spine1", target: "dummy0" }],
+      annotations: { viewerSettings: { showDummyLinks: false } }
+    },
+    {},
+    createSessionClient()
+  );
+
+  assert.equal(useTopoViewerStore.getState().showDummyLinks, false);
+
+  const graph = useGraphStore.getState();
+  // The dummy node and its link are flagged, not dropped.
+  assert.equal(graph.nodes.length, 2);
+  assert.equal(graph.nodes.find((node) => node.id === "spine1")?.hidden, undefined);
+  assert.equal(graph.nodes.find((node) => node.id === "dummy0")?.hidden, true);
+  assert.equal(graph.edges.length, 1);
+  assert.equal(graph.edges[0]?.hidden, true);
+});
+
+test("applySnapshotToStores defaults showDummyLinks to true when unset", () => {
+  useGraphStore.getState().setGraph([], []);
+  useTopoViewerStore.setState({ showDummyLinks: false });
+
+  applySnapshotToStores(
+    { ...createSnapshot([]), annotations: { viewerSettings: {} } },
+    {},
+    createSessionClient()
+  );
+
+  assert.equal(useTopoViewerStore.getState().showDummyLinks, true);
+});

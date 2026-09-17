@@ -162,7 +162,10 @@ function createNetworkNodeAnnotationWithPosition(
  * Older saves could store ids like "macvlan:ens33" as regular node annotations,
  * but the parser resolves those nodes only from networkNodeAnnotations.
  */
-export function migrateGeneratedNetworkNodeAnnotations(annotations: TopologyAnnotations): boolean {
+export function migrateGeneratedNetworkNodeAnnotations(
+  annotations: TopologyAnnotations,
+  topologyNodeIds?: ReadonlySet<string>
+): boolean {
   const nodeAnnotations = annotations.nodeAnnotations ?? [];
   if (nodeAnnotations.length === 0) return false;
 
@@ -172,21 +175,30 @@ export function migrateGeneratedNetworkNodeAnnotations(annotations: TopologyAnno
 
   for (const annotation of nodeAnnotations) {
     const generatedNetworkType = inferGeneratedNetworkAnnotationType(annotation.id);
-    if (!generatedNetworkType) {
+    if (!generatedNetworkType || topologyNodeIds?.has(annotation.id) === true) {
       regularNodeAnnotations.push(annotation);
       continue;
     }
 
-    modified = true;
     const existingNetworkAnnotation = annotations.networkNodeAnnotations.find(
       (entry) => entry.id === annotation.id
     );
-    if (existingNetworkAnnotation) {
-      continue;
+    if (!existingNetworkAnnotation) {
+      annotations.networkNodeAnnotations.push(
+        createNetworkNodeAnnotationWithPosition(annotation.id, generatedNetworkType, annotation)
+      );
+      modified = true;
     }
-    annotations.networkNodeAnnotations.push(
-      createNetworkNodeAnnotationWithPosition(annotation.id, generatedNetworkType, annotation)
-    );
+
+    // Positions belong to networkNodeAnnotations; membership and other visual
+    // settings still belong to nodeAnnotations and must survive reloads.
+    const { position, geoCoordinates, label, ...metadata } = annotation;
+    if (Object.keys(metadata).length > 1) {
+      regularNodeAnnotations.push(metadata);
+      modified ||= position !== undefined || geoCoordinates !== undefined || label !== undefined;
+    } else {
+      modified = true;
+    }
   }
 
   if (modified) {
@@ -686,7 +698,11 @@ export class TopologyIO {
       await this.annotationsIO.modifyAnnotations(this.yamlFilePath, (annotations) => {
         annotations.nodeAnnotations ??= [];
         annotations.networkNodeAnnotations ??= [];
-        migrateGeneratedNetworkNodeAnnotations(annotations);
+        const yamlNodes = this.doc?.getIn(["topology", "nodes"]);
+        const topologyNodeIds = new Set(
+          YAML.isMap(yamlNodes) ? yamlNodes.items.map(({ key }) => String(key)) : []
+        );
+        migrateGeneratedNetworkNodeAnnotations(annotations, topologyNodeIds);
 
         // Index annotations by id (first occurrence wins, matching .find semantics)
         const networkNodeById = new Map<string, NetworkNodeAnnotation>();
@@ -706,7 +722,9 @@ export class TopologyIO {
             continue;
           }
 
-          const generatedNetworkType = inferGeneratedNetworkAnnotationType(id);
+          const generatedNetworkType = topologyNodeIds.has(id)
+            ? undefined
+            : inferGeneratedNetworkAnnotationType(id);
           if (generatedNetworkType) {
             const staleNodeAnnotation = nodeById.get(id);
             const networkAnnotation = createNetworkNodeAnnotationWithPosition(

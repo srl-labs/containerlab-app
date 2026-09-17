@@ -646,8 +646,10 @@ function buildEdgeElement(params: {
     specialNodes
   } = params;
 
-  const sourceEndpoint = shouldOmitEndpoint(sourceNode) ? "" : sourceIface;
-  const targetEndpoint = shouldOmitEndpoint(targetNode) ? "" : targetIface;
+  const sourceEndpoint =
+    specialNodes.has(actualSourceNode) && shouldOmitEndpoint(sourceNode) ? "" : sourceIface;
+  const targetEndpoint =
+    specialNodes.has(actualTargetNode) && shouldOmitEndpoint(targetNode) ? "" : targetIface;
   const classes = buildEdgeClasses(edgeClass, specialNodes, actualSourceNode, actualTargetNode);
   const extValidationErrors = validateExtendedLink(linkObj);
   const extraData = buildEdgeExtraData({

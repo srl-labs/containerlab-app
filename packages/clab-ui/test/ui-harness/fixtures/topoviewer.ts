@@ -330,6 +330,7 @@ interface TopologyAnnotations {
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;
+    showDummyLinks?: boolean;
     autoCreateTrafficRateAnnotations?: boolean;
   };
   aliasEndpointAnnotations?: Array<{ id: string }>;

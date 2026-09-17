@@ -112,6 +112,7 @@ export interface TopoViewerActions {
   // Rendering settings
   setLinkLabelMode: (mode: LinkLabelMode) => void;
   toggleDummyLinks: () => void;
+  setShowDummyLinks: (enabled: boolean) => void;
   toggleEndpointLabelOffset: () => void;
   setEndpointLabelOffset: (value: number) => void;
   setTelemetryNodeSizePx: (value: number) => void;
@@ -404,6 +405,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set((state) => ({ showDummyLinks: !state.showDummyLinks }));
   },
 
+  setShowDummyLinks: (showDummyLinks) => {
+    set({ showDummyLinks });
+  },
+
   toggleEndpointLabelOffset: () => {
     set((state) => ({ endpointLabelOffsetEnabled: !state.endpointLabelOffsetEnabled }));
   },
@@ -674,6 +679,7 @@ export const useTopoViewerActions = () =>
       toggleLock: state.toggleLock,
       setLinkLabelMode: state.setLinkLabelMode,
       toggleDummyLinks: state.toggleDummyLinks,
+      setShowDummyLinks: state.setShowDummyLinks,
       toggleEndpointLabelOffset: state.toggleEndpointLabelOffset,
       setEndpointLabelOffset: state.setEndpointLabelOffset,
       setTelemetryNodeSizePx: state.setTelemetryNodeSizePx,

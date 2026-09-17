@@ -12,7 +12,7 @@ import {
   forceCollide,
   forceRadial
 } from "d3-force";
-import { isLayoutableNode, applyPositionMap } from "./types";
+import { isLayoutParticipant, applyPositionMap } from "./types";
 import type { SimNode, SimLink, LayoutOptions } from "./types";
 import { orderRing } from "./graphAnalysis";
 
@@ -122,7 +122,7 @@ export function applyForceLayout(
   if (nodes.length === 0) return nodes;
 
   // Filter out annotation nodes (groups, free text, free shapes)
-  const layoutNodes = nodes.filter(isLayoutableNode);
+  const layoutNodes = nodes.filter(isLayoutParticipant);
   if (layoutNodes.length === 0) return nodes;
 
   // Create simulation nodes with deterministic initial positions
@@ -137,7 +137,7 @@ export function applyForceLayout(
   // Create simulation links
   const nodeIds = new Set(simNodes.map((n) => n.id));
   const simLinks: SimLink[] = edges
-    .filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target))
+    .filter((edge) => edge.hidden !== true && nodeIds.has(edge.source) && nodeIds.has(edge.target))
     .map((edge) => ({
       source: edge.source,
       target: edge.target

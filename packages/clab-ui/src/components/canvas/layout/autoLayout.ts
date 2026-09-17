@@ -14,7 +14,7 @@
  */
 import type { Node, Edge } from "@xyflow/react";
 import ELK from "elkjs/lib/elk.bundled.js";
-import { isLayoutableNode, applyPositionMap } from "./types";
+import { isLayoutParticipant, applyPositionMap } from "./types";
 import type { LayoutOptions } from "./types";
 import {
   classifyComponent,
@@ -33,7 +33,7 @@ export async function applyAutoLayout(
 ): Promise<{ nodes: Node[]; edges: Edge[] }> {
   const { padding = 80, nodeSpacing = 100 } = options;
 
-  const layoutNodes = nodes.filter(isLayoutableNode);
+  const layoutNodes = nodes.filter(isLayoutParticipant);
   if (layoutNodes.length === 0) return { nodes, edges };
 
   const nodeIds = new Set(layoutNodes.map((n) => n.id));
@@ -45,7 +45,7 @@ export async function applyAutoLayout(
     height: node.measured?.height ?? 60
   }));
 
-  const { adj, topoEdges } = buildAdjacency(nodeIds, edges);
+  const { adj, topoEdges } = buildAdjacency(nodeIds, edges.filter((edge) => edge.hidden !== true));
 
   const degree = new Map<string, number>();
   for (const [id, neighbors] of adj) degree.set(id, neighbors.length);
@@ -247,13 +247,14 @@ export async function applyAutoLayout(
 
   // Stamp node.data.layer for hierarchical nodes (mesh nodes get layer -1 as sentinel)
   const laidNodes = applyPositionMap(nodes, positions).map((node) => {
-    if (!isLayoutableNode(node)) return node;
+    if (!isLayoutParticipant(node)) return node;
     const l = meshNodeIds.has(node.id) ? -1 : (layer.get(node.id) ?? 0);
     return { ...node, data: { ...node.data, layer: l } };
   });
 
   // Stamp edge.data.topologyType based on whether both endpoints are in mesh components
   const laidEdges = edges.map((edge) => {
+    if (edge.hidden === true || !nodeIds.has(edge.source) || !nodeIds.has(edge.target)) return edge;
     const isMeshEdge = meshNodeIds.has(edge.source) || meshNodeIds.has(edge.target);
     return { ...edge, data: { ...edge.data, topologyType: isMeshEdge ? "mesh" : "hierarchical" } };
   });

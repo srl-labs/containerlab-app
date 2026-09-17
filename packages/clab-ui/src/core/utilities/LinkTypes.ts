@@ -42,7 +42,6 @@ export function splitEndpointLike(endpoint: string | { node: string; interface?:
   if (typeof endpoint === "string") {
     if (
       endpoint.startsWith(PREFIX_MACVLAN) ||
-      endpoint.startsWith(PREFIX_DUMMY) ||
       endpoint.startsWith(PREFIX_VXLAN) ||
       endpoint.startsWith(PREFIX_VXLAN_STITCH)
     ) {

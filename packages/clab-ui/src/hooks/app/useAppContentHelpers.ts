@@ -11,6 +11,11 @@ import {
   type EdgeAnnotationLookup
 } from "../../annotations/edgeAnnotations";
 import { convertToLinkEditorData } from "../../utils/linkEditorConversions";
+import {
+  collectDummyNodeIds,
+  markDummyEdgesHidden,
+  markDummyNodesHidden
+} from "../../utils/graphQueryUtils";
 import { parseEndpointLabelOffset } from "../../annotations/endpointLabelOffset";
 
 interface SelectionStateSlice {
@@ -63,25 +68,30 @@ export function useCustomNodeErrorToast(
   }, [customNodeError, addToast, clearCustomNodeError]);
 }
 
-export function useFilteredGraphElements(
+/**
+ * Marks dummy endpoint nodes and the links attached to them as hidden.
+ *
+ * Re-applied on every render because the graph store is replaced wholesale on each
+ * snapshot; see `markDummyNodesHidden` for why elements are flagged rather than removed.
+ */
+export function useDummyVisibility(
   nodes: TopoNode[],
   edges: TopoEdge[],
   showDummyLinks: boolean
-): { filteredNodes: TopoNode[]; filteredEdges: TopoEdge[] } {
-  const filteredNodes = React.useMemo(() => {
-    if (showDummyLinks) return nodes;
-    return nodes.filter((node) => !node.id.startsWith("dummy"));
-  }, [nodes, showDummyLinks]);
+): { canvasNodes: TopoNode[]; canvasEdges: TopoEdge[] } {
+  const dummyNodeIds = React.useMemo(() => collectDummyNodeIds(nodes), [nodes]);
 
-  const filteredEdges = React.useMemo(() => {
-    if (showDummyLinks) return edges;
-    const dummyNodeIds = new Set(
-      nodes.filter((node) => node.id.startsWith("dummy")).map((node) => node.id)
-    );
-    return edges.filter((edge) => !dummyNodeIds.has(edge.source) && !dummyNodeIds.has(edge.target));
-  }, [nodes, edges, showDummyLinks]);
+  const canvasNodes = React.useMemo(
+    () => markDummyNodesHidden(nodes, dummyNodeIds, showDummyLinks),
+    [nodes, dummyNodeIds, showDummyLinks]
+  );
 
-  return { filteredNodes, filteredEdges };
+  const canvasEdges = React.useMemo(
+    () => markDummyEdgesHidden(edges, dummyNodeIds, showDummyLinks),
+    [edges, dummyNodeIds, showDummyLinks]
+  );
+
+  return { canvasNodes, canvasEdges };
 }
 
 export function useSelectionData(
