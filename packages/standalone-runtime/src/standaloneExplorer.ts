@@ -895,7 +895,11 @@ export function createStandaloneExplorerBridge(
     const localItemsByEndpoint = new Map<string, ExplorerTreeItem[]>();
     for (const [endpointId, endpointFiles] of filesByEndpoint.entries()) {
       const items = endpointFiles
-        .filter((file) => !isTopologyRunning(file.topologyRef, runningLabs))
+        .filter(
+          (file) =>
+            !(file.filename || safeFilename(file.path)).startsWith(".") &&
+            !isTopologyRunning(file.topologyRef, runningLabs),
+        )
         .map((file) => {
           const labName = topologyEntryLabName(file);
           const item: ExplorerTreeItem = {

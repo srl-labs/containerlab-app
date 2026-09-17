@@ -99,6 +99,56 @@ describe("LocalLabTreeDataProvider", () => {
     expect(nodes).to.be.undefined;
   });
 
+  it("hides dot-prefixed lab files while keeping visible labs in dot-prefixed folders", async () => {
+    sinon.stub(vscodeStub.workspace, "findFiles").resolves([
+      vscodeStub.Uri.file("/workspace/.state.clab.yaml"),
+      vscodeStub.Uri.file("/workspace/.hidden.clab.yml"),
+      vscodeStub.Uri.file("/workspace/nested/.state.clab.yaml"),
+      vscodeStub.Uri.file("/workspace/visible.clab.yaml"),
+      vscodeStub.Uri.file("/workspace/visible.clab.yml"),
+      vscodeStub.Uri.file("/workspace/.clab/visible.clab.yml")
+    ]);
+
+    const provider = new LocalLabTreeDataProvider();
+    const nodes = await provider.getChildren(undefined);
+
+    expect(nodes!.map((node) => node.label)).to.deep.equal([
+      "visible.clab.yaml",
+      "visible.clab.yml",
+      ".clab"
+    ]);
+    const children = await provider.getChildren(nodes![2]);
+    expect(children!.map((node) => node.label)).to.deep.equal(["visible.clab.yml"]);
+  });
+
+  it("hides dot-prefixed lab files added by the file watcher", async () => {
+    const onDidCreate = sinon.stub();
+    sinon.stub(vscodeStub.workspace, "createFileSystemWatcher").returns({
+      ...fileWatcherStub,
+      onDidCreate
+    });
+
+    const provider = new LocalLabTreeDataProvider();
+    expect(await provider.getChildren(undefined)).to.be.undefined;
+
+    const createFile = onDidCreate.firstCall.args[0];
+    createFile(vscodeStub.Uri.file("/workspace/.state.clab.yaml"));
+    createFile(vscodeStub.Uri.file("/workspace/nested/.hidden.clab.yml"));
+    expect(await provider.getChildren(undefined)).to.be.undefined;
+
+    createFile(vscodeStub.Uri.file("/workspace/new.clab.yml"));
+    const nodes = await provider.getChildren(undefined);
+    expect(nodes!.map((node) => node.label)).to.deep.equal(["new.clab.yml"]);
+  });
+
+  it("hides dot-prefixed favorite lab files outside the workspace", async () => {
+    globals.favoriteLabs.add("/outside/.state.clab.yaml");
+    globals.favoriteLabs.add("/outside/.hidden.clab.yml");
+
+    const provider = new LocalLabTreeDataProvider();
+    expect(await provider.getChildren(undefined)).to.be.undefined;
+  });
+
   // Labs that are currently running should be filtered out and the remaining
   // entries returned in alphabetical order.
   it("filters running labs and sorts results", async () => {

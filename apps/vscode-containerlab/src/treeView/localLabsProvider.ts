@@ -192,7 +192,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     isFavorite: boolean
   ): void {
     const normPath = utils.normalizeLabPath(filePath);
-    if (labPaths.has(normPath)) {
+    if (path.basename(filePath).startsWith(".") || labPaths.has(normPath)) {
       return;
     }
 
