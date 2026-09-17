@@ -149,7 +149,7 @@ The [containerlab documentation](https://containerlab.dev/) covers topology file
 
 ## Development
 
-The [Containerlab Apps documentation](https://srl-labs.github.io/containerlab-app/docs/) covers the apps and includes interactive topology examples. Run `pnpm docs` to preview it locally (requires Python 3.11+ and [uv](https://docs.astral.sh/uv/)). See [contributing to the docs](docs/contributing.md) for the Zensical build and the reusable YAML/topology component.
+The [Containerlab Apps documentation](https://srl-labs.github.io/containerlab-app/docs/) covers the apps and includes interactive topology examples. Run `pnpm run docs` to preview it locally (requires Python 3.11+ and [uv](https://docs.astral.sh/uv/)). See [contributing to the docs](docs/contributing.md) for the Zensical build and the reusable YAML/topology component.
 
 Use Node.js `24.21.0` and pnpm `12.4.2`, as pinned in `package.json`. From the repository root:
 

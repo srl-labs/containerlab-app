@@ -19,7 +19,7 @@ Design, deploy, and troubleshoot your containerlab networks in one visual worksp
 
 </div>
 
-```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="420"
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="420" loading="eager"
 ```
 
 <div class="demo-caption">Select a node to inspect its configuration and find it in the YAML.</div>

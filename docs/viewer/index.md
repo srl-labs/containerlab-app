@@ -61,7 +61,7 @@ Set `borderless="true"` to place just the canvas between paragraphs. The transpa
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="360" borderless="true"
 ```
 
-The title still names the diagram for assistive technology. Use the regular component when readers need YAML tabs, downloads, or node details. In plain HTML, add the boolean `borderless` attribute to `<clab-topology>`. Without JavaScript, the source remains readable; a viewer error also reveals the YAML.
+The title still names the diagram for assistive technology. Bring back individual controls with options such as `toolbar="true"` or `controls="true"`; see [customization recipes](customize.md). In plain HTML, add the boolean `borderless` attribute to `<clab-topology>`. Without JavaScript, the source remains readable; a viewer error also reveals the YAML.
 
 ## Made for reading
 

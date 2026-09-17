@@ -46,6 +46,8 @@ test.describe("Canvas Interactions", () => {
   test("canvas is visible and has correct selector", async ({ page }) => {
     const canvas = page.locator(".react-flow");
     await expect(canvas).toBeVisible();
+    // The editor still loads deployment badges; the standalone viewer omits them.
+    await expect(page.locator(".topology-node-runtime-badge").first()).toBeVisible();
   });
 
   test("app container is visible", async ({ page }) => {

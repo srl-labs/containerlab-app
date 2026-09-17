@@ -30,7 +30,14 @@ class TopologyPreprocessor(Preprocessor):
         return path.read_text(encoding="utf-8")
 
     def component(self, options, body):
-        allowed = {"title", "file", "annotations", "view", "height", "filename", "borderless"}
+        toggles = {"borderless", "heading", "toolbar", "inspector", "footer", "controls", "transparent", "node-labels", "zoom", "pan"}
+        choices = {
+            "theme": {"auto", "light", "dark"},
+            "grid": {"dots", "lines", "none"},
+            "link-labels": {"show-all", "on-select", "hide"},
+            "loading": {"eager", "lazy"},
+        }
+        allowed = {"title", "file", "annotations", "view", "height", "filename", "fit-padding"} | toggles | choices.keys()
         unknown = options.keys() - allowed
         if unknown:
             raise ValueError(f"Unknown clab fence options: {', '.join(sorted(unknown))}")
@@ -45,19 +52,24 @@ class TopologyPreprocessor(Preprocessor):
         view = options.get("view", "topology")
         if view not in {"topology", "yaml", "split"}:
             raise ValueError(f"Unknown topology view: {view}")
-        borderless = options.get("borderless", "false")
-        if borderless not in {"true", "false"}:
-            raise ValueError("borderless must be true or false")
-        if borderless == "true" and view != "topology":
-            raise ValueError("A borderless canvas requires view=topology")
+        for option in toggles & options.keys():
+            if options[option] not in {"true", "false"}:
+                raise ValueError(f"{option} must be true or false")
+        for option in choices.keys() & options.keys():
+            if options[option] not in choices[option]:
+                raise ValueError(f"Unknown {option}: {options[option]}")
+        if "fit-padding" in options and not 0 <= float(options["fit-padding"]) <= 2:
+            raise ValueError("fit-padding must be between 0 and 2")
         height = int(options.get("height", "460"))
         if not 240 <= height <= 1000:
             raise ValueError("Topology height must be between 240 and 1000 pixels")
         title = options.get("title", str(data.get("name", "Network topology")))
         filename = options.get("filename", Path(options.get("file", "topology.clab.yml")).name)
         attrs = {"title": title, "view": view, "filename": filename, "height": str(height)}
-        if borderless == "true":
+        if options.get("borderless") == "true":
             attrs["borderless"] = ""
+        for option in sorted((toggles - {"borderless"} | choices.keys() | {"fit-padding"}) & options.keys()):
+            attrs[option] = options[option]
         if "annotations" in options:
             annotations = self.read_asset(options["annotations"])
             if not isinstance(json.loads(annotations), dict):
@@ -73,9 +85,10 @@ class TopologyPreprocessor(Preprocessor):
             for i, line in enumerate(lines, 1)
         )
         return (
-            f'<div class="clab-example"><clab-topology class="no-copy" {attributes}>'
+            f'<div class="clab-example"><clab-topology class="no-copy" data-clab-generated {attributes}>'
             f'<pre data-clab-source hidden>{escape(source)}</pre>'
             f'<pre class="clab-source"><code>{code}</code></pre>'
+            '<span data-clab-end hidden></span>'
             '</clab-topology></div>'
         )
 

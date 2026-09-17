@@ -1,4 +1,19 @@
-/* Scoped to the standalone viewer document; never changes the editor's appearance. */
+@import "@xyflow/react/dist/style.css";
+
+/* No editor, map, Monaco, or webfont CSS on the read-only path. */
+.clab-viewer-canvas {
+  width: 100%;
+  height: 100%;
+  font-family: var(--viewer-font, system-ui, sans-serif);
+  --topoviewer-node-label-background: var(--viewer-background, var(--vscode-editor-background));
+  --topoviewer-node-label-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
+  --topoviewer-node-label-outline: var(--viewer-background, var(--vscode-editor-background));
+  --topoviewer-edge-label-background: var(--viewer-background, var(--vscode-editor-background));
+  --topoviewer-edge-label-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
+  --topoviewer-edge-label-outline: var(--viewer-background, var(--vscode-editor-background));
+  --topoviewer-network-node-background: var(--vscode-sideBar-background);
+}
+.clab-viewer-canvas *, .clab-viewer-canvas *::before, .clab-viewer-canvas *::after { box-sizing: border-box; }
 html[data-clab-theme="dark"] {
   color-scheme: dark;
   --vscode-editor-background: #101823 !important;
@@ -14,7 +29,7 @@ html[data-clab-theme="light"] {
   --vscode-panel-border: #dce4ee !important;
 }
 .react-flow__controls {
-  border: 1px solid var(--vscode-panel-border);
+  border: 1px solid var(--viewer-border, var(--vscode-panel-border));
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 4px 18px #00000012;
@@ -22,18 +37,20 @@ html[data-clab-theme="light"] {
 .react-flow__controls-button {
   width: 32px;
   height: 32px;
-  background: var(--vscode-sideBar-background) !important;
-  color: var(--vscode-editor-foreground) !important;
-  border-color: var(--vscode-panel-border);
+  background: var(--viewer-surface, var(--vscode-sideBar-background)) !important;
+  color: var(--viewer-foreground, var(--vscode-editor-foreground)) !important;
+  border-color: var(--viewer-border, var(--vscode-panel-border));
 }
-.react-flow, .react-flow__background { background-color: var(--vscode-editor-background) !important; }
+.clab-viewer-canvas .react-flow, .clab-viewer-canvas .react-flow__background { background-color: var(--viewer-background, var(--vscode-editor-background)) !important; }
+.clab-viewer-canvas[style*="--viewer-edge"] .react-flow__edge-path { stroke: var(--viewer-edge) !important; }
+.clab-viewer-canvas .react-flow__node:focus-visible { outline-color: var(--viewer-accent, #51b6e8); }
 .react-flow__controls-button:hover { background: var(--vscode-input-background); }
 .react-flow__node-topology-node { cursor: pointer !important; }
 .topology-node-label {
-  background: var(--vscode-editor-background) !important;
-  color: var(--vscode-editor-foreground) !important;
+  background: var(--viewer-background, var(--vscode-editor-background)) !important;
+  color: var(--viewer-foreground, var(--vscode-editor-foreground)) !important;
   padding: 4px 8px !important;
-  font-family: system-ui, sans-serif !important;
+  font-family: var(--viewer-font, system-ui, sans-serif) !important;
   font-size: 13px !important;
   letter-spacing: .01em;
 }
@@ -46,13 +63,10 @@ html[data-clab-selected] .react-flow__node.clab-viewer-selected {
 }
 /* A canvas-only embed inherits the page underneath the transparent iframe. */
 html[data-clab-borderless="true"] {
-  --vscode-editor-background: transparent !important;
   background: transparent !important;
 }
 html[data-clab-borderless="true"] body,
 html[data-clab-borderless="true"] #root { background: transparent !important; }
-html[data-clab-borderless="true"] .react-flow__background,
-html[data-clab-borderless="true"] .react-flow__controls { display: none; }
 html[data-clab-borderless="true"] .topology-node-label { text-shadow: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

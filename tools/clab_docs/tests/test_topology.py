@@ -45,7 +45,11 @@ class TopologyTests(unittest.TestCase):
             '```clab heigth="300"\n' + SOURCE + '```',
             '```clab height="10000"\n' + SOURCE + '```',
             '```clab borderless="yes"\n' + SOURCE + '```',
-            '```clab borderless="true" view="split"\n' + SOURCE + '```',
+            '```clab controls="sometimes"\n' + SOURCE + '```',
+            '```clab grid="squares"\n' + SOURCE + '```',
+            '```clab theme="blue"\n' + SOURCE + '```',
+            '```clab fit-padding="NaN"\n' + SOURCE + '```',
+            '```clab fit-padding="3"\n' + SOURCE + '```',
             '```clab\nname: no-topology\n```',
             '```clab\ntopology: [\n```',
             '```clab\n' + SOURCE,
@@ -67,6 +71,11 @@ class TopologyTests(unittest.TestCase):
         html = self.render('# Examples\n\n```clab\n' + SOURCE + '```\n\nSome text.\n\n```clab\n' + SOURCE + '```')
         self.assertEqual(html.count('<clab-topology '), 2)
         self.assertIn('<p>Some text.</p>', html)
+
+    def test_independent_presentation_options(self):
+        html = self.render('```clab borderless="true" view="split" toolbar="true" controls="true" grid="lines" zoom="false" theme="light" loading="eager" fit-padding="0.1"\n' + SOURCE + '```')
+        for attribute in ['borderless=""', 'view="split"', 'toolbar="true"', 'controls="true"', 'grid="lines"', 'zoom="false"', 'theme="light"', 'loading="eager"', 'fit-padding="0.1"']:
+            self.assertIn(attribute, html)
 
     def test_zensical_rebuilds_when_a_referenced_yaml_file_changes(self):
         with TemporaryDirectory() as tmp:

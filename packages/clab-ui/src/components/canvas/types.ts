@@ -14,7 +14,7 @@ import type {
 } from "../../core/types/graph";
 import { DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../../core/types/graph";
 import type { FreeTextAnnotation } from "../../core/types/topology";
-import { vscodePalette } from "../../theme/vscodeTheme";
+import { vscodePalette } from "../../theme/vscodePalette";
 type GridStyle = "dotted" | "quadratic";
 
 /** Edge label rendering mode */

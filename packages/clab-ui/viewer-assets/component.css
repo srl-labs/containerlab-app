@@ -5,21 +5,22 @@ clab-topology {
   --clab-text: #e0e9f5;
   --clab-muted: #90a3ba;
   --clab-accent: #6bc8f0;
+  --clab-font: system-ui, sans-serif;
   display: block;
   position: relative;
   margin: 1.8rem 0;
   color: var(--clab-text);
   background: var(--clab-surface);
   border: 1px solid var(--clab-border);
-  border-radius: 14px;
+  border-radius: var(--clab-radius, 14px);
   overflow: hidden;
   text-align: left;
-  font: 400 13px/1.6 "Inter", system-ui, sans-serif;
-  box-shadow: 0 16px 64px #00000012;
+  font: 400 13px/1.6 var(--clab-font);
+  box-shadow: var(--clab-shadow, 0 16px 64px #00000012);
   contain: layout;
   color-scheme: dark;
 }
-[data-md-color-scheme="default"] clab-topology {
+clab-topology[data-theme="light"] {
   --clab-surface: #f7f9fc;
   --clab-raised: #ffffff;
   --clab-border: #dce4ee;
@@ -48,7 +49,7 @@ clab-topology svg { width: 17px; height: 17px; flex-shrink: 0; }
 .clab-actions { display: flex; gap: 2px; }
 .clab-icon-button { display: grid; place-items: center; padding: 8px; border-radius: 6px; color: var(--clab-muted) !important; }
 .clab-panels { display: grid; height: var(--clab-height, 460px); min-height: 0; }
-clab-topology[data-view="split"] .clab-panels { grid-template-columns: 1.25fr 1fr; }
+clab-topology[data-view="split"] .clab-panels { grid-template-columns: var(--clab-split, 1.25fr 1fr); }
 .clab-graph { position: relative; min-width: 0; min-height: 0; }
 .clab-graph iframe { display: block; width: 100%; height: 100%; border: 0; }
 .clab-loading { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; padding: 24px; text-align: center; z-index: 1; color: var(--clab-muted); background: var(--clab-surface); }
@@ -82,16 +83,12 @@ clab-topology pre.clab-source code { display: block; padding: 0; border: 0; bord
 clab-topology:fullscreen { display: flex; flex-direction: column; margin: 0; border-radius: 0; }
 clab-topology:fullscreen .clab-panels { flex: 1; }
 /* Bare diagrams sit directly in the document, including over custom backgrounds. */
-clab-topology[borderless] { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
-clab-topology[borderless] .clab-component-heading,
-clab-topology[borderless] .clab-toolbar,
-clab-topology[borderless] .clab-inspector,
-clab-topology[borderless] .clab-component-footer { display: none; }
-clab-topology[borderless] .clab-loading { background: transparent; }
-clab-topology[borderless][data-error] .clab-panels { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-clab-topology[borderless][data-error] .clab-loading { position: relative; padding: 16px; }
-clab-topology[borderless][data-error] iframe { display: none; }
-clab-topology[borderless][data-error] .clab-code { border: 0; }
+clab-topology[data-borderless="true"] { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+clab-topology[data-borderless="true"] .clab-loading { background: transparent; }
+clab-topology[data-borderless="true"][data-error] .clab-panels { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+clab-topology[data-borderless="true"][data-error] .clab-loading { position: relative; padding: 16px; }
+clab-topology[data-borderless="true"][data-error] iframe { display: none; }
+clab-topology[data-borderless="true"][data-error] .clab-code { border: 0; }
 @keyframes clab-spin { to { transform: rotate(360deg); } }
 @media (max-width: 650px) {
   .clab-toolbar { padding: 7px; }

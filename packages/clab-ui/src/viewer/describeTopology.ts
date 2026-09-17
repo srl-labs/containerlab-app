@@ -1,4 +1,5 @@
 import { isMap, isNode, LineCounter, parseDocument } from "yaml";
+import type { ClabTopology } from "../core/types/topology";
 
 export interface ViewerNodeInfo {
   id: string;
@@ -29,6 +30,11 @@ function sourceLines(key: unknown, value: unknown, counter: LineCounter) {
 
 /** Source ranges come from the YAML parser, including quoted names and flow mappings. */
 export function describeTopology(source: string): { nodes: ViewerNodeInfo[]; links: number } {
+  return parseViewerSource(source).description;
+}
+
+/** Parse once for both the graph and its source-linked inspector. */
+export function parseViewerSource(source: string) {
   const lineCounter = new LineCounter();
   const document = parseDocument(source, { lineCounter, merge: true });
   if (document.errors.length > 0) throw new Error(document.errors[0].message);
@@ -51,5 +57,8 @@ export function describeTopology(source: string): { nodes: ViewerNodeInfo[]; lin
       ...sourceLines(pair.key, pair.value, lineCounter)
     };
   });
-  return { nodes, links: Array.isArray(topology.links) ? topology.links.length : 0 };
+  return {
+    topology: data as ClabTopology,
+    description: { nodes, links: Array.isArray(topology.links) ? topology.links.length : 0 }
+  };
 }

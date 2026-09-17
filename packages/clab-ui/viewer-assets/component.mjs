@@ -14,11 +14,30 @@ const icons = {
 };
 const icon = (name) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
 const button = (action, label) => `<button class="clab-icon-button" type="button" data-action="${action}" aria-label="${label}" title="${label}">${icon(action)}</button>`;
-const theme = () => document.body.dataset.mdColorScheme === "slate" ? "dark" : "light";
+const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+const theme = (element) => {
+  const explicit = element.getAttribute("theme");
+  if (explicit === "light" || explicit === "dark") return explicit;
+  const scheme = document.body?.dataset.mdColorScheme;
+  return scheme ? (scheme === "slate" ? "dark" : "light") : (systemTheme.matches ? "dark" : "light");
+};
+const booleanOption = (element, name, fallback) => element.hasAttribute(name) ? element.getAttribute(name) !== "false" : fallback;
 
 export class ClabTopology extends HTMLElement {
   connectedCallback() {
     if (this.abort) return;
+    // An async head script can upgrade a generated element before the HTML parser has
+    // finished its children. Wait for the source/end marker before replacing the markup.
+    if (this.hasAttribute("data-clab-generated") && !this.built && !this.querySelector("[data-clab-end]")) {
+      this.sourceObserver ??= new MutationObserver(() => {
+        if (this.querySelector("[data-clab-end]")) {
+          this.sourceObserver.disconnect();
+          this.connectedCallback();
+        }
+      });
+      this.sourceObserver.observe(this, { childList: true });
+      return;
+    }
     this.abort = new AbortController();
     instances.add(this);
     if (!this.built) this.build();
@@ -36,12 +55,18 @@ export class ClabTopology extends HTMLElement {
       }
     }, { rootMargin: "240px" });
     this.observer.observe(this);
+    if (this.getAttribute("loading") === "eager") {
+      this.nearViewport = true;
+      this.ensureViewer();
+      this.observer.disconnect();
+    }
   }
 
   disconnectedCallback() {
     this.abort?.abort();
     this.abort = null;
     this.observer?.disconnect();
+    this.sourceObserver?.disconnect();
     clearTimeout(this.loadTimeout);
     clearTimeout(this.copyTimeout);
     instances.delete(this);
@@ -54,14 +79,16 @@ export class ClabTopology extends HTMLElement {
 
   build() {
     this.built = true;
-    this.borderless = this.hasAttribute("borderless");
+    this.borderless = booleanOption(this, "borderless", false);
+    this.dataset.theme = theme(this);
+    this.dataset.borderless = String(this.borderless);
     this.classList.add("no-copy");
     const id = `clab-${++sequence}`;
     const source = this.querySelector("[data-clab-source]");
     const pre = this.querySelector(".clab-source") ?? this.querySelector("pre");
     this.yaml = source?.textContent ?? pre?.textContent ?? "";
     this.nodes = [];
-    this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
+    if (this.hasAttribute("height")) this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
     // All dynamic author content is assigned through textContent, never innerHTML.
     this.innerHTML = `
       <div class="clab-component-heading"><span class="clab-component-mark">${icon("topology")}</span><strong></strong><span class="clab-live-badge"><i></i> INTERACTIVE</span></div>
@@ -98,9 +125,16 @@ export class ClabTopology extends HTMLElement {
     this.pre.tabIndex = 0;
     this.pre.setAttribute("aria-label", "Topology YAML source");
     this.querySelector(".clab-code").append(this.pre);
+    for (const [option, selector] of Object.entries({ heading: ".clab-component-heading", toolbar: ".clab-toolbar", inspector: ".clab-inspector", footer: ".clab-component-footer" })) {
+      this.querySelector(selector).hidden = !booleanOption(this, option, !this.borderless);
+    }
+    this.querySelector(".clab-hint").textContent = [
+      booleanOption(this, "pan", true) ? "Drag to pan" : "",
+      booleanOption(this, "zoom", true) ? "Scroll to zoom" : ""
+    ].filter(Boolean).join(" · ");
     if (!this.requestFullscreen) this.querySelector('[data-action="expand"]').hidden = true;
-    this.setView(this.borderless ? "topology" : this.getAttribute("view") || "topology");
-    if (this.borderless) {
+    this.setView(this.getAttribute("view") || "topology");
+    if (this.querySelector(".clab-toolbar").hidden) {
       const panel = this.querySelector(".clab-panels");
       panel.setAttribute("role", "region");
       panel.setAttribute("aria-label", this.getAttribute("title") || "Network topology");
@@ -114,7 +148,7 @@ export class ClabTopology extends HTMLElement {
       const selected = tab.dataset.view === view;
       tab.setAttribute("aria-selected", String(selected));
       tab.tabIndex = selected ? 0 : -1;
-      if (selected && !this.borderless) this.querySelector(".clab-panels").setAttribute("aria-labelledby", tab.id);
+      if (selected && !this.querySelector(".clab-toolbar").hidden) this.querySelector(".clab-panels").setAttribute("aria-labelledby", tab.id);
     }
     this.querySelector(".clab-graph").hidden = view === "yaml";
     this.querySelector(".clab-code").hidden = view === "topology";
@@ -129,10 +163,11 @@ export class ClabTopology extends HTMLElement {
     this.frameOrigin = url.origin;
     this.frame = document.createElement("iframe");
     // Matching schemes prevents browsers from painting an opaque iframe backdrop.
-    this.frame.style.colorScheme = theme();
+    this.frame.style.colorScheme = theme(this);
     this.frame.title = `${this.getAttribute("title") || "Network"} — interactive topology`;
     this.frame.src = url.href;
     this.frame.setAttribute("allow", "fullscreen");
+    this.loadStartedAt = performance.now();
     this.querySelector(".clab-graph").append(this.frame);
     this.loading("Preparing your topology…");
     this.loadTimeout = setTimeout(() => this.loading("The viewer could not load. Your YAML is still available.", true), 30000);
@@ -141,7 +176,7 @@ export class ClabTopology extends HTMLElement {
   loading(message, error = false) {
     this.toggleAttribute("data-error", error);
     // Preserve readable YAML if a canvas-only embed fails to render.
-    if (this.borderless) this.setView(error ? "split" : "topology");
+    if (this.borderless && error) this.setView("split");
     const loader = this.querySelector(".clab-loading");
     loader.hidden = false;
     loader.classList.toggle("clab-load-error", error);
@@ -159,9 +194,25 @@ export class ClabTopology extends HTMLElement {
     this.frame?.contentWindow?.postMessage(message, this.frameOrigin);
   }
 
+  viewerOptions() {
+    const styles = getComputedStyle(this);
+    const options = { appearance: {} };
+    for (const [attribute, key] of Object.entries({ controls: "controls", transparent: "transparent", "node-labels": "nodeLabels", zoom: "zoomOnScroll", pan: "panOnDrag" })) {
+      if (this.hasAttribute(attribute)) options[key] = booleanOption(this, attribute, true);
+    }
+    if (["dots", "lines", "none"].includes(this.getAttribute("grid"))) options.background = this.getAttribute("grid");
+    if (["show-all", "on-select", "hide"].includes(this.getAttribute("link-labels"))) options.linkLabels = this.getAttribute("link-labels");
+    if (this.hasAttribute("fit-padding") && Number.isFinite(Number(this.getAttribute("fit-padding")))) options.fitPadding = Math.min(2, Math.max(0, Number(this.getAttribute("fit-padding"))));
+    for (const [key, variable] of Object.entries({ background: "--clab-surface", foreground: "--clab-text", surface: "--clab-raised", border: "--clab-border", accent: "--clab-accent", edge: "--clab-edge", font: "--clab-font" })) {
+      const value = styles.getPropertyValue(variable).trim();
+      if (value) options.appearance[key] = value;
+    }
+    return options;
+  }
+
   receive(message) {
     if (message.type === "clab-viewer:ready") {
-      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(), borderless: this.borderless });
+      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(this), borderless: this.borderless, options: this.viewerOptions() });
     } else if (message.type === "clab-viewer:loaded") {
       clearTimeout(this.loadTimeout);
       this.ready = true;
@@ -172,6 +223,7 @@ export class ClabTopology extends HTMLElement {
       for (const node of this.nodes) select.add(new Option(node.id, node.id));
       this.querySelector(".clab-counts").textContent = `${this.nodes.length} nodes · ${message.links} links`;
       this.dataset.loaded = "true";
+      this.dispatchEvent(new CustomEvent("clab:loaded", { bubbles: true, detail: { duration: performance.now() - this.loadStartedAt, nodes: this.nodes.length, links: message.links } }));
     } else if (message.type === "clab-viewer:select") {
       this.inspect(message.id);
     } else if (message.type === "clab-viewer:error") {
@@ -270,12 +322,20 @@ document.addEventListener("fullscreenchange", () => {
     button.title = label;
   }
 });
-new MutationObserver(() => {
-  const nextTheme = theme();
+function syncThemes() {
   for (const instance of instances) {
+    const nextTheme = theme(instance);
+    instance.dataset.theme = nextTheme;
     if (instance.frame) instance.frame.style.colorScheme = nextTheme;
-    instance.send({ type: "clab-viewer:theme", theme: nextTheme });
+    instance.send({ type: "clab-viewer:theme", theme: nextTheme, appearance: instance.viewerOptions().appearance });
   }
-}).observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+}
+function observeTheme() {
+  new MutationObserver(syncThemes).observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+  syncThemes();
+}
+if (document.body) observeTheme();
+else document.addEventListener("DOMContentLoaded", observeTheme, { once: true });
+systemTheme.addEventListener("change", syncThemes);
 
 if (!customElements.get("clab-topology")) customElements.define("clab-topology", ClabTopology);

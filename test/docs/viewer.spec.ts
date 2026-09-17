@@ -13,6 +13,7 @@ test("landing example renders the real graph and links a selected node to its YA
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
   await expect(viewer.locator(".react-flow__edge")).toHaveCount(9);
+  await expect(viewer.locator(".topology-node-runtime-badge")).toHaveCount(0);
   await viewer.locator('.react-flow__node[data-id="leaf2"]').click();
   await expect(component.getByLabel("Inspect a node")).toHaveValue("leaf2");
   await expect(component.locator(".clab-node-detail")).toContainText("nokia_srlinux");

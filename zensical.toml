@@ -11,7 +11,8 @@ site_dir = "site"
 watch = ["docs/examples", "tools/clab_docs/topology.py"]
 copyright = "Containerlab Apps · Open source. Built for network people."
 extra_css = ["assets/stylesheets/site.css", "assets/viewer/component.css"]
-extra_javascript = ["assets/viewer/component.mjs"]
+# The template loads this asynchronously in the head, ahead of the docs bundle.
+extra_javascript = []
 nav = [
   { "Overview" = "index.md" },
   { "Get started" = [
@@ -42,6 +43,7 @@ nav = [
     { "Standalone clab-ui" = [
       { "Overview" = "viewer/standalone.md" },
       { "Zensical integration" = "viewer/index.md" },
+      { "Customization" = "viewer/customize.md" },
       { "Component reference" = "viewer/reference.md" },
     ] },
     { "Contribute to the docs" = "contributing.md" },

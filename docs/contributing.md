@@ -8,10 +8,10 @@ Install the repository's pinned Node and pnpm versions, Python 3.11 or newer, an
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm docs
+pnpm run docs
 ```
 
-The command builds the viewer, copies its static assets into the documentation, installs the locked Python dependencies, and starts Zensical. Edit Markdown, CSS, or templates and the preview reloads. After changing viewer code, restart `pnpm docs` to rebuild the viewer bundle.
+The command builds the viewer, copies its static assets into the documentation, installs the locked Python dependencies, and starts Zensical. Edit Markdown, CSS, or templates and the preview reloads. After changing viewer code, restart `pnpm run docs` to rebuild the viewer bundle.
 
 `docs/examples/` is explicitly watched so edits to referenced YAML and annotations also rebuild their documentation pages. Add another watch path in `zensical.toml` if you store examples elsewhere.
 
@@ -21,9 +21,12 @@ The command builds the viewer, copies its static assets into the documentation, 
 pnpm docs:build
 pnpm exec playwright install chromium
 pnpm docs:test
+pnpm docs:perf
 ```
 
 The build produces `site/`. The tests exercise Markdown validation and the built site in Chromium, including multiple viewers, tabs, source inspection, theme changes, downloads, mobile layout, and instant navigation.
+
+Run the performance check on its own so other builds or browser tests do not compete for CPU. It checks three cold starts per profile with a 10 Mbps connection and 40 ms latency: the whole page and viewer at normal CPU speed, then viewer startup under 4× CPU slowdown. The viewer build also rejects editor dependencies in the initial bundle and enforces size limits.
 
 ## Add an example
 

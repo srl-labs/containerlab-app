@@ -2,7 +2,7 @@ import type { Root } from "react-dom/client";
 import type { ReactFlowInstance } from "@xyflow/react";
 
 import { applyThemeVars } from "../theme/devTheme";
-import { describeTopology } from "./describeTopology";
+import { isViewerOptions, resolveViewerOptions, type ViewerOptions } from "./options";
 import "./viewer.css";
 
 import { mountViewer } from "./mountViewer";
@@ -24,6 +24,7 @@ interface RenderMessage {
   annotations?: string;
   theme?: "light" | "dark";
   borderless?: boolean;
+  options?: ViewerOptions;
 }
 
 interface ViewerWindow extends Window {
@@ -40,7 +41,8 @@ function isRenderMessage(data: unknown): data is RenderMessage {
     typeof (data as { yaml?: unknown }).yaml === "string" &&
     ((data as { annotations?: unknown }).annotations === undefined || typeof (data as { annotations?: unknown }).annotations === "string") &&
     ((data as { theme?: unknown }).theme === undefined || ["light", "dark"].includes(String((data as { theme?: unknown }).theme))) &&
-    ((data as { borderless?: unknown }).borderless === undefined || typeof (data as { borderless?: unknown }).borderless === "boolean")
+    ((data as { borderless?: unknown }).borderless === undefined || typeof (data as { borderless?: unknown }).borderless === "boolean") &&
+    isViewerOptions((data as { options?: unknown }).options)
   );
 }
 
@@ -81,6 +83,8 @@ if (!container) throw new Error("Root element not found");
 
 let root: Root | null = null;
 let flow: ReactFlowInstance | null = null;
+let fitPadding = 0.25;
+let transparent = false;
 const viewerWindow = window as ViewerWindow;
 const parentOrigin = getConfiguredParentOrigin(viewerWindow);
 const allowedOrigins = getAllowedOrigins(viewerWindow, parentOrigin);
@@ -102,10 +106,15 @@ function selectNode(id: string | null): void {
   send({ type: "clab-viewer:select", id });
 }
 
+function renderError(error: unknown): void {
+  send({ type: "clab-viewer:error", message: error instanceof Error ? error.message : "Unable to render topology" });
+}
+
 function render(msg: Omit<RenderMessage, "type">): void {
   try {
-    const description = describeTopology(msg.yaml);
-    if (msg.annotations !== undefined) JSON.parse(msg.annotations);
+    const options = resolveViewerOptions(msg.options, msg.borderless);
+    fitPadding = options.fitPadding;
+    transparent = options.transparent;
     document.documentElement.dataset.clabBorderless = String(msg.borderless === true);
     root?.unmount();
     flow = null;
@@ -113,18 +122,20 @@ function render(msg: Omit<RenderMessage, "type">): void {
       yaml: msg.yaml,
       annotations: msg.annotations,
       theme: msg.theme,
+      borderless: msg.borderless,
       viewerOptions: {
-        zoomOnScroll: true,
+        ...options,
         onNodeSelect: selectNode,
         onInit: (instance) => {
           flow = instance;
-          send({ type: "clab-viewer:loaded", ...description });
         }
-      }
+      },
+      onReady: (description) => send({ type: "clab-viewer:loaded", ...description }),
+      onError: renderError
     });
     setTheme(msg.theme ?? "dark");
   } catch (error) {
-    send({ type: "clab-viewer:error", message: error instanceof Error ? error.message : "Unable to render topology" });
+    renderError(error);
   }
 }
 
@@ -135,11 +146,19 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
     return;
   }
   if (typeof event.data !== "object" || event.data === null) return;
-  const message = event.data as { type?: string; theme?: string; id?: string };
+  const message = event.data as { type?: string; theme?: string; id?: string; appearance?: ViewerOptions["appearance"] };
   if (message.type === "clab-viewer:theme" && (message.theme === "light" || message.theme === "dark")) {
     setTheme(message.theme);
+    if (message.appearance && isViewerOptions({ appearance: message.appearance })) {
+      const canvas = container.querySelector<HTMLElement>(".clab-viewer-canvas");
+      for (const key of ["background", "foreground", "surface", "border", "accent", "edge", "font"] as const) {
+        if (key === "background" && transparent) continue;
+        const value = message.appearance[key];
+        if (value) canvas?.style.setProperty(`--viewer-${key}`, value);
+      }
+    }
   } else if (message.type === "clab-viewer:fit") {
-    void flow?.fitView({ padding: 0.25, duration: 0 });
+    void flow?.fitView({ padding: fitPadding, duration: 0 });
   } else if (message.type === "clab-viewer:focus" && typeof message.id === "string") {
     selectNode(message.id);
     void flow?.fitView({ nodes: [{ id: message.id }], padding: 1, maxZoom: 1.5 });
@@ -150,7 +169,7 @@ window.addEventListener("message", (event: MessageEvent<unknown>) => {
 let resizeFrame = 0;
 new ResizeObserver(() => {
   cancelAnimationFrame(resizeFrame);
-  resizeFrame = requestAnimationFrame(() => { void flow?.fitView({ padding: 0.25, duration: 0 }); });
+  resizeFrame = requestAnimationFrame(() => { void flow?.fitView({ padding: fitPadding, duration: 0 }); });
 }).observe(container);
 
 const injected = viewerWindow.__CLAB_VIEWER__;

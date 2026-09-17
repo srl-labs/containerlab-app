@@ -35,7 +35,8 @@
     "docs": "node scripts/docs.mjs serve",
     "docs:build": "node scripts/docs.mjs build",
     "docs:prepare": "node scripts/docs.mjs prepare",
-    "docs:test": "uv run --frozen python -m unittest discover -s tools/clab_docs/tests && playwright test --config test/docs/playwright.config.ts"
+    "docs:test": "uv run --frozen python -m unittest discover -s tools/clab_docs/tests && playwright test --config test/docs/playwright.config.ts",
+    "docs:perf": "playwright test --config test/docs/performance.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
