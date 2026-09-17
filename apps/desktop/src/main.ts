@@ -14,10 +14,7 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 
-import {
-  configureApiTlsVerification,
-  createContainerlabAppServer
-} from "@srl-labs/containerlab-app-server";
+import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
 
 const APP_NAME = "Containerlab";
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
@@ -271,7 +268,7 @@ function runEditMenuAction(
       openExternalUrl(linkURL);
       break;
     case "copyLink":
-      clipboard.writeText(linkURL);
+      void clipboard.writeText(linkURL);
       break;
   }
 }
@@ -624,8 +621,6 @@ function openTerminalWindow(url: string, serverOrigin: string): void {
 }
 
 async function startLocalAppServer(): Promise<string> {
-  configureApiTlsVerification();
-
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,

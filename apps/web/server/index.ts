@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
-  configureApiTlsVerification,
+  shouldVerifyApiTls,
   createContainerlabAppServer,
   resolveWebTlsConfig
 } from "@srl-labs/containerlab-app-server";
@@ -11,7 +11,7 @@ const PORT = parseInt(process.env.PORT ?? "3001", 10);
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
 const VITE_DEV_URL = process.env.VITE_DEV_URL ?? "https://localhost:5173";
 const IS_DEV = process.env.NODE_ENV !== "production";
-const API_TLS_VERIFY = configureApiTlsVerification();
+const API_TLS_VERIFY = shouldVerifyApiTls();
 const WEB_TLS = resolveWebTlsConfig();
 
 function resolveStaticClientRoot(): string {
@@ -43,7 +43,9 @@ async function start(): Promise<void> {
     app.log.warn(`Generated self-signed web TLS certificate at ${WEB_TLS.certFile}`);
   }
   if (!API_TLS_VERIFY) {
-    app.log.warn("clab-api-server upstream TLS certificate verification is disabled (CLAB_API_TLS_VERIFY=false)");
+    app.log.warn(
+      "clab-api-server upstream TLS certificate verification is disabled (CLAB_API_TLS_VERIFY=false)"
+    );
   }
   app.log.info(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
   if (IS_DEV) {

@@ -79,7 +79,9 @@ export class ClabApiFileSystemAdapter {
   }
 
   private createNotFoundError(pathValue: string): Error & { code?: string } {
-    const err = new Error(`ENOENT: no such file ${pathValue}`) as Error & { code?: string };
+    const err = new Error(`ENOENT: no such file ${pathValue}`) as Error & {
+      code?: string;
+    };
     err.code = "ENOENT";
     return err;
   }
@@ -157,6 +159,11 @@ export class ClabApiFileSystemAdapter {
     return Date.now();
   }
 
+  invalidateCache(): void {
+    this.fileContentCache.clear();
+    this.fileExistsCache.clear();
+  }
+
   private clearFileCache(pathValue: string): void {
     this.fileContentCache.delete(pathValue);
     this.fileExistsCache.delete(pathValue);
@@ -181,7 +188,10 @@ export class ClabApiFileSystemAdapter {
   }
 
   private setCachedExists(pathValue: string, exists: boolean): void {
-    this.fileExistsCache.set(pathValue, { exists, expiresAt: this.now() + FILE_CACHE_TTL_MS });
+    this.fileExistsCache.set(pathValue, {
+      exists,
+      expiresAt: this.now() + FILE_CACHE_TTL_MS
+    });
     if (!exists) {
       this.fileContentCache.delete(pathValue);
     }

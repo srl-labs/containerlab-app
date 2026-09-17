@@ -63,6 +63,10 @@ if (!container) {
 
 createRoot(container).render(
   <React.StrictMode>
-    <App initialData={initialData} runtime={runtime} />
+    <App
+      initialData={initialData}
+      runtime={runtime}
+      lifecycleActionsAvailable={params.get("lifecycleActions") !== "false"}
+    />
   </React.StrictMode>
 );

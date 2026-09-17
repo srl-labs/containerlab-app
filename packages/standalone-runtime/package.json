@@ -33,10 +33,13 @@
     "@types/react-dom": "catalog:",
     "@types/three": "catalog:",
     "typescript": "catalog:",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "node --import tsx --test 'src/**/*.test.ts'"
+    "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
+    "lint": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin src"
   }
 }

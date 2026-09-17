@@ -7,7 +7,9 @@ import type { ClabApiClient } from "./clabApiClient";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager";
 
 function notFound(path: string): Error & { status: number } {
-  const error = new Error(`GET ${path} failed (404): not found`) as Error & { status: number };
+  const error = new Error(`GET ${path} failed (404): not found`) as Error & {
+    status: number;
+  };
   error.status = 404;
   return error;
 }
@@ -63,11 +65,7 @@ class InMemoryClabApiClient {
     return content;
   }
 
-  async putLabTopologyAnnotations(
-    _token: string,
-    labName: string,
-    content: string
-  ): Promise<void> {
+  async putLabTopologyAnnotations(_token: string, labName: string, content: string): Promise<void> {
     const docs = this.runningDocs.get(labName) ?? {};
     docs.annotations = content;
     this.runningDocs.set(labName, docs);
@@ -206,7 +204,7 @@ test("active topology session leases prevent idle cleanup until released", (t) =
   }
 });
 
-test("running-lab-doc sessions treat missing annotations as empty and create them on save", async () => {
+test("running-lab-doc sessions create missing annotations and recover from a failed undo", async (t) => {
   const labName = "demo";
   const yamlPath = "/home/alice/.clab/demo/demo.clab.yml";
   const initialYaml = [
@@ -265,7 +263,10 @@ test("running-lab-doc sessions treat missing annotations as empty and create the
     const saved = clientImpl.getRunningAnnotations(labName);
     assert.ok(saved);
     const annotations = JSON.parse(saved) as {
-      nodeAnnotations?: Array<{ id: string; position?: { x: number; y: number } }>;
+      nodeAnnotations?: Array<{
+        id: string;
+        position?: { x: number; y: number };
+      }>;
     };
     assert.deepEqual(annotations.nodeAnnotations, [
       {
@@ -273,7 +274,91 @@ test("running-lab-doc sessions treat missing annotations as empty and create the
         position: { x: 100, y: 200 }
       }
     ]);
+
+    assert.ok(response.type === "topology-host:ack");
+    const writeAnnotations = clientImpl.putLabTopologyAnnotations.bind(clientImpl);
+    let failNextWrite = true;
+    t.mock.method(
+      clientImpl,
+      "putLabTopologyAnnotations",
+      async (...args: Parameters<typeof writeAnnotations>) => {
+        if (failNextWrite) {
+          failNextWrite = false;
+          throw new Error("injected undo failure");
+        }
+        await writeAnnotations(...args);
+      }
+    );
+    const failedUndo = await session.host.applyCommand({ command: "undo" }, response.revision);
+    assert.equal(failedUndo.type, "topology-host:error");
+    assert.equal(clientImpl.getRunningAnnotations(labName), saved);
+    const retry = await session.host.applyCommand({ command: "undo" }, response.revision);
+    assert.equal(retry.type, "topology-host:ack");
+    assert.equal(clientImpl.getRunningAnnotations(labName), "{}\n");
   } finally {
     manager.disposeAll();
   }
+});
+
+test("failed running-document batch restores YAML and annotations and allows retry", async (t) => {
+  const labName = "rollback-demo";
+  const yamlPath = `/labs/${labName}.clab.yml`;
+  const yaml = `name: ${labName}\ntopology:\n  nodes: {}\n`;
+  const annotations = "{}\n";
+  const client = new InMemoryClabApiClient({}, { [labName]: { yaml, annotations } });
+  const manager = createStandaloneTopologySessionManager();
+  t.after(() => manager.disposeAll());
+  const session = manager.createSession({
+    client: client as unknown as ClabApiClient,
+    token: "test-token",
+    endpointId: "rollback-endpoint",
+    topologyRef: {
+      topologyId: yamlPath,
+      labName,
+      yamlPath,
+      source: "standalone"
+    },
+    mode: "edit",
+    deploymentState: "deployed",
+    sourcePreference: "running-lab-doc",
+    containerDataProvider: createRuntimeContainerDataProvider([])
+  });
+  const snapshot = await session.host.getSnapshot();
+  const writeAnnotations = client.putLabTopologyAnnotations.bind(client);
+  let failNextWrite = true;
+  t.mock.method(
+    client,
+    "putLabTopologyAnnotations",
+    async (...args: Parameters<typeof writeAnnotations>) => {
+      if (failNextWrite) {
+        failNextWrite = false;
+        throw new Error("injected annotations write failure");
+      }
+      await writeAnnotations(...args);
+    }
+  );
+  const command = {
+    command: "batch" as const,
+    payload: {
+      commands: [
+        {
+          command: "setYamlContent" as const,
+          payload: {
+            content: yaml.replace("nodes: {}", "nodes: {n1: {kind: linux}}")
+          }
+        },
+        {
+          command: "setAnnotationsContent" as const,
+          payload: { content: '{"viewerSettings":{"gridLineWidth":2}}\n' }
+        }
+      ]
+    }
+  };
+  const failed = await session.host.applyCommand(command, snapshot.revision);
+  assert.equal(failed.type, "topology-host:error");
+  assert.equal(await client.getLabTopologyYaml("test-token", labName), yaml);
+  assert.equal(client.getRunningAnnotations(labName), annotations);
+  const retried = await session.host.applyCommand(command, snapshot.revision);
+  assert.equal(retried.type, "topology-host:ack");
+  assert.match(await client.getLabTopologyYaml("test-token", labName), /n1/);
 });

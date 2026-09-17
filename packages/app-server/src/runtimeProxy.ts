@@ -1,3 +1,5 @@
+import { apiFetch } from "./upstreamRequest.ts";
+
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
@@ -1383,7 +1385,7 @@ export function registerRuntimeProxy(
           headers[key] = value;
         }
 
-        const upstreamResponse = await fetch(upstreamUrl, {
+        const upstreamResponse = await apiFetch(upstreamUrl, {
           method: request.method,
           headers
         });

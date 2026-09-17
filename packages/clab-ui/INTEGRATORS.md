@@ -37,6 +37,7 @@ Supported imports:
 - `@containerlab/clab-ui/session`
 - `@containerlab/clab-ui/theme`
 - `@containerlab/clab-ui/explorer`
+- `@containerlab/clab-ui/explorer/filter` (pure filtering utilities, also available through Node.js `require`)
 - `@containerlab/clab-ui/inspect`
 - `@containerlab/clab-ui/welcome`
 - `@containerlab/clab-ui/node-impairments`
@@ -157,6 +158,21 @@ If you skip step 2, the app mounts, but the first topology snapshot request has
 no context to work with.
 
 ## Integration Model
+
+`App` accepts optional React `slots` for a workspace `header`, replacement
+`content` (such as a file editor), and an `emptyState` overlay. Supplying
+`content` hides the topology canvas and its controls while preserving the
+mounted canvas state. Set `lifecycleActionsAvailable={false}` when the host
+cannot deploy or apply labs. These options are exported as `AppLayoutOptions`.
+Hosts should use these props instead of inspecting or modifying the UI's DOM.
+
+`TopologySessionCore` serializes operations by `documentKey` within one process
+and rejects edits when the backing document differs from the last snapshot.
+The default key is the YAML path; remote hosts should include the endpoint and
+lab identity. Cached file adapters should implement `invalidateCache()` so the
+comparison reads current data. This does not provide a distributed lock or an
+atomic conditional write against external writers. Failed multi-file saves
+restore backups where possible; they are not crash-atomic.
 
 Every integration follows the same shape:
 

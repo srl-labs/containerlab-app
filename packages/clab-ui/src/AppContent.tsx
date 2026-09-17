@@ -298,7 +298,19 @@ function createRuntimeForwarder(ref: React.RefObject<AnnotationContextValue | nu
   };
 }
 
-export interface AppContentProps {
+export interface AppLayoutOptions {
+  slots?: {
+    /** Content above the canvas, such as an application's document tabs. */
+    header?: React.ReactNode;
+    /** Replaces the visible canvas while retaining its mounted state. */
+    content?: React.ReactNode;
+    /** Content rendered over an empty canvas. */
+    emptyState?: React.ReactNode;
+  };
+  lifecycleActionsAvailable?: boolean;
+}
+
+export interface AppContentProps extends AppLayoutOptions {
   reactFlowRef: React.RefObject<ReactFlowCanvasRef | null>;
   rfInstance: ReactFlowInstance | null;
   layoutControls: LayoutControls;
@@ -686,9 +698,11 @@ export const AppContent: React.FC<AppContentProps> = ({
   rfInstance,
   layoutControls,
   onInit,
-  chrome = "full"
+  chrome = "full",
+  slots,
+  lifecycleActionsAvailable = true
 }) => {
-  const viewerOnly = chrome === "viewer";
+  const viewerOnly = chrome === "viewer" || slots?.content != null;
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
   const { renderAboutModal, renderDeployMenuItems } = useClabUiRuntime();
@@ -1441,6 +1455,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         />
         {!viewerOnly && (
           <Navbar
+            lifecycleActionsAvailable={lifecycleActionsAvailable}
             hasActiveTopology={hasActiveTopology}
             onZoomToFit={handleZoomToFit}
             layout={layoutControls.layout}
@@ -1595,21 +1610,31 @@ export const AppContent: React.FC<AppContentProps> = ({
             component="main"
             sx={{
               flexGrow: 1,
+              minWidth: 0,
               overflow: "hidden",
-              position: "relative"
+              position: "relative",
+              display: "flex",
+              flexDirection: "column"
             }}
           >
-            <GraphCanvasMain
-              canvasRef={reactFlowRef}
-              canvasProps={canvasProps}
-              showDummyLinks={state.showDummyLinks}
-              edgeAnnotationLookup={edgeAnnotationLookup}
-              endpointLabelOffset={state.endpointLabelOffset}
-              endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
-            />
-            <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
-            <EasterEggRenderer easterEgg={easterEgg} />
-            <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+            {slots?.header && <Box sx={{ flexShrink: 0 }}>{slots.header}</Box>}
+            <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
+              <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
+                <GraphCanvasMain
+                  canvasRef={reactFlowRef}
+                  canvasProps={canvasProps}
+                  showDummyLinks={state.showDummyLinks}
+                  edgeAnnotationLookup={edgeAnnotationLookup}
+                  endpointLabelOffset={state.endpointLabelOffset}
+                  endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
+                />
+                <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+              </Box>
+              {slots?.content}
+              {slots?.emptyState}
+              <EasterEggRenderer easterEgg={easterEgg} />
+              <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+            </Box>
           </Box>
         </Box>
 

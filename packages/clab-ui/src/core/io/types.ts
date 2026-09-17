@@ -40,6 +40,8 @@ export const noopLogger: IOLogger = {
  * - Standalone/API-backed hosts (using backend file proxies)
  */
 export interface FileSystemAdapter {
+  /** Discard cached reads before checking for changes made by another editor. */
+  invalidateCache?(): void;
   /**
    * Read file as UTF-8 string.
    * @throws Error if file doesn't exist

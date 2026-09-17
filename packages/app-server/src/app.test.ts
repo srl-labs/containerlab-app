@@ -91,6 +91,92 @@ interface TestAppContext {
   fetchMock: FetchMock;
 }
 
+for (const changes of [
+  { url: "https://other-host.test" },
+  { username: "other-user" },
+]) {
+  test(`changing endpoint identity requires authentication again: ${JSON.stringify(changes)}`, async (t) => {
+    const { app, fetchMock } = await createTestContext(t);
+    fetchMock.on("POST", "https://original-host.test/login", () =>
+      jsonResponse({ token: "original-token" }),
+    );
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/endpoints/add",
+      payload: {
+        url: "https://original-host.test",
+        username: "alice",
+        password: "example",
+      },
+    });
+    const cookie = extractSessionCookie(login);
+    const endpointId = login.json().id as string;
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/auth/endpoints/${endpointId}`,
+      headers: { cookie },
+      payload: changes,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().connected, false);
+    assert.equal(response.json().status, "session_expired");
+    assert.equal(
+      fetchMock.calls.length,
+      1,
+      "must not contact the new endpoint with the old token",
+    );
+    const request = await app.inject({
+      url: "/api/runtime/version",
+      headers: { cookie, "x-endpoint-id": endpointId },
+    });
+    assert.equal(request.statusCode, 401);
+  });
+}
+
+test("auth startup bounds an unresponsive endpoint and still reports healthy endpoints", async (t) => {
+  const { app, fetchMock } = await createTestContext(t);
+  let cookie = "";
+  for (const host of ["healthy", "stalled"]) {
+    fetchMock.on("POST", `https://${host}.test/login`, () =>
+      jsonResponse({ token: `${host}-token` }),
+    );
+    const login = await app.inject({
+      method: "POST",
+      url: "/auth/endpoints/add",
+      headers: { cookie },
+      payload: {
+        url: `https://${host}.test`,
+        username: "alice",
+        password: "example",
+      },
+    });
+    if (!cookie) cookie = extractSessionCookie(login);
+  }
+  fetchMock.on("GET", "https://healthy.test/api/v1/version", () =>
+    jsonResponse({ version: "test" }),
+  );
+  fetchMock.on(
+    "GET",
+    "https://stalled.test/api/v1/version",
+    ({ signal }) =>
+      new Promise((_resolve, reject) => {
+        assert.ok(signal);
+        signal.addEventListener("abort", () => reject(signal.reason), {
+          once: true,
+        });
+      }),
+  );
+  // Keep the event loop alive because AbortSignal.timeout itself is unrefed.
+  const keepAlive = setInterval(() => {}, 1000);
+  t.after(() => clearInterval(keepAlive));
+  const response = await app.inject({ url: "/auth/me", headers: { cookie } });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(
+    response.json().endpoints.map((entry: { status: string }) => entry.status),
+    ["connected", "offline"],
+  );
+});
+
 async function createTestContext(t: TestContext): Promise<TestAppContext> {
   const originalFetch = globalThis.fetch;
   const fetchMock = new FetchMock();
@@ -321,7 +407,9 @@ function demoTopologyRef(endpointId: string): {
   };
 }
 
-function vlanMismatchTopologyRef(endpointId: string): ReturnType<typeof demoTopologyRef> {
+function vlanMismatchTopologyRef(
+  endpointId: string,
+): ReturnType<typeof demoTopologyRef> {
   return {
     topologyId: `standalone:${endpointId}::vlan.clab.yml`,
     labName: "srlinux-vlan-handling-lab",
@@ -358,16 +446,22 @@ function mockVlanMismatchTopology(context: TestAppContext): void {
         {
           name: "clab-vlan-srl1",
           lab_name: "vlan",
-          absLabPath: "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
-          labPath: "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
+          absLabPath:
+            "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
+          labPath:
+            "/home/flschwar/.clab/srlinux-vlan-handling-lab/vlan.clab.yml",
         },
       ],
     });
   });
-  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/vlan", (call) => {
-    assert.equal(call.headers.get("authorization"), "Bearer secret-token");
-    return jsonResponse([{ name: "clab-vlan-srl1" }]);
-  });
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/vlan",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      return jsonResponse([{ name: "clab-vlan-srl1" }]);
+    },
+  );
 }
 
 test("GET /api/config returns empty endpoints without a session", async (t) => {
@@ -897,7 +991,10 @@ test("/api/runtime/file-explorer/upload forwards multipart file bytes", async (t
     "http://api.example.test/api/v1/labs/workspace/file?path=labs%2Fimage.bin",
     (call) => {
       assert.equal(call.headers.get("authorization"), "Bearer secret-token");
-      assert.equal(call.headers.get("content-type"), "application/octet-stream");
+      assert.equal(
+        call.headers.get("content-type"),
+        "application/octet-stream",
+      );
       assert.equal(call.body, Buffer.from([0, 1, 2, 255]).toString());
       return jsonResponse({ success: true });
     },
@@ -997,10 +1094,13 @@ test("/api/runtime/file-explorer/upload forwards multiple files to a directory t
     paths: ["labs/configs/leaf.cfg", "labs/configs/spine.cfg"],
     success: true,
   });
-  assert.deepEqual(written, new Map([
-    ["labs/configs/leaf.cfg", "leaf\n"],
-    ["labs/configs/spine.cfg", "spine\n"],
-  ]));
+  assert.deepEqual(
+    written,
+    new Map([
+      ["labs/configs/leaf.cfg", "leaf\n"],
+      ["labs/configs/spine.cfg", "spine\n"],
+    ]),
+  );
 });
 
 test("/api/runtime/labs/archive downloads all files from a direct lab folder", async (t) => {
@@ -1021,9 +1121,18 @@ test("/api/runtime/labs/archive downloads all files from a direct lab folder", a
 
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.rawPayload.readUInt32LE(0), 0x04034b50);
-  assert.match(response.headers["content-disposition"] as string, /srl-mirroring-lab\.zip/);
-  assert.match(response.rawPayload.toString("utf8"), /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/);
-  assert.match(response.rawPayload.toString("utf8"), /srl-mirroring-lab\/configs\/leaf\.cfg/);
+  assert.match(
+    response.headers["content-disposition"] as string,
+    /srl-mirroring-lab\.zip/,
+  );
+  assert.match(
+    response.rawPayload.toString("utf8"),
+    /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/,
+  );
+  assert.match(
+    response.rawPayload.toString("utf8"),
+    /srl-mirroring-lab\/configs\/leaf\.cfg/,
+  );
 });
 
 test("/api/runtime/labs/archive downloads tar.gz archives", async (t) => {
@@ -1044,7 +1153,10 @@ test("/api/runtime/labs/archive downloads tar.gz archives", async (t) => {
 
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.headers["content-type"], "application/gzip");
-  assert.match(response.headers["content-disposition"] as string, /srl-mirroring-lab\.tar\.gz/);
+  assert.match(
+    response.headers["content-disposition"] as string,
+    /srl-mirroring-lab\.tar\.gz/,
+  );
   const tarContent = gunzipSync(response.rawPayload).toString("utf8");
   assert.match(tarContent, /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/);
   assert.match(tarContent, /srl-mirroring-lab\/configs\/leaf\.cfg/);
@@ -1157,7 +1269,8 @@ test("/api/lab/deploy reconciles upstream network errors", async (t) => {
       labName: "demo",
       running: true,
     },
-    message: "Lifecycle deploy result reconciled after the upstream connection was interrupted.",
+    message:
+      "Lifecycle deploy result reconciled after the upstream connection was interrupted.",
     logs: [],
   });
 });
@@ -1208,7 +1321,8 @@ test("/api/lab/destroy reconciles upstream network errors", async (t) => {
       labName: "demo",
       running: false,
     },
-    message: "Lifecycle destroy result reconciled after the upstream connection was interrupted.",
+    message:
+      "Lifecycle destroy result reconciled after the upstream connection was interrupted.",
     logs: [],
   });
 });
@@ -1243,7 +1357,8 @@ test("/api/lab/redeploy reports indeterminate upstream network errors as retryab
   assert.deepEqual(response.json(), {
     success: false,
     reconciled: false,
-    error: "Lifecycle redeploy result is unknown after the upstream connection was interrupted. Retry after a short delay or refresh lab state.",
+    error:
+      "Lifecycle redeploy result is unknown after the upstream connection was interrupted. Retry after a short delay or refresh lab state.",
   });
 });
 

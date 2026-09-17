@@ -12,11 +12,7 @@ import {
   isValidEndpointSessionDuration,
   normalizeEndpointSessionDuration
 } from "./endpointSessionStore.ts";
-import {
-  clearLegacySessionCookies,
-  clearSessionCookie,
-  normalizeApiUrl
-} from "./middleware.ts";
+import { clearLegacySessionCookies, clearSessionCookie, normalizeApiUrl } from "./middleware.ts";
 
 export interface EndpointPublicInfo {
   id: string;
@@ -92,17 +88,18 @@ function toPublicInfo(
 }
 
 async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInfo> {
+  if (!entry.token) return toPublicInfo(entry, "session_expired");
   const client = new ClabApiClient({ baseUrl: entry.url });
   try {
-    await client.getVersion(entry.token);
+    await client.getVersion(entry.token, 3000);
     return toPublicInfo(entry, "connected");
   } catch (error) {
     if (
       typeof error === "object" &&
       error !== null &&
       "status" in error &&
-      (((error as { status?: unknown }).status === 401) ||
-        ((error as { status?: unknown }).status === 403))
+      ((error as { status?: unknown }).status === 401 ||
+        (error as { status?: unknown }).status === 403)
     ) {
       return toPublicInfo(entry, "session_expired");
     }
@@ -111,10 +108,15 @@ async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInf
 }
 
 async function listEndpointInfos(session: EndpointSession): Promise<EndpointPublicInfo[]> {
-  return await Promise.all(Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry)));
+  return await Promise.all(
+    Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry))
+  );
 }
 
-function requireCredentials(username: string | undefined, password: string | undefined): string | null {
+function requireCredentials(
+  username: string | undefined,
+  password: string | undefined
+): string | null {
   if (!username?.trim() || !password?.trim()) {
     return "Username and password are required";
   }
@@ -134,9 +136,9 @@ function authErrorStatusCode(error: unknown): number {
     typeof error === "object" &&
     error !== null &&
     "status" in error &&
-    ((((error as { status?: unknown }).status === 400) ||
-      ((error as { status?: unknown }).status === 401) ||
-      ((error as { status?: unknown }).status === 403)))
+    ((error as { status?: unknown }).status === 400 ||
+      (error as { status?: unknown }).status === 401 ||
+      (error as { status?: unknown }).status === 403)
   ) {
     return Number((error as { status?: unknown }).status);
   }
@@ -153,7 +155,10 @@ function resolveEndpointSessionDuration(
   return normalized;
 }
 
-async function authenticateEndpoint(body: AddEndpointBody, defaultApiUrl: string): Promise<EndpointEntry> {
+async function authenticateEndpoint(
+  body: AddEndpointBody,
+  defaultApiUrl: string
+): Promise<EndpointEntry> {
   const username = body.username?.trim() ?? "";
   const password = body.password;
   const sessionDuration = resolveEndpointSessionDuration(body.sessionDuration);
@@ -194,7 +199,9 @@ async function reconnectEndpoint(
     throw new Error("Endpoint URL is required to reconnect");
   }
 
-  const sessionDuration = resolveEndpointSessionDuration(body.sessionDuration ?? existing?.sessionDuration);
+  const sessionDuration = resolveEndpointSessionDuration(
+    body.sessionDuration ?? existing?.sessionDuration
+  );
   const result = await new ClabApiClient({ baseUrl: normalizedUrl }).login(
     body.username.trim(),
     body.password,
@@ -311,7 +318,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
         const session = options.ensureSession(request, reply);
         const updated = await reconnectEndpoint(endpointId, request.body, session, options);
         clearLegacySessionCookies(reply);
-        return reply.send(toPublicInfo(updated, "connected"));
+        return reply.send(toPublicInfo(updated, updated.token ? "connected" : "session_expired"));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reconnect failed";
         return reply.status(authErrorStatusCode(error)).send({ error: message });
@@ -339,9 +346,10 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
           sessionDuration: resolveEndpointSessionDuration(request.body.sessionDuration)
         };
         options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-        return reply.send(toPublicInfo(updated, "connected"));
+        return reply.send(toPublicInfo(updated, updated.token ? "connected" : "session_expired"));
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to update endpoint preferences";
+        const message =
+          error instanceof Error ? error.message : "Failed to update endpoint preferences";
         return reply.status(authErrorStatusCode(error)).send({ error: message });
       }
     }
@@ -362,9 +370,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       }
 
       const nextUrl =
-        request.body.url !== undefined
-          ? normalizeApiUrl(request.body.url)
-          : existing.url;
+        request.body.url !== undefined ? normalizeApiUrl(request.body.url) : existing.url;
       if (!nextUrl) {
         return reply.status(400).send({ error: "Invalid API endpoint URL" });
       }
@@ -380,8 +386,10 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
           ? resolveEndpointSessionDuration(request.body.sessionDuration)
           : existing.sessionDuration;
 
+      const identityChanged = nextUrl !== existing.url || nextUsername !== existing.username;
       const updated: EndpointEntry = {
         ...existing,
+        token: identityChanged ? "" : existing.token,
         url: nextUrl,
         label:
           request.body.label !== undefined

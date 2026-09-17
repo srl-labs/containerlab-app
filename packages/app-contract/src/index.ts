@@ -10,3 +10,6 @@ export interface AppConfigResponse {
   defaultClabApiUrl: string;
   endpoints: EndpointSessionMetadata[];
 }
+
+export * from "./runtime";
+export * from "./endpoints";

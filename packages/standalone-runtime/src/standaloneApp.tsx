@@ -1,3 +1,8 @@
+import {
+  StandaloneLabTabs,
+  StandaloneFileEditor,
+  StandaloneLabEmptyState,
+} from "./components/StandaloneWorkspace";
 /**
  * Standalone app entry point.
  *
@@ -33,7 +38,6 @@ import {
 } from "./mainUiDependencies";
 
 import {
-  LabTabsBar,
   createStandaloneLifecycleManager,
   createStandaloneTopologyManager,
   extractEndpointIdFromTopologyId,
@@ -83,7 +87,6 @@ import {
   setDefaultUiCustomNode,
   uploadUiIcon,
   useLabTabsStore,
-  type FileLabTab,
   type TerminalPreferences,
 } from "./mainApiDependencies";
 import type * as ImageManagerExports from "@containerlab/clab-ui/image-manager";
@@ -109,11 +112,6 @@ function loadImageManagerModule(): Promise<ImageManagerModule> {
   return imageManagerModulePromise;
 }
 
-const LazyAttractorEmptyState = lazy(async () => {
-  const module = await import("./components/AttractorEmptyState");
-  return { default: module.AttractorEmptyState };
-});
-
 const LazyLoginPage = lazy(async () => {
   const module = await import("./components/LoginPage");
   return { default: module.LoginPage };
@@ -128,23 +126,6 @@ const LazyRuntimeActionDialogs = lazy(async () => {
   const module = await import("./components/RuntimeActionDialogs");
   return { default: module.RuntimeActionDialogs };
 });
-
-const LazyFileEditorTabPanel = lazy(async () => {
-  const module = await import("./components/FileEditorTabPanel");
-  return { default: module.FileEditorTabPanel };
-});
-
-const FILE_TAB_TOPOLOGY_CHROME_CSS = `
-  [data-testid="context-panel"],
-  [data-testid="panel-toggle-btn"],
-  [data-testid="panel-toggle-btn"] + * {
-    display: none !important;
-  }
-
-  header.MuiAppBar-root:has([data-testid="navbar-lab-name"]) {
-    display: none !important;
-  }
-`;
 
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("./components/SettingsOverlay");
@@ -443,7 +424,9 @@ async function refreshRuntimeStoreForTopology(target: {
   sessionId?: string;
   topologyRef: TopologyRef;
 }): Promise<void> {
-  const endpointId = extractEndpointIdFromTopologyId(target.topologyRef.topologyId);
+  const endpointId = extractEndpointIdFromTopologyId(
+    target.topologyRef.topologyId,
+  );
   if (!endpointId) {
     return;
   }
@@ -1240,78 +1223,6 @@ const IGNORED_STANDALONE_MESSAGE_COMMANDS = new Set([
   "topoViewerLog",
 ]);
 
-const PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS = [
-  'button[data-testid="navbar-deploy"]',
-  'button[data-testid="navbar-deploy-menu"]',
-] as const;
-
-function hidePagesLifecycleElement(element: HTMLElement): void {
-  if (!element.hidden) {
-    element.hidden = true;
-  }
-  if (element.style.display !== "none") {
-    element.style.display = "none";
-  }
-  if (element.getAttribute("aria-hidden") !== "true") {
-    element.setAttribute("aria-hidden", "true");
-  }
-}
-
-function hidePagesLifecycleButtons(): void {
-  for (const selector of PAGES_HIDDEN_LIFECYCLE_BUTTON_SELECTORS) {
-    const button = document.querySelector<HTMLButtonElement>(selector);
-    if (!button) {
-      continue;
-    }
-    if (!button.disabled) {
-      button.disabled = true;
-    }
-    if (button.getAttribute("aria-disabled") !== "true") {
-      button.setAttribute("aria-disabled", "true");
-    }
-    if (button.title !== "Deploy is not available in GitHub Pages mode.") {
-      button.title = "Deploy is not available in GitHub Pages mode.";
-    }
-    button.tabIndex = -1;
-    let elementToHide: HTMLElement = button;
-    if (
-      !selector.includes("navbar-deploy-menu") &&
-      button.parentElement?.tagName === "SPAN"
-    ) {
-      elementToHide = button.parentElement;
-    }
-    hidePagesLifecycleElement(elementToHide);
-  }
-}
-
-function usePagesLifecycleControlsHidden(): void {
-  useEffect(() => {
-    if (!isPagesRuntimeMode()) {
-      return;
-    }
-
-    hidePagesLifecycleButtons();
-    const observer = new MutationObserver(hidePagesLifecycleButtons);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: [
-        "aria-disabled",
-        "aria-hidden",
-        "disabled",
-        "hidden",
-        "style",
-        "title",
-      ],
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-}
-
 // Standalone host bridge - explicit UI host with API-backed topology transport.
 function setupStandaloneUiHost(): void {
   const warnedCommands = new Set<string>();
@@ -1463,495 +1374,16 @@ function renderApp(): void {
   reactRoot.render(<StandaloneApp />);
 }
 
-interface TabsHostResolution {
-  created: boolean;
-  host: HTMLDivElement | null;
-}
-
-function resolveLabTabsHostElement(): TabsHostResolution {
-  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
-  if (!(appRoot instanceof HTMLDivElement)) {
-    return { created: false, host: null };
-  }
-
-  const existingHost = appRoot.querySelector(
-    "[data-standalone-lab-tabs-host='true']",
-  );
-  if (existingHost instanceof HTMLDivElement) {
-    return { created: false, host: existingHost };
-  }
-
-  const mainElement = appRoot.querySelector("main");
-  if (!(mainElement instanceof HTMLElement)) {
-    return { created: false, host: null };
-  }
-
-  const host = document.createElement("div");
-  host.setAttribute("data-standalone-lab-tabs-host", "true");
-  host.style.position = "absolute";
-  host.style.top = "0";
-  host.style.left = "0";
-  host.style.right = "0";
-  host.style.zIndex = "7";
-  host.style.pointerEvents = "auto";
-  mainElement.insertBefore(host, mainElement.firstChild);
-  return { created: true, host };
-}
-
-function resolveLabEmptyStateHostElement(): TabsHostResolution {
-  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
-  if (!(appRoot instanceof HTMLDivElement)) {
-    return { created: false, host: null };
-  }
-
-  const mainElement = appRoot.querySelector("main");
-  if (!(mainElement instanceof HTMLElement)) {
-    return { created: false, host: null };
-  }
-
-  const existingHost = mainElement.querySelector(
-    "[data-standalone-lab-empty-host='true']",
-  );
-  if (existingHost instanceof HTMLDivElement) {
-    return { created: false, host: existingHost };
-  }
-
-  const host = document.createElement("div");
-  host.setAttribute("data-standalone-lab-empty-host", "true");
-  host.style.position = "absolute";
-  host.style.top = "0";
-  host.style.left = "0";
-  host.style.right = "0";
-  host.style.bottom = "0";
-  host.style.zIndex = "6";
-  host.style.pointerEvents = "none";
-  mainElement.appendChild(host);
-  return { created: true, host };
-}
-
-function resolveFileEditorHostElement(): TabsHostResolution {
-  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
-  if (!(appRoot instanceof HTMLDivElement)) {
-    return { created: false, host: null };
-  }
-
-  const mainElement = appRoot.querySelector("main");
-  if (!(mainElement instanceof HTMLElement)) {
-    return { created: false, host: null };
-  }
-
-  const existingHost = mainElement.querySelector(
-    "[data-standalone-file-editor-host='true']",
-  );
-  if (existingHost instanceof HTMLDivElement) {
-    return { created: false, host: existingHost };
-  }
-
-  const host = document.createElement("div");
-  host.setAttribute("data-standalone-file-editor-host", "true");
-  host.style.position = "absolute";
-  host.style.top = "45px";
-  host.style.left = "0";
-  host.style.right = "0";
-  host.style.bottom = "0";
-  host.style.zIndex = "6";
-  host.style.pointerEvents = "none";
-  mainElement.appendChild(host);
-  return { created: true, host };
-}
-
-function useLabTabsPortalHost(): HTMLDivElement | null {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let ownedHost: HTMLDivElement | null = null;
-    let observer: MutationObserver | null = null;
-
-    const attach = () => {
-      const resolution = resolveLabTabsHostElement();
-      if (!resolution.host) {
-        return false;
-      }
-      if (resolution.created) {
-        ownedHost = resolution.host;
-      }
-      if (mounted) {
-        setHost(resolution.host);
-      }
-      return true;
-    };
-
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) {
-          observer?.disconnect();
-          observer = null;
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-      if (ownedHost && ownedHost.parentElement) {
-        ownedHost.remove();
-      }
-      setHost(null);
-    };
-  }, []);
-
-  return host;
-}
-
-function StandaloneLabTabsMount() {
-  const host = useLabTabsPortalHost();
-  const tabs = useLabTabsStore((state) => state.tabs);
-  const activeTabId = useLabTabsStore((state) => state.activeTabId);
-  const endpoints = useEndpointStore((state) => state.endpoints);
-
-  const endpointLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const endpoint of endpoints.values()) {
-      labels.set(endpoint.id, endpoint.label);
-    }
-    return labels;
-  }, [endpoints]);
-
-  const handleActivate = useCallback((tabId: string) => {
-    void activateLabTabById(tabId);
-  }, []);
-
-  const handleClose = useCallback((tabId: string) => {
-    void closeLabTabAndActivateNext(tabId);
-  }, []);
-
-  if (!host) {
-    return null;
-  }
-
-  return createPortal(
-    <LabTabsBar
-      activeTabId={activeTabId}
-      endpointLabels={endpointLabels}
-      onActivate={handleActivate}
-      onClose={handleClose}
-      tabs={tabs}
-    />,
-    host,
-  );
-}
-
-function useFileEditorPortalHost(): HTMLDivElement | null {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let ownedHost: HTMLDivElement | null = null;
-    let observer: MutationObserver | null = null;
-
-    const attach = () => {
-      const resolution = resolveFileEditorHostElement();
-      if (!resolution.host) {
-        return false;
-      }
-      if (resolution.created) {
-        ownedHost = resolution.host;
-      }
-      if (mounted) {
-        setHost(resolution.host);
-      }
-      return true;
-    };
-
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) {
-          observer?.disconnect();
-          observer = null;
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-      if (ownedHost && ownedHost.parentElement) {
-        ownedHost.remove();
-      }
-      setHost(null);
-    };
-  }, []);
-
-  return host;
-}
-
-function StandaloneFileEditorTabMount() {
-  const host = useFileEditorPortalHost();
-  const activeFileTab = useLabTabsStore((state): FileLabTab | null => {
-    const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
-    return isFileLabTab(activeTab) ? activeTab : null;
-  });
-
-  const handleClose = useCallback((tabId: string) => {
-    void closeLabTabAndActivateNext(tabId);
-  }, []);
-
-  if (!host || !activeFileTab) {
-    return null;
-  }
-
-  return createPortal(
-    <Suspense fallback={null}>
-      <LazyFileEditorTabPanel onClose={handleClose} tab={activeFileTab} />
-    </Suspense>,
-    host,
-  );
-}
-
-function useLabEmptyStatePortalHost(): HTMLDivElement | null {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let ownedHost: HTMLDivElement | null = null;
-    let observer: MutationObserver | null = null;
-
-    const attach = () => {
-      const resolution = resolveLabEmptyStateHostElement();
-      if (!resolution.host) {
-        return false;
-      }
-      if (resolution.created) {
-        ownedHost = resolution.host;
-      }
-      if (mounted) {
-        setHost(resolution.host);
-      }
-      return true;
-    };
-
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) {
-          observer?.disconnect();
-          observer = null;
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-      if (ownedHost && ownedHost.parentElement) {
-        ownedHost.remove();
-      }
-      setHost(null);
-    };
-  }, []);
-
-  return host;
-}
-
-function computeContextPanelOcclusion(host: HTMLDivElement | null): {
-  left: number;
-  right: number;
-} {
-  if (!host) {
-    return { left: 0, right: 0 };
-  }
-  const hostRect = host.getBoundingClientRect();
-  if (hostRect.width <= 0 || hostRect.height <= 0) {
-    return { left: 0, right: 0 };
-  }
-
-  const panel = document.querySelector<HTMLElement>(
-    "[data-testid='context-panel'] .MuiDrawer-paper",
-  );
-  if (!panel) {
-    return { left: 0, right: 0 };
-  }
-
-  const panelRect = panel.getBoundingClientRect();
-  const overlapLeft = Math.max(hostRect.left, panelRect.left);
-  const overlapRight = Math.min(hostRect.right, panelRect.right);
-  const overlapWidth = Math.max(0, overlapRight - overlapLeft);
-  if (overlapWidth <= 0) {
-    return { left: 0, right: 0 };
-  }
-
-  const panelMid = (panelRect.left + panelRect.right) / 2;
-  const hostMid = (hostRect.left + hostRect.right) / 2;
-  return panelMid < hostMid
-    ? { left: overlapWidth, right: 0 }
-    : { left: 0, right: overlapWidth };
-}
-
-function useEmptyStateOcclusion(host: HTMLDivElement | null): {
-  left: number;
-  right: number;
-} {
-  const [occlusion, setOcclusion] = useState<{ left: number; right: number }>({
-    left: 0,
-    right: 0,
-  });
-
-  useEffect(() => {
-    if (!host) {
-      setOcclusion({ left: 0, right: 0 });
-      return;
-    }
-
-    let observer: MutationObserver | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    let rafId: number | null = null;
-
-    const update = () => {
-      setOcclusion((previous) => {
-        const next = computeContextPanelOcclusion(host);
-        if (next.left === previous.left && next.right === previous.right) {
-          return previous;
-        }
-        return next;
-      });
-    };
-
-    const scheduleUpdate = () => {
-      if (rafId !== null) {
-        return;
-      }
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null;
-        update();
-      });
-    };
-
-    const attachPanelResizeObserver = () => {
-      resizeObserver?.disconnect();
-      resizeObserver = new ResizeObserver(() => {
-        scheduleUpdate();
-      });
-      resizeObserver.observe(host);
-      const panel = document.querySelector<HTMLElement>(
-        "[data-testid='context-panel'] .MuiDrawer-paper",
-      );
-      if (panel) {
-        resizeObserver.observe(panel);
-      }
-    };
-
-    observer = new MutationObserver(() => {
-      attachPanelResizeObserver();
-      scheduleUpdate();
-    });
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["class", "style"],
-    });
-
-    window.addEventListener("resize", scheduleUpdate);
-    attachPanelResizeObserver();
-    update();
-
-    return () => {
-      window.removeEventListener("resize", scheduleUpdate);
-      observer?.disconnect();
-      resizeObserver?.disconnect();
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-    };
-  }, [host]);
-
-  return occlusion;
-}
-
 function useDeferredRuntimeChrome(): boolean {
   const [ready, setReady] = useState(false);
-
   useEffect(() => {
-    let observer: MutationObserver | null = null;
-    let frameId: number | null = null;
-    let timerId: number | null = null;
-    const scheduleReady = () => {
-      if (frameId !== null || timerId !== null) {
-        return;
-      }
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        timerId = window.setTimeout(() => {
-          timerId = null;
-          setReady(true);
-        }, RUNTIME_CHROME_DEFER_MS);
-      });
-    };
-    const scheduleAfterTopoViewerMount = () => {
-      if (document.querySelector("[data-testid='topoviewer-app']")) {
-        observer?.disconnect();
-        observer = null;
-        scheduleReady();
-      }
-    };
-
-    scheduleAfterTopoViewerMount();
-    if (frameId === null && timerId === null) {
-      observer = new MutationObserver(scheduleAfterTopoViewerMount);
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      observer?.disconnect();
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      if (timerId !== null) {
-        window.clearTimeout(timerId);
-      }
-    };
+    const timer = window.setTimeout(
+      () => setReady(true),
+      RUNTIME_CHROME_DEFER_MS,
+    );
+    return () => window.clearTimeout(timer);
   }, []);
-
   return ready;
-}
-
-function StandaloneLabEmptyStateMount() {
-  const host = useLabEmptyStatePortalHost();
-  const tabs = useLabTabsStore((state) => state.tabs);
-  const occlusion = useEmptyStateOcclusion(host);
-  const [showEmptyState, setShowEmptyState] = useState(false);
-
-  useEffect(() => {
-    if (!host || tabs.length > 0) {
-      setShowEmptyState(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setShowEmptyState(true);
-    }, 750);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [host, tabs.length]);
-
-  if (!host || tabs.length > 0 || !showEmptyState) {
-    return null;
-  }
-
-  return createPortal(
-    <Suspense fallback={null}>
-      <LazyAttractorEmptyState
-        occlusionLeft={occlusion.left}
-        occlusionRight={occlusion.right}
-      />
-    </Suspense>,
-    host,
-  );
 }
 
 /**
@@ -1989,7 +1421,6 @@ function StandaloneApp() {
   });
   const runtimeChromeReady = useDeferredRuntimeChrome();
   const runtimeDialogsReady = isPagesRuntimeMode() || runtimeChromeReady;
-  usePagesLifecycleControlsHidden();
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -2234,13 +1665,24 @@ function StandaloneApp() {
 
   return (
     <>
-      {activeLabTabKind === "file" ? (
-        <style>{FILE_TAB_TOPOLOGY_CHROME_CSS}</style>
-      ) : null}
-      <App initialData={initialData} runtime={standaloneRuntime!} />
-      <StandaloneLabTabsMount />
-      <StandaloneFileEditorTabMount />
-      <StandaloneLabEmptyStateMount />
+      <App
+        initialData={initialData}
+        runtime={standaloneRuntime!}
+        lifecycleActionsAvailable={!isPagesRuntimeMode()}
+        slots={{
+          header: (
+            <StandaloneLabTabs
+              onActivate={activateLabTabById}
+              onClose={closeLabTabAndActivateNext}
+            />
+          ),
+          content:
+            activeLabTabKind === "file" ? (
+              <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />
+            ) : undefined,
+          emptyState: <StandaloneLabEmptyState />,
+        }}
+      />
       {runtimeDialogsReady ? (
         <>
           <MuiThemeProvider>

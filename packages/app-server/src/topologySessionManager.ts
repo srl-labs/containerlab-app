@@ -198,6 +198,11 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
       const host = new TopologySessionCore({
         fs,
+        documentKey: JSON.stringify([
+          options.client.getBaseUrl(),
+          options.topologyRef.labName,
+          options.topologyRef.yamlPath
+        ]),
         yamlFilePath: options.topologyRef.yamlPath,
         mode: options.mode,
         deploymentState: options.deploymentState,
@@ -285,10 +290,8 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         }
         const sessionLabName = session.topologyRef.labName.trim().toLowerCase();
         const sessionYamlPath = normalizePath(session.topologyRef.yamlPath);
-        const matchesPath =
-          normalizedYamlPath.length > 0 && sessionYamlPath === normalizedYamlPath;
-        const matchesLabName =
-          normalizedLabName.length > 0 && sessionLabName === normalizedLabName;
+        const matchesPath = normalizedYamlPath.length > 0 && sessionYamlPath === normalizedYamlPath;
+        const matchesLabName = normalizedLabName.length > 0 && sessionLabName === normalizedLabName;
         if (!matchesPath && !matchesLabName) {
           continue;
         }

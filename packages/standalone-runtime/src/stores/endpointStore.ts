@@ -1,9 +1,7 @@
 import { create } from "zustand";
 
 import {
-  DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointProfileKey,
-  isValidEndpointSessionDuration,
   normalizeEndpointProfile,
   normalizeEndpointSessionDuration,
   type EndpointImportResult,
@@ -160,7 +158,9 @@ function importEndpointProfiles(
   currentEndpoints: Map<string, EndpointConfig>,
   profiles: EndpointProfile[]
 ): { endpoints: Map<string, EndpointConfig>; result: EndpointImportResult } {
-  const normalizedProfiles = profiles.map((profile, index) => normalizeEndpointProfile(profile, index));
+  const normalizedProfiles = profiles.map((profile, index) =>
+    normalizeEndpointProfile(profile, index)
+  );
   const deduped = uniqueImportProfiles(normalizedProfiles);
   const endpoints = new Map(currentEndpoints);
   const existingByProfileKey = new Map<string, EndpointConfig>();

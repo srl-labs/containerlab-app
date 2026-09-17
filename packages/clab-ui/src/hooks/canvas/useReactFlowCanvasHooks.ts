@@ -234,18 +234,20 @@ export function useCanvasRefMethods(
       fit: () => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }),
       applyLayout: (layoutName: string) => {
         const name = isLayoutName(layoutName) ? layoutName : "preset";
-        applyLayout(name, nodes, edges).then(({ nodes: laidNodes, edges: laidEdges }) => {
-          const shouldPersist = shouldPersistLayoutPositions(name);
-          const { nodes: normalizedNodes, positions } = shouldPersist
-            ? normalizeLayoutableNodePositions(laidNodes, snapToGrid)
-            : { nodes: laidNodes, positions: [] };
-          setNodes(normalizedNodes);
-          setEdges(laidEdges);
-          if (shouldPersist && positions.length > 0) {
-            void saveNodePositions(sessionClient, positions);
-          }
-          scheduleFitView(reactFlowInstanceRef);
-        });
+        void applyLayout(name, nodes, edges)
+          .then(({ nodes: laidNodes, edges: laidEdges }) => {
+            const shouldPersist = shouldPersistLayoutPositions(name);
+            const { nodes: normalizedNodes, positions } = shouldPersist
+              ? normalizeLayoutableNodePositions(laidNodes, snapToGrid)
+              : { nodes: laidNodes, positions: [] };
+            setNodes(normalizedNodes);
+            setEdges(laidEdges);
+            if (shouldPersist && positions.length > 0) {
+              void saveNodePositions(sessionClient, positions);
+            }
+            scheduleFitView(reactFlowInstanceRef);
+          })
+          .catch((error: unknown) => console.error("Failed to apply topology layout", error));
       },
 
       getReactFlowInstance: () => reactFlowInstanceRef.current,

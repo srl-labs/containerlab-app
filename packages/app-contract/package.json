@@ -9,9 +9,15 @@
     ".": "./src/index.ts"
   },
   "devDependencies": {
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin src"
+  },
+  "dependencies": {
+    "@containerlab/clab-ui": "workspace:*"
   }
 }

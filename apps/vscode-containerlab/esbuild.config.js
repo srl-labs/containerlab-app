@@ -193,7 +193,7 @@ async function buildCss() {
 
   // Monaco codicon font reference (relative to editor.main.css)
   css = css.replace(
-    /url\((\"|')?\.\.\/base\/browser\/ui\/codicons\/codicon\/codicon\.ttf(\")?\)/g,
+    /url\(("|')?\.\.\/base\/browser\/ui\/codicons\/codicon\/codicon\.ttf(")?\)/g,
     "url(webfonts/codicon.ttf)"
   );
 

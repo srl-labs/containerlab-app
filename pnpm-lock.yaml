@@ -359,6 +359,9 @@ catalogs:
     typescript:
       specifier: 7.0.2
       version: 7.0.2
+    undici:
+      specifier: 7.29.1
+      version: 7.29.1
     use-sync-external-store:
       specifier: 1.7.0
       version: 1.7.0
@@ -467,6 +470,12 @@ importers:
       fastify:
         specifier: 'catalog:'
         version: 5.12.5
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.83.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2001
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -693,7 +702,17 @@ importers:
         version: 8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.6.1)(tsx@4.23.13)(yaml@2.9.1)
 
   packages/app-contract:
+    dependencies:
+      '@containerlab/clab-ui':
+        specifier: workspace:*
+        version: link:../clab-ui
     devDependencies:
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.83.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2001
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -721,6 +740,9 @@ importers:
       fastify:
         specifier: 'catalog:'
         version: 5.12.5
+      undici:
+        specifier: 'catalog:'
+        version: 7.29.1
       ws:
         specifier: 'catalog:'
         version: 8.21.3
@@ -731,6 +753,12 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.1
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.83.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2001
       tsx:
         specifier: 'catalog:'
         version: 4.23.13
@@ -913,6 +941,12 @@ importers:
       '@types/three':
         specifier: 'catalog:'
         version: 0.186.0
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.83.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2001
       tsx:
         specifier: 'catalog:'
         version: 4.23.13

@@ -34,6 +34,7 @@ const entryPoints = {
   "session/index": "src/session/index.ts",
   "theme/index": "src/theme/index.ts",
   "explorer/index": "src/explorer/index.ts",
+  "explorer/filter": "src/utils/filterUtils.ts",
   "image-manager/index": "src/image-manager/index.ts",
   "image-manager/catalog": "src/image-manager/catalog-entry.ts",
   "inspect/index": "src/inspect/index.ts",

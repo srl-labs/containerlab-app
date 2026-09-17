@@ -125,7 +125,7 @@ For the web container, pass variables with `docker run -e NAME=value` before the
 
 | Variable | Default | Applies to | Purpose |
 | --- | --- | --- | --- |
-| `CLAB_API_TLS_VERIFY` | `false` | Web, desktop | Verify the API server's TLS certificate. |
+| `CLAB_API_TLS_VERIFY` | `false` | Web, desktop | Accept self-signed API certificates by default; set `true` to verify them. Applies only to API connections. |
 | `PORT` | `3001` | Web | Port used to serve the web app. |
 | `WEB_TLS_ENABLE` | `true` | Web | Serve the app over HTTPS. |
 | `WEB_TLS_AUTO_CERT` | `true` | Web | Generate a self-signed certificate when no certificate files are supplied. |
