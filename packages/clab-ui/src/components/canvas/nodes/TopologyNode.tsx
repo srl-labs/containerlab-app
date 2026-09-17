@@ -22,7 +22,7 @@ import {
   useDeploymentState,
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
-import { getCustomIconMap } from "../../../utils/iconUtils";
+import { getCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
 import {
@@ -182,7 +182,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     // Check if role matches a custom icon
     const customDataUri = customIconMap.get(role);
     if (customDataUri !== undefined && customDataUri.length > 0) {
-      return customDataUri;
+      return getCustomIconUrl(customDataUri, iconColor);
     }
     // Fall back to built-in SVG icons
     const svgType = getRoleSvgType(role);

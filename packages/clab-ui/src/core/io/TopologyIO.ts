@@ -372,7 +372,7 @@ export class TopologyIO {
     return {
       label: toOptionalNullableString(extraData.label),
       icon: toOptionalString(extraData.topoViewerRole),
-      iconColor: toOptionalString(extraData.iconColor),
+      iconColor: toOptionalNullableString(extraData.iconColor),
       iconCornerRadius: toOptionalNumber(extraData.iconCornerRadius),
       labelPosition: toOptionalNullableString(extraData.labelPosition),
       direction: toOptionalNullableString(extraData.direction),
@@ -389,7 +389,7 @@ export class TopologyIO {
     return (
       annotationData.label !== undefined ||
       Boolean(annotationData.icon) ||
-      Boolean(annotationData.iconColor) ||
+      annotationData.iconColor !== undefined ||
       annotationData.iconCornerRadius !== undefined ||
       annotationData.labelPosition !== undefined ||
       annotationData.direction !== undefined ||

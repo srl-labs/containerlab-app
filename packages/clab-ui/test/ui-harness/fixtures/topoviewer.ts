@@ -275,6 +275,7 @@ interface TopologyAnnotations {
     group?: string;
     level?: string;
     icon?: string;
+    iconColor?: string;
     labelPosition?: string;
     direction?: string;
     labelBackgroundColor?: string;

@@ -23,7 +23,7 @@ import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
 import { useSchema, useDockerImages } from "../../../hooks/editor";
 import { useCustomIcons } from "../../../stores/topoViewerStore";
-import { buildCustomIconMap } from "../../../utils/iconUtils";
+import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
 import type { TabProps } from "./types";
@@ -294,7 +294,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const customIcons = useCustomIcons();
 
-  const color = data.iconColor ?? DEFAULT_ICON_COLOR;
+  const color = data.iconColor;
   // Don't apply default for dropdown value - show actual value (or empty)
   // Only use fallback for preview image rendering
   const icon = data.icon ?? "";
@@ -314,12 +314,12 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
 
   // Get icon source - check custom icons first, then built-in
   const getIconSource = useCallback(
-    (iconName: string, iconColor: string): string => {
+    (iconName: string, iconColor: string | undefined): string => {
       const customDataUri = customIconMap.get(iconName);
       if (customDataUri !== undefined) {
-        return customDataUri;
+        return getCustomIconUrl(customDataUri, iconColor);
       }
-      return getIconSrc(iconName, iconColor);
+      return getIconSrc(iconName, iconColor ?? DEFAULT_ICON_COLOR);
     },
     [customIconMap]
   );

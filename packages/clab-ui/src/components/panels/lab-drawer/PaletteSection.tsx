@@ -48,7 +48,7 @@ import {
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
 import { useClabUiHost, useTopologySessionClient, useClabUiRuntime } from "../../../host";
-import { buildCustomIconMap } from "../../../utils/iconUtils";
+import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { getNetworkNodeTypeColor } from "../../canvas/nodes/networkNodeShared";
 import { applyPaletteDragPreview } from "./paletteDragPreview";
 import type { TabDefinition } from "../../ui/editor";
@@ -129,7 +129,7 @@ function getTemplateIconUrl(
   const role = template.icon ?? "pe";
   const customDataUri = customIconMap.get(role);
   if (customDataUri !== undefined && customDataUri.length > 0) {
-    return customDataUri;
+    return getCustomIconUrl(customDataUri, template.iconColor);
   }
   const color = template.iconColor ?? DEFAULT_ICON_COLOR;
   const svgType = getRoleSvgType(role);
