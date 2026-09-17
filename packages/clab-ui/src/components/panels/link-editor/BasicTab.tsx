@@ -13,6 +13,7 @@ import {
 } from "../../../annotations/endpointLabelOffset";
 
 import type { LinkTabProps } from "./types";
+import { LinkRotationControl } from "../rotation/LinkRotationControl";
 
 interface EndpointInterfaceFieldProps {
   isNetwork: boolean;
@@ -175,6 +176,7 @@ export const BasicTab: React.FC<LinkTabProps> = ({ data, onChange, onPreviewOffs
         </Box>
       </PanelSection>
 
+      <LinkRotationControl edgeId={data.id} />
       <LabelOffsetSection
         endpointOffsetValue={endpointOffsetValue}
         onOffsetChange={handleOffsetChange}
