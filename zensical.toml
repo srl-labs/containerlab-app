@@ -1,6 +1,6 @@
 [project]
 site_name = "Containerlab Apps"
-site_description = "Design networks. Explore every connection. Documentation for the Containerlab web, desktop, and VS Code apps."
+site_description = "The GUI for containerlab. Design, deploy, and troubleshoot network labs in VS Code, on your desktop, or in your browser."
 site_url = "https://srl-labs.github.io/containerlab-app/docs/"
 repo_url = "https://github.com/srl-labs/containerlab-app"
 repo_name = "srl-labs/containerlab-app"
@@ -17,25 +17,39 @@ nav = [
   { "Get started" = [
     { "Choose your app" = "getting-started/index.md" },
     { "Your first lab" = "getting-started/first-lab.md" },
-    { "VS Code" = "manual/gui/vsc-extension.md" },
-    { "Web app" = "manual/gui/web.md" },
+  ] },
+  { "Installation" = [
+    { "VS Code extension" = "manual/gui/vsc-extension.md" },
     { "Desktop app" = "manual/gui/desktop.md" },
+    { "Web app" = "manual/gui/web.md" },
     { "Connect a lab host" = "manual/api-server.md" },
   ] },
   { "User guide" = [
-    { "The shared workspace" = "manual/gui/index.md" },
+    { "The workspace" = "manual/gui/index.md" },
     { "Design a topology" = "guides/topologies.md" },
-    { "Containerlab reference" = "https://containerlab.dev/manual/topo-def-file/" },
+    { "Layouts and templates" = "guides/layouts.md" },
+    { "Run your labs" = "guides/labs.md" },
+    { "Inspect and troubleshoot" = "guides/troubleshooting.md" },
+    { "Export and share" = "guides/sharing.md" },
+    { "Keyboard shortcuts" = "guides/shortcuts.md" },
   ] },
-  { "Topology gallery" = [
-    { "Explore the examples" = "examples/index.md" },
+  { "Examples" = [
+    { "Topology gallery" = "examples/index.md" },
     { "Leaf–spine fabric" = "examples/fabric.md" },
     { "Linux playground" = "examples/linux.md" },
   ] },
-  { "Build with the viewer" = [
-    { "Interactive documentation" = "viewer/index.md" },
-    { "Component reference" = "viewer/reference.md" },
-    { "Contributing to the docs" = "contributing.md" },
+  { "Developers" = [
+    { "Standalone clab-ui" = [
+      { "Overview" = "viewer/standalone.md" },
+      { "Zensical integration" = "viewer/index.md" },
+      { "Component reference" = "viewer/reference.md" },
+    ] },
+    { "Contribute to the docs" = "contributing.md" },
+  ] },
+  { "Resources" = [
+    { "Containerlab manual" = "https://containerlab.dev/" },
+    { "Releases" = "https://github.com/srl-labs/containerlab-app/releases" },
+    { "Community" = "https://discord.gg/vAyddtaEV9" },
   ] },
 ]
 
@@ -45,7 +59,7 @@ custom_dir = "docs-overrides"
 logo = "assets/images/mark.svg"
 favicon = "assets/images/mark.svg"
 font = false
-features = ["navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.indexes", "navigation.instant", "navigation.instant.progress", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "content.tabs.link", "search.highlight", "search.suggest"]
+features = ["navigation.path", "navigation.instant", "navigation.instant.progress", "navigation.top", "navigation.footer", "toc.follow", "content.code.copy", "content.tabs.link", "search.highlight", "search.suggest"]
 
 [[project.theme.palette]]
 scheme = "slate"

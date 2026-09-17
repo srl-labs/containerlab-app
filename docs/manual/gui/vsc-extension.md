@@ -127,7 +127,7 @@ The settings are under the `containerlab.` namespace.
 | `editor.updateLinkEndpointsOnKindChange` | `true` | Update connected link endpoints when a node kind changes. |
 | `editor.lockLabByDefault` | `true` | Start TopoViewer sessions with the lab canvas locked. |
 
-`editor.customNodes` backs the node-template and drag-and-drop workflow described in the [shared GUI page](index.md#node-templates-and-drag-and-drop). It can include full node template data such as kind, type, image, icon, base name, interface pattern, binds, environment variables, and startup config.
+`editor.customNodes` backs the [node-template and drag-and-drop workflow](../../guides/layouts.md#node-templates-and-drag-and-drop). It can include full node template data such as kind, type, image, icon, base name, interface pattern, binds, environment variables, and startup config.
 
 Example:
 

@@ -8,4 +8,4 @@ The initial app guides were copied from [srl-labs/containerlab](https://github.c
 
 These files retain the upstream Apache-2.0 license; see the repository [LICENSE](https://github.com/srl-labs/containerlab-app/blob/main/LICENSE). Links, video embeds, and app instructions are maintained in this repository from this point onward. The CLI manual, node kinds, and containerlab release notes remain at [containerlab.dev](https://containerlab.dev/).
 
-The landing page, tutorials, examples, and viewer integration are maintained in containerlab-app. Example layouts are clab-ui annotations, separate from the deployable topology YAML.
+The shared GUI guide is organized into the workspace overview and task guides under `docs/guides/`. The landing page, tutorials, examples, and viewer integration are maintained in containerlab-app. Example layouts are clab-ui annotations, separate from the deployable topology YAML.

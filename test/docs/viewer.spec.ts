@@ -5,6 +5,8 @@ test("landing example renders the real graph and links a selected node to its YA
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("./");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab.");
+  await expect(page.getByText("Diagrams that speak YAML", { exact: true })).toHaveCount(0);
   const component = page.locator("clab-topology");
   await expect(component).toHaveAttribute("data-loaded", "true");
   const viewer = component.frameLocator("iframe");
@@ -23,6 +25,58 @@ test("landing example renders the real graph and links a selected node to its YA
   expect(errors).toEqual([]);
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.screenshot({ path: "test-results/docs/home-desktop.png", fullPage: true });
+});
+
+test("the full sidebar keeps categories and the active page together across instant navigation", async ({ page }) => {
+  await page.goto("guides/topologies/");
+  const sidebar = page.locator(".md-sidebar--primary");
+  const groups = ["Get started", "Installation", "User guide", "Examples", "Developers", "Resources"];
+  for (const group of groups) {
+    await expect(sidebar.locator("label.md-nav__link").getByText(group, { exact: true })).toBeVisible();
+  }
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Design a topology");
+  await expect(sidebar.getByRole("link", { name: "Layouts and templates", exact: true })).toBeVisible();
+  await expect(page.locator(".md-path")).toContainText("User guide");
+  await expect(page.locator(".md-tabs")).toHaveCount(0);
+
+  await sidebar.locator("label.md-nav__link").getByText("Installation", { exact: true }).click();
+  await sidebar.getByRole("link", { name: "Desktop app", exact: true }).click();
+  await expect(page).toHaveURL(/manual\/gui\/desktop\//);
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Desktop app");
+  await expect(sidebar.getByRole("link", { name: "VS Code extension", exact: true })).toBeVisible();
+  await expect(page.locator(".md-path")).toContainText("Installation");
+
+  await sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true }).click();
+  await sidebar.locator("label.md-nav__link").getByText("Standalone clab-ui", { exact: true }).click();
+  await sidebar.getByRole("link", { name: "Zensical integration", exact: true }).click();
+  await expect(page).toHaveURL(/\/viewer\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Diagrams that speak YAML");
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
+  await expect(page.locator(".md-path")).toContainText("Developers");
+  await expect(page.locator(".md-path")).toContainText("Standalone clab-ui");
+  for (const group of groups) {
+    await expect(sidebar.locator("label.md-nav__link").getByText(group, { exact: true })).toBeVisible();
+  }
+});
+
+test("mobile navigation exposes the same hierarchy and closes when a guide is selected", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("viewer/");
+  await page.locator('.md-header label[for="__drawer"]').click();
+  await expect(page.locator("#__drawer")).toBeChecked();
+  const sidebar = page.locator(".md-sidebar--primary");
+  await expect(sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true })).toBeInViewport();
+  await expect(sidebar.locator("label.md-nav__link").getByText("Standalone clab-ui", { exact: true })).toBeInViewport();
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
+  await sidebar.locator("label.md-nav__link").getByText("User guide", { exact: true }).click();
+  await sidebar.getByRole("link", { name: "Keyboard shortcuts", exact: true }).click();
+  await expect(page).toHaveURL(/guides\/shortcuts\//);
+  await expect(page.locator("#__drawer")).not.toBeChecked();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Keyboard shortcuts");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('.md-header label[for="__drawer"]').click();
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Keyboard shortcuts");
+  await expect(sidebar.locator("label.md-nav__link").getByText("User guide", { exact: true })).toBeInViewport();
 });
 
 test("copy and download contain the original YAML, and tabs work from the keyboard", async ({ page }) => {

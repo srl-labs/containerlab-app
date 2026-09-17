@@ -1,5 +1,5 @@
 ---
-title: Network labs, brought to life
+title: The GUI for containerlab
 template: home.html
 hide:
   - navigation
@@ -8,11 +8,11 @@ hide:
 ---
 
 <div class="home-hero" markdown>
-<div class="hero-eyebrow"><span></span> THE CONTAINERLAB APPS DOCUMENTATION</div>
+<div class="hero-eyebrow"><span></span> VS CODE · DESKTOP · WEB</div>
 
-# Your network.<br>All the possibilities.
+# The GUI<br> for containerlab.
 
-Design it. Understand it. Bring it to life. A shared workspace for your network labs, in VS Code, on your desktop, and in your browser.
+Design, deploy, and troubleshoot your containerlab networks in one visual workspace. In VS Code, on your desktop, or in your browser.
 
 <div class="hero-actions" markdown>
 [Build your first lab :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
@@ -71,42 +71,6 @@ Build visually or work in YAML. Add nodes, connect interfaces, and make your net
 Explore working examples. Read the YAML behind every connection. Download a lab and make it yours.
 
 [Browse the gallery :lucide-arrow-up-right:](examples/index.md){ .card-link }
-</div>
-</div>
-
-<div class="home-feature" markdown>
-<div markdown>
-<span class="section-eyebrow">DIAGRAMS THAT SPEAK YAML</span>
-
-## The example is<br>the documentation.
-
-Every interactive diagram starts with a real containerlab topology. Pan, zoom, and inspect the network, then see exactly how it is defined.
-
-One source of truth. No diagram to redraw when your lab changes.
-
-[Put a topology in your docs :lucide-arrow-right:](viewer/index.md){ .feature-link }
-</div>
-<div class="home-code-card" markdown>
-<div class="code-card-label"><span></span> your-next-guide.md</div>
-
-````markdown
-```clab title="Hello, network"
-name: hello
-topology:
-  defaults:
-    kind: linux
-    image: alpine:3.23
-  nodes:
-    client: {}
-    server: {}
-  links:
-    - endpoints:
-        - client:eth1
-        - server:eth1
-```
-````
-
-<div class="code-card-note">A little YAML. An entire interactive topology.</div>
 </div>
 </div>
 
