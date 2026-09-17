@@ -158,4 +158,6 @@ corepack pnpm install --frozen-lockfile
 
 Run `pnpm web:local` or `pnpm desktop:local` to launch an app, `pnpm vsix` to package the VS Code extension, or `pnpm pages:local` to work on the browser sandbox.
 
+From WSL, use `pnpm desktop:windows` to build and launch the native Windows app with Windows window borders and controls. It uses Windows PowerShell interop; Node and pnpm only need to be installed in WSL. Close the app and rerun the command after edits.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, and [RELEASING.md](RELEASING.md) for publishing.

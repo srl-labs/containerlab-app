@@ -33,6 +33,14 @@ For rapid UI-only edits, use `pnpm ui:local`; its harness reads source directly 
 
 The web development frontend is at `https://localhost:5173`; the app server also serves it through `https://localhost:3001`. Log in against your running `clab-api-server`. The standalone UI harness uses `http://127.0.0.1:5184`.
 
+### Windows desktop from WSL
+
+Run `pnpm desktop:windows` from WSL to rebuild the shared UI and desktop app, package an unpacked Windows build, and launch it on Windows. This uses native Windows window borders and controls. `pnpm desktop:local` in WSL launches Linux Electron through WSLg.
+
+The command requires Windows PowerShell interop, detects Windows x64 or ARM64, and does not need Node or pnpm installed on Windows. The first run downloads the pinned Windows Electron runtime. It copies the app to `%LOCALAPPDATA%\containerlab-desktop-dev\<checkout-id>` and waits for the app to close. Close the window and rerun after edits; there is no hot reload. Each checkout has its own build copy, while the app uses its normal Windows user profile for saved sessions.
+
+`CLAB_*` and `CONTAINERLAB_DESKTOP_*` environment variables are forwarded to Windows. API URLs must be reachable from Windows; the default remains `https://localhost:8090`. Build output is under `apps/desktop/release/windows-dev/`. This command skips code signing; use the regular Windows packaging workflow for installers.
+
 ### Desktop packaging
 
 `pnpm desktop` packages for the current platform. Select a target explicitly when needed:

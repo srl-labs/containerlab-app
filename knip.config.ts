@@ -36,7 +36,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ]
   },
   "apps/desktop": {
-    entry: ["scripts/after-pack.cjs"]
+    entry: ["scripts/after-pack.cjs"],
+    // Provided by WSL for the native Windows development launcher.
+    ignoreBinaries: ["wslpath"]
   },
   "apps/web": {
     entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]

@@ -18,6 +18,7 @@
     "web:local": "pnpm ui && pnpm --filter containerlab-app-web run dev",
     "desktop": "pnpm ui && pnpm --filter containerlab-desktop run package",
     "desktop:local": "pnpm ui && pnpm --filter containerlab-desktop run dev",
+    "desktop:windows": "node apps/desktop/scripts/dev-windows.mjs",
     "pages": "pnpm ui && pnpm --filter containerlab-app-web run build:pages",
     "pages:local": "pnpm ui && pnpm --filter containerlab-app-web run dev:pages",
     "check": "node scripts/check-release-version.mjs && node scripts/check-deps.mjs",
