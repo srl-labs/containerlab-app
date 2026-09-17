@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 
-const managedDependencies = ["@srl-labs/clab-ui"];
+import { workspaceConfig, resolveCatalog } from "./workspace-config.mjs";
+
+const managedDependencies = ["@containerlab/clab-ui"];
 const dependencyFields = [
   "dependencies",
   "devDependencies",
@@ -25,12 +27,36 @@ const sourceExtensions = new Set([
 ]);
 
 const rootPackage = readJson(path.join(projectRoot, "package.json"));
-const workspacePackages = expandWorkspaces(rootPackage.workspaces ?? []);
+const workspacePackages = expandWorkspaces(workspaceConfig.packages);
 const failures = [];
 
 for (const dependencyName of managedDependencies) {
   assertRootDoesNotDeclare(dependencyName);
   assertWorkspaceDependencyPolicy(dependencyName);
+}
+
+for (const pkg of [{ path: projectRoot, relativePath: "." }, ...workspacePackages]) {
+  const manifest = readJson(path.join(pkg.path, "package.json"));
+  for (const field of dependencyFields) {
+    for (const [name, spec] of Object.entries(manifest[field] ?? {})) {
+      if (spec === "workspace:*") continue;
+      const resolved = resolveCatalog(name, spec);
+      if (!spec.startsWith("catalog:") || !resolved) failures.push(`${pkg.relativePath}: ${name} must use a defined catalog entry`);
+      else if (field !== "peerDependencies" && !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(resolved)) failures.push(`${name}: catalog dependencies must be exact versions`);
+    }
+  }
+}
+
+const nodeVersion = rootPackage.engines?.node ?? "";
+if (!/^\d+\.\d+\.\d+$/.test(nodeVersion)) failures.push("package.json engines.node must pin an exact Node version");
+if (!/^pnpm@\d+\.\d+\.\d+$/.test(rootPackage.packageManager ?? "")) failures.push("packageManager must pin an exact pnpm version");
+const dockerfile = fs.readFileSync(path.join(projectRoot, "Dockerfile"), "utf8");
+for (const match of dockerfile.matchAll(/^FROM node:([^ ]+)/gm)) {
+  if (match[1] !== `${nodeVersion}-alpine`) failures.push("Docker Node version must match package.json engines.node");
+}
+const desktopPackage = readJson(path.join(projectRoot, "apps/desktop/package.json"));
+if (desktopPackage.build.electronVersion !== resolveCatalog("electron", desktopPackage.devDependencies.electron)) {
+  failures.push("Desktop electronVersion must match the catalog pin");
 }
 
 if (failures.length > 0) {
@@ -60,6 +86,10 @@ function assertWorkspaceDependencyPolicy(dependencyName) {
   for (const workspacePackage of workspacePackages) {
     const packageJsonPath = path.join(workspacePackage.path, "package.json");
     const packageJson = readJson(packageJsonPath);
+    if (packageJson.name === dependencyName) {
+      continue;
+    }
+
     const importFiles = findImportFiles(workspacePackage.path, dependencyName);
     const fields = declaredFields(packageJson, dependencyName);
     const packageLabel = `${packageJson.name ?? workspacePackage.relativePath} (${workspacePackage.relativePath})`;

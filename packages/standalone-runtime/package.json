@@ -12,29 +12,31 @@
     "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx"
   },
   "dependencies": {
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.3.11",
-    "@mui/material": "^7.3.11",
-    "@srl-labs/clab-ui": "0.3.1",
-    "@srl-labs/containerlab-app-contract": "0.2.2",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
-    "ajv": "^8.20.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "three": "^0.184.0",
-    "yaml": "^2.9.0",
-    "zustand": "^4.5.7"
+    "@emotion/react": "catalog:",
+    "@emotion/styled": "catalog:",
+    "@mui/icons-material": "catalog:",
+    "@mui/material": "catalog:",
+    "@containerlab/clab-ui": "workspace:*",
+    "@srl-labs/containerlab-app-contract": "workspace:*",
+    "@xterm/addon-fit": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "ajv": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "three": "catalog:",
+    "yaml": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@types/three": "^0.184.0",
-    "typescript": "^6.0.3"
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/three": "catalog:",
+    "typescript": "catalog:",
+    "tsx": "catalog:"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node --import tsx --test 'src/**/*.test.ts'"
   }
 }

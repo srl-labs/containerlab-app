@@ -6,7 +6,7 @@ import {
   type TopologyHostResponseMessage,
   type TopologyRef,
   type TopologySnapshot,
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import type { EndpointHealthMetrics } from "./endpointHealth";
 import {

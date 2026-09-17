@@ -12,3 +12,7 @@ blob-report/
 .nyc_output/
 
 dev/topologies/
+
+# Packed release artifacts
+artifacts/
+*.tgz

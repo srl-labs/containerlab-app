@@ -1,8 +1,8 @@
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
 import {
   createTopologySyncController,
   type HostRuntimeContainer
-} from "@srl-labs/clab-ui/host";
+} from "@containerlab/clab-ui/host";
 import {
   applyRuntimeEdgeStatsToGraph,
   clearTopologyGraph,
@@ -10,7 +10,7 @@ import {
   setHostContext,
   type TopologySessionClient,
   type TopologyRef
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import { fetchUiIcons } from "./runtimeApi";
 import {

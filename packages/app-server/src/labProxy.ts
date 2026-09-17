@@ -2,7 +2,7 @@
  * Lab lifecycle action proxy - deploy, destroy, redeploy, start, stop, restart.
  */
 
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {

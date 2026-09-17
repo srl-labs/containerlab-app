@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Box, Typography } from "@mui/material";
-import { applyThemeVars, MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
 
 import {
   RuntimeTerminalPaneView

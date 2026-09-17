@@ -1,0 +1,1 @@
+export { PaletteView } from "./PaletteView";

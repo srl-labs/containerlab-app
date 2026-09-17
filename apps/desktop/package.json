@@ -1,6 +1,6 @@
 {
   "name": "containerlab-desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Manage and inspect containerlab topologies from a desktop application.",
   "license": "Apache-2.0",
@@ -23,27 +23,28 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
-    "@srl-labs/containerlab-app-server": "0.2.2"
+    "@srl-labs/containerlab-app-server": "workspace:*"
   },
   "devDependencies": {
-    "electron": "^41.5.0",
-    "electron-builder": "^26.8.1",
-    "esbuild": "^0.27.7",
-    "typescript": "^6.0.3"
+    "electron": "catalog:",
+    "electron-builder": "catalog:",
+    "esbuild": "catalog:",
+    "typescript": "catalog:",
+    "fastify": "catalog:"
   },
   "scripts": {
     "start": "electron --ozone-platform=x11 .",
-    "dev": "npm run build --workspace containerlab-app-web && npm run build && npm run start",
+    "dev": "pnpm --filter containerlab-app-web run build && pnpm run build && pnpm run start",
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "package": "npm run package:linux",
-    "package:linux": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux --publish never",
-    "package:appimage": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux AppImage --publish never",
-    "package:deb": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux deb --publish never",
-    "package:rpm": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --linux rpm --publish never",
-    "package:mac": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --mac dmg --universal --publish never",
-    "package:win": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --win nsis --x64 --publish never",
-    "package:dir": "npm run build --workspace containerlab-app-web && npm run build && electron-builder --dir --publish never"
+    "package": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --publish never",
+    "package:linux": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux --publish never",
+    "package:appimage": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux AppImage --publish never",
+    "package:deb": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux deb --publish never",
+    "package:rpm": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux rpm --publish never",
+    "package:mac": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --mac dmg --universal --publish never",
+    "package:win": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --win nsis --x64 --publish never",
+    "package:dir": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --dir --publish never"
   },
   "build": {
     "appId": "dev.containerlab.desktop",

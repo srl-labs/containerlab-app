@@ -1,0 +1,48 @@
+{
+  "freeTextAnnotations": [],
+  "freeShapeAnnotations": [],
+  "trafficRateAnnotations": [
+    {
+      "id": "traffic-rate-1",
+      "position": {
+        "x": 311,
+        "y": 203.375
+      },
+      "nodeId": "srl1",
+      "interfaceName": "e1-1",
+      "mode": "chart",
+      "textMetric": "combined",
+      "backgroundOpacity": 20,
+      "borderWidth": 1,
+      "borderRadius": 8,
+      "width": 194,
+      "height": 128
+    }
+  ],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "srl1",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 380,
+        "y": 360
+      }
+    },
+    {
+      "id": "srl2",
+      "interfacePattern": "e1-{n}",
+      "position": {
+        "x": 660,
+        "y": 360
+      }
+    }
+  ],
+  "edgeAnnotations": [],
+  "aliasEndpointAnnotations": [],
+  "viewerSettings": {
+    "style": "telemetry-style",
+    "linkLabelMode": "show-all"
+  }
+}

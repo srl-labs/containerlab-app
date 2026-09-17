@@ -1,12 +1,12 @@
-import { useTopoViewerStore } from "@srl-labs/clab-ui";
-import { createLifecycleCommandController } from "@srl-labs/clab-ui/host";
+import { useTopoViewerStore } from "@containerlab/clab-ui";
+import { createLifecycleCommandController } from "@containerlab/clab-ui/host";
 import {
   MSG_LAB_LIFECYCLE_LOG,
   MSG_LAB_LIFECYCLE_STATUS,
   MSG_CANCEL_LAB_LIFECYCLE,
   type LifecycleCommand as ExtensionLifecycleCommand,
   type TopologyRef
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import { refreshTopologyDirtyState } from "./standaloneDirtyState";
 import { standaloneServerUrl } from "./standaloneServerOrigin";

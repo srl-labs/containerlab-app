@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { App, useTopoViewerStore } from "@srl-labs/clab-ui";
+import { App, useTopoViewerStore } from "@containerlab/clab-ui";
 import {
   createApiClabUiHost,
   createClabUiRuntime
-} from "@srl-labs/clab-ui/host";
-import { applyThemeVars, MuiThemeProvider } from "@srl-labs/clab-ui/theme";
+} from "@containerlab/clab-ui/host";
+import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import {
   EXPORT_COMMANDS,
   MSG_CANCEL_LAB_LIFECYCLE,
@@ -15,7 +15,7 @@ import {
   parseSchemaData,
   type TopologySnapshot,
   type TopologyRef
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 export {
   App,

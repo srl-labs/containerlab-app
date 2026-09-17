@@ -5,7 +5,7 @@ import type {
   ExplorerIncomingMessage,
   ExplorerNode,
   ExplorerUiState,
-} from "@srl-labs/clab-ui/explorer";
+} from "@containerlab/clab-ui/explorer";
 
 import { createStandaloneExplorerBridge } from "./standaloneExplorer";
 import {

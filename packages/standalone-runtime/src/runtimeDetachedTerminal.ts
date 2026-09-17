@@ -1,4 +1,4 @@
-import type { TopologyRef } from "@srl-labs/clab-ui/session";
+import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { publicAssetUrl } from "./publicAssetUrl";
 import type { RuntimeTerminalProtocol, RuntimeTerminalRequest } from "./stores/runtimeUiStore";

@@ -3,7 +3,7 @@ import type {
   CustomNodeTemplate,
   CustomNodeTemplateExportIcon,
   TopologyRef,
-} from "@srl-labs/clab-ui/session";
+} from "@containerlab/clab-ui/session";
 
 import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
 import { standaloneServerUrl } from "./standaloneServerOrigin";

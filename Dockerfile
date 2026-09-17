@@ -1,27 +1,37 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24-alpine AS deps
+# The build emits portable JavaScript and static assets for both runtime architectures.
+FROM --platform=$BUILDPLATFORM node:24.18.0-alpine AS deps
 
 WORKDIR /app
 
-COPY package.json package-lock.json .npmrc ./
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable
+COPY scripts/check-package-manager.mjs scripts/check-package-manager.mjs
 COPY apps/web/package.json apps/web/package.json
 COPY apps/desktop/package.json apps/desktop/package.json
+COPY apps/vscode-containerlab/package.json apps/vscode-containerlab/package.json
 COPY packages/app-contract/package.json packages/app-contract/package.json
 COPY packages/app-server/package.json packages/app-server/package.json
+COPY packages/clab-ui/package.json packages/clab-ui/package.json
 COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
 
-RUN --mount=type=secret,id=github_token,required=true \
-  GITHUB_TOKEN="$(cat /run/secrets/github_token)" npm ci
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
 FROM deps AS build
 
-COPY . .
+COPY tsconfig.base.json ./
+COPY apps/web ./apps/web
+COPY packages/app-contract ./packages/app-contract
+COPY packages/app-server ./packages/app-server
+COPY packages/clab-ui ./packages/clab-ui
+COPY packages/standalone-runtime ./packages/standalone-runtime
 
-RUN npm run build
-RUN npm prune --omit=dev
+RUN pnpm web
 
-FROM node:24-alpine AS runtime
+FROM node:24.18.0-alpine AS runtime
 
 ENV NODE_ENV=production
 ENV PORT=3001
@@ -30,9 +40,6 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl
 
-COPY --from=build --chown=node:node /app/package.json ./package.json
-COPY --from=build --chown=node:node /app/node_modules ./node_modules
-COPY --from=build --chown=node:node /app/apps/web/package.json ./apps/web/package.json
 COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 
 USER node
