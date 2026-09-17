@@ -16,9 +16,7 @@ export type EndpointStatus = "connected" | "session_expired" | "offline" | "save
 export {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   isValidEndpointSessionDuration,
-  normalizeEndpointSessionDuration,
   type EndpointImportResult,
-  type EndpointProfile,
   type EndpointSessionDuration
 } from "../endpointTransfer";
 

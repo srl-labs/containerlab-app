@@ -21,7 +21,7 @@ export type CustomNodeConfig = CustomNodeTemplate;
 /**
  * Custom node data structure for save operations
  */
-export interface CustomNodeData extends CustomNodeConfig {
+interface CustomNodeData extends CustomNodeConfig {
   oldName?: string;
 }
 
@@ -29,7 +29,7 @@ export interface CustomNodeData extends CustomNodeConfig {
  * Manages custom node configuration in VS Code settings.
  * Handles saving, deleting, and setting default custom nodes.
  */
-export class CustomNodeConfigManager {
+class CustomNodeConfigManager {
   /**
    * Saves a custom node to the configuration.
    * If the node has an oldName, it will be updated; otherwise, it will be added.

@@ -57,7 +57,7 @@ export function splitInterfaceParts(endpoint: string): string[] {
   return uniqueParts;
 }
 
-export function getAutoCompactInterfaceLabel(endpoint: string): string {
+function getAutoCompactInterfaceLabel(endpoint: string): string {
   const trimmed = endpoint.trim();
   if (!trimmed) return "";
 

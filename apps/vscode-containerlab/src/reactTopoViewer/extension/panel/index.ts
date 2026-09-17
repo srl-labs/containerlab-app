@@ -3,29 +3,14 @@
  */
 
 // Panel management
-export { createPanel, generateNonce, generateWebviewHtml } from "./PanelManager";
-export type { PanelConfig, WebviewPanelOptions, WebviewHtmlData } from "./PanelManager";
+export { createPanel, generateWebviewHtml } from "./PanelManager";
+export type { PanelConfig } from "./PanelManager";
 
 // Message routing
 export { MessageRouter } from "./MessageRouter";
-export type { MessageRouterContext } from "./MessageRouter";
 
 // File watchers
 export { WatcherManager } from "./Watchers";
-export type { SnapshotLoader, SnapshotPoster, InternalUpdateController } from "./Watchers";
 
 // Bootstrap data
 export { buildBootstrapData } from "./BootstrapDataBuilder";
-export type { BootstrapData, BootstrapDataInput } from "./BootstrapDataBuilder";
-
-// Schema types and functions
-export type { CustomNodeTemplate, SchemaData } from "@containerlab/clab-ui/session";
-export {
-  extractKindsFromSchema,
-  extractTypesByKindFromSchema,
-  extractSrosComponentTypes,
-  parseSchemaData
-} from "@containerlab/clab-ui/session";
-
-// Service adapters
-export { getCustomNodesFromConfig } from "../services/schema";

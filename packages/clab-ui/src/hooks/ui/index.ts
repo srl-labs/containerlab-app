@@ -5,7 +5,6 @@ export { useDeploymentCommands, usePanelVisibility } from "./usePanelCommands";
 
 // Footer Refs
 export { useFooterControlsRef } from "./useFooterControlsRef";
-export type { FooterControlsRef } from "./useFooterControlsRef";
 
 // Editor Button Handlers
 export { useApplySaveHandlers } from "./useApplySaveHandlers";

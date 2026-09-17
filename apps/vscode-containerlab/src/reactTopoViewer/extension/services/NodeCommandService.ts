@@ -91,7 +91,7 @@ function createInterfaceObject(
  * Service for handling node and interface command operations.
  * Executes VS Code commands for SSH, shell attach, and logs.
  */
-export class NodeCommandService {
+class NodeCommandService {
   /**
    * Gets a container node by name from the running labs.
    */

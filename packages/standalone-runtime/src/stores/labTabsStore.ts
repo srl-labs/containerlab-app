@@ -43,13 +43,13 @@ export interface ResolveFileTabInput {
   title?: string;
 }
 
-export interface CloseLabTabResult {
+interface CloseLabTabResult {
   nextActiveTabId: string | null;
   removed: boolean;
   wasActive: boolean;
 }
 
-export interface CloseTabsByEndpointResult {
+interface CloseTabsByEndpointResult {
   nextActiveTabId: string | null;
   removedCount: number;
   removedIds: string[];
@@ -91,7 +91,7 @@ function toTabTitle(topologyRef: TopologyRef): string {
   return FALLBACK_TAB_TITLE;
 }
 
-export function buildLabTabId(topologyRef: TopologyRef, endpointId: string): string {
+function buildLabTabId(topologyRef: TopologyRef, endpointId: string): string {
   const normalizedPath = normalizePathValue(topologyRef.yamlPath);
   if (normalizedPath.length > 0) {
     return `${endpointId}::${normalizedPath}`;
@@ -99,12 +99,8 @@ export function buildLabTabId(topologyRef: TopologyRef, endpointId: string): str
   return `${endpointId}::${topologyRef.topologyId}`;
 }
 
-export function buildFileLabTabId(endpointId: string, pathValue: string): string {
+function buildFileLabTabId(endpointId: string, pathValue: string): string {
   return `file:${endpointId}::${normalizePathValue(pathValue)}`;
-}
-
-export function isTopologyLabTab(tab: LabTab): tab is TopologyLabTab {
-  return tab.kind === "topology";
 }
 
 export function isFileLabTab(tab: LabTab | undefined | null): tab is FileLabTab {

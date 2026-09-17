@@ -9,7 +9,7 @@ import type {
 
 const ENDPOINT_TOPOLOGY_ID_SEPARATOR = "::";
 
-export function normalizeTopologyPath(pathValue: string): string {
+function normalizeTopologyPath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
@@ -47,7 +47,7 @@ function runtimeContainerString(
   return undefined;
 }
 
-export function topologyPathsLikelyMatch(leftPath: string, rightPath: string): boolean {
+function topologyPathsLikelyMatch(leftPath: string, rightPath: string): boolean {
   const left = normalizeTopologyPath(leftPath).toLowerCase();
   const right = normalizeTopologyPath(rightPath).toLowerCase();
   if (!left || !right) {
@@ -123,7 +123,7 @@ export async function resolveRunningLabNameForTopology(
   }
 }
 
-export function buildStandaloneTopologyId(yamlPath: string): string {
+function buildStandaloneTopologyId(yamlPath: string): string {
   return `standalone:${normalizeTopologyPath(yamlPath)}`;
 }
 
@@ -142,7 +142,7 @@ export function extractEndpointIdFromTopologyId(topologyId: string | undefined):
   return endpointId.length > 0 ? endpointId : undefined;
 }
 
-export function buildEndpointScopedTopologyId(yamlPath: string, endpointId: string): string {
+function buildEndpointScopedTopologyId(yamlPath: string, endpointId: string): string {
   return `standalone:${endpointId}${ENDPOINT_TOPOLOGY_ID_SEPARATOR}${normalizeTopologyPath(yamlPath)}`;
 }
 

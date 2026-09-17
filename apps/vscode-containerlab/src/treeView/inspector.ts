@@ -23,21 +23,6 @@ export function isPollingMode(): boolean {
   return config.get<string>("refreshMode", "events") === "polling";
 }
 
-/**
- * Check if interface stats are enabled
- */
-export function isInterfaceStatsEnabled(): boolean {
-  const config = vscode.workspace.getConfiguration("containerlab");
-  return config.get<boolean>("enableInterfaceStats", true);
-}
-
-/**
- * Check if events were available or we had to fall back
- */
-export function isUsingForcedPolling(): boolean {
-  return forcedPollingMode;
-}
-
 export async function update(): Promise<void> {
   const config = vscode.workspace.getConfiguration("containerlab");
   const runtime = config.get<string>("runtime", "docker");
@@ -100,25 +85,10 @@ export function getInterfacesSnapshot(
   return events.getInterfaceSnapshot(containerShortId, containerName);
 }
 
-export function getInterfaceVersion(containerShortId: string): number {
-  if (isPollingMode()) {
-    // Fallback doesn't track versions
-    return fallback.getInterfaceVersion(containerShortId);
-  }
-  return events.getInterfaceVersion(containerShortId);
-}
-
 export function refreshFromEventStream(): void {
   if (isPollingMode()) {
     rawInspectData = fallback.getGroupedContainers();
   } else {
     rawInspectData = events.getGroupedContainers();
   }
-}
-
-/**
- * Reset forced polling mode (for testing or reconfiguration)
- */
-export function resetForcedPollingMode(): void {
-  forcedPollingMode = false;
 }

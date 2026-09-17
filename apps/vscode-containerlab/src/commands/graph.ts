@@ -191,7 +191,7 @@ async function postLifecycleLog(
  * Notifies the current active topoviewer about successful command completion
  * This should ONLY be called after a containerlab command has successfully completed
  */
-export async function notifyCurrentTopoViewerOfCommandSuccess(commandType: LifecycleCommandType) {
+async function notifyCurrentTopoViewerOfCommandSuccess(commandType: LifecycleCommandType) {
   if (!currentTopoViewer?.currentPanel) {
     return;
   }
@@ -218,7 +218,7 @@ export async function notifyCurrentTopoViewerOfCommandFailure(
   await postLifecycleStatus(commandType, "error", errorMessage);
 }
 
-export async function notifyCurrentTopoViewerOfCommandLog(
+async function notifyCurrentTopoViewerOfCommandLog(
   commandType: LifecycleCommandType,
   line: string,
   stream: LifecycleCommandStream

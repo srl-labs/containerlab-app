@@ -100,12 +100,6 @@ export function persistTerminalPreferences(next: TerminalPreferences): TerminalP
   return normalized;
 }
 
-export function resetTerminalPreferences(): TerminalPreferences {
-  const defaults = normalizeTerminalPreferences(undefined);
-  localStorage.setItem(TERMINAL_SETTINGS_STORAGE_KEY, JSON.stringify(defaults));
-  return defaults;
-}
-
 export function resolveTerminalSshUsername(
   kind: string | undefined,
   preferences: TerminalPreferences

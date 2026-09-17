@@ -101,7 +101,7 @@ function mergeStoredAndServerEndpoints(
   return Array.from(merged.values());
 }
 
-export function useEndpointAuth() {
+function useEndpointAuth() {
   const pagesMode = isPagesRuntimeMode();
   const endpoints = useEndpointStore((state) => state.endpoints);
   const addEndpointToStore = useEndpointStore((state) => state.addEndpoint);

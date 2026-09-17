@@ -8,4 +8,3 @@ export { destroy, destroyCleanup } from "../destroy";
 export { startLab, stopLab, restartLab } from "../labNodeLifecycle";
 export { redeploy, redeployCleanup } from "../redeploy";
 export { saveLab, saveNode } from "../save";
-export { runClabAction } from "../runClabAction";

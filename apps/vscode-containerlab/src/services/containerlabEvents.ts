@@ -1369,10 +1369,6 @@ export function getInterfaceSnapshot(
   ];
 }
 
-export function getInterfaceVersion(containerShortId: string): number {
-  return interfaceVersions.get(containerShortId) ?? 0;
-}
-
 export function resetForTests(): void {
   stopProcess();
   containersById.clear();

@@ -17,7 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function resolveStateFilePath(yamlFilePath: string, labName: string): string {
+function resolveStateFilePath(yamlFilePath: string, labName: string): string {
   return path.join(path.dirname(yamlFilePath), `clab-${labName}`, ".state.clab.yaml");
 }
 

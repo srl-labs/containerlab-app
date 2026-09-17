@@ -74,6 +74,7 @@ This builds the checked-out workspace for your current Docker platform. Follow t
 pnpm check         # dependency and release-version policies
 pnpm typecheck     # build UI, check policies, typecheck all workspaces
 pnpm lint
+pnpm knip          # unused files, exports, types, and dependencies across workspaces
 pnpm test          # all unit suites and release-routing tests
 pnpm test:package  # strict public API and npm tarball validation
 ```
@@ -90,6 +91,14 @@ pnpm test:vscode
 UI and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
 
 Package-specific checks remain available through `pnpm --filter <package> run <script>`. Maintenance scripts can be invoked directly, e.g. `node scripts/run-stress-api-bff.mjs` for the API stress runner. Schema synchronization remains `pnpm sync:schema`.
+
+Knip also runs as part of `pnpm lint` and PR checks. Its configuration in
+`knip.config.ts` includes browser, extension, test, and maintenance entry points.
+Public library entry points and source aliases follow the `clab-ui` export map;
+those public exports are retained for external consumers. Add new independently
+launched entry points to the relevant workspace configuration. Review unused
+exports before deleting implementations: a function may still be used inside its
+own module and only need its `export` removed.
 
 ---
 

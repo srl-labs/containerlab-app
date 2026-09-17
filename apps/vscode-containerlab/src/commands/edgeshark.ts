@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import { execCommandInTerminal } from "./command";
 
-export function getEdgesharkInstallCmd(): string {
+function getEdgesharkInstallCmd(): string {
   const config = vscode.workspace.getConfiguration("containerlab");
   const extraEnvVars = config.get<string>("edgeshark.extraEnvironmentVars", "");
 
@@ -34,14 +34,11 @@ https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.ya
 | DOCKER_DEFAULT_PLATFORM= docker compose -f - up -d`;
 }
 
-export function getEdgesharkUninstallCmd(): string {
+function getEdgesharkUninstallCmd(): string {
   return `curl -sL \
 https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.yaml \
 | DOCKER_DEFAULT_PLATFORM= docker compose -f - down`;
 }
-
-export const EDGESHARK_INSTALL_CMD = getEdgesharkInstallCmd();
-export const EDGESHARK_UNINSTALL_CMD = getEdgesharkUninstallCmd();
 
 export async function installEdgeshark() {
   execCommandInTerminal(getEdgesharkInstallCmd(), "Edgeshark Installation");

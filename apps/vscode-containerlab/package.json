@@ -1066,8 +1066,6 @@
     "@types/vscode": "catalog:",
     "@vscode/test-electron": "catalog:",
     "@vscode/vsce": "catalog:",
-    "ajv": "catalog:",
-    "ajv-formats": "catalog:",
     "autoprefixer": "catalog:",
     "chai": "catalog:",
     "dockerode": "catalog:",

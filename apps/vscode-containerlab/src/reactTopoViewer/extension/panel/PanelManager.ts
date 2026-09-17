@@ -20,7 +20,7 @@ export interface PanelConfig {
 /**
  * Options for webview panel creation
  */
-export interface WebviewPanelOptions {
+interface WebviewPanelOptions {
   enableScripts: boolean;
   retainContextWhenHidden: boolean;
   localResourceRoots: vscode.Uri[];
@@ -55,7 +55,7 @@ export function createPanel(config: PanelConfig): vscode.WebviewPanel {
 /**
  * Generate a nonce for CSP using crypto
  */
-export function generateNonce(): string {
+function generateNonce(): string {
   return crypto.randomBytes(16).toString("base64");
 }
 

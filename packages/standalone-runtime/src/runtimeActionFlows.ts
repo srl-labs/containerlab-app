@@ -1,12 +1,7 @@
-import {
-  createTopologyFile,
-  deleteTopologyFile,
-  saveLabConfigs,
-  type RuntimeTargetRequest
-} from "./runtimeApi";
+import { deleteTopologyFile, saveLabConfigs, type RuntimeTargetRequest } from "./runtimeApi";
 import { runtimeUiActions } from "./stores/runtimeUiStore";
 
-export type RuntimeDialogSeverity = "default" | "warning" | "error";
+type RuntimeDialogSeverity = "default" | "warning" | "error";
 
 export interface RuntimeConfirmDialogRequest {
   cancelLabel?: string;
@@ -68,7 +63,7 @@ export interface ActiveRuntimeOptionSelectionDialogRequest {
   title: string;
 }
 
-export interface TopologyFileNameDialogRequest {
+interface TopologyFileNameDialogRequest {
   defaultValue?: string;
   message?: string;
   title?: string;
@@ -132,7 +127,7 @@ export interface CloneRepoDialogResult {
   target: CloneRepoDialogTarget;
 }
 
-export interface CloneRepoPopularOption {
+interface CloneRepoPopularOption {
   description?: string;
   label: string;
   value: string;
@@ -374,7 +369,7 @@ function normalizeTopologyFileNameDialogRequest(
   };
 }
 
-export function promptForTopologyFileName(
+function promptForTopologyFileName(
   request?: TopologyFileNameDialogRequest
 ): Promise<string | undefined> {
   const normalizedRequest = normalizeTopologyFileNameDialogRequest(request);
@@ -635,22 +630,6 @@ export async function promptForCloneRepo(
   }
   const labNameOverride = rawLabNameOverride || undefined;
   return { endpointId, sourceUrl, labNameOverride, target };
-}
-
-export async function createTopologyFileFlow(): Promise<void> {
-  const rawFileName = await promptForTopologyFileName();
-  if (!rawFileName) {
-    return;
-  }
-
-  const fileName = normalizeTopologyFileNameForCreate(rawFileName);
-  try {
-    const created = await createTopologyFile({ fileName });
-    runtimeUiActions.notify(`Created topology file "${fileName}".`, "success");
-    runtimeUiActions.openInspectLab({ topologyRef: created.topologyRef }, `New Topology: ${fileName}`);
-  } catch (error) {
-    runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
-  }
 }
 
 export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Promise<boolean> {

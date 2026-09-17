@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-export interface ExplorerContributedMenuItem {
+interface ExplorerContributedMenuItem {
   commandId: string;
   label?: string;
   iconId?: string;

@@ -10,7 +10,7 @@ const PREVIEW_ICON_SIZE = DEFAULT_TELEMETRY_NODE_SIZE_PX;
 const PREVIEW_LABEL_MAX_WIDTH = 110;
 const PREVIEW_GLYPH_SIZE = 32;
 
-export const PALETTE_DRAG_GHOST_ATTR = "data-palette-drag-ghost";
+const PALETTE_DRAG_GHOST_ATTR = "data-palette-drag-ghost";
 
 export interface PaletteDragPreviewOptions {
   label: string;

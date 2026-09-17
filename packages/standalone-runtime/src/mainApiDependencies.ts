@@ -8,8 +8,7 @@ export {
   isFileLabTab,
   resolveFileTab,
   resolveLabTab,
-  useLabTabsStore,
-  type FileLabTab
+  useLabTabsStore
 } from "./stores/labTabsStore";
 export { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
 export {

@@ -52,7 +52,7 @@ export interface LabState {
   containers: Map<string, ContainerState>;
 }
 
-export interface LabRuntimeSnapshotContainer {
+interface LabRuntimeSnapshotContainer {
   name: string;
   containerId?: string;
   image?: string;
@@ -68,14 +68,14 @@ export interface LabRuntimeSnapshotContainer {
   owner?: string;
 }
 
-export interface LabRuntimeSnapshot {
+interface LabRuntimeSnapshot {
   containers: LabRuntimeSnapshotContainer[];
   endpointId: string;
   labName?: string;
   topologyPath?: string;
 }
 
-export interface LabRemovalTarget {
+interface LabRemovalTarget {
   endpointId?: string;
   labName?: string;
   topologyPath?: string;
@@ -345,7 +345,7 @@ type InterfaceNetemField = typeof NETEM_INTERFACE_FIELDS[number];
 
 export type InterfaceNetemPatch = Partial<Pick<InterfaceState, InterfaceNetemField>>;
 
-export interface InterfaceNetemUpdate {
+interface InterfaceNetemUpdate {
   endpointId?: string;
   topologyPath?: string;
   labName?: string;
