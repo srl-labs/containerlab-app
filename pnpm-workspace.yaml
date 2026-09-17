@@ -19,13 +19,13 @@ catalog:
   "@types/geojson": 7946.0.16
   "@types/dockerode": 4.0.1
   "@types/mocha": 10.0.10
-  "@types/node": 24.13.5
+  "@types/node": 26.5.1
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
   "@types/sinon": 22.0.0
   "@types/three": 0.186.0
   # Match the extension's minimum VS Code API to retain compatibility with forks.
-  "@types/vscode": 1.105.0
+  "@types/vscode": 1.137.0
   "@types/ws": 8.18.1
   "@vitejs/plugin-react": 6.1.1
   "@vscode/test-electron": 3.1.0
@@ -55,7 +55,7 @@ catalog:
   mocha: 12.0.1
   mochawesome: 8.1.1
   # monaco-yaml/monaco-worker-manager still import paths removed in Monaco 0.56.
-  monaco-editor: 0.55.1
+  monaco-editor: 0.56.0
   monaco-yaml: 5.5.1
   ovsx: 1.2.0
   oxlint: 1.83.0
@@ -75,7 +75,7 @@ catalog:
   yaml: 2.9.1
   zustand: 5.0.15
   use-sync-external-store: 1.7.0
-  undici: 7.29.1
+  undici: 8.10.2
 catalogs:
   peers:
     react: ^19.2.5
