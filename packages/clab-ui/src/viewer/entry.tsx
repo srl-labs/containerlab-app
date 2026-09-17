@@ -1,4 +1,9 @@
 import type { Root } from "react-dom/client";
+import type { ReactFlowInstance } from "@xyflow/react";
+
+import { applyThemeVars } from "../theme/devTheme";
+import { describeTopology } from "./describeTopology";
+import "./viewer.css";
 
 import { mountViewer } from "./mountViewer";
 
@@ -31,7 +36,9 @@ function isRenderMessage(data: unknown): data is RenderMessage {
     typeof data === "object" &&
     data !== null &&
     (data as { type?: unknown }).type === "clab-viewer:render" &&
-    typeof (data as { yaml?: unknown }).yaml === "string"
+    typeof (data as { yaml?: unknown }).yaml === "string" &&
+    ((data as { annotations?: unknown }).annotations === undefined || typeof (data as { annotations?: unknown }).annotations === "string") &&
+    ((data as { theme?: unknown }).theme === undefined || ["light", "dark"].includes(String((data as { theme?: unknown }).theme)))
   );
 }
 
@@ -71,23 +78,77 @@ const container = document.getElementById("root");
 if (!container) throw new Error("Root element not found");
 
 let root: Root | null = null;
+let flow: ReactFlowInstance | null = null;
 const viewerWindow = window as ViewerWindow;
 const parentOrigin = getConfiguredParentOrigin(viewerWindow);
 const allowedOrigins = getAllowedOrigins(viewerWindow, parentOrigin);
 
-function render(msg: { yaml: string; annotations?: string; theme?: "light" | "dark" }): void {
-  root?.unmount();
-  root = mountViewer(container as Element, {
-    yaml: msg.yaml,
-    annotations: msg.annotations,
-    theme: msg.theme
+function send(data: Record<string, unknown>): void {
+  if (window.parent !== window) window.parent.postMessage(data, parentOrigin ?? "*");
+}
+
+function setTheme(theme: "light" | "dark"): void {
+  applyThemeVars(theme);
+  document.documentElement.dataset.clabTheme = theme;
+}
+
+function selectNode(id: string | null): void {
+  document.documentElement.dataset.clabSelected = id ?? "";
+  document.querySelectorAll(".react-flow__node").forEach((node) => {
+    node.classList.toggle("clab-viewer-selected", node.getAttribute("data-id") === id);
   });
+  send({ type: "clab-viewer:select", id });
+}
+
+function render(msg: { yaml: string; annotations?: string; theme?: "light" | "dark" }): void {
+  try {
+    const description = describeTopology(msg.yaml);
+    if (msg.annotations !== undefined) JSON.parse(msg.annotations);
+    root?.unmount();
+    flow = null;
+    root = mountViewer(container as Element, {
+      yaml: msg.yaml,
+      annotations: msg.annotations,
+      theme: msg.theme,
+      viewerOptions: {
+        zoomOnScroll: false,
+        onNodeSelect: selectNode,
+        onInit: (instance) => {
+          flow = instance;
+          send({ type: "clab-viewer:loaded", ...description });
+        }
+      }
+    });
+    setTheme(msg.theme ?? "dark");
+  } catch (error) {
+    send({ type: "clab-viewer:error", message: error instanceof Error ? error.message : "Unable to render topology" });
+  }
 }
 
 window.addEventListener("message", (event: MessageEvent<unknown>) => {
   if (event.source !== window.parent || !isAllowedOrigin(allowedOrigins, event.origin)) return;
-  if (isRenderMessage(event.data)) render(event.data);
+  if (isRenderMessage(event.data)) {
+    render(event.data);
+    return;
+  }
+  if (typeof event.data !== "object" || event.data === null) return;
+  const message = event.data as { type?: string; theme?: string; id?: string };
+  if (message.type === "clab-viewer:theme" && (message.theme === "light" || message.theme === "dark")) {
+    setTheme(message.theme);
+  } else if (message.type === "clab-viewer:fit") {
+    void flow?.fitView({ padding: 0.25, duration: 0 });
+  } else if (message.type === "clab-viewer:focus" && typeof message.id === "string") {
+    selectNode(message.id);
+    void flow?.fitView({ nodes: [{ id: message.id }], padding: 1, maxZoom: 1.5 });
+  }
 });
+
+// Split tabs and full screen change the iframe's dimensions without remounting the graph.
+let resizeFrame = 0;
+new ResizeObserver(() => {
+  cancelAnimationFrame(resizeFrame);
+  resizeFrame = requestAnimationFrame(() => { void flow?.fitView({ padding: 0.25, duration: 0 }); });
+}).observe(container);
 
 const injected = viewerWindow.__CLAB_VIEWER__;
 if (injected && typeof injected.yaml === "string") {

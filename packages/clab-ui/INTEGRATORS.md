@@ -662,6 +662,8 @@ Monorepo hosts resolve `@containerlab/clab-ui` through `workspace:*` and consume
 
 ## Stability Rules
 
+For read-only documentation embeds, use the standalone viewer and `<clab-topology>` component described in the [component reference](../../docs/viewer/reference.md). The static assets ship under `@containerlab/clab-ui/viewer/static/*`; an iframe per topology isolates its stores from the host application and other diagrams.
+
 You can rely on:
 
 - the package name

@@ -2,7 +2,7 @@ import "../types/assets";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import { App } from "../App";
+import { App, type AppLayoutOptions } from "../App";
 import { defaultSchemaData } from "../core/schema";
 import { createClabUiRuntime } from "../host";
 import { applyThemeVars } from "../theme";
@@ -12,6 +12,8 @@ import { createViewerHost, type ViewerHostInput } from "./createViewerHost";
 
 export interface MountViewerOptions extends ViewerHostInput {
   theme?: "light" | "dark";
+  /** Optional inspection and viewport callbacks for embedded documentation. */
+  viewerOptions?: AppLayoutOptions["viewerOptions"];
 }
 
 // Renders a read-only clab-ui topology viewer into `container`. Returns the React root so callers
@@ -46,7 +48,7 @@ export function mountViewer(container: Element, options: MountViewerOptions): Ro
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      <App initialData={initialData} runtime={runtime} chrome="viewer" />
+      <App initialData={initialData} runtime={runtime} chrome="viewer" viewerOptions={options.viewerOptions} />
     </React.StrictMode>
   );
   return root;

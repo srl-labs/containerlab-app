@@ -31,7 +31,11 @@
     "test:vscode": "pnpm ui && pnpm --filter vscode-containerlab run test:e2e",
     "test:package": "pnpm ui:pack && node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz",
     "sync:schema": "node scripts/sync-clab-schema.mjs",
-    "preinstall": "node scripts/check-package-manager.mjs"
+    "preinstall": "node scripts/check-package-manager.mjs",
+    "docs": "node scripts/docs.mjs serve",
+    "docs:build": "node scripts/docs.mjs build",
+    "docs:prepare": "node scripts/docs.mjs prepare",
+    "docs:test": "uv run --frozen python -m unittest discover -s tools/clab_docs/tests && playwright test --config test/docs/playwright.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

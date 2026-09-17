@@ -1,0 +1,146 @@
+import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+
+test("landing example renders the real graph and links a selected node to its YAML", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("./");
+  const component = page.locator("clab-topology");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const viewer = component.frameLocator("iframe");
+  await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
+  await expect(viewer.locator(".react-flow__edge")).toHaveCount(9);
+  await viewer.locator('.react-flow__node[data-id="leaf2"]').click();
+  await expect(component.getByLabel("Inspect a node")).toHaveValue("leaf2");
+  await expect(component.locator(".clab-node-detail")).toContainText("nokia_srlinux");
+  await expect(component.locator(".clab-line-selected").first()).toContainText("leaf2:");
+  await component.getByRole("tab", { name: "Topology", exact: true }).click();
+  await expect(component.locator(".clab-code")).toBeHidden();
+  await component.getByRole("button", { name: "Show in YAML" }).click();
+  await expect(component).toHaveAttribute("data-view", "split");
+  await expect(component.locator(".clab-line-selected").first()).toBeInViewport();
+  await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
+  expect(errors).toEqual([]);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: "test-results/docs/home-desktop.png", fullPage: true });
+});
+
+test("copy and download contain the original YAML, and tabs work from the keyboard", async ({ page }) => {
+  await page.goto("examples/linux/");
+  const component = page.locator("clab-topology");
+  await component.getByRole("tab", { name: "Topology", exact: true }).click();
+  await page.keyboard.press("ArrowRight");
+  await expect(component.getByRole("tab", { name: "YAML", exact: true })).toBeFocused();
+  await expect(component).toHaveAttribute("data-view", "yaml");
+  const yaml = await readFile("docs/examples/linux.clab.yml", "utf8");
+  await component.getByRole("button", { name: "Copy YAML", exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(yaml);
+  const pending = page.waitForEvent("download");
+  await component.getByRole("button", { name: "Download YAML" }).click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe("linux.clab.yml");
+  expect(await readFile((await download.path())!, "utf8")).toBe(yaml);
+});
+
+test("theme changes preserve the iframe, and instant navigation initializes new examples", async ({ page }) => {
+  await page.goto("./");
+  const component = page.locator("clab-topology");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  await component.locator("iframe").evaluate((frame) => frame.setAttribute("data-preserved", "true"));
+  await page.locator('label[title="Switch to light mode"]').click();
+  await expect(component.frameLocator("iframe").locator("html")).toHaveAttribute("data-clab-theme", "light");
+  await expect(component.locator("iframe")).toHaveAttribute("data-preserved", "true");
+  await page.evaluate(() => { (window as unknown as { docsNavigationMarker: boolean }).docsNavigationMarker = true; });
+  await page.getByRole("link", { name: "Build your first lab" }).click();
+  await expect(page).toHaveURL(/getting-started\/first-lab\//);
+  expect(await page.evaluate(() => (window as unknown as { docsNavigationMarker: boolean }).docsNavigationMarker)).toBe(true);
+  await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
+  await expect(page.frameLocator("clab-topology iframe").locator(".react-flow__node-topology-node")).toHaveCount(2);
+  await page.goBack();
+  await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
+  await expect(page.frameLocator("clab-topology iframe").locator(".react-flow__node-topology-node")).toHaveCount(8);
+});
+
+test("multiple components stay independent and YAML-first examples defer loading", async ({ page }) => {
+  await page.goto("examples/linux/");
+  await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
+  await page.evaluate(() => {
+    const second = document.createElement("clab-topology");
+    second.setAttribute("title", "Independent viewer");
+    second.setAttribute("view", "yaml");
+    const pre = document.createElement("pre");
+    pre.textContent = "name: independent\ntopology:\n  nodes:\n    independent: {kind: linux, image: alpine:3.23}\n";
+    second.append(pre);
+    document.querySelector("clab-topology")!.after(second);
+  });
+  const second = page.locator("clab-topology").nth(1);
+  await second.scrollIntoViewIfNeeded();
+  await expect(second.locator("iframe")).toHaveCount(0);
+  await second.getByRole("tab", { name: "Topology", exact: true }).click();
+  await expect(second).toHaveAttribute("data-loaded", "true");
+  await expect(second.frameLocator("iframe").locator(".react-flow__node-topology-node")).toHaveCount(1);
+  await expect(page.locator("clab-topology").first().frameLocator("iframe").locator(".react-flow__node-topology-node")).toHaveCount(2);
+  // Same-origin messages from any other window must not impersonate the iframe.
+  await page.evaluate(() => window.postMessage({ type: "clab-viewer:error", message: "spoofed" }, location.origin));
+  await expect(second.locator(".clab-loading")).toBeHidden();
+});
+
+test("mobile layout has no horizontal overflow and retains all controls", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("./");
+  const component = page.locator("clab-topology");
+  await component.scrollIntoViewIfNeeded();
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(component.getByRole("button", { name: "Download YAML" })).toBeVisible();
+  await component.getByRole("tab", { name: "YAML", exact: true }).click();
+  await expect(component.locator(".clab-source")).toBeVisible();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: "test-results/docs/home-mobile.png", fullPage: true });
+});
+
+test("invalid examples show an error while preserving the source", async ({ page }) => {
+  await page.goto("viewer/reference/");
+  await page.evaluate(() => {
+    const element = document.createElement("clab-topology");
+    const pre = document.createElement("pre");
+    pre.textContent = "name: missing-topology";
+    element.append(pre);
+    document.querySelector("article")!.prepend(element);
+  });
+  const component = page.locator("clab-topology");
+  await expect(component.locator(".clab-load-error")).toContainText("topology.nodes");
+  await component.getByRole("tab", { name: "YAML", exact: true }).click();
+  await expect(component.locator(".clab-source")).toContainText("name: missing-topology");
+});
+
+test("YAML stays readable without JavaScript", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false });
+  const page = await context.newPage();
+  await page.goto("http://127.0.0.1:8011/containerlab-app/docs/getting-started/first-lab/");
+  await expect(page.locator("clab-topology .clab-source")).toBeVisible();
+  await expect(page.locator("clab-topology .clab-source")).toContainText("10.10.10.1/24");
+  await context.close();
+});
+
+test("full screen and read-only interactions preserve the topology", async ({ page }) => {
+  await page.goto("examples/linux/");
+  const component = page.locator("clab-topology");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const viewer = component.frameLocator("iframe");
+  const node = viewer.locator('[data-id="client"]');
+  await expect(node).toBeVisible();
+  const before = await node.getAttribute("style");
+  const box = (await node.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 40, { steps: 5 });
+  await page.mouse.up();
+  expect(await node.getAttribute("style")).toBe(before);
+  await component.getByRole("button", { name: "Expand example" }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.tagName)).toBe("CLAB-TOPOLOGY");
+  await component.getByRole("button", { name: "Exit full screen" }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBe(null);
+  await component.getByRole("button", { name: "Fit topology" }).click();
+  await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(2);
+});

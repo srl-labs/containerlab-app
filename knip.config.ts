@@ -33,7 +33,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "scripts/impairment-proxy.mjs",
       "scripts/wait-web-server.mjs",
       "scripts/fixtures/clab-ui-consumer.ts"
-    ]
+    ],
+    // Python documentation tooling is installed through uv.lock.
+    ignoreBinaries: ["uv"]
   },
   "apps/desktop": {
     entry: ["scripts/after-pack.cjs"],
@@ -67,6 +69,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     entry: [
       ...uiSources.map(([, source]) => path.posix.relative(uiDirectory, source)),
       "src/viewer/entry.tsx",
+      "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",
       "docs/javascripts/mermaid-config.js"
     ]

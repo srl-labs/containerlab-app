@@ -1,0 +1,25 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "client",
+      "position": {
+        "x": 80,
+        "y": 100
+      },
+      "icon": "client",
+      "iconColor": "#70bcde"
+    },
+    {
+      "id": "server",
+      "position": {
+        "x": 420,
+        "y": 100
+      },
+      "icon": "server",
+      "iconColor": "#bfad89"
+    }
+  ],
+  "viewerSettings": {
+    "linkLabelMode": "show-all"
+  }
+}

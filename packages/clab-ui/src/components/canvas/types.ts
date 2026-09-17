@@ -168,6 +168,11 @@ export interface ReactFlowCanvasProps {
   layout?: LayoutName;
   /** Pure embedded viewer mode: pan/zoom only, no selection, dragging, or context menus. */
   readOnlyViewer?: boolean;
+  viewerOptions?: {
+    onNodeSelect?: (nodeId: string | null) => void;
+    onInit?: (instance: ReactFlowInstance) => void;
+    zoomOnScroll?: boolean;
+  };
   /** Geo layout active */
   isGeoLayout?: boolean;
   /** Grid line thickness for the background */

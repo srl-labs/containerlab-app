@@ -21,6 +21,8 @@ Use Node.js >=24 and React 19.2.5 or newer within React 19. The public npm packa
 | `/image-manager`, `/image-manager/catalog` | Image UI and catalog helpers |
 | `/inspect`, `/welcome`, `/node-impairments`, `/wireshark-vnc` | Auxiliary webviews |
 | `/viewer`, `/viewer/static/*` | Embeddable viewer and static assets |
+
+The standalone viewer also includes a framework-independent `<clab-topology>` documentation component with Topology, YAML, and split views, node inspection, copy/download, and theme synchronization. See the [documentation component guide](../../docs/viewer/index.md) and [embedding reference](../../docs/viewer/reference.md). `pnpm docs` runs the Zensical showcase locally.
 | `/monaco/core`, `/monaco/editor-worker`, `/monaco/json-worker`, `/monaco/yaml-worker`, `/monaco-assets.json` | Editor integration |
 | `/yaml` | YAML completion and hover helpers |
 

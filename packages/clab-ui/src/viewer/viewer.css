@@ -1,0 +1,47 @@
+/* Scoped to the standalone viewer document; never changes the editor's appearance. */
+html[data-clab-theme="dark"] {
+  --vscode-editor-background: #101823 !important;
+  --vscode-editor-foreground: #d6e1f0 !important;
+  --vscode-sideBar-background: #141e2b !important;
+  --vscode-panel-border: #283749 !important;
+}
+html[data-clab-theme="light"] {
+  --vscode-editor-background: #f7f9fc !important;
+  --vscode-editor-foreground: #24354a !important;
+  --vscode-sideBar-background: #ffffff !important;
+  --vscode-panel-border: #dce4ee !important;
+}
+.react-flow__controls {
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px #00000012;
+}
+.react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+  background: var(--vscode-sideBar-background) !important;
+  color: var(--vscode-editor-foreground) !important;
+  border-color: var(--vscode-panel-border);
+}
+.react-flow, .react-flow__background { background-color: var(--vscode-editor-background) !important; }
+.react-flow__controls-button:hover { background: var(--vscode-input-background); }
+.react-flow__node-topology-node { cursor: pointer !important; }
+.topology-node-label {
+  background: var(--vscode-editor-background) !important;
+  color: var(--vscode-editor-foreground) !important;
+  padding: 4px 8px !important;
+  font-family: system-ui, sans-serif !important;
+  font-size: 13px !important;
+  letter-spacing: .01em;
+}
+/* Documentation describes the topology, not a running deployment. */
+.topology-node-runtime-badge { display: none !important; }
+.topology-node-icon { opacity: 1 !important; }
+.react-flow__node:focus-visible { outline: 2px solid #51b6e8; outline-offset: 6px; border-radius: 8px; }
+html[data-clab-selected] .react-flow__node.clab-viewer-selected {
+  filter: drop-shadow(0 0 9px #48bce077);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

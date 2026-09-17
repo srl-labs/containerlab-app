@@ -12,6 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: __dirname,
   base: "./",
+  publicDir: path.resolve(__dirname, "viewer-assets"),
   build: {
     outDir: "dist-viewer",
     emptyOutDir: true,
