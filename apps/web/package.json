@@ -22,6 +22,7 @@
     "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
     "test:e2e": "playwright test --config test/e2e/playwright.config.ts",
+    "test:base-path": "pnpm run build && VITE_CLAB_RUNTIME_MODE=pages vite build --config vite.config.ts --outDir dist/pages && playwright test --config test/e2e/playwright.base-path.config.ts",
     "test:e2e:local-ui": "pnpm run test:e2e",
     "test:e2e:smoke": "playwright test --config test/e2e/playwright.config.ts test/e2e/specs/standalone-smoke.spec.ts --project=chromium",
     "test:e2e:smoke:local-ui": "pnpm run test:e2e:smoke",

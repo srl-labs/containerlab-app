@@ -1,6 +1,5 @@
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
-import { publicAssetUrl } from "./publicAssetUrl";
 import type { RuntimeTerminalProtocol, RuntimeTerminalRequest } from "./stores/runtimeUiStore";
 
 const DETACHED_TERMINAL_TARGET_PARAM = "target";
@@ -116,8 +115,11 @@ export function detachedTerminalTargetFromLocation(location: Location = window.l
   return decodeDetachedTerminalTarget(params.get(DETACHED_TERMINAL_TARGET_PARAM));
 }
 
-export function buildDetachedTerminalUrl(target: RuntimeTerminalRequest): string {
-  const url = new URL(publicAssetUrl("terminal.html"), window.location.origin);
+export function buildDetachedTerminalUrl(
+  target: RuntimeTerminalRequest,
+  baseUri = document.baseURI
+): string {
+  const url = new URL("terminal.html", baseUri);
   url.searchParams.set(DETACHED_TERMINAL_TARGET_PARAM, encodeDetachedTerminalTarget(target));
   return url.toString();
 }

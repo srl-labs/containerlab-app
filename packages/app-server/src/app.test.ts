@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { once } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
 import undici, { Headers, type Request, Response } from "undici";
+import WebSocket, { WebSocketServer } from "ws";
 
 import { createStandaloneApp } from "./app";
+import { normalizeBasePath } from "./basePath";
 
 interface FetchCall {
   body: string | undefined;
@@ -89,6 +98,7 @@ class FetchMock {
 
 interface TestAppContext {
   app: Awaited<ReturnType<typeof createStandaloneApp>>;
+  basePath: string;
   fetchMock: FetchMock;
 }
 
@@ -178,11 +188,12 @@ test("auth startup bounds an unresponsive endpoint and still reports healthy end
   );
 });
 
-async function createTestContext(t: TestContext): Promise<TestAppContext> {
+async function createTestContext(t: TestContext, basePath = ""): Promise<TestAppContext> {
   const fetchMock = new FetchMock();
   t.mock.method(undici, "fetch", fetchMock.fetch);
 
   const app = await createStandaloneApp({
+    basePath,
     defaultClabApiUrl: "https://default-api.test:8080",
     isDev: true,
     logger: false,
@@ -193,7 +204,7 @@ async function createTestContext(t: TestContext): Promise<TestAppContext> {
     await app.close();
   });
 
-  return { app, fetchMock };
+  return { app, basePath, fetchMock };
 }
 
 function bodyToString(body: unknown): string | undefined {
@@ -306,7 +317,7 @@ async function loginEndpoint(
 ): Promise<{ cookie: string; endpointId: string }> {
   const response = await context.app.inject({
     method: "POST",
-    url: "/auth/login",
+    url: `${context.basePath}/auth/login`,
     headers: cookie ? { cookie } : undefined,
     payload: {
       password: "password",
@@ -1863,4 +1874,212 @@ test("terminal session creation resolves topology ref and short node name before
 
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json<{ sessionId: string }>().sessionId, "terminal-1");
+});
+
+async function createStaticAppContext(
+  t: TestContext,
+  basePath?: string
+): Promise<Awaited<ReturnType<typeof createStandaloneApp>>> {
+  const clientRoot = mkdtempSync(join(tmpdir(), "clab-web-static-"));
+  for (const name of ["index.html", "terminal.html", "wireshark.html"]) {
+    writeFileSync(
+      join(clientRoot, name),
+      '<!doctype html><html><head><title>app</title></head><body></body></html>'
+    );
+  }
+  writeFileSync(join(clientRoot, "asset.js"), "console.log('asset');");
+  t.after(() => rmSync(clientRoot, { recursive: true, force: true }));
+
+  const app = await createStandaloneApp({
+    basePath,
+    isDev: false,
+    logger: false,
+    staticClientRoot: clientRoot,
+  });
+
+  t.after(async () => {
+    await app.close();
+  });
+
+  return app;
+}
+
+test("normalizeBasePath accepts bare, prefixed, and trailing-slash forms", () => {
+  assert.equal(normalizeBasePath(undefined), "");
+  assert.equal(normalizeBasePath(""), "");
+  assert.equal(normalizeBasePath("  "), "");
+  assert.equal(normalizeBasePath("/"), "");
+  assert.equal(normalizeBasePath("web"), "/web");
+  assert.equal(normalizeBasePath("/web"), "/web");
+  assert.equal(normalizeBasePath("/web/"), "/web");
+  assert.equal(normalizeBasePath("/web///"), "/web");
+  assert.equal(normalizeBasePath(" /clab/web/ "), "/clab/web");
+  assert.equal(normalizeBasePath("//clab//web///"), "/clab/web");
+});
+
+test("the client is served at the root when no base path is configured", async (t) => {
+  const app = await createStaticAppContext(t);
+
+  const index = await app.inject({ method: "GET", url: "/" });
+  assert.equal(index.statusCode, 200);
+  assert.match(index.body, /<title>app<\/title>/);
+  assert.match(index.body, /<base href="\/">/);
+
+  const deepLink = await app.inject({ method: "GET", url: "/anything" });
+  assert.equal(deepLink.statusCode, 200);
+  assert.match(deepLink.body, /<title>app<\/title>/);
+
+  const config = await app.inject({ method: "GET", url: "/api/config" });
+  assert.equal(config.statusCode, 200);
+});
+
+test("a configured base path serves the client and keeps other paths off the fallback", async (t) => {
+  const app = await createStaticAppContext(t, "/web");
+
+  const index = await app.inject({ method: "GET", url: "/web/" });
+  assert.equal(index.statusCode, 200);
+  assert.match(index.body, /<title>app<\/title>/);
+
+  const bare = await app.inject({ method: "GET", url: "/web" });
+  assert.equal(bare.statusCode, 308);
+  assert.equal(bare.headers.location, "/web/");
+
+  const deepLink = await app.inject({ method: "GET", url: "/web/anything" });
+  assert.equal(deepLink.statusCode, 200);
+  assert.match(deepLink.body, /<title>app<\/title>/);
+
+  const outside = await app.inject({ method: "GET", url: "/anything" });
+  assert.equal(outside.statusCode, 404);
+});
+
+test("a configured base path moves the API and declares the document base", async (t) => {
+  const app = await createStaticAppContext(t, "/web");
+
+  const index = await app.inject({ method: "GET", url: "/web/" });
+  assert.match(index.body, /<base href="\/web\/">/);
+
+  const config = await app.inject({ method: "GET", url: "/web/api/config" });
+  assert.equal(config.statusCode, 200);
+
+  const rootConfig = await app.inject({ method: "GET", url: "/api/config" });
+  assert.equal(rootConfig.statusCode, 404);
+});
+
+test("all HTML entrypoints and assets work under a nested base", async (t) => {
+  const app = await createStaticAppContext(t, "/tools/clab");
+  for (const path of ["", "index.html", "terminal.html", "wireshark.html", "deep/link"]) {
+    const response = await app.inject(`/tools/clab/${path}`);
+    assert.equal(response.statusCode, 200, path);
+    assert.match(response.body, /<base href="\/tools\/clab\/">/);
+  }
+  const asset = await app.inject("/tools/clab/asset.js");
+  assert.equal(asset.statusCode, 200);
+  assert.match(String(asset.headers["content-type"]), /javascript/);
+  assert.equal((await app.inject("/asset.js")).statusCode, 404);
+  assert.equal((await app.inject("/tools/clab-other/")).statusCode, 404);
+  const redirect = await app.inject("/tools/clab?theme=dark");
+  assert.equal(redirect.statusCode, 308);
+  assert.equal(redirect.headers.location, "/tools/clab/?theme=dark");
+});
+
+test("development proxy and redirects honor the configured prefix", async (t) => {
+  const { app } = await createTestContext(t, "/tools/clab");
+  t.mock.method(globalThis, "fetch", (url: string) => {
+    assert.equal(url, "http://vite.test/tools/clab/terminal.html");
+    return Promise.resolve(new globalThis.Response("dev terminal"));
+  });
+  const terminal = await app.inject("/tools/clab/terminal.html");
+  assert.equal(terminal.statusCode, 200);
+  assert.equal(terminal.body, "dev terminal");
+  assert.equal((await app.inject("/terminal.html")).statusCode, 404);
+  const bare = await app.inject("/tools/clab?target=example");
+  assert.equal(bare.statusCode, 308);
+  assert.equal(bare.headers.location, "/tools/clab/?target=example");
+});
+
+test("development readiness probe reaches the API under a normalized prefix", async (t) => {
+  const { app } = await createTestContext(t, "/tools/clab");
+  const address = await app.listen({ host: "127.0.0.1", port: 0 });
+  await promisify(execFile)(process.execPath, [
+    fileURLToPath(new URL("../../../scripts/wait-web-server.mjs", import.meta.url))
+  ], {
+    env: { ...process.env, PORT: new URL(address).port, WEB_TLS_ENABLE: "false", WEB_BASE_PATH: " tools/clab/ " },
+    timeout: 5000
+  });
+});
+
+test("prefixed authentication reconnects endpoints and returns reachable Wireshark URLs", async (t) => {
+  const context = await createTestContext(t, "/web");
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/capture/wireshark-vnc-sessions/capture-1/ready", () => jsonResponse({ ready: true }));
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/capture/wireshark-vnc-sessions/capture-1/vnc/", () => textResponse("VNC viewer"));
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const headers = { cookie, "x-endpoint-id": endpointId };
+  const reconnect = await context.app.inject({
+    method: "POST",
+    url: `/web/auth/endpoints/${endpointId}/reconnect`,
+    headers,
+    payload: { username: "admin", password: "password", url: "http://api.example.test" }
+  });
+  assert.equal(reconnect.statusCode, 200, reconnect.body);
+  const files = await context.app.inject({ url: "/web/files", headers });
+  assert.equal(files.statusCode, 200, files.body);
+  const ready = await context.app.inject({ url: "/web/api/runtime/capture/wireshark-vnc-sessions/capture-1/ready", headers });
+  assert.equal(ready.statusCode, 200, ready.body);
+  const viewerUrl = ready.json<{ url: string }>().url;
+  assert.equal(viewerUrl, "/web/api/runtime/capture/wireshark-vnc-sessions/capture-1/vnc/");
+  const viewer = await context.app.inject({ url: viewerUrl, headers });
+  assert.equal(viewer.statusCode, 200, viewer.body);
+  assert.equal(viewer.body, "VNC viewer");
+});
+
+test("prefixed workspace SSE forwards upstream events", async (t) => {
+  const context = await createTestContext(t, "/tools/clab");
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/workspace/events", () =>
+    ndjsonResponse(`${JSON.stringify({ type: "workspace-file", path: "labs/test", action: "delete" })}\n`)
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const response = await context.app.inject({
+    url: "/tools/clab/api/runtime/file-explorer/events",
+    headers: { cookie, "x-endpoint-id": endpointId }
+  });
+  assert.equal(response.statusCode, 200);
+  assert.match(String(response.headers["content-type"]), /text\/event-stream/);
+  assert.match(response.body, /"path":"labs\/test"/);
+});
+
+test("prefixed terminal WebSockets forward authenticated upstream output", async (t) => {
+  let socket: WebSocket | undefined;
+  t.after(() => socket?.terminate());
+  const context = await createTestContext(t, "/tools/clab");
+  const upstream = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  t.after(async () => {
+    for (const client of upstream.clients) client.terminate();
+    await new Promise<void>((resolve, reject) => upstream.close((error) => error ? reject(error) : resolve()));
+  });
+  await once(upstream, "listening");
+  const upstreamAddress = upstream.address();
+  assert.ok(upstreamAddress && typeof upstreamAddress !== "string");
+  const upstreamOrigin = `http://127.0.0.1:${upstreamAddress.port}`;
+  context.fetchMock.on("POST", `${upstreamOrigin}/login`, () => jsonResponse({ token: "test-token" }));
+  let upstreamPath: string | undefined;
+  let upstreamAuthorization: string | undefined;
+  upstream.on("connection", (client, request) => {
+    upstreamPath = request.url;
+    upstreamAuthorization = request.headers.authorization;
+    client.send("terminal output");
+  });
+  const { cookie, endpointId } = await loginEndpoint(context, { url: upstreamOrigin });
+  const address = await context.app.listen({ host: "127.0.0.1", port: 0 });
+  socket = new WebSocket(
+    `${address.replace("http:", "ws:")}/tools/clab/api/runtime/terminal-sessions/terminal-1/stream?endpointId=${endpointId}`,
+    { headers: { cookie } }
+  );
+  const [message] = await once(socket, "message", { signal: AbortSignal.timeout(5000) });
+  assert.equal(String(message), "terminal output");
+  assert.equal(upstreamPath, "/api/v1/terminal-sessions/terminal-1/stream");
+  assert.equal(upstreamAuthorization, "Bearer test-token");
+  socket.close();
+  await once(socket, "close");
 });
