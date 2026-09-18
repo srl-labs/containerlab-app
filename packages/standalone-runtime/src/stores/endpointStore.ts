@@ -1,3 +1,4 @@
+import { getStandaloneBackend } from "../backend";
 import { create } from "zustand";
 
 import {
@@ -66,6 +67,7 @@ function buildBrowserEndpointId(): string {
 }
 
 function persistEndpoints(endpoints: Map<string, EndpointConfig>): void {
+  if (!getStandaloneBackend().capabilities.endpoints) return;
   try {
     const serialized: PersistedEndpointConfig[] = Array.from(endpoints.values())
       .filter((endpoint) => endpoint.id !== LEGACY_PAGES_SANDBOX_ENDPOINT_ID)
@@ -306,7 +308,7 @@ export const useEndpointStore = create<EndpointStoreState>((set) => ({
   clear: () =>
     set(() => {
       try {
-        localStorage.removeItem(STORAGE_KEY);
+        if (getStandaloneBackend().capabilities.endpoints) localStorage.removeItem(STORAGE_KEY);
       } catch {
         // Ignore persistence failures.
       }

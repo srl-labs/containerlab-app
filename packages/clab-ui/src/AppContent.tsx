@@ -301,7 +301,7 @@ export interface AppLayoutOptions {
     content?: React.ReactNode;
     /** Content rendered over an empty canvas. */
     emptyState?: React.ReactNode;
-    /** Host-owned left chrome; replaces the built-in dev explorer pane when set. */
+    /** Shared workspace navigation supplied by the host composition. */
     sidebar?: React.ReactNode;
   };
   lifecycleActionsAvailable?: boolean;
@@ -699,6 +699,7 @@ export const AppContent: React.FC<AppContentProps> = ({
   slots,
   lifecycleActionsAvailable = true
 }) => {
+  const [contextPanelWidth, setContextPanelWidth] = React.useState(0);
   const viewerOnly = chrome === "viewer" || slots?.content != null;
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
@@ -1361,9 +1362,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (hasActiveTopology) {
       return;
     }
-    if (panelVisibility.isContextPanelOpen) {
-      panelVisibility.handleCloseContextPanel();
-    }
     if (panelVisibility.showLabSettingsModal) {
       panelVisibility.handleCloseLabSettings();
     }
@@ -1457,7 +1455,6 @@ export const AppContent: React.FC<AppContentProps> = ({
           ref={layoutRef}
           sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
         >
-          {slots?.emptyState}
           {slots?.sidebar}
           {showDevExplorer && (
             <Box
@@ -1495,91 +1492,6 @@ export const AppContent: React.FC<AppContentProps> = ({
               />
             </Box>
           )}
-          {!viewerOnly && hasActiveTopology && (
-            <ContextPanel
-              isOpen={panelVisibility.isContextPanelOpen}
-              side={panelVisibility.panelSide}
-              onOpen={panelVisibility.handleOpenContextPanel}
-              onClose={panelVisibility.handleCloseContextPanel}
-              onBack={handleContextPanelBack}
-              onToggleSide={panelVisibility.handleTogglePanelSide}
-              rfInstance={rfInstance}
-              palette={{
-                mode: state.mode,
-                requestedTab: paletteTabRequest,
-
-                onEditCustomNode: customNodeCommands.onEditCustomNode,
-                onDeleteCustomNode: customNodeCommands.onDeleteCustomNode,
-                onSetDefaultCustomNode: customNodeCommands.onSetDefaultCustomNode
-              }}
-              view={{
-                selectedNodeData: selectionData.selectedNodeData,
-                selectedLinkData: selectionData.selectedLinkData
-              }}
-              editor={{
-                editingNodeData: selectionData.editingNodeData,
-                editingNodeInheritedProps: selectionData.editingNodeInheritedProps,
-                onOpenSelectedNodeEditor: handleOpenSelectedNodeEditor,
-                nodeEditorHandlers: {
-                  handleClose: nodeEditorHandlers.handleClose,
-                  handleSave: nodeEditorHandlers.handleSave,
-                  handleApply: nodeEditorHandlers.handleApply,
-                  previewVisuals: nodeEditorHandlers.previewVisuals,
-                  handleDelete: selectionData.editingNodeData
-                    ? () => graphHandlers.handleDeleteNode(selectionData.editingNodeData!.id)
-                    : undefined
-                },
-                editingLinkData: selectionData.editingLinkData,
-                linkEditorHandlers: {
-                  handleClose: linkEditorHandlers.handleClose,
-                  handleSave: linkEditorHandlers.handleSave,
-                  handleApply: linkEditorHandlers.handleApply,
-                  previewOffset: linkEditorHandlers.previewOffset,
-                  revertOffset: linkEditorHandlers.revertOffset,
-                  handleDelete: selectionData.editingLinkData
-                    ? () => graphHandlers.handleDeleteLink(selectionData.editingLinkData!.id)
-                    : undefined
-                },
-                editingNetworkData: selectionData.editingNetworkData,
-                networkEditorHandlers: {
-                  handleClose: networkEditorHandlers.handleClose,
-                  handleSave: handleNetworkSave,
-                  handleApply: handleNetworkApply
-                },
-                linkImpairmentData: selectionData.selectedLinkImpairmentData,
-                linkImpairmentHandlers: {
-                  onError: handleLinkImpairmentError,
-                  onApply: handleLinkImpairmentApply,
-                  onSave: handleLinkImpairmentSave,
-                  onClose: () => topoActions.editImpairment(null)
-                },
-                editingTextAnnotation: annotationUiState.editingTextAnnotation,
-                textAnnotationHandlers: {
-                  onApply: annotationActions.applyTextAnnotationEdit,
-                  onClose: annotationUiActions.closeTextEditor,
-                  onDelete: annotationActions.deleteTextAnnotation
-                },
-                editingShapeAnnotation: annotationUiState.editingShapeAnnotation,
-                shapeAnnotationHandlers: {
-                  onApply: annotationActions.applyShapeAnnotationEdit,
-                  onClose: annotationUiActions.closeShapeEditor,
-                  onDelete: annotationActions.deleteShapeAnnotation
-                },
-                editingTrafficRateAnnotation: annotationUiState.editingTrafficRateAnnotation,
-                trafficRateAnnotationHandlers: {
-                  onApply: annotationActions.applyTrafficRateAnnotationEdit,
-                  onClose: annotationUiActions.closeTrafficRateEditor,
-                  onDelete: annotationActions.deleteTrafficRateAnnotation
-                },
-                editingGroup: annotationUiState.editingGroup,
-                groupHandlers: {
-                  onApply: annotationActions.applyGroupEdit,
-                  onClose: annotationUiActions.closeGroupEditor,
-                  onDelete: annotationActions.deleteGroup
-                }
-              }}
-            />
-          )}
           <Box
             component="main"
             sx={{
@@ -1592,53 +1504,145 @@ export const AppContent: React.FC<AppContentProps> = ({
             }}
           >
             {slots?.header && <Box sx={{ flexShrink: 0 }}>{slots.header}</Box>}
-            <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
-              <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
-                {hasActiveTopology && (
-                  <>
-                    <GraphCanvasMain
-                      canvasRef={reactFlowRef}
-                      canvasProps={canvasProps}
-                      showDummyLinks={state.showDummyLinks}
-                      edgeAnnotationLookup={edgeAnnotationLookup}
-                      endpointLabelOffset={state.endpointLabelOffset}
-                      endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
-                    />
-                    <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
-                  </>
-                )}
-              </Box>
-              {slots?.content}
+            <Box sx={{ flex: 1, minHeight: 0, display: "flex", position: "relative",
+              "--clab-ui-panel-right": !viewerOnly && panelVisibility.isContextPanelOpen && panelVisibility.panelSide === "right" ? `min(${contextPanelWidth}px, 70%)` : "0px",
+              "--clab-ui-panel-left": !viewerOnly && panelVisibility.isContextPanelOpen && panelVisibility.panelSide === "left" ? `min(${contextPanelWidth}px, 70%)` : "0px"
+            }}>
               {!viewerOnly && hasActiveTopology && (
-                <Navbar
-                  lifecycleActionsAvailable={lifecycleActionsAvailable}
-                  hasActiveTopology={hasActiveTopology}
-                  barSide="right"
+                <ContextPanel
+                  onWidthChange={setContextPanelWidth}
+                  isOpen={panelVisibility.isContextPanelOpen}
+                  side={panelVisibility.panelSide}
+                  onOpen={panelVisibility.handleOpenContextPanel}
+                  onClose={panelVisibility.handleCloseContextPanel}
+                  onBack={handleContextPanelBack}
+                  onToggleSide={panelVisibility.handleTogglePanelSide}
                   rfInstance={rfInstance}
-                  onZoomToFit={handleZoomToFit}
-                  layout={layoutControls.layout}
-                  onLayoutChange={layoutControls.setLayout}
-                  onLabSettings={panelVisibility.handleShowLabSettings}
-                  onToggleSplit={handleToggleSplit}
-                  onCaptureViewport={panelVisibility.handleShowSvgExport}
-                  onShowShortcuts={panelVisibility.handleShowShortcuts}
-                  onShowAbout={panelVisibility.handleShowAbout}
-                  onShowBulkLink={panelVisibility.handleShowBulkLink}
-                  linkLabelMode={state.linkLabelMode}
-                  onLinkLabelModeChange={handleLinkLabelModeChange}
-                  showDummyLinks={state.showDummyLinks}
-                  onToggleDummyLinks={handleToggleDummyLinks}
-                  shortcutDisplayEnabled={shortcutDisplay.isEnabled}
-                  onToggleShortcutDisplay={shortcutDisplay.toggle}
-                  canUndo={undoRedo.canUndo}
-                  canRedo={undoRedo.canRedo}
-                  onUndo={undoRedo.undo}
-                  onRedo={undoRedo.redo}
-                  renderDeployMenuItems={renderDeployMenuItems}
+                  palette={{
+                    mode: state.mode,
+                    requestedTab: paletteTabRequest,
+
+                    onEditCustomNode: customNodeCommands.onEditCustomNode,
+                    onDeleteCustomNode: customNodeCommands.onDeleteCustomNode,
+                    onSetDefaultCustomNode: customNodeCommands.onSetDefaultCustomNode
+                  }}
+                  view={{
+                    selectedNodeData: selectionData.selectedNodeData,
+                    selectedLinkData: selectionData.selectedLinkData
+                  }}
+                  editor={{
+                    editingNodeData: selectionData.editingNodeData,
+                    editingNodeInheritedProps: selectionData.editingNodeInheritedProps,
+                    onOpenSelectedNodeEditor: handleOpenSelectedNodeEditor,
+                    nodeEditorHandlers: {
+                      handleClose: nodeEditorHandlers.handleClose,
+                      handleSave: nodeEditorHandlers.handleSave,
+                      handleApply: nodeEditorHandlers.handleApply,
+                      previewVisuals: nodeEditorHandlers.previewVisuals,
+                      handleDelete: selectionData.editingNodeData
+                        ? () => graphHandlers.handleDeleteNode(selectionData.editingNodeData!.id)
+                        : undefined
+                    },
+                    editingLinkData: selectionData.editingLinkData,
+                    linkEditorHandlers: {
+                      handleClose: linkEditorHandlers.handleClose,
+                      handleSave: linkEditorHandlers.handleSave,
+                      handleApply: linkEditorHandlers.handleApply,
+                      previewOffset: linkEditorHandlers.previewOffset,
+                      revertOffset: linkEditorHandlers.revertOffset,
+                      handleDelete: selectionData.editingLinkData
+                        ? () => graphHandlers.handleDeleteLink(selectionData.editingLinkData!.id)
+                        : undefined
+                    },
+                    editingNetworkData: selectionData.editingNetworkData,
+                    networkEditorHandlers: {
+                      handleClose: networkEditorHandlers.handleClose,
+                      handleSave: handleNetworkSave,
+                      handleApply: handleNetworkApply
+                    },
+                    linkImpairmentData: selectionData.selectedLinkImpairmentData,
+                    linkImpairmentHandlers: {
+                      onError: handleLinkImpairmentError,
+                      onApply: handleLinkImpairmentApply,
+                      onSave: handleLinkImpairmentSave,
+                      onClose: () => topoActions.editImpairment(null)
+                    },
+                    editingTextAnnotation: annotationUiState.editingTextAnnotation,
+                    textAnnotationHandlers: {
+                      onApply: annotationActions.applyTextAnnotationEdit,
+                      onClose: annotationUiActions.closeTextEditor,
+                      onDelete: annotationActions.deleteTextAnnotation
+                    },
+                    editingShapeAnnotation: annotationUiState.editingShapeAnnotation,
+                    shapeAnnotationHandlers: {
+                      onApply: annotationActions.applyShapeAnnotationEdit,
+                      onClose: annotationUiActions.closeShapeEditor,
+                      onDelete: annotationActions.deleteShapeAnnotation
+                    },
+                    editingTrafficRateAnnotation: annotationUiState.editingTrafficRateAnnotation,
+                    trafficRateAnnotationHandlers: {
+                      onApply: annotationActions.applyTrafficRateAnnotationEdit,
+                      onClose: annotationUiActions.closeTrafficRateEditor,
+                      onDelete: annotationActions.deleteTrafficRateAnnotation
+                    },
+                    editingGroup: annotationUiState.editingGroup,
+                    groupHandlers: {
+                      onApply: annotationActions.applyGroupEdit,
+                      onClose: annotationUiActions.closeGroupEditor,
+                      onDelete: annotationActions.deleteGroup
+                    }
+                  }}
                 />
               )}
-              <EasterEggRenderer easterEgg={easterEgg} />
-              <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+              <Box sx={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}>
+                {slots?.emptyState}
+                <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
+                  {hasActiveTopology && (
+                    <>
+                      <GraphCanvasMain
+                        canvasRef={reactFlowRef}
+                        canvasProps={canvasProps}
+                        showDummyLinks={state.showDummyLinks}
+                        edgeAnnotationLookup={edgeAnnotationLookup}
+                        endpointLabelOffset={state.endpointLabelOffset}
+                        endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
+                      />
+                      <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+                    </>
+                  )}
+                </Box>
+                {slots?.content}
+                {!viewerOnly && hasActiveTopology && (
+                  <Navbar
+                    lifecycleActionsAvailable={lifecycleActionsAvailable}
+                    hasActiveTopology={hasActiveTopology}
+                    barSide="right"
+                    rfInstance={rfInstance}
+                    onZoomToFit={handleZoomToFit}
+                    layout={layoutControls.layout}
+                    onLayoutChange={layoutControls.setLayout}
+                    onLabSettings={panelVisibility.handleShowLabSettings}
+                    onToggleSplit={handleToggleSplit}
+                    onCaptureViewport={panelVisibility.handleShowSvgExport}
+                    onShowShortcuts={panelVisibility.handleShowShortcuts}
+                    onShowAbout={panelVisibility.handleShowAbout}
+                    onShowBulkLink={panelVisibility.handleShowBulkLink}
+                    linkLabelMode={state.linkLabelMode}
+                    onLinkLabelModeChange={handleLinkLabelModeChange}
+                    showDummyLinks={state.showDummyLinks}
+                    onToggleDummyLinks={handleToggleDummyLinks}
+                    shortcutDisplayEnabled={shortcutDisplay.isEnabled}
+                    onToggleShortcutDisplay={shortcutDisplay.toggle}
+                    canUndo={undoRedo.canUndo}
+                    canRedo={undoRedo.canRedo}
+                    onUndo={undoRedo.undo}
+                    onRedo={undoRedo.redo}
+                    renderDeployMenuItems={renderDeployMenuItems}
+                  />
+                )}
+                <EasterEggRenderer easterEgg={easterEgg} />
+                <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+              </Box>
             </Box>
           </Box>
         </Box>

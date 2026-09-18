@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 /**
  * Topology sync (dirty) state refresh for standalone mode.
  *
@@ -42,7 +43,7 @@ export async function refreshTopologyDirtyState(
     if (target.sessionId) {
       payload.sessionId = target.sessionId;
     }
-    const response = await fetch(standaloneServerUrl("/api/lab/apply"), {
+    const response = await runtimeFetch(standaloneServerUrl("/api/lab/apply"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

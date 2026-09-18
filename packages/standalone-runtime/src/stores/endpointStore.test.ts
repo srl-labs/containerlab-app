@@ -229,3 +229,22 @@ test("isValidEndpointSessionDuration accepts free-form durations", () => {
   assert.equal(isValidEndpointSessionDuration("forever"), false);
   assert.equal(isValidEndpointSessionDuration(""), false);
 });
+
+test("a host without endpoint management preserves saved server profiles", async () => {
+  const { configureStandaloneBackend, getStandaloneBackend } = await import("../backend");
+  const previous = getStandaloneBackend();
+  const profiles = '[{"id":"saved-server","url":"https://lab.example"}]';
+  localStorage.setItem("clab-standalone-endpoints", profiles);
+  configureStandaloneBackend({ ...previous, capabilities: { ...previous.capabilities, endpoints: false } });
+  try {
+    useEndpointStore.getState().setEndpoints([{
+      id: "local-workspace", url: "local://workspace", label: "Local workspace", username: "",
+      sessionDuration: "24h", status: "connected", connected: true
+    }]);
+    assert.equal(localStorage.getItem("clab-standalone-endpoints"), profiles);
+    useEndpointStore.getState().clear();
+    assert.equal(localStorage.getItem("clab-standalone-endpoints"), profiles);
+  } finally {
+    configureStandaloneBackend(previous);
+  }
+});

@@ -43,9 +43,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   "apps/web": {
     entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]
   },
-  "apps/web-public": {
-    entry: ["src/main.tsx"]
-  },
+  "apps/web-public": {},
   "apps/vscode-containerlab": {
     entry: ["src/webviews/*/entry.tsx", "test/**/*.test.ts"],
     ignoreDependencies: [
@@ -82,4 +80,4 @@ for (const [directory, workspace] of Object.entries(workspaces)) {
   );
 }
 
-export default { workspaces } satisfies KnipConfig;
+export default { workspaces, ignore: [".venv/**"] } satisfies KnipConfig;

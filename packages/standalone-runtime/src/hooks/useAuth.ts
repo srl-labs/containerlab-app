@@ -1,3 +1,4 @@
+import { getStandaloneBackend, runtimeFetch } from "../backend";
 import { useCallback, useEffect, useMemo } from "react";
 import type { AppConfigResponse } from "@srl-labs/containerlab-app-contract";
 
@@ -116,7 +117,7 @@ function useEndpointAuth() {
   const endpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
 
   const refreshConfig = useCallback(async () => {
-    const response = await fetch(standaloneServerUrl("/api/config"), { credentials: "include" });
+    const response = await runtimeFetch(standaloneServerUrl("/api/config"), { credentials: "include" });
     if (!response.ok) {
       return;
     }
@@ -128,7 +129,7 @@ function useEndpointAuth() {
 
   const refreshEndpoints = useCallback(async () => {
     const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
-    const response = await fetch(standaloneServerUrl("/auth/endpoints"), { credentials: "include" });
+    const response = await runtimeFetch(standaloneServerUrl("/auth/endpoints"), { credentials: "include" });
     if (!response.ok) {
       throw new Error(await readError(response, "Failed to load endpoints"));
     }
@@ -145,14 +146,14 @@ function useEndpointAuth() {
       return;
     }
 
-    hydratePersisted();
+    if (getStandaloneBackend().capabilities.endpoints) hydratePersisted();
     setLoading(true);
 
     void (async () => {
       try {
         await refreshConfig().catch(() => {});
         const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
-        const response = await fetch(standaloneServerUrl("/auth/me"), { credentials: "include" });
+        const response = await runtimeFetch(standaloneServerUrl("/auth/me"), { credentials: "include" });
         if (!response.ok) {
           throw new Error(await readError(response, "Authentication check failed"));
         }
@@ -203,7 +204,7 @@ function useEndpointAuth() {
       username: string;
     }): Promise<EndpointConfig> => {
       clearError();
-      const response = await fetch(standaloneServerUrl("/auth/endpoints/add"), {
+      const response = await runtimeFetch(standaloneServerUrl("/auth/endpoints/add"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -234,7 +235,7 @@ function useEndpointAuth() {
         return;
       }
 
-      const response = await fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}`), {
+      const response = await runtimeFetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}`), {
         method: "DELETE",
         credentials: "include"
       });
@@ -265,7 +266,7 @@ function useEndpointAuth() {
       if (!existing) {
         throw new Error("Endpoint profile not found");
       }
-      const response = await fetch(
+      const response = await runtimeFetch(
         standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(input.endpointId)}/reconnect`),
         {
           method: "POST",
@@ -304,7 +305,7 @@ function useEndpointAuth() {
         return;
       }
 
-      void fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/preferences`), {
+      void runtimeFetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(endpointId)}/preferences`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -354,7 +355,7 @@ function useEndpointAuth() {
         return endpoint;
       }
 
-      const response = await fetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(input.endpointId)}`), {
+      const response = await runtimeFetch(standaloneServerUrl(`/auth/endpoints/${encodeURIComponent(input.endpointId)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -388,14 +389,14 @@ function useEndpointAuth() {
 
   const logout = useCallback(async () => {
     clearError();
-    await fetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
+    await runtimeFetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
     markAllSaved();
     useLabStore.getState().clear();
   }, [clearError, markAllSaved]);
 
   const forgetAllEndpoints = useCallback(() => {
     clearError();
-    void fetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
+    void runtimeFetch(standaloneServerUrl("/auth/logout"), { method: "POST", credentials: "include" }).catch(() => {});
     clearEndpoints();
     useLabStore.getState().clear();
   }, [clearEndpoints, clearError]);

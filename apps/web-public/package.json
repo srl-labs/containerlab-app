@@ -16,29 +16,22 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
     "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
-    "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions"
+    "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",
+    "test:e2e": "playwright test --config test/playwright.config.ts"
   },
   "dependencies": {
     "@emotion/react": "catalog:",
     "@emotion/styled": "catalog:",
-    "@mui/icons-material": "catalog:",
     "@mui/material": "catalog:",
     "@containerlab/clab-ui": "workspace:*",
-    "@srl-labs/containerlab-app-contract": "workspace:*",
-    "@xterm/addon-fit": "catalog:",
-    "@xterm/xterm": "catalog:",
-    "ajv": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "yaml": "catalog:",
-    "zustand": "catalog:",
-    "three": "catalog:"
+    "@srl-labs/containerlab-standalone-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/three": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "autoprefixer": "catalog:",
     "oxlint": "catalog:",
@@ -47,6 +40,7 @@
     "postcss-import": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "@playwright/test": "catalog:"
   }
 }

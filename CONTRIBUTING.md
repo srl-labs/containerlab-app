@@ -114,12 +114,13 @@ own module and only need its `export` removed.
 
 ```text
 apps/web                      browser deployment host and Docker image entry
+apps/web-public               local-storage backend for the shared standalone workspace
 apps/desktop                  Electron host
 apps/vscode-containerlab      VS Code extension
 packages/app-server           shared Fastify BFF used by web and desktop
-packages/standalone-runtime   shared standalone renderer/runtime around clab-ui
+packages/standalone-runtime   backend adapters, sessions and shared UI composition
 packages/app-contract         shared browser-facing DTO types
-packages/clab-ui              shared publishable topology UI package
+packages/clab-ui              shared publishable UI, themes and optional workspace views
 ```
 
 This repository is the `containerlab-app` monorepo and owns:
@@ -134,3 +135,8 @@ This repository is the `containerlab-app` monorepo and owns:
 
 UI, extension, web, and desktop are independently versioned. All
 three application hosts consume the local UI workspace through the root lockfile.
+
+UI changes belong in `packages/clab-ui`; app code supplies backend operations and
+capabilities. See [UI composition and ownership](packages/clab-ui/INTEGRATORS.md#one-ui-host-specific-composition).
+Run `pnpm test:pages` for sandbox workspace, keyboard tab navigation and narrow-layout
+coverage, alongside `pnpm test:web`, `pnpm test:ui` and `pnpm test:package`.

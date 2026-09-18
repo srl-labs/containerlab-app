@@ -70,7 +70,7 @@ export function StandaloneLabEmptyState() {
   if (hasTabs || !ready) return null;
   return (
     <Suspense fallback={null}>
-      <EmptyState occlusionLeft={0} occlusionRight={0} />
+      <EmptyState />
     </Suspense>
   );
 }

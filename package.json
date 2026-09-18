@@ -31,7 +31,8 @@
     "test:vscode": "pnpm ui && pnpm --filter vscode-containerlab run test:e2e",
     "test:package": "pnpm ui:pack && node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz",
     "sync:schema": "node scripts/sync-clab-schema.mjs",
-    "preinstall": "node scripts/check-package-manager.mjs"
+    "preinstall": "node scripts/check-package-manager.mjs",
+    "test:pages": "pnpm ui && pnpm --filter containerlab-app-web-public run test:e2e"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

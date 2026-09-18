@@ -1,15 +1,5 @@
-/**
- * Topology editor entry point.
- *
- * The sandbox has no API server. Workspace I/O goes through SandboxBackend
- * (localStorage + in-memory topology sessions). The editor mounts immediately.
- */
-import { mountStandaloneApp } from "./standaloneApp";
+import { configureStandaloneBackend } from "@srl-labs/containerlab-standalone-runtime/backend";
+import { createSandboxTransport } from "./sandboxTransport";
 
-mountStandaloneApp();
-
-if (import.meta.hot) {
-  import.meta.hot.accept("./standaloneApp", () => {
-    mountStandaloneApp();
-  });
-}
+configureStandaloneBackend(createSandboxTransport());
+void import("@srl-labs/containerlab-standalone-runtime/web-main");

@@ -60,7 +60,7 @@ const STANDALONE_HIDDEN_COMMAND_IDS = [
   "containerlab.lab.openFolderInNewWindow",
   "containerlab.file.refresh",
 ] as const;
-const PAGES_LIFECYCLE_HIDDEN_COMMAND_IDS = [
+const LIFECYCLE_COMMAND_IDS = [
   "containerlab.lab.deployPopular",
   "containerlab.lab.deploy",
   "containerlab.lab.deploy.specificFile",
@@ -723,9 +723,13 @@ export function createStandaloneExplorerBridge(
   options: StandaloneExplorerBridgeOptions,
 ): StandaloneExplorerBridge {
   const lifecycleActionsAvailable = options.lifecycleActionsAvailable !== false;
-  const hiddenCommandIds = lifecycleActionsAvailable
-    ? STANDALONE_HIDDEN_COMMAND_IDS
-    : [...STANDALONE_HIDDEN_COMMAND_IDS, ...PAGES_LIFECYCLE_HIDDEN_COMMAND_IDS];
+  const hiddenCommandIds = [
+    ...STANDALONE_HIDDEN_COMMAND_IDS,
+    ...(lifecycleActionsAvailable ? [] : [...LIFECYCLE_COMMAND_IDS, "containerlab.inspectAll", "containerlab.inspectOneLab", "containerlab.images.manage", "containerlab.treeView.runningLabs.hideNonOwnedLabs", "containerlab.treeView.runningLabs.showNonOwnedLabs", "containerlab.install.edgeshark", "containerlab.uninstall.edgeshark", "containerlab.capture.killAllWiresharkVNC", "containerlab.set.sessionHostname"]),
+    ...(options.endpointManagementAvailable === false ? ["containerlab.endpoint.add", "containerlab.endpoint.remove", "containerlab.endpoint.reconnect", "containerlab.endpoint.copyUrl"] : []),
+    ...(options.repositoriesAvailable === false ? ["containerlab.lab.cloneRepo", "containerlab.lab.clonePopularRepo", "containerlab.lab.deployPopular"] : []),
+    ...(options.archivesAvailable === false ? ["containerlab.file.downloadArchive", "containerlab.lab.downloadArchive"] : [])
+  ];
   let explorerFilterText = "";
   let explorerUiState: ExplorerUiState = {};
   const explorerSubscribers = new Set<
@@ -954,7 +958,7 @@ export function createStandaloneExplorerBridge(
         };
         return buildEndpointRootItem(endpoint, "endpoint", [placeholder]);
       }
-      const healthState = endpointHealthStateForTooltip(endpoint);
+      const healthState = lifecycleActionsAvailable ? endpointHealthStateForTooltip(endpoint) : undefined;
       const runningItems = filterTreeItems(
         runningByEndpoint.get(endpoint.id) ?? [],
         filterText,
@@ -964,7 +968,7 @@ export function createStandaloneExplorerBridge(
         filterText,
       );
       const groups = [
-        buildEndpointSectionItem(endpoint.id, "running", runningItems),
+        ...(lifecycleActionsAvailable ? [buildEndpointSectionItem(endpoint.id, "running", runningItems)] : []),
         buildEndpointSectionItem(endpoint.id, "local", localItems),
       ];
       return buildEndpointRootItem(

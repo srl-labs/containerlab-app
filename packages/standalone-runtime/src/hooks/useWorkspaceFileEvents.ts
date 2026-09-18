@@ -1,3 +1,4 @@
+import { getStandaloneBackend } from "../backend";
 import { useEffect, useRef } from "react";
 
 import type { EndpointConfig } from "../stores/endpointStore";
@@ -23,6 +24,10 @@ export function useWorkspaceFileEvents(
   }, [onWorkspaceFileEvent]);
 
   useEffect(() => {
+    const backend = getStandaloneBackend();
+    if (!backend.capabilities.events) {
+      return backend.subscribeFiles?.((endpointId) => handlerRef.current(endpointId, { type: "workspace-file" }));
+    }
     const streamableEndpoints = endpoints.filter(
       (endpoint) => endpoint.status === "connected",
     );

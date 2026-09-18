@@ -1,3 +1,8 @@
+import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import { persistStandaloneTheme } from "./standaloneTheme";
+import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { workspaceHost } from "./workspaceHost";
+import { getStandaloneBackend, runtimeFetch } from "./backend";
 import {
   StandaloneLabTabs,
   StandaloneFileEditor,
@@ -24,7 +29,6 @@ import {
   applyThemeVars,
   createApiClabUiHost,
   createClabUiRuntime,
-  createPortal,
   createRoot,
   useCallback,
   useEffect,
@@ -121,10 +125,7 @@ const LazyRuntimeTerminalWindows = lazy(async () => {
   return { default: module.RuntimeTerminalWindows };
 });
 
-const LazyRuntimeActionDialogs = lazy(async () => {
-  const module = await import("./components/RuntimeActionDialogs");
-  return { default: module.RuntimeActionDialogs };
-});
+import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("./components/SettingsOverlay");
@@ -338,19 +339,10 @@ function loadPersistedTheme(): "light" | "dark" {
   return readPersistedStandaloneTheme() ?? "dark";
 }
 
-function persistTheme(theme: "light" | "dark"): void {
-  try {
-    localStorage.setItem("clab-standalone-theme", theme);
-  } catch {
-    /* ignore */
-  }
-}
-
 currentTheme = loadPersistedTheme();
 
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
-const RUNTIME_CHROME_DEFER_MS = 1000;
 function getConfiguredEndpoints() {
   return Array.from(useEndpointStore.getState().endpoints.values());
 }
@@ -641,6 +633,11 @@ const lifecycleManager = createStandaloneLifecycleManager({
 
 const explorerBridge = createStandaloneExplorerBridge({
   debounceMs: EXPLORER_REFRESH_DEBOUNCE_MS,
+  lifecycleActionsAvailable: getStandaloneBackend().capabilities.lifecycle,
+  endpointManagementAvailable: getStandaloneBackend().capabilities.endpoints,
+  repositoriesAvailable: getStandaloneBackend().capabilities.repositories,
+  archivesAvailable: getStandaloneBackend().capabilities.archives,
+  defaultExpandExplorerTrees: !getStandaloneBackend().capabilities.lifecycle,
   getEndpoints: getConfiguredEndpoints,
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache:
@@ -1259,6 +1256,7 @@ function setupStandaloneUiHost(): void {
   };
 
   const apiHost = createApiClabUiHost({
+    fetchImpl: runtimeFetch,
     explorer: explorerBridge.explorer,
     images: {
       async listImages(options): Promise<ContainerImageSummary[]> {
@@ -1350,25 +1348,14 @@ function renderApp(): void {
     throw new Error("Standalone runtime not configured");
   }
 
-  reactRoot.render(<StandaloneApp />);
-}
-
-function useDeferredRuntimeChrome(): boolean {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(
-      () => setReady(true),
-      RUNTIME_CHROME_DEFER_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, []);
-  return ready;
+  reactRoot.render(<WorkspaceHostProvider host={workspaceHost}><StandaloneApp /></WorkspaceHostProvider>);
 }
 
 /**
  * Root component that handles auth and renders the app.
  */
 function StandaloneApp() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     addEndpoint,
     defaultApiUrl,
@@ -1398,8 +1385,6 @@ function StandaloneApp() {
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
     return activeTab?.kind ?? null;
   });
-  const runtimeChromeReady = useDeferredRuntimeChrome();
-  const runtimeDialogsReady = runtimeChromeReady;
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -1408,7 +1393,7 @@ function StandaloneApp() {
 
   const handleWorkspaceFileEvent = useCallback(
     (endpointId: string, event: WorkspaceFileEvent) => {
-      if (workspaceEventTouchesTopology(event.path)) {
+      if (event.path === undefined || workspaceEventTouchesTopology(event.path)) {
         topologyManager.invalidateTopologyFileListCache(endpointId);
       }
       explorerBridge.invalidateFileExplorerCache(endpointId);
@@ -1559,7 +1544,7 @@ function StandaloneApp() {
     currentTheme = nextTheme;
     setTheme(nextTheme);
     applyThemeVars(nextTheme);
-    persistTheme(nextTheme);
+    persistStandaloneTheme(nextTheme);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -1605,22 +1590,7 @@ function StandaloneApp() {
     [updateEndpoint],
   );
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          color:
-            "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #d4d4d4))",
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   if (startupScreen === "login") {
     return (
@@ -1647,7 +1617,9 @@ function StandaloneApp() {
       <App
         initialData={initialData}
         runtime={standaloneRuntime!}
+        lifecycleActionsAvailable={getStandaloneBackend().capabilities.lifecycle}
         slots={{
+          sidebar: <WorkspaceSidebar colorScheme={theme} onColorSchemeChange={handleThemeChange} onOpenSettings={() => setSettingsOpen(true)} />,
           header: (
             <StandaloneLabTabs
               onActivate={activateLabTabById}
@@ -1661,8 +1633,7 @@ function StandaloneApp() {
           emptyState: <StandaloneLabEmptyState />,
         }}
       />
-      {runtimeDialogsReady ? (
-        <>
+      <>
           <MuiThemeProvider>
             {terminalCount > 0 ? (
               <Suspense fallback={null}>
@@ -1672,9 +1643,7 @@ function StandaloneApp() {
                 />
               </Suspense>
             ) : null}
-            <Suspense fallback={null}>
-              <LazyRuntimeActionDialogs />
-            </Suspense>
+            <RuntimeActionDialogs />
             {imageManagerOpen ? (
               <Suspense fallback={null}>
                 <LazyContainerlabImageManagerDialog
@@ -1695,6 +1664,9 @@ function StandaloneApp() {
             ) : null}
           </MuiThemeProvider>
           <SettingsOverlayMounted
+            open={settingsOpen}
+            onOpen={() => setSettingsOpen(true)}
+            onClose={() => setSettingsOpen(false)}
             currentTheme={theme}
             defaultApiUrl={defaultApiUrl}
             endpoints={endpointList}
@@ -1710,16 +1682,18 @@ function StandaloneApp() {
             onSaveTerminalPreferences={handleSaveTerminalPreferences}
             terminalPreferences={terminalPreferences}
           />
-        </>
-      ) : null}
+      </>
     </>
   );
 }
 
 /**
- * Settings overlay mounted in its own root div.
+ * Compose shared settings with the runtime backend operations.
  */
 function SettingsOverlayMounted(props: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   currentTheme: "light" | "dark";
   defaultApiUrl: string;
   endpoints: ReturnType<typeof useAuth>["endpointList"];
@@ -1759,13 +1733,13 @@ function SettingsOverlayMounted(props: {
   onThemeChange: (nextTheme: "light" | "dark") => void;
   terminalPreferences: TerminalPreferences;
 }) {
-  const overlayContainer = document.getElementById("settings-overlay");
-  if (!overlayContainer) return null;
-
-  return createPortal(
+  return (
     <MuiThemeProvider>
       <Suspense fallback={null}>
         <LazySettingsOverlay
+          open={props.open}
+          onOpen={props.onOpen}
+          onClose={props.onClose}
           currentTheme={props.currentTheme}
           defaultApiUrl={props.defaultApiUrl}
           endpoints={props.endpoints}
@@ -1782,8 +1756,7 @@ function SettingsOverlayMounted(props: {
           terminalPreferences={props.terminalPreferences}
         />
       </Suspense>
-    </MuiThemeProvider>,
-    overlayContainer,
+    </MuiThemeProvider>
   );
 }
 

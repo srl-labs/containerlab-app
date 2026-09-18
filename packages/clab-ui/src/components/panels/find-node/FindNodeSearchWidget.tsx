@@ -113,9 +113,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
       if (e.key === "Enter") {
         e.preventDefault();
         handleSearch();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClear();
       }
     },
-    [handleSearch]
+    [handleSearch, handleClear]
   );
 
   if (variant === "toolbar") {
@@ -130,6 +134,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
         <TextField
           disabled={!isActive}
           hiddenLabel
+          onKeyDown={handleKeyDown}
           inputRef={inputRef}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Filter"
@@ -158,6 +163,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
             }
           }}
           slotProps={{
+            htmlInput: { "aria-label": "Find nodes" },
             input: {
               disableUnderline: true,
               endAdornment: searchTerm ? (
@@ -165,6 +171,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
                   <IconButton
                     data-testid="find-node-clear-btn"
                     edge="end"
+                    aria-label="Clear node search"
                     onClick={handleClear}
                     size="small"
                   >
@@ -213,11 +220,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           onKeyDown={handleKeyDown}
           data-testid="find-node-input"
           slotProps={{
+            htmlInput: { "aria-label": "Find nodes" },
             input: {
               endAdornment: searchTerm ? (
                 <InputAdornment position="end">
                   <IconButton
                     size="small"
+                    aria-label="Clear node search"
                     onClick={handleClear}
                     edge="end"
                     data-testid="find-node-clear-btn"

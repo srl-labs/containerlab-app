@@ -48,3 +48,23 @@ test("sandbox backend file explorer writes and reads files", async () => {
   const root = backend.listDirectory("");
   assert.equal(root.some((entry) => entry.kind === "directory" && entry.name === "notes"), true);
 });
+
+test("file edits refresh an open session while ordinary snapshots preserve undo", async () => {
+  const backend = createMemorySandboxBackend();
+  const topologyRef = await backend.createTopologyFile("lab.clab.yml");
+  const { sessionId } = backend.createSession(topologyRef);
+  const before = await backend.getSnapshot(sessionId);
+  await backend.dispatchCommand(sessionId, before.revision, {
+    command: "setYamlContent", payload: { content: "name: edited\ntopology:\n  nodes: {}\n" }
+  });
+  const edited = await backend.getSnapshot(sessionId);
+  assert.equal(edited.canUndo, true);
+  assert.equal((await backend.getSnapshot(sessionId)).revision, edited.revision);
+  await backend.writeFile("notes.txt", "unrelated file");
+  assert.equal((await backend.getSnapshot(sessionId)).canUndo, true);
+  await backend.writeFile("lab.clab.yml", "name: external\ntopology:\n  nodes: {}\n");
+  const external = await backend.getSnapshot(sessionId);
+  assert.equal(external.labName, "external");
+  assert.equal(external.canUndo, false);
+  assert.ok(external.revision > edited.revision);
+});

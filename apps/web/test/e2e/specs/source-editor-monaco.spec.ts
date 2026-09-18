@@ -150,6 +150,7 @@ async function openYamlEditor(page: Page): Promise<void> {
   }
 
   await page.getByText("demo.clab.yml", { exact: true }).click({ force: true });
+  await page.getByTestId("navbar-split-view").click();
   await expect(page.locator('[data-testid="panel-tab-yaml"]')).toBeVisible({ timeout: 20000 });
   await page.locator('[data-testid="navbar-lock"]').click();
   await page.locator('[data-testid="panel-tab-yaml"]').click();
@@ -446,14 +447,16 @@ test("workspace file tabs replace the canvas and restore topology controls when 
       { endpointId: ENDPOINT.id, name: "notes.txt", path: "notes.txt", kind: "file" }
     ])
   );
-  await page.route("**/api/runtime/file-explorer/file?**", (route) =>
-    fulfillJson(route, {
-      endpointId: ENDPOINT.id,
-      path: "notes.txt",
-      content: "workspace notes\n"
-    })
-  );
+  let savedContent = "workspace notes\n";
+  await page.route("**/api/runtime/file-explorer/file?**", (route) => {
+    if (route.request().method() === "PUT") {
+      savedContent = (route.request().postDataJSON() as { content: string }).content;
+      return fulfillJson(route, { success: true });
+    }
+    return fulfillJson(route, { endpointId: ENDPOINT.id, path: "notes.txt", content: savedContent });
+  });
   await openYamlEditor(page);
+  await page.getByRole("button", { name: "File Explorer", exact: true }).click();
   const expandFiles = page.getByLabel("Expand File Explorer", { exact: true });
   if (await expandFiles.count()) await expandFiles.click();
   await page.getByLabel("Expand Test Endpoint", { exact: true }).last().click();
@@ -466,6 +469,19 @@ test("workspace file tabs replace the canvas and restore topology controls when 
   expect(tabs).not.toBeNull();
   expect(editor).not.toBeNull();
   expect(editor!.y).toBeGreaterThanOrEqual(tabs!.y + tabs!.height - 1);
+  const input = page.getByTestId("file-editor-tab-panel").getByRole("textbox", { name: "Editor content", exact: true });
+  await input.focus();
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await page.keyboard.insertText("updated workspace notes");
+  await expect(page.getByTestId("file-editor-tab-save")).toBeEnabled();
+  await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Discard Unsaved Changes" });
+  await expect(confirm).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByTestId("file-editor-tab-panel")).toBeVisible();
+  await page.getByTestId("file-editor-tab-save").click();
+  await expect.poll(() => savedContent).toBe("updated workspace notes");
+  await expect(page.getByTestId("file-editor-tab-save")).toBeDisabled();
   await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
   await expect(page.getByTestId("file-editor-tab-panel")).toHaveCount(0);
   await expect(page.getByTestId("navbar-lock")).toBeVisible();
