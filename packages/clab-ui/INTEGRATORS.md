@@ -715,9 +715,13 @@ The editor owns the floating node palette, whose side can be changed independent
 of the rail; the topology toolbar stays on the opposite side of the editor.
 Native hosts retain their own navigation. Pass `onCreateLab` to `AttractorEmptyState` to connect
 the shared empty-state action to the host's existing topology creation operation.
-Its stationary dotted artwork is bundled as SVG paths and paints with the component,
-including with reduced motion enabled. It needs no image request, worker, or render
-loop. Regenerate the paths from the source logo with `pnpm generate:empty-state`.
+Its dotted artwork is bundled as SVG paths and paints with the component. The
+original noise and twinkle animation varies the dots' size and brightness with a
+slight boost in contrast and tempo. Hover makes scattered dots twinkle independently;
+pointer movement leaves a short fading trail, and clicks add colored impulses. The WebGL 2
+animation pauses while the page is hidden; reduced motion or
+unavailable WebGL keeps the static artwork. It needs no image request or worker.
+Regenerate the paths and baked logo sample with `pnpm generate:empty-state`.
 Optional editor, settings and terminal views can be loaded on demand.
 
 The repository's `standalone-runtime` owns session/authentication orchestration,

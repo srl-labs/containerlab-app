@@ -117,7 +117,12 @@ async function generateArtwork(svg) {
         Math.max(0, (dark - baseDark) / (1 - baseDark)), Math.max(0, (light - baseLight) / (1 - baseLight)), 64);
     }
   }
-  return { size, tileSize, field: [...fieldPaths.values()], logo: [...logoPaths.values()] };
+  // Preserve the original animation's sampled logo without an image request or
+  // runtime rasterization. Its renderer interpolates these grayscale ink values.
+  const ink = Array.from({ length: sample.size * sample.size }, (_, index) =>
+    String.fromCharCode(Math.round(toneAt(sample, index % sample.size, Math.floor(index / sample.size)) * 255))
+  ).join("");
+  return { size, tileSize, field: [...fieldPaths.values()], logo: [...logoPaths.values()], sample: { size: sample.size, ink: btoa(ink) } };
 }
 
 const root = new URL("../", import.meta.url);

@@ -63,12 +63,13 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
   await page.goto("/");
   const emptyState = page.getByTestId("standalone-empty-lab-state");
   const artwork = page.getByTestId("empty-state-artwork");
-  await expect(artwork).toBeVisible();
-  await expect(emptyState.locator("canvas, img")).toHaveCount(0);
+  const waves = page.getByTestId("empty-state-waves");
+  await expect(waves).toBeVisible();
 
   const frames = await emptyState.evaluate(async (host) => {
     const svg = host.querySelector("svg")!;
     const path = svg.querySelector("path")!;
+    const canvas = host.querySelector("canvas")!;
     const originalWidth = host.style.width;
     const width = host.getBoundingClientRect().width;
     const samples: Array<{ present: boolean; width: number }> = [];
@@ -77,8 +78,8 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
         host.style.width = `${width - (index % 2) * 12}px`;
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         samples.push({
-          present: svg.isConnected && svg.querySelector("path") === path && Number(getComputedStyle(path).opacity) > 0,
-          width: svg.getBoundingClientRect().width
+          present: svg.isConnected && svg.querySelector("path") === path && canvas.isConnected && getComputedStyle(canvas).display !== "none",
+          width: canvas.getBoundingClientRect().width
         });
       }
       return samples;
@@ -91,7 +92,7 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(artwork).toBeVisible();
-  await expect(emptyState.locator("canvas, img")).toHaveCount(0);
+  await expect(waves).toBeHidden();
   await createLab(page, "artwork-lifecycle", true);
   await expect(emptyState).toBeHidden();
   await page.getByRole("button", { name: "Close artwork-lifecycle", exact: true }).click();

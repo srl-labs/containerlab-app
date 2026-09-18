@@ -1,16 +1,27 @@
 import Button from "@mui/material/Button";
 import Box from "@mui/material/Box";
 import AddIcon from "@mui/icons-material/Add";
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { emptyStateArtwork } from "./emptyStateArtwork";
+import { attachEmptyStateWaves } from "./emptyStateWaves";
 
 export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void }) {
   const patternId = useId();
+  const hostRef = useRef<HTMLDivElement>(null);
+  const artworkRef = useRef<SVGSVGElement>(null);
   const { size, tileSize, field, logo } = emptyStateArtwork;
+
+  useEffect(() => {
+    if (hostRef.current && artworkRef.current) {
+      return attachEmptyStateWaves(hostRef.current, artworkRef.current);
+    }
+    return undefined;
+  }, []);
 
   return (
     <div
+      ref={hostRef}
       data-testid="standalone-empty-lab-state"
       style={{
         position: "absolute",
@@ -21,9 +32,10 @@ export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void 
         backgroundColor: "var(--vscode-editor-background, #000000)",
       }}
     >
-      {/* Baked paths paint with the workspace. No image decode, worker, or render loop. */}
+      {/* The SVG paints immediately and remains the reduced-motion / graphics fallback. */}
       <Box
         component="svg"
+        ref={artworkRef}
         data-testid="empty-state-artwork"
         aria-hidden="true"
         focusable="false"
