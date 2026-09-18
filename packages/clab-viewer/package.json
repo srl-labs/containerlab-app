@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "description": "Standalone interactive containerlab topology viewer for any website.",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
