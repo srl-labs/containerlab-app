@@ -3,6 +3,7 @@ import type { Node } from "@xyflow/react";
 
 import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { getCustomIconUrl } from "../../../utils/iconUtils";
 
 import {
   NODE_ICON_SIZE,
@@ -305,11 +306,12 @@ function topologyNodeToSvg(
   // Check for custom icon first
   let iconSvgContent = "";
   const customDataUri = customIconMap?.get(role);
+  const isCustomIcon = customDataUri !== undefined && customDataUri.length > 0;
 
-  if (customDataUri !== undefined && customDataUri.length > 0) {
-    // Custom icon - decode and embed
-    const svgString = decodeSvgDataUri(customDataUri);
-    iconSvgContent = extractSvgContent(svgString, iconSize);
+  if (isCustomIcon) {
+    // Preserve custom styles, transparency and viewBox, including base64 SVGs and PNGs.
+    const iconUrl = getCustomIconUrl(customDataUri, data.iconColor);
+    iconSvgContent = `<image width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(iconUrl)}"/>`;
   } else {
     // Built-in icon
     const roleSvgType = getRoleSvgType(role);
@@ -325,8 +327,10 @@ function topologyNodeToSvg(
   svg += `<g transform="rotate(${directionRotation} ${centerX} ${centerY})">`;
 
   // Background rect with fill color (rendered by the icon's st0 class)
-  svg += `<rect x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" `;
-  svg += `rx="${cornerRadius}" ry="${cornerRadius}" fill="${iconColor}"/>`;
+  if (!isCustomIcon) {
+    svg += `<rect x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" `;
+    svg += `rx="${cornerRadius}" ry="${cornerRadius}" fill="${iconColor}"/>`;
+  }
 
   // Icon content (transformed to fit)
   svg += `<g transform="translate(${x}, ${y})" style="color: ${iconColor}">`;

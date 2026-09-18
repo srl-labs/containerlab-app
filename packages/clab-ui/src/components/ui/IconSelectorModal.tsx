@@ -21,6 +21,7 @@ import { useCustomIcons } from "../../stores/topoViewerStore";
 import { useClabUiHost } from "../../host";
 import { isBuiltInIcon } from "../../core/types/icons";
 import { DEFAULT_ICON_COLOR } from "../../core/types/graph";
+import { getCustomIconUrl, supportsCustomIconColor } from "../../utils/iconUtils";
 
 import { DialogCancelSaveActions, DialogTitleWithClose } from "./dialog/DialogChrome";
 import { ColorField, IconPreview, InputField } from "./form";
@@ -89,18 +90,13 @@ const IconsGrid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 /**
- * Get icon source - for built-in icons applies color, for custom icons returns as-is
+ * Get built-in icon source with a fallback.
  */
-function getIconSrc(icon: string, color: string, customIconDataUri?: string): string {
-  // Custom icons render as-is (no color tinting)
-  if (customIconDataUri !== undefined && customIconDataUri.length > 0) {
-    return customIconDataUri;
-  }
-  // Built-in icons with color
+function getIconSrc(icon: string, color: string | null): string {
   try {
-    return generateEncodedSVG(isNodeType(icon) ? icon : "pe", color);
+    return generateEncodedSVG(isNodeType(icon) ? icon : "pe", color ?? DEFAULT_COLOR);
   } catch {
-    return generateEncodedSVG("pe", color);
+    return generateEncodedSVG("pe", color ?? DEFAULT_COLOR);
   }
 }
 
@@ -121,11 +117,10 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 interface UseIconSelectorStateReturn {
   icon: string;
   setIcon: (icon: string) => void;
-  color: string;
-  setColor: (color: string) => void;
+  color: string | null;
+  setColor: (color: string | null) => void;
   radius: number;
   setRadius: (radius: number) => void;
-  resultColor: string | null;
 }
 
 /**
@@ -138,18 +133,16 @@ function useIconSelectorState(
   initialCornerRadius: number
 ): UseIconSelectorStateReturn {
   const [icon, setIcon] = useState(initialIcon);
-  const [color, setColor] = useState(initialColor ?? DEFAULT_COLOR);
+  const [color, setColor] = useState(initialColor);
   const [radius, setRadius] = useState(initialCornerRadius);
 
   useEffect(() => {
     if (isOpen) {
       setIcon(initialIcon);
-      setColor(initialColor ?? DEFAULT_COLOR);
+      setColor(initialColor);
       setRadius(initialCornerRadius);
     }
   }, [isOpen, initialIcon, initialColor, initialCornerRadius]);
-
-  const resultColor = color !== DEFAULT_COLOR ? color : null;
 
   return {
     icon,
@@ -157,8 +150,7 @@ function useIconSelectorState(
     color,
     setColor,
     radius,
-    setRadius,
-    resultColor
+    setRadius
   };
 }
 
@@ -299,7 +291,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
   const customIcons = useCustomIcons();
   const { topoViewer } = useClabUiHost();
 
-  const { icon, setIcon, color, setColor, radius, setRadius, resultColor } = useIconSelectorState(
+  const { icon, setIcon, color, setColor, radius, setRadius } = useIconSelectorState(
     isOpen,
     initialIcon,
     initialColor,
@@ -315,6 +307,15 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
   const currentCustomIcon = useMemo(() => {
     return customIcons.find((ci) => ci.name === icon);
   }, [customIcons, icon]);
+  const canEditColor = currentCustomIcon
+    ? supportsCustomIconColor(currentCustomIcon.dataUri)
+    : isBuiltInIcon(icon);
+  // Default blue is an explicit tint for custom SVGs; null restores their original colors.
+  const resultColor =
+    canEditColor && (currentCustomIcon !== undefined || color !== DEFAULT_COLOR) ? color : null;
+  const resetColorLabel = currentCustomIcon
+    ? "Restore original icon colors"
+    : "Reset to default color";
 
   // Memoize icon sources for built-in icons - only regenerate when debounced color changes
   const iconSources = useMemo(() => {
@@ -324,6 +325,13 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
     }
     return sources;
   }, [debouncedGridColor]);
+  const customIconSources = useMemo(() => {
+    const sources: Record<string, string> = {};
+    for (const customIcon of customIcons) {
+      sources[customIcon.name] = getCustomIconUrl(customIcon.dataUri, debouncedGridColor);
+    }
+    return sources;
+  }, [customIcons, debouncedGridColor]);
 
   // Memoize click/delete handlers to prevent IconButton re-renders
   const iconClickHandlers = useRef<Record<string, () => void>>({});
@@ -351,7 +359,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
   // Get preview icon source
   const previewIconSrc = useMemo(() => {
     if (currentCustomIcon) {
-      return currentCustomIcon.dataUri;
+      return getCustomIconUrl(currentCustomIcon.dataUri, color);
     }
     return getIconSrc(icon, color);
   }, [icon, color, currentCustomIcon]);
@@ -407,7 +415,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                         key={ci.name}
                         icon={ci.name}
                         isSelected={icon === ci.name}
-                        iconSrc={ci.dataUri}
+                        iconSrc={customIconSources[ci.name]}
                         cornerRadius={radius}
                         onClick={iconClickHandlers.current[ci.name]}
                         onDelete={iconDeleteHandlers.current[ci.name]}
@@ -455,24 +463,25 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
           <Divider />
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
             <Tooltip
-              title={!isBuiltInIcon(icon) ? "Color cannot be modified for custom icons" : ""}
+              title={!canEditColor ? "Color can only be modified for built-in and SVG icons" : ""}
               placement="top"
             >
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                 <Box sx={{ flex: 1 }}>
                   <ColorField
                     label="Icon Color"
-                    value={color}
+                    value={color ?? DEFAULT_COLOR}
                     onChange={(v) => setColor(v)}
-                    disabled={!isBuiltInIcon(icon)}
+                    disabled={!canEditColor}
                   />
                 </Box>
-                <Tooltip title="Reset to default color" placement="top">
+                <Tooltip title={resetColorLabel} placement="top">
                   <span>
                     <MuiIconButton
                       size="small"
-                      onClick={() => setColor(DEFAULT_ICON_COLOR)}
-                      disabled={!isBuiltInIcon(icon) || color === DEFAULT_ICON_COLOR}
+                      aria-label={resetColorLabel}
+                      onClick={() => setColor(null)}
+                      disabled={!canEditColor || resultColor === null}
                     >
                       <ResetIcon fontSize="small" />
                     </MuiIconButton>

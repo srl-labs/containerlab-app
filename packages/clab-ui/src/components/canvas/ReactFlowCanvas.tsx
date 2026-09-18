@@ -62,6 +62,7 @@ import { useContextMenuItems } from "./useContextMenuItems";
 import { edgeTypes, edgeTypesLite } from "./edges";
 import { CustomConnectionLine, LinkCreationLine } from "./LinkPreview";
 import { nodeTypes, nodeTypesLite } from "./nodes";
+import { RotationMatchOverlay } from "./RotationMatchOverlay";
 import type {
   AnnotationHandlers,
   CanvasDropData,
@@ -1305,6 +1306,11 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       restoreOnExit: layout === "preset"
     });
     const isGeoEdit = isGeoEditable;
+    const getAnnotationGeoUpdate = geoLayout.getGeoUpdateForNode;
+    useEffect(() => {
+      useCanvasStore.setState({ getAnnotationGeoUpdate: isGeoLayout ? getAnnotationGeoUpdate : null });
+      return () => useCanvasStore.setState({ getAnnotationGeoUpdate: null });
+    }, [isGeoLayout, getAnnotationGeoUpdate]);
     useGeoWheelZoom(geoLayout, isGeoLayout, isGeoEdit, canvasContainerRef);
 
     const fitCanvasToVisibleViewport = useCallback(
@@ -1946,6 +1952,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         {overlays.linkIndicator}
 
         {overlays.annotationIndicator}
+        {!readOnlyViewer && <RotationMatchOverlay canvasRef={canvasContainerRef} />}
       </div>
     );
   }

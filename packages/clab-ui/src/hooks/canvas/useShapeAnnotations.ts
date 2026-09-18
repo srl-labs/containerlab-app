@@ -5,6 +5,9 @@ import type { TopologySessionClient } from "../../session";
 import type { AnnotationUIActions, AnnotationUIState } from "../../stores/annotationUIStore";
 import * as annotationServices from "../../services";
 import * as logger from "../../utils/logger";
+import { getShapeRotation, rotateLine, normalizeRotation } from "../../annotations/rotation";
+import { freeShapeToNode } from "../../annotations/annotationNodeConverters";
+import { useCanvasStore } from "../../stores/canvasStore";
 
 import type { UseDerivedAnnotationsReturn } from "./useDerivedAnnotations";
 import { findDeepestGroupAtPosition } from "./groupUtils";
@@ -166,8 +169,19 @@ export function useShapeAnnotations(params: UseShapeAnnotationsParams): ShapeAnn
   /** Live apply from the shape editor panel: merge editable fields and persist debounced. */
   const applyShapeAnnotationEdit = useCallback(
     (annotation: FreeShapeAnnotation) => {
-      if (!derived.shapeAnnotations.some((s) => s.id === annotation.id)) return;
-      derived.updateShapeAnnotation(annotation.id, pickShapeEditableFields(annotation));
+      const current = derived.shapeAnnotations.find((shape) => shape.id === annotation.id);
+      if (!current) return;
+      const updates = pickShapeEditableFields(annotation);
+      if (
+        annotation.shapeType === "line" &&
+        annotation.rotation !== undefined &&
+        Math.abs(normalizeRotation(annotation.rotation - getShapeRotation(current))) > 0.000001
+      ) {
+        Object.assign(updates, rotateLine(current, annotation.rotation));
+        const toGeo = useCanvasStore.getState().getAnnotationGeoUpdate;
+        if (toGeo) Object.assign(updates, toGeo(freeShapeToNode({ ...current, ...updates })));
+      }
+      derived.updateShapeAnnotation(annotation.id, updates);
       lastShapeStyleRef.current = {
         fillColor: annotation.fillColor,
         fillOpacity: annotation.fillOpacity,

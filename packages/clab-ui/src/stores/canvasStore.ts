@@ -5,7 +5,7 @@
  * Edge info (parallel/loop) is computed separately as derived data.
  */
 import { createWithEqualityFn } from "zustand/traditional";
-import type { Edge } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 
 import type { AnnotationHandlers, EdgeLabelMode } from "../components/canvas/types";
 
@@ -56,6 +56,13 @@ interface CanvasState {
   edgeRenderConfig: EdgeRenderConfig;
   nodeRenderConfig: NodeRenderConfig;
   annotationHandlers: AnnotationHandlers | null;
+  /** Convert edited annotation geometry back to coordinates while the map is active. */
+  getAnnotationGeoUpdate:
+    | ((node: Node) => {
+        geoCoordinates?: { lat: number; lng: number };
+        endGeoCoordinates?: { lat: number; lng: number };
+      } | null)
+    | null;
   easterEggGlow: EasterEggGlow | null;
   fitViewRequestId: number;
   nodeFilter: string;
@@ -170,6 +177,7 @@ const initialState: CanvasState = {
   edgeRenderConfig: defaultEdgeRenderConfig,
   nodeRenderConfig: defaultNodeRenderConfig,
   annotationHandlers: null,
+  getAnnotationGeoUpdate: null,
   easterEggGlow: null,
   fitViewRequestId: 0,
   nodeFilter: ""
