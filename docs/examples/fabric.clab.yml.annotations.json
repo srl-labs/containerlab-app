@@ -1,0 +1,79 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "spine1",
+      "position": {
+        "x": 180,
+        "y": 40
+      },
+      "icon": "spine",
+      "iconColor": "#70bcde"
+    },
+    {
+      "id": "spine2",
+      "position": {
+        "x": 460,
+        "y": 40
+      },
+      "icon": "spine",
+      "iconColor": "#70bcde"
+    },
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 40,
+        "y": 230
+      },
+      "icon": "leaf",
+      "iconColor": "#80b9d8"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 320,
+        "y": 230
+      },
+      "icon": "leaf",
+      "iconColor": "#80b9d8"
+    },
+    {
+      "id": "leaf3",
+      "position": {
+        "x": 600,
+        "y": 230
+      },
+      "icon": "leaf",
+      "iconColor": "#80b9d8"
+    },
+    {
+      "id": "client1",
+      "position": {
+        "x": 40,
+        "y": 410
+      },
+      "icon": "server",
+      "iconColor": "#bfad89"
+    },
+    {
+      "id": "client2",
+      "position": {
+        "x": 320,
+        "y": 410
+      },
+      "icon": "server",
+      "iconColor": "#bfad89"
+    },
+    {
+      "id": "client3",
+      "position": {
+        "x": 600,
+        "y": 410
+      },
+      "icon": "server",
+      "iconColor": "#bfad89"
+    }
+  ],
+  "viewerSettings": {
+    "linkLabelMode": "hide"
+  }
+}

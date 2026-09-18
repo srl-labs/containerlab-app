@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {# Let diagrams start while the documentation's search/navigation bundle loads. #}
+  <script type="module" async src="{{ 'assets/viewer/component.mjs' | url }}"></script>
+  <script type="module" src="{{ 'assets/javascripts/customization.mjs' | url }}"></script>
+{% endblock %}

@@ -53,6 +53,17 @@ jobs:
         env:
           VITE_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}/
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build documentation
+        run: pnpm docs:build
+
+      - name: Include documentation alongside sandbox
+        run: cp -R site apps/web/dist/client/docs
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
