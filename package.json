@@ -36,6 +36,7 @@
     "test:vscode": "pnpm ui && pnpm --filter vscode-containerlab run test:e2e",
     "test:package": "pnpm ui:pack && node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz",
     "sync:schema": "node scripts/sync-clab-schema.mjs",
+    "generate:empty-state": "node scripts/generate-empty-state-artwork.mjs",
     "preinstall": "node scripts/check-package-manager.mjs",
     "test:pages": "pnpm ui && pnpm --filter containerlab-app-web-public run test:e2e",
     "docs": "node scripts/docs.mjs serve",

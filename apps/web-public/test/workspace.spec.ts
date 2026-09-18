@@ -57,37 +57,28 @@ test("toolbar and YAML panel stay usable in a narrow workspace", async ({ page }
   await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
 });
 
-test("animated empty-state logo stays painted during resizing and respects reduced motion", async ({ page }) => {
+test("dotted artwork stays present during resizing and reduced motion", async ({ page }) => {
   await page.setViewportSize({ width: 640, height: 480 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const emptyState = page.getByTestId("standalone-empty-lab-state");
-  await expect(emptyState.locator("canvas")).toBeVisible();
-  await expect(emptyState.getByRole("img", { name: "Containerlab" })).toBeHidden();
-  expect(await emptyState.evaluate((host) =>
-    host.querySelector("canvas")?.getContext("2d")?.getContextAttributes().desynchronized
-  )).toBe(false);
+  const artwork = page.getByTestId("empty-state-artwork");
+  await expect(artwork).toBeVisible();
+  await expect(emptyState.locator("canvas, img")).toHaveCount(0);
 
   const frames = await emptyState.evaluate(async (host) => {
-    const canvas = host.querySelector("canvas")!;
-    const context = canvas.getContext("2d")!;
+    const svg = host.querySelector("svg")!;
+    const path = svg.querySelector("path")!;
     const originalWidth = host.style.width;
     const width = host.getBoundingClientRect().width;
-    const samples: Array<{ painted: boolean; width: number }> = [];
+    const samples: Array<{ present: boolean; width: number }> = [];
     try {
       for (let index = 0; index < 24; index += 1) {
-        // Resize on consecutive display frames, including frames between the 30 fps redraws.
         host.style.width = `${width - (index % 2) * 12}px`;
         await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        const pixels = context.getImageData(
-          Math.floor(canvas.width / 2) - 16,
-          Math.floor(canvas.height / 2) - 16,
-          32,
-          32
-        ).data;
         samples.push({
-          painted: pixels.some((value, offset) => offset % 4 === 3 && value > 0),
-          width: canvas.width
+          present: svg.isConnected && svg.querySelector("path") === path && Number(getComputedStyle(path).opacity) > 0,
+          width: svg.getBoundingClientRect().width
         });
       }
       return samples;
@@ -96,13 +87,16 @@ test("animated empty-state logo stays painted during resizing and respects reduc
     }
   });
   expect(new Set(frames.map((frame) => frame.width)).size).toBeGreaterThan(1);
-  expect(frames.every((frame) => frame.painted)).toBe(true);
+  expect(frames.every((frame) => frame.present)).toBe(true);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(emptyState.locator("canvas")).toBeHidden();
-  await expect(emptyState.getByRole("img", { name: "Containerlab" })).toBeVisible();
+  await expect(artwork).toBeVisible();
+  await expect(emptyState.locator("canvas, img")).toHaveCount(0);
+  await createLab(page, "artwork-lifecycle", true);
+  await expect(emptyState).toBeHidden();
+  await page.getByRole("button", { name: "Close artwork-lifecycle", exact: true }).click();
+  await expect(artwork).toBeVisible();
 });
-
 
 test("shared sidebar resizes independently of the floating palette and toolbar", async ({ page }) => {
   const errors: string[] = [];
@@ -115,12 +109,14 @@ test("shared sidebar resizes independently of the floating palette and toolbar",
   const sidebar = page.getByTestId("workspace-sidebar");
   await expect(sidebar.getByRole("button", { name: "Node palette", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("button", { name: /Move sidebar/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Open panel", exact: true })).toBeVisible();
+  // Empty labs open the palette on the right by default.
+  await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await page.locator(".react-flow__pane").click({ button: "right", position: { x: 120, y: 160 } });
   await page.getByText("Open Palette", { exact: true }).click();
   const panel = page.getByTestId("context-panel");
   const drawer = panel.locator(".MuiDrawer-paper");
   await expect(panel.getByText("Node Templates", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Move panel to left", exact: true }).click();
   await panel.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Create Node Template" })).toHaveCount(1);
   await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();

@@ -1,78 +1,16 @@
 import Button from "@mui/material/Button";
+import Box from "@mui/material/Box";
 import AddIcon from "@mui/icons-material/Add";
-import { useEffect, useRef, useState } from "react";
+import { useId } from "react";
 
-import {
-  rasterizeLogo,
-  runEmptyState,
-  type EmptyStateView,
-  type LogoSample,
-} from "./emptyStateField";
-import { useWorkspaceHost } from "./WorkspaceHost";
-
-function currentView(host: HTMLElement): EmptyStateView {
-  const rect = host.getBoundingClientRect();
-  const firefox = /\bFirefox\//.test(navigator.userAgent);
-  return {
-    width: Math.max(1, rect.width),
-    height: Math.max(1, rect.height),
-    dpr: Math.min(window.devicePixelRatio || 1, firefox ? 1.25 : 2),
-    light: document.documentElement.classList.contains("light"),
-    hidden: document.hidden,
-  };
-}
-
-function loadLogoSample(url: string): Promise<LogoSample | null> {
-  const image = new Image();
-  image.src = url;
-  return image.decode().then(() => rasterizeLogo(image));
-}
+import { emptyStateArtwork } from "./emptyStateArtwork";
 
 export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void }) {
-  const { assetUrl: publicAssetUrl } = useWorkspaceHost();
-  const [animated, setAnimated] = useState(false);
-  const hostRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.style.position = "absolute";
-    canvas.style.inset = "0";
-    canvas.style.width = "100%";
-    canvas.style.height = "100%";
-    host.insertBefore(canvas, host.firstChild);
-
-    const logoUrl = publicAssetUrl("containerlab.svg");
-    let sample: LogoSample | null = null;
-    let stop = () => {};
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let disposed = false;
-    const start = () => {
-      stop();
-      const enabled = !reducedMotion.matches && sample !== null;
-      canvas.style.display = enabled ? "block" : "none";
-      setAnimated(enabled);
-      if (enabled) stop = runEmptyState(canvas, () => currentView(host), () => sample);
-    };
-    start();
-    reducedMotion.addEventListener("change", start);
-    void loadLogoSample(logoUrl).then((next) => {
-      if (!disposed) { sample = next; start(); }
-    }).catch(() => { /* Keep the static logo when canvas or image decoding is unavailable. */ });
-
-    return () => {
-      disposed = true;
-      stop();
-      reducedMotion.removeEventListener("change", start);
-      canvas.remove();
-    };
-  }, [publicAssetUrl]);
+  const patternId = useId();
+  const { size, tileSize, field, logo } = emptyStateArtwork;
 
   return (
     <div
-      ref={hostRef}
       data-testid="standalone-empty-lab-state"
       style={{
         position: "absolute",
@@ -83,8 +21,38 @@ export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void 
         backgroundColor: "var(--vscode-editor-background, #000000)",
       }}
     >
+      {/* Baked paths paint with the workspace. No image decode, worker, or render loop. */}
+      <Box
+        component="svg"
+        data-testid="empty-state-artwork"
+        aria-hidden="true"
+        focusable="false"
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${size} ${size}`}
+        fill="currentColor"
+        sx={{
+          position: "absolute", inset: 0, pointerEvents: "none", color: "#fff",
+          "--empty-state-light": 0,
+          "html.light &, body.vscode-light &, body.vscode-high-contrast-light &": {
+            color: "#000", "--empty-state-light": 1
+          }
+        }}
+      >
+        <defs>
+          <pattern id={patternId} width={tileSize} height={tileSize} patternUnits="userSpaceOnUse">
+            {field.map(({ path, dark, light: lightOpacity }, index) => (
+              <path key={index} d={path} style={{ opacity: `calc(${dark} + var(--empty-state-light) * ${lightOpacity - dark})` }} />
+            ))}
+          </pattern>
+        </defs>
+        {/* Cover the viewport beyond the square viewBox in wide and tall windows. */}
+        <rect x="-10000" y="-10000" width="20000" height="20000" fill={`url(#${patternId})`} />
+        {logo.map(({ path, dark, light: lightOpacity }, index) => (
+          <path key={index} d={path} style={{ opacity: `calc(${dark} + var(--empty-state-light) * ${lightOpacity - dark})` }} />
+        ))}
+      </Box>
       {onCreateLab && <Button variant="text" startIcon={<AddIcon />} onClick={onCreateLab} sx={{ position: "absolute", top: 72, left: "50%", transform: "translateX(-50%)", zIndex: 1, whiteSpace: "nowrap", color: "text.secondary", fontSize: "1.25rem", textTransform: "none", "&:hover": { color: "text.primary" } }}>Create a lab</Button>}
-      <img src={publicAssetUrl("containerlab.svg")} alt="Containerlab" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(180px, 35%)", opacity: 0.35, display: animated ? "none" : "block" }} />
     </div>
   );
 }

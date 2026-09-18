@@ -1,14 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 
 import { useEndpointStore } from "../stores/endpointStore";
 import { isFileLabTab, useLabTabsStore } from "../stores/labTabsStore";
 import { LabTabsBar } from "./LabTabsBar";
+import { AttractorEmptyState } from "./AttractorEmptyState";
 
 const FileEditor = lazy(async () => ({
   default: (await import("./FileEditorTabPanel")).FileEditorTabPanel
-}));
-const EmptyState = lazy(async () => ({
-  default: (await import("./AttractorEmptyState")).AttractorEmptyState
 }));
 
 interface TabActions {
@@ -58,19 +56,6 @@ export function StandaloneFileEditor({ onClose }: Pick<TabActions, "onClose">) {
 
 export function StandaloneLabEmptyState({ onCreateLab }: { onCreateLab: () => Promise<void> }) {
   const hasTabs = useLabTabsStore((state) => state.tabs.length > 0);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (hasTabs) {
-      setReady(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setReady(true), 750);
-    return () => window.clearTimeout(timer);
-  }, [hasTabs]);
-  if (hasTabs || !ready) return null;
-  return (
-    <Suspense fallback={null}>
-      <EmptyState onCreateLab={() => { void onCreateLab(); }} />
-    </Suspense>
-  );
+  if (hasTabs) return null;
+  return <AttractorEmptyState onCreateLab={() => { void onCreateLab(); }} />;
 }
