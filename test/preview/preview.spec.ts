@@ -40,6 +40,7 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   await expect(tab).toHaveAttribute("aria-selected", "true");
   await page.reload();
   await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
+  await page.getByText("preview.clab.yml", { exact: true }).dblclick();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);
 });

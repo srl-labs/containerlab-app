@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "../fixtures/topoviewer";
+import { fitGraph } from "../helpers/react-flow-helpers";
 
 const FILE = "datacenter.clab.yml";
 const TEXT_ID = "text-title";
@@ -118,6 +119,7 @@ test.describe("Annotation rotation", () => {
     await expect(computed).toHaveAttribute("readonly", "");
     const expectedAngle = Number(await computed.inputValue());
     await page.getByRole("button", { name: "Copy rotation", exact: true }).click();
+    await fitGraph(page);
     await openText(page);
     await page.getByRole("button", { name: "Apply copied rotation", exact: true }).click();
     await expect

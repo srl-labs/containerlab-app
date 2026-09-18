@@ -1,4 +1,5 @@
 import { expect, test } from "../fixtures/topoviewer";
+import { fitGraph } from "../helpers/react-flow-helpers";
 
 const DATACENTER_FILE = "datacenter.clab.yml";
 const GIF_MARKDOWN =
@@ -59,7 +60,7 @@ test.describe("Free Text Dragging", () => {
     const textElement = page.locator(`[data-id="${text!.id}"] .free-text-content`).first();
     await expect(textElement).toBeVisible();
     await textElement.click();
-    await page.waitForTimeout(100);
+    await fitGraph(page);
 
     await topoViewerPage.dragNode(text!.id, { x: 120, y: 80 });
 
@@ -234,6 +235,7 @@ test.describe("Free Text Dragging", () => {
     const textElement = page.locator(`[data-id="${text!.id}"] .free-text-content`).first();
     await expect(textElement.locator("img")).toBeVisible({ timeout: 5000 });
     await textElement.click();
+    await fitGraph(page);
 
     const rotationHandle = page
       .locator(`[data-id="${text!.id}"] [title="Drag to rotate (Shift for 15° snap)"]`)

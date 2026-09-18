@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures/topoviewer";
-import { rightClick } from "../helpers/react-flow-helpers";
+import { fitGraph, rightClick } from "../helpers/react-flow-helpers";
 
 const DATACENTER_FILE = "datacenter.clab.yml";
 
@@ -50,8 +50,9 @@ async function setup(page: Page, api: TopoViewerApi) {
   await api.setEditMode();
   await api.unlock();
   await page.waitForTimeout(500);
-  await api.fit();
-  await page.waitForTimeout(300);
+  // Keep the annotation reachable when clicking it opens the floating editor.
+  await page.getByTestId("panel-toggle-btn").click();
+  await fitGraph(page);
 }
 
 async function setupLocked(page: Page, api: TopoViewerApi) {
@@ -61,8 +62,9 @@ async function setupLocked(page: Page, api: TopoViewerApi) {
   await api.setEditMode();
   await api.lock();
   await page.waitForTimeout(500);
-  await api.fit();
-  await page.waitForTimeout(300);
+  // Keep the annotation reachable when clicking it opens the floating editor.
+  await page.getByTestId("panel-toggle-btn").click();
+  await fitGraph(page);
 }
 
 async function getFirstTextAnnotation(api: TopoViewerApi): Promise<FreeTextFileEntry> {
@@ -157,7 +159,11 @@ test.describe("Free Text Inline Editing", () => {
 
     const canvasBox = await api.getCanvas().boundingBox();
     expect(canvasBox).not.toBeNull();
-    await rightClick(page, canvasBox!.x + 200, canvasBox!.y + 200);
+    await rightClick(
+      page,
+      canvasBox!.x + canvasBox!.width - 280,
+      canvasBox!.y + canvasBox!.height - 120
+    );
     const addTextItem = page.locator(SEL_ADD_TEXT_ITEM);
     await expect(addTextItem).toBeVisible();
     await addTextItem.click();
@@ -167,7 +173,10 @@ test.describe("Free Text Inline Editing", () => {
     await input.fill("Created inline");
 
     // Clicking elsewhere on the canvas blurs the editor and commits.
-    await page.mouse.click(canvasBox!.x + 420, canvasBox!.y + 320);
+    await page.mouse.click(
+      canvasBox!.x + canvasBox!.width - 30,
+      canvasBox!.y + canvasBox!.height - 30
+    );
     await expect(input).not.toBeVisible();
 
     await expect
