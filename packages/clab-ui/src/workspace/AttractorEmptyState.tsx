@@ -1,3 +1,5 @@
+import Button from "@mui/material/Button";
+import AddIcon from "@mui/icons-material/Add";
 import { useEffect, useRef, useState } from "react";
 
 import {
@@ -26,7 +28,7 @@ function loadLogoSample(url: string): Promise<LogoSample | null> {
   return image.decode().then(() => rasterizeLogo(image));
 }
 
-export function AttractorEmptyState() {
+export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void }) {
   const { assetUrl: publicAssetUrl } = useWorkspaceHost();
   const [animated, setAnimated] = useState(false);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -40,7 +42,7 @@ export function AttractorEmptyState() {
     canvas.style.inset = "0";
     canvas.style.width = "100%";
     canvas.style.height = "100%";
-    host.appendChild(canvas);
+    host.insertBefore(canvas, host.firstChild);
 
     const logoUrl = publicAssetUrl("containerlab.svg");
     let sample: LogoSample | null = null;
@@ -81,6 +83,7 @@ export function AttractorEmptyState() {
         backgroundColor: "var(--vscode-editor-background, #000000)",
       }}
     >
+      {onCreateLab && <Button variant="text" startIcon={<AddIcon />} onClick={onCreateLab} sx={{ position: "absolute", top: 72, left: "50%", transform: "translateX(-50%)", zIndex: 1, whiteSpace: "nowrap", color: "text.secondary", fontSize: "1.25rem", textTransform: "none", "&:hover": { color: "text.primary" } }}>Create a lab</Button>}
       <img src={publicAssetUrl("containerlab.svg")} alt="Containerlab" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(180px, 35%)", opacity: 0.35, display: animated ? "none" : "block" }} />
     </div>
   );

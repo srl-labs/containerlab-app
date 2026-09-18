@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-async function createLab(page: Page, name: string) {
-  await page.getByRole("button", { name: "New Topology File", exact: true }).click();
+async function createLab(page: Page, name: string, fromEmptyState = false) {
+  await page.getByRole("button", { name: fromEmptyState ? "Create a lab" : "New Topology File", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Topology file name" }).fill(`${name}.clab.yml`);
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
@@ -101,4 +101,56 @@ test("animated empty-state logo stays painted during resizing and respects reduc
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(emptyState.locator("canvas")).toBeHidden();
   await expect(emptyState.getByRole("img", { name: "Containerlab" })).toBeVisible();
+});
+
+
+test("shared rail creates labs, opens the palette, resizes and switches sides", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Close explorer", exact: true }).click();
+  await createLab(page, "rail", true);
+  await page.getByRole("button", { name: "Unlock lab to edit", exact: true }).click();
+  const sidebar = page.getByTestId("workspace-sidebar");
+  const paletteButton = sidebar.getByRole("button", { name: "Node palette", exact: true });
+  await expect(page.getByRole("button", { name: "Open panel", exact: true })).toHaveCount(0);
+  await page.locator(".react-flow__pane").click({ button: "right", position: { x: 120, y: 160 } });
+  await page.getByText("Open Palette", { exact: true }).click();
+  await expect(paletteButton).toHaveAttribute("aria-pressed", "true");
+  await expect(sidebar.getByText("Node Templates", { exact: true })).toBeVisible();
+
+  const resize = sidebar.getByRole("separator", { name: "Resize sidebar" });
+  await resize.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(resize).toHaveAttribute("aria-valuenow", "300");
+  const handle = (await resize.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 40, handle.y + 200, { steps: 4 });
+  await page.mouse.up();
+  await expect(resize).toHaveAttribute("aria-valuenow", "340");
+
+  await page.getByTestId("navbar-split-view").click();
+  const panel = page.getByTestId("context-panel");
+  await expect(panel.getByTestId("panel-tab-yaml")).toBeVisible();
+  // Both palette surfaces can be mounted; template editing must open exactly one dialog.
+  await sidebar.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Create Node Template" })).toHaveCount(1);
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Move sidebar to right", exact: true }).click();
+  const sidebarBounds = (await sidebar.boundingBox())!;
+  expect(sidebarBounds.x + sidebarBounds.width).toBe(1440);
+  await expect(panel.locator(".MuiDrawer-paper")).toHaveCSS("left", "0px");
+  const tabs = (await page.getByTestId("lab-tabs").boundingBox())!;
+  const panelBounds = (await panel.boundingBox())!;
+  expect(panelBounds.y).toBeGreaterThanOrEqual(tabs.y + tabs.height);
+  await resize.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(resize).toHaveAttribute("aria-valuenow", "360");
+
+  await page.getByRole("button", { name: "Close rail", exact: true }).click();
+  await expect(paletteButton).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Create a lab", exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
 });

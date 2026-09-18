@@ -34,7 +34,7 @@ function disposeModel(object: THREE.Object3D) {
   });
 }
 
-export function RailLogo(props: { showTooltip?: boolean }) {
+export function RailLogo(props: { showTooltip?: boolean; side?: "left" | "right" }) {
   const { assetUrl: publicAssetUrl } = useWorkspaceHost();
   const hostRef = useRef<HTMLDivElement>(null);
   const kickRef = useRef<(spin: boolean) => void>(() => {});
@@ -174,7 +174,7 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       disableHoverListener={!props.showTooltip}
       disableInteractive
       leaveDelay={0}
-      placement="right"
+      placement={props.side === "right" ? "left" : "right"}
       title="TopoViewer"
       {...(props.showTooltip === true ? {} : { open: false })}
     >

@@ -706,6 +706,11 @@ Provide a stable `WorkspaceHost` object through `WorkspaceHostProvider`. It supp
 operations, live lab subscriptions, asset URLs, and native terminal-window opening.
 The UI never imports a particular application's API implementation. Mount action
 dialogs when mounting navigation so the first action can immediately open a dialog.
+The provider also scopes rail selection and side placement to this workspace. The
+rail shares the node palette with the editor, supports pointer and keyboard resizing,
+and keeps topology chrome on the opposite side. Native hosts without this provider
+retain their own navigation. Pass `onCreateLab` to `AttractorEmptyState` to connect
+the shared empty-state action to the host's existing topology creation operation.
 Optional editor, settings and terminal views can be loaded on demand.
 
 The repository's `standalone-runtime` owns session/authentication orchestration,

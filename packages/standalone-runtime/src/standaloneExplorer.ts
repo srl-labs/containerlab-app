@@ -368,6 +368,7 @@ type StandaloneExplorerSnapshotProviders = ExplorerSnapshotProviders & {
 };
 
 export interface StandaloneExplorerBridge {
+  createTopologyFile: () => Promise<void>;
   explorer: {
     connect: () => void;
     invokeAction: (actionRef: string) => Promise<void>;
@@ -1338,6 +1339,7 @@ export function createStandaloneExplorerBridge(
   scheduleHealthSnapshotRefresh = (delay) => controller.scheduleSnapshot(delay);
 
   return {
+    createTopologyFile: () => executeExplorerCommand("containerlab.editor.topoViewerEditor", []),
     explorer: {
       connect() {
         controller.connect();

@@ -1630,7 +1630,7 @@ function StandaloneApp() {
             activeLabTabKind === "file" ? (
               <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />
             ) : undefined,
-          emptyState: <StandaloneLabEmptyState />,
+          emptyState: <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} />,
         }}
       />
       <>
