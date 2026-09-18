@@ -112,7 +112,8 @@ export function runEmptyState(
   getView: () => EmptyStateView,
   getSample: () => LogoSample | null,
 ): () => void {
-  const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
+  // Present complete frames: low-latency rendering can expose the cleared canvas mid-draw.
+  const ctx = canvas.getContext("2d", { alpha: true, desynchronized: false });
   if (!ctx) return () => {};
 
   const sheet = makeDotSheet();
@@ -122,7 +123,7 @@ export function runEmptyState(
   let width = 0;
   let height = 0;
   let dpr = 1;
-  let sample: LogoSample | null = null;
+  let sample = getSample();
   let count = 0;
   let xs = new Float32Array(0);
   let ys = new Float32Array(0);
@@ -219,23 +220,27 @@ export function runEmptyState(
       frame = requestAnimationFrame(tick);
       return;
     }
-    if (
+    const resized =
       view.width !== width ||
       view.height !== height ||
       view.dpr !== dpr ||
-      nextSample !== sample
-    ) {
+      nextSample !== sample;
+    if (resized) {
       sample = nextSample;
       fit(view);
     }
-    if (now - lastDraw >= FRAME_MS) {
+    // Changing canvas dimensions clears its pixels, so redraw before this frame is presented.
+    if (resized || now - lastDraw >= FRAME_MS) {
       lastDraw = now;
       draw(now, view.light);
     }
     frame = requestAnimationFrame(tick);
   };
 
-  fit(getView());
+  const initialView = getView();
+  fit(initialView);
+  lastDraw = performance.now();
+  if (!initialView.hidden) draw(lastDraw, initialView.light);
   frame = requestAnimationFrame(tick);
 
   return () => {

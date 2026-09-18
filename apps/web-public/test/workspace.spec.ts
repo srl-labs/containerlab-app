@@ -56,3 +56,49 @@ test("toolbar and YAML panel stay usable in a narrow workspace", async ({ page }
   expect(panel!.y).toBeGreaterThanOrEqual(tabs!.y + tabs!.height);
   await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
 });
+
+test("animated empty-state logo stays painted during resizing and respects reduced motion", async ({ page }) => {
+  await page.setViewportSize({ width: 640, height: 480 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+  const emptyState = page.getByTestId("standalone-empty-lab-state");
+  await expect(emptyState.locator("canvas")).toBeVisible();
+  await expect(emptyState.getByRole("img", { name: "Containerlab" })).toBeHidden();
+  expect(await emptyState.evaluate((host) =>
+    host.querySelector("canvas")?.getContext("2d")?.getContextAttributes().desynchronized
+  )).toBe(false);
+
+  const frames = await emptyState.evaluate(async (host) => {
+    const canvas = host.querySelector("canvas")!;
+    const context = canvas.getContext("2d")!;
+    const originalWidth = host.style.width;
+    const width = host.getBoundingClientRect().width;
+    const samples: Array<{ painted: boolean; width: number }> = [];
+    try {
+      for (let index = 0; index < 24; index += 1) {
+        // Resize on consecutive display frames, including frames between the 30 fps redraws.
+        host.style.width = `${width - (index % 2) * 12}px`;
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const pixels = context.getImageData(
+          Math.floor(canvas.width / 2) - 16,
+          Math.floor(canvas.height / 2) - 16,
+          32,
+          32
+        ).data;
+        samples.push({
+          painted: pixels.some((value, offset) => offset % 4 === 3 && value > 0),
+          width: canvas.width
+        });
+      }
+      return samples;
+    } finally {
+      host.style.width = originalWidth;
+    }
+  });
+  expect(new Set(frames.map((frame) => frame.width)).size).toBeGreaterThan(1);
+  expect(frames.every((frame) => frame.painted)).toBe(true);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(emptyState.locator("canvas")).toBeHidden();
+  await expect(emptyState.getByRole("img", { name: "Containerlab" })).toBeVisible();
+});
