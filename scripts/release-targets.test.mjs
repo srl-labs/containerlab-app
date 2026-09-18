@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { releaseTargets, resolveRelease } from "./release-targets.mjs";
 
-const versions = { "clab-ui": "0.3.2", vscode: "0.26.4", web: "1.2.3", desktop: "4.5.6" };
+const versions = { "clab-ui": "0.3.2", "clab-viewer": "0.1.0", vscode: "0.26.4", web: "1.2.3", desktop: "4.5.6" };
 const readManifest = (file) => {
   const target = Object.keys(releaseTargets).find((name) => releaseTargets[name] === file);
   return { name: target, version: versions[target] };
@@ -17,6 +17,7 @@ test("each product validates its own version independently", () => {
 test("unknown tags, mismatched targets and stale versions fail before publishing", () => {
   assert.throws(() => resolveRelease("v0.2.2", readManifest), /Unknown release tag/);
   assert.throws(() => resolveRelease("web-v1.2.3", readManifest, "desktop"), /not desktop/);
+  assert.throws(() => resolveRelease("clab-viewer-v0.1.0", readManifest, "clab-ui"), /not clab-ui/);
   assert.throws(() => resolveRelease("desktop-v1.2.3", readManifest), /does not match/);
   assert.throws(() => resolveRelease("web-v01.2.3", readManifest), /Invalid release version/);
 });

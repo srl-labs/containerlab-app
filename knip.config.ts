@@ -59,6 +59,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ]
   },
   "packages/app-contract": {},
+  "packages/clab-viewer": {
+    entry: ["src/index.ts"]
+  },
   "packages/app-server": {
     entry: ["src/**/*.test.ts"],
     // The TLS certificate generator invokes the operating system's OpenSSL.

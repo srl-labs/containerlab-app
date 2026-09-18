@@ -40,7 +40,7 @@ nav = [
     { "Linux playground" = "examples/linux.md" },
   ] },
   { "Developers" = [
-    { "Standalone clab-ui" = [
+    { "Standalone viewer" = [
       { "Overview" = "viewer/standalone.md" },
       { "Zensical integration" = "viewer/index.md" },
       { "Customization studio" = "viewer/customize.md" },

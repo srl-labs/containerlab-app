@@ -1,0 +1,66 @@
+name: Publish clab-viewer to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: publish-clab-viewer
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'srl-labs/containerlab-app' && (github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'clab-viewer-v'))
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Validate release target and version
+        id: version
+        run: node scripts/check-release-version.mjs ${{ github.event_name == 'release' && 'clab-viewer' || '' }}
+      - name: Check version is unpublished
+        if: github.event_name == 'release'
+        run: node scripts/check-npm-version.mjs clab-viewer
+      - name: Check shared renderer
+        run: |
+          pnpm --filter @containerlab/clab-viewer run lint
+          pnpm --filter @containerlab/clab-ui run lint
+          pnpm --filter @containerlab/clab-ui run test:unit
+      - name: Build and pack viewer
+        run: pnpm viewer:pack
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      - name: Validate the release tarball with npm and browser consumers
+        run: node scripts/check-packed-clab-viewer.mjs artifacts/clab-viewer.tgz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: clab-viewer-npm-package
+          path: artifacts/clab-viewer.tgz
+          if-no-files-found: error
+      - name: Publish tested tarball
+        if: github.event_name == 'release'
+        env:
+          NPM_DIST_TAG: ${{ steps.version.outputs.channel }}
+        run: npm publish ./artifacts/clab-viewer.tgz --access public --tag "$NPM_DIST_TAG"
+      - name: Manual run result
+        if: github.event_name == 'workflow_dispatch'
+        run: echo 'Validated the npm artifact. Publish a clab-viewer-v<version> GitHub Release to publish it.' >> "$GITHUB_STEP_SUMMARY"

@@ -11,9 +11,9 @@ function run(command, args) {
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-run("pnpm", ["--filter", "@containerlab/clab-ui", "run", "build:viewer"]);
+run("pnpm", ["--filter", "@containerlab/clab-viewer", "run", "build"]);
 // This directory contains generated assets only. Drop old content-hashed chunks.
 await rm(path.join(root, "docs/assets/viewer"), { recursive: true, force: true });
 await mkdir(path.join(root, "docs/assets/viewer"), { recursive: true });
-await cp(path.join(root, "packages/clab-ui/dist-viewer"), path.join(root, "docs/assets/viewer"), { recursive: true });
+await cp(path.join(root, "packages/clab-viewer/dist"), path.join(root, "docs/assets/viewer"), { recursive: true });
 if (mode !== "prepare") run("uv", ["run", "--frozen", "zensical", mode, ...(mode === "build" ? ["--strict", "--clean"] : []), ...process.argv.slice(3)]);

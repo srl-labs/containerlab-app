@@ -8,20 +8,14 @@ import { useGraphStore } from "../stores/graphStore";
 import { useCanvasStore } from "../stores/canvasStore";
 import { applyThemeVars } from "../theme/devTheme";
 
-import type { ViewerHostInput } from "./createViewerHost";
-import type { ViewerNodeInfo } from "./describeTopology";
+import type { MountViewerOptions as PublicMountViewerOptions } from "./publicTypes";
 import { prepareViewer } from "./prepareViewer";
 import { ViewerCanvas } from "./ViewerCanvas";
 import { resolveViewerOptions, type ViewerOptions } from "./options";
 import "./viewer.css";
 
-export interface MountViewerOptions extends ViewerHostInput {
-  theme?: "light" | "dark";
-  borderless?: boolean;
+export interface MountViewerOptions extends PublicMountViewerOptions {
   viewerOptions?: ViewerOptions;
-  /** Fires once the graph is measured, fitted, and painted. */
-  onReady?: (description: { nodes: ViewerNodeInfo[]; links: number }) => void;
-  onError?: (error: unknown) => void;
 }
 
 // Reuse the editor's parser, saved-layout normalization, and renderers without starting the

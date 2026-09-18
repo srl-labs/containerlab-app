@@ -1,0 +1,37 @@
+{
+  "name": "@containerlab/clab-viewer",
+  "version": "0.1.0",
+  "private": false,
+  "description": "Standalone interactive containerlab topology viewer for any website.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "LICENSE"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srl-labs/containerlab-app.git",
+    "directory": "packages/clab-viewer"
+  },
+  "homepage": "https://github.com/srl-labs/containerlab-app/tree/main/packages/clab-viewer",
+  "bugs": { "url": "https://github.com/srl-labs/containerlab-app/issues" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./styles.css": { "types": "./dist/styles.d.ts", "default": "./dist/styles.css" },
+    "./static/*": "./dist/*"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint --type-aware --import-plugin src",
+    "prepack": "pnpm run build"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  },
+  "publishConfig": { "registry": "https://registry.npmjs.org", "access": "public" }
+}

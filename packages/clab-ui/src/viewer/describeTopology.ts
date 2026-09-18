@@ -1,13 +1,8 @@
 import { isMap, isNode, LineCounter, parseDocument } from "yaml";
 import type { ClabTopology } from "../core/types/topology";
+import type { ViewerNodeInfo } from "./publicTypes";
 
-export interface ViewerNodeInfo {
-  id: string;
-  kind: string;
-  image: string;
-  startLine: number;
-  endLine: number;
-}
+export type { ViewerNodeInfo } from "./publicTypes";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

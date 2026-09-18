@@ -1,8 +1,8 @@
 # Diagrams that speak YAML
 
-Use the [standalone clab-ui viewer](standalone.md) in a Zensical documentation site. Write the topology once. Get an interactive diagram, highlighted YAML, and a split view in your documentation. Readers can inspect nodes and download the same file to use in their labs.
+Use the [standalone Containerlab viewer](standalone.md) in a Zensical documentation site. Write the topology once. Get an interactive diagram, highlighted YAML, and a split view in your documentation. Readers can inspect nodes and download the same file to use in their labs.
 
-The component uses the `@containerlab/clab-ui` standalone viewer. Each diagram runs in its own iframe, keeping its state and styles independent of other diagrams and the documentation theme.
+The component uses the `@containerlab/clab-viewer` package. Each diagram runs in its own iframe, keeping its state and styles independent of other diagrams and the documentation theme.
 
 ## A fence is all it takes
 

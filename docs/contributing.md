@@ -1,6 +1,6 @@
 # Contributing to the docs
 
-The documentation lives in `docs/` and builds with Zensical. It shares the standalone viewer with the apps, so improvements to topology rendering are available in the docs too.
+The documentation lives in `docs/` and builds with Zensical. It consumes `@containerlab/clab-viewer`, which builds the same parser and renderers as the apps. Improvements to topology rendering are available in the docs too.
 
 ## Local development
 

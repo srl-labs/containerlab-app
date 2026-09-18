@@ -36,7 +36,7 @@ export default defineConfig({
         return { name, bytes: Buffer.byteLength(chunk.code), gzip: gzipSync(chunk.code).byteLength };
       });
       for (const asset of Object.values(bundle)) {
-        if (asset.type === "asset" && /^assets\/viewer-.*\.css$/.test(asset.fileName)) {
+        if (asset.type === "asset" && asset.fileName.endsWith(".css")) {
           files.push({ name: asset.fileName, bytes: Buffer.byteLength(asset.source), gzip: gzipSync(asset.source).byteLength });
         }
       }

@@ -162,4 +162,4 @@ Run `pnpm web:local` or `pnpm desktop:local` to launch an app, `pnpm vsix` to pa
 
 From WSL, use `pnpm desktop:windows` to build and launch the native Windows app with Windows window borders and controls. It uses Windows PowerShell interop; Node and pnpm only need to be installed in WSL. Close the app and rerun the command after edits.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, and [RELEASING.md](RELEASING.md) for publishing.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, the [standalone viewer guide](packages/clab-viewer/README.md) for external embeds, and [RELEASING.md](RELEASING.md) for publishing.

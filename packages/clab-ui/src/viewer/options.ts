@@ -1,18 +1,8 @@
 import type { ReactFlowInstance } from "@xyflow/react";
 import { isRecord } from "../core/utilities/typeHelpers";
+import type { ViewerOptions as PublicViewerOptions } from "./publicTypes";
 
-export interface ViewerOptions {
-  controls?: boolean;
-  background?: "dots" | "lines" | "none";
-  transparent?: boolean;
-  nodeLabels?: boolean;
-  linkLabels?: "show-all" | "on-select" | "hide";
-  zoomOnScroll?: boolean;
-  panOnDrag?: boolean;
-  fitPadding?: number;
-  /** Colors/fonts supplied by the embedding page, also applied inside the iframe. */
-  appearance?: Partial<Record<"background" | "foreground" | "surface" | "border" | "accent" | "edge" | "font", string>>;
-  onNodeSelect?: (id: string | null) => void;
+export interface ViewerOptions extends PublicViewerOptions {
   onInit?: (instance: ReactFlowInstance) => void;
 }
 

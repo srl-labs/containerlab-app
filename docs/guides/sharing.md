@@ -41,4 +41,4 @@ Draw.io export is useful for quick documentation diagrams. Use the SVG export wh
 
 ## Interactive documentation
 
-Use the [standalone clab-ui viewer](../viewer/standalone.md) to embed the actual topology alongside its YAML. The [Zensical integration](../viewer/index.md) provides a Markdown component with tabs, node inspection, and downloads.
+Use the [standalone Containerlab viewer](../viewer/standalone.md) to embed the actual topology alongside its YAML. The [Zensical integration](../viewer/index.md) provides a Markdown component with tabs, node inspection, and downloads.

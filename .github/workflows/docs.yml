@@ -7,6 +7,7 @@ on:
       - "docs-overrides/**"
       - "tools/clab_docs/**"
       - "packages/clab-ui/**"
+      - "packages/clab-viewer/**"
       - "scripts/docs.mjs"
       - "test/docs/**"
       - "zensical.toml"

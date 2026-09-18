@@ -49,13 +49,13 @@ test("the full sidebar keeps categories and the active page together across inst
   await expect(page.locator(".md-path")).toContainText("Installation");
 
   await sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true }).click();
-  await sidebar.locator("label.md-nav__link").getByText("Standalone clab-ui", { exact: true }).click();
+  await sidebar.locator("label.md-nav__link").getByText("Standalone viewer", { exact: true }).click();
   await sidebar.getByRole("link", { name: "Zensical integration", exact: true }).click();
   await expect(page).toHaveURL(/\/viewer\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Diagrams that speak YAML");
   await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
   await expect(page.locator(".md-path")).toContainText("Developers");
-  await expect(page.locator(".md-path")).toContainText("Standalone clab-ui");
+  await expect(page.locator(".md-path")).toContainText("Standalone viewer");
   for (const group of groups) {
     await expect(sidebar.locator("label.md-nav__link").getByText(group, { exact: true })).toBeVisible();
   }
@@ -68,7 +68,7 @@ test("mobile navigation exposes the same hierarchy and closes when a guide is se
   await expect(page.locator("#__drawer")).toBeChecked();
   const sidebar = page.locator(".md-sidebar--primary");
   await expect(sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true })).toBeInViewport();
-  await expect(sidebar.locator("label.md-nav__link").getByText("Standalone clab-ui", { exact: true })).toBeInViewport();
+  await expect(sidebar.locator("label.md-nav__link").getByText("Standalone viewer", { exact: true })).toBeInViewport();
   await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
   await sidebar.locator("label.md-nav__link").getByText("User guide", { exact: true }).click();
   await sidebar.getByRole("link", { name: "Keyboard shortcuts", exact: true }).click();

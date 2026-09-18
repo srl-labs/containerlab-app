@@ -32,11 +32,11 @@ Try these options in the [customization studio](customize.md#playground). Switch
 
 ## Add it to another Zensical site
 
-The Markdown extension lives in `tools/clab_docs` and installs with this repository's Python project. It emits `<clab-topology>` elements containing escaped YAML and static highlighted source. The browser component and renderer ship in the UI package's `dist-viewer/` directory.
+The Markdown extension lives in `tools/clab_docs` and installs with this repository's Python project. It emits `<clab-topology>` elements containing escaped YAML and static highlighted source. The browser component and renderer ship in the `@containerlab/clab-viewer` package's `dist/` directory.
 
 1. Install this repository's Python project into your docs environment (`uv pip install /path/to/containerlab-app`).
-2. Build the viewer with `pnpm --filter @containerlab/clab-ui build:viewer`, or obtain `dist-viewer/` from the published `@containerlab/clab-ui` package.
-3. Copy the entire `dist-viewer/` directory to your site's `docs/assets/viewer/`.
+2. Build the viewer with `pnpm viewer`, or obtain `dist/` from the `@containerlab/clab-viewer` npm package.
+3. Copy the entire `dist/` directory to your site's `docs/assets/viewer/`.
 4. Enable the extension and its assets in your Zensical configuration:
 
 ```toml
@@ -124,7 +124,7 @@ document.addEventListener("clab:loaded", ({ detail }) => {
 });
 ```
 
-In this repository, `pnpm docs:build && pnpm docs:perf` checks three cold loads per profile at 10 Mbps and 40 ms latency. At normal CPU speed, the page and viewer together must finish below one second from navigation. With 4× CPU slowdown, viewer startup must remain below one second; total page time is reported separately. The build enforces a 250 KB compressed startup budget and 25 KB CSS budget; `dist-viewer/startup-budget.json` records the measured files.
+In this repository, `pnpm docs:build && pnpm docs:perf` checks three cold loads per profile at 10 Mbps and 40 ms latency. At normal CPU speed, the page and viewer together must finish below one second from navigation. With 4× CPU slowdown, viewer startup must remain below one second; total page time is reported separately. The build enforces a 250 KB compressed startup budget and 25 KB CSS budget; `dist/startup-budget.json` records the measured files.
 
 ## Standalone viewer messages
 
@@ -159,4 +159,4 @@ frame.contentWindow.postMessage({
 | `clab-viewer:fit` | Parent → viewer | Fit all nodes in the viewport |
 | `clab-viewer:focus` | Parent → viewer | Inspect and focus a node by `id` |
 
-Direct React consumers can use `mountViewer` from `@containerlab/clab-ui/viewer`. Its `viewerOptions` accepts the options above plus `onNodeSelect` and `onInit` callbacks; top-level `onReady` receives the topology description after painting, and `onError` handles rendering errors. `borderless` is a top-level option. Since the renderers use shared stores, use the standalone iframe for multiple independent viewers on one page.
+JavaScript consumers can import `mountViewer` from `@containerlab/clab-viewer` and its stylesheet from `@containerlab/clab-viewer/styles.css`. Give the mount container a height. Its `viewerOptions` accepts the options above plus an `onNodeSelect` callback; top-level `onReady` receives the topology description after painting, and `onError` handles rendering errors. `borderless` is a top-level option. Call the returned handle's `unmount()` during cleanup or before replacing the topology. Since direct mounts share stores, use the HTML component or standalone iframe for multiple independent viewers on one page. The package bundles React and does not require it in the host application.
