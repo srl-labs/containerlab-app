@@ -80,4 +80,4 @@ for (const [directory, workspace] of Object.entries(workspaces)) {
   );
 }
 
-export default { workspaces, ignore: [".venv/**"] } satisfies KnipConfig;
+export default { workspaces } satisfies KnipConfig;
