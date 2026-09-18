@@ -15,6 +15,8 @@ export function SettingsLayout({
   navigationTestIdPrefix,
   headerActions,
   toolbar,
+  title = "Settings",
+  titleId = "containerlab-settings-title",
   sectionTitle,
   sectionDescription,
   sectionActions,
@@ -28,6 +30,8 @@ export function SettingsLayout({
   navigationTestIdPrefix?: string;
   headerActions?: React.ReactNode;
   toolbar?: React.ReactNode;
+  title?: string;
+  titleId?: string;
   sectionTitle: string;
   sectionDescription?: string;
   sectionActions?: React.ReactNode;
@@ -44,7 +48,7 @@ export function SettingsLayout({
         minWidth: 0,
         display: "flex",
         flexDirection: "column",
-        bgcolor: "background.default",
+        bgcolor: "transparent",
         color: "text.primary",
         containerType: "inline-size",
         containerName: "settings-layout",
@@ -70,7 +74,7 @@ export function SettingsLayout({
       >
         <TuneIcon sx={{ fontSize: 20, color: "text.secondary" }} />
         <Typography
-          id="containerlab-settings-title"
+          id={titleId}
           component="h1"
           sx={{
             fontSize: "calc(1rem * var(--settings-font-scale, 1))",
@@ -78,7 +82,7 @@ export function SettingsLayout({
             letterSpacing: "-0.02em",
           }}
         >
-          Settings
+          {title}
         </Typography>
         <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
           {headerActions}
@@ -104,7 +108,7 @@ export function SettingsLayout({
             minHeight: 0,
             borderBottom: 1,
             borderColor: "divider",
-            bgcolor: "background.paper",
+            bgcolor: "transparent",
             "@container settings-layout (min-width: 720px)": {
               width: 196,
               borderBottom: 0,
@@ -166,6 +170,9 @@ export function SettingsLayout({
               overflow: "auto",
               px: { xs: 1.5, sm: 2.5 },
               py: 2,
+              display: "grid",
+              alignContent: "start",
+              rowGap: 2,
               containerType: "inline-size",
               containerName: "settings-content",
             }}
@@ -177,7 +184,6 @@ export function SettingsLayout({
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 1,
-                mb: 1.5,
               }}
             >
               <Box>

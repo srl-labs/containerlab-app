@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 
+import type { TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { useEndpointStore } from "../stores/endpointStore";
 import { isFileLabTab, useLabTabsStore } from "../stores/labTabsStore";
 import { LabTabsBar } from "./LabTabsBar";
@@ -14,7 +15,7 @@ interface TabActions {
   onClose: (tabId: string) => Promise<void>;
 }
 
-export function StandaloneLabTabs({ onActivate, onClose }: TabActions) {
+export function StandaloneLabTabs({ onActivate, onClose, orientation = "horizontal" }: TabActions & { orientation?: TabOrientation }) {
   const tabs = useLabTabsStore((state) => state.tabs);
   const activeTabId = useLabTabsStore((state) => state.activeTabId);
   const endpoints = useEndpointStore((state) => state.endpoints);
@@ -27,6 +28,7 @@ export function StandaloneLabTabs({ onActivate, onClose }: TabActions) {
       tabs={tabs}
       activeTabId={activeTabId}
       endpointLabels={endpointLabels}
+      orientation={orientation}
       onActivate={(id) => {
         void onActivate(id);
       }}

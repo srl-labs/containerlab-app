@@ -10,6 +10,7 @@ import ClearIcon from "@mui/icons-material/Clear";
 
 import { useGraphStore } from "../../../stores/graphStore";
 import { useCanvasStore } from "../../../stores/canvasStore";
+import { floatingRadius } from "../../../theme/surfaces";
 import { getNodesBoundingBox, isTopoNodeLike } from "../../../utils/graphQueryUtils";
 
 import { formatMatchCountText, getCombinedMatches } from "./findNodeSearchUtils";
@@ -147,7 +148,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
             "& .MuiFilledInput-root": {
               height: 32,
               fontSize: 13,
-              borderRadius: "7px",
+              borderRadius: floatingRadius,
               overflow: "hidden",
               bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 12%, transparent)",
               "&:hover": {

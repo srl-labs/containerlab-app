@@ -10,6 +10,7 @@ import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormHelperText from "@mui/material/FormHelperText";
+import type { SxProps, Theme } from "@mui/material/styles";
 import ClearIcon from "@mui/icons-material/Clear";
 
 export interface SelectOption {
@@ -30,6 +31,7 @@ interface SelectFieldProps {
   helperText?: string;
   required?: boolean;
   clearable?: boolean;
+  sx?: SxProps<Theme>;
 }
 
 const INLINE_FLEX_DISPLAY = "inline-flex";
@@ -67,7 +69,8 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   disabled,
   helperText,
   required,
-  clearable
+  clearable,
+  sx
 }) => {
   const hasLabel = label !== undefined && label.length > 0;
   const hasPlaceholder = placeholder !== undefined && placeholder.length > 0;
@@ -84,6 +87,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
         onChange={(e) => onChange(e.target.value)}
         label={label}
         displayEmpty={hasPlaceholder && !hasLabel}
+        sx={sx}
         renderValue={(selected): React.ReactElement => {
           const selectedValue = String(selected);
           const option = options.find((opt) => opt.value === selectedValue);

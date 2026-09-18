@@ -1,4 +1,4 @@
-import { floatingSurfaceSx } from "../../theme/surfaces";
+import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
 // Floating action bar for React TopoViewer.
 import React from "react";
 import Badge from "@mui/material/Badge";
@@ -12,11 +12,11 @@ import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AddIcon from "@mui/icons-material/Add";
 import CheckIcon from "@mui/icons-material/Check";
 import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FitScreenIcon from "@mui/icons-material/FitScreen";
-import InfoIcon from "@mui/icons-material/Info";
 import KeyboardIcon from "@mui/icons-material/Keyboard";
 import LabelIcon from "@mui/icons-material/Label";
 import LinkIcon from "@mui/icons-material/Link";
@@ -26,6 +26,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PhotoCameraBackIcon from "@mui/icons-material/PhotoCameraBack";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RedoIcon from "@mui/icons-material/Redo";
+import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayIcon from "@mui/icons-material/Replay";
 import SettingsIcon from "@mui/icons-material/Settings";
 import StopIcon from "@mui/icons-material/Stop";
@@ -65,6 +66,79 @@ function getApplyTooltip(isInSync: boolean, isDeployed: boolean): string {
   return "Apply Topology Changes";
 }
 
+function floatingDockSx(barSide: "left" | "right", edge: "top" | "bottom") {
+  return {
+    position: "absolute" as const,
+    [edge]: FLOATING_NAVBAR_INSET,
+    ...(barSide === "left"
+      ? { left: `calc(var(--clab-ui-panel-left, 0px) + ${FLOATING_NAVBAR_INSET}px)` }
+      : { right: `calc(var(--clab-ui-panel-right, 0px) + ${FLOATING_NAVBAR_INSET}px)` })
+  };
+}
+
+function CanvasZoomControls({
+  barSide,
+  fitDisabled,
+  zoomDisabled,
+  onFit,
+  onZoomIn,
+  onZoomOut
+}: {
+  barSide: "left" | "right";
+  fitDisabled: boolean;
+  zoomDisabled: boolean;
+  onFit?: () => void;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+}) {
+  const tooltipPlacement = barSide === "left" ? "right" : "left";
+  return (
+    <Paper
+      elevation={0}
+      data-testid="canvas-zoom-controls"
+      sx={{
+        ...floatingDockSx(barSide, "bottom"),
+        width: "auto",
+        borderRadius: floatingRadius,
+        zIndex: NAVBAR_Z_INDEX,
+        ...floatingSurfaceSx,
+        display: "flex",
+        flexDirection: "column",
+        p: 0.5,
+        gap: 0.5
+      }}
+    >
+      <Tooltip title="Zoom in" placement={tooltipPlacement}>
+        <span>
+          <IconButton aria-label="Zoom in" size="small" onClick={onZoomIn} disabled={zoomDisabled}>
+            <AddIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Zoom out" placement={tooltipPlacement}>
+        <span>
+          <IconButton aria-label="Zoom out" size="small" onClick={onZoomOut} disabled={zoomDisabled}>
+            <RemoveIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title="Fit to Viewport" placement={tooltipPlacement}>
+        <span>
+          <IconButton
+            aria-label="Fit to Viewport"
+            size="small"
+            onClick={onFit}
+            disabled={fitDisabled}
+            data-testid="navbar-fit-viewport"
+          >
+            <FitScreenIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Paper>
+  );
+}
+
 function getToolbarAnchorPosition(
   appBar: HTMLDivElement | null,
   button: HTMLElement
@@ -91,7 +165,6 @@ export interface NavbarProps {
   onToggleSplit?: () => void;
   onCaptureViewport?: () => void;
   onShowShortcuts?: () => void;
-  onShowAbout?: () => void;
   onShowBulkLink?: () => void;
   /** Toggle shortcut display props */
   shortcutDisplayEnabled?: boolean;
@@ -125,7 +198,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSplit,
   onCaptureViewport,
   onShowShortcuts,
-  onShowAbout,
   onShowBulkLink,
   shortcutDisplayEnabled = false,
   onToggleShortcutDisplay,
@@ -343,10 +415,10 @@ export const Navbar: React.FC<NavbarProps> = ({
     onShowShortcuts?.();
   }, [onShowShortcuts]);
 
-  const handleAbout = React.useCallback(() => {
+  const handleToggleShortcutDisplay = React.useCallback(() => {
     setMoreMenuPosition(null);
-    onShowAbout?.();
-  }, [onShowAbout]);
+    onToggleShortcutDisplay?.();
+  }, [onToggleShortcutDisplay]);
 
   React.useEffect(() => {
     if (isTopologyActive) return;
@@ -356,21 +428,28 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMoreMenuPosition(null);
   }, [isTopologyActive]);
 
+  const handleZoomIn = React.useCallback(() => {
+    void rfInstance?.zoomIn({ duration: 160 });
+  }, [rfInstance]);
+
+  const handleZoomOut = React.useCallback(() => {
+    void rfInstance?.zoomOut({ duration: 160 });
+  }, [rfInstance]);
+
+  const zoomDisabled = !isTopologyActive || rfInstance === null;
+
   return (
+    <>
     <Paper
       ref={appBarRef}
       elevation={0}
       data-testid="topoviewer-navbar"
       sx={{
-        position: "absolute",
-        top: FLOATING_NAVBAR_INSET,
-        ...(barSide === "left"
-          ? { left: `calc(var(--clab-ui-panel-left, 0px) + ${FLOATING_NAVBAR_INSET}px)` }
-          : { right: `calc(var(--clab-ui-panel-right, 0px) + ${FLOATING_NAVBAR_INSET}px)` }),
+        ...floatingDockSx(barSide, "top"),
         width: "auto",
         maxWidth: `calc(100% - var(--clab-ui-panel-left, 0px) - var(--clab-ui-panel-right, 0px) - ${FLOATING_NAVBAR_INSET * 2}px)`,
         overflow: "visible",
-        borderRadius: "9px",
+        borderRadius: floatingRadius,
         zIndex: NAVBAR_Z_INDEX,
         ...floatingSurfaceSx
       }}
@@ -604,21 +683,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </Tooltip>
         )}
 
-        {/* Fit to Viewport */}
-        <Tooltip title="Fit to Viewport">
-          <span>
-            <IconButton
-                  aria-label="Fit to Viewport"
-              size="small"
-              onClick={onZoomToFit}
-              disabled={!isTopologyActive}
-              data-testid="navbar-fit-viewport"
-            >
-              <FitScreenIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-
         {/* Toggle YAML Split View */}
         <Tooltip title="Toggle YAML Split View">
           <span>
@@ -774,21 +838,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
 
-        {/* Toggle Shortcut Display */}
-        <Tooltip title="Toggle Shortcut Display">
-          <IconButton
-            size="small"
-            onClick={onToggleShortcutDisplay}
-            data-testid="navbar-shortcut-display"
-          >
-            {shortcutDisplayEnabled ? (
-              <VisibilityIcon fontSize="small" />
-            ) : (
-              <VisibilityOffIcon fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
-
         <Tooltip title="More">
           <IconButton
             size="small"
@@ -825,15 +874,28 @@ export const Navbar: React.FC<NavbarProps> = ({
             </ListItemIcon>
             <ListItemText>Keyboard Shortcuts</ListItemText>
           </MenuItem>
-          <MenuItem onClick={handleAbout} data-testid="navbar-about">
+          <MenuItem onClick={handleToggleShortcutDisplay} data-testid="navbar-shortcut-display">
             <ListItemIcon>
-              <InfoIcon fontSize="small" />
+              {shortcutDisplayEnabled ? (
+                <VisibilityIcon fontSize="small" />
+              ) : (
+                <VisibilityOffIcon fontSize="small" />
+              )}
             </ListItemIcon>
-            <ListItemText>Info</ListItemText>
+            <ListItemText>Shortcut Display</ListItemText>
           </MenuItem>
         </Menu>
       </Toolbar>
     </Paper>
+    <CanvasZoomControls
+      barSide={barSide}
+      zoomDisabled={zoomDisabled}
+      fitDisabled={!isTopologyActive}
+      onFit={onZoomToFit}
+      onZoomIn={handleZoomIn}
+      onZoomOut={handleZoomOut}
+    />
+    </>
   );
 };
 /* eslint-enable complexity */

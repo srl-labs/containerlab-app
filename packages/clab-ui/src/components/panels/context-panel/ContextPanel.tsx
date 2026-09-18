@@ -17,6 +17,7 @@ import Typography from "@mui/material/Typography";
 import { useIsLocked } from "../../../stores/topoViewerStore";
 import type { NodeData, LinkData } from "../../../hooks/ui";
 import { useContextPanelContent } from "../../../hooks/ui/useContextPanelContent";
+import { floatingRadius } from "../../../theme/surfaces";
 
 import type {
   ContextPanelEditorState,
@@ -51,7 +52,7 @@ function getSideConfig(side: "left" | "right"): SideConfig {
       positionProp: "left",
       openIcon: ChevronRightIcon,
       closeIcon: ChevronLeftIcon,
-      borderRadius: "0 4px 4px 0",
+      borderRadius: `0 ${floatingRadius} ${floatingRadius} 0`,
       borderZeroProp: "borderLeft",
       moveTargetLabel: "right"
     };
@@ -63,7 +64,7 @@ function getSideConfig(side: "left" | "right"): SideConfig {
     positionProp: "right",
     openIcon: ChevronLeftIcon,
     closeIcon: ChevronRightIcon,
-    borderRadius: "4px 0 0 4px",
+    borderRadius: `${floatingRadius} 0 0 ${floatingRadius}`,
     borderZeroProp: "borderRight",
     moveTargetLabel: "left"
   };
@@ -390,6 +391,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         <Box
           sx={{
             flexGrow: 1,
+            minHeight: 0,
             overflow: "auto"
           }}
         >

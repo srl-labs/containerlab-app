@@ -31,20 +31,30 @@
       .startup-fallback {
         align-items: center;
         background: #000000;
-        color: #ececec;
         display: flex;
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
-          sans-serif;
         height: 100%;
+        inset: 0;
         justify-content: center;
+        position: fixed;
+        width: 100%;
+      }
+
+      .startup-fallback img {
+        display: block;
+        height: 136px;
+        width: 136px;
+      }
+
+      #root:has(> *) ~ .startup-fallback {
+        display: none;
       }
     </style>
   </head>
   <body>
     <div id="settings-overlay"></div>
-    <div id="root">
-      <div class="startup-fallback">containerlab</div>
+    <div id="root"></div>
+    <div class="startup-fallback">
+      <img src="%BASE_URL%clab-animated-no-logo.svg" alt="Containerlab" width="136" height="136" />
     </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>

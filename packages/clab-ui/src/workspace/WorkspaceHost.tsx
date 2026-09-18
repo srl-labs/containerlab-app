@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useSyncExternalStore } from "react";
+import type { TopologyRef } from "../session";
 import type {
-  EdgeSharkStatusResponse, EndpointHealthMetrics, InspectAllLabsResponse, InspectLabResponse,
+  EdgeSharkStatusResponse, EndpointHealthMetrics, FileExplorerEntry, InspectAllLabsResponse, InspectLabResponse,
   InterfaceNetemPatch, LabState, LogsResponse, RuntimeTargetRequest, TerminalProtocol,
   TerminalSessionInfo, VersionCheckResponse, VersionResponse
 } from "./types";
+import type { TopologyFileEntry } from "./state/documentUtils";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
 
 type NodeTarget = RuntimeTargetRequest & { nodeName: string };
@@ -18,6 +20,14 @@ export interface WorkspaceHost {
     getSnapshot: () => Map<string, LabState>;
     subscribe: (listener: () => void) => () => void;
     updateInterfaceNetemState: (update: { endpointId?: string; topologyPath?: string; labName?: string; nodeName: string; interfaceName: string; netem: InterfaceNetemPatch }) => void;
+  };
+  explorer: {
+    listTopologies: () => Promise<TopologyFileEntry[]>;
+    listDirectory: (parentPath: string) => Promise<FileExplorerEntry[]>;
+    subscribe: (listener: () => void) => () => void;
+    createTopology: () => void;
+    openTopology: (topologyRef: TopologyRef) => void | Promise<void>;
+    openFile: (entry: FileExplorerEntry) => void | Promise<void>;
   };
   api: {
     fetchEndpointHealthMetrics: (endpointId: string, signal?: AbortSignal) => Promise<EndpointHealthMetrics>;

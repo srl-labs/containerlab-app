@@ -1,6 +1,7 @@
 // VS Code MUI theme config.
 // Palette values are CSS var() references — VS Code swaps them for light/dark.
 import { createTheme, type ThemeOptions } from "@mui/material/styles";
+import { floatingRadius } from "./surfaces";
 import { vscodePalette } from "./vscodePalette";
 export { vscodePalette } from "./vscodePalette";
 
@@ -229,7 +230,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     }
   },
@@ -238,7 +240,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     }
   },
@@ -247,7 +250,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     },
     defaultProps: {

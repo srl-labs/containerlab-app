@@ -95,13 +95,6 @@ export default defineConfig(({ command }) => ({
     port: 5174,
     host: true,
     open: false,
-    watch: {
-      usePolling: true,
-      interval: 300,
-    },
-    hmr: {
-      overlay: true,
-    },
     warmup: {
       clientFiles: [
         "./src/main.tsx",

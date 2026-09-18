@@ -10,6 +10,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Switch,
   ToggleButton,
   ToggleButtonGroup,
   Typography
@@ -48,9 +49,18 @@ import {
 } from "../endpoints";
 import { SettingsLayout } from "../../settings/SettingsLayout";
 import { SettingsField } from "../../settings/SettingsField";
-import { ColorSchemePicker } from "../../settings/ColorSchemePicker";
+import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
 import { AboutSettingsContent } from "./AboutSettingsContent";
 import { EndpointManager } from "./EndpointManager";
+import {
+  persistAutoOpenPalette,
+  persistAutoOpenPaletteOnSelect,
+  persistDefaultLabLocked,
+  readPersistedAutoOpenPalette,
+  readPersistedAutoOpenPaletteOnSelect,
+  readPersistedDefaultLabLocked,
+  type TabOrientation
+} from "../state/themePreferences";
 
 type SettingsSectionKey = "endpoints" | "general" | "terminal" | "capture" | "about";
 
@@ -95,6 +105,8 @@ interface SettingsOverlayProps {
     }
   ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
+  tabOrientation?: TabOrientation;
+  onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
 }
 
@@ -178,10 +190,12 @@ function SectionCard(props: {
   title: string;
   description: string;
   tone?: "info" | "success" | "warning" | "error";
+  wide?: boolean;
   children: React.ReactNode;
 }) {
+  const wide = props.wide ?? true;
   return (
-    <SettingsField title={props.title} description={props.description} wide>
+    <SettingsField title={props.title} description={props.description} wide={wide} compactControl={!wide}>
       {props.children}
     </SettingsField>
   );
@@ -305,7 +319,7 @@ function CaptureSettingsSection(props: {
   };
 
   return (
-    <Stack spacing={1.5}>
+    <>
       <SectionCard
         title="Edgeshark"
         description="Install or uninstall Edgeshark on the selected endpoint host."
@@ -491,7 +505,7 @@ function CaptureSettingsSection(props: {
           </Button>
         </Stack>
       </SectionCard>
-    </Stack>
+    </>
   );
 }
 
@@ -512,8 +526,13 @@ export function SettingsOverlay({
   onSetEndpointSessionDuration,
   onSaveTerminalPreferences,
   onThemeChange,
+  tabOrientation = "horizontal",
+  onTabOrientationChange,
   terminalPreferences
 }: SettingsOverlayProps) {
+  const [autoOpenPalette, setAutoOpenPalette] = useState(readPersistedAutoOpenPalette);
+  const [autoOpenPaletteOnSelect, setAutoOpenPaletteOnSelect] = useState(readPersistedAutoOpenPaletteOnSelect);
+  const [defaultLabLocked, setDefaultLabLocked] = useState(readPersistedDefaultLabLocked);
   const { fetchEdgeSharkStatus, fetchVersionCheck, fetchVersionInfo } = useWorkspaceHost().api;
   const { capabilities } = useWorkspaceHost();
   const dialogOpen = open;
@@ -691,7 +710,6 @@ export function SettingsOverlay({
     switch (activeSection) {
       case "endpoints":
         return (
-          <Stack spacing={1.5}>
             <EndpointManager
               defaultApiUrl={defaultApiUrl}
               endpoints={endpoints}
@@ -706,25 +724,110 @@ export function SettingsOverlay({
               onRequestedActionHandled={() => setRequestedEndpointAction(null)}
               requestedAction={requestedEndpointAction}
             />
-          </Stack>
         );
       case "general":
         return (
-          <Stack spacing={1.5}>
-            <SectionCard title="Color Theme" description="Choose the color scheme for the app.">
-              <ColorSchemePicker
+          <>
+            <SectionCard
+              title="Color Theme"
+              description="Choose the color scheme for the app."
+              wide={false}
+            >
+              <TextField
+                select
+                size="small"
                 value={currentTheme}
-                onChange={(nextTheme) => {
-                  if (nextTheme !== "vscode") onThemeChange(nextTheme);
+                onChange={(event) => {
+                  const nextTheme = event.target.value;
+                  if (nextTheme === "light" || nextTheme === "dark") onThemeChange(nextTheme);
                 }}
-                testIdPrefix="standalone-settings-theme-"
+                sx={{ minWidth: 160 }}
+              >
+                <MenuItem value="light" data-testid="standalone-settings-theme-light">
+                  Light
+                </MenuItem>
+                <MenuItem value="dark" data-testid="standalone-settings-theme-dark">
+                  Dark
+                </MenuItem>
+              </TextField>
+            </SectionCard>
+            {onTabOrientationChange ? (
+              <SectionCard
+                title="Open Tabs"
+                description="Horizontal tabs sit above the editor. Vertical tabs sit in the workspace rail."
+                wide={false}
+              >
+                <TextField
+                  select
+                  size="small"
+                  value={tabOrientation}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    if (next === "horizontal" || next === "vertical") onTabOrientationChange(next);
+                  }}
+                  sx={{ minWidth: 160 }}
+                >
+                  <MenuItem value="horizontal" data-testid="standalone-settings-tabs-horizontal">
+                    Horizontal
+                  </MenuItem>
+                  <MenuItem value="vertical" data-testid="standalone-settings-tabs-vertical">
+                    Vertical
+                  </MenuItem>
+                </TextField>
+              </SectionCard>
+            ) : null}
+            <SectionCard
+              title="Automatically open palette"
+              description="Open the node palette when you open an empty lab."
+              wide={false}
+            >
+              <Switch
+                size="small"
+                checked={autoOpenPalette}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setAutoOpenPalette(next);
+                  persistAutoOpenPalette(next);
+                }}
+                slotProps={{ input: { "aria-label": "Automatically open palette" } }}
               />
             </SectionCard>
-          </Stack>
+            <SectionCard
+              title="Open palette on node click"
+              description="Open the side panel when you click a node or link."
+              wide={false}
+            >
+              <Switch
+                size="small"
+                checked={autoOpenPaletteOnSelect}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setAutoOpenPaletteOnSelect(next);
+                  persistAutoOpenPaletteOnSelect(next);
+                }}
+                slotProps={{ input: { "aria-label": "Open palette on node click" } }}
+              />
+            </SectionCard>
+            <SectionCard
+              title="Lock labs by default"
+              description="Opened labs start locked until you unlock them."
+              wide={false}
+            >
+              <Switch
+                size="small"
+                checked={defaultLabLocked}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setDefaultLabLocked(next);
+                  persistDefaultLabLocked(next);
+                }}
+                slotProps={{ input: { "aria-label": "Lock labs by default" } }}
+              />
+            </SectionCard>
+          </>
         );
       case "terminal":
         return (
-          <Stack spacing={1.5}>
             <SectionCard
               title="Terminal Defaults"
               description="Configure standalone defaults for SSH username resolution, telnet access, and font sizing."
@@ -844,7 +947,6 @@ export function SettingsOverlay({
                 </Button>
               </Box>
             </SectionCard>
-          </Stack>
         );
       case "about":
         return (
@@ -901,9 +1003,10 @@ export function SettingsOverlay({
       slotProps={{
         paper: {
           sx: {
+            ...floatingSurfaceSx,
             minHeight: { xs: "calc(100vh - 32px)", md: 560 },
             height: { xs: "calc(100vh - 32px)", md: "76vh" },
-            borderRadius: 2,
+            borderRadius: floatingRadius,
             overflow: "hidden"
           }
         }

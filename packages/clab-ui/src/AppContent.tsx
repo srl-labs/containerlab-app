@@ -86,6 +86,7 @@ import {
   toNetemState
 } from "./utils/netemOverrides";
 import { isRecord } from "./core/utilities/typeHelpers";
+import { readPersistedAutoOpenPalette, readPersistedAutoOpenPaletteOnSelect, readPersistedDefaultLabLocked } from "./workspace/state/themePreferences";
 
 type LayoutControls = ReturnType<typeof useLayoutControls>;
 const DEV_EXPLORER_DEFER_MS = 300;
@@ -118,11 +119,6 @@ const LazySvgExportModal = React.lazy(async () => {
 const LazyBulkLinkModal = React.lazy(async () => {
   const module = await import("./components/panels/BulkLinkModal");
   return { default: module.BulkLinkModal };
-});
-
-const LazyAboutModal = React.lazy(async () => {
-  const module = await import("./components/panels/AboutModal");
-  return { default: module.AboutModal };
 });
 
 const TOPO_NODE_TYPES = new Set<string>([
@@ -713,7 +709,7 @@ export const AppContent: React.FC<AppContentProps> = ({
   const viewerOnly = chrome === "viewer" || slots?.content != null;
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
-  const { renderAboutModal, renderDeployMenuItems } = useClabUiRuntime();
+  const { renderDeployMenuItems } = useClabUiRuntime();
   const state = useTopoViewerStore(selectAppContentState, shallow);
   const topoActions = useTopoViewerActions();
   const graphActions = useGraphActions();
@@ -1098,7 +1094,9 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (initializedPaletteTopology.current === topologyKey) return;
     initializedPaletteTopology.current = topologyKey;
 
-    if (useGraphStore.getState().nodes.length === 0) {
+    useTopoViewerStore.setState({ isLocked: readPersistedDefaultLabLocked() });
+
+    if (useGraphStore.getState().nodes.length === 0 && readPersistedAutoOpenPalette()) {
       // Keep the palette open through selection changes, but allow manual dismissal.
       handleOpenContextPanel("manual");
       setPaletteTabRequest({ tabId: "nodes" });
@@ -1258,7 +1256,8 @@ export const AppContent: React.FC<AppContentProps> = ({
       !viewerOnly &&
       hasContextContent &&
       !isProcessing &&
-      !panelVisibility.isContextPanelOpen
+      !panelVisibility.isContextPanelOpen &&
+      readPersistedAutoOpenPaletteOnSelect()
     ) {
       panelVisibility.handleOpenContextPanel("auto");
     }
@@ -1451,25 +1450,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     void saveViewerSettings(sessionClient, { showDummyLinks: next });
   }, [sessionClient, topoActions]);
 
-  let aboutModal: React.ReactNode = null;
-  if (panelVisibility.showAboutPanel) {
-    if (renderAboutModal) {
-      aboutModal = renderAboutModal({
-        isOpen: panelVisibility.showAboutPanel,
-        onClose: panelVisibility.handleCloseAbout
-      });
-    } else {
-      aboutModal = (
-        <React.Suspense fallback={null}>
-          <LazyAboutModal
-            isOpen={panelVisibility.showAboutPanel}
-            onClose={panelVisibility.handleCloseAbout}
-          />
-        </React.Suspense>
-      );
-    }
-  }
-
   return (
     <MuiThemeProvider>
       <Box
@@ -1644,7 +1624,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                         endpointLabelOffset={state.endpointLabelOffset}
                         endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
                       />
-                      <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+                      <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} side={panelSide} />
                     </>
                   )}
                 </Box>
@@ -1662,7 +1642,6 @@ export const AppContent: React.FC<AppContentProps> = ({
                     onToggleSplit={handleToggleSplit}
                     onCaptureViewport={panelVisibility.handleShowSvgExport}
                     onShowShortcuts={panelVisibility.handleShowShortcuts}
-                    onShowAbout={panelVisibility.handleShowAbout}
                     onShowBulkLink={panelVisibility.handleShowBulkLink}
                     linkLabelMode={state.linkLabelMode}
                     onLinkLabelModeChange={handleLinkLabelModeChange}
@@ -1733,7 +1712,6 @@ export const AppContent: React.FC<AppContentProps> = ({
             />
           </React.Suspense>
         ) : null}
-        {aboutModal}
       </Box>
     </MuiThemeProvider>
   );

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   parseStandaloneTheme,
+  parseTabOrientation,
   readPersistedStandaloneTheme,
   resolveStandaloneTheme
 } from "./standaloneTheme";
@@ -28,6 +29,12 @@ function withGlobalProperty<T>(name: "document" | "localStorage", value: unknown
 test("parseStandaloneTheme accepts light and dark", () => {
   assert.equal(parseStandaloneTheme("light"), "light");
   assert.equal(parseStandaloneTheme("dark"), "dark");
+});
+
+test("parseTabOrientation accepts horizontal and vertical", () => {
+  assert.equal(parseTabOrientation("horizontal"), "horizontal");
+  assert.equal(parseTabOrientation("vertical"), "vertical");
+  assert.equal(parseTabOrientation("side"), undefined);
 });
 
 test("readPersistedStandaloneTheme returns undefined for invalid persisted values", () => {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { ENDPOINT_EXPORT_FILENAME, DEFAULT_ENDPOINT_SESSION_DURATION, isValidEndpointSessionDuration } from "../endpoints";
 import type { EndpointImportResult, EndpointSessionDuration } from "../types";
+
 export function LoadingScreen() {
   return (
     <div style={{

@@ -1,4 +1,4 @@
-import { BootstrapLoginPage, LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import { BootstrapLoginPage } from "@containerlab/clab-ui/workspace/bootstrap";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
 import { resolveStandaloneTheme } from "./standaloneTheme";
 /**
@@ -115,12 +115,8 @@ function BootstrapApp() {
     [addEndpoint, refreshConfig]
   );
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
-
-  if (startupScreen === "app") {
-    return <LoadingScreen />;
+  if (loading || startupScreen === "app") {
+    return null;
   }
 
   return (

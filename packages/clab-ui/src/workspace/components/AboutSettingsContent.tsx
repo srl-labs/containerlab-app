@@ -5,10 +5,6 @@ import {
   Avatar,
   Box,
   Divider,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Paper,
   Stack,
   TextField,
@@ -17,9 +13,8 @@ import {
 import ExtensionIcon from "@mui/icons-material/Extension";
 import FavoriteIcon from "@mui/icons-material/Favorite";
 import GroupsIcon from "@mui/icons-material/Groups";
-import MenuBookIcon from "@mui/icons-material/MenuBook";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 
+import { floatingRadius } from "../../theme/surfaces";
 import { useWorkspaceHost } from "../WorkspaceHost";
 
 interface AboutSettingsContentProps {
@@ -30,37 +25,16 @@ interface AboutSettingsContentProps {
   versionLoading: boolean;
 }
 
-interface AboutLink {
-  description: string;
-  icon: ReactNode;
-  label: string;
-  url: string;
-}
-
 interface AboutAuthor {
   color: string;
   initials: string;
   linkedIn: string;
   name: string;
+  photo?: string;
   title: string;
 }
 
 const TEXT_SECONDARY = "text.secondary";
-
-const documentationLinks: AboutLink[] = [
-  {
-    label: "Containerlab Docs",
-    description: "Full documentation",
-    url: "https://containerlab.dev/",
-    icon: <MenuBookIcon fontSize="small" />
-  },
-  {
-    label: "Extension Docs",
-    description: "VS Code extension guide",
-    url: "https://containerlab.dev/manual/vsc-extension/",
-    icon: <ExtensionIcon fontSize="small" />
-  }
-];
 
 const authors: AboutAuthor[] = [
   {
@@ -75,7 +49,8 @@ const authors: AboutAuthor[] = [
     title: "Maintainer",
     linkedIn: "https://linkedin.com/in/kaelem-chandra",
     initials: "KC",
-    color: "#9C27B0"
+    color: "#9C27B0",
+    photo: "https://github.com/kaelemc.png"
   },
   {
     name: "Asad Arafat",
@@ -109,76 +84,60 @@ function AboutSection(props: { children: ReactNode; icon: ReactNode; title: stri
   );
 }
 
-function LinkList(props: { links: AboutLink[] }) {
+function AuthorCards() {
   return (
-    <List disablePadding>
-      {props.links.map((link, index) => (
-        <Box key={link.url}>
-          {index > 0 ? <Divider /> : null}
-          <ListItemButton
-            component="a"
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ alignItems: "flex-start", py: 1.5 }}
+    <Box
+      sx={{
+        display: "flex",
+        gap: 0.5,
+        p: 1.5
+      }}
+    >
+      {authors.map((author) => (
+        <Box
+          key={author.linkedIn}
+          component="a"
+          href={author.linkedIn}
+          target="_blank"
+          rel="noopener noreferrer"
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flex: 1,
+            minWidth: 0,
+            px: 1,
+            py: 0.75,
+            borderRadius: floatingRadius,
+            color: "inherit",
+            textDecoration: "none",
+            "&:hover": { bgcolor: "action.hover" }
+          }}
+        >
+          <Avatar
+            src={author.photo}
+            alt=""
+            slotProps={{ img: { referrerPolicy: "no-referrer" } }}
+            sx={{
+              bgcolor: author.color,
+              width: 28,
+              height: 28,
+              fontSize: "0.75rem"
+            }}
           >
-            <ListItemIcon sx={{ minWidth: 36, color: TEXT_SECONDARY, mt: 0.25 }}>
-              {link.icon}
-            </ListItemIcon>
-            <ListItemText
-              primary={link.label}
-              secondary={link.description}
-              slotProps={{
-                primary: { variant: "body2", sx: { fontWeight: 600 } },
-                secondary: { variant: "caption", color: TEXT_SECONDARY }
-              }}
-            />
-            <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
-          </ListItemButton>
+            {author.initials}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+              {author.name}
+            </Typography>
+            <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
+              {author.title}
+            </Typography>
+          </Box>
         </Box>
       ))}
-    </List>
-  );
-}
-
-function AuthorList() {
-  return (
-    <List disablePadding>
-      {authors.map((author, index) => (
-        <Box key={author.linkedIn}>
-          {index > 0 ? <Divider /> : null}
-          <ListItemButton
-            component="a"
-            href={author.linkedIn}
-            target="_blank"
-            rel="noopener noreferrer"
-            sx={{ alignItems: "flex-start", py: 1.5 }}
-          >
-            <ListItemIcon sx={{ minWidth: 48 }}>
-              <Avatar
-                sx={{
-                  bgcolor: author.color,
-                  width: 32,
-                  height: 32,
-                  fontSize: "0.875rem"
-                }}
-              >
-                {author.initials}
-              </Avatar>
-            </ListItemIcon>
-            <ListItemText
-              primary={author.name}
-              secondary={author.title}
-              slotProps={{
-                primary: { variant: "body2", sx: { fontWeight: 600 } },
-                secondary: { variant: "caption", color: TEXT_SECONDARY }
-              }}
-            />
-            <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
-          </ListItemButton>
-        </Box>
-      ))}
-    </List>
+    </Box>
   );
 }
 
@@ -199,7 +158,7 @@ export function AboutSettingsContent({
         <Box>
           <Typography variant="h6">About</Typography>
           <Typography variant="body2" color={TEXT_SECONDARY}>
-            TopoViewer details, project links, maintainers, and runtime diagnostics.
+            Containerlab App details, maintainers, and runtime diagnostics.
           </Typography>
         </Box>
       )}
@@ -224,7 +183,7 @@ export function AboutSettingsContent({
               fontWeight: 600
             }}
           >
-            TopoViewer
+            Containerlab App
           </Typography>
           <Typography variant="body2" color={TEXT_SECONDARY}>
             Interactive topology visualization and editing for Containerlab network labs in the
@@ -233,24 +192,9 @@ export function AboutSettingsContent({
         </Box>
       </Stack>
 
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2.5}
-        sx={{
-          alignItems: "stretch"
-        }}
-      >
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <AboutSection title="Documentation" icon={<MenuBookIcon fontSize="small" />}>
-            <LinkList links={documentationLinks} />
-          </AboutSection>
-        </Box>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <AboutSection title="Team" icon={<GroupsIcon fontSize="small" />}>
-            <AuthorList />
-          </AboutSection>
-        </Box>
-      </Stack>
+      <AboutSection title="Team" icon={<GroupsIcon fontSize="small" />}>
+        <AuthorCards />
+      </AboutSection>
 
       <AboutSection title="Runtime Version" icon={<ExtensionIcon fontSize="small" />}>
         <Stack spacing={2} sx={{ p: 2 }}>

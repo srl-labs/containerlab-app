@@ -12,7 +12,7 @@ const ATTR_DATA_TESTID = "data-testid";
  * - Layout dropdown (MUI Menu)
  * - Link labels dropdown (MUI Menu)
  * - Grid settings (Lab Settings > Appearance)
- * - Shortcuts/About modals (MUI Dialog)
+ * - Shortcuts modal (MUI Dialog)
  * - Shortcut display toggle
  */
 test.describe("Navbar Interactions", () => {
@@ -192,8 +192,7 @@ test.describe("Navbar Interactions", () => {
   });
 
   test.describe("Panel Toggles", () => {
-    test("shortcuts and about buttons open their respective modals", async ({ page }) => {
-      // Test shortcuts modal
+    test("shortcuts button opens the shortcuts modal", async ({ page }) => {
       const shortcutsBtn = page.locator('[data-testid="navbar-shortcuts"]');
       await page.locator('[data-testid="navbar-more"]').click();
       await shortcutsBtn.click();
@@ -202,53 +201,37 @@ test.describe("Navbar Interactions", () => {
       const shortcutsModal = page.locator('[data-testid="shortcuts-modal"]');
       await expect(shortcutsModal).toBeVisible();
 
-      // Close shortcuts (press Escape)
       await page.keyboard.press("Escape");
       await page.waitForTimeout(200);
       await expect(shortcutsModal).not.toBeVisible();
-
-      // Test about modal
-      const aboutBtn = page.locator('[data-testid="navbar-about"]');
-      await page.locator('[data-testid="navbar-more"]').click();
-      await aboutBtn.click();
-      await page.waitForTimeout(300);
-
-      const aboutModal = page.locator('[data-testid="about-modal"]');
-      await expect(aboutModal).toBeVisible();
     });
   });
 
   test.describe("Shortcut Display Toggle", () => {
     test("clicking shortcut display toggles the icon", async ({ page }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       const shortcutDisplayBtn = page.locator('[data-testid="navbar-shortcut-display"]');
       await expect(shortcutDisplayBtn).toBeVisible();
 
-      // Get initial icon (VisibilityOff when disabled)
       const initialIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // Click to toggle
       await shortcutDisplayBtn.click();
-      await page.waitForTimeout(200);
-
-      // Icon should have changed (VisibilityOff <-> Visibility)
+      await page.locator('[data-testid="navbar-more"]').click();
       const toggledIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // Toggle back
       await shortcutDisplayBtn.click();
-      await page.waitForTimeout(200);
-
+      await page.locator('[data-testid="navbar-more"]').click();
       const restoredIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // State should have toggled and been restored
       expect(initialIcon).toBe(restoredIcon);
       expect(initialIcon).not.toBe(toggledIcon);
     });
 
     test("shortcut display shows keypresses when enabled", async ({ page, topoViewerPage }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       const shortcutDisplayBtn = page.locator('[data-testid="navbar-shortcut-display"]');
       await expect(shortcutDisplayBtn).toBeVisible();
 
-      // Enable shortcut display.
       await shortcutDisplayBtn.click();
       await page.waitForTimeout(200);
 

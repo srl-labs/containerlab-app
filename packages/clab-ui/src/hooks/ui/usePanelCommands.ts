@@ -3,7 +3,7 @@
  *
  * Simplified for the new UI model:
  * - ContextPanel (side drawer) with auto-open on selection
- * - MUI Dialogs for modals (LabSettings, Shortcuts, SvgExport, BulkLink, About)
+ * - MUI Dialogs for modals (LabSettings, Shortcuts, SvgExport, BulkLink)
  * - MUI Popovers for Grid and Find (anchor-based)
  */
 import { useCallback, useState } from "react";
@@ -73,17 +73,14 @@ export interface PanelVisibility {
   showShortcutsModal: boolean;
   showSvgExportModal: boolean;
   showBulkLinkModal: boolean;
-  showAboutPanel: boolean;
   handleShowLabSettings: () => void;
   handleShowShortcuts: () => void;
   handleShowSvgExport: () => void;
   handleShowBulkLink: () => void;
-  handleShowAbout: () => void;
   handleCloseLabSettings: () => void;
   handleCloseShortcuts: () => void;
   handleCloseSvgExport: () => void;
   handleCloseBulkLink: () => void;
-  handleCloseAbout: () => void;
 
   // Popovers (position based)
   gridPopoverPosition: { top: number; left: number } | null;
@@ -151,24 +148,20 @@ function useModals() {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [showSvgExportModal, setShowSvgExportModal] = useState(false);
   const [showBulkLinkModal, setShowBulkLinkModal] = useState(false);
-  const [showAboutPanel, setShowAboutPanel] = useState(false);
 
   return {
     showLabSettingsModal,
     showShortcutsModal,
     showSvgExportModal,
     showBulkLinkModal,
-    showAboutPanel,
     handleShowLabSettings: useCallback(() => setShowLabSettingsModal(true), []),
     handleShowShortcuts: useCallback(() => setShowShortcutsModal(true), []),
     handleShowSvgExport: useCallback(() => setShowSvgExportModal(true), []),
     handleShowBulkLink: useCallback(() => setShowBulkLinkModal(true), []),
-    handleShowAbout: useCallback(() => setShowAboutPanel((prev) => !prev), []),
     handleCloseLabSettings: useCallback(() => setShowLabSettingsModal(false), []),
     handleCloseShortcuts: useCallback(() => setShowShortcutsModal(false), []),
     handleCloseSvgExport: useCallback(() => setShowSvgExportModal(false), []),
-    handleCloseBulkLink: useCallback(() => setShowBulkLinkModal(false), []),
-    handleCloseAbout: useCallback(() => setShowAboutPanel(false), [])
+    handleCloseBulkLink: useCallback(() => setShowBulkLinkModal(false), [])
   };
 }
 

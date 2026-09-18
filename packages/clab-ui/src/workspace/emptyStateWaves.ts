@@ -11,9 +11,8 @@ const PALETTE = [
   [1, 0.68, 0.27], [0.25, 1, 0.72], [0.35, 0.58, 1]
 ] as const;
 
-// The pre-SVG noise and twinkle retain their character with a small contrast and
-// tempo lift. The six-pixel grid stays still until a click impulse passes through.
-// The baked logo sample avoids the original image decoding delay.
+// Same field as the 2d worker: 6px grid, 0.22 twinkle, additive dots in dark mode.
+// Click impulses ride on top. The baked logo sample avoids image decode at runtime.
 const VERTEX_SHADER = `#version 300 es
   precision highp float;
   precision highp int;
@@ -22,6 +21,7 @@ const VERTEX_SHADER = `#version 300 es
   uniform float u_dpr;
   uniform float u_light;
   uniform float u_time;
+  uniform vec2 u_seed;
   uniform vec3 u_hover;
   uniform sampler2D u_logo;
   uniform vec4 u_trails[${MAX_TRAILS}];
@@ -54,22 +54,28 @@ const VERTEX_SHADER = `#version 300 es
       float sampleSize = float(textureSize(u_logo, 0).x);
       logo = texture(u_logo, (uv * (sampleSize - 1.0) + 0.5) / sampleSize).r;
     }
-    float seed = hash2(floor(position / 6.0 + 0.5));
-    float ambientTime = u_time * 1.1;
+    float seed = hash2(floor(position / 6.0 + 0.5) + u_seed);
     float cluster = pow(
-      valueNoise(position * 0.012 + ambientTime * vec2(0.13, -0.1)) * 0.62 +
-      valueNoise(position * vec2(0.031, 0.029) + ambientTime * vec2(-0.19, 0.16)) * 0.38, 1.55);
-    float twinkle = 0.78 + 0.28 * sin(ambientTime * (0.8 + seed * 1.7) + seed * 6.28);
+      valueNoise(position * 0.012 + u_seed + u_time * vec2(0.13, -0.1)) * 0.62 +
+      valueNoise(position * vec2(0.031, 0.029) + u_seed + u_time * vec2(-0.19, 0.16)) * 0.38, 1.55);
+    float twinkle = 0.78 + 0.22 * sin(u_time * (0.8 + seed * 1.7) + seed * 6.28);
     float field = (0.38 + 0.62 * cluster) * twinkle;
     float amplitude = field * 0.55 + logo * 1.05;
     float grey = mix(100.0 + field * 50.0 + logo * 160.0,
       210.0 - field * 50.0 - logo * 160.0, u_light);
     vec3 color = vec3(clamp(floor(floor(grey + 0.5) / 255.0 * 23.0 + 0.5), 0.0, 23.0) / 23.0);
-    float alpha = 0.22 * field + logo * 0.8;
+    float alpha = 0.2 * field + logo * 0.8;
+    if (alpha < 0.03) {
+      gl_PointSize = 0.0;
+      gl_Position = vec4(2.0, 2.0, 0.0, 1.0);
+      v_color = vec4(0.0);
+      v_size = 0.0;
+      return;
+    }
 
     // Only a scattered subset of dots reacts, each at its own phase and reach.
     // The pointer brushes a fading trail into the field without a circular wash.
-    float scatter = hash2(floor(position / 6.0) + vec2(137.0, 71.0));
+    float scatter = hash2(floor(position / 6.0) + vec2(137.0, 71.0) + u_seed);
     float reach = 26.0 + seed * 48.0;
     float excitement = (1.0 - smoothstep(reach * 0.3, reach, length(position - u_hover.xy))) * u_hover.z;
     for (int i = 0; i < ${MAX_TRAILS}; i++) {
@@ -106,13 +112,13 @@ const VERTEX_SHADER = `#version 300 es
     }
 
     alpha = min(0.95, alpha + illumination * 0.18);
-    float size = amplitude * 6.0 * 0.28 * 1.8 * 2.0 * (30.0 / 32.0)
+    float size = amplitude * 6.0 * 0.28 * 1.8 * 2.0
       * (1.0 + illumination * 0.16 + hoverSignal * 0.13);
     v_size = max(size * u_dpr, 1.0);
     gl_PointSize = v_size + 2.0;
     vec2 clip = (position + offset) / u_viewport * 2.0 - 1.0;
     gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
-    v_color = vec4(color, alpha * min(size * size * u_dpr * u_dpr, 1.0));
+    v_color = vec4(color, alpha);
   }
 `;
 
@@ -144,6 +150,11 @@ function createRenderer(canvas: HTMLCanvasElement) {
     if (!shader) { gl.deleteProgram(program); return null; }
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
+    if (gl.getShaderParameter(shader, gl.COMPILE_STATUS) !== true) {
+      gl.deleteShader(shader);
+      gl.deleteProgram(program);
+      return null;
+    }
     gl.attachShader(program, shader);
     gl.deleteShader(shader);
   }
@@ -158,8 +169,9 @@ function createRenderer(canvas: HTMLCanvasElement) {
   gl.enable(gl.BLEND);
   gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const uniforms = Object.fromEntries(
-    ["viewport", "dpr", "light", "time", "hover", "trails", "trailStrengths", "pulses", "colors", "logo"].map((name) => [name, gl.getUniformLocation(program, `u_${name}`)])
+    ["viewport", "dpr", "light", "time", "seed", "hover", "trails", "trailStrengths", "pulses", "colors", "logo"].map((name) => [name, gl.getUniformLocation(program, `u_${name}`)])
   );
+  gl.uniform2f(uniforms.seed, Math.random() * 4096, Math.random() * 4096);
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
   const { sample } = emptyStateArtwork;
@@ -212,6 +224,8 @@ function createRenderer(canvas: HTMLCanvasElement) {
       }
       gl.uniform4fv(uniforms.pulses, pulseData);
       gl.uniform3fv(uniforms.colors, colors);
+      if (light) gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      else gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.POINTS, 0, count);
     },
@@ -229,7 +243,6 @@ export function attachEmptyStateWaves(host: HTMLDivElement, artwork: SVGSVGEleme
   let unavailable = false;
   let frame = 0;
   let previousFrame = 0;
-  let time = 0;
   let bounds = host.getBoundingClientRect();
   let needsResize = true;
   let light = false;
@@ -269,14 +282,13 @@ export function attachEmptyStateWaves(host: HTMLDivElement, artwork: SVGSVGEleme
     pulses = pulses.filter((pulse) => now - pulse.start < pulse.duration * 1000);
     trails = trails.filter((trail) => now - trail.start < TRAIL_LIFETIME * 1000);
     const elapsed = previousFrame ? Math.min(now - previousFrame, 64) : 0;
-    time += elapsed / 1000;
     const follow = 1 - Math.exp(-elapsed / 80);
     hover.x += (pointer.x - hover.x) * follow;
     hover.y += (pointer.y - hover.y) * follow;
     const fade = 1 - Math.exp(-elapsed / (pointer.inside ? 180 : 350));
     hover.strength += (Number(pointer.inside) - hover.strength) * fade;
     previousFrame = now;
-    renderer.draw(now, time, hover, trails, pulses, light);
+    renderer.draw(now, now / 1000, hover, trails, pulses, light);
     if (canvas.style.display !== "block") {
       canvas.style.display = "block";
       artwork.style.visibility = "hidden";

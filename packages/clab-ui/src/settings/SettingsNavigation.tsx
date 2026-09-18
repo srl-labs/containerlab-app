@@ -5,6 +5,8 @@ import ListItemButton from "@mui/material/ListItemButton";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
+import { floatingRadius } from "../theme/surfaces";
+
 export interface SettingsNavigationItem {
   key: string;
   label: string;
@@ -55,7 +57,7 @@ export function SettingsNavigation({
             }
             aria-current={item.key === active ? "page" : undefined}
             sx={{
-              borderRadius: 1.25,
+              borderRadius: floatingRadius,
               px: 1.25,
               py: 0.9,
               gap: 1,

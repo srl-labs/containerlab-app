@@ -1,7 +1,7 @@
-import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
-import { persistStandaloneTheme } from "./standaloneTheme";
+import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "./standaloneTheme";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
-import { workspaceHost } from "./workspaceHost";
+import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import { connectWorkspaceExplorer, workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import {
   StandaloneLabTabs,
@@ -105,6 +105,7 @@ import {
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
+import { listFileExplorerDirectory, readFileExplorerFile } from "./runtimeApi";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -415,6 +416,9 @@ async function refreshRuntimeStoreForTopology(target: {
   sessionId?: string;
   topologyRef: TopologyRef;
 }): Promise<void> {
+  if (!getStandaloneBackend().capabilities.lifecycle) {
+    return;
+  }
   const endpointId = extractEndpointIdFromTopologyId(
     target.topologyRef.topologyId,
   );
@@ -657,6 +661,35 @@ const explorerBridge = createStandaloneExplorerBridge({
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
 
+connectWorkspaceExplorer({
+  listTopologies: () => topologyManager.listTopologyFiles(),
+  listDirectory: async (parentPath) => {
+    const endpointId = getConnectedEndpointIdForUiAssets();
+    if (!endpointId) return [];
+    return listFileExplorerDirectory(endpointId, parentPath);
+  },
+  subscribe(listener) {
+    const unsubFiles = getStandaloneBackend().subscribeFiles?.(() => listener()) ?? (() => {});
+    const unsubExplorer = explorerBridge.explorer.subscribe(() => listener());
+    return () => {
+      unsubFiles();
+      unsubExplorer();
+    };
+  },
+  createTopology: () => {
+    void explorerBridge.createTopologyFile();
+  },
+  openTopology: (topologyRef) => openTopologyInTab(topologyRef),
+  openFile: async (entry) => {
+    if (entry.topologyRef) {
+      await openTopologyInTab(entry.topologyRef, { endpointId: entry.endpointId });
+      return;
+    }
+    const document = await readFileExplorerFile(entry.endpointId, entry.path);
+    openWorkspaceFileInTab({ ...document, title: entry.name });
+  },
+});
+
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
   return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
 }
@@ -893,6 +926,7 @@ function handleGrafanaBundleExport(msg: VscodeMessage): void {
 }
 
 function handleNodeTerminalCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   if (
     !target ||
@@ -910,6 +944,7 @@ function handleNodeTerminalCommand(msg: VscodeMessage): void {
 }
 
 function handleNodeLogsCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   if (
     !target ||
@@ -926,6 +961,7 @@ function handleNodeLogsCommand(msg: VscodeMessage): void {
 }
 
 function handleNodeLifecycleCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
   let action: "start" | "stop" | "restart" | null = null;
@@ -1374,6 +1410,9 @@ function StandaloneApp() {
     setEndpointSessionDuration,
   } = useAuth();
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
+  const [tabOrientation, setTabOrientation] = useState<TabOrientation>(
+    () => readPersistedTabOrientation() ?? "vertical",
+  );
   const [terminalPreferences, setTerminalPreferences] =
     useState<TerminalPreferences>(() => loadTerminalPreferences());
   const imageManagerOpen = useRuntimeUiStore((state) => state.imageManagerOpen);
@@ -1547,6 +1586,11 @@ function StandaloneApp() {
     persistStandaloneTheme(nextTheme);
   }, []);
 
+  const handleTabOrientationChange = useCallback((next: TabOrientation) => {
+    setTabOrientation(next);
+    persistTabOrientation(next);
+  }, []);
+
   const handleLogout = useCallback(() => {
     topologyManager.closeEventStream();
     clearStandaloneUiState();
@@ -1619,13 +1663,29 @@ function StandaloneApp() {
         runtime={standaloneRuntime!}
         lifecycleActionsAvailable={getStandaloneBackend().capabilities.lifecycle}
         slots={{
-          sidebar: <WorkspaceSidebar colorScheme={theme} onColorSchemeChange={handleThemeChange} onOpenSettings={() => setSettingsOpen(true)} />,
-          header: (
-            <StandaloneLabTabs
-              onActivate={activateLabTabById}
-              onClose={closeLabTabAndActivateNext}
+          sidebar: (
+            <WorkspaceSidebar
+              colorScheme={theme}
+              onColorSchemeChange={handleThemeChange}
+              onOpenSettings={() => setSettingsOpen(true)}
+              tabs={
+                tabOrientation === "vertical" ? (
+                  <StandaloneLabTabs
+                    orientation="vertical"
+                    onActivate={activateLabTabById}
+                    onClose={closeLabTabAndActivateNext}
+                  />
+                ) : undefined
+              }
             />
           ),
+          header:
+            tabOrientation === "horizontal" ? (
+              <StandaloneLabTabs
+                onActivate={activateLabTabById}
+                onClose={closeLabTabAndActivateNext}
+              />
+            ) : undefined,
           content:
             activeLabTabKind === "file" ? (
               <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />
@@ -1668,6 +1728,8 @@ function StandaloneApp() {
             onOpen={() => setSettingsOpen(true)}
             onClose={() => setSettingsOpen(false)}
             currentTheme={theme}
+            tabOrientation={tabOrientation}
+            onTabOrientationChange={handleTabOrientationChange}
             defaultApiUrl={defaultApiUrl}
             endpoints={endpointList}
             onAddEndpoint={handleAddEndpoint}
@@ -1731,6 +1793,8 @@ function SettingsOverlayMounted(props: {
     },
   ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
+  tabOrientation: TabOrientation;
+  onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
 }) {
   return (
@@ -1747,6 +1811,8 @@ function SettingsOverlayMounted(props: {
           onExportEndpoints={props.onExportEndpoints}
           onImportEndpoints={props.onImportEndpoints}
           onThemeChange={props.onThemeChange}
+          tabOrientation={props.tabOrientation}
+          onTabOrientationChange={props.onTabOrientationChange}
           onLogout={props.onLogout}
           onReconnectEndpoint={props.onReconnectEndpoint}
           onRemoveEndpoint={props.onRemoveEndpoint}
