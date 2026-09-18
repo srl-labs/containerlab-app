@@ -28,6 +28,8 @@ const uiSources = Object.entries(uiPackage.exports).flatMap<[string, string]>(([
 const workspaces: Record<string, WorkspaceProjectConfig> = {
   ".": {
     entry: [
+      // Loaded as a module by docs-overrides/main.html.
+      "docs/assets/javascripts/customization.mjs",
       "scripts/run-stress-api-bff.mjs",
       "scripts/stress-api-bff.mjs",
       "scripts/impairment-proxy.mjs",
