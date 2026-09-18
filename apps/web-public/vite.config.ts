@@ -1,13 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
 const clabUiSrc = path.resolve(workspaceRoot, "packages/clab-ui/src");
-// GitHub Pages serves under /<repo>/; Cloudflare sandbox overrides to "/".
-const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? "/containerlab-app/";
+const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? "/";
+const require = createRequire(path.join(__dirname, "package.json"));
+const threeRoot = path.resolve(require.resolve("three"), "../..");
+const threeAliases = [
+  {
+    find: /^three$/,
+    replacement: path.join(threeRoot, "build/three.module.js")
+  },
+  {
+    find: /^three\/addons\//,
+    replacement: `${path.join(threeRoot, "examples/jsm")}/`
+  }
+];
 
 const clabUiSubpathAliases = [
   ["styles/global.css", "styles/global.css"],
@@ -48,6 +60,7 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: [
       ...(command === "serve" ? clabUiDevAliases() : []),
+      ...threeAliases,
       {
         find: /^monaco-editor$/,
         replacement: "@containerlab/clab-ui/monaco/core"
@@ -62,6 +75,10 @@ export default defineConfig(({ command }) => ({
     ]
   },
   optimizeDeps: {
+    entries: [
+      "index.html",
+      "../../packages/clab-ui/src/explorer/containerlabExplorerView.webview.tsx"
+    ],
     include: [
       "react",
       "react-dom",
@@ -80,7 +97,22 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 5174,
+    host: true,
     open: false,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+    hmr: {
+      overlay: true,
+    },
+    warmup: {
+      clientFiles: [
+        "./src/main.tsx",
+        "./src/standaloneApp.tsx",
+        "../../packages/clab-ui/src/explorer/containerlabExplorerView.webview.tsx"
+      ]
+    },
     fs: {
       allow: [
         __dirname,

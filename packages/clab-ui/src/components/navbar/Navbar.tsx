@@ -1,6 +1,5 @@
-// Navbar for React TopoViewer.
+// Floating action bar for React TopoViewer.
 import React from "react";
-import AppBar from "@mui/material/AppBar";
 import Badge from "@mui/material/Badge";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
@@ -8,9 +7,9 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
+import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
-import Typography from "@mui/material/Typography";
 import AccountTreeIcon from "@mui/icons-material/AccountTree";
 import CheckIcon from "@mui/icons-material/Check";
 import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
@@ -22,11 +21,11 @@ import LabelIcon from "@mui/icons-material/Label";
 import LinkIcon from "@mui/icons-material/Link";
 import LockIcon from "@mui/icons-material/Lock";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
 import PhotoCameraBackIcon from "@mui/icons-material/PhotoCameraBack";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RedoIcon from "@mui/icons-material/Redo";
 import ReplayIcon from "@mui/icons-material/Replay";
-import SearchIcon from "@mui/icons-material/Search";
 import SettingsIcon from "@mui/icons-material/Settings";
 import StopIcon from "@mui/icons-material/Stop";
 import UndoIcon from "@mui/icons-material/Undo";
@@ -34,23 +33,26 @@ import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 
+import type { ReactFlowInstance } from "@xyflow/react";
 import type { LinkLabelMode } from "../../stores/topoViewerStore";
 import {
   useDeploymentState,
   useIsDirty,
   useIsLocked,
   useIsProcessing,
-  useLabName,
   useMode,
   useTopoViewerActions
 } from "../../stores/topoViewerStore";
 import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
-
-import { ContainerlabLogo } from "./ContainerlabLogo";
+import { FindNodeSearchWidget } from "../panels/find-node/FindNodeSearchWidget";
 
 const ERROR_MAIN = "error.main";
 const SUCCESS_MAIN = "success.main";
+/** Below the context panel drawer (1200); menus still portal above. */
+const NAVBAR_Z_INDEX = 1100;
+/** Inset of the floating bar from the canvas edges (px). */
+export const FLOATING_NAVBAR_INSET = 8;
 
 function isGeneratedLayoutOption(layout: LayoutOption): boolean {
   return layout === "force" || layout === "auto" || layout === "radial";
@@ -78,12 +80,14 @@ function getToolbarAnchorPosition(
 export interface NavbarProps {
   lifecycleActionsAvailable?: boolean;
   hasActiveTopology?: boolean;
+  /** Which canvas corner the floating bar docks to. */
+  barSide?: "left" | "right";
+  rfInstance?: ReactFlowInstance | null;
   onZoomToFit?: () => void;
   layout: LayoutOption;
   onLayoutChange: (layout: LayoutOption) => void;
   onLabSettings?: () => void;
   onToggleSplit?: () => void;
-  onFindNode?: (position: { top: number; left: number }) => void;
   onCaptureViewport?: () => void;
   onShowShortcuts?: () => void;
   onShowAbout?: () => void;
@@ -96,12 +100,6 @@ export interface NavbarProps {
   canRedo?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
-  /** Easter egg click progress (0-10) */
-  logoClickProgress?: number;
-  /** Whether party mode is active (logo has exploded) */
-  isPartyMode?: boolean;
-  /** Easter egg logo click handler and state */
-  onLogoClick?: () => void;
   linkLabelMode: LinkLabelMode;
   onLinkLabelModeChange: (mode: LinkLabelMode) => void;
   showDummyLinks?: boolean;
@@ -117,12 +115,13 @@ export interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   hasActiveTopology = true,
   lifecycleActionsAvailable = true,
+  barSide = "right",
+  rfInstance = null,
   onZoomToFit,
   layout,
   onLayoutChange,
   onLabSettings,
   onToggleSplit,
-  onFindNode,
   onCaptureViewport,
   onShowShortcuts,
   onShowAbout,
@@ -133,9 +132,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   canRedo = false,
   onUndo,
   onRedo,
-  onLogoClick,
-  logoClickProgress = 0,
-  isPartyMode = false,
   linkLabelMode,
   onLinkLabelModeChange,
   showDummyLinks = true,
@@ -144,7 +140,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const isTopologyActive = hasActiveTopology;
   const mode = useMode();
-  const labName = useLabName();
   const isLocked = useIsLocked();
   const isProcessing = useIsProcessing();
   const deploymentState = useDeploymentState();
@@ -320,53 +315,76 @@ export const Navbar: React.FC<NavbarProps> = ({
     [isGeneratedLayoutDisabled, onLayoutChange]
   );
 
-  const handleFindNodeClick = React.useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (!isTopologyActive) return;
-      const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
-      if (anchorPosition) {
-        onFindNode?.(anchorPosition);
-      }
-    },
-    [isTopologyActive, onFindNode]
-  );
+  const [moreMenuPosition, setMoreMenuPosition] = React.useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const moreMenuOpen = Boolean(moreMenuPosition);
+
+  const handleMoreMenuOpen = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const anchorPosition = getToolbarAnchorPosition(appBarRef.current, event.currentTarget);
+    if (anchorPosition) {
+      setMoreMenuPosition(anchorPosition);
+    }
+  }, []);
+
+  const handleMoreMenuClose = React.useCallback(() => {
+    setMoreMenuPosition(null);
+  }, []);
+
+  const handleLabSettings = React.useCallback(() => {
+    setMoreMenuPosition(null);
+    onLabSettings?.();
+  }, [onLabSettings]);
+
+  const handleShortcuts = React.useCallback(() => {
+    setMoreMenuPosition(null);
+    onShowShortcuts?.();
+  }, [onShowShortcuts]);
+
+  const handleAbout = React.useCallback(() => {
+    setMoreMenuPosition(null);
+    onShowAbout?.();
+  }, [onShowAbout]);
 
   React.useEffect(() => {
     if (isTopologyActive) return;
     setDeployMenuPosition(null);
     setLayoutMenuPosition(null);
     setLinkLabelMenuPosition(null);
+    setMoreMenuPosition(null);
   }, [isTopologyActive]);
 
   return (
-    <AppBar
+    <Paper
       ref={appBarRef}
-      position="static"
       elevation={0}
-      sx={{ borderBottom: 1, borderColor: "divider" }}
+      data-testid="topoviewer-navbar"
+      sx={{
+        position: "absolute",
+        top: FLOATING_NAVBAR_INSET,
+        ...(barSide === "left"
+          ? { left: FLOATING_NAVBAR_INSET }
+          : { right: FLOATING_NAVBAR_INSET }),
+        width: "auto",
+        maxWidth: `calc(100% - ${FLOATING_NAVBAR_INSET * 2}px)`,
+        overflow: "hidden",
+        borderRadius: "9px",
+        zIndex: NAVBAR_Z_INDEX,
+        bgcolor:
+          "color-mix(in srgb, var(--vscode-editor-background, #000) 28%, transparent)",
+        backdropFilter: "blur(24px) saturate(1.6)",
+        WebkitBackdropFilter: "blur(24px) saturate(1.6)",
+        border: 1,
+        borderColor: "color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent)",
+        boxShadow: "none"
+      }}
     >
       <Toolbar
         variant="dense"
         disableGutters
         sx={{ minHeight: 40, px: 1, display: "flex", alignItems: "center", gap: 0.5 }}
       >
-        {/* Left: Logo + Title */}
-        <IconButton size="small" onClick={onLogoClick}>
-          <ContainerlabLogo clickProgress={logoClickProgress} isExploded={isPartyMode} />
-        </IconButton>
-        <Typography
-          variant="h5"
-          data-testid="navbar-lab-name"
-          sx={{
-            fontWeight: 500,
-            ml: 0.5,
-            lineHeight: 1,
-            flexGrow: 1
-          }}
-        >
-          {labName || "TopoViewer"}
-        </Typography>
-
         {lifecycleActionsAvailable && (
           <>
             {/* Apply topology (deploys when absent, reconciles when running) */}
@@ -526,19 +544,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </Tooltip>
 
-        {/* Lab Settings */}
-        <Tooltip title="Lab Settings">
-          <span>
-            <IconButton
-              size="small"
-              onClick={onLabSettings}
-              disabled={!isTopologyActive}
-              data-testid="navbar-lab-settings"
-            >
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <FindNodeSearchWidget
+          isActive={isTopologyActive}
+          rfInstance={rfInstance}
+          variant="toolbar"
+        />
 
         {/* Undo - only show in edit mode */}
         {isEditMode && (
@@ -676,20 +686,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </MenuItem>
         </Menu>
 
-        {/* Find Node */}
-        <Tooltip title="Find Node">
-          <span>
-            <IconButton
-              size="small"
-              onClick={handleFindNodeClick}
-              disabled={!isTopologyActive}
-              data-testid="navbar-find-node"
-            >
-              <SearchIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-
         {/* Links Dropdown */}
         <Tooltip title="Links">
           <span>
@@ -774,13 +770,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
 
-        {/* Shortcuts */}
-        <Tooltip title="Shortcuts">
-          <IconButton size="small" onClick={onShowShortcuts} data-testid="navbar-shortcuts">
-            <KeyboardIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-
         {/* Toggle Shortcut Display */}
         <Tooltip title="Toggle Shortcut Display">
           <IconButton
@@ -796,14 +785,51 @@ export const Navbar: React.FC<NavbarProps> = ({
           </IconButton>
         </Tooltip>
 
-        {/* About */}
-        <Tooltip title="About TopoViewer">
-          <IconButton size="small" onClick={onShowAbout} data-testid="navbar-about">
-            <InfoIcon fontSize="small" />
+        <Tooltip title="More">
+          <IconButton
+            size="small"
+            onClick={handleMoreMenuOpen}
+            aria-haspopup="true"
+            aria-expanded={moreMenuOpen ? "true" : undefined}
+            data-testid="navbar-more"
+          >
+            <MoreVertIcon fontSize="small" />
           </IconButton>
         </Tooltip>
+        <Menu
+          id="navbar-more-menu"
+          open={moreMenuOpen}
+          onClose={handleMoreMenuClose}
+          anchorReference="anchorPosition"
+          anchorPosition={moreMenuPosition ?? undefined}
+          transformOrigin={{ vertical: "top", horizontal: "center" }}
+        >
+          <MenuItem
+            onClick={handleLabSettings}
+            disabled={!isTopologyActive}
+            data-testid="navbar-lab-settings"
+          >
+            <ListItemIcon>
+              <SettingsIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Lab Settings</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={handleShortcuts} data-testid="navbar-shortcuts">
+            <ListItemIcon>
+              <KeyboardIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Keyboard Shortcuts</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={handleAbout} data-testid="navbar-about">
+            <ListItemIcon>
+              <InfoIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>Info</ListItemText>
+          </MenuItem>
+        </Menu>
       </Toolbar>
-    </AppBar>
+    </Paper>
   );
 };
 /* eslint-enable complexity */

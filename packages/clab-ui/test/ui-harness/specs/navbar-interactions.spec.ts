@@ -26,15 +26,13 @@ test.describe("Navbar Interactions", () => {
   test.describe("Basic Button Visibility", () => {
     test("navbar has all expected buttons", async ({ page }) => {
       const expectedButtons = [
-        "navbar-lab-settings",
         "navbar-fit-viewport",
         "navbar-split-view",
         "navbar-layout",
         "navbar-find-node",
         "navbar-link-labels",
         "navbar-capture",
-        "navbar-shortcuts",
-        "navbar-about"
+        "navbar-more"
       ];
 
       for (const testId of expectedButtons) {
@@ -133,6 +131,7 @@ test.describe("Navbar Interactions", () => {
       const beforeWidth = beforeBox?.width ?? 0;
       expect(beforeWidth).toBeGreaterThan(0);
 
+      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
@@ -168,6 +167,7 @@ test.describe("Navbar Interactions", () => {
 
   test.describe("Grid Settings", () => {
     test("grid settings are available in Lab Settings > Appearance", async ({ page }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
@@ -195,6 +195,7 @@ test.describe("Navbar Interactions", () => {
     test("shortcuts and about buttons open their respective modals", async ({ page }) => {
       // Test shortcuts modal
       const shortcutsBtn = page.locator('[data-testid="navbar-shortcuts"]');
+      await page.locator('[data-testid="navbar-more"]').click();
       await shortcutsBtn.click();
       await page.waitForTimeout(300);
 
@@ -208,6 +209,7 @@ test.describe("Navbar Interactions", () => {
 
       // Test about modal
       const aboutBtn = page.locator('[data-testid="navbar-about"]');
+      await page.locator('[data-testid="navbar-more"]').click();
       await aboutBtn.click();
       await page.waitForTimeout(300);
 

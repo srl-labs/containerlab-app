@@ -1,6 +1,6 @@
 /* eslint-disable import-x/max-dependencies */
 // Context-sensitive panel with palette, info, and editor tabs.
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -271,6 +271,23 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   const sideRef = useRef(side);
   sideRef.current = side;
   const { panelWidth, isDragging, handleResizeStart } = usePanelResize(sideRef);
+
+  useEffect(() => {
+    const app = document.querySelector("[data-testid='topoviewer-app']");
+    if (!(app instanceof HTMLElement)) return;
+    app.style.setProperty(
+      "--clab-ui-panel-right",
+      side === "right" && isOpen ? `${panelWidth}px` : "0px"
+    );
+    app.style.setProperty(
+      "--clab-ui-panel-left",
+      side === "left" && isOpen ? `${panelWidth}px` : "0px"
+    );
+    return () => {
+      app.style.removeProperty("--clab-ui-panel-right");
+      app.style.removeProperty("--clab-ui-panel-left");
+    };
+  }, [isOpen, panelWidth, side]);
 
   const setFooterRef = useCallback((ref: FooterRef | null) => {
     const changed = hasFooterRefChanged(footerRef.current, ref);

@@ -97,9 +97,9 @@ export interface PanelVisibility {
 const PANEL_SIDE_KEY = "contextPanelSide";
 
 function useContextPanel() {
-  const [isContextPanelOpen, setIsContextPanelOpen] = useState(true);
+  const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
   const [contextPanelOpenReason, setContextPanelOpenReason] = useState<"manual" | "auto" | null>(
-    "manual"
+    null
   );
   const [panelSide, setPanelSide] = useState<"left" | "right">(() => {
     try {

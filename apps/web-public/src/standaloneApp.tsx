@@ -21,7 +21,6 @@ import {
   createRoot,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   useTopoViewerStore,
@@ -30,14 +29,16 @@ import {
   type TopologySnapshot,
 } from "./mainUiDependencies";
 
-import { LabTabsBar } from "./components/LabTabsBar";
+import { SandboxSidebar } from "./components/SandboxSidebar";
+import { AttractorEmptyState } from "./components/AttractorEmptyState";
+import { FileEditorTabPanel } from "./components/FileEditorTabPanel";
+import { SettingsOverlay } from "./components/SettingsOverlay";
 import {
   createStandaloneTopologyManager,
   extractEndpointIdFromTopologyId,
   isStandaloneLifecycleCommand,
   labsEqualForExplorer,
   useAuth,
-  useEndpointStore,
   useEventStream,
   useWorkspaceFileEvents,
   useLabStore,
@@ -82,7 +83,7 @@ import {
   parseCustomNodeTemplatesExportFile,
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
-import { getSandboxBackend } from "./sandboxBackend";
+import { getSandboxBackend, SANDBOX_ENDPOINT } from "./sandboxBackend";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -93,16 +94,6 @@ function loadImageManagerModule(): Promise<ImageManagerModule> {
   return imageManagerModulePromise;
 }
 
-const LazyAttractorEmptyState = lazy(async () => {
-  const module = await import("./components/AttractorEmptyState");
-  return { default: module.AttractorEmptyState };
-});
-
-const LazyFileEditorTabPanel = lazy(async () => {
-  const module = await import("./components/FileEditorTabPanel");
-  return { default: module.FileEditorTabPanel };
-});
-
 const FILE_TAB_TOPOLOGY_CHROME_CSS = `
   [data-testid="context-panel"],
   [data-testid="panel-toggle-btn"],
@@ -110,15 +101,10 @@ const FILE_TAB_TOPOLOGY_CHROME_CSS = `
     display: none !important;
   }
 
-  header.MuiAppBar-root:has([data-testid="navbar-lab-name"]) {
+  [data-testid="topoviewer-navbar"] {
     display: none !important;
   }
 `;
-
-const LazySettingsOverlay = lazy(async () => {
-  const module = await import("./components/SettingsOverlay");
-  return { default: module.SettingsOverlay };
-});
 
 const LazyContainerlabImageManagerDialog = lazy(async () => {
   const module = await loadImageManagerModule();
@@ -340,7 +326,7 @@ currentTheme = loadPersistedTheme();
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
 function getConfiguredEndpoints() {
-  return Array.from(useEndpointStore.getState().endpoints.values());
+  return [SANDBOX_ENDPOINT];
 }
 
 function getDefaultEndpointId(): string | undefined {
@@ -999,67 +985,6 @@ interface TabsHostResolution {
   host: HTMLDivElement | null;
 }
 
-function resolveLabTabsHostElement(): TabsHostResolution {
-  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
-  if (!(appRoot instanceof HTMLDivElement)) {
-    return { created: false, host: null };
-  }
-
-  const existingHost = appRoot.querySelector(
-    "[data-standalone-lab-tabs-host='true']",
-  );
-  if (existingHost instanceof HTMLDivElement) {
-    return { created: false, host: existingHost };
-  }
-
-  const mainElement = appRoot.querySelector("main");
-  if (!(mainElement instanceof HTMLElement)) {
-    return { created: false, host: null };
-  }
-
-  const host = document.createElement("div");
-  host.setAttribute("data-standalone-lab-tabs-host", "true");
-  host.style.position = "absolute";
-  host.style.top = "0";
-  host.style.left = "0";
-  host.style.right = "0";
-  host.style.zIndex = "7";
-  host.style.pointerEvents = "auto";
-  mainElement.insertBefore(host, mainElement.firstChild);
-  return { created: true, host };
-}
-
-function resolveLabEmptyStateHostElement(): TabsHostResolution {
-  const appRoot = document.querySelector("[data-testid='topoviewer-app']");
-  if (!(appRoot instanceof HTMLDivElement)) {
-    return { created: false, host: null };
-  }
-
-  const mainElement = appRoot.querySelector("main");
-  if (!(mainElement instanceof HTMLElement)) {
-    return { created: false, host: null };
-  }
-
-  const existingHost = mainElement.querySelector(
-    "[data-standalone-lab-empty-host='true']",
-  );
-  if (existingHost instanceof HTMLDivElement) {
-    return { created: false, host: existingHost };
-  }
-
-  const host = document.createElement("div");
-  host.setAttribute("data-standalone-lab-empty-host", "true");
-  host.style.position = "absolute";
-  host.style.top = "0";
-  host.style.left = "0";
-  host.style.right = "0";
-  host.style.bottom = "0";
-  host.style.zIndex = "6";
-  host.style.pointerEvents = "none";
-  mainElement.appendChild(host);
-  return { created: true, host };
-}
-
 function resolveFileEditorHostElement(): TabsHostResolution {
   const appRoot = document.querySelector("[data-testid='topoviewer-app']");
   if (!(appRoot instanceof HTMLDivElement)) {
@@ -1075,13 +1000,14 @@ function resolveFileEditorHostElement(): TabsHostResolution {
     "[data-standalone-file-editor-host='true']",
   );
   if (existingHost instanceof HTMLDivElement) {
+    existingHost.style.top = "0";
     return { created: false, host: existingHost };
   }
 
   const host = document.createElement("div");
   host.setAttribute("data-standalone-file-editor-host", "true");
   host.style.position = "absolute";
-  host.style.top = "45px";
+  host.style.top = "0";
   host.style.left = "0";
   host.style.right = "0";
   host.style.bottom = "0";
@@ -1089,89 +1015,6 @@ function resolveFileEditorHostElement(): TabsHostResolution {
   host.style.pointerEvents = "none";
   mainElement.appendChild(host);
   return { created: true, host };
-}
-
-function useLabTabsPortalHost(): HTMLDivElement | null {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let ownedHost: HTMLDivElement | null = null;
-    let observer: MutationObserver | null = null;
-
-    const attach = () => {
-      const resolution = resolveLabTabsHostElement();
-      if (!resolution.host) {
-        return false;
-      }
-      if (resolution.created) {
-        ownedHost = resolution.host;
-      }
-      if (mounted) {
-        setHost(resolution.host);
-      }
-      return true;
-    };
-
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) {
-          observer?.disconnect();
-          observer = null;
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-      if (ownedHost && ownedHost.parentElement) {
-        ownedHost.remove();
-      }
-      setHost(null);
-    };
-  }, []);
-
-  return host;
-}
-
-function StandaloneLabTabsMount() {
-  const host = useLabTabsPortalHost();
-  const tabs = useLabTabsStore((state) => state.tabs);
-  const activeTabId = useLabTabsStore((state) => state.activeTabId);
-  const endpoints = useEndpointStore((state) => state.endpoints);
-
-  const endpointLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    for (const endpoint of endpoints.values()) {
-      labels.set(endpoint.id, endpoint.label);
-    }
-    return labels;
-  }, [endpoints]);
-
-  const handleActivate = useCallback((tabId: string) => {
-    void activateLabTabById(tabId);
-  }, []);
-
-  const handleClose = useCallback((tabId: string) => {
-    void closeLabTabAndActivateNext(tabId);
-  }, []);
-
-  if (!host) {
-    return null;
-  }
-
-  return createPortal(
-    <LabTabsBar
-      activeTabId={activeTabId}
-      endpointLabels={endpointLabels}
-      onActivate={handleActivate}
-      onClose={handleClose}
-      tabs={tabs}
-    />,
-    host,
-  );
 }
 
 function useFileEditorPortalHost(): HTMLDivElement | null {
@@ -1235,207 +1078,17 @@ function StandaloneFileEditorTabMount() {
   }
 
   return createPortal(
-    <Suspense fallback={null}>
-      <LazyFileEditorTabPanel onClose={handleClose} tab={activeFileTab} />
-    </Suspense>,
+    <FileEditorTabPanel onClose={handleClose} tab={activeFileTab} />,
     host,
   );
 }
 
-function useLabEmptyStatePortalHost(): HTMLDivElement | null {
-  const [host, setHost] = useState<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    let ownedHost: HTMLDivElement | null = null;
-    let observer: MutationObserver | null = null;
-
-    const attach = () => {
-      const resolution = resolveLabEmptyStateHostElement();
-      if (!resolution.host) {
-        return false;
-      }
-      if (resolution.created) {
-        ownedHost = resolution.host;
-      }
-      if (mounted) {
-        setHost(resolution.host);
-      }
-      return true;
-    };
-
-    if (!attach()) {
-      observer = new MutationObserver(() => {
-        if (attach()) {
-          observer?.disconnect();
-          observer = null;
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    return () => {
-      mounted = false;
-      observer?.disconnect();
-      if (ownedHost && ownedHost.parentElement) {
-        ownedHost.remove();
-      }
-      setHost(null);
-    };
-  }, []);
-
-  return host;
-}
-
-function computeContextPanelOcclusion(host: HTMLDivElement | null): {
-  left: number;
-  right: number;
-} {
-  if (!host) {
-    return { left: 0, right: 0 };
-  }
-  const hostRect = host.getBoundingClientRect();
-  if (hostRect.width <= 0 || hostRect.height <= 0) {
-    return { left: 0, right: 0 };
-  }
-
-  const panel = document.querySelector<HTMLElement>(
-    "[data-testid='context-panel'] .MuiDrawer-paper",
-  );
-  if (!panel) {
-    return { left: 0, right: 0 };
-  }
-
-  const panelRect = panel.getBoundingClientRect();
-  const overlapLeft = Math.max(hostRect.left, panelRect.left);
-  const overlapRight = Math.min(hostRect.right, panelRect.right);
-  const overlapWidth = Math.max(0, overlapRight - overlapLeft);
-  if (overlapWidth <= 0) {
-    return { left: 0, right: 0 };
-  }
-
-  const panelMid = (panelRect.left + panelRect.right) / 2;
-  const hostMid = (hostRect.left + hostRect.right) / 2;
-  return panelMid < hostMid
-    ? { left: overlapWidth, right: 0 }
-    : { left: 0, right: overlapWidth };
-}
-
-function useEmptyStateOcclusion(host: HTMLDivElement | null): {
-  left: number;
-  right: number;
-} {
-  const [occlusion, setOcclusion] = useState<{ left: number; right: number }>({
-    left: 0,
-    right: 0,
-  });
-
-  useEffect(() => {
-    if (!host) {
-      setOcclusion({ left: 0, right: 0 });
-      return;
-    }
-
-    let observer: MutationObserver | null = null;
-    let resizeObserver: ResizeObserver | null = null;
-    let rafId: number | null = null;
-
-    const update = () => {
-      setOcclusion((previous) => {
-        const next = computeContextPanelOcclusion(host);
-        if (next.left === previous.left && next.right === previous.right) {
-          return previous;
-        }
-        return next;
-      });
-    };
-
-    const scheduleUpdate = () => {
-      if (rafId !== null) {
-        return;
-      }
-      rafId = window.requestAnimationFrame(() => {
-        rafId = null;
-        update();
-      });
-    };
-
-    const attachPanelResizeObserver = () => {
-      resizeObserver?.disconnect();
-      resizeObserver = new ResizeObserver(() => {
-        scheduleUpdate();
-      });
-      resizeObserver.observe(host);
-      const panel = document.querySelector<HTMLElement>(
-        "[data-testid='context-panel'] .MuiDrawer-paper",
-      );
-      if (panel) {
-        resizeObserver.observe(panel);
-      }
-    };
-
-    observer = new MutationObserver(() => {
-      attachPanelResizeObserver();
-      scheduleUpdate();
-    });
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["class", "style"],
-    });
-
-    window.addEventListener("resize", scheduleUpdate);
-    attachPanelResizeObserver();
-    update();
-
-    return () => {
-      window.removeEventListener("resize", scheduleUpdate);
-      observer?.disconnect();
-      resizeObserver?.disconnect();
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-    };
-  }, [host]);
-
-  return occlusion;
-}
-
-function StandaloneLabEmptyStateMount() {
-  const host = useLabEmptyStatePortalHost();
-  const tabs = useLabTabsStore((state) => state.tabs);
-  const occlusion = useEmptyStateOcclusion(host);
-  const [showEmptyState, setShowEmptyState] = useState(false);
-
-  useEffect(() => {
-    if (!host || tabs.length > 0) {
-      setShowEmptyState(false);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setShowEmptyState(true);
-    }, 750);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [host, tabs.length]);
-
-  if (!host || tabs.length > 0 || !showEmptyState) {
+function StandaloneLabEmptyState() {
+  const hasTabs = useLabTabsStore((state) => state.tabs.length > 0);
+  if (hasTabs) {
     return null;
   }
-
-  return createPortal(
-    <Suspense fallback={null}>
-      <LazyAttractorEmptyState
-        occlusionLeft={occlusion.left}
-        occlusionRight={occlusion.right}
-      />
-    </Suspense>,
-    host,
-  );
+  return <AttractorEmptyState />;
 }
 
 /**
@@ -1609,10 +1262,30 @@ function StandaloneApp() {
         initialData={initialData}
         runtime={standaloneRuntime!}
         lifecycleActionsAvailable={false}
+        slots={{
+          emptyState: <StandaloneLabEmptyState />,
+          sidebar: (
+            <SandboxSidebar
+              colorScheme={theme}
+              onColorSchemeChange={handleThemeChange}
+              onActivateTab={(tabId) => {
+                void activateLabTabById(tabId);
+              }}
+              onCloseTab={(tabId) => {
+                void closeLabTabAndActivateNext(tabId);
+              }}
+              onOpenFile={openWorkspaceFileInTab}
+              onOpenTopology={(topologyRef) =>
+                openTopologyInTab(topologyRef, {
+                  deploymentState: "undeployed",
+                  endpointId: SANDBOX_ENDPOINT.id,
+                })
+              }
+            />
+          ),
+        }}
       />
-      <StandaloneLabTabsMount />
       <StandaloneFileEditorTabMount />
-      <StandaloneLabEmptyStateMount />
       {runtimeDialogsReady ? (
         <>
           <MuiThemeProvider>
@@ -1666,14 +1339,12 @@ function SettingsOverlayMounted(props: {
 
   return createPortal(
     <MuiThemeProvider>
-      <Suspense fallback={null}>
-        <LazySettingsOverlay
+      <SettingsOverlay
           currentTheme={props.currentTheme}
           onThemeChange={props.onThemeChange}
           onSaveTerminalPreferences={props.onSaveTerminalPreferences}
           terminalPreferences={props.terminalPreferences}
         />
-      </Suspense>
     </MuiThemeProvider>,
     overlayContainer,
   );

@@ -124,11 +124,6 @@ const LazyAboutModal = React.lazy(async () => {
   return { default: module.AboutModal };
 });
 
-const LazyFindNodePopover = React.lazy(async () => {
-  const module = await import("./components/panels/FindNodePopover");
-  return { default: module.FindNodePopover };
-});
-
 const TOPO_NODE_TYPES = new Set<string>([
   "topology-node",
   "network-node",
@@ -306,6 +301,8 @@ export interface AppLayoutOptions {
     content?: React.ReactNode;
     /** Content rendered over an empty canvas. */
     emptyState?: React.ReactNode;
+    /** Host-owned left chrome; replaces the built-in dev explorer pane when set. */
+    sidebar?: React.ReactNode;
   };
   lifecycleActionsAvailable?: boolean;
 }
@@ -717,8 +714,8 @@ export const AppContent: React.FC<AppContentProps> = ({
   const interactionMode = getInteractionMode(state.mode, isProcessing);
   const isDevMock = isDevMockWebview(host);
   const showDevExplorer = React.useMemo(
-    () => isDevMock && !isDevExplorerDisabledByUrl(),
-    [isDevMock]
+    () => !slots?.sidebar && isDevMock && !isDevExplorerDisabledByUrl(),
+    [isDevMock, slots?.sidebar]
   );
   useDevMockTrafficStats(shouldCollectDevMockTrafficStats(host, isDevMock, interactionMode));
   const { layoutRef, devExplorerWidth, isDevExplorerDragging, handleDevExplorerResizeStart } =
@@ -1364,11 +1361,8 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (hasActiveTopology) {
       return;
     }
-    if (!panelVisibility.isContextPanelOpen) {
-      panelVisibility.handleOpenContextPanel("manual");
-    }
-    if (panelVisibility.findPopoverPosition !== null) {
-      panelVisibility.handleCloseFindPopover();
+    if (panelVisibility.isContextPanelOpen) {
+      panelVisibility.handleCloseContextPanel();
     }
     if (panelVisibility.showLabSettingsModal) {
       panelVisibility.handleCloseLabSettings();
@@ -1459,40 +1453,12 @@ export const AppContent: React.FC<AppContentProps> = ({
           onLockedAction={handleLockedAction}
           runtimeRef={annotationRuntimeRef}
         />
-        {!viewerOnly && (
-          <Navbar
-            lifecycleActionsAvailable={lifecycleActionsAvailable}
-            hasActiveTopology={hasActiveTopology}
-            onZoomToFit={handleZoomToFit}
-            layout={layoutControls.layout}
-            onLayoutChange={layoutControls.setLayout}
-            onLabSettings={panelVisibility.handleShowLabSettings}
-            onToggleSplit={handleToggleSplit}
-            onFindNode={panelVisibility.handleOpenFindPopover}
-            onCaptureViewport={panelVisibility.handleShowSvgExport}
-            onShowShortcuts={panelVisibility.handleShowShortcuts}
-            onShowAbout={panelVisibility.handleShowAbout}
-            onShowBulkLink={panelVisibility.handleShowBulkLink}
-            linkLabelMode={state.linkLabelMode}
-            onLinkLabelModeChange={handleLinkLabelModeChange}
-            showDummyLinks={state.showDummyLinks}
-            onToggleDummyLinks={handleToggleDummyLinks}
-            shortcutDisplayEnabled={shortcutDisplay.isEnabled}
-            onToggleShortcutDisplay={shortcutDisplay.toggle}
-            canUndo={undoRedo.canUndo}
-            canRedo={undoRedo.canRedo}
-            onUndo={undoRedo.undo}
-            onRedo={undoRedo.redo}
-            onLogoClick={easterEgg.handleLogoClick}
-            logoClickProgress={easterEgg.state.progress}
-            isPartyMode={easterEgg.state.isPartyMode}
-            renderDeployMenuItems={renderDeployMenuItems}
-          />
-        )}
         <Box
           ref={layoutRef}
           sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
         >
+          {slots?.emptyState}
+          {slots?.sidebar}
           {showDevExplorer && (
             <Box
               sx={{
@@ -1628,18 +1594,49 @@ export const AppContent: React.FC<AppContentProps> = ({
             {slots?.header && <Box sx={{ flexShrink: 0 }}>{slots.header}</Box>}
             <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
               <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
-                <GraphCanvasMain
-                  canvasRef={reactFlowRef}
-                  canvasProps={canvasProps}
-                  showDummyLinks={state.showDummyLinks}
-                  edgeAnnotationLookup={edgeAnnotationLookup}
-                  endpointLabelOffset={state.endpointLabelOffset}
-                  endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
-                />
-                <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+                {hasActiveTopology && (
+                  <>
+                    <GraphCanvasMain
+                      canvasRef={reactFlowRef}
+                      canvasProps={canvasProps}
+                      showDummyLinks={state.showDummyLinks}
+                      edgeAnnotationLookup={edgeAnnotationLookup}
+                      endpointLabelOffset={state.endpointLabelOffset}
+                      endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
+                    />
+                    <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+                  </>
+                )}
               </Box>
               {slots?.content}
-              {slots?.emptyState}
+              {!viewerOnly && hasActiveTopology && (
+                <Navbar
+                  lifecycleActionsAvailable={lifecycleActionsAvailable}
+                  hasActiveTopology={hasActiveTopology}
+                  barSide="right"
+                  rfInstance={rfInstance}
+                  onZoomToFit={handleZoomToFit}
+                  layout={layoutControls.layout}
+                  onLayoutChange={layoutControls.setLayout}
+                  onLabSettings={panelVisibility.handleShowLabSettings}
+                  onToggleSplit={handleToggleSplit}
+                  onCaptureViewport={panelVisibility.handleShowSvgExport}
+                  onShowShortcuts={panelVisibility.handleShowShortcuts}
+                  onShowAbout={panelVisibility.handleShowAbout}
+                  onShowBulkLink={panelVisibility.handleShowBulkLink}
+                  linkLabelMode={state.linkLabelMode}
+                  onLinkLabelModeChange={handleLinkLabelModeChange}
+                  showDummyLinks={state.showDummyLinks}
+                  onToggleDummyLinks={handleToggleDummyLinks}
+                  shortcutDisplayEnabled={shortcutDisplay.isEnabled}
+                  onToggleShortcutDisplay={shortcutDisplay.toggle}
+                  canUndo={undoRedo.canUndo}
+                  canRedo={undoRedo.canRedo}
+                  onUndo={undoRedo.undo}
+                  onRedo={undoRedo.redo}
+                  renderDeployMenuItems={renderDeployMenuItems}
+                />
+              )}
               <EasterEggRenderer easterEgg={easterEgg} />
               <ToastContainer toasts={toasts} onDismiss={dismissToast} />
             </Box>
@@ -1695,17 +1692,6 @@ export const AppContent: React.FC<AppContentProps> = ({
           </React.Suspense>
         ) : null}
         {aboutModal}
-
-        {/* Popovers */}
-        {panelVisibility.findPopoverPosition ? (
-          <React.Suspense fallback={null}>
-            <LazyFindNodePopover
-              anchorPosition={panelVisibility.findPopoverPosition}
-              onClose={panelVisibility.handleCloseFindPopover}
-              rfInstance={rfInstance}
-            />
-          </React.Suspense>
-        ) : null}
       </Box>
     </MuiThemeProvider>
   );

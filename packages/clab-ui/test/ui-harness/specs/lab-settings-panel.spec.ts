@@ -4,6 +4,7 @@ const SIMPLE_FILE = "simple.clab.yml";
 
 // Test selectors for the new MUI Dialog-based lab settings
 const SEL_LAB_SETTINGS_BTN = '[data-testid="navbar-lab-settings"]';
+const SEL_NAVBAR_MORE = '[data-testid="navbar-more"]';
 const SEL_LAB_SETTINGS_MODAL = '[data-testid="lab-settings-modal"]';
 const SEL_LAB_SETTINGS_CLOSE_BTN = '[data-testid="lab-settings-close-btn"]';
 const SEL_LAB_SETTINGS_TAB_BASIC = '[data-testid="lab-settings-tab-basic"]';
@@ -33,6 +34,7 @@ test.describe("Lab Settings Modal", () => {
   });
 
   async function openModal(page: any) {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
     const modal = page.locator(SEL_LAB_SETTINGS_MODAL);
@@ -65,6 +67,7 @@ test.describe("Lab Settings Modal", () => {
   }
 
   test("opens lab settings modal via navbar button", async ({ page }) => {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -73,6 +76,7 @@ test.describe("Lab Settings Modal", () => {
   });
 
   test("lab settings modal has correct title", async ({ page }) => {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -82,6 +86,7 @@ test.describe("Lab Settings Modal", () => {
   });
 
   test("lab settings modal has Basic, Management, and Appearance tabs", async ({ page }) => {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -94,6 +99,7 @@ test.describe("Lab Settings Modal", () => {
   });
 
   test("Basic tab is selected by default", async ({ page }) => {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -102,6 +108,7 @@ test.describe("Lab Settings Modal", () => {
   });
 
   test("can switch to Management tab", async ({ page }) => {
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -579,6 +586,7 @@ test.describe("Lab Settings Modal", () => {
     await page.locator(SEL_LAB_SETTINGS_CLOSE_BTN).click();
     await page.waitForTimeout(300);
 
+    await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 

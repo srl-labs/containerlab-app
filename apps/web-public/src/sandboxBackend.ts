@@ -18,6 +18,15 @@ import {
 } from "./standaloneHostShared";
 
 export const SANDBOX_ENDPOINT_ID = "pages-sandbox";
+export const SANDBOX_FILES_CHANGED_EVENT = "clab-sandbox-files-changed";
+
+function newId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
+}
+
+function notifySandboxFilesChanged(): void {
+  globalThis.dispatchEvent(new Event(SANDBOX_FILES_CHANGED_EVENT));
+}
 const SANDBOX_STORAGE_FILES = "clab-pages-sandbox-files-v1";
 const SANDBOX_STORAGE_DIRECTORIES = "clab-pages-sandbox-directories-v1";
 const SANDBOX_STORAGE_CUSTOM_NODES = "clab-pages-sandbox-custom-nodes-v1";
@@ -489,12 +498,14 @@ export class SandboxBackend {
 
   async writeFile(pathValue: string, content: string): Promise<void> {
     await this.fs.writeFile(normalizeSandboxPath(pathValue), content);
+    notifySandboxFilesChanged();
   }
 
   async deletePath(pathValue: string, recursive = false): Promise<void> {
     const normalized = normalizeSandboxPath(pathValue);
     if (!recursive) {
       await this.fs.unlink(normalized);
+      notifySandboxFilesChanged();
       return;
     }
 
@@ -513,6 +524,7 @@ export class SandboxBackend {
       }
     }
     this.fs.writeDirectories(directories);
+    notifySandboxFilesChanged();
   }
 
   async renamePath(oldPath: string, newPath: string): Promise<void> {
@@ -520,6 +532,7 @@ export class SandboxBackend {
     const to = normalizeSandboxPath(newPath);
     if (await this.fs.exists(from)) {
       await this.fs.rename(from, to);
+      notifySandboxFilesChanged();
       return;
     }
 
@@ -536,6 +549,7 @@ export class SandboxBackend {
     }
     if (changed) {
       this.fs.writeFiles(files);
+      notifySandboxFilesChanged();
     }
   }
 
@@ -543,6 +557,7 @@ export class SandboxBackend {
     const directories = this.fs.readDirectories();
     addDirectoryAncestors(directories, normalizeSandboxPath(pathValue));
     this.fs.writeDirectories(directories);
+    notifySandboxFilesChanged();
   }
 
   async uploadFiles(
@@ -556,11 +571,13 @@ export class SandboxBackend {
     const path = normalizeSandboxPath(targetPath);
     if (targetKind === "file") {
       await this.fs.writeFile(path, files[0].content);
+      notifySandboxFilesChanged();
       return;
     }
     for (const file of files) {
       await this.fs.writeFile(joinPath(path, file.name), file.content);
     }
+    notifySandboxFilesChanged();
   }
 
   async createTopologyFile(fileName: string, content?: string): Promise<TopologyRef> {
@@ -573,6 +590,7 @@ export class SandboxBackend {
     }
     const yaml = content ?? defaultTopologyContent(path);
     await this.fs.writeFile(path, yaml);
+    notifySandboxFilesChanged();
     return topologyFileEntry(path, yaml).topologyRef;
   }
 
@@ -580,6 +598,7 @@ export class SandboxBackend {
     const path = normalizeSandboxPath(topologyRef.yamlPath);
     await this.fs.unlink(path);
     await this.fs.unlink(`${path}.annotations.json`);
+    notifySandboxFilesChanged();
     return path;
   }
 
@@ -601,7 +620,7 @@ export class SandboxBackend {
         error: console.error,
       },
     });
-    const sessionId = crypto.randomUUID();
+    const sessionId = newId();
     this.sessions.set(sessionId, { host, sessionId, topologyRef: canonical });
     return { sessionId, topologyRef: canonical };
   }

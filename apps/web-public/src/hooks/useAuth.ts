@@ -19,6 +19,8 @@ const SANDBOX_ENDPOINTS: Map<string, EndpointConfig> = new Map([
   [SANDBOX_ENDPOINT.id, SANDBOX_ENDPOINT]
 ]);
 
+useEndpointStore.getState().addEndpoint(SANDBOX_ENDPOINT);
+
 async function resolveSandboxEndpoint(_input?: unknown): Promise<EndpointConfig> {
   return SANDBOX_ENDPOINT;
 }

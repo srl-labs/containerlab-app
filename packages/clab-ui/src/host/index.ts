@@ -27,6 +27,11 @@ import { isRecord } from "../core/utilities/typeHelpers";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./runtimeContext";
+
+function newId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
+}
+
 type FetchLike = typeof fetch;
 type TopologyHostMessageType =
   | "topology-host:snapshot"
@@ -455,7 +460,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         timeoutMs = 30_000
       ): Promise<T> => {
         ensureListener();
-        const requestId = globalThis.crypto.randomUUID();
+        const requestId = newId();
         return new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             if (!pending.has(requestId)) {
@@ -547,7 +552,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         timeoutMs = 30_000
       ): Promise<TopologyHostResponseMessage | TopologySnapshot> => {
         ensureListener();
-        const requestId = globalThis.crypto.randomUUID();
+        const requestId = newId();
         return new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             if (!pending.has(requestId)) {

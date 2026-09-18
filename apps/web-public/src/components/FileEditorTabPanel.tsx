@@ -20,12 +20,12 @@ interface FileEditorTabPanelProps {
 }
 
 const PANEL_BG =
-  "var(--clab-ui-editor-background, var(--vscode-editor-background, #1e1e1e))";
+  "var(--clab-ui-editor-background, var(--vscode-editor-background, #000000))";
 const PANEL_FG =
-  "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #d4d4d4))";
+  "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #ececec))";
 const BORDER = "var(--vscode-panel-border, rgba(128, 128, 128, 0.35))";
-const BUTTON_BG = "var(--vscode-button-background, #0e639c)";
-const BUTTON_FG = "var(--vscode-button-foreground, #ffffff)";
+const BUTTON_BG = "var(--vscode-button-background, #f2f2f2)";
+const BUTTON_FG = "var(--vscode-button-foreground, #000000)";
 const DISABLED_BG =
   "var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.25))";
 const ERROR_BG =
@@ -77,13 +77,13 @@ const MONACO_COLORS = {
     wordHighlightStrong: "#0e639c40",
   },
   dark: {
-    bg: "#1e1e1e",
-    fg: "#cccccc",
-    sel: "#264f78",
-    inactiveSel: "#3a3d41",
-    selectionHighlight: "#add6ff26",
-    wordHighlight: "#575757b8",
-    wordHighlightStrong: "#004972b8",
+    bg: "#000000",
+    fg: "#ececec",
+    sel: "#2a2a2a",
+    inactiveSel: "#1a1a1a",
+    selectionHighlight: "#ffffff14",
+    wordHighlight: "#ffffff18",
+    wordHighlightStrong: "#ffffff28",
   },
 } as const;
 

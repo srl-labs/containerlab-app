@@ -19,7 +19,6 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography
 } from "@mui/material";
 import type { Theme } from "@mui/material/styles";
@@ -37,6 +36,7 @@ import {
   type TerminalPreferences
 } from "../runtimeTerminalSettings";
 import { AboutSettingsContent } from "./AboutSettingsContent";
+import { SANDBOX_OPEN_SETTINGS_EVENT } from "./SandboxSidebar";
 
 type SettingsSectionKey = "general" | "terminal" | "about";
 
@@ -88,8 +88,6 @@ const SETTINGS_SECTIONS: Array<{
     icon: <InfoOutlinedIcon fontSize="small" />
   }
 ];
-
-const SETTINGS_OVERLAY_Z_INDEX = (theme: Theme) => theme.zIndex.drawer + 2;
 
 function accentSx(theme: Theme, color: "info" | "success" | "warning" | "error") {
   return {
@@ -205,7 +203,6 @@ export function SettingsOverlay({
   onThemeChange,
   terminalPreferences
 }: SettingsOverlayProps) {
-  const [panelOpen, setPanelOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("general");
   const [sshUserMappingText, setSshUserMappingText] = useState("");
@@ -223,13 +220,16 @@ export function SettingsOverlay({
     [fontSizeText, sshUserMappingText, telnetPortText]
   );
 
-  const handleTogglePanel = useCallback(() => setPanelOpen((prev) => !prev), []);
-  const handleClosePanel = useCallback(() => setPanelOpen(false), []);
   const handleOpenDialog = useCallback((section: SettingsSectionKey = "general") => {
-    setPanelOpen(false);
     setActiveSection(section);
     setDialogOpen(true);
   }, []);
+
+  useEffect(() => {
+    const open = () => handleOpenDialog("general");
+    window.addEventListener(SANDBOX_OPEN_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(SANDBOX_OPEN_SETTINGS_EVENT, open);
+  }, [handleOpenDialog]);
   const handleCloseDialog = useCallback(() => {
     setDialogOpen(false);
   }, []);
@@ -422,71 +422,7 @@ export function SettingsOverlay({
   };
 
   return (
-    <>
-      <Tooltip title="Settings" placement="left">
-        <IconButton
-          onClick={handleTogglePanel}
-          size="small"
-          data-testid="standalone-settings-button"
-          aria-label="Open standalone settings"
-          sx={{
-            position: "fixed",
-            top: 8,
-            right: 8,
-            zIndex: SETTINGS_OVERLAY_Z_INDEX,
-            bgcolor: "background.paper",
-            color: "action.active",
-            border: 1,
-            borderColor: "divider",
-            boxShadow: 2,
-            "&:hover": {
-              bgcolor: "action.hover"
-            }
-          }}
-        >
-          <SettingsIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-
-      {panelOpen ? (
-        <Paper
-          elevation={10}
-          data-testid="standalone-settings-panel"
-          sx={{
-            position: "fixed",
-            top: 8,
-            right: 48,
-            zIndex: SETTINGS_OVERLAY_Z_INDEX,
-            width: 340,
-            maxWidth: "calc(100vw - 64px)",
-            p: 2,
-            border: 1,
-            borderColor: "divider",
-            bgcolor: "background.paper"
-          }}
-        >
-          <Stack spacing={1.5}>
-            <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center" }}>
-              <Typography variant="subtitle2">Quick Settings</Typography>
-              <IconButton size="small" onClick={handleClosePanel} aria-label="Close quick settings">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Stack>
-            <Divider />
-            <Stack spacing={1.5}>
-              <Button
-                variant="outlined"
-                onClick={() => handleOpenDialog("general")}
-                data-testid="standalone-settings-open-dialog"
-              >
-                General Settings
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
-      ) : null}
-
-      <Dialog
+    <Dialog
         open={dialogOpen}
         onClose={handleCloseDialog}
         fullWidth
@@ -589,6 +525,5 @@ export function SettingsOverlay({
           <Button onClick={handleCloseDialog}>Close</Button>
         </DialogActions>
       </Dialog>
-    </>
   );
 }

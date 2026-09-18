@@ -30,9 +30,9 @@
     "ajv": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "three": "catalog:",
     "yaml": "catalog:",
-    "zustand": "catalog:"
+    "zustand": "catalog:",
+    "three": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
