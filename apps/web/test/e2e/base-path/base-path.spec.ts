@@ -1,7 +1,9 @@
 import path from "node:path";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
-import { createServer, preview, type ViteDevServer } from "vite";
+import { build, createServer, preview, type PreviewServer, type ViteDevServer } from "vite";
 import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
 
 import { buildDetachedTerminalUrl } from "../../../../../packages/standalone-runtime/src/runtimeDetachedTerminal";
@@ -142,50 +144,54 @@ for (const mode of ["production", "development"] as const) {
   }
 }
 
-test("built Pages app handles files and topology requests without a backend", async ({ page }) => {
-  const server = await preview({
-    configFile: false,
-    root: webRoot,
-    base: "/containerlab-app/",
-    build: { outDir: "dist/pages" },
-    preview: { host: "127.0.0.1", port: 0 }
-  });
+test("built sandbox loads at a subpath and opens a topology without backend requests", async ({ page }) => {
+  const sandboxRoot = path.resolve(webRoot, "../web-public");
+  const outDir = await mkdtemp(path.join(tmpdir(), "clab-sandbox-base-path-"));
+  let server: PreviewServer | undefined;
   try {
+    // Build the current sandbox into a fresh directory; never reuse a prior app's output.
+    await build({
+      configFile: path.join(sandboxRoot, "vite.config.ts"),
+      base: "/containerlab-app/",
+      logLevel: "error",
+      build: { outDir, emptyOutDir: true }
+    });
+    server = await preview({
+      configFile: false,
+      root: sandboxRoot,
+      base: "/containerlab-app/",
+      build: { outDir },
+      preview: { host: "127.0.0.1", port: 0 }
+    });
     const address = server.httpServer.address();
     if (address === null || typeof address === "string") throw new Error("Pages preview did not listen");
     const networkRequests: string[] = [];
+    const browserErrors: string[] = [];
+    page.on("pageerror", (error) => browserErrors.push(error.message));
     page.on("request", (request) => {
       if (/\/(?:api|auth)\/|\/files(?:\?|$)/.test(new URL(request.url()).pathname)) networkRequests.push(request.url());
     });
     await page.goto(`http://127.0.0.1:${address.port}/containerlab-app/`);
-    await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-    const responses = await page.evaluate(async () => {
-      const created = await fetch("/api/runtime/topology-file/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileName: "base-path.clab.yml" })
-      });
-      const topology: unknown = await created.json();
-      if (typeof topology !== "object" || topology === null || !("topologyRef" in topology)) {
-        throw new Error("Sandbox did not create a topology");
-      }
-      const session = await fetch("/api/topology/sessions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topologyRef: topology.topologyRef })
-      });
-      const sessionPayload: unknown = await session.json();
-      const files = await fetch("/files");
-      const nodes = await fetch("/api/runtime/ui/custom-nodes");
-      const filePayload: unknown = await files.json();
-      const nodePayload: unknown = await nodes.json();
-      return { files: filePayload, nodes: nodePayload, session: sessionPayload };
-    });
-    expect(Array.isArray(responses.files)).toBe(true);
-    expect(responses.nodes).toHaveProperty("customNodes", expect.any(Array));
-    expect(responses.session).toHaveProperty("sessionId", expect.any(String));
+    await expect(page.getByTestId("workspace-sidebar")).toBeVisible();
+    await page.getByRole("button", { name: "New Topology File", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox", { name: "Topology file name" }).fill("base-path.clab.yml");
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("tab", { name: "base-path Close base-path", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(".react-flow")).toBeVisible();
+    await page.getByTestId("navbar-split-view").click();
+    await expect(page.locator(".monaco-editor .view-lines")).toContainText("name: base-path");
     expect(networkRequests).toEqual([]);
+    expect(browserErrors).toEqual([]);
   } finally {
-    await new Promise<void>((resolve, reject) => server.httpServer.close((error) => error ? reject(error) : resolve()));
+    try {
+      const httpServer = server?.httpServer;
+      if (httpServer) {
+        await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
+      }
+    } finally {
+      await rm(outDir, { recursive: true, force: true });
+    }
   }
 });
