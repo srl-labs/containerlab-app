@@ -5,7 +5,6 @@ import type {
   TerminalSessionInfo, VersionCheckResponse, VersionResponse
 } from "./types";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
-import { WorkspaceLayoutProvider } from "./WorkspaceLayout";
 
 type NodeTarget = RuntimeTargetRequest & { nodeName: string };
 type InterfaceTarget = NodeTarget & { interfaceName: string };
@@ -42,7 +41,7 @@ export interface WorkspaceHost {
 const Context = createContext<WorkspaceHost | null>(null);
 
 export function WorkspaceHostProvider({ host, children }: { host: WorkspaceHost; children: React.ReactNode }) {
-  return <Context.Provider value={host}><WorkspaceLayoutProvider>{children}</WorkspaceLayoutProvider></Context.Provider>;
+  return <Context.Provider value={host}>{children}</Context.Provider>;
 }
 
 export function useWorkspaceHost(): WorkspaceHost {

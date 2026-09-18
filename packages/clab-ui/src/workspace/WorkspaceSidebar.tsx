@@ -9,17 +9,12 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import CloseIcon from "@mui/icons-material/Close";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import Typography from "@mui/material/Typography";
 import type { ExplorerSectionId } from "../explorer/shared/explorer/types";
-import { useWorkspaceLayout } from "../host/workspaceLayoutContext";
 import { floatingSurfaceSx } from "../theme/surfaces";
-import { useLabTabsStore } from "./state/labTabsStore";
 import { RailLogo } from "./RailLogo";
 
 const Explorer = lazy(async () => ({ default: (await import("../explorer")).ContainerlabExplorerView }));
-const NodePalette = lazy(async () => ({ default: (await import("../components/panels/lab-drawer/NodePalette")).NodePalette }));
 const SECTIONS: Record<string, ExplorerSectionId[]> = {
   labs: ["runningLabs", "localLabs"],
   files: ["fileExplorer"],
@@ -28,11 +23,12 @@ const SECTIONS: Record<string, ExplorerSectionId[]> = {
 const VIEWS = [
   { id: "labs", label: "Labs", icon: <ScienceIcon /> },
   { id: "files", label: "File Explorer", icon: <FolderIcon /> },
-  { id: "palette", label: "Node palette", icon: <EditOutlinedIcon /> },
   { id: "help", label: "Help & Feedback", icon: <HelpOutlineIcon /> }
 ] as const;
 
-function useSidebarResize(side: "left" | "right") {
+type SidebarView = (typeof VIEWS)[number]["id"];
+
+function useSidebarResize() {
   const ref = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [width, setWidth] = useState(280);
@@ -48,7 +44,6 @@ function useSidebarResize(side: "left" | "right") {
   const min = Math.min(280, max);
   const clamp = (value: number) => Math.max(min, Math.min(max, value));
   const panelWidth = clamp(width);
-  const direction = side === "left" ? 1 : -1;
   return {
     ref, panelWidth,
     separatorProps: {
@@ -68,7 +63,7 @@ function useSidebarResize(side: "left" | "right") {
         drag.current = { x: event.clientX, width: panelWidth };
       },
       onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
-        if (drag.current) setWidth(clamp(drag.current.width + (event.clientX - drag.current.x) * direction));
+        if (drag.current) setWidth(clamp(drag.current.width + event.clientX - drag.current.x));
       },
       onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
         drag.current = null;
@@ -81,63 +76,52 @@ function useSidebarResize(side: "left" | "right") {
         event.preventDefault();
         if (event.key === "Home") setWidth(min);
         else if (event.key === "End") setWidth(max);
-        else setWidth(clamp(panelWidth + delta * direction));
+        else setWidth(clamp(panelWidth + delta));
       }
     }
   };
 }
 
-/** Standalone composition of the same explorer and palette used in VS Code. */
+/** Standalone composition of the same explorer used in VS Code. */
 export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSettings }: {
   colorScheme: "light" | "dark";
   onColorSchemeChange: (scheme: "light" | "dark") => void;
   onOpenSettings: () => void;
 }) {
-  const layout = useWorkspaceLayout();
-  if (!layout) throw new Error("WorkspaceHostProvider is required for WorkspaceSidebar.");
-  const { side, view, setView, toggleSide } = layout;
-  const hasTopology = useLabTabsStore((state) => state.tabs.some((tab) => tab.id === state.activeTabId && tab.kind === "topology"));
-  useEffect(() => {
-    if (!hasTopology && view === "palette") setView(null);
-  }, [hasTopology, view, setView]);
-  const { ref, panelWidth, separatorProps } = useSidebarResize(side);
-  const visibleView = view === "palette" && !hasTopology ? null : view;
-  const tooltipSide = side === "left" ? "right" : "left";
-  const borderWidth = side === "left" ? "0 1px 0 0" : "0 0 0 1px";
+  const [view, setView] = useState<SidebarView | null>("labs");
+  const { ref, panelWidth, separatorProps } = useSidebarResize();
+  const borderWidth = "0 1px 0 0";
   return (
-    <Box ref={ref} data-testid="workspace-sidebar" sx={{ display: "flex", flexDirection: side === "left" ? "row" : "row-reverse", flexShrink: 0, minHeight: 0, maxWidth: "65%", zIndex: 8 }}>
+    <Box ref={ref} data-testid="workspace-sidebar" sx={{ display: "flex", flexShrink: 0, minHeight: 0, maxWidth: "65%", zIndex: 8 }}>
       <Box component="nav" aria-label="Workspace" sx={{ ...floatingSurfaceSx, borderWidth, width: 48, flexShrink: 0, py: 1, display: "flex", alignItems: "center", flexDirection: "column", gap: 0.75 }}>
-        <RailLogo showTooltip side={side} />
-        {VIEWS.filter(({ id }) => id !== "palette" || hasTopology).map(({ id, label, icon }) => (
-          <Tooltip disableInteractive key={id} title={label} placement={tooltipSide}>
-            <IconButton aria-label={label} aria-pressed={visibleView === id} aria-controls="workspace-explorer" onClick={() => setView(visibleView === id ? null : id)} sx={{ color: visibleView === id ? "primary.main" : "text.primary", bgcolor: visibleView === id ? "action.selected" : undefined }}>
+        <RailLogo showTooltip />
+        {VIEWS.map(({ id, label, icon }) => (
+          <Tooltip disableInteractive key={id} title={label} placement="right">
+            <IconButton aria-label={label} aria-pressed={view === id} aria-controls="workspace-explorer" onClick={() => setView(view === id ? null : id)} sx={{ color: view === id ? "primary.main" : "text.primary", bgcolor: view === id ? "action.selected" : undefined }}>
               {icon}
             </IconButton>
           </Tooltip>
         ))}
         <Box sx={{ flex: 1 }} />
-        <Tooltip disableInteractive title={`Move sidebar to ${tooltipSide}`} placement={tooltipSide}>
-          <IconButton aria-label={`Move sidebar to ${tooltipSide}`} onClick={toggleSide}><SwapHorizIcon /></IconButton>
-        </Tooltip>
-        <Tooltip disableInteractive title={colorScheme === "dark" ? "Light mode" : "Dark mode"} placement={tooltipSide}>
+        <Tooltip disableInteractive title={colorScheme === "dark" ? "Light mode" : "Dark mode"} placement="right">
           <IconButton aria-label={colorScheme === "dark" ? "Light mode" : "Dark mode"} onClick={() => onColorSchemeChange(colorScheme === "dark" ? "light" : "dark")}>
             {colorScheme === "dark" ? <LightModeIcon /> : <DarkModeIcon />}
           </IconButton>
         </Tooltip>
-        <Tooltip disableInteractive title="Settings" placement={tooltipSide}>
+        <Tooltip disableInteractive title="Settings" placement="right">
           <IconButton aria-label="Settings" data-testid="standalone-settings-button" onClick={onOpenSettings}><TuneIcon /></IconButton>
         </Tooltip>
       </Box>
-      {visibleView && (
+      {view && (
         <Box id="workspace-explorer" sx={{ ...floatingSurfaceSx, borderWidth, width: panelWidth, minWidth: 0, display: "flex", flexDirection: "column", position: "relative" }}>
           <Box sx={{ display: "flex", alignItems: "center", px: 1, minHeight: 36 }}>
-            <Typography variant="subtitle2" sx={{ flex: 1 }}>{VIEWS.find((entry) => entry.id === visibleView)?.label}</Typography>
+            <Typography variant="subtitle2" sx={{ flex: 1 }}>{VIEWS.find((entry) => entry.id === view)?.label}</Typography>
             <IconButton size="small" aria-label="Close explorer" onClick={() => setView(null)}><CloseIcon fontSize="small" /></IconButton>
           </Box>
           <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-            <Suspense fallback={null}>{visibleView === "palette" ? <NodePalette /> : <Explorer visibleSectionIds={SECTIONS[visibleView]} />}</Suspense>
+            <Suspense fallback={null}><Explorer visibleSectionIds={SECTIONS[view]} /></Suspense>
           </Box>
-          <Box {...separatorProps} sx={{ position: "absolute", [tooltipSide]: 0, top: 0, bottom: 0, width: 4, cursor: "col-resize", touchAction: "none", zIndex: 2, "&:hover, &:focus-visible": { bgcolor: "primary.main" } }} />
+          <Box {...separatorProps} sx={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 4, cursor: "col-resize", touchAction: "none", zIndex: 2, "&:hover, &:focus-visible": { bgcolor: "primary.main" } }} />
         </Box>
       )}
     </Box>

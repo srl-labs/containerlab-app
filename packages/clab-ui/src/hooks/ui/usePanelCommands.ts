@@ -108,7 +108,7 @@ function useContextPanel() {
     } catch {
       /* ignore */
     }
-    return "right";
+    return "left";
   });
 
   return {

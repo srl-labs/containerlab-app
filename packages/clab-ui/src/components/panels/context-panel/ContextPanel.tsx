@@ -26,9 +26,6 @@ import type {
 import { PaletteView } from "./views";
 
 const MIN_WIDTH = 500;
-function getMaxWidth() {
-  return Math.floor(window.innerWidth / 2);
-}
 const TEXT_SECONDARY = "text.secondary";
 const ACTION_HOVER = "action.hover";
 
@@ -202,10 +199,16 @@ function usePanelResize(sideRef: React.RefObject<string>) {
       e.preventDefault();
       isDraggingRef.current = true;
       setIsDragging(true);
+      const editor = (e.currentTarget as HTMLElement).closest("[data-testid='topoviewer-editor']");
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDraggingRef.current) return;
-        const newWidth = sideRef.current === "left" ? ev.clientX : window.innerWidth - ev.clientX;
-        setPanelWidth(Math.min(getMaxWidth(), Math.max(MIN_WIDTH, newWidth)));
+        const rect = editor?.getBoundingClientRect();
+        const newWidth =
+          sideRef.current === "left"
+            ? ev.clientX - (rect?.left ?? 0)
+            : (rect?.right ?? window.innerWidth) - ev.clientX;
+        const maxWidth = Math.floor((rect?.width ?? window.innerWidth) / 2);
+        setPanelWidth(Math.min(maxWidth, Math.max(MIN_WIDTH, newWidth)));
       };
       const onMouseUp = () => {
         isDraggingRef.current = false;
@@ -247,7 +250,6 @@ export interface ContextPanelProps {
   onClose: () => void;
   onBack: () => void;
   onToggleSide: () => void;
-  hideToggleWhenClosed?: boolean;
   onWidthChange?: (width: number) => void;
   rfInstance: ReactFlowInstance | null;
   palette: ContextPanelPaletteProps;
@@ -263,7 +265,6 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   onBack,
   onToggleSide,
   onWidthChange,
-  hideToggleWhenClosed = false,
   palette,
   view,
   editor
@@ -312,7 +313,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
 
   return (
     <>
-      {(!hideToggleWhenClosed || isOpen) && <ToggleHandle
+      <ToggleHandle
         isOpen={isOpen}
         panelWidth={panelWidth}
         isDragging={isDragging}
@@ -321,7 +322,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         onClose={onClose}
         onBack={onBack}
         onToggleSide={onToggleSide}
-      />}
+      />
       <Drawer
         variant="persistent"
         anchor={side}
@@ -407,6 +408,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         )}
 
         <Box
+          data-testid="context-panel-resize-handle"
           onMouseDown={handleResizeStart}
           sx={{
             position: "absolute",

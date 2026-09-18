@@ -27,7 +27,6 @@ import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
 import { NodeTemplateModal } from "./components/panels/node-editor/NodeTemplateModal";
-import { useWorkspaceLayout } from "./host/workspaceLayoutContext";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
 import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
@@ -702,7 +701,6 @@ export const AppContent: React.FC<AppContentProps> = ({
   lifecycleActionsAvailable = true
 }) => {
   const [contextPanelWidth, setContextPanelWidth] = React.useState(0);
-  const workspaceLayout = useWorkspaceLayout();
   const viewerOnly = chrome === "viewer" || slots?.content != null;
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
@@ -1080,8 +1078,7 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   const shortcutDisplay = useShortcutDisplay();
   const panelVisibility = usePanelVisibility();
-  const workspacePanelSide = workspaceLayout?.side === "right" ? "left" : "right";
-  const panelSide = workspaceLayout ? workspacePanelSide : panelVisibility.panelSide;
+  const panelSide = panelVisibility.panelSide;
 
   const clearAllEditingState = React.useCallback(() => {
     topoActions.editNode(null);
@@ -1258,13 +1255,9 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (!hasActiveTopology || viewerOnly) {
       return;
     }
-    if (workspaceLayout) {
-      workspaceLayout.setView("palette");
-      return;
-    }
     handleContextPanelBack();
     panelVisibility.handleOpenContextPanel();
-  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, viewerOnly, workspaceLayout]);
+  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, viewerOnly]);
 
   const canvasProps = React.useMemo<CanvasPropsWithoutGraph>(
     () => ({
@@ -1462,7 +1455,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         />
         <Box
           ref={layoutRef}
-          sx={{ display: "flex", flexDirection: workspaceLayout?.side === "right" ? "row-reverse" : "row", flexGrow: 1, overflow: "hidden", position: "relative" }}
+          sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
         >
           {slots?.sidebar}
           {showDevExplorer && (
@@ -1508,12 +1501,13 @@ export const AppContent: React.FC<AppContentProps> = ({
               minWidth: 0,
               overflow: "hidden",
               position: "relative",
+              zIndex: 0,
               display: "flex",
               flexDirection: "column"
             }}
           >
             {slots?.header && <Box sx={{ flexShrink: 0 }}>{slots.header}</Box>}
-            <Box sx={{ flex: 1, minHeight: 0, display: "flex", position: "relative",
+            <Box data-testid="topoviewer-editor" sx={{ flex: 1, minHeight: 0, display: "flex", position: "relative",
               "--clab-ui-panel-right": !viewerOnly && panelVisibility.isContextPanelOpen && panelSide === "right" ? `min(${contextPanelWidth}px, 70%)` : "0px",
               "--clab-ui-panel-left": !viewerOnly && panelVisibility.isContextPanelOpen && panelSide === "left" ? `min(${contextPanelWidth}px, 70%)` : "0px"
             }}>
@@ -1522,11 +1516,10 @@ export const AppContent: React.FC<AppContentProps> = ({
                   onWidthChange={setContextPanelWidth}
                   isOpen={panelVisibility.isContextPanelOpen}
                   side={panelSide}
-                  hideToggleWhenClosed={workspaceLayout !== null}
                   onOpen={panelVisibility.handleOpenContextPanel}
                   onClose={panelVisibility.handleCloseContextPanel}
                   onBack={handleContextPanelBack}
-                  onToggleSide={workspaceLayout?.toggleSide ?? panelVisibility.handleTogglePanelSide}
+                  onToggleSide={panelVisibility.handleTogglePanelSide}
                   rfInstance={rfInstance}
                   palette={{
                     mode: state.mode,
@@ -1626,7 +1619,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                   <Navbar
                     lifecycleActionsAvailable={lifecycleActionsAvailable}
                     hasActiveTopology={hasActiveTopology}
-                    barSide={workspaceLayout ? panelSide : "right"}
+                    barSide={panelSide === "left" ? "right" : "left"}
                     rfInstance={rfInstance}
                     onZoomToFit={handleZoomToFit}
                     layout={layoutControls.layout}
