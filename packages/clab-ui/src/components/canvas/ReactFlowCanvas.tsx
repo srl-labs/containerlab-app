@@ -62,6 +62,7 @@ import { useContextMenuItems } from "./useContextMenuItems";
 import { edgeTypes, edgeTypesLite } from "./edges";
 import { CustomConnectionLine, LinkCreationLine } from "./LinkPreview";
 import { nodeTypes, nodeTypesLite } from "./nodes";
+import { RotationMatchOverlay } from "./RotationMatchOverlay";
 import type {
   AnnotationHandlers,
   CanvasDropData,
@@ -1141,6 +1142,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       isContextPanelOpen = false,
       layout = "preset",
       readOnlyViewer = false,
+      viewerOptions,
       isGeoLayout = false,
       gridLineWidth = DEFAULT_GRID_LINE_WIDTH,
       gridStyle = "dotted",
@@ -1305,6 +1307,11 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       restoreOnExit: layout === "preset"
     });
     const isGeoEdit = isGeoEditable;
+    const getAnnotationGeoUpdate = geoLayout.getGeoUpdateForNode;
+    useEffect(() => {
+      useCanvasStore.setState({ getAnnotationGeoUpdate: isGeoLayout ? getAnnotationGeoUpdate : null });
+      return () => useCanvasStore.setState({ getAnnotationGeoUpdate: null });
+    }, [isGeoLayout, getAnnotationGeoUpdate]);
     useGeoWheelZoom(geoLayout, isGeoLayout, isGeoEdit, canvasContainerRef);
 
     const fitCanvasToVisibleViewport = useCallback(
@@ -1731,6 +1738,16 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
     );
 
     const wrappedOnInit = useWrappedOnInit(handleCanvasInit, onInitProp);
+    const handleViewerInit = useCallback((instance: ReactFlowInstance) => {
+      wrappedOnInit(instance);
+      viewerOptions?.onInit?.(instance);
+    }, [wrappedOnInit, viewerOptions]);
+    const handleViewerNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
+      viewerOptions?.onNodeSelect?.(node.id);
+    }, [viewerOptions]);
+    const handleViewerPaneClick = useCallback(() => {
+      viewerOptions?.onNodeSelect?.(null);
+    }, [viewerOptions]);
 
     // Drag-drop handlers for node palette
     const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -1882,8 +1899,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
           edgeTypes={activeEdgeTypes}
           onNodesChange={handlers.onNodesChange}
           onEdgesChange={onEdgesChange}
-          onInit={wrappedOnInit}
-          onNodeClick={readOnlyViewer ? undefined : wrappedOnNodeClick}
+          onInit={readOnlyViewer ? handleViewerInit : wrappedOnInit}
+          onNodeClick={readOnlyViewer ? handleViewerNodeClick : wrappedOnNodeClick}
           onNodeDoubleClick={readOnlyViewer ? undefined : wrappedOnNodeDoubleClick}
           onNodeMouseEnter={handleNodeMouseEnter}
           onNodeMouseLeave={handleNodeMouseLeave}
@@ -1894,7 +1911,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
           onEdgeClick={readOnlyViewer ? undefined : wrappedOnEdgeClick}
           onEdgeDoubleClick={readOnlyViewer ? undefined : handlers.onEdgeDoubleClick}
           onEdgeContextMenu={readOnlyViewer ? undefined : handlers.onEdgeContextMenu}
-          onPaneClick={readOnlyViewer ? undefined : wrappedOnPaneClick}
+          onPaneClick={readOnlyViewer ? handleViewerPaneClick : wrappedOnPaneClick}
           onPaneContextMenu={readOnlyViewer ? undefined : handlers.onPaneContextMenu}
           onMoveEnd={handleViewportMoveEnd}
           onConnect={handlers.onConnect}
@@ -1918,7 +1935,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
           nodesDraggable={nodesDraggable}
           nodesConnectable={nodesConnectable}
           elementsSelectable={elementsSelectable}
-          zoomOnScroll={!isGeoLayout}
+          zoomOnScroll={!isGeoLayout && (!readOnlyViewer || viewerOptions?.zoomOnScroll !== false)}
           zoomOnPinch={!isGeoLayout}
           zoomOnDoubleClick={!isGeoLayout && isLocked}
           panOnScroll={false}
@@ -1946,6 +1963,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         {overlays.linkIndicator}
 
         {overlays.annotationIndicator}
+        {!readOnlyViewer && <RotationMatchOverlay canvasRef={canvasContainerRef} />}
       </div>
     );
   }

@@ -5,8 +5,6 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/browserErrors";
 
 const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
-const SEL_SETTINGS_PANEL = '[data-testid="standalone-settings-panel"]';
-const SEL_OPEN_DIALOG = '[data-testid="standalone-settings-open-dialog"]';
 const SEL_SETTINGS_DIALOG = '[data-testid="standalone-settings-dialog"]';
 const SEL_SETTINGS_CLOSE = '[data-testid="standalone-settings-close"]';
 const SEL_NAV_ENDPOINTS = '[data-testid="standalone-settings-nav-endpoints"]';
@@ -44,9 +42,6 @@ test.describe("Standalone Settings Dialog", () => {
 
   async function openSettings(page: Page) {
     await page.locator(SEL_SETTINGS_BUTTON).click();
-    const panel = page.locator(SEL_SETTINGS_PANEL);
-    await expect(panel).toBeVisible();
-    await panel.locator(SEL_OPEN_DIALOG).click();
     const dialog = page.locator(SEL_SETTINGS_DIALOG);
     await expect(dialog).toBeVisible();
     return dialog;
@@ -139,16 +134,12 @@ test.describe("Standalone Settings Dialog", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
 
-  test("quick panel keeps connection status and logout close to the gear button", async ({ page }) => {
-    await page.locator(SEL_SETTINGS_BUTTON).click();
-
-    const panel = page.locator(SEL_SETTINGS_PANEL);
-    await expect(panel).toBeVisible();
-    await expect(panel.getByText("Quick Settings")).toBeVisible();
-    await expect(panel.getByRole("button", { name: "General Settings" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Inspect Labs" })).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "About" })).toHaveCount(0);
+  test("settings opens directly from the shared rail and exposes disconnect", async ({ page }) => {
+    const dialog = await openSettings(page);
+    await expect(dialog.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeFocused();
   });
 
   test("opens the standalone settings dialog with section navigation", async ({ page }) => {
@@ -429,6 +420,7 @@ test.describe("Standalone Settings Dialog", () => {
       };
     });
 
+    await page.getByRole("button", { name: "Help & Feedback", exact: true }).click();
     const documentationRow = page
       .locator('[data-explorer-node-row="true"]')
       .filter({ hasText: "Containerlab Documentation" });

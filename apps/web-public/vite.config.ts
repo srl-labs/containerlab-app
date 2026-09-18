@@ -1,27 +1,25 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
 const clabUiSrc = path.resolve(workspaceRoot, "packages/clab-ui/src");
 const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? "/";
-const require = createRequire(path.join(__dirname, "package.json"));
-const threeRoot = path.resolve(require.resolve("three"), "../..");
-const threeAliases = [
-  {
-    find: /^three$/,
-    replacement: path.join(threeRoot, "build/three.module.js")
-  },
-  {
-    find: /^three\/addons\//,
-    replacement: `${path.join(threeRoot, "examples/jsm")}/`
-  }
-];
-
 const clabUiSubpathAliases = [
+  ["workspace/yaml", "workspace/yaml.ts"],
+  ["workspace/bootstrap", "workspace/bootstrap.ts"],
+  ["workspace/editor", "workspace/editor.ts"],
+  ["workspace/settings", "workspace/settings.ts"],
+  ["workspace/login", "workspace/login.ts"],
+  ["workspace/dialogs", "workspace/dialogs.ts"],
+  ["workspace/terminal", "workspace/terminal.ts"],
+  ["workspace/empty-state", "workspace/empty-state.ts"],
+  ["workspace/state", "workspace/state/index.ts"],
+  ["workspace/types", "workspace/types.ts"],
+  ["workspace", "workspace/index.ts"],
+
   ["styles/global.css", "styles/global.css"],
   ["monaco/editor-worker", "monaco/editor-worker.ts"],
   ["monaco/json-worker", "monaco/json-worker.ts"],
@@ -38,7 +36,7 @@ const clabUiSubpathAliases = [
 function clabUiDevAliases(): Array<{ find: string | RegExp; replacement: string }> {
   return [
     ...clabUiSubpathAliases.map(([subpath, file]) => ({
-      find: `@containerlab/clab-ui/${subpath}`,
+      find: new RegExp(`^@containerlab/clab-ui/${subpath.replaceAll(".", "\\.")}(?=\\?|$)`),
       replacement: path.join(clabUiSrc, file)
     })),
     {
@@ -60,7 +58,6 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: [
       ...(command === "serve" ? clabUiDevAliases() : []),
-      ...threeAliases,
       {
         find: /^monaco-editor$/,
         replacement: "@containerlab/clab-ui/monaco/core"
@@ -77,7 +74,9 @@ export default defineConfig(({ command }) => ({
   optimizeDeps: {
     entries: [
       "index.html",
-      "../../packages/clab-ui/src/explorer/containerlabExplorerView.webview.tsx"
+      "../../packages/clab-ui/src/**/*.tsx",
+      "../../packages/clab-ui/src/**/*.ts",
+      "!**/*.test.*"
     ],
     include: [
       "react",
@@ -85,10 +84,7 @@ export default defineConfig(({ command }) => ({
       "@emotion/react",
       "@emotion/styled",
       "@mui/material",
-      "@xterm/addon-fit",
-      "@xterm/xterm",
-      "three",
-      "zustand"
+      "react-dom/client"
     ],
     exclude: ["@containerlab/clab-ui"]
   },
@@ -109,7 +105,7 @@ export default defineConfig(({ command }) => ({
     warmup: {
       clientFiles: [
         "./src/main.tsx",
-        "./src/standaloneApp.tsx",
+        "../../packages/standalone-runtime/src/standaloneApp.tsx",
         "../../packages/clab-ui/src/explorer/containerlabExplorerView.webview.tsx"
       ]
     },

@@ -65,13 +65,13 @@ test.describe("Zoom and Pan", () => {
     expect(newPan.y).toBeCloseTo(targetPan.y, 0);
   });
 
-  test("dragging on pane does not change pan in default mode", async ({ page, topoViewerPage }) => {
+  test("middle-button dragging pans the canvas", async ({ page, topoViewerPage }) => {
     const initialPan = await topoViewerPage.getPan();
     const canvasCenter = await topoViewerPage.getCanvasCenter();
 
     const dragDistance = 100;
 
-    // Use middle-button drag to pan reliably with the current React Flow settings.
+    // Middle-button dragging pans regardless of the current edit/lock mode.
     const start = { x: canvasCenter.x + 220, y: canvasCenter.y + 180 };
     const end = { x: start.x - dragDistance, y: start.y - dragDistance };
     await page.mouse.move(start.x, start.y);
@@ -82,12 +82,12 @@ test.describe("Zoom and Pan", () => {
 
     const newPan = await topoViewerPage.getPan();
 
-    // Current interaction model keeps pan fixed while drag is used for selection.
+    // Panning follows the pointer movement on both axes.
     const panDeltaX = Math.abs(newPan.x - initialPan.x);
     const panDeltaY = Math.abs(newPan.y - initialPan.y);
 
-    expect(panDeltaX).toBeLessThan(5);
-    expect(panDeltaY).toBeLessThan(5);
+    expect(panDeltaX).toBeCloseTo(dragDistance, 0);
+    expect(panDeltaY).toBeCloseTo(dragDistance, 0);
   });
 
   test("fit to viewport centers and scales graph", async ({ topoViewerPage }) => {

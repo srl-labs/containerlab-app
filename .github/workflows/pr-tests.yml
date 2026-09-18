@@ -70,8 +70,14 @@ jobs:
       - name: Install Playwright headless shell
         run: pnpm exec playwright install --with-deps --only-shell chromium
 
+      - name: Validate packed clab-viewer consumer
+        run: pnpm test:viewer-package
+
       - name: Web E2E
         run: pnpm --filter containerlab-app-web run test:e2e
+
+      - name: Public sandbox workspace E2E
+        run: pnpm --filter containerlab-app-web-public run test:e2e
 
       - name: Web base path regressions
         run: pnpm --filter containerlab-app-web run test:base-path
@@ -221,7 +227,7 @@ jobs:
     uses: ./.github/workflows/desktop-builds.yml
 
   sandbox:
-    name: Deploy browser sandbox
+    name: Deploy docs and sandbox preview
     needs:
       - test
       - clab-ui-browser-tests

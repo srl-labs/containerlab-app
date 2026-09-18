@@ -17,6 +17,7 @@ import TextField from "@mui/material/TextField";
 
 import type { FreeTextAnnotation } from "../../../core/types/topology";
 import { ColorField, InputField, PanelSection } from "../../ui/form";
+import { RotationControl } from "../rotation/RotationControl";
 
 // Helper functions to avoid duplicate calculations
 const DEFAULT_FILL_COLOR = "#000000";
@@ -74,10 +75,10 @@ const IconBtn: React.FC<{
 );
 
 // Formatting toolbar
-const Toolbar: React.FC<{ formData: FreeTextAnnotation; updateField: Props["updateField"] }> = ({
-  formData,
-  updateField
-}) => {
+const Toolbar: React.FC<{
+  formData: FreeTextAnnotation;
+  updateField: Props["updateField"];
+}> = ({ formData, updateField }) => {
   const isBold = formData.fontWeight === "bold";
   const isItalic = formData.fontStyle === "italic";
   const isUnderline = formData.textDecoration === "underline";
@@ -209,16 +210,6 @@ const StyleOptions: React.FC<{
           />
         </Box>
       </Box>
-      <InputField
-        id="text-rotation"
-        label="Rotation"
-        type="number"
-        value={String(formData.rotation ?? 0)}
-        onChange={(v) => updateField("rotation", parseInt(v) || 0)}
-        min={-360}
-        max={360}
-        suffix="deg"
-      />
     </Box>
   );
 };
@@ -238,6 +229,15 @@ export const FreeTextFormContent: React.FC<Props> = ({ formData, updateField }) 
         sx={{ "& textarea": { resize: "vertical", overflow: "auto" } }}
       />
     </PanelSection>
+
+    <RotationControl
+      key={formData.id}
+      objectId={formData.id}
+      inputId="text-rotation"
+      angle={formData.rotation ?? 0}
+      onChange={(angle) => updateField("rotation", angle)}
+      keepUpright
+    />
 
     <PanelSection title="Font" bodySx={{ p: 2 }}>
       <FontControls formData={formData} updateField={updateField} />

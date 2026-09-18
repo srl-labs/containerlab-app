@@ -1,15 +1,17 @@
 import { test, expect } from "../fixtures/topoviewer";
-import { boxSelect } from "../helpers/react-flow-helpers";
+import { boxSelect, fitGraph } from "../helpers/react-flow-helpers";
 
 const SIMPLE_FILE = "simple.clab.yml";
 
 test.describe("Box Selection", () => {
-  test.beforeEach(async ({ topoViewerPage }) => {
+  test.beforeEach(async ({ page, topoViewerPage }) => {
     await topoViewerPage.resetFiles();
     await topoViewerPage.gotoFile(SIMPLE_FILE);
     await topoViewerPage.waitForCanvasReady();
     await topoViewerPage.setEditMode();
     await topoViewerPage.unlock();
+    await page.getByTestId("panel-toggle-btn").click();
+    await fitGraph(page);
   });
 
   test("drag on canvas creates selection box", async ({ page, topoViewerPage }) => {
@@ -101,7 +103,7 @@ test.describe("Box Selection", () => {
     const node2Box = await topoViewerPage.getNodeBoundingBox(nodeIds[1]);
     expect(node2Box).not.toBeNull();
 
-    // Create a box around the second node with Ctrl held
+    // Create a box around the second node with Shift held
     const from = {
       x: node2Box!.x - 10,
       y: node2Box!.y - 10
@@ -188,7 +190,7 @@ test.describe("Box Selection", () => {
 
     // Select a node first
     await topoViewerPage.selectNode(nodeIds[0]);
-    let selectedIds = await topoViewerPage.getSelectedNodeIds();
+    const selectedIds = await topoViewerPage.getSelectedNodeIds();
     expect(selectedIds.length).toBe(1);
 
     // Get canvas center
@@ -207,10 +209,8 @@ test.describe("Box Selection", () => {
     await boxSelect(page, from, to);
     await page.waitForTimeout(300);
 
-    // Shift-box selection is additive; selecting empty area preserves existing selection
-    selectedIds = await topoViewerPage.getSelectedNodeIds();
-    expect(selectedIds.length).toBe(1);
-    expect(selectedIds).toContain(nodeIds[0]);
+    // A new selection box replaces the selection, including when it encloses no nodes.
+    await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toEqual([]);
   });
 
   test("box selection works after zoom and pan", async ({ page, topoViewerPage }) => {
@@ -244,7 +244,8 @@ test.describe("Box Selection", () => {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
 
-    // Pan the canvas using viewport (selection drag uses mouse)
+    // Close the palette before panning nodes into the left side of the canvas.
+    await page.getByTestId("panel-toggle-btn").click();
     await topoViewerPage.setPan(100, 100);
 
     // Get updated positions after pan

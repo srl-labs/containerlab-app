@@ -35,11 +35,8 @@ import type {
   TopoViewerState
 } from "../stores/topoViewerStore";
 import { useCanvasStore } from "../stores/canvasStore";
-import {
-  applyForceLayout,
-  hasPresetPositions,
-  normalizeLayoutableNodePositions
-} from "../components/canvas/layout";
+import { applyForceLayout } from "../components/canvas/layout/forceLayout";
+import { hasPresetPositions, normalizeLayoutableNodePositions } from "../components/canvas/layout/types";
 import { snapToGrid } from "../utils/grid";
 import {
   collectDummyNodeIds,
@@ -680,9 +677,9 @@ function buildInitialTopoViewerData(
 export function applySnapshotToStores(
   snapshot: TopologySnapshot,
   options: ApplySnapshotOptions = {},
-  client: TopologySessionClient
+  client?: TopologySessionClient
 ): void {
-  client.setRevision(snapshot.revision);
+  client?.setRevision(snapshot.revision);
 
   const annotations = normalizeAnnotations(snapshot.annotations);
   const edges = snapshot.edges;
@@ -714,7 +711,7 @@ export function applySnapshotToStores(
       snapToGrid
     );
     mergedNodes = snappedNodes;
-    void persistLayoutPositions(positions, client);
+    if (client) void persistLayoutPositions(positions, client);
   }
 
   const cleanedEdgeAnnotations = pruneEdgeAnnotations(annotations.edgeAnnotations, edges);

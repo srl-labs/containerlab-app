@@ -4,10 +4,6 @@
  */
 import React, { useMemo, memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import StopRoundedIcon from "@mui/icons-material/StopRounded";
-import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
-import BlockRoundedIcon from "@mui/icons-material/BlockRounded";
 
 import type { TopologyNodeData } from "../types";
 import { SELECTION_COLOR, DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../types";
@@ -22,7 +18,7 @@ import {
   useDeploymentState,
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
-import { getCustomIconMap } from "../../../utils/iconUtils";
+import { getCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
 import {
@@ -30,9 +26,10 @@ import {
   HIDDEN_HANDLE_STYLE,
   getNodeDirectionRotation,
   getNodeRuntimeIconOpacity,
-  getNodeRuntimeBadgeState,
-  type NodeRuntimeBadgeState
+  getNodeRuntimeBadgeState
 } from "./nodeStyles";
+
+const RuntimeBadge = React.lazy(() => import("./NodeRuntimeBadge"));
 
 /**
  * Map role to SVG node type (for built-in icons only)
@@ -97,51 +94,6 @@ const ICON_STYLE_BASE: React.CSSProperties = {
   backgroundRepeat: "no-repeat"
 };
 
-const BADGE_STYLE_BASE: React.CSSProperties = {
-  position: "absolute",
-  right: -3,
-  bottom: -3,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 12,
-  height: 12,
-  lineHeight: 0,
-  borderRadius: 999,
-  pointerEvents: "none",
-  zIndex: 4
-};
-
-function getRuntimeBadgeColors(state: NodeRuntimeBadgeState): {
-  bg: string;
-  border: string;
-  icon: string;
-} {
-  switch (state) {
-    case "running":
-      return { bg: "#16A34A", border: "#14532D", icon: "#ECFDF5" };
-    case "paused":
-      return { bg: "#F59E0B", border: "#78350F", icon: "#FFFBEB" };
-    case "undeployed":
-      return { bg: "#64748B", border: "#334155", icon: "#F8FAFC" };
-    default:
-      return { bg: "#EF4444", border: "#7F1D1D", icon: "#FFF1F2" };
-  }
-}
-
-function getRuntimeBadgeIcon(state: NodeRuntimeBadgeState, iconColor: string): React.ReactElement {
-  switch (state) {
-    case "running":
-      return <PlayArrowRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
-    case "paused":
-      return <PauseRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
-    case "undeployed":
-      return <BlockRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
-    default:
-      return <StopRoundedIcon sx={{ fontSize: "0.52rem", color: iconColor }} />;
-  }
-}
-
 // Selection styles - use outline to avoid layout shift
 const SELECTED_OUTLINE = `2px solid ${SELECTION_COLOR}`;
 // Hover highlight for link creation uses CSS :hover (see topology-node-icon.link-target:hover in CSS)
@@ -162,7 +114,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     labelBackgroundColor
   } = nodeData;
   const { linkSourceNode } = useLinkCreationContext();
-  const { suppressLabels } = useNodeRenderConfig();
+  const { suppressLabels, suppressRuntimeBadges } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
   const customIcons = useCustomIcons();
   const deploymentState = useDeploymentState();
@@ -182,7 +134,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     // Check if role matches a custom icon
     const customDataUri = customIconMap.get(role);
     if (customDataUri !== undefined && customDataUri.length > 0) {
-      return customDataUri;
+      return getCustomIconUrl(customDataUri, iconColor);
     }
     // Fall back to built-in SVG icons
     const svgType = getRoleSvgType(role);
@@ -241,22 +193,6 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
   // Build class names for CSS-based hover effects
   const iconClassName = isLinkTarget ? "topology-node-icon link-target" : "topology-node-icon";
 
-  const runtimeBadgeColors = useMemo(
-    () => getRuntimeBadgeColors(runtimeBadgeState),
-    [runtimeBadgeState]
-  );
-  const runtimeBadgeIcon = useMemo(
-    () => getRuntimeBadgeIcon(runtimeBadgeState, runtimeBadgeColors.icon),
-    [runtimeBadgeState, runtimeBadgeColors.icon]
-  );
-  const runtimeBadgeStyle = useMemo(
-    () => ({
-      ...BADGE_STYLE_BASE,
-      backgroundColor: runtimeBadgeColors.bg,
-      border: `1px solid ${runtimeBadgeColors.border}`
-    }),
-    [runtimeBadgeColors.bg, runtimeBadgeColors.border]
-  );
   const labelStyle = useMemo(
     () =>
       buildNodeLabelStyle({
@@ -292,12 +228,11 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
 
       {/* Node icon - hover effect for link creation handled via CSS */}
       <div style={iconStyle} className={iconClassName} />
-      <div
-        style={runtimeBadgeStyle}
-        className={`react-flow__node-badge topology-node-runtime-badge state-${runtimeBadgeState}`}
-      >
-        {runtimeBadgeIcon}
-      </div>
+      {!suppressRuntimeBadges && (
+        <React.Suspense fallback={null}>
+          <RuntimeBadge state={runtimeBadgeState} />
+        </React.Suspense>
+      )}
 
       {/* Node label */}
       {!suppressLabels && (

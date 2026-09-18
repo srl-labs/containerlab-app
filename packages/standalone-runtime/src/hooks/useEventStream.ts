@@ -1,3 +1,4 @@
+import { getStandaloneBackend } from "../backend";
 import { useEffect, useRef } from "react";
 
 import { useEndpointStore, type EndpointConfig } from "../stores/endpointStore";
@@ -11,6 +12,7 @@ function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
   const sourcesRef = useRef<Map<string, EventSource>>(new Map());
 
   useEffect(() => {
+    if (!getStandaloneBackend().capabilities.events) return;
     const streamableEndpoints = endpoints.filter(
       (endpoint) => endpoint.status === "connected" || endpoint.status === "offline"
     );

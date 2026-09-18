@@ -1,3 +1,4 @@
+import { floatingSurfaceSx } from "../../theme/surfaces";
 // Floating action bar for React TopoViewer.
 import React from "react";
 import Badge from "@mui/material/Badge";
@@ -52,7 +53,7 @@ const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
 const NAVBAR_Z_INDEX = 1100;
 /** Inset of the floating bar from the canvas edges (px). */
-export const FLOATING_NAVBAR_INSET = 8;
+const FLOATING_NAVBAR_INSET = 8;
 
 function isGeneratedLayoutOption(layout: LayoutOption): boolean {
   return layout === "force" || layout === "auto" || layout === "radial";
@@ -364,26 +365,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         position: "absolute",
         top: FLOATING_NAVBAR_INSET,
         ...(barSide === "left"
-          ? { left: FLOATING_NAVBAR_INSET }
-          : { right: FLOATING_NAVBAR_INSET }),
+          ? { left: `calc(var(--clab-ui-panel-left, 0px) + ${FLOATING_NAVBAR_INSET}px)` }
+          : { right: `calc(var(--clab-ui-panel-right, 0px) + ${FLOATING_NAVBAR_INSET}px)` }),
         width: "auto",
-        maxWidth: `calc(100% - ${FLOATING_NAVBAR_INSET * 2}px)`,
-        overflow: "hidden",
+        maxWidth: `calc(100% - var(--clab-ui-panel-left, 0px) - var(--clab-ui-panel-right, 0px) - ${FLOATING_NAVBAR_INSET * 2}px)`,
+        overflow: "visible",
         borderRadius: "9px",
         zIndex: NAVBAR_Z_INDEX,
-        bgcolor:
-          "color-mix(in srgb, var(--vscode-editor-background, #000) 28%, transparent)",
-        backdropFilter: "blur(24px) saturate(1.6)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.6)",
-        border: 1,
-        borderColor: "color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent)",
-        boxShadow: "none"
+        ...floatingSurfaceSx
       }}
     >
       <Toolbar
         variant="dense"
         disableGutters
-        sx={{ minHeight: 40, px: 1, display: "flex", alignItems: "center", gap: 0.5 }}
+        sx={{ minHeight: 40, px: 1, py: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, "& > *": { flexShrink: 0 } }}
       >
         {lifecycleActionsAvailable && (
           <>
@@ -391,6 +386,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Tooltip title={applyTooltip}>
               <span>
                 <IconButton
+                  aria-label={applyTooltip}
                   size="small"
                   onClick={handlePrimaryAction}
                   disabled={isApplyDisabled}
@@ -533,6 +529,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title={isLocked ? "Unlock lab to edit" : "Lock Lab"}>
           <span>
             <IconButton
+                  aria-label={isLocked ? "Unlock lab to edit" : "Lock Lab"}
               size="small"
               onClick={toggleLock}
               disabled={isProcessing || !isTopologyActive}
@@ -555,6 +552,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Undo (Ctrl+Z)">
             <span>
               <IconButton
+                  aria-label="Undo (Ctrl+Z)"
                 size="small"
                 onClick={onUndo}
                 disabled={!isTopologyActive || !canUndo}
@@ -571,6 +569,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Redo (Ctrl+Y)">
             <span>
               <IconButton
+                  aria-label="Redo (Ctrl+Y)"
                 size="small"
                 onClick={onRedo}
                 disabled={!isTopologyActive || !canRedo}
@@ -589,6 +588,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Bulk Link Devices">
             <span>
               <IconButton
+                  aria-label="Bulk Link Devices"
                 size="small"
                 onClick={onShowBulkLink}
                 disabled={!isTopologyActive || isLocked}
@@ -608,6 +608,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Fit to Viewport">
           <span>
             <IconButton
+                  aria-label="Fit to Viewport"
               size="small"
               onClick={onZoomToFit}
               disabled={!isTopologyActive}
@@ -622,6 +623,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Toggle YAML Split View">
           <span>
             <IconButton
+                  aria-label="Toggle YAML Split View"
               size="small"
               onClick={onToggleSplit}
               disabled={!isTopologyActive}
@@ -636,6 +638,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Layout">
           <span>
             <IconButton
+                  aria-label="Layout"
               size="small"
               onClick={handleLayoutClick}
               disabled={!isTopologyActive}
@@ -758,6 +761,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Capture Viewport as SVG">
           <span>
             <IconButton
+                  aria-label="Capture Viewport as SVG"
               size="small"
               onClick={onCaptureViewport}
               disabled={!isTopologyActive}

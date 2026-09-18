@@ -9,29 +9,22 @@
     ".": "./src/index.ts",
     "./terminal-main": "./src/terminalMain.tsx",
     "./web-main": "./src/main.tsx",
-    "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx"
+    "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx",
+    "./backend": "./src/backend.ts",
+    "./host": "./src/standaloneHostShared.ts",
+    "./endpoints": "./src/stores/endpointStore.ts"
   },
   "dependencies": {
-    "@emotion/react": "catalog:",
-    "@emotion/styled": "catalog:",
-    "@mui/icons-material": "catalog:",
-    "@mui/material": "catalog:",
     "@containerlab/clab-ui": "workspace:*",
     "@srl-labs/containerlab-app-contract": "workspace:*",
-    "@xterm/addon-fit": "catalog:",
-    "@xterm/xterm": "catalog:",
-    "ajv": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "three": "catalog:",
-    "yaml": "catalog:",
     "zustand": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/three": "catalog:",
     "typescript": "catalog:",
     "tsx": "catalog:",
     "oxlint": "catalog:",

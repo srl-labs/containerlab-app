@@ -15,6 +15,7 @@ import {
   DEFAULT_CORNER_RADIUS
 } from "../../../annotations/constants";
 import { InputField, SelectField, Toggle, ColorField, PanelSection } from "../../ui/form";
+import { RotationControl } from "../rotation/RotationControl";
 
 interface Props {
   formData: FreeShapeAnnotation;
@@ -62,7 +63,7 @@ const ShapeSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
           ]}
         />
         {!isLine && (
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
             <InputField
               id="shape-width"
               label="Width"
@@ -83,16 +84,6 @@ const ShapeSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
               max={2000}
               suffix="px"
             />
-            <InputField
-              id="shape-rotation"
-              label="Rotation"
-              type="number"
-              value={String(formData.rotation ?? 0)}
-              onChange={(v) => updateField("rotation", Number(v))}
-              min={-360}
-              max={360}
-              suffix="deg"
-            />
           </Box>
         )}
       </>
@@ -108,7 +99,12 @@ const FillSection: React.FC<SectionProps> = ({ formData, updateField, isLine }) 
   return (
     <PanelSection
       title="Fill"
-      bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
+      bodySx={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 1.5,
+        p: 2
+      }}
     >
       <>
         <ColorField
@@ -238,6 +234,13 @@ export const FreeShapeFormContent: React.FC<Props> = ({ formData, updateField })
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <ShapeSection formData={formData} updateField={updateField} isLine={isLine} />
+      <RotationControl
+        key={formData.id}
+        objectId={formData.id}
+        inputId="shape-rotation"
+        angle={formData.rotation ?? 0}
+        onChange={(angle) => updateField("rotation", angle)}
+      />
       <FillSection formData={formData} updateField={updateField} isLine={isLine} />
       <BorderSection
         formData={formData}

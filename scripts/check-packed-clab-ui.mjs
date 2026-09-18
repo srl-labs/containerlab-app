@@ -64,6 +64,9 @@ try {
   assert.equal(manifest.version, readJson("packages/clab-ui/package.json").version);
   assert.equal(manifest.publishConfig.registry, "https://registry.npmjs.org");
   assert.equal(manifest.private, false);
+  for (const asset of ["viewer.html", "component.mjs", "component.css"]) {
+    assert.ok(fs.existsSync(path.join(packageRoot, "dist-viewer", asset)), `missing documentation viewer asset: ${asset}`);
+  }
   const publicModules = Object.entries(manifest.exports)
     .filter(([, target]) => typeof target === "object" && target.types)
     .map(([subpath]) => manifest.name + (subpath === "." ? "" : subpath.slice(1)));
@@ -107,9 +110,16 @@ try {
     run(process.execPath, ["node_modules/typescript/bin/tsc", "-p", "tsconfig.public.json"]);
   }
   fs.writeFileSync(path.join(temporary, "bundle.mjs"), `
+    import assert from "node:assert/strict";
     import { build } from "esbuild";
     await build({ entryPoints: ["browser.ts"], bundle: true, platform: "browser", format: "esm", outdir: "browser-dist",
       loader: { ".woff": "dataurl", ".woff2": "dataurl", ".ttf": "dataurl", ".svg": "dataurl", ".png": "dataurl" } });
+    // VS Code consumes these entries without the standalone workspace, terminal or 3D logo.
+    const result = await build({ stdin: { contents: 'import * as editor from "@containerlab/clab-ui"; import * as explorer from "@containerlab/clab-ui/explorer"; console.log(editor, explorer);', resolveDir: process.cwd() },
+      bundle: true, platform: "browser", format: "esm", outdir: "embedded-dist", write: false, metafile: true,
+      loader: { ".woff": "dataurl", ".woff2": "dataurl", ".ttf": "dataurl", ".svg": "dataurl", ".png": "dataurl" } });
+    const unusedFeatures = Object.keys(result.metafile.inputs).filter((file) => file.includes("/@containerlab/clab-ui/dist/workspace/") || file.includes("/@xterm/") || file.includes("/three/"));
+    assert.deepEqual(unusedFeatures, [], "embedded editor/explorer must not import standalone features");
   `);
   run(process.execPath, ["bundle.mjs"]);
   run(process.execPath, ["consumer.ts"]);

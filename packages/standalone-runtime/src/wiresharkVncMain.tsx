@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
@@ -54,7 +55,7 @@ function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): 
     return;
   }
 
-  void fetch(closePath, {
+  void runtimeFetch(closePath, {
     method: "POST",
     keepalive: true,
     credentials: "same-origin"

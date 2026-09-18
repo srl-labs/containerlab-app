@@ -3,7 +3,7 @@ import React, { memo, useCallback } from "react";
 import { type NodeProps, NodeResizer, type ResizeParams } from "@xyflow/react";
 
 import { SELECTION_COLOR } from "../types";
-import { vscodePalette } from "../../../theme/vscodeTheme";
+import { vscodePalette } from "../../../theme/vscodePalette";
 import { useIsLocked } from "../../../stores/topoViewerStore";
 import { useAnnotationHandlers } from "../../../stores/canvasStore";
 

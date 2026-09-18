@@ -1,0 +1,163 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "ams",
+      "position": {
+        "x": 165,
+        "y": 150
+      },
+      "icon": "pe",
+      "iconColor": "#b9a5ef",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "fra",
+      "position": {
+        "x": 440,
+        "y": 95
+      },
+      "icon": "pe",
+      "iconColor": "#cbb9ff",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "ber",
+      "position": {
+        "x": 715,
+        "y": 150
+      },
+      "icon": "pe",
+      "iconColor": "#b9a5ef",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "waw",
+      "position": {
+        "x": 715,
+        "y": 400
+      },
+      "icon": "pe",
+      "iconColor": "#88cbd0",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "vie",
+      "position": {
+        "x": 440,
+        "y": 455
+      },
+      "icon": "pe",
+      "iconColor": "#88cbd0",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "par",
+      "position": {
+        "x": 165,
+        "y": 400
+      },
+      "icon": "pe",
+      "iconColor": "#88cbd0",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    }
+  ],
+  "groupStyleAnnotations": [],
+  "freeTextAnnotations": [
+    {
+      "id": "wan-heading",
+      "text": "**The long way is still a way.**",
+      "position": {
+        "x": 40,
+        "y": -70
+      },
+      "width": 850,
+      "height": 65,
+      "fontSize": 34,
+      "fontColor": "#eee8ff",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "wan-subtitle",
+      "text": "A six-city ring for routing and link-failure experiments.",
+      "position": {
+        "x": 42,
+        "y": -8
+      },
+      "width": 840,
+      "height": 40,
+      "fontSize": 17,
+      "fontColor": "#a69fc3",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "ring-center",
+      "text": "**SIX CITIES**\nOne resilient idea.",
+      "position": {
+        "x": 332,
+        "y": 267
+      },
+      "width": 295,
+      "height": 100,
+      "fontSize": 26,
+      "fontColor": "#ddd3f6",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif",
+      "textAlign": "center"
+    },
+    {
+      "id": "wan-exercise",
+      "text": "**TRY THIS**  Disable FRA \u2194 BER, then compare the route.",
+      "position": {
+        "x": 90,
+        "y": 575
+      },
+      "width": 770,
+      "height": 48,
+      "fontSize": 17,
+      "fontColor": "#bcafd8",
+      "backgroundColor": "#211d3b",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "ring-halo",
+      "shapeType": "circle",
+      "position": {
+        "x": 285,
+        "y": 190
+      },
+      "width": 390,
+      "height": 220,
+      "fillColor": "#2a2347",
+      "fillOpacity": 35,
+      "borderColor": "#55446f",
+      "borderWidth": 1,
+      "borderStyle": "dashed",
+      "zIndex": -5
+    }
+  ],
+  "viewerSettings": {
+    "linkLabelMode": "hide",
+    "gridColor": "#322a49",
+    "gridLineWidth": 0.5
+  }
+}

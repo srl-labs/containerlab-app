@@ -1,3 +1,4 @@
+import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import {
   createTopologySyncController,
@@ -106,6 +107,7 @@ export function createStandaloneTopologyManager(
   const fileListCache = new Map<string, { entries: TopologyFileEntry[]; fetchedAt: number }>();
   const fileListInFlight = new Map<string, Promise<TopologyFileEntry[]>>();
   let topologyEventSource: EventSource | null = null;
+  let unsubscribeLocalFiles: (() => void) | undefined;
   let topologyEventStreamEndpointId: string | null = null;
   let topologyEventStreamSessionId: string | null = null;
   let pendingRuntimeStatsContainers: HostRuntimeContainer[] | null = null;
@@ -149,6 +151,8 @@ export function createStandaloneTopologyManager(
   }
 
   function closeTopologyEventStream(): void {
+    unsubscribeLocalFiles?.();
+    unsubscribeLocalFiles = undefined;
     topologyEventSource?.close();
     topologyEventSource = null;
     topologyEventStreamEndpointId = null;
@@ -329,7 +333,7 @@ export function createStandaloneTopologyManager(
 
   async function fetchTopologyFilesForEndpoint(endpointId: string): Promise<TopologyFileEntry[]> {
     try {
-      const response = await fetch(standaloneServerUrl("/files"), withEndpointHeaders(endpointId, { credentials: "include" }));
+      const response = await runtimeFetch(standaloneServerUrl("/files"), withEndpointHeaders(endpointId, { credentials: "include" }));
       if (!response.ok) {
         return [];
       }
@@ -390,7 +394,7 @@ export function createStandaloneTopologyManager(
       return;
     }
     try {
-      await fetch(
+      await runtimeFetch(
         `/api/topology/sessions/${encodeURIComponent(sessionId)}`,
         withEndpointHeaders(endpointId ?? undefined, {
           method: "DELETE",
@@ -456,7 +460,7 @@ export function createStandaloneTopologyManager(
       hostOptions.mode ?? modeForSourcePreference(hostOptions.sourcePreference ?? "api-file");
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef, options.getLabs());
 
-    const response = await fetch(
+    const response = await runtimeFetch(
       "/api/topology/sessions",
       withEndpointHeaders(endpointId, {
         method: "POST",
@@ -531,6 +535,18 @@ export function createStandaloneTopologyManager(
   }
 
   function ensureTopologyEventStream(): void {
+    const backend = getStandaloneBackend();
+    if (!backend.capabilities.events) {
+      unsubscribeLocalFiles ??= backend.subscribeFiles?.((endpointId) => {
+        if (endpointId !== currentEndpointId || !currentSessionId) return;
+        invalidateTopologyFileListCache(endpointId);
+        options.onTopologyFilesChanged();
+        // The adapter identifies actual external document changes; unrelated file
+        // events and acknowledged commands must not clear the undo history.
+        topologySyncController.schedule(0);
+      });
+      return;
+    }
     const sessionId = currentSessionId?.trim() ?? "";
     const endpointId = currentEndpointId?.trim() ?? "";
     if (

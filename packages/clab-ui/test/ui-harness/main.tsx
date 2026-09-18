@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "../../src/App";
 import { defaultSchemaData } from "../../src/core/schema";
+import type { CustomIconInfo } from "../../src/core/types/icons";
 import { createClabUiRuntime } from "../../src/host";
 import { applyThemeVars } from "../../src/theme";
 import "../../src/styles/global.css";
@@ -38,6 +39,7 @@ const initialData = {
 };
 
 harnessWindow.__DEV__ = {
+  setCustomIcons: (icons: CustomIconInfo[]) => host.harness.setCustomIcons(icons),
   getCurrentFile: () => host.harness.getCurrentFile(),
   getHostSnapshot: () => host.getSnapshot(),
   getYamlFromFile: (filename: string) => host.harness.readYamlFile(filename),

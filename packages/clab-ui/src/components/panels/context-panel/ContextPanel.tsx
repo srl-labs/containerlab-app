@@ -147,7 +147,7 @@ const ToggleHandle: React.FC<{
     <Box
       sx={{
         position: "absolute",
-        [sideConfig.positionProp]: anchorOffset,
+        [sideConfig.positionProp]: isOpen ? `min(${anchorOffset}px, 70%)` : 0,
         top: "50%",
         transform: "translateY(-50%)",
         transition: isDragging
@@ -165,6 +165,9 @@ const ToggleHandle: React.FC<{
     >
       <Tooltip title={toggleTitle} placement={sideConfig.tooltipPlacement}>
         <Box
+          component="button"
+          type="button"
+          aria-label={toggleTitle}
           onClick={handleToggle}
           data-testid="panel-toggle-btn"
           sx={{ ...handleStyle, height: 48 }}
@@ -177,7 +180,7 @@ const ToggleHandle: React.FC<{
           title={`Move panel to ${sideConfig.moveTargetLabel}`}
           placement={sideConfig.tooltipPlacement}
         >
-          <Box onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
+          <Box component="button" type="button" aria-label={`Move panel to ${sideConfig.moveTargetLabel}`} onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
             <SwapHorizIcon sx={{ fontSize: 14, color: TEXT_SECONDARY }} />
           </Box>
         </Tooltip>
@@ -247,6 +250,7 @@ export interface ContextPanelProps {
   onClose: () => void;
   onBack: () => void;
   onToggleSide: () => void;
+  onWidthChange?: (width: number) => void;
   rfInstance: ReactFlowInstance | null;
   palette: ContextPanelPaletteProps;
   view: ContextPanelViewProps;
@@ -260,6 +264,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   onClose,
   onBack,
   onToggleSide,
+  onWidthChange,
   palette,
   view,
   editor
@@ -274,23 +279,8 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   const sideRef = useRef(side);
   sideRef.current = side;
   const { panelWidth, isDragging, handleResizeStart } = usePanelResize(sideRef);
+  useEffect(() => { onWidthChange?.(panelWidth); }, [onWidthChange, panelWidth]);
 
-  useEffect(() => {
-    const app = document.querySelector("[data-testid='topoviewer-app']");
-    if (!(app instanceof HTMLElement)) return;
-    app.style.setProperty(
-      "--clab-ui-panel-right",
-      side === "right" && isOpen ? `${panelWidth}px` : "0px"
-    );
-    app.style.setProperty(
-      "--clab-ui-panel-left",
-      side === "left" && isOpen ? `${panelWidth}px` : "0px"
-    );
-    return () => {
-      app.style.removeProperty("--clab-ui-panel-right");
-      app.style.removeProperty("--clab-ui-panel-left");
-    };
-  }, [isOpen, panelWidth, side]);
 
   const setFooterRef = useCallback((ref: FooterRef | null) => {
     const changed = hasFooterRefChanged(footerRef.current, ref);
@@ -347,6 +337,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
           "& .MuiDrawer-paper": {
             position: "absolute",
             width: panelWidth,
+            maxWidth: "70%",
             boxShadow: 4,
             [sideLayout.border]: 1,
             borderColor: "divider",
@@ -417,6 +408,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         )}
 
         <Box
+          data-testid="context-panel-resize-handle"
           onMouseDown={handleResizeStart}
           sx={{
             position: "absolute",

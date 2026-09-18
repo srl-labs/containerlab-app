@@ -1,0 +1,114 @@
+clab-topology {
+  --clab-surface: #101823;
+  --clab-raised: #16212f;
+  --clab-border: #293648;
+  --clab-text: #e0e9f5;
+  --clab-muted: #90a3ba;
+  --clab-accent: #6bc8f0;
+  --clab-font: system-ui, sans-serif;
+  display: block;
+  position: relative;
+  margin: 1.8rem 0;
+  color: var(--clab-text);
+  background: var(--clab-surface);
+  border: 1px solid var(--clab-border);
+  border-radius: var(--clab-radius, 14px);
+  overflow: hidden;
+  text-align: left;
+  font: 400 13px/1.6 var(--clab-font);
+  box-shadow: var(--clab-shadow, 0 16px 64px #00000012);
+  contain: layout;
+  color-scheme: dark;
+}
+clab-topology[data-theme="light"] {
+  --clab-surface: #f7f9fc;
+  --clab-raised: #ffffff;
+  --clab-border: #dce4ee;
+  --clab-text: #24354a;
+  --clab-muted: #5b6e85;
+  --clab-accent: #096f9c;
+  color-scheme: light;
+}
+clab-topology *, clab-topology *::before, clab-topology *::after { box-sizing: border-box; }
+clab-topology [hidden] { display: none !important; }
+clab-topology button, clab-topology select { font: inherit; color: inherit; }
+clab-topology button { border: 0; cursor: pointer; background: transparent; }
+clab-topology button:disabled { opacity: .3; cursor: default; }
+clab-topology button:focus-visible, clab-topology select:focus-visible, clab-topology pre:focus-visible { outline: 2px solid var(--clab-accent); outline-offset: -3px; }
+clab-topology svg { width: 17px; height: 17px; flex-shrink: 0; }
+.clab-component-heading { display: flex; align-items: center; gap: 10px; padding: 15px 20px; border-bottom: 1px solid var(--clab-border); }
+.clab-component-heading strong { font-size: 13px; font-weight: 550; }
+.clab-component-mark { display: flex; color: var(--clab-accent); }
+.clab-live-badge { margin-left: auto; font-size: 9px; letter-spacing: .13em; color: var(--clab-muted); display: flex; align-items: center; gap: 7px; }
+.clab-live-badge i { width: 5px; height: 5px; background: #65cda1; border-radius: 50%; box-shadow: 0 0 0 3px #65cda112; }
+.clab-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--clab-border); background: var(--clab-raised); gap: 8px; }
+.clab-tabs { display: flex; gap: 3px; }
+.clab-tabs button { display: flex; align-items: center; gap: 7px; border-radius: 6px; padding: 7px 11px; color: var(--clab-muted); font-size: 12px; }
+.clab-tabs button[aria-selected="true"] { color: var(--clab-accent); background: color-mix(in srgb, var(--clab-accent) 12%, transparent); }
+.clab-tabs button:hover, .clab-icon-button:hover { background: color-mix(in srgb, var(--clab-muted) 12%, transparent); color: var(--clab-text); }
+.clab-actions { display: flex; gap: 2px; }
+.clab-icon-button { display: grid; place-items: center; padding: 8px; border-radius: 6px; color: var(--clab-muted) !important; }
+.clab-panels { display: grid; height: var(--clab-height, 460px); min-height: 0; }
+clab-topology[data-view="split"] .clab-panels { grid-template-columns: var(--clab-split, 1.25fr 1fr); }
+.clab-graph { position: relative; min-width: 0; min-height: 0; }
+.clab-graph iframe { display: block; width: 100%; height: 100%; border: 0; }
+.clab-loading { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; padding: 24px; text-align: center; z-index: 1; color: var(--clab-muted); background: var(--clab-surface); }
+.clab-loader { width: 24px; height: 24px; border: 2px solid var(--clab-border); border-top-color: var(--clab-accent); border-radius: 50%; animation: clab-spin 1s linear infinite; }
+.clab-load-error .clab-loader { display: none; }
+.clab-load-error button { padding: 6px 14px; border: 1px solid var(--clab-border); border-radius: 6px; }
+.clab-code { display: flex; flex-direction: column; overflow: hidden; min-width: 0; min-height: 0; }
+clab-topology[data-view="split"] .clab-code { border-left: 1px solid var(--clab-border); }
+.clab-file-label { display: flex; align-items: center; gap: 8px; color: var(--clab-muted); font: 11px/1.5 "JetBrains Mono", monospace; padding: 11px 16px; border-bottom: 1px solid var(--clab-border); }
+clab-topology pre.clab-source { flex: 1; position: relative; margin: 0; padding: 18px 0; overflow: auto; border-radius: 0; background: var(--clab-surface); color: var(--clab-text); font: 11.5px/1.9 "JetBrains Mono", monospace; scrollbar-width: thin; tab-size: 2; }
+clab-topology pre.clab-source code { display: block; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; min-width: max-content; }
+.clab-code-line { display: inline-block; min-width: 100%; padding-right: 24px; }
+.clab-code-line::before { content: attr(data-line); display: inline-block; width: 44px; padding-right: 14px; color: var(--clab-muted); opacity: .5; text-align: right; user-select: none; }
+.clab-code-line.clab-line-selected { background: color-mix(in srgb, var(--clab-accent) 12%, transparent); box-shadow: inset 2px 0 var(--clab-accent); }
+.clab-source .nt, .clab-source .na { color: #82c5ed; }
+.clab-source .s, .clab-source .s1, .clab-source .s2 { color: #a1d7b6; }
+.clab-source .c1 { color: #71839c; font-style: italic; }
+.clab-source .p { color: #9bacc1; }
+.clab-source .kc, .clab-source .mi { color: #efc68c; }
+[data-md-color-scheme="default"] .clab-source .nt { color: #00689d; }
+[data-md-color-scheme="default"] .clab-source .s, [data-md-color-scheme="default"] .clab-source .s1, [data-md-color-scheme="default"] .clab-source .s2 { color: #236c49; }
+.clab-inspector { display: flex; gap: 14px; align-items: center; border-top: 1px solid var(--clab-border); background: var(--clab-raised); padding: 10px 16px; min-height: 49px; }
+.clab-inspector select { max-width: 170px; border: 1px solid var(--clab-border); border-radius: 5px; background: var(--clab-surface); padding: 4px 8px; font-size: 11px; }
+.clab-node-detail { font-size: 11px; color: var(--clab-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.clab-inspector button { margin-left: auto; white-space: nowrap; color: var(--clab-accent); font-size: 11px; }
+.clab-component-footer { border-top: 1px solid var(--clab-border); padding: 9px 18px; display: flex; align-items: center; gap: 18px; font-size: 10px; color: var(--clab-muted); }
+.clab-hint { margin-left: auto; }
+.clab-feedback:empty { display: none; }
+.clab-feedback { color: var(--clab-accent); }
+.clab-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+clab-topology:fullscreen { display: flex; flex-direction: column; margin: 0; border-radius: 0; }
+clab-topology:fullscreen .clab-panels { flex: 1; }
+/* Bare diagrams sit directly in the document, including over custom backgrounds. */
+clab-topology[data-borderless="true"] { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+clab-topology[data-borderless="true"] .clab-loading { background: transparent; }
+clab-topology[data-borderless="true"][data-error] .clab-panels { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+clab-topology[data-borderless="true"][data-error] .clab-loading { position: relative; padding: 16px; }
+clab-topology[data-borderless="true"][data-error] iframe { display: none; }
+clab-topology[data-borderless="true"][data-error] .clab-code { border: 0; }
+@keyframes clab-spin { to { transform: rotate(360deg); } }
+@media (max-width: 650px) {
+  .clab-toolbar { padding: 7px; }
+  .clab-tabs button { padding: 8px; gap: 5px; }
+  .clab-tabs button svg { display: none; }
+  .clab-actions { gap: 0; }
+  .clab-icon-button { padding: 7px; }
+  .clab-component-heading { padding: 13px; }
+  .clab-live-badge { font-size: 8px; }
+  .clab-node-detail { display: none; }
+  .clab-hint { font-size: 9px; }
+  .clab-panels { height: min(var(--clab-height, 460px), 360px); }
+  clab-topology[data-view="split"] .clab-panels { height: calc(min(var(--clab-height, 460px), 360px) + 260px); grid-template-columns: 1fr; grid-template-rows: 1fr 260px; }
+  clab-topology[data-view="split"] .clab-code { border-left: 0; border-top: 1px solid var(--clab-border); }
+}
+@media (prefers-reduced-motion: reduce) { .clab-loader { animation: none; } }
+@media print {
+  clab-topology { break-inside: avoid; color: #111; background: #fff; box-shadow: none; }
+  clab-topology .clab-graph, .clab-toolbar, .clab-inspector, .clab-component-footer { display: none !important; }
+  clab-topology .clab-code[hidden], clab-topology .clab-code { display: block !important; }
+  clab-topology .clab-panels { display: block; height: auto !important; }
+  clab-topology pre.clab-source { height: auto; overflow: visible; }
+}

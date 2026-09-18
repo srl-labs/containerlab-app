@@ -4,7 +4,7 @@ Build, run, and explore your [containerlab](https://containerlab.dev/) network l
 
 All three apps share the same topology editor, so you can choose the environment that fits how you work.
 
-[![Docs](https://img.shields.io/badge/Docs-containerlab.dev-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://containerlab.dev/)
+[![Docs](https://img.shields.io/badge/Docs-Containerlab_Apps-blue?style=flat-square&color=00c9ff&labelColor=bec8d2)](https://srl-labs.github.io/containerlab-app/docs/)
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
 [![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
 
@@ -149,6 +149,8 @@ The [containerlab documentation](https://containerlab.dev/) covers topology file
 
 ## Development
 
+The [Containerlab Apps documentation](https://srl-labs.github.io/containerlab-app/docs/) covers the apps and includes interactive topology examples. Run `pnpm run docs` to preview it locally (requires Python 3.11+ and [uv](https://docs.astral.sh/uv/)). See [contributing to the docs](docs/contributing.md) for the Zensical build and the reusable YAML/topology component.
+
 Use Node.js `24.21.0` and pnpm `12.4.2`, as pinned in `package.json`. From the repository root:
 
 ```sh
@@ -160,4 +162,4 @@ Run `pnpm web:local` or `pnpm desktop:local` to launch an app, `pnpm vsix` to pa
 
 From WSL, use `pnpm desktop:windows` to build and launch the native Windows app with Windows window borders and controls. It uses Windows PowerShell interop; Node and pnpm only need to be installed in WSL. Close the app and rerun the command after edits.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, and [RELEASING.md](RELEASING.md) for publishing.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development, builds, and tests, the [shared UI guide](packages/clab-ui/README.md) for `@containerlab/clab-ui`, the [standalone viewer guide](packages/clab-viewer/README.md) for external embeds, and [RELEASING.md](RELEASING.md) for publishing.

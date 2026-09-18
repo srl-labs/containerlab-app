@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 import type {
   SaveConfigResponse,
   TerminalProtocol,
@@ -64,7 +65,7 @@ export interface RuntimeTargetRequest {
   topologyRef?: TopologyRef;
 }
 
-export interface InspectContainerInfo {
+interface InspectContainerInfo {
   name: string;
   containerId: string;
   image: string;
@@ -281,7 +282,7 @@ export function resolveRuntimeRequestUrl(
 async function requestJson<T>(input: string, init?: RequestInit, endpointId?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(resolveRuntimeRequestUrl(input), {
+    response = await runtimeFetch(resolveRuntimeRequestUrl(input), {
       credentials: "include",
       ...init
     });
@@ -332,7 +333,7 @@ async function requestBlob(
 ): Promise<BinaryDownloadResult> {
   let response: Response;
   try {
-    response = await fetch(resolveRuntimeRequestUrl(input), {
+    response = await runtimeFetch(resolveRuntimeRequestUrl(input), {
       credentials: "include",
       ...init
     });
@@ -920,7 +921,7 @@ export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconLi
 async function deleteUiIconIfExists(iconName: string, endpointId?: string): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await runtimeFetch(
       resolveRuntimeRequestUrl(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`),
       withEndpointHeaders({ method: "DELETE" }, endpointId)
     );
@@ -1087,17 +1088,4 @@ export async function deleteTopologyFile(target: RuntimeTargetRequest): Promise<
     asJsonBody(target, endpointId),
     endpointId
   );
-}
-
-export function normalizeNetemFields(value: unknown): NetemFields {
-  if (!isRecord(value)) {
-    return { delay: "", jitter: "", loss: "", rate: "", corruption: "" };
-  }
-  return {
-    delay: typeof value.delay === "string" ? value.delay : "",
-    jitter: typeof value.jitter === "string" ? value.jitter : "",
-    loss: typeof value.loss === "string" ? value.loss : "",
-    rate: typeof value.rate === "string" ? value.rate : "",
-    corruption: typeof value.corruption === "string" ? value.corruption : ""
-  };
 }

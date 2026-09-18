@@ -87,10 +87,10 @@ export async function getPan(page: Page): Promise<{ x: number; y: number }> {
  * Fit the graph to the viewport.
  */
 export async function fitGraph(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const dev = (window as any).__DEV__;
-    dev?.rfInstance?.fitView?.({ padding: 0.1 });
-  });
+  // Wait for the panel handle to stop moving before measuring the visible canvas.
+  await page.getByTestId("panel-toggle-btn").click({ trial: true });
+  // Use the toolbar so fitting accounts for the floating context panel.
+  await page.getByTestId("navbar-fit-viewport").click();
   await page.waitForTimeout(300);
 }
 
@@ -702,41 +702,4 @@ export async function boxSelect(
   await drag(page, from, to, { steps: 5 });
   await page.keyboard.up("Shift");
   await page.waitForTimeout(50);
-
-  await page.evaluate(
-    ({ start, end, topoType, networkType }) => {
-      const left = Math.min(start.x, end.x);
-      const right = Math.max(start.x, end.x);
-      const top = Math.min(start.y, end.y);
-      const bottom = Math.max(start.y, end.y);
-      const dev = (window as any).__DEV__;
-      const rf = dev?.rfInstance;
-      if (!rf) return;
-
-      const selectedIds = (rf.getNodes?.() ?? [])
-        .filter((node: any) => node.type === topoType || node.type === networkType)
-        .filter((node: any) => {
-          const element = document.querySelector(`[data-id="${CSS.escape(node.id)}"]`);
-          const rect = element?.getBoundingClientRect();
-          if (!rect) return false;
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          return centerX >= left && centerX <= right && centerY >= top && centerY <= bottom;
-        })
-        .map((node: any) => node.id);
-
-      if (selectedIds.length === 0) return;
-
-      if (dev?.selectNodesForClipboard) {
-        dev.selectNodesForClipboard(selectedIds);
-        return;
-      }
-
-      const selected = new Set(selectedIds);
-      rf.setNodes(
-        rf.getNodes().map((node: any) => ({ ...node, selected: selected.has(node.id) }))
-      );
-    },
-    { start: from, end: to, topoType: TOPOLOGY_NODE_TYPE, networkType: NETWORK_NODE_TYPE }
-  );
 }

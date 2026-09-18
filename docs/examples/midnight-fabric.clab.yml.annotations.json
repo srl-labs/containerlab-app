@@ -1,0 +1,348 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "spine1",
+      "position": {
+        "x": 300,
+        "y": 95
+      },
+      "icon": "spine",
+      "iconColor": "#d4f58a",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "spine2",
+      "position": {
+        "x": 580,
+        "y": 95
+      },
+      "icon": "spine",
+      "iconColor": "#d4f58a",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 95,
+        "y": 310
+      },
+      "icon": "leaf",
+      "iconColor": "#63d7cb",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-1"
+    },
+    {
+      "id": "compute1",
+      "position": {
+        "x": 95,
+        "y": 450
+      },
+      "icon": "server",
+      "iconColor": "#a3b9dc",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-1"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 325,
+        "y": 310
+      },
+      "icon": "leaf",
+      "iconColor": "#63d7cb",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-2"
+    },
+    {
+      "id": "compute2",
+      "position": {
+        "x": 325,
+        "y": 450
+      },
+      "icon": "server",
+      "iconColor": "#a3b9dc",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-2"
+    },
+    {
+      "id": "leaf3",
+      "position": {
+        "x": 555,
+        "y": 310
+      },
+      "icon": "leaf",
+      "iconColor": "#63d7cb",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-3"
+    },
+    {
+      "id": "compute3",
+      "position": {
+        "x": 555,
+        "y": 450
+      },
+      "icon": "server",
+      "iconColor": "#a3b9dc",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-3"
+    },
+    {
+      "id": "leaf4",
+      "position": {
+        "x": 785,
+        "y": 310
+      },
+      "icon": "leaf",
+      "iconColor": "#63d7cb",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-4"
+    },
+    {
+      "id": "compute4",
+      "position": {
+        "x": 785,
+        "y": 450
+      },
+      "icon": "server",
+      "iconColor": "#a3b9dc",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "rack-4"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "rack-1",
+      "name": "RACK 01",
+      "level": "L1",
+      "position": {
+        "x": 45,
+        "y": 285
+      },
+      "width": 160,
+      "height": 255,
+      "backgroundColor": "#102631",
+      "backgroundOpacity": 85,
+      "borderColor": "#2e525d",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#8cb7c2",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "rack-2",
+      "name": "RACK 02",
+      "level": "L1",
+      "position": {
+        "x": 275,
+        "y": 285
+      },
+      "width": 160,
+      "height": 255,
+      "backgroundColor": "#102631",
+      "backgroundOpacity": 85,
+      "borderColor": "#2e525d",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#8cb7c2",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "rack-3",
+      "name": "RACK 03",
+      "level": "L1",
+      "position": {
+        "x": 505,
+        "y": 285
+      },
+      "width": 160,
+      "height": 255,
+      "backgroundColor": "#102631",
+      "backgroundOpacity": 85,
+      "borderColor": "#2e525d",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#8cb7c2",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "rack-4",
+      "name": "RACK 04",
+      "level": "L1",
+      "position": {
+        "x": 735,
+        "y": 285
+      },
+      "width": 160,
+      "height": 255,
+      "backgroundColor": "#102631",
+      "backgroundOpacity": 85,
+      "borderColor": "#2e525d",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#8cb7c2",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "fabric-heading",
+      "text": "**EVERY RACK. TWO PATHS.**",
+      "position": {
+        "x": 35,
+        "y": -30
+      },
+      "width": 660,
+      "height": 60,
+      "fontSize": 30,
+      "fontColor": "#f0f6ef",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "fabric-subtitle",
+      "text": "A redundant Clos fabric \u00b7 physical wiring study",
+      "position": {
+        "x": 37,
+        "y": 28
+      },
+      "width": 650,
+      "height": 40,
+      "fontSize": 15,
+      "fontColor": "#96b4c2",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "underlay",
+      "text": "SPINE LAYER / SHARED TRANSIT",
+      "position": {
+        "x": 300,
+        "y": 62
+      },
+      "width": 340,
+      "height": 32,
+      "fontSize": 11,
+      "fontColor": "#c5de9e",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    },
+    {
+      "id": "rack-subnet-1",
+      "text": "POD 01",
+      "position": {
+        "x": 85,
+        "y": 555
+      },
+      "width": 95,
+      "height": 30,
+      "fontSize": 12,
+      "fontColor": "#8cb7c2",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    },
+    {
+      "id": "rack-subnet-2",
+      "text": "POD 02",
+      "position": {
+        "x": 315,
+        "y": 555
+      },
+      "width": 95,
+      "height": 30,
+      "fontSize": 12,
+      "fontColor": "#8cb7c2",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    },
+    {
+      "id": "rack-subnet-3",
+      "text": "POD 03",
+      "position": {
+        "x": 545,
+        "y": 555
+      },
+      "width": 95,
+      "height": 30,
+      "fontSize": 12,
+      "fontColor": "#8cb7c2",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    },
+    {
+      "id": "rack-subnet-4",
+      "text": "POD 04",
+      "position": {
+        "x": 775,
+        "y": 555
+      },
+      "width": 95,
+      "height": 30,
+      "fontSize": 12,
+      "fontColor": "#8cb7c2",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    },
+    {
+      "id": "fabric-footnote",
+      "text": "8 fabric uplinks  /  4 access links  /  no single spine dependency",
+      "position": {
+        "x": 100,
+        "y": 618
+      },
+      "width": 780,
+      "height": 35,
+      "fontSize": 14,
+      "fontColor": "#b7cec7",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true,
+      "textAlign": "center"
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "viewerSettings": {
+    "linkLabelMode": "hide",
+    "gridColor": "#25394a",
+    "gridLineWidth": 0.5
+  }
+}

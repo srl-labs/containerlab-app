@@ -56,7 +56,7 @@ export function StandaloneFileEditor({ onClose }: Pick<TabActions, "onClose">) {
   );
 }
 
-export function StandaloneLabEmptyState() {
+export function StandaloneLabEmptyState({ onCreateLab }: { onCreateLab: () => Promise<void> }) {
   const hasTabs = useLabTabsStore((state) => state.tabs.length > 0);
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -70,7 +70,7 @@ export function StandaloneLabEmptyState() {
   if (hasTabs || !ready) return null;
   return (
     <Suspense fallback={null}>
-      <EmptyState occlusionLeft={0} occlusionRight={0} />
+      <EmptyState onCreateLab={() => { void onCreateLab(); }} />
     </Suspense>
   );
 }

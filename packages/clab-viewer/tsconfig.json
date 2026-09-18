@@ -1,0 +1,5 @@
+{
+  "extends": "../clab-ui/tsconfig.base.json",
+  "compilerOptions": { "paths": {} },
+  "include": ["src/**/*.ts", "../clab-ui/src/**/*.d.ts"]
+}

@@ -35,6 +35,7 @@ function AppRoot({
   initialData,
   chrome,
   slots,
+  viewerOptions,
   lifecycleActionsAvailable
 }: AppRootProps): React.JSX.Element {
   const reactFlowRef = React.useRef<ReactFlowCanvasRef>(null);
@@ -58,6 +59,7 @@ function AppRoot({
       onInit={setRfInstance}
       chrome={chrome}
       slots={slots}
+      viewerOptions={viewerOptions}
       lifecycleActionsAvailable={lifecycleActionsAvailable}
     />
   );
@@ -70,13 +72,14 @@ export const App: React.FC<
     runtime: ClabUiRuntime;
     chrome?: AppChrome;
   }
-> = ({ initialData, runtime, chrome, slots, lifecycleActionsAvailable }) => {
+> = ({ initialData, runtime, chrome, slots, viewerOptions, lifecycleActionsAvailable }) => {
   return (
     <ClabUiRuntimeProvider runtime={runtime}>
       <AppRoot
         initialData={initialData}
         chrome={chrome}
         slots={slots}
+        viewerOptions={viewerOptions}
         lifecycleActionsAvailable={lifecycleActionsAvailable}
       />
     </ClabUiRuntimeProvider>

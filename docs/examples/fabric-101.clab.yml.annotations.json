@@ -1,0 +1,215 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 70,
+        "y": 180
+      },
+      "icon": "leaf",
+      "iconColor": "#19826b",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "spine1",
+      "position": {
+        "x": 430,
+        "y": 180
+      },
+      "icon": "spine",
+      "iconColor": "#4d6550",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 790,
+        "y": 180
+      },
+      "icon": "leaf",
+      "iconColor": "#19826b",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "rack-a",
+      "name": "01 / RACK A",
+      "level": "L1",
+      "position": {
+        "x": 25,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#cddbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "transit",
+      "name": "02 / TRANSIT",
+      "level": "L1",
+      "position": {
+        "x": 385,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#e6eddf",
+      "backgroundOpacity": 85,
+      "borderColor": "#bacdbb",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "rack-b",
+      "name": "03 / RACK B",
+      "level": "L1",
+      "position": {
+        "x": 745,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#cddbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "paper-heading",
+      "text": "**Small fabric. Every detail.**",
+      "position": {
+        "x": 20,
+        "y": 0
+      },
+      "width": 760,
+      "height": 65,
+      "fontSize": 34,
+      "fontColor": "#253f33",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "paper-subtitle",
+      "text": "A /31 addressing plan, right where you need it.",
+      "position": {
+        "x": 22,
+        "y": 58
+      },
+      "width": 720,
+      "height": 45,
+      "fontSize": 17,
+      "fontColor": "#627565",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "endpoint-a",
+      "text": "**e1-49**\n10.0.0.1/31",
+      "position": {
+        "x": 180,
+        "y": 135
+      },
+      "width": 135,
+      "height": 64,
+      "fontSize": 14,
+      "fontColor": "#436052",
+      "backgroundColor": "#ffffff",
+      "roundedBackground": true,
+      "fontFamily": "monospace"
+    },
+    {
+      "id": "endpoint-b",
+      "text": "**e1-1**\n10.0.0.0/31",
+      "position": {
+        "x": 275,
+        "y": 250
+      },
+      "width": 135,
+      "height": 64,
+      "fontSize": 14,
+      "fontColor": "#436052",
+      "backgroundColor": "#ffffff",
+      "roundedBackground": true,
+      "fontFamily": "monospace"
+    },
+    {
+      "id": "endpoint-c",
+      "text": "**e1-2**\n10.0.0.2/31",
+      "position": {
+        "x": 540,
+        "y": 135
+      },
+      "width": 135,
+      "height": 64,
+      "fontSize": 14,
+      "fontColor": "#436052",
+      "backgroundColor": "#ffffff",
+      "roundedBackground": true,
+      "fontFamily": "monospace"
+    },
+    {
+      "id": "endpoint-d",
+      "text": "**e1-49**\n10.0.0.3/31",
+      "position": {
+        "x": 635,
+        "y": 250
+      },
+      "width": 135,
+      "height": 64,
+      "fontSize": 14,
+      "fontColor": "#436052",
+      "backgroundColor": "#ffffff",
+      "roundedBackground": true,
+      "fontFamily": "monospace"
+    },
+    {
+      "id": "paper-note",
+      "text": "**DESIGN NOTE**  Both leaves use e1-49 for their uplink.",
+      "position": {
+        "x": 22,
+        "y": 368
+      },
+      "width": 875,
+      "height": 42,
+      "fontSize": 16,
+      "fontColor": "#436052",
+      "backgroundColor": "#e3eddf",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "viewerSettings": {
+    "linkLabelMode": "hide",
+    "gridColor": "#ccd8cc",
+    "gridLineWidth": 0.5
+  }
+}

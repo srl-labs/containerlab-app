@@ -1,0 +1,39 @@
+# Wiring only. Configure addressing and routing as a separate exercise.
+name: midnight-fabric
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    spine1: {type: ixrd3}
+    spine2: {type: ixrd3}
+    leaf1: {type: ixrd2}
+    leaf2: {type: ixrd2}
+    leaf3: {type: ixrd2}
+    leaf4: {type: ixrd2}
+    compute1:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    compute2:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    compute3:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    compute4:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+  links:
+    - endpoints: [spine1:e1-1, leaf1:e1-49]
+    - endpoints: [spine1:e1-2, leaf2:e1-49]
+    - endpoints: [spine1:e1-3, leaf3:e1-49]
+    - endpoints: [spine1:e1-4, leaf4:e1-49]
+    - endpoints: [spine2:e1-1, leaf1:e1-50]
+    - endpoints: [spine2:e1-2, leaf2:e1-50]
+    - endpoints: [spine2:e1-3, leaf3:e1-50]
+    - endpoints: [spine2:e1-4, leaf4:e1-50]
+    - endpoints: [leaf1:e1-1, compute1:eth1]
+    - endpoints: [leaf2:e1-1, compute2:eth1]
+    - endpoints: [leaf3:e1-1, compute3:eth1]
+    - endpoints: [leaf4:e1-1, compute4:eth1]

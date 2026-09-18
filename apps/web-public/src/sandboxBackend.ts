@@ -8,16 +8,16 @@ import {
   type TopologySnapshot,
 } from "@containerlab/clab-ui/session";
 
-import type { EndpointConfig } from "./stores/endpointStore";
+import type { EndpointConfig } from "@srl-labs/containerlab-standalone-runtime/endpoints";
 import {
   buildStandaloneTopologyRefFromPath,
   normalizePathValue,
   safeFilename,
   stripTopologySuffix,
   type TopologyFileEntry,
-} from "./standaloneHostShared";
+} from "@srl-labs/containerlab-standalone-runtime/host";
 
-export const SANDBOX_ENDPOINT_ID = "pages-sandbox";
+const SANDBOX_ENDPOINT_ID = "pages-sandbox";
 export const SANDBOX_FILES_CHANGED_EVENT = "clab-sandbox-files-changed";
 
 function newId(): string {
@@ -25,7 +25,7 @@ function newId(): string {
 }
 
 function notifySandboxFilesChanged(): void {
-  globalThis.dispatchEvent(new Event(SANDBOX_FILES_CHANGED_EVENT));
+  globalThis.dispatchEvent?.(new Event(SANDBOX_FILES_CHANGED_EVENT));
 }
 const SANDBOX_STORAGE_FILES = "clab-pages-sandbox-files-v1";
 const SANDBOX_STORAGE_DIRECTORIES = "clab-pages-sandbox-directories-v1";
@@ -90,6 +90,7 @@ export interface SandboxUploadFile {
 }
 
 interface TopologySessionRecord {
+  documentVersion?: string;
   host: TopologySessionCore;
   sessionId: string;
   topologyRef: TopologyRef;
@@ -630,6 +631,11 @@ export class SandboxBackend {
     this.sessions.delete(sessionId);
   }
 
+  private documentVersion(topologyRef: TopologyRef): string {
+    const files = this.fs.readFiles();
+    return JSON.stringify([files[topologyRef.yamlPath], files[topologyRef.annotationsPath ?? `${topologyRef.yamlPath}.annotations.json`]]);
+  }
+
   async getSnapshot(
     sessionId: string | undefined,
     options: { externalChange?: boolean } = {},
@@ -643,7 +649,10 @@ export class SandboxBackend {
       throw new Error("Topology session not found");
     }
     session.host.updateContext({ mode: "edit", deploymentState: "undeployed" });
-    return options.externalChange ? await session.host.onExternalChange() : await session.host.getSnapshot();
+    const externalChange = options.externalChange || (session.documentVersion !== undefined && session.documentVersion !== this.documentVersion(session.topologyRef));
+    const snapshot = externalChange ? await session.host.onExternalChange() : await session.host.getSnapshot();
+    session.documentVersion = this.documentVersion(session.topologyRef);
+    return snapshot;
   }
 
   async dispatchCommand(
@@ -660,7 +669,13 @@ export class SandboxBackend {
       return topologyError("Topology session not found");
     }
     session.host.updateContext({ mode: "edit", deploymentState: "undeployed" });
-    return await session.host.applyCommand(command, revision);
+    // Read external file edits before applying a revision-checked command. Own writes
+    // advance the baseline so a later snapshot preserves the command undo history.
+    await this.getSnapshot(id);
+    const result = await session.host.applyCommand(command, revision);
+    session.documentVersion = this.documentVersion(session.topologyRef);
+    notifySandboxFilesChanged();
+    return result;
   }
 
   getCustomNodes(): SandboxCustomNodes {

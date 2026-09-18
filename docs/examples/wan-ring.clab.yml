@@ -1,0 +1,22 @@
+# Physical ring only. Add routing and failure-detection configuration for the exercise.
+name: wan-ring
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+    type: ixrd2
+  nodes:
+    ams: {}
+    fra: {}
+    ber: {}
+    waw: {}
+    vie: {}
+    par: {}
+  links:
+    - endpoints: [ams:e1-1, fra:e1-2]
+    - endpoints: [fra:e1-1, ber:e1-2]
+    - endpoints: [ber:e1-1, waw:e1-2]
+    - endpoints: [waw:e1-1, vie:e1-2]
+    - endpoints: [vie:e1-1, par:e1-2]
+    - endpoints: [par:e1-1, ams:e1-2]

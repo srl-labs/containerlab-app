@@ -216,7 +216,7 @@ export function useDerivedAnnotations(): UseDerivedAnnotationsReturn {
       const currentAnnotation = nodeToFreeText(currentNode);
       const updatedAnnotation = { ...currentAnnotation, ...updates };
       const newNode = freeTextToNode(updatedAnnotation);
-      replaceNode(id, newNode);
+      replaceNode(id, { ...newNode, selected: currentNode.selected });
     },
     [replaceNode]
   );
@@ -250,7 +250,7 @@ export function useDerivedAnnotations(): UseDerivedAnnotationsReturn {
       const currentAnnotation = nodeToFreeShape(currentNode);
       const updatedAnnotation = { ...currentAnnotation, ...updates };
       const newNode = freeShapeToNode(updatedAnnotation);
-      replaceNode(id, newNode);
+      replaceNode(id, { ...newNode, selected: currentNode.selected });
     },
     [replaceNode]
   );

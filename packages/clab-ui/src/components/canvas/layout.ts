@@ -2,8 +2,7 @@
  * Layout algorithms for React Flow topology viewer
  */
 export type { LayoutName, LayoutOptions } from "./layout/types";
-export { hasPresetPositions, normalizeLayoutableNodePositions } from "./layout/types";
-export { applyForceLayout } from "./layout/forceLayout";
+export { normalizeLayoutableNodePositions } from "./layout/types";
 
 import type { Node, Edge } from "@xyflow/react";
 import type { LayoutName, LayoutOptions } from "./layout/types";

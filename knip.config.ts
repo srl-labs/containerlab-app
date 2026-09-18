@@ -28,12 +28,16 @@ const uiSources = Object.entries(uiPackage.exports).flatMap<[string, string]>(([
 const workspaces: Record<string, WorkspaceProjectConfig> = {
   ".": {
     entry: [
+      // Loaded as a module by docs-overrides/main.html.
+      "docs/assets/javascripts/customization.mjs",
       "scripts/run-stress-api-bff.mjs",
       "scripts/stress-api-bff.mjs",
       "scripts/impairment-proxy.mjs",
       "scripts/wait-web-server.mjs",
       "scripts/fixtures/clab-ui-consumer.ts"
-    ]
+    ],
+    // Python documentation tooling is installed through uv.lock.
+    ignoreBinaries: ["uv"]
   },
   "apps/desktop": {
     entry: ["scripts/after-pack.cjs"],
@@ -43,9 +47,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   "apps/web": {
     entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]
   },
-  "apps/web-public": {
-    entry: ["src/main.tsx"]
-  },
+  "apps/web-public": {},
   "apps/vscode-containerlab": {
     entry: ["src/webviews/*/entry.tsx", "test/**/*.test.ts"],
     ignoreDependencies: [
@@ -58,6 +60,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ]
   },
   "packages/app-contract": {},
+  "packages/clab-viewer": {
+    entry: ["src/index.ts"]
+  },
   "packages/app-server": {
     entry: ["src/**/*.test.ts"],
     // The TLS certificate generator invokes the operating system's OpenSSL.
@@ -70,6 +75,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     entry: [
       ...uiSources.map(([, source]) => path.posix.relative(uiDirectory, source)),
       "src/viewer/entry.tsx",
+      "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",
       "docs/javascripts/mermaid-config.js"
     ]

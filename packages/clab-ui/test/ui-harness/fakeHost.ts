@@ -1,4 +1,5 @@
 import type { ClabUiHost, ClabUiTopoViewerEvent } from "../../src/host/contracts";
+import type { CustomIconInfo } from "../../src/core/types/icons";
 import {
   TopologySessionCore,
   type FileSystemAdapter,
@@ -112,6 +113,7 @@ export interface FakeClabUiHost extends ClabUiHost {
     emitCurrentSnapshot(): Promise<void>;
     writeAnnotationsFile(filename: string, content: unknown): Promise<void>;
     writeYamlFile(filename: string, content: string): Promise<void>;
+    setCustomIcons(icons: CustomIconInfo[]): void;
   };
 }
 
@@ -171,6 +173,12 @@ export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiH
     },
 
     harness: {
+      setCustomIcons(icons) {
+        for (const subscriber of topoViewerSubscribers) {
+          subscriber({ type: "iconList", icons });
+        }
+      },
+
       getCurrentFile() {
         return currentYamlPath;
       },
