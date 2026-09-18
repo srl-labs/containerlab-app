@@ -1,5 +1,6 @@
 export const releaseTargets = {
   "clab-ui": "packages/clab-ui/package.json",
+  "clab-viewer": "packages/clab-viewer/package.json",
   vscode: "apps/vscode-containerlab/package.json",
   web: "apps/web/package.json",
   desktop: "apps/desktop/package.json",

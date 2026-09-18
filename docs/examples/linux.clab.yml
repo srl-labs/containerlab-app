@@ -1,0 +1,17 @@
+name: linux-playground
+
+topology:
+  defaults:
+    kind: linux
+    image: ghcr.io/srl-labs/network-multitool:latest
+
+  nodes:
+    client:
+      exec:
+        - ip address add 10.10.10.1/24 dev eth1
+    server:
+      exec:
+        - ip address add 10.10.10.2/24 dev eth1
+
+  links:
+    - endpoints: [client:eth1, server:eth1]

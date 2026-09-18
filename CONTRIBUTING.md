@@ -66,6 +66,8 @@ The extension identity remains `srl-labs.vscode-containerlab`. It was imported f
 
 `pnpm ui` builds the shared library used by the apps. `pnpm ui:pack` also builds the standalone iframe viewer and writes the complete npm package to `artifacts/clab-ui.tgz`. `pnpm test:package` validates a freshly built tarball in an isolated npm consumer.
 
+`pnpm viewer` builds the standalone `@containerlab/clab-viewer` distribution. `pnpm viewer:pack` writes `artifacts/clab-viewer.tgz`; `pnpm test:viewer-package` checks its dependency-free installation, portable types, browser API, and isolated HTML embeds outside the workspace. Install Chromium with `pnpm exec playwright install --only-shell chromium` before the browser check. Docs builds consume this viewer package.
+
 Publishing is separate from building. See [RELEASING.md](RELEASING.md) for independent product tags, npm Trusted Publishing, GitHub Latest, and extension store secrets.
 
 ### Local Docker build
@@ -121,6 +123,7 @@ packages/app-server           shared Fastify BFF used by web and desktop
 packages/standalone-runtime   backend adapters, sessions and shared UI composition
 packages/app-contract         shared browser-facing DTO types
 packages/clab-ui              shared publishable UI, themes and optional workspace views
+packages/clab-viewer          independently publishable standalone viewer
 ```
 
 This repository is the `containerlab-app` monorepo and owns:
@@ -129,6 +132,7 @@ This repository is the `containerlab-app` monorepo and owns:
 - the Electron desktop app host and desktop package artifacts
 - the VS Code extension and VSIX artifacts
 - the shared `@containerlab/clab-ui` package
+- the standalone `@containerlab/clab-viewer` package
 - the shared app server used by web and desktop
 - standalone unit and Playwright E2E test suites
 - static resources used by the standalone app

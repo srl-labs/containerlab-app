@@ -18,3 +18,10 @@ dev/topologies/
 # Packed release artifacts
 artifacts/
 *.tgz
+
+# Documentation build and Python environment
+.venv/
+__pycache__/
+.cache/
+site/
+docs/assets/viewer/

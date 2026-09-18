@@ -12,6 +12,9 @@
     "ui": "pnpm --filter @containerlab/clab-ui run build",
     "ui:local": "pnpm --filter @containerlab/clab-ui run dev:ui-harness",
     "ui:pack": "pnpm --filter @containerlab/clab-ui pack --out artifacts/clab-ui.tgz",
+    "viewer": "pnpm --filter @containerlab/clab-viewer run build",
+    "viewer:pack": "pnpm --filter @containerlab/clab-viewer pack --out artifacts/clab-viewer.tgz",
+    "test:viewer-package": "node scripts/check-packed-clab-viewer.mjs",
     "vsix": "pnpm ui && pnpm --filter vscode-containerlab run package",
     "vsix:local": "pnpm vsix",
     "web": "pnpm ui && pnpm --filter containerlab-app-web run build",
@@ -21,6 +24,8 @@
     "desktop:windows": "node apps/desktop/scripts/dev-windows.mjs",
     "pages": "pnpm ui && pnpm --filter containerlab-app-web-public run build",
     "pages:local": "pnpm --filter containerlab-app-web-public run dev",
+    "preview:build": "node scripts/build-preview.mjs",
+    "preview:test": "playwright test --config test/preview/playwright.config.ts",
     "check": "node scripts/check-release-version.mjs && node scripts/check-deps.mjs",
     "typecheck": "pnpm ui && pnpm check && pnpm -r --if-present run typecheck",
     "lint": "pnpm ui && pnpm knip && pnpm -r --if-present run lint",
@@ -32,7 +37,12 @@
     "test:package": "pnpm ui:pack && node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz",
     "sync:schema": "node scripts/sync-clab-schema.mjs",
     "preinstall": "node scripts/check-package-manager.mjs",
-    "test:pages": "pnpm ui && pnpm --filter containerlab-app-web-public run test:e2e"
+    "test:pages": "pnpm ui && pnpm --filter containerlab-app-web-public run test:e2e",
+    "docs": "node scripts/docs.mjs serve",
+    "docs:build": "node scripts/docs.mjs build",
+    "docs:prepare": "node scripts/docs.mjs prepare",
+    "docs:test": "uv run --frozen python -m unittest discover -s tools/clab_docs/tests && playwright test --config test/docs/playwright.config.ts",
+    "docs:perf": "playwright test --config test/docs/performance.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",

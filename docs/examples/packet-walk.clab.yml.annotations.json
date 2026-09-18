@@ -1,0 +1,249 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "client",
+      "position": {
+        "x": 65,
+        "y": 165
+      },
+      "icon": "client",
+      "iconColor": "#32917d",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "router",
+      "position": {
+        "x": 425,
+        "y": 165
+      },
+      "icon": "pe",
+      "iconColor": "#518371",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "server",
+      "position": {
+        "x": 785,
+        "y": 165
+      },
+      "icon": "server",
+      "iconColor": "#32917d",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "subnet-left",
+      "name": "10.10.1.0/24",
+      "level": "L1",
+      "position": {
+        "x": 15,
+        "y": 112
+      },
+      "width": 340,
+      "height": 190,
+      "backgroundColor": "#e6f1e7",
+      "backgroundOpacity": 85,
+      "borderColor": "#bad5c4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#537c63",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "subnet-right",
+      "name": "10.10.2.0/24",
+      "level": "L1",
+      "position": {
+        "x": 555,
+        "y": 112
+      },
+      "width": 340,
+      "height": 190,
+      "backgroundColor": "#e6f1e7",
+      "backgroundOpacity": 85,
+      "borderColor": "#bad5c4",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#537c63",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "packet-heading",
+      "text": "**Follow one packet.**",
+      "position": {
+        "x": 15,
+        "y": -10
+      },
+      "width": 850,
+      "height": 65,
+      "fontSize": 34,
+      "fontColor": "#274938",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "packet-subtitle",
+      "text": "Two subnets. A Linux router. A working return path.",
+      "position": {
+        "x": 17,
+        "y": 48
+      },
+      "width": 840,
+      "height": 40,
+      "fontSize": 17,
+      "fontColor": "#64816e",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "client-ip",
+      "text": "**.2** / eth1",
+      "position": {
+        "x": 42,
+        "y": 245
+      },
+      "width": 150,
+      "height": 34,
+      "fontSize": 15,
+      "fontColor": "#426c55",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "router-left-ip",
+      "text": "**.1** / eth1",
+      "position": {
+        "x": 235,
+        "y": 155
+      },
+      "width": 125,
+      "height": 34,
+      "fontSize": 14,
+      "fontColor": "#426c55",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "router-right-ip",
+      "text": "**.1** / eth2",
+      "position": {
+        "x": 563,
+        "y": 155
+      },
+      "width": 125,
+      "height": 34,
+      "fontSize": 14,
+      "fontColor": "#426c55",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "server-ip",
+      "text": "**.2** / eth1",
+      "position": {
+        "x": 760,
+        "y": 245
+      },
+      "width": 150,
+      "height": 34,
+      "fontSize": 15,
+      "fontColor": "#426c55",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif"
+    },
+    {
+      "id": "request",
+      "text": "01  ICMP ECHO REQUEST",
+      "position": {
+        "x": 295,
+        "y": 335
+      },
+      "width": 390,
+      "height": 35,
+      "fontSize": 15,
+      "fontColor": "#428066",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif",
+      "textAlign": "center"
+    },
+    {
+      "id": "reply",
+      "text": "02  RETURN VIA THE ROUTER",
+      "position": {
+        "x": 295,
+        "y": 434
+      },
+      "width": 390,
+      "height": 35,
+      "fontSize": 15,
+      "fontColor": "#7a8060",
+      "backgroundColor": "transparent",
+      "roundedBackground": true,
+      "fontFamily": "sans-serif",
+      "textAlign": "center"
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "echo-request",
+      "shapeType": "line",
+      "position": {
+        "x": 110,
+        "y": 385
+      },
+      "endPosition": {
+        "x": 810,
+        "y": 385
+      },
+      "borderColor": "#459c7e",
+      "borderWidth": 2,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineArrowSize": 10,
+      "zIndex": -2
+    },
+    {
+      "id": "echo-reply",
+      "shapeType": "line",
+      "position": {
+        "x": 810,
+        "y": 425
+      },
+      "endPosition": {
+        "x": 110,
+        "y": 425
+      },
+      "borderColor": "#9caa72",
+      "borderWidth": 2,
+      "borderStyle": "dashed",
+      "lineEndArrow": true,
+      "lineArrowSize": 10,
+      "zIndex": -2
+    }
+  ],
+  "viewerSettings": {
+    "linkLabelMode": "hide",
+    "gridColor": "#c5decb",
+    "gridLineWidth": 0.5
+  }
+}

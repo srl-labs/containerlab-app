@@ -17,6 +17,7 @@ interface EdgeRenderConfig {
 
 interface NodeRenderConfig {
   suppressLabels: boolean;
+  suppressRuntimeBadges?: boolean;
 }
 
 /** RGB color for easter egg glow effects */

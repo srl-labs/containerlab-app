@@ -1,14 +1,9 @@
 // VS Code MUI theme config.
 // Palette values are CSS var() references — VS Code swaps them for light/dark.
 import { createTheme, type ThemeOptions } from "@mui/material/styles";
+import { vscodePalette } from "./vscodePalette";
+export { vscodePalette } from "./vscodePalette";
 
-const BUTTON_BACKGROUND = "var(--clab-ui-button-background, var(--vscode-button-background))";
-const BUTTON_SECONDARY_BACKGROUND = "var(--vscode-button-secondaryBackground)";
-const EDITOR_ERROR_FOREGROUND = "var(--vscode-editorError-foreground)";
-const EDITOR_WARNING_FOREGROUND = "var(--vscode-editorWarning-foreground)";
-const EDITOR_INFO_FOREGROUND = "var(--vscode-editorInfo-foreground)";
-const TESTING_ICON_PASSED = "var(--vscode-testing-iconPassed, var(--vscode-charts-green))";
-const FOCUS_BORDER = "var(--clab-ui-focus-border, var(--vscode-focusBorder))";
 const EXPLORER_FONT_FAMILY =
   "var(--clab-ui-font-family, var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif))";
 const EXPLORER_FONT_SIZE = "var(--clab-ui-font-size, var(--vscode-font-size, 13px))";
@@ -19,51 +14,6 @@ const EXPLORER_SCOPE_SELECTORS = [
 
 const explorerScopedSelector = (suffix: string) =>
   EXPLORER_SCOPE_SELECTORS.map((selector) => `${selector}${suffix}`).join(", ");
-
-const buildPaletteColor = (main: string, contrastText: string) => ({
-  main,
-  dark: main,
-  light: main,
-  contrastText
-});
-
-// Palette — single source of truth for all colors.
-// dark/light repeat main to prevent createTheme from deriving them (crashes on CSS vars).
-export const vscodePalette = {
-  divider: "var(--clab-ui-panel-border, var(--vscode-panel-border))",
-  background: {
-    default: "var(--clab-ui-editor-background, var(--vscode-editor-background))",
-    paper: "var(--clab-ui-panel-background, var(--vscode-sideBar-background))"
-  },
-  text: {
-    primary: "var(--clab-ui-editor-foreground, var(--vscode-foreground))",
-    secondary: "var(--vscode-descriptionForeground)",
-    disabled: "var(--vscode-disabledForeground)"
-  },
-  primary: buildPaletteColor(BUTTON_BACKGROUND, "var(--vscode-button-foreground)"),
-  secondary: buildPaletteColor(
-    BUTTON_SECONDARY_BACKGROUND,
-    "var(--vscode-button-secondaryForeground)"
-  ),
-  error: buildPaletteColor(
-    EDITOR_ERROR_FOREGROUND,
-    "var(--vscode-inputValidation-errorForeground)"
-  ),
-  warning: buildPaletteColor(
-    EDITOR_WARNING_FOREGROUND,
-    "var(--vscode-inputValidation-warningForeground)"
-  ),
-  info: buildPaletteColor(EDITOR_INFO_FOREGROUND, "var(--vscode-inputValidation-infoForeground)"),
-  success: buildPaletteColor(TESTING_ICON_PASSED, "var(--vscode-button-foreground)"),
-  action: {
-    active: "var(--vscode-icon-foreground)",
-    hover: "var(--vscode-list-hoverBackground)",
-    selected: "var(--vscode-list-inactiveSelectionBackground)",
-    disabled: "var(--vscode-disabledForeground)",
-    disabledBackground: "var(--vscode-input-background)",
-    focus: FOCUS_BORDER
-  }
-} as const;
 
 // Component overrides
 export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
@@ -191,7 +141,7 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
           backgroundColor: "var(--vscode-inputValidation-errorBackground)",
           color: "var(--vscode-inputValidation-errorForeground, var(--vscode-foreground))",
           border: "1px solid var(--vscode-inputValidation-errorBorder)",
-          "& .MuiAlert-icon": { color: EDITOR_ERROR_FOREGROUND }
+          "& .MuiAlert-icon": { color: vscodePalette.error.main }
         },
         "&.MuiAlert-filled.MuiAlert-colorError": {
           backgroundColor: "var(--vscode-inputValidation-errorBackground)",
@@ -202,7 +152,7 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
           backgroundColor: "var(--vscode-inputValidation-warningBackground)",
           color: "var(--vscode-inputValidation-warningForeground, var(--vscode-foreground))",
           border: "1px solid var(--vscode-inputValidation-warningBorder)",
-          "& .MuiAlert-icon": { color: EDITOR_WARNING_FOREGROUND }
+          "& .MuiAlert-icon": { color: vscodePalette.warning.main }
         },
         "&.MuiAlert-filled.MuiAlert-colorWarning": {
           backgroundColor: "var(--vscode-inputValidation-warningBackground)",
@@ -213,7 +163,7 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
           backgroundColor: "var(--vscode-inputValidation-infoBackground)",
           color: "var(--vscode-inputValidation-infoForeground, var(--vscode-foreground))",
           border: "1px solid var(--vscode-inputValidation-infoBorder)",
-          "& .MuiAlert-icon": { color: EDITOR_INFO_FOREGROUND }
+          "& .MuiAlert-icon": { color: vscodePalette.info.main }
         },
         "&.MuiAlert-filled.MuiAlert-colorInfo": {
           backgroundColor: "var(--vscode-inputValidation-infoBackground)",
@@ -223,13 +173,13 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         "&.MuiAlert-standard.MuiAlert-colorSuccess": {
           backgroundColor: vscodePalette.background.paper,
           color: vscodePalette.text.primary,
-          border: `1px solid ${TESTING_ICON_PASSED}`,
-          "& .MuiAlert-icon": { color: TESTING_ICON_PASSED }
+          border: `1px solid ${vscodePalette.success.main}`,
+          "& .MuiAlert-icon": { color: vscodePalette.success.main }
         },
         "&.MuiAlert-filled.MuiAlert-colorSuccess": {
           backgroundColor: vscodePalette.background.paper,
           color: vscodePalette.text.primary,
-          border: `1px solid ${TESTING_ICON_PASSED}`
+          border: `1px solid ${vscodePalette.success.main}`
         }
       }
     }
@@ -258,10 +208,10 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
     styleOverrides: {
       root: {
         "&:hover .MuiOutlinedInput-notchedOutline": {
-          borderColor: FOCUS_BORDER
+          borderColor: vscodePalette.action.focus
         },
         "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-          borderColor: FOCUS_BORDER
+          borderColor: vscodePalette.action.focus
         }
       },
       notchedOutline: {

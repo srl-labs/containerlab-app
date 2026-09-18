@@ -18,6 +18,14 @@ const typescriptPackagePath = require.resolve("typescript/package.json");
 const tscBin = path.resolve(path.dirname(typescriptPackagePath), require(typescriptPackagePath).bin.tsc);
 const copiedCssAssets = [
   {
+    from: path.join(__dirname, "src/viewer/viewer.css"),
+    to: [
+      path.join(distDir, "viewer.css"),
+      path.join(distDir, "viewer/viewer.css"),
+      path.join(distDir, "chunks/viewer.css")
+    ]
+  },
+  {
     from: path.join(__dirname, "src/components/canvas/nodes/FreeTextNode.css"),
     to: [
       path.join(distDir, "FreeTextNode.css"),

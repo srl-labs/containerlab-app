@@ -2,52 +2,45 @@ import "../types/assets";
 import React from "react";
 import { createRoot, type Root } from "react-dom/client";
 
-import { App } from "../App";
-import { defaultSchemaData } from "../core/schema";
-import { createClabUiRuntime } from "../host";
-import { applyThemeVars } from "../theme";
-import "../styles/global.css";
+import { applySnapshotToStores } from "../services/topologyHostSync";
+import { useTopoViewerStore } from "../stores/topoViewerStore";
+import { useGraphStore } from "../stores/graphStore";
+import { useCanvasStore } from "../stores/canvasStore";
+import { applyThemeVars } from "../theme/devTheme";
 
-import { createViewerHost, type ViewerHostInput } from "./createViewerHost";
+import type { MountViewerOptions as PublicMountViewerOptions } from "./publicTypes";
+import { prepareViewer } from "./prepareViewer";
+import { ViewerCanvas } from "./ViewerCanvas";
+import { resolveViewerOptions, type ViewerOptions } from "./options";
+import "./viewer.css";
 
-export interface MountViewerOptions extends ViewerHostInput {
-  theme?: "light" | "dark";
+export interface MountViewerOptions extends PublicMountViewerOptions {
+  viewerOptions?: ViewerOptions;
 }
 
-// Renders a read-only clab-ui topology viewer into `container`. Returns the React root so callers
-// can unmount. The graph is built from the given clab YAML (+ optional annotations.json) in view
-// mode — no editor chrome, no lifecycle.
+// Reuse the editor's parser, saved-layout normalization, and renderers without starting the
+// editor, its host session, schema, commands, panels, or subscriptions.
 export function mountViewer(container: Element, options: MountViewerOptions): Root {
-  const host = createViewerHost({ yaml: options.yaml, annotations: options.annotations });
-  const runtime = createClabUiRuntime({
-    host,
-    initialContext: {
-      mode: "view",
-      deploymentState: "undeployed",
-      path: "/lab/topology.clab.yml",
-      sessionId: "clab-viewer"
+  const { snapshot, description } = prepareViewer(options.yaml, options.annotations);
+  useTopoViewerStore.setState(useTopoViewerStore.getInitialState());
+  applySnapshotToStores(snapshot);
+  // Per-node annotation flags otherwise override React Flow's read-only canvas props.
+  useGraphStore.getState().setNodes(nodes => nodes.map(node => ({ ...node, draggable: false, connectable: false, deletable: false })));
+  const resolved = resolveViewerOptions(options.viewerOptions, options.borderless);
+  useTopoViewerStore.setState({ isLocked: true, selectedNode: null, selectedEdge: null });
+  useCanvasStore.setState({
+    linkSourceNode: null,
+    annotationHandlers: null,
+    easterEggGlow: null,
+    nodeRenderConfig: { suppressLabels: !resolved.nodeLabels, suppressRuntimeBadges: true },
+    edgeRenderConfig: {
+      labelMode: resolved.linkLabels ?? useTopoViewerStore.getState().linkLabelMode,
+      suppressLabels: false,
+      suppressHitArea: false
     }
   });
-
-  const initialData = {
-    schemaData: defaultSchemaData,
-    dockerImages: [],
-    customNodes: [],
-    defaultNode: "",
-    customIcons: []
-  };
-
-  const win = window as unknown as { __SCHEMA_DATA__?: unknown; __DOCKER_IMAGES__?: string[] };
-  win.__SCHEMA_DATA__ = defaultSchemaData;
-  win.__DOCKER_IMAGES__ = [];
-
   applyThemeVars(options.theme ?? "dark");
-
-  const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App initialData={initialData} runtime={runtime} chrome="viewer" />
-    </React.StrictMode>
-  );
+  const root = createRoot(container, { onUncaughtError: options.onError });
+  root.render(<ViewerCanvas options={resolved} onReady={() => options.onReady?.(description)} />);
   return root;
 }

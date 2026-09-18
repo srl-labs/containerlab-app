@@ -64,6 +64,9 @@ try {
   assert.equal(manifest.version, readJson("packages/clab-ui/package.json").version);
   assert.equal(manifest.publishConfig.registry, "https://registry.npmjs.org");
   assert.equal(manifest.private, false);
+  for (const asset of ["viewer.html", "component.mjs", "component.css"]) {
+    assert.ok(fs.existsSync(path.join(packageRoot, "dist-viewer", asset)), `missing documentation viewer asset: ${asset}`);
+  }
   const publicModules = Object.entries(manifest.exports)
     .filter(([, target]) => typeof target === "object" && target.types)
     .map(([subpath]) => manifest.name + (subpath === "." ? "" : subpath.slice(1)));

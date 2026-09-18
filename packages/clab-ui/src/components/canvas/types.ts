@@ -14,7 +14,7 @@ import type {
 } from "../../core/types/graph";
 import { DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../../core/types/graph";
 import type { FreeTextAnnotation } from "../../core/types/topology";
-import { vscodePalette } from "../../theme/vscodeTheme";
+import { vscodePalette } from "../../theme/vscodePalette";
 type GridStyle = "dotted" | "quadratic";
 
 /** Edge label rendering mode */
@@ -168,6 +168,11 @@ export interface ReactFlowCanvasProps {
   layout?: LayoutName;
   /** Pure embedded viewer mode: pan/zoom only, no selection, dragging, or context menus. */
   readOnlyViewer?: boolean;
+  viewerOptions?: {
+    onNodeSelect?: (nodeId: string | null) => void;
+    onInit?: (instance: ReactFlowInstance) => void;
+    zoomOnScroll?: boolean;
+  };
   /** Geo layout active */
   isGeoLayout?: boolean;
   /** Grid line thickness for the background */

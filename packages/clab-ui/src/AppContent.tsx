@@ -295,6 +295,12 @@ function createRuntimeForwarder(ref: React.RefObject<AnnotationContextValue | nu
 }
 
 export interface AppLayoutOptions {
+  /** Read-only embed interactions; never dispatch editor commands. */
+  viewerOptions?: {
+    onNodeSelect?: (nodeId: string | null) => void;
+    onInit?: (instance: ReactFlowInstance) => void;
+    zoomOnScroll?: boolean;
+  };
   slots?: {
     /** Content above the canvas, such as an application's document tabs. */
     header?: React.ReactNode;
@@ -698,6 +704,7 @@ export const AppContent: React.FC<AppContentProps> = ({
   onInit,
   chrome = "full",
   slots,
+  viewerOptions,
   lifecycleActionsAvailable = true
 }) => {
   const [contextPanelWidth, setContextPanelWidth] = React.useState(0);
@@ -1264,6 +1271,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       topologyViewportKey,
       isContextPanelOpen: !viewerOnly && hasActiveTopology && panelVisibility.isContextPanelOpen,
       readOnlyViewer: viewerOnly,
+      viewerOptions,
       onPaneClick: handleEmptyCanvasClick,
       layout: layoutControls.layout,
       isGeoLayout: layoutControls.isGeoLayout,
@@ -1294,6 +1302,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     }),
     [
       topologyViewportKey,
+      viewerOptions,
       viewerOnly,
       hasActiveTopology,
       panelVisibility.isContextPanelOpen,

@@ -1,0 +1,38 @@
+name: fabric
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+
+  nodes:
+    spine1:
+      type: ixrd3
+    spine2:
+      type: ixrd3
+    leaf1:
+      type: ixrd2
+    leaf2:
+      type: ixrd2
+    leaf3:
+      type: ixrd2
+    client1:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    client2:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    client3:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+
+  links:
+    - endpoints: [spine1:e1-1, leaf1:e1-49]
+    - endpoints: [spine1:e1-2, leaf2:e1-49]
+    - endpoints: [spine1:e1-3, leaf3:e1-49]
+    - endpoints: [spine2:e1-1, leaf1:e1-50]
+    - endpoints: [spine2:e1-2, leaf2:e1-50]
+    - endpoints: [spine2:e1-3, leaf3:e1-50]
+    - endpoints: [leaf1:e1-1, client1:eth1]
+    - endpoints: [leaf2:e1-1, client2:eth1]
+    - endpoints: [leaf3:e1-1, client3:eth1]

@@ -1,0 +1,60 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "docs-overrides/**"
+      - "tools/clab_docs/**"
+      - "packages/clab-ui/**"
+      - "packages/clab-viewer/**"
+      - "scripts/docs.mjs"
+      - "test/docs/**"
+      - "zensical.toml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/docs.yml"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - run: pnpm docs:build
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      - run: pnpm docs:test
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: documentation-preview
+          path: |
+            site/
+            test-results/docs/
+          if-no-files-found: ignore
