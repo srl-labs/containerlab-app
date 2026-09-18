@@ -44,6 +44,7 @@ test.describe("Standalone Settings Dialog", () => {
     await page.locator(SEL_SETTINGS_BUTTON).click();
     const dialog = page.locator(SEL_SETTINGS_DIALOG);
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("settings-layout")).toBeVisible();
     return dialog;
   }
 

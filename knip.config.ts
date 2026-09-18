@@ -75,6 +75,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     entry: [
       ...uiSources.map(([, source]) => path.posix.relative(uiDirectory, source)),
       "src/viewer/entry.tsx",
+      "test/ui-harness/settings.tsx",
       "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",
       "docs/javascripts/mermaid-config.js"

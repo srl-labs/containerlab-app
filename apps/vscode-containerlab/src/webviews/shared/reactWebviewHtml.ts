@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 
 import * as vscode from "vscode";
+import { appearanceBootstrap } from "./appearance";
 
 export interface ReactWebviewHtmlOptions {
   webview: vscode.Webview;
@@ -68,6 +69,7 @@ export function createReactWebviewHtml(options: ReactWebviewHtmlOptions): string
 <body${bodyAttributes}>
   <div id="root"></div>
   <script nonce="${nonce}">
+    ${appearanceBootstrap(webview)}
     window.__INITIAL_DATA__ = ${initialDataJson};
     if (!window.vscode) {
       try {

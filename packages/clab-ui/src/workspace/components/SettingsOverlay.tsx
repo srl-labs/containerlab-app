@@ -6,30 +6,18 @@ import {
   Button,
   Chip,
   Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
   IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   MenuItem,
-  Paper,
   Stack,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography
 } from "@mui/material";
-import type { Theme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
 import DnsRoundedIcon from "@mui/icons-material/DnsRounded";
 import DownloadIcon from "@mui/icons-material/Download";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import LightModeIcon from "@mui/icons-material/LightMode";
 import LinkIcon from "@mui/icons-material/Link";
 import LogoutIcon from "@mui/icons-material/Logout";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -58,6 +46,9 @@ import {
   type EndpointImportResult,
   type EndpointSessionDuration
 } from "../endpoints";
+import { SettingsLayout } from "../../settings/SettingsLayout";
+import { SettingsField } from "../../settings/SettingsField";
+import { ColorSchemePicker } from "../../settings/ColorSchemePicker";
 import { AboutSettingsContent } from "./AboutSettingsContent";
 import { EndpointManager } from "./EndpointManager";
 
@@ -183,53 +174,16 @@ const SETTINGS_SECTIONS: Array<{
   }
 ];
 
-
-function accentSx(theme: Theme, color: "info" | "success" | "warning" | "error") {
-  return {
-    borderColor: `${color}.main`,
-    backgroundColor: theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)",
-    boxShadow: "none"
-  };
-}
-
 function SectionCard(props: {
   title: string;
   description: string;
   tone?: "info" | "success" | "warning" | "error";
   children: React.ReactNode;
 }) {
-  const { title, description, tone = "info", children } = props;
-
   return (
-    <Paper
-      variant="outlined"
-      sx={(theme) => ({
-        p: 3,
-        ...accentSx(theme, tone)
-      })}
-    >
-      <Stack spacing={2.5}>
-        <Box>
-          <Typography
-            variant="subtitle1"
-            sx={{
-              fontWeight: 600
-            }}
-          >
-            {title}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            {description}
-          </Typography>
-        </Box>
-        {children}
-      </Stack>
-    </Paper>
+    <SettingsField title={props.title} description={props.description} wide>
+      {props.children}
+    </SettingsField>
   );
 }
 
@@ -351,18 +305,7 @@ function CaptureSettingsSection(props: {
   };
 
   return (
-    <Stack spacing={3}>
-      <Box>
-        <Typography variant="h6">Capture</Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "text.secondary"
-          }}
-        >
-          Manage Edgeshark availability for packet capture and Wireshark noVNC sessions.
-        </Typography>
-      </Box>
+    <Stack spacing={1.5}>
       <SectionCard
         title="Edgeshark"
         description="Install or uninstall Edgeshark on the selected endpoint host."
@@ -553,7 +496,9 @@ function CaptureSettingsSection(props: {
 }
 
 export function SettingsOverlay({
-  open, onOpen, onClose,
+  open,
+  onOpen,
+  onClose,
   currentTheme,
   defaultApiUrl,
   endpoints,
@@ -746,19 +691,7 @@ export function SettingsOverlay({
     switch (activeSection) {
       case "endpoints":
         return (
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="h6">Endpoints</Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "text.secondary"
-                }}
-              >
-                Configure every `clab-api-server` session that should appear in the explorer. The
-                selected target endpoint is resolved per action from endpoint context or a picker.
-              </Typography>
-            </Box>
+          <Stack spacing={1.5}>
             <EndpointManager
               defaultApiUrl={defaultApiUrl}
               endpoints={endpoints}
@@ -777,91 +710,21 @@ export function SettingsOverlay({
         );
       case "general":
         return (
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="h6">General</Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "text.secondary"
-                }}
-              >
-                Standalone preferences live here so lab editing settings can stay in their own
-                dedicated flow.
-              </Typography>
-            </Box>
-            <SectionCard
-              title="Color Theme"
-              description="Theme changes apply immediately and persist in local browser storage."
-            >
-              <ToggleButtonGroup
-                exclusive
+          <Stack spacing={1.5}>
+            <SectionCard title="Color Theme" description="Choose the color scheme for the app.">
+              <ColorSchemePicker
                 value={currentTheme}
-                onChange={(_event, nextTheme: "light" | "dark" | null) => {
-                  if (nextTheme) {
-                    onThemeChange(nextTheme);
-                  }
+                onChange={(nextTheme) => {
+                  if (nextTheme !== "vscode") onThemeChange(nextTheme);
                 }}
-                sx={{
-                  alignSelf: "flex-start",
-                  "& .MuiToggleButton-root": {
-                    px: 1.75,
-                    color: "text.primary",
-                    borderColor: "divider"
-                  },
-                  "& .MuiToggleButton-root.Mui-selected": {
-                    bgcolor: "action.selected",
-                    color: "text.primary",
-                    borderColor: "text.primary"
-                  },
-                  "& .MuiToggleButton-root.Mui-selected:hover": {
-                    bgcolor: "action.hover"
-                  }
-                }}
-              >
-                <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                      alignItems: "center"
-                    }}
-                  >
-                    <DarkModeIcon fontSize="small" />
-                    <span>Dark</span>
-                  </Stack>
-                </ToggleButton>
-                <ToggleButton value="light" data-testid="standalone-settings-theme-light">
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    sx={{
-                      alignItems: "center"
-                    }}
-                  >
-                    <LightModeIcon fontSize="small" />
-                    <span>Light</span>
-                  </Stack>
-                </ToggleButton>
-              </ToggleButtonGroup>
+                testIdPrefix="standalone-settings-theme-"
+              />
             </SectionCard>
           </Stack>
         );
       case "terminal":
         return (
-          <Stack spacing={3}>
-            <Box>
-              <Typography variant="h6">Terminal</Typography>
-              <Typography
-                variant="body2"
-                sx={{
-                  color: "text.secondary"
-                }}
-              >
-                Configure standalone defaults for SSH username resolution, telnet access, and
-                terminal font sizing.
-              </Typography>
-            </Box>
+          <Stack spacing={1.5}>
             <SectionCard
               title="Terminal Defaults"
               description="Configure standalone defaults for SSH username resolution, telnet access, and font sizing."
@@ -873,7 +736,7 @@ export function SettingsOverlay({
                 onChange={(event) => setSshUserMappingText(event.target.value)}
                 fullWidth
                 multiline
-                minRows={12}
+                minRows={5}
                 error={terminalDraft.field === "ssh"}
                 helperText={
                   terminalDraft.field === "ssh"
@@ -899,7 +762,9 @@ export function SettingsOverlay({
                     ? terminalDraft.error
                     : "Default telnet port used by standalone terminal actions."
                 }
-                slotProps={{ htmlInput: { inputMode: "numeric", pattern: "[0-9]*" } }}
+                slotProps={{
+                  htmlInput: { inputMode: "numeric", pattern: "[0-9]*" }
+                }}
                 data-testid="standalone-settings-telnet-port"
               />
               <TextField
@@ -984,6 +849,7 @@ export function SettingsOverlay({
       case "about":
         return (
           <AboutSettingsContent
+            showHeading={false}
             versionCheck={versionCheck}
             versionError={versionError}
             versionInfo={versionInfo}
@@ -1018,32 +884,39 @@ export function SettingsOverlay({
     }
   };
 
+  const sections = SETTINGS_SECTIONS.filter(
+    (section) =>
+      (section.key !== "endpoints" || capabilities.endpoints) &&
+      (!["terminal", "capture"].includes(section.key) || capabilities.lifecycle)
+  );
+  const active = sections.find((section) => section.key === activeSection) ?? sections[0];
   return (
-    <>
-      <Dialog
-        open={dialogOpen}
-        onClose={handleCloseDialog}
-        fullWidth
-        maxWidth="lg"
-        data-testid="standalone-settings-dialog"
-        slotProps={{
-          paper: {
-            sx: {
-              minHeight: { xs: "calc(100vh - 32px)", md: 600 },
-              height: { xs: "calc(100vh - 32px)", md: "76vh" }
-            }
+    <Dialog
+      open={dialogOpen}
+      onClose={handleCloseDialog}
+      fullWidth
+      maxWidth="lg"
+      aria-labelledby="containerlab-settings-title"
+      data-testid="standalone-settings-dialog"
+      slotProps={{
+        paper: {
+          sx: {
+            minHeight: { xs: "calc(100vh - 32px)", md: 560 },
+            height: { xs: "calc(100vh - 32px)", md: "76vh" },
+            borderRadius: 2,
+            overflow: "hidden"
           }
-        }}
-      >
-        <DialogTitle
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            py: 1.5
-          }}
-        >
-          Settings
+        }
+      }}
+    >
+      <SettingsLayout
+        items={sections}
+        active={activeSection}
+        onSelect={(key) => setActiveSection(key as SettingsSectionKey)}
+        navigationTestIdPrefix="standalone-settings-nav-"
+        sectionTitle={active.label}
+        sectionDescription={active.description}
+        headerActions={
           <IconButton
             size="small"
             onClick={handleCloseDialog}
@@ -1052,77 +925,30 @@ export function SettingsOverlay({
           >
             <CloseIcon fontSize="small" />
           </IconButton>
-        </DialogTitle>
-        <DialogContent dividers sx={{ p: 0, overflow: "hidden" }}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", md: "row" },
-              minHeight: 0,
-              height: "100%"
-            }}
-          >
-            <Box
-              sx={{
-                width: { xs: "100%", md: 260 },
-                flexShrink: 0,
-                borderRight: { xs: 0, md: 1 },
-                borderBottom: { xs: 1, md: 0 },
-                borderColor: "divider",
-                bgcolor: "background.default"
-              }}
-            >
-              <List disablePadding>
-                {SETTINGS_SECTIONS.filter((section) => (section.key !== "endpoints" || capabilities.endpoints) && (!["terminal", "capture"].includes(section.key) || capabilities.lifecycle)).map((section, index) => (
-                  <React.Fragment key={section.key}>
-                    {index > 0 ? <Divider /> : null}
-                    <ListItemButton
-                      selected={section.key === activeSection}
-                      onClick={() => setActiveSection(section.key)}
-                      data-testid={`standalone-settings-nav-${section.key}`}
-                      sx={{
-                        alignItems: "flex-start",
-                        py: 1.5,
-                        "&.Mui-selected": {
-                          bgcolor: "action.selected",
-                          color: "text.primary"
-                        },
-                        "&.Mui-selected:hover": {
-                          bgcolor: "action.hover"
-                        }
-                      }}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          minWidth: 36,
-                          mt: 0.25,
-                          color: section.key === activeSection ? "text.primary" : "text.secondary"
-                        }}
-                      >
-                        {section.icon}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={section.label}
-                        secondary={section.description}
-                        slotProps={{
-                          primary: { sx: { fontWeight: 600, color: "inherit" } },
-                          secondary: { sx: { mt: 0.25, color: "text.secondary" } }
-                        }} />
-                    </ListItemButton>
-                  </React.Fragment>
-                ))}
-              </List>
-            </Box>
-            <Box sx={{ flex: 1, minWidth: 0, overflow: "auto" }}>
-              <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 860 }}>{renderSectionContent()}</Box>
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          {capabilities.endpoints && <Button color="error" startIcon={<LogoutIcon />} onClick={handleLogoutClick}>Disconnect Sessions</Button>}
-          <Button onClick={handleCloseDialog}>Close</Button>
-        </DialogActions>
-      </Dialog>
-    </>
+        }
+        footer={
+          <>
+            {capabilities.endpoints ? (
+              <Button
+                size="small"
+                variant="text"
+                color="error"
+                startIcon={<LogoutIcon />}
+                onClick={handleLogoutClick}
+              >
+                Disconnect Sessions
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button size="small" onClick={handleCloseDialog}>
+              Close
+            </Button>
+          </>
+        }
+      >
+        {renderSectionContent()}
+      </SettingsLayout>
+    </Dialog>
   );
 }

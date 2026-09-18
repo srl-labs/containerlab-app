@@ -6,6 +6,7 @@ import * as crypto from "crypto";
 import * as fs from "fs";
 
 import * as vscode from "vscode";
+import { appearanceBootstrap } from "../../../webviews/shared/appearance";
 
 /**
  * Configuration for creating a webview panel
@@ -131,6 +132,7 @@ export function generateWebviewHtml(data: WebviewHtmlData): string {
         // Ignore duplicate-acquire errors and keep using the cached instance.
       }
     }
+    ${appearanceBootstrap(webview)}
     window.__INITIAL_DATA__ = ${initialDataJson};
     window.maplibreWorkerUrl = "${maplibreWorkerUri.toString()}";
     window.maplibreWorkerSourceBase64 = "${maplibreWorkerSourceBase64}";

@@ -23,6 +23,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { useWorkspaceHost } from "../WorkspaceHost";
 
 interface AboutSettingsContentProps {
+  showHeading?: boolean;
   versionCheck: string;
   versionError: string | null;
   versionInfo: string;
@@ -130,7 +131,8 @@ function LinkList(props: { links: AboutLink[] }) {
               slotProps={{
                 primary: { variant: "body2", sx: { fontWeight: 600 } },
                 secondary: { variant: "caption", color: TEXT_SECONDARY }
-              }} />
+              }}
+            />
             <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
           </ListItemButton>
         </Box>
@@ -153,7 +155,14 @@ function AuthorList() {
             sx={{ alignItems: "flex-start", py: 1.5 }}
           >
             <ListItemIcon sx={{ minWidth: 48 }}>
-              <Avatar sx={{ bgcolor: author.color, width: 32, height: 32, fontSize: "0.875rem" }}>
+              <Avatar
+                sx={{
+                  bgcolor: author.color,
+                  width: 32,
+                  height: 32,
+                  fontSize: "0.875rem"
+                }}
+              >
                 {author.initials}
               </Avatar>
             </ListItemIcon>
@@ -163,7 +172,8 @@ function AuthorList() {
               slotProps={{
                 primary: { variant: "body2", sx: { fontWeight: 600 } },
                 secondary: { variant: "caption", color: TEXT_SECONDARY }
-              }} />
+              }}
+            />
             <OpenInNewIcon fontSize="small" sx={{ color: TEXT_SECONDARY, mt: 0.25 }} />
           </ListItemButton>
         </Box>
@@ -173,6 +183,7 @@ function AuthorList() {
 }
 
 export function AboutSettingsContent({
+  showHeading = true,
   versionCheck,
   versionError,
   versionInfo,
@@ -183,13 +194,15 @@ export function AboutSettingsContent({
   const updateValue = versionLoading ? "Loading..." : versionCheck;
 
   return (
-    <Stack spacing={3}>
-      <Box>
-        <Typography variant="h6">About</Typography>
-        <Typography variant="body2" color={TEXT_SECONDARY}>
-          TopoViewer details, project links, maintainers, and runtime diagnostics.
-        </Typography>
-      </Box>
+    <Stack spacing={2}>
+      {showHeading && (
+        <Box>
+          <Typography variant="h6">About</Typography>
+          <Typography variant="body2" color={TEXT_SECONDARY}>
+            TopoViewer details, project links, maintainers, and runtime diagnostics.
+          </Typography>
+        </Box>
+      )}
 
       <Stack
         direction={{ xs: "column", sm: "row" }}

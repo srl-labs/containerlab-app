@@ -79,7 +79,22 @@ Note: The extension will automatically prompt to add your user to the `clab_admi
 
 ## Extension Settings
 
-Configure the extension behavior through VS Code settings (`containerlab.*`):
+Open **Containerlab: Open Settings** from the command palette, or click the gear in the Containerlab explorer title bar. The settings tab includes every extension setting, searchable categories, mapping and template editors, and appearance controls.
+
+Choose **User** or **Workspace** before editing. Save each changed setting; **Reset** removes its override in that scope. Changes stay in sync with VS Code Settings. Appearance changes apply immediately after saving, while runtime settings indicate when a window reload is needed.
+
+Use **Modified in view** to see overrides in the current category, or **All modified** to see overrides across every category. Both filters show counts for the selected scope.
+
+The same settings are available in VS Code Settings under `containerlab.*`.
+
+### Appearance
+
+| Setting | Default | Description |
+| ------- | ------- | ----------- |
+| `appearance.colorScheme` | `vscode` | Follow VS Code, or use a light or dark theme in Containerlab views. |
+| `appearance.fontSize` | `0` | Interface font size from 10 to 24 pixels; 0 follows VS Code. |
+| `appearance.fontFamily` | `""` | Interface font family; empty follows VS Code. |
+| `appearance.reduceMotion` | `false` | Minimize interface animations and transitions. |
 
 ### 🚀 Core Settings
 

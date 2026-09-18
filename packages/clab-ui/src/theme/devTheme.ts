@@ -4,7 +4,7 @@ export interface VarMap {
   [cssVar: string]: string;
 }
 
-const CLAB_UI_VAR_ALIASES = {
+export const CLAB_UI_VAR_ALIASES = {
   "--clab-ui-editor-background": "--vscode-editor-background",
   "--clab-ui-editor-foreground": "--vscode-editor-foreground",
   "--clab-ui-panel-background": "--vscode-sideBar-background",

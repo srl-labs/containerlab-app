@@ -145,6 +145,15 @@
     "./workspace/yaml": {
       "types": "./dist/workspace/yaml.d.ts",
       "import": "./dist/workspace/yaml.js"
+    },
+    "./settings": {
+      "types": "./dist/settings/index.d.ts",
+      "import": "./dist/settings/index.js"
+    },
+    "./settings/schema": {
+      "types": "./dist/settings/schema.d.ts",
+      "import": "./dist/settings/schema.js",
+      "default": "./dist/settings/schema.js"
     }
   },
   "scripts": {
