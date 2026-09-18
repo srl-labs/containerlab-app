@@ -26,7 +26,6 @@ import { ReactFlowCanvas } from "./components/canvas";
 import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
-import { OPEN_NODE_PALETTE_EVENT } from "./components/panels/lab-drawer/NodePalette";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
 import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
@@ -59,7 +58,6 @@ import {
 } from "./services/deleteSelectionCommands";
 import { useAnnotations, useDerivedAnnotations, type AnnotationContextValue } from "./hooks/canvas";
 import {
-  SET_CHROME_SIDE_EVENT,
   useAppHandlers,
   useContextMenuHandlers,
   usePanelVisibility,
@@ -303,7 +301,7 @@ export interface AppLayoutOptions {
     content?: React.ReactNode;
     /** Content rendered over an empty canvas. */
     emptyState?: React.ReactNode;
-    /** Host-owned left chrome; replaces the built-in dev explorer pane when set. */
+    /** Host-owned chrome beside the editor; replaces the built-in dev explorer pane when set. */
     sidebar?: React.ReactNode;
   };
   lifecycleActionsAvailable?: boolean;
@@ -1078,19 +1076,6 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   const shortcutDisplay = useShortcutDisplay();
   const panelVisibility = usePanelVisibility();
-  const [chromeSide, setChromeSide] = React.useState<"left" | "right">("right");
-  React.useEffect(() => {
-    const onSide = (event: Event) => {
-      const side = (event as CustomEvent<unknown>).detail;
-      if (side !== "left" && side !== "right") {
-        return;
-      }
-      setChromeSide(side);
-      panelVisibility.handleSetPanelSide(side);
-    };
-    window.addEventListener(SET_CHROME_SIDE_EVENT, onSide);
-    return () => window.removeEventListener(SET_CHROME_SIDE_EVENT, onSide);
-  }, [panelVisibility.handleSetPanelSide]);
 
   const clearAllEditingState = React.useCallback(() => {
     topoActions.editNode(null);
@@ -1267,13 +1252,9 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (!hasActiveTopology || viewerOnly) {
       return;
     }
-    window.dispatchEvent(new Event(OPEN_NODE_PALETTE_EVENT));
-    if (slots?.sidebar != null) {
-      return;
-    }
     handleContextPanelBack();
     panelVisibility.handleOpenContextPanel();
-  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, slots?.sidebar, viewerOnly]);
+  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, viewerOnly]);
 
   const canvasProps = React.useMemo<CanvasPropsWithoutGraph>(
     () => ({
@@ -1472,12 +1453,21 @@ export const AppContent: React.FC<AppContentProps> = ({
           onLockedAction={handleLockedAction}
           runtimeRef={annotationRuntimeRef}
         />
-        <Box
-          ref={layoutRef}
-          sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
-        >
-          {slots?.emptyState}
+        <Box sx={{ display: "flex", flexGrow: 1, overflow: "hidden" }}>
           {slots?.sidebar}
+          <Box
+            ref={layoutRef}
+            data-testid="topoviewer-editor"
+            sx={{
+              display: "flex",
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              position: "relative",
+              zIndex: 0
+            }}
+          >
+          {slots?.emptyState}
           {showDevExplorer && (
             <Box
               sx={{
@@ -1514,9 +1504,7 @@ export const AppContent: React.FC<AppContentProps> = ({
               />
             </Box>
           )}
-          {!viewerOnly &&
-            hasActiveTopology &&
-            (slots?.sidebar == null || panelVisibility.isContextPanelOpen) && (
+          {!viewerOnly && hasActiveTopology && (
             <ContextPanel
               isOpen={panelVisibility.isContextPanelOpen}
               side={panelVisibility.panelSide}
@@ -1524,7 +1512,6 @@ export const AppContent: React.FC<AppContentProps> = ({
               onClose={panelVisibility.handleCloseContextPanel}
               onBack={handleContextPanelBack}
               onToggleSide={panelVisibility.handleTogglePanelSide}
-              hideToggleWhenClosed={slots?.sidebar != null}
               rfInstance={rfInstance}
               palette={{
                 mode: state.mode,
@@ -1635,7 +1622,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                 <Navbar
                   lifecycleActionsAvailable={lifecycleActionsAvailable}
                   hasActiveTopology={hasActiveTopology}
-                  barSide={slots?.sidebar != null ? chromeSide : "right"}
+                  barSide={panelVisibility.panelSide === "left" ? "right" : "left"}
                   rfInstance={rfInstance}
                   onZoomToFit={handleZoomToFit}
                   layout={layoutControls.layout}
@@ -1662,6 +1649,7 @@ export const AppContent: React.FC<AppContentProps> = ({
               <EasterEggRenderer easterEgg={easterEgg} />
               <ToastContainer toasts={toasts} onDismiss={dismissToast} />
             </Box>
+          </Box>
           </Box>
         </Box>
 

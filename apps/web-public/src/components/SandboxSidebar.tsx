@@ -5,7 +5,6 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CloseIcon from "@mui/icons-material/Close";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
@@ -15,7 +14,6 @@ import NoteAddIcon from "@mui/icons-material/NoteAdd";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ScienceIcon from "@mui/icons-material/Science";
-import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import TuneIcon from "@mui/icons-material/Tune";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -36,7 +34,6 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
-import { NodePalette, OPEN_NODE_PALETTE_EVENT, SET_CHROME_SIDE_EVENT } from "@containerlab/clab-ui";
 
 import {
   DEFAULT_TOPOLOGY_FILE_NAME,
@@ -79,8 +76,7 @@ const HELP_LINKS = [
   { label: "Join our Discord server", url: "https://discord.gg/vAyddtaEV9" },
 ] as const;
 
-type SidebarView = "labs" | "files" | "palette";
-type RailSide = "left" | "right";
+type SidebarView = "labs" | "files";
 
 export interface SandboxSidebarProps {
   colorScheme: "light" | "dark";
@@ -117,11 +113,9 @@ function RailButton(props: {
   onContextMenu?: (event: MouseEvent<HTMLButtonElement>) => void;
   onMouseDown?: (event: MouseEvent<HTMLButtonElement>) => void;
   showTooltip?: boolean;
-  side?: RailSide;
   testId: string;
   children: ReactNode;
 }) {
-  const side = props.side ?? "left";
   const button = (
     <ButtonBase
       aria-label={props.label}
@@ -131,7 +125,6 @@ function RailButton(props: {
       onMouseDown={props.onMouseDown}
       sx={{
         display: "flex",
-        flexDirection: side === "right" ? "row-reverse" : "row",
         justifyContent: "flex-start",
         alignItems: "center",
         gap: 1,
@@ -139,9 +132,7 @@ function RailButton(props: {
         mx: 0.75,
         minWidth: 0,
         height: 36,
-        ...(side === "right"
-          ? { pl: props.onClose ? 0.5 : 1 }
-          : { pr: props.onClose ? 0.5 : 1 }),
+        pr: props.onClose ? 0.5 : 1,
         overflow: "hidden",
         borderRadius: 1,
         color: props.active === true ? "primary.main" : "text.primary",
@@ -165,7 +156,7 @@ function RailButton(props: {
       <Typography
         noWrap
         variant="body2"
-        sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: side === "right" ? "right" : "left" }}
+        sx={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}
       >
         {props.label}
       </Typography>
@@ -205,7 +196,7 @@ function RailButton(props: {
   }
 
   return (
-    <Tooltip disableInteractive leaveDelay={0} placement={side === "right" ? "left" : "right"} title={props.label}>
+    <Tooltip disableInteractive leaveDelay={0} placement="right" title={props.label}>
       {button}
     </Tooltip>
   );
@@ -215,7 +206,6 @@ function OpenRailTabs(props: {
   onActivate: (tabId: string) => void;
   onClose: (tabId: string) => void;
   showTooltip?: boolean;
-  side?: RailSide;
 }) {
   const tabs = useLabTabsStore((state) => state.tabs);
   const activeTabId = useLabTabsStore((state) => state.activeTabId);
@@ -248,7 +238,6 @@ function OpenRailTabs(props: {
               label={dirty ? `${tab.title} *` : tab.title}
               onClose={() => props.onClose(tab.id)}
               showTooltip={props.showTooltip}
-              side={props.side}
               testId={`lab-tab-${tab.id}`}
               onClick={() => props.onActivate(tab.id)}
               onMouseDown={(event) => {
@@ -275,7 +264,7 @@ function OpenRailTabs(props: {
         anchorEl={menu?.anchor ?? null}
         open={menu !== null}
         onClose={() => setMenu(null)}
-        anchorOrigin={{ vertical: "center", horizontal: props.side === "right" ? "left" : "right" }}
+        anchorOrigin={{ vertical: "center", horizontal: "right" }}
       >
         <MenuItem
           data-testid={menu ? `lab-tab-close-${menu.tabId}` : undefined}
@@ -434,18 +423,11 @@ export function SandboxSidebar({
   const [createError, setCreateError] = useState<string | null>(null);
   const [helpAnchor, setHelpAnchor] = useState<HTMLElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(PANEL_MIN_WIDTH);
-  const [railSide, setRailSide] = useState<RailSide>("left");
   const panelRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
-  const railSideRef = useRef(railSide);
-  railSideRef.current = railSide;
   const labelsVisible = pinned || !open;
   const hoverExpand = !pinned && !open && !hoverLocked;
   const topologies = getSandboxBackend().listTopologyFiles();
-  const topologyOpen = useLabTabsStore((state) => {
-    const tab = state.tabs.find((entry) => entry.id === state.activeTabId);
-    return tab?.kind === "topology";
-  });
 
   const selectView = (next: SidebarView) => {
     if (open && view === next) {
@@ -469,25 +451,6 @@ export function SandboxSidebar({
       window.removeEventListener(SANDBOX_CREATE_TOPOLOGY_EVENT, openCreate);
     };
   }, [openCreate]);
-
-  const openPalette = useCallback(() => {
-    setView("palette");
-    setOpen(true);
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener(OPEN_NODE_PALETTE_EVENT, openPalette);
-    return () => {
-      window.removeEventListener(OPEN_NODE_PALETTE_EVENT, openPalette);
-    };
-  }, [openPalette]);
-
-  useEffect(() => {
-    if (topologyOpen || view !== "palette") {
-      return;
-    }
-    setOpen(false);
-  }, [topologyOpen, view]);
 
   const openEntry = useCallback(
     async (entry: SandboxFileExplorerEntry) => {
@@ -513,15 +476,10 @@ export function SandboxSidebar({
       if (!draggingRef.current) {
         return;
       }
-      const rect = panelRef.current?.getBoundingClientRect();
-      if (!rect) {
-        return;
-      }
-      const width =
-        railSideRef.current === "left"
-          ? moveEvent.clientX - rect.left
-          : rect.right - moveEvent.clientX;
-      setPanelWidth(Math.min(panelMaxWidth(), Math.max(PANEL_MIN_WIDTH, width)));
+      const left = panelRef.current?.getBoundingClientRect().left ?? 0;
+      setPanelWidth(
+        Math.min(panelMaxWidth(), Math.max(PANEL_MIN_WIDTH, moveEvent.clientX - left)),
+      );
     };
     const onUp = () => {
       draggingRef.current = false;
@@ -549,15 +507,12 @@ export function SandboxSidebar({
   return (
       <Box
         data-testid="sandbox-sidebar"
-        data-side={railSide}
         sx={{
-          position: "absolute",
-          [railSide]: 0,
-          top: 0,
-          bottom: 0,
+          position: "relative",
           zIndex: 8,
           display: "flex",
-          flexDirection: railSide === "right" ? "row-reverse" : "row",
+          flexShrink: 0,
+          alignSelf: "stretch",
         }}
       >
       <Box
@@ -578,7 +533,7 @@ export function SandboxSidebar({
         sx={{
           position: "absolute",
           top: 0,
-          [railSide]: 0,
+          left: 0,
           bottom: 0,
           width: pinned ? "100%" : RAIL_WIDTH,
           overflow: "hidden",
@@ -587,7 +542,7 @@ export function SandboxSidebar({
           gap: 0.5,
           py: 1,
           ...GLASS_SX,
-          [railSide === "right" ? "borderLeft" : "borderRight"]: 1,
+          borderRight: 1,
           borderColor:
             "color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent)",
           transition: (theme) =>
@@ -602,7 +557,6 @@ export function SandboxSidebar({
         <Box
           sx={{
             display: "flex",
-            flexDirection: railSide === "right" ? "row-reverse" : "row",
             alignItems: "center",
             gap: 1,
             alignSelf: "stretch",
@@ -615,7 +569,7 @@ export function SandboxSidebar({
           }}
         >
           <Box sx={{ width: 36, height: 36, flexShrink: 0, display: "grid", placeItems: "center" }}>
-            <RailLogo showTooltip={!labelsVisible} side={railSide} />
+            <RailLogo showTooltip={!labelsVisible} />
           </Box>
           <Typography noWrap variant="body1">
             Containerlab
@@ -625,7 +579,6 @@ export function SandboxSidebar({
           active={open && view === "labs"}
           label="Labs"
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-labs"
           onClick={() => selectView("labs")}
         >
@@ -635,34 +588,15 @@ export function SandboxSidebar({
           active={open && view === "files"}
           label="File Explorer"
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-files"
           onClick={() => selectView("files")}
         >
           <FolderIcon fontSize="small" />
         </RailButton>
-        {topologyOpen ? (
-          <RailButton
-            active={open && view === "palette"}
-            label="Palette"
-            showTooltip={!labelsVisible}
-            side={railSide}
-            testId="sandbox-sidebar-palette"
-            onClick={() => selectView("palette")}
-          >
-            <EditOutlinedIcon fontSize="small" />
-          </RailButton>
-        ) : null}
-        <OpenRailTabs
-          onActivate={onActivateTab}
-          onClose={onCloseTab}
-          showTooltip={!labelsVisible}
-          side={railSide}
-        />
+        <OpenRailTabs onActivate={onActivateTab} onClose={onCloseTab} showTooltip={!labelsVisible} />
         <RailButton
           label="Help & Feedback"
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-help"
           onClick={(event) => setHelpAnchor(event.currentTarget)}
         >
@@ -671,7 +605,6 @@ export function SandboxSidebar({
         <RailButton
           label={colorScheme === "dark" ? "Light mode" : "Dark mode"}
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-theme"
           onClick={() => onColorSchemeChange(colorScheme === "dark" ? "light" : "dark")}
         >
@@ -684,34 +617,15 @@ export function SandboxSidebar({
         <RailButton
           label="Settings"
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-settings"
           onClick={() => window.dispatchEvent(new Event(SANDBOX_OPEN_SETTINGS_EVENT))}
         >
           <TuneIcon fontSize="small" />
         </RailButton>
         <RailButton
-          label={railSide === "left" ? "Move to right" : "Move to left"}
-          showTooltip={!labelsVisible}
-          side={railSide}
-          testId="sandbox-sidebar-flip"
-          onClick={() => {
-            const next = railSide === "left" ? "right" : "left";
-            setRailSide(next);
-            window.dispatchEvent(
-              new CustomEvent(SET_CHROME_SIDE_EVENT, {
-                detail: next === "left" ? "right" : "left",
-              }),
-            );
-          }}
-        >
-          <SwapHorizIcon fontSize="small" />
-        </RailButton>
-        <RailButton
           active={pinned}
           label={pinned ? "Unpin" : "Pin"}
           showTooltip={!labelsVisible}
-          side={railSide}
           testId="sandbox-sidebar-pin"
           onClick={() => setPinned((current) => !current)}
         >
@@ -731,7 +645,7 @@ export function SandboxSidebar({
             flexDirection: "column",
             minWidth: 0,
             ...GLASS_SX,
-            [railSide === "right" ? "borderLeft" : "borderRight"]: 1,
+            borderRight: 1,
             borderColor:
               "color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent)",
           }}
@@ -752,7 +666,7 @@ export function SandboxSidebar({
               variant="subtitle2"
               sx={{ flexGrow: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
             >
-              {view === "labs" ? "Labs" : view === "files" ? "File Explorer" : "Palette"}
+              {view === "labs" ? "Labs" : "File Explorer"}
             </Typography>
             {view === "labs" ? (
               <Tooltip title="New Topology File">
@@ -779,23 +693,15 @@ export function SandboxSidebar({
               </IconButton>
             </Tooltip>
           </Box>
-          <Box
-            sx={{
-              flex: 1,
-              minHeight: 0,
-              overflow: view === "palette" ? "hidden" : "auto",
-            }}
-          >
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
             {view === "labs" ? (
               <LabsPanel
                 onCreate={openCreate}
                 onOpenTopology={onOpenTopology}
                 topologies={topologies}
               />
-            ) : view === "files" ? (
-              <FileTree depth={0} onOpen={(entry) => void openEntry(entry)} parentPath="" />
             ) : (
-              <NodePalette />
+              <FileTree depth={0} onOpen={(entry) => void openEntry(entry)} parentPath="" />
             )}
           </Box>
           <Box
@@ -803,7 +709,7 @@ export function SandboxSidebar({
             onMouseDown={handlePanelResizeStart}
             sx={{
               position: "absolute",
-              [railSide === "right" ? "left" : "right"]: 0,
+              right: 0,
               top: 0,
               bottom: 0,
               width: 4,
@@ -819,7 +725,7 @@ export function SandboxSidebar({
         anchorEl={helpAnchor}
         open={helpAnchor !== null}
         onClose={() => setHelpAnchor(null)}
-        anchorOrigin={{ vertical: "center", horizontal: railSide === "right" ? "left" : "right" }}
+        anchorOrigin={{ vertical: "center", horizontal: "right" }}
       >
         {HELP_LINKS.map((link) => (
           <MenuItem

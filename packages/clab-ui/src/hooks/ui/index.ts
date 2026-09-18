@@ -1,7 +1,7 @@
 // UI hooks barrel.
 
 // Commands
-export { SET_CHROME_SIDE_EVENT, useDeploymentCommands, usePanelVisibility } from "./usePanelCommands";
+export { useDeploymentCommands, usePanelVisibility } from "./usePanelCommands";
 
 // Footer Refs
 export { useFooterControlsRef } from "./useFooterControlsRef";
