@@ -95,6 +95,61 @@ export async function fitGraph(page: Page): Promise<void> {
 }
 
 /**
+ * Find a visible 100px square of empty canvas for pointer interactions.
+ * Hit testing avoids floating panels, toolbars, and menus on either side.
+ */
+export async function getEmptyCanvasArea(
+  page: Page
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const handle = await page.waitForFunction(
+    (selector) => {
+      const canvas = document.querySelector(selector);
+      if (canvas === null) return null;
+      const bounds = canvas.getBoundingClientRect();
+      const size = 100;
+      const margin = 80;
+      const left = Math.max(bounds.left, 0) + margin;
+      const right = Math.min(bounds.right, window.innerWidth) - margin;
+      const top = Math.max(bounds.top, 0) + margin;
+      const bottom = Math.min(bounds.bottom, window.innerHeight) - margin;
+      const nodes = Array.from(canvas.querySelectorAll(".react-flow__node"), (node) =>
+        node.getBoundingClientRect()
+      ).filter((rect) => rect.width > 0 && rect.height > 0);
+
+      for (let y = bottom - size; y >= top; y -= 40) {
+        for (let x = left; x + size <= right; x += 40) {
+          if (
+            nodes.some(
+              (rect) =>
+                rect.left <= x + size && rect.right >= x &&
+                rect.top <= y + size && rect.bottom >= y
+            )
+          ) continue;
+
+          const offsets = [0, size / 2, size];
+          const isEmpty = offsets.every((dx) =>
+            offsets.every((dy) =>
+              document.elementFromPoint(x + dx, y + dy)?.matches(".react-flow__pane") === true
+            )
+          );
+          if (isEmpty) return { x, y, width: size, height: size };
+        }
+      }
+      return null;
+    },
+    RF_SELECTOR,
+    { timeout: 5000 }
+  );
+  try {
+    const area = await handle.jsonValue();
+    if (!area) throw new Error("No unobstructed empty canvas area found");
+    return area;
+  } finally {
+    await handle.dispose();
+  }
+}
+
+/**
  * Get all node IDs in the graph.
  */
 export async function getAllNodeIds(page: Page): Promise<string[]> {

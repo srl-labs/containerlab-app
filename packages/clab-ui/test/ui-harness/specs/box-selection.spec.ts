@@ -1,5 +1,5 @@
 import { test, expect } from "../fixtures/topoviewer";
-import { boxSelect, fitGraph } from "../helpers/react-flow-helpers";
+import { boxSelect, fitGraph, getEmptyCanvasArea } from "../helpers/react-flow-helpers";
 
 const SIMPLE_FILE = "simple.clab.yml";
 
@@ -193,21 +193,9 @@ test.describe("Box Selection", () => {
     const selectedIds = await topoViewerPage.getSelectedNodeIds();
     expect(selectedIds.length).toBe(1);
 
-    // Get canvas center
-    const canvasCenter = await topoViewerPage.getCanvasCenter();
-
-    // Perform box selection in empty area (far from nodes)
-    const from = {
-      x: canvasCenter.x + 200,
-      y: canvasCenter.y + 200
-    };
-    const to = {
-      x: canvasCenter.x + 300,
-      y: canvasCenter.y + 300
-    };
-
-    await boxSelect(page, from, to);
-    await page.waitForTimeout(300);
+    // Drag entirely within empty canvas, clear of the floating palette.
+    const area = await getEmptyCanvasArea(page);
+    await boxSelect(page, area, { x: area.x + area.width, y: area.y + area.height });
 
     // A new selection box replaces the selection, including when it encloses no nodes.
     await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toEqual([]);
