@@ -185,6 +185,8 @@ test.describe("Annotation rotation", () => {
   }) => {
     await openText(page);
     const dial = page.getByRole("button", { name: "Rotation dial", exact: true });
+    // Wait for the panel's opening transition before measuring pointer coordinates.
+    await dial.hover();
     const bounds = await dial.boundingBox();
     expect(bounds).not.toBeNull();
     await page.keyboard.down("Shift");
