@@ -244,6 +244,7 @@ export interface ContextPanelProps {
   onClose: () => void;
   onBack: () => void;
   onToggleSide: () => void;
+  hideToggleWhenClosed?: boolean;
   rfInstance: ReactFlowInstance | null;
   palette: ContextPanelPaletteProps;
   view: ContextPanelViewProps;
@@ -257,6 +258,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   onClose,
   onBack,
   onToggleSide,
+  hideToggleWhenClosed = false,
   palette,
   view,
   editor
@@ -320,16 +322,18 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
 
   return (
     <>
-      <ToggleHandle
-        isOpen={isOpen}
-        panelWidth={panelWidth}
-        isDragging={isDragging}
-        side={side}
-        onOpen={onOpen}
-        onClose={onClose}
-        onBack={onBack}
-        onToggleSide={onToggleSide}
-      />
+      {hideToggleWhenClosed && !isOpen ? null : (
+        <ToggleHandle
+          isOpen={isOpen}
+          panelWidth={panelWidth}
+          isDragging={isDragging}
+          side={side}
+          onOpen={onOpen}
+          onClose={onClose}
+          onBack={onBack}
+          onToggleSide={onToggleSide}
+        />
+      )}
       <Drawer
         variant="persistent"
         anchor={side}

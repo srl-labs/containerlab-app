@@ -25,7 +25,7 @@ function faceCamera(object: THREE.Object3D) {
   object.rotation.set(0, bestY, 0);
 }
 
-export function RailLogo(props: { showTooltip?: boolean }) {
+export function RailLogo(props: { showTooltip?: boolean; side?: "left" | "right" }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const kickRef = useRef<(spin: boolean) => void>(() => {});
 
@@ -156,7 +156,7 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       disableHoverListener={!props.showTooltip}
       disableInteractive
       leaveDelay={0}
-      placement="right"
+      placement={props.side === "right" ? "left" : "right"}
       title="TopoViewer"
       {...(props.showTooltip === true ? {} : { open: false })}
     >

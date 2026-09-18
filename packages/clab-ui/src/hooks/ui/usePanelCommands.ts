@@ -67,6 +67,7 @@ export interface PanelVisibility {
   handleCloseContextPanel: () => void;
   handleToggleContextPanel: () => void;
   handleTogglePanelSide: () => void;
+  handleSetPanelSide: (side: "left" | "right") => void;
 
   // Modals
   showLabSettingsModal: boolean;
@@ -95,6 +96,7 @@ export interface PanelVisibility {
 }
 
 const PANEL_SIDE_KEY = "contextPanelSide";
+export const SET_CHROME_SIDE_EVENT = "clab-ui-set-chrome-side";
 
 function useContextPanel() {
   const [isContextPanelOpen, setIsContextPanelOpen] = useState(false);
@@ -141,6 +143,17 @@ function useContextPanel() {
           /* ignore */
         }
         return next;
+      });
+    }, []),
+    handleSetPanelSide: useCallback((side: "left" | "right") => {
+      setPanelSide((prev) => {
+        if (prev === side) return prev;
+        try {
+          window.localStorage.setItem(PANEL_SIDE_KEY, side);
+        } catch {
+          /* ignore */
+        }
+        return side;
       });
     }, [])
   };

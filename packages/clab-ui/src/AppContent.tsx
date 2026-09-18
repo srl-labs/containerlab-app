@@ -26,6 +26,7 @@ import { ReactFlowCanvas } from "./components/canvas";
 import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
+import { OPEN_NODE_PALETTE_EVENT } from "./components/panels/lab-drawer/NodePalette";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
 import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
@@ -58,6 +59,7 @@ import {
 } from "./services/deleteSelectionCommands";
 import { useAnnotations, useDerivedAnnotations, type AnnotationContextValue } from "./hooks/canvas";
 import {
+  SET_CHROME_SIDE_EVENT,
   useAppHandlers,
   useContextMenuHandlers,
   usePanelVisibility,
@@ -1076,6 +1078,19 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   const shortcutDisplay = useShortcutDisplay();
   const panelVisibility = usePanelVisibility();
+  const [chromeSide, setChromeSide] = React.useState<"left" | "right">("right");
+  React.useEffect(() => {
+    const onSide = (event: Event) => {
+      const side = (event as CustomEvent<unknown>).detail;
+      if (side !== "left" && side !== "right") {
+        return;
+      }
+      setChromeSide(side);
+      panelVisibility.handleSetPanelSide(side);
+    };
+    window.addEventListener(SET_CHROME_SIDE_EVENT, onSide);
+    return () => window.removeEventListener(SET_CHROME_SIDE_EVENT, onSide);
+  }, [panelVisibility.handleSetPanelSide]);
 
   const clearAllEditingState = React.useCallback(() => {
     topoActions.editNode(null);
@@ -1252,9 +1267,13 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (!hasActiveTopology || viewerOnly) {
       return;
     }
+    window.dispatchEvent(new Event(OPEN_NODE_PALETTE_EVENT));
+    if (slots?.sidebar != null) {
+      return;
+    }
     handleContextPanelBack();
     panelVisibility.handleOpenContextPanel();
-  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, viewerOnly]);
+  }, [handleContextPanelBack, hasActiveTopology, panelVisibility, slots?.sidebar, viewerOnly]);
 
   const canvasProps = React.useMemo<CanvasPropsWithoutGraph>(
     () => ({
@@ -1495,7 +1514,9 @@ export const AppContent: React.FC<AppContentProps> = ({
               />
             </Box>
           )}
-          {!viewerOnly && hasActiveTopology && (
+          {!viewerOnly &&
+            hasActiveTopology &&
+            (slots?.sidebar == null || panelVisibility.isContextPanelOpen) && (
             <ContextPanel
               isOpen={panelVisibility.isContextPanelOpen}
               side={panelVisibility.panelSide}
@@ -1503,6 +1524,7 @@ export const AppContent: React.FC<AppContentProps> = ({
               onClose={panelVisibility.handleCloseContextPanel}
               onBack={handleContextPanelBack}
               onToggleSide={panelVisibility.handleTogglePanelSide}
+              hideToggleWhenClosed={slots?.sidebar != null}
               rfInstance={rfInstance}
               palette={{
                 mode: state.mode,
@@ -1613,7 +1635,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                 <Navbar
                   lifecycleActionsAvailable={lifecycleActionsAvailable}
                   hasActiveTopology={hasActiveTopology}
-                  barSide="right"
+                  barSide={slots?.sidebar != null ? chromeSide : "right"}
                   rfInstance={rfInstance}
                   onZoomToFit={handleZoomToFit}
                   layout={layoutControls.layout}

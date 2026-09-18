@@ -74,6 +74,7 @@ interface PaletteSectionProps {
   infoTabContent?: React.ReactNode;
   showInfoTab?: boolean;
   infoTabTitle?: string;
+  hideTitle?: boolean;
 }
 
 interface NetworkTypeDefinition {
@@ -478,7 +479,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   onEditTabLeave,
   infoTabContent,
   showInfoTab = false,
-  infoTabTitle
+  infoTabTitle,
+  hideTitle = false
 }) => {
   const sessionClient = useTopologySessionClient();
   const { customPaletteTabs, disabledTabIds, yamlSchema, paletteTabLabels } = useClabUiRuntime();
@@ -692,6 +694,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {hideTitle && (activeTab === "nodes" || activeTab === "annotations") ? null : (
+        <>
       <Box
         sx={{
           display: "flex",
@@ -743,6 +747,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
         )}
       </Box>
       <Divider />
+        </>
+      )}
       <Box onPointerOver={handleSourceTabIntent} onFocusCapture={handleSourceTabIntent}>
         <TabNavigation
           tabs={visibleTabs}
