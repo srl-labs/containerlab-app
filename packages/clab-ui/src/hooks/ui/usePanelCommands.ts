@@ -2,7 +2,7 @@
  * usePanelCommands - Hooks providing deployment callbacks and panel visibility management.
  *
  * Simplified for the new UI model:
- * - ContextPanel (left drawer) with auto-open on selection
+ * - ContextPanel (side drawer) with auto-open on selection
  * - MUI Dialogs for modals (LabSettings, Shortcuts, SvgExport, BulkLink, About)
  * - MUI Popovers for Grid and Find (anchor-based)
  */
@@ -52,7 +52,7 @@ export function useDeploymentCommands(): DeploymentCommands {
 // ============================================================================
 
 export interface PanelVisibility {
-  // Context panel (left drawer)
+  // Context panel (side drawer)
   isContextPanelOpen: boolean;
   /** Why the panel is open. Used to decide how pane-click should behave. */
   contextPanelOpenReason: "manual" | "auto" | null;
@@ -108,7 +108,7 @@ function useContextPanel() {
     } catch {
       /* ignore */
     }
-    return "left";
+    return "right";
   });
 
   return {

@@ -585,6 +585,7 @@ function DeferredDevExplorerView() {
 type AppContentStateSlice = Pick<
   TopoViewerState,
   | "labName"
+  | "yamlFileName"
   | "mode"
   | "labSettings"
   | "canUndo"
@@ -615,6 +616,7 @@ type AppContentStateSlice = Pick<
 function selectAppContentState(state: TopoViewerState): AppContentStateSlice {
   return {
     labName: state.labName,
+    yamlFileName: state.yamlFileName,
     mode: state.mode,
     labSettings: state.labSettings,
     canUndo: state.canUndo,
@@ -1086,6 +1088,29 @@ export const AppContent: React.FC<AppContentProps> = ({
   const shortcutDisplay = useShortcutDisplay();
   const panelVisibility = usePanelVisibility();
   const panelSide = panelVisibility.panelSide;
+  const initializedPaletteTopology = React.useRef<string | null>(null);
+  const { handleOpenContextPanel } = panelVisibility;
+
+  React.useEffect(() => {
+    // Wait for the lab snapshot before checking whether its canvas is empty.
+    if (viewerOnly || !hasActiveTopology || state.labName.length === 0) return;
+    const topologyKey = JSON.stringify([topologyViewportKey, state.yamlFileName]);
+    if (initializedPaletteTopology.current === topologyKey) return;
+    initializedPaletteTopology.current = topologyKey;
+
+    if (useGraphStore.getState().nodes.length === 0) {
+      // Keep the palette open through selection changes, but allow manual dismissal.
+      handleOpenContextPanel("manual");
+      setPaletteTabRequest({ tabId: "nodes" });
+    }
+  }, [
+    viewerOnly,
+    hasActiveTopology,
+    state.labName,
+    state.yamlFileName,
+    topologyViewportKey,
+    handleOpenContextPanel
+  ]);
 
   const clearAllEditingState = React.useCallback(() => {
     topoActions.editNode(null);
