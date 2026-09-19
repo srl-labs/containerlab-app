@@ -254,6 +254,7 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
         endpointId: currentTab.endpointId,
         path: currentTab.path,
         content: currentTab.content,
+        originalContent: currentTab.originalContent,
       });
       useLabTabsStore
         .getState()

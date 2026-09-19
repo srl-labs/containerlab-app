@@ -1,6 +1,29 @@
 # Export and share
 
-Share a snapshot of your canvas, prepare a Grafana panel, or put an interactive topology in your documentation.
+Work on shared labs with other users, share a snapshot of your canvas, prepare a Grafana panel, or put an interactive topology in your documentation.
+
+## Shared labs in Desktop and Web
+
+When your API server enables a shared workspace, **Shared labs** appears in its
+File Explorer. Everyone signed in to that server can read, edit, deploy, operate,
+and destroy labs in this folder. Terminals and capture sessions remain personal.
+
+Use the folder's menu to create a topology, create a subfolder, or upload files.
+Shared topologies also appear in the running and undeployed lab lists with a
+**Shared** badge. You can open and edit a shared lab deployed by someone else,
+and it remains visible when other users' personal labs are hidden. The owner
+shown on a running lab identifies who deployed it.
+
+Destroying a shared lab leaves its source files available for the next deployment.
+Deleting a shared file or subfolder removes it for everyone. The shared root
+cannot be renamed or deleted, and files cannot be moved between personal and
+shared workspaces.
+
+Topology changes from other editors refresh the canvas. If a file changes while
+you have an older edit open, a stale save is rejected. The text editor keeps your
+unsaved changes so you can copy them before reopening the current file.
+
+See [API server setup](../manual/api-server.md) for enabling the folder.
 
 ## SVG and Grafana export
 

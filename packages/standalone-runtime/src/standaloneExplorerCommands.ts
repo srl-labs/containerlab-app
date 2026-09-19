@@ -48,6 +48,7 @@ import {
   firstArgAsTreeItem,
   normalizeLabName,
   normalizePathValue,
+  isSharedWorkspacePath,
   safeFilename
 } from "./standaloneHostShared";
 import { resolveStandaloneTheme } from "./standaloneTheme";
@@ -355,6 +356,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
     const openSshToAllNodes = (): void => {
       const lab = findLabStateForTopology(
         {
+          absoluteYamlPath: actionTopologyRef?.absoluteYamlPath,
           yamlPath: actionTopologyRef?.yamlPath ?? "",
           topologyId: actionTopologyRef?.topologyId,
           labName: actionTopologyRef?.labName ?? item?.labName,
@@ -720,7 +722,9 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
       const createTopologyInput = await promptForCreateTopology({
         title: "Create Topology File",
-        message: "Choose endpoint and file name for the new topology file.",
+        message: isSharedWorkspacePath(item?.resourcePath)
+          ? "Create a topology available to everyone on this server."
+          : "Choose endpoint and file name for the new topology file.",
         confirmLabel: "Create",
         endpointOptions: connectedEndpoints.map((endpoint) => ({
           value: endpoint.id,
@@ -731,7 +735,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           preferredEndpoint?.status === "connected"
             ? preferredEndpoint.id
             : connectedEndpoints[0]?.id,
-        defaultFileName: "new-lab.clab.yml"
+        defaultFileName: joinWorkspacePath(selectedDirectoryPath(), "new-lab.clab.yml")
       });
       if (!createTopologyInput) {
         return;
@@ -1033,6 +1037,10 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
       const newPath = await promptWorkspacePath("Rename path", oldPath);
       if (!newPath || newPath === oldPath) {
+        return;
+      }
+      if (isSharedWorkspacePath(oldPath) !== isSharedWorkspacePath(newPath)) {
+        postExplorerError("Files cannot be moved between personal and shared workspaces.");
         return;
       }
       await renameFileExplorerPath({ endpointId, oldPath, newPath });

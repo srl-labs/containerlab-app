@@ -184,6 +184,20 @@ These settings are the ones most users need to look at first:
 
 The full configuration reference is maintained in the [`clab-api-server` repository](https://github.com/srl-labs/clab-api-server).
 
+### Shared lab workspace
+
+Set `CLAB_SHARED_LABS_ROOT=/var/lib/containerlab/shared-labs` in the API server's
+environment and restart it to enable a folder available to all authenticated API
+users. Use a dedicated absolute directory separate from personal workspaces.
+For a containerized API server, mount it at the same absolute path on the host
+and in the container.
+
+Desktop and Web show the folder as **Shared labs**. Users can edit and operate
+its labs regardless of who deployed them. This grants access to everyone on the
+API server; it does not configure individual invitations or per-group sharing.
+Leave the setting empty to disable the folder. See [Shared labs](../guides/sharing.md#shared-labs-in-desktop-and-web)
+for the user workflow.
+
 ## API docs
 
 When the server is running, the interactive API documentation is available from the API server itself:

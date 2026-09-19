@@ -24,6 +24,7 @@ type HelpFeedbackProvider = ExplorerTreeProvider;
 interface ExplorerTreeItemLike {
   label?: string | { label: string };
   description?: string | boolean;
+  workspaceScope?: "shared";
   tooltip?: string | { value: string };
   collapsibleState?: number;
   id?: string;
@@ -1061,6 +1062,7 @@ async function buildNode(
     id: nodeId,
     label,
     description,
+    workspaceScope: item.workspaceScope,
     tooltip,
     contextValue,
     endpointId: item.endpointId,

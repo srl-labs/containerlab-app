@@ -200,7 +200,6 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         fs,
         documentKey: JSON.stringify([
           options.client.getBaseUrl(),
-          options.topologyRef.labName,
           options.topologyRef.yamlPath
         ]),
         yamlFilePath: options.topologyRef.yamlPath,

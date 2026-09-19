@@ -476,6 +476,11 @@ export function resolveArchiveLabFolder(input: {
   targetLabel?: string;
 }): string | undefined {
   const resourcePath = normalizePathValue(input.item?.resourcePath ?? "");
+  if (resourcePath === "@shared") return undefined;
+  if (input.item?.resourceKind === "directory" && resourcePath.startsWith("@shared/")) {
+    const segments = resourcePath.split("/");
+    return segments.length === 2 ? resourcePath : undefined;
+  }
   if (input.item?.resourceKind === "directory" && resourcePath && !resourcePath.includes("/")) {
     return resourcePath;
   }
@@ -484,6 +489,9 @@ export function resolveArchiveLabFolder(input: {
   if (yamlPath) {
     const normalizedYamlPath = yamlPath.replace(/\\/g, "/");
     const pathSegments = normalizedYamlPath.split("/").filter(Boolean);
+    if (pathSegments[0] === "@shared") {
+      return pathSegments.length > 2 ? pathSegments.slice(0, 2).join("/") : undefined;
+    }
     const clabIndex = pathSegments.lastIndexOf(".clab");
     if (clabIndex >= 0 && pathSegments[clabIndex + 1]) {
       return pathSegments[clabIndex + 1];

@@ -621,12 +621,21 @@ export function createApiClabUiHost(options: ApiHostOptions = {}): ClabUiHost {
 
   const buildUrl = (path: string): string => `${baseUrl}${path}`;
 
-  const postJson = async <T>(path: string, payload: unknown): Promise<T> => {
-    const response = await fetchImpl(buildUrl(path), {
+  const postJson = async <T>(path: string, payload: unknown, readOnly = false): Promise<T> => {
+    const sendRequest = () => fetchImpl(buildUrl(path), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+    let response: Response;
+    try {
+      response = await sendRequest();
+    } catch (error) {
+      // Lab network changes can briefly invalidate browser connections. Snapshot
+      // reads are safe to retry; commands may already have been applied.
+      if (!readOnly || !(error instanceof TypeError)) throw error;
+      response = await sendRequest();
+    }
 
     const parsedBody: unknown = await response.json().catch(() => undefined);
     if (!response.ok) {
@@ -658,7 +667,8 @@ export function createApiClabUiHost(options: ApiHostOptions = {}): ClabUiHost {
             deploymentState: context.deploymentState,
             runtimeContainers: context.runtimeContainers,
             externalChange: options.externalChange ?? false
-          }
+          },
+          true
         );
 
         if (!isRecord(payload) || !isRecord(payload.snapshot)) {

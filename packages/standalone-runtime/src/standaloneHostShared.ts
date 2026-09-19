@@ -31,6 +31,7 @@ export interface ExplorerTreeItem {
   id?: string;
   label: string;
   description?: string;
+  workspaceScope?: "shared";
   tooltip?: string;
   contextValue?: string;
   command?: { command: string; title: string; arguments?: unknown[] };
@@ -110,6 +111,14 @@ export function safeFilename(pathValue: string): string {
 export function normalizePathValue(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\.\//, "");
 }
+
+export function isSharedWorkspacePath(pathValue: string | undefined): boolean {
+  const path = normalizePathValue(pathValue ?? "");
+  return path === "@shared" || path.startsWith("@shared/");
+}
+
+export const SHARED_WORKSPACE_DESCRIPTION =
+  "Everyone on this server can edit, deploy, and destroy these labs. Terminal and capture sessions remain personal.";
 
 export function normalizeLabName(labName: string | undefined): string {
   return (labName ?? "").trim().toLowerCase();
@@ -274,6 +283,7 @@ type TopologyLookupRef = (
   Pick<TopologyRef, "yamlPath"> &
   Partial<Pick<TopologyRef, "topologyId">> &
   Partial<Pick<TopologyRef, "labName">> &
+  Partial<Pick<TopologyRef, "absoluteYamlPath">> &
   { endpointId?: string }
 ) | undefined;
 
@@ -321,6 +331,13 @@ export function findLabStateForTopology(
 ): LabState | undefined {
   const endpointId = topologyRef?.endpointId ?? extractEndpointIdFromTopologyId(topologyRef?.topologyId);
   const normalizedPath = topologyRef?.yamlPath ? normalizePathValue(topologyRef.yamlPath) : "";
+  if (topologyRef?.absoluteYamlPath) {
+    const absolutePath = normalizePathValue(topologyRef.absoluteYamlPath);
+    return [...labs.values()].find((lab) => labMatchesEndpoint(lab, endpointId) && (
+      normalizePathValue(lab.topologyPath) === absolutePath ||
+      [...lab.containers.values()].some((container) => normalizePathValue(container.labPath) === absolutePath)
+    ));
+  }
   if (!normalizedPath) {
     return uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
   }
@@ -333,16 +350,15 @@ export function findLabStateForTopology(
     return uniqueLabByName(byPath, topologyRef?.labName);
   }
 
-  return uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
+  // A shared workspace path is a virtual mount, not a suffix of a host path.
+  // Matching it by name can associate an unrelated personal lab with this file.
+  return isSharedWorkspacePath(normalizedPath)
+    ? undefined
+    : uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
 }
 
 export function isTopologyRunning(
-  topologyRef: (
-    Pick<TopologyRef, "yamlPath"> &
-    Partial<Pick<TopologyRef, "topologyId">> &
-    Partial<Pick<TopologyRef, "labName">> &
-    { endpointId?: string }
-  ) | undefined,
+  topologyRef: TopologyLookupRef,
   labs: Map<string, LabState>
 ): boolean {
   return findLabStateForTopology(topologyRef, labs) !== undefined;
@@ -368,22 +384,22 @@ export function resolveStandaloneLoadTopologyTarget(
   input: ResolveLoadTopologyTargetInput
 ): LoadTopologyTarget | undefined {
   const { deploymentState, endpointId, endpoints, files, labs, topologyRef } = input;
+  const endpointFiles = files.filter((file) => file.endpointId === endpointId);
+  const entry = findTopologyFileEntryByPath(endpointFiles, topologyRef.yamlPath) ??
+    endpointFiles.find((file) => file.topologyRef.absoluteYamlPath === topologyRef.yamlPath);
   const runtimeLab = findLabStateForTopology(
     {
-      topologyId: topologyRef.topologyId,
-      yamlPath: topologyRef.yamlPath,
-      labName: topologyRef.labName,
+      ...(entry?.topologyRef ?? topologyRef),
       endpointId
     },
     labs
   );
   const endpointUsername = endpoints.find((endpoint) => endpoint.id === endpointId)?.username;
 
-  if (runtimeLab && isNonOwnedLabForEndpoint(runtimeLab, endpointUsername)) {
+  if (runtimeLab && isNonOwnedLabForEndpoint(runtimeLab, endpointUsername) && !isSharedWorkspacePath(entry?.path)) {
     return buildRunningDocLoadTarget(topologyRef, endpointId);
   }
 
-  const entry = findTopologyFileEntryByPath(files, topologyRef.yamlPath);
   if (entry?.topologyRef) {
     return buildApiFileLoadTarget(entry);
   }
