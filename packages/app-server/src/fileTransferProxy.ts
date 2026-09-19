@@ -292,10 +292,11 @@ function normalizeLabFolderPath(pathValue: string): string {
 
 function normalizeDirectLabFolder(pathValue: string): string {
   const segments = normalizePathSegments(pathValue);
-  if (segments.length !== 1) {
+  const shared = segments[0] === "@shared";
+  if (segments.length !== (shared ? 2 : 1)) {
     throw new RequestError("Archive download is only allowed for direct lab folders.", 400);
   }
-  return segments[0];
+  return segments.join("/");
 }
 
 function safeFileName(pathValue: string): string {
@@ -596,7 +597,7 @@ export function registerFileTransferProxy(
       const archive = buildArchive(format, files);
       const extension = format === "zip" ? "zip" : "tar.gz";
       reply.header("Content-Type", format === "zip" ? "application/zip" : "application/gzip");
-      reply.header("Content-Disposition", contentDisposition(`${labFolder}.${extension}`));
+      reply.header("Content-Disposition", contentDisposition(`${safeFileName(labFolder)}.${extension}`));
       return reply.send(archive);
     } catch (error) {
       return sendRouteError(reply, error);

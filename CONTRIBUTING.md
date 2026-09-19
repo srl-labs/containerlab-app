@@ -100,6 +100,22 @@ pnpm test:vscode
 
 UI and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
 
+The shared-workspace browser test is opt-in. Start a test API server with
+`CLAB_SHARED_LABS_ROOT` set to a dedicated test directory and source-path discovery
+metadata enabled. Point `CLAB_E2E_TEST_ENV` at its `tests_go/.env` (containing
+`API_URL`, `APIUSER_USER`, `APIUSER_PASS`, `SUPERUSER_USER`, and `SUPERUSER_PASS`):
+
+```sh
+CLAB_E2E_TEST_ENV=/path/to/clab-api-server/tests_go/.env \
+  pnpm --filter containerlab-app-web exec playwright test \
+  --config test/e2e/playwright.config.ts shared-workspace-live --workers=1 --retries=0
+```
+
+It creates and removes a temporary user and a three-node Alpine lab, verifies
+two-user editing and lifecycle actions, and saves screenshots under the web
+test-results directory. Run it separately from other browser suites: creating
+and removing host network interfaces can briefly interrupt Chromium requests.
+
 Package-specific checks remain available through `pnpm --filter <package> run <script>`. Maintenance scripts can be invoked directly, e.g. `node scripts/run-stress-api-bff.mjs` for the API stress runner. Schema synchronization remains `pnpm sync:schema`.
 
 Knip also runs as part of `pnpm lint` and PR checks. Its configuration in

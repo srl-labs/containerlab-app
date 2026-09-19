@@ -104,13 +104,15 @@ function findRuntimeContainer(
   const topologyHint = input.topologyRef?.yamlPath
     ? {
         topologyId: input.topologyRef.topologyId,
+        absoluteYamlPath: input.topologyRef.absoluteYamlPath,
         yamlPath: input.topologyRef.yamlPath,
         labName: input.topologyRef.labName,
         endpointId: input.endpointId
       }
     : undefined;
   const lab = findLabStateForTopology(topologyHint, labs);
-  const candidateLabs = lab ? [lab] : [...labs.values()];
+  let candidateLabs = lab ? [lab] : [...labs.values()];
+  if (!lab && topologyHint?.absoluteYamlPath) candidateLabs = [];
 
   let bestContainer: ContainerState | undefined;
   let bestScore = 0;

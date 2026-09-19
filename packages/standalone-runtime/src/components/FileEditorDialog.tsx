@@ -148,6 +148,7 @@ export function FileEditorDialog() {
         endpointId: state.endpointId,
         path: state.path,
         content: state.content,
+        originalContent: state.originalContent,
       });
       runtimeUiActions.markFileEditorSaved(state.content);
       runtimeUiActions.notify(`Saved ${state.path}`, "success");

@@ -521,8 +521,8 @@ function validateTopologyFileName(fileName: string): string {
   if (!trimmed) {
     throw new RequestError("File name is required", 400);
   }
-  if (trimmed.includes("/") || trimmed.includes("\\")) {
-    throw new RequestError("File name must not include path separators", 400);
+  if (trimmed.includes("\\") || trimmed.includes("\0") || trimmed.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new RequestError("File path must stay inside the lab workspace", 400);
   }
   if (!/\.clab\.(yml|yaml)$/i.test(trimmed)) {
     throw new RequestError("File name must end with .clab.yml or .clab.yaml", 400);
@@ -1581,18 +1581,22 @@ export function registerRuntimeProxy(
       try {
         const { client, endpoint } = resolved;
         const fileName = validateTopologyFileName(request.body.fileName);
-        const labName = stripTopologySuffix(fileName);
+        const labName = stripTopologySuffix(fileName.split("/").at(-1) ?? fileName);
         if (await client.headFile(endpoint.token, labName, fileName)) {
           throw new RequestError(`Topology file "${fileName}" already exists.`, 409);
         }
 
         const content =
           normalizeOptionalString(request.body.content) ?? buildDefaultTopologyContent(labName);
-        await client.putFile(endpoint.token, labName, fileName, content);
+        if (fileName.includes("/")) {
+          await client.putWorkspaceFile(endpoint.token, fileName, content);
+        } else {
+          await client.putFile(endpoint.token, labName, fileName, content);
+        }
 
         const topologies = await client.listTopologies(endpoint.token);
         const topologyEntry = topologies.find(
-          (entry) => entry.labName === labName && entry.yamlFileName === fileName
+          (entry) => entry.yamlFileName === fileName
         );
 
         return reply.send({

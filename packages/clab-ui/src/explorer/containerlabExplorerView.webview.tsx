@@ -1776,6 +1776,24 @@ function ExplorerNodeTextBlock({
             endpointDescription={endpointDescription}
             handleShareAction={handleShareAction}
           />
+          {node.workspaceScope === "shared" && (
+            <Box
+              component="span"
+              aria-label="Shared lab"
+              sx={{
+                flexShrink: 0,
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 0.75,
+                px: 0.55,
+                fontSize: 10,
+                lineHeight: "17px",
+                color: "text.secondary"
+              }}
+            >
+              Shared
+            </Box>
+          )}
         </Stack>
       </Tooltip>
       {showSecondaryLine && (

@@ -3,6 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { runDocumentOperation } from "@containerlab/clab-ui/session";
 import {
   getHttpErrorStatus,
   type ClabApiClient,
@@ -327,7 +328,25 @@ export function registerFileProxy(
 
     try {
       const { client, endpoint } = resolved;
-      await client.putWorkspaceFile(endpoint.token, pathValue, content);
+      const originalContent = bodyRecord(request).originalContent;
+      const documentPath = pathValue.replace(/\.clab\.(ya?ml)\.annotations\.json$/, ".clab.$1");
+      await runDocumentOperation(JSON.stringify([client.getBaseUrl(), documentPath]), async () => {
+        if (typeof originalContent === "string") {
+          let currentContent: string;
+          try {
+            currentContent = await readTextResponseWithLimit(
+              await client.openWorkspaceFile(endpoint.token, pathValue), MAX_TEXT_FILE_BYTES,
+            );
+          } catch (error) {
+            if (getHttpErrorStatus(error) !== 404) throw error;
+            throw Object.assign(new Error("This file was deleted on the server. Your edits have been kept."), { status: 409 });
+          }
+          if (currentContent !== originalContent) {
+            throw Object.assign(new Error("This file changed on the server. Your edits have been kept. Copy them before closing and reopening the file."), { status: 409 });
+          }
+        }
+        await client.putWorkspaceFile(endpoint.token, pathValue, content);
+      });
       return reply.send({
         endpointId: endpoint.id,
         path: pathValue,

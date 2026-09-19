@@ -33,6 +33,8 @@ import {
   buildStandaloneTopologyRefFromPath,
   getLabOwner,
   isNonOwnedLabForEndpoint,
+  isSharedWorkspacePath,
+  SHARED_WORKSPACE_DESCRIPTION,
   isTopologyRunning,
   normalizeLabName,
   normalizePathValue,
@@ -103,6 +105,11 @@ const STANDALONE_COMMAND_ICONS = new Map<string, string>([
   ["containerlab.endpoint.add", "add"],
 ]);
 const STANDALONE_TRANSFER_FILE_ACTIONS = [
+  {
+    commandId: "containerlab.editor.topoViewerEditor",
+    contextValues: ["containerlabFileExplorerRoot", "containerlabFileFolder"],
+    label: "New Topology File",
+  },
   {
     commandId: "containerlab.file.download",
     contextValues: ["containerlabFile", "containerlabFileTopology"],
@@ -310,13 +317,15 @@ function buildRunningLabItem(input: {
   const { containers, lab, pathHint, shareChildren, topologyRef } = input;
   const owner = getLabOwner(lab);
   const labLabel = owner ? `${lab.name} (${owner})` : lab.name;
+  const shared = isSharedWorkspacePath(topologyRef?.yamlPath);
   const labItem: ExplorerTreeItem = {
     id: `running-lab:${lab.endpointId}:${lab.name}`,
     label: labLabel,
+    workspaceScope: shared ? "shared" : undefined,
     description: pathHint || "No API topology file",
-    tooltip:
-      pathHint ||
-      `No API topology file available for running lab "${lab.name}"`,
+    tooltip: shared
+      ? `${pathHint}\n${SHARED_WORKSPACE_DESCRIPTION}`
+      : pathHint || `No API topology file available for running lab "${lab.name}"`,
     contextValue:
       topologyRef &&
       isStandaloneFavorite({ endpointId: lab.endpointId, topologyRef })
@@ -485,8 +494,9 @@ function getInterfaceContextValue(state: string): string {
 function shouldShowRunningLab(
   lab: LabState,
   endpointsById: ReadonlyMap<string, EndpointConfig>,
+  topologyEntry?: TopologyFileEntry,
 ): boolean {
-  if (explorerPreferences.showNonOwnedLabs) {
+  if (explorerPreferences.showNonOwnedLabs || isSharedWorkspacePath(topologyEntry?.path)) {
     return true;
   }
 
@@ -520,6 +530,15 @@ function findTopologyEntryForRunningLab(
       return exact;
     }
   }
+
+  const absoluteMatch = files.find((entry) => entry.topologyRef.absoluteYamlPath &&
+    pathHints.has(normalizePathValue(entry.topologyRef.absoluteYamlPath)));
+  if (absoluteMatch) {
+    return absoluteMatch;
+  }
+  // New servers provide authoritative paths. Only legacy personal entries may
+  // fall back to suffix/name matching.
+  files = files.filter((entry) => !entry.topologyRef.absoluteYamlPath && !isSharedWorkspacePath(entry.path));
 
   const loosePathMatches = files.filter((entry) => {
     const entryPath = normalizePathValue(entry.path);
@@ -646,19 +665,22 @@ function buildFileExplorerEntryItem(
   entry: FileExplorerEntry,
 ): ExplorerTreeItem {
   const isDirectory = entry.kind === "directory";
+  const sharedRoot = isDirectory && entry.path === "@shared";
   const isTopology = !isDirectory && isTopologyExplorerEntry(entry);
   const description = isDirectory ? undefined : entry.labName;
   let contextValue = "containerlabFile";
   if (isDirectory) {
-    contextValue = "containerlabFileFolder";
+    contextValue = sharedRoot ? "containerlabFileExplorerRoot" : "containerlabFileFolder";
   } else if (isTopology) {
     contextValue = "containerlabFileTopology";
   }
   return {
     id: `file:${entry.endpointId}:${entry.path || "."}`,
-    label: entry.name || safeFilename(entry.path),
+    label: sharedRoot ? "Shared labs" : entry.name || safeFilename(entry.path),
     description,
-    tooltip: `Lab workspace/${entry.path}`,
+    tooltip: isSharedWorkspacePath(entry.path)
+      ? `${entry.path}\n${SHARED_WORKSPACE_DESCRIPTION}`
+      : `Lab workspace/${entry.path}`,
     contextValue,
     endpointId: entry.endpointId,
     labName: entry.labName,
@@ -841,15 +863,16 @@ export function createStandaloneExplorerBridge(
 
     const labItemsByEndpoint = new Map<string, ExplorerTreeItem[]>();
     for (const lab of labs.values()) {
-      if (!shouldShowRunningLab(lab, endpointsById)) {
+      const endpointFiles = filesByEndpoint.get(lab.endpointId) ?? [];
+      const matchedEntry = findTopologyEntryForRunningLab(lab, endpointFiles);
+      if (!shouldShowRunningLab(lab, endpointsById, matchedEntry)) {
         continue;
       }
 
-      const endpointFiles = filesByEndpoint.get(lab.endpointId) ?? [];
       const endpointUsername = endpointsById.get(lab.endpointId)?.username;
-      const topologyEntry = isNonOwnedLabForEndpoint(lab, endpointUsername)
+      const topologyEntry = isNonOwnedLabForEndpoint(lab, endpointUsername) && !isSharedWorkspacePath(matchedEntry?.path)
         ? undefined
-        : findTopologyEntryForRunningLab(lab, endpointFiles);
+        : matchedEntry;
       const topologyRef = topologyRefForRunningLab(lab, topologyEntry);
       const containers = [...lab.containers.values()].map((container) =>
         buildRunningContainerItem(lab, container, topologyRef),
@@ -904,9 +927,10 @@ export function createStandaloneExplorerBridge(
           const labName = topologyEntryLabName(file);
           const item: ExplorerTreeItem = {
             id: `local-lab:${file.endpointId}:${file.path}`,
-            label: file.filename || safeFilename(file.path),
+            label: safeFilename(file.filename || file.path),
+            workspaceScope: isSharedWorkspacePath(file.path) ? "shared" : undefined,
             description: file.path,
-            tooltip: file.path,
+            tooltip: isSharedWorkspacePath(file.path) ? `${file.path}\n${SHARED_WORKSPACE_DESCRIPTION}` : file.path,
             contextValue: isStandaloneFavorite({
               endpointId: file.endpointId,
               topologyRef: file.topologyRef,

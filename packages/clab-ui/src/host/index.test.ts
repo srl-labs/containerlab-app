@@ -166,3 +166,21 @@ test("createApiClabUiHost posts topology requests to the standalone backend", as
     }
   ]);
 });
+
+test("API snapshots recover from a network change without replaying commands", async () => {
+  let calls = 0;
+  const host = createApiClabUiHost({
+    targetWindow: new FakeWindow() as unknown as Window,
+    postMessage: () => {},
+    fetchImpl: async () => {
+      if (++calls !== 2) throw new TypeError("Failed to fetch");
+      return Response.json({ snapshot: { revision: 1, nodes: [], edges: [], annotations: {} } });
+    }
+  });
+  assert.equal((await host.topology.requestSnapshot({ sessionId: "test" })).revision, 1);
+  assert.equal(calls, 2);
+  await assert.rejects(host.topology.dispatchCommand({ sessionId: "test" }, 1, { command: "undo" }), /Failed to fetch/);
+  assert.equal(calls, 3);
+  await assert.rejects(host.topology.requestSnapshot({ sessionId: "test" }), /Failed to fetch/);
+  assert.equal(calls, 5);
+});
