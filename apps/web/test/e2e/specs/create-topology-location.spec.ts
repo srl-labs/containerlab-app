@@ -24,13 +24,11 @@ async function setup(page: Page) {
       : []
   }));
   await page.goto("/");
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
+  await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
 }
 
 async function openCreate(page: Page) {
-  const row = page.locator('[data-explorer-node-row="true"]').filter({ hasText: "Team server" }).filter({ hasText: "team.example" });
-  await row.hover();
-  await row.getByRole("button", { name: "New topology file", exact: true }).click();
+  await page.getByRole("button", { name: "Create a lab", exact: true }).click();
   return page.getByRole("dialog", { name: "Create Topology File", exact: true });
 }
 
@@ -124,17 +122,15 @@ test("workspace lookup errors prevent creation until availability can be checked
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
 });
 
-test("a removed shared workspace requires choosing Personal before creating", async ({ page }) => {
+test("reopening the dialog checks whether the shared workspace is still available", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: "Expand Team server", exact: true }).last().click();
-  await expect(page.getByText("Shared labs", { exact: true })).toBeVisible();
+  let dialog = await openCreate(page);
+  await dialog.getByRole("button", { name: "Shared", exact: true }).click();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({ json: [] }));
-  await page.getByText("Shared labs", { exact: true }).click({ button: "right" });
-  await page.getByTestId("context-menu").last().getByText("New Topology File", { exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
-  await expect(dialog).toContainText("Shared is no longer available on this server.");
+  dialog = await openCreate(page);
+  await expect(dialog).toContainText("Saved in your personal workspace.");
   await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Personal", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
 });

@@ -40,6 +40,7 @@ test("dotted artwork is present with the first workspace render without a fallba
   // The rail's optional logo may request this file; the empty workspace must not need it.
   await page.route("**/containerlab.svg", (route) => route.abort());
   await page.goto("/");
+  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator("html")).toHaveAttribute("data-first-workspace-has-artwork", "true");
   const artwork = page.getByTestId("empty-state-artwork");
   await expect(artwork).toBeVisible();
@@ -55,6 +56,7 @@ test("dotted artwork animates without interaction and while hovering or pinning 
   await page.setViewportSize({ width: 2560, height: 1440 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();
   const bounds = (await waves.boundingBox())!;
@@ -64,12 +66,12 @@ test("dotted artwork animates without interaction and while hovering or pinning 
   const rail = page.getByTestId("workspace-rail");
   for (let index = 0; index < 3; index += 1) {
     await rail.getByRole("button", { name: "Labs", exact: true }).hover();
-    await rail.getByRole("button", { name: "File Explorer", exact: true }).hover();
+    await rail.getByRole("button", { name: "Files", exact: true }).hover();
   }
-  await rail.getByRole("button", { name: "Pin rail", exact: true }).click();
+  await rail.getByRole("button", { name: "Pin", exact: true }).click();
   await expect(rail).toHaveAttribute("data-pinned", "true");
-  expect((await waves.boundingBox())!.width).toBe(bounds.width - 148);
-  await rail.getByRole("button", { name: "Unpin rail", exact: true }).click();
+  expect(await waves.boundingBox()).toEqual(bounds);
+  await rail.getByRole("button", { name: "Unpin", exact: true }).click();
   expect(await waves.boundingBox()).toEqual(bounds);
   await expect(waves).toBeVisible();
   expect((await sampleWaves(page)).visible).toBeGreaterThan(1000);
@@ -82,6 +84,7 @@ test("hover twinkles and colored click ripples settle back to the ongoing ambien
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
   const artwork = page.getByTestId("empty-state-artwork");
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();
@@ -133,6 +136,7 @@ test("unavailable WebGL preserves the artwork and workspace actions", async ({ p
     });
   });
   await page.goto("/");
+  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
   const artwork = page.getByTestId("empty-state-artwork");
   await expect(artwork).toBeVisible();
   const bounds = (await artwork.boundingBox())!;
@@ -146,6 +150,7 @@ test("unavailable WebGL preserves the artwork and workspace actions", async ({ p
 test("waves recover to the SVG when their graphics context is lost", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
+  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
   const artwork = page.getByTestId("empty-state-artwork");
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();

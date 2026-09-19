@@ -14,15 +14,11 @@ const SEL_LAB_SETTINGS_SAVE_BTN = '[data-testid="lab-settings-save-btn"]';
 
 const LABEL_CONTAINER_NAME_PREFIX = "Container Name Prefix";
 
-const ATTR_ARIA_SELECTED = "aria-selected";
-const ARIA_TRUE = "true";
-const ARIA_FALSE = "false";
-
 /**
  * Lab Settings Modal E2E Tests (MUI Dialog version)
  *
  * In the new MUI design, lab settings are shown in a Dialog (modal)
- * with tabs for Basic, Management, and Appearance settings.
+ * with sections for Basic, Management, Appearance, and Grid settings.
  */
 test.describe("Lab Settings Modal", () => {
   test.beforeEach(async ({ topoViewerPage }) => {
@@ -42,16 +38,8 @@ test.describe("Lab Settings Modal", () => {
     return modal;
   }
 
-  function formControlByLabel(modal: any, labelText: string) {
-    return modal.locator(`.MuiFormControl-root:has(label:has-text("${labelText}"))`).first();
-  }
-
   function muiSelectTriggerByLabel(modal: any, labelText: string) {
-    // Prefer MUI Select's internal trigger element; fall back to ARIA roles.
-    const formControl = formControlByLabel(modal, labelText);
-    return formControl
-      .locator('[role="combobox"],[role="button"],.MuiSelect-select,[aria-haspopup="listbox"]')
-      .first();
+    return modal.getByRole("combobox", { name: labelText, exact: true });
   }
 
   async function expectMuiSelectDisabled(modal: any, labelText: string) {
@@ -80,12 +68,11 @@ test.describe("Lab Settings Modal", () => {
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
-    // DialogTitle contains "Lab Settings"
     const modal = page.locator(SEL_LAB_SETTINGS_MODAL);
-    await expect(modal.locator("h2")).toHaveText("Lab Settings");
+    await expect(modal.getByRole("heading", { name: "Lab Settings", exact: true })).toHaveText("Lab Settings");
   });
 
-  test("lab settings modal has Basic, Management, and Appearance tabs", async ({ page }) => {
+  test("lab settings modal has Basic, Management, Appearance, and Grid sections", async ({ page }) => {
     await page.locator(SEL_NAVBAR_MORE).click();
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
@@ -96,6 +83,7 @@ test.describe("Lab Settings Modal", () => {
     await expect(basicTab).toBeVisible();
     await expect(mgmtTab).toBeVisible();
     await expect(appearanceTab).toBeVisible();
+    await expect(page.getByTestId("lab-settings-tab-grid")).toBeVisible();
   });
 
   test("Basic tab is selected by default", async ({ page }) => {
@@ -104,7 +92,7 @@ test.describe("Lab Settings Modal", () => {
     await page.waitForTimeout(300);
 
     const basicTab = page.locator(SEL_LAB_SETTINGS_TAB_BASIC);
-    await expect(basicTab).toHaveAttribute(ATTR_ARIA_SELECTED, ARIA_TRUE);
+    await expect(basicTab).toHaveAttribute("aria-current", "page");
   });
 
   test("can switch to Management tab", async ({ page }) => {
@@ -116,9 +104,9 @@ test.describe("Lab Settings Modal", () => {
     await mgmtTab.click();
     await page.waitForTimeout(200);
 
-    await expect(mgmtTab).toHaveAttribute(ATTR_ARIA_SELECTED, ARIA_TRUE);
+    await expect(mgmtTab).toHaveAttribute("aria-current", "page");
     const basicTab = page.locator(SEL_LAB_SETTINGS_TAB_BASIC);
-    await expect(basicTab).toHaveAttribute(ATTR_ARIA_SELECTED, ARIA_FALSE);
+    await expect(basicTab).not.toHaveAttribute("aria-current");
   });
 
   test("Appearance tab shows Style selector and Telemetry options", async ({ page }) => {
@@ -131,18 +119,20 @@ test.describe("Lab Settings Modal", () => {
       .locator('[data-testid="lab-settings-telemetry-style"] [role="combobox"]')
       .first();
     await expect(styleSelect).toBeVisible();
-    await expect(modal.getByLabel("Node size")).toBeVisible();
-    await expect(modal.getByLabel("Interface size")).toBeVisible();
-    await expect(modal.getByLabel("Show rate labels")).toBeVisible();
-    await expect(modal.getByLabel("Show rate labels")).not.toBeChecked();
+    await expect(modal.getByRole("spinbutton", { name: "Node size", exact: true })).toBeVisible();
+    await expect(modal.getByRole("spinbutton", { name: "Interface size", exact: true })).toBeVisible();
+    await expect(modal.getByRole("switch", { name: "Show rate labels", exact: true })).toBeVisible();
+    await expect(modal.getByRole("switch", { name: "Show rate labels", exact: true })).not.toBeChecked();
 
-    // Interface-name override controls are available in the Appearance tab.
-    await expect(modal.getByLabel("Global override (all interfaces)")).toBeVisible();
+    // Interface overrides are shown only when telemetry style is enabled.
+    await styleSelect.click();
+    await chooseOption(page, /^Default$/);
+    await expect(modal.getByRole("combobox", { name: "Global override", exact: true })).toBeHidden();
 
     // Telemetry style exposes interface-name overrides.
     await styleSelect.click();
     await chooseOption(page, /^Telemetry Style$/);
-    await expect(modal.getByLabel("Global override (all interfaces)")).toBeVisible();
+    await expect(modal.getByRole("combobox", { name: "Global override", exact: true })).toBeVisible();
   });
 
   test("Appearance tab remembers legacy auto-create setting as show rate labels", async ({
@@ -163,7 +153,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
 
-    await expect(modal.getByLabel("Show rate labels")).toBeChecked();
+    await expect(modal.getByRole("switch", { name: "Show rate labels", exact: true })).toBeChecked();
   });
 
   test("Appearance tab enables show rate labels when auto-created annotations exist", async ({
@@ -200,7 +190,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
 
-    await expect(modal.getByLabel("Show rate labels")).toBeChecked();
+    await expect(modal.getByRole("switch", { name: "Show rate labels", exact: true })).toBeChecked();
   });
 
   test("Appearance settings persist after reload", async ({ page, topoViewerPage }) => {
@@ -215,15 +205,14 @@ test.describe("Lab Settings Modal", () => {
     await styleSelect.click();
     await chooseOption(page, /^Telemetry Style$/);
 
-    await modal.getByLabel("Node size").fill("80");
-    await modal.getByLabel("Interface size").fill("150");
-    await modal.getByLabel("Show rate labels").check();
+    await modal.getByRole("spinbutton", { name: "Node size", exact: true }).fill("80");
+    await modal.getByRole("spinbutton", { name: "Interface size", exact: true }).fill("150");
+    await modal.getByRole("switch", { name: "Show rate labels", exact: true }).check();
 
-    await modal.locator('[data-testid="lab-settings-appearance-subtab-grid"]').click();
+    await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
-    await modal
-      .locator('[data-testid="lab-settings-grid-style"] button[value="quadratic"]')
-      .click();
+    await modal.getByRole("combobox", { name: "Grid Style", exact: true }).click();
+    await chooseOption(page, "Quadratic");
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).not.toBeVisible({ timeout: 3000 });
@@ -258,15 +247,15 @@ test.describe("Lab Settings Modal", () => {
       .locator('[data-testid="lab-settings-telemetry-style"] [role="combobox"]')
       .first();
     await expect(reloadedStyleSelect).toContainText("Telemetry Style");
-    await expect(reloadedModal.getByLabel("Node size")).toHaveValue("80");
-    await expect(reloadedModal.getByLabel("Interface size")).toHaveValue("150");
-    await expect(reloadedModal.getByLabel("Show rate labels")).toBeChecked();
+    await expect(reloadedModal.getByRole("spinbutton", { name: "Node size", exact: true })).toHaveValue("80");
+    await expect(reloadedModal.getByRole("spinbutton", { name: "Interface size", exact: true })).toHaveValue("150");
+    await expect(reloadedModal.getByRole("switch", { name: "Show rate labels", exact: true })).toBeChecked();
 
-    await reloadedModal.locator('[data-testid="lab-settings-appearance-subtab-grid"]').click();
+    await reloadedModal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
     await expect(
-      reloadedModal.locator('[data-testid="lab-settings-grid-style"] button[value="quadratic"]')
-    ).toHaveAttribute("aria-pressed", ARIA_TRUE);
+      reloadedModal.getByRole("combobox", { name: "Grid Style", exact: true })
+    ).toHaveText("Quadratic");
   });
 
   test("show rate labels adds missing link endpoint labels", async ({
@@ -291,7 +280,7 @@ test.describe("Lab Settings Modal", () => {
     await styleSelect.click();
     await chooseOption(page, /^Default$/);
 
-    await modal.getByLabel("Show rate labels").check();
+    await modal.getByRole("switch", { name: "Show rate labels", exact: true }).check();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).not.toBeVisible({ timeout: 3000 });
 
@@ -324,7 +313,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
 
-    const showRateLabels = modal.getByLabel("Show rate labels");
+    const showRateLabels = modal.getByRole("switch", { name: "Show rate labels", exact: true });
     await expect(showRateLabels).not.toBeChecked();
 
     await showRateLabels.check();
@@ -370,7 +359,7 @@ test.describe("Lab Settings Modal", () => {
     let modal = await openModal(page);
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
-    await modal.getByLabel("Show rate labels").check();
+    await modal.getByRole("switch", { name: "Show rate labels", exact: true }).check();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).not.toBeVisible({ timeout: 3000 });
 
@@ -387,7 +376,7 @@ test.describe("Lab Settings Modal", () => {
     modal = await openModal(page);
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
-    await modal.getByLabel("Show rate labels").uncheck();
+    await modal.getByRole("switch", { name: "Show rate labels", exact: true }).uncheck();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).not.toBeVisible({ timeout: 3000 });
 
@@ -479,15 +468,14 @@ test.describe("Lab Settings Modal", () => {
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(150);
     await expectMuiSelectDisabled(modal, "Style");
-    await expect(modal.getByLabel("Node size")).toBeDisabled();
-    await expect(modal.getByLabel("Interface size")).toBeDisabled();
+    await expect(modal.getByRole("spinbutton", { name: "Node size", exact: true })).toBeDisabled();
+    await expect(modal.getByRole("spinbutton", { name: "Interface size", exact: true })).toBeDisabled();
 
-    await modal.locator('[data-testid="lab-settings-appearance-subtab-grid"]').click();
+    await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
-    const gridSlider = modal.locator('[data-testid="lab-settings-grid-line-width"]');
-    await expect(gridSlider).toHaveClass(/Mui-disabled/);
+    await expect(modal.getByRole("spinbutton", { name: "Stroke Width", exact: true })).toBeDisabled();
     await expect(
-      modal.locator('[data-testid="lab-settings-grid-style"] button').first()
+      modal.getByRole("combobox", { name: "Grid Style", exact: true })
     ).toBeDisabled();
   });
 
@@ -514,7 +502,7 @@ test.describe("Lab Settings Modal", () => {
     await styleSelect.click();
     await chooseOption(page, /^Telemetry Style$/);
 
-    await modal.getByLabel("Node size").fill("72");
+    await modal.getByRole("spinbutton", { name: "Node size", exact: true }).fill("72");
 
     await saveBtn.click();
     await expect(modal).not.toBeVisible({ timeout: 3000 });

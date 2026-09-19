@@ -39,6 +39,7 @@ const VIEWS = [
 ] as const;
 const RAIL_WIDTH = 48;
 const EXPANDED_RAIL_WIDTH = 196;
+const PREFERENCES_KEY = "clab.workspace.sidebar.v1";
 const WIDTH_MOTION = "width 160ms cubic-bezier(0.4, 0, 0.2, 1), left 160ms cubic-bezier(0.4, 0, 0.2, 1)";
 const REDUCE_MOTION = { "@media (prefers-reduced-motion: reduce)": { transition: "none" } } as const;
 const RAIL_BORDER = "var(--vscode-panel-border, var(--clab-ui-panel-border, #888))";
@@ -50,6 +51,20 @@ const VERTICAL_BORDERS = {
 } as const;
 
 type SidebarView = (typeof VIEWS)[number]["id"];
+
+function readPreferences(): { pinned: boolean; width: number } {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "null");
+    if (typeof value !== "object" || value === null) return { pinned: false, width: 280 };
+    return {
+      pinned: "pinned" in value && value.pinned === true,
+      width: "width" in value && typeof value.width === "number" && Number.isFinite(value.width) && value.width >= 280
+        ? value.width : 280
+    };
+  } catch {
+    return { pinned: false, width: 280 };
+  }
+}
 
 function useExplorerRevision(): number {
   const { explorer } = useWorkspaceHost();
@@ -123,6 +138,7 @@ function FileTree(props: { depth: number; parentPath: string; revision: number }
     <List dense disablePadding>
       {entries.map((entry) => {
         const isOpen = expanded.has(entry.path);
+        const ExpandIcon = isOpen ? ExpandMoreIcon : ChevronRightIcon;
         return (
           <Box key={`${entry.endpointId}:${entry.path}`}>
             <ListItemButton
@@ -141,7 +157,7 @@ function FileTree(props: { depth: number; parentPath: string; revision: number }
               }}
             >
               <ListItemIcon sx={{ minWidth: 28 }}><EntryIcon entry={entry} open={isOpen} /></ListItemIcon>
-              {entry.kind === "directory" ? (isOpen ? <ExpandMoreIcon fontSize="small" sx={{ mr: 0.5 }} /> : <ChevronRightIcon fontSize="small" sx={{ mr: 0.5 }} />) : null}
+              {entry.kind === "directory" ? <ExpandIcon fontSize="small" sx={{ mr: 0.5 }} /> : null}
               <ListItemText primary={entry.name} slotProps={{ primary: { noWrap: true, variant: "body2" } }} />
             </ListItemButton>
             {entry.kind === "directory" && isOpen ? <FileTree depth={props.depth + 1} parentPath={entry.path} revision={props.revision} /> : null}
@@ -163,16 +179,22 @@ export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSetti
   const revision = useExplorerRevision();
   const [view, setView] = useState<SidebarView>("labs");
   const [open, setOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const [preferences, setPreferences] = useState(readPreferences);
+  const savePreferences = (next: typeof preferences) => {
+    setPreferences(next);
+    try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next)); } catch { /* Storage can be disabled. */ }
+  };
   const navRef = useRef<HTMLElement>(null);
-  const { ref, width: panelWidth, separatorProps, isDragging } = useHorizontalResize({
-    initialWidth: 280,
+  const { ref, width: panelWidth, separatorProps, availableWidth, isDragging } = useHorizontalResize({
+    initialWidth: preferences.width,
     minimumWidth: 280,
-    maximumWidth: (width) => Math.min(width / 2, width * 0.65 - (pinned ? EXPANDED_RAIL_WIDTH : RAIL_WIDTH))
+    maximumWidth: (width) => Math.min(width / 2, width * 0.65 - (preferences.pinned && width >= 720 ? EXPANDED_RAIL_WIDTH : RAIL_WIDTH)),
+    onCommit: (width) => savePreferences({ ...preferences, width })
   });
+  const pinned = preferences.pinned && availableWidth >= 720;
   const railWidth = pinned ? EXPANDED_RAIL_WIDTH : RAIL_WIDTH;
   const themeLabel = colorScheme === "dark" ? "Light mode" : "Dark mode";
-  const pinLabel = pinned ? "Unpin" : "Pin";
+  const pinLabel = preferences.pinned ? "Unpin" : "Pin";
   const selectView = (id: SidebarView) => {
     if (open && view === id) {
       setOpen(false);
@@ -238,7 +260,7 @@ export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSetti
           <WorkspaceRailItem pinned={pinned} label="Settings" testId="standalone-settings-button" onClick={onOpenSettings}>
             <TuneIcon fontSize="small" />
           </WorkspaceRailItem>
-          <WorkspaceRailItem pinned={pinned} label={pinLabel} active={pinned} testId="workspace-sidebar-pin" onClick={() => setPinned((current) => !current)}>
+          <WorkspaceRailItem pinned={pinned} label={pinLabel} active={preferences.pinned} testId="workspace-sidebar-pin" onClick={() => savePreferences({ ...preferences, pinned: !preferences.pinned })}>
             {pinned ? <PushPinIcon fontSize="small" /> : <PushPinOutlinedIcon fontSize="small" />}
           </WorkspaceRailItem>
         </Box>

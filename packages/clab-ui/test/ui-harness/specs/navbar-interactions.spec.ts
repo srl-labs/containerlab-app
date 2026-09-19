@@ -11,7 +11,7 @@ const ATTR_DATA_TESTID = "data-testid";
  * - Fit to viewport
  * - Layout dropdown (MUI Menu)
  * - Link labels dropdown (MUI Menu)
- * - Grid settings (Lab Settings > Appearance)
+ * - Grid settings (Lab Settings > Grid)
  * - Shortcuts modal (MUI Dialog)
  * - Shortcut display toggle
  */
@@ -147,7 +147,7 @@ test.describe("Navbar Interactions", () => {
       await page.getByRole("option", { name: /^Telemetry Style$/ }).click();
       await page.waitForTimeout(100);
 
-      const nodeSizeInput = modal.getByLabel("Node size");
+      const nodeSizeInput = modal.getByRole("spinbutton", { name: "Node size", exact: true });
       await nodeSizeInput.fill("80");
       await page.waitForTimeout(200);
       await page.locator('[data-testid="lab-settings-close-btn"]').click();
@@ -166,28 +166,21 @@ test.describe("Navbar Interactions", () => {
   });
 
   test.describe("Grid Settings", () => {
-    test("grid settings are available in Lab Settings > Appearance", async ({ page }) => {
+    test("grid settings are available in Lab Settings > Grid", async ({ page }) => {
       await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
       await expect(modal).toBeVisible();
 
-      await modal.locator('[data-testid="lab-settings-tab-appearance"]').click();
-      await page.waitForTimeout(200);
-      await modal.locator('[data-testid="lab-settings-appearance-subtab-grid"]').click();
+      await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
       await page.waitForTimeout(200);
 
       const gridSection = modal.locator('[data-testid="lab-settings-grid-settings"]');
-      await expect(gridSection).toBeVisible();
-
-      // Verify slider exists (MUI Slider)
-      const slider = gridSection.locator('[data-testid="lab-settings-grid-line-width"]');
-      await expect(slider).toBeVisible();
-
-      // Verify toggle buttons exist (Dotted/Quadratic)
-      const toggleGroup = gridSection.locator('[data-testid="lab-settings-grid-style"]');
-      await expect(toggleGroup).toBeVisible();
+      await expect(gridSection.getByRole("spinbutton", { name: "Stroke Width", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("combobox", { name: "Grid Style", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Grid Color", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Background Color", exact: true })).toBeVisible();
     });
   });
 

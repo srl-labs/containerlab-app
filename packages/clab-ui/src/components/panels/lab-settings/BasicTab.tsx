@@ -17,6 +17,7 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
   <>
     <SettingsField title="Lab Name" description="Unique name for this topology.">
       <TextField
+        slotProps={{ htmlInput: { "aria-label": "Lab Name" } }}
         id="lab-basic-name"
         size="small"
         placeholder="Unique name for this topology"
@@ -28,6 +29,7 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
     </SettingsField>
     <SettingsField title="Container Name Prefix" description="Prefix applied to deployed container names.">
       <TextField
+        slotProps={{ select: { inputProps: { "aria-label": "Container Name Prefix" } } }}
         id="lab-basic-prefix-type"
         select
         size="small"
@@ -44,6 +46,7 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
     {basic.prefixType === "custom" ? (
       <SettingsField title="Custom Prefix" description="Used instead of the default clab prefix.">
         <TextField
+          slotProps={{ htmlInput: { "aria-label": "Custom Prefix" } }}
           id="lab-basic-custom-prefix"
           size="small"
           placeholder="Enter custom prefix"

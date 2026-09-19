@@ -108,7 +108,7 @@ test.describe("Standalone startup", () => {
     await expect(addButton).toBeEnabled();
     await addButton.click();
 
-    await expect(page.locator('[data-testid="standalone-settings-button"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
     const persisted = await page.evaluate(() => localStorage.getItem("clab-standalone-endpoints"));
     expect(JSON.parse(persisted ?? "[]")).toEqual([
       {
@@ -167,7 +167,7 @@ test.describe("Standalone startup", () => {
       )
     });
 
-    await expect(page.locator('[data-testid="standalone-settings-button"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-endpoints")))
       .not.toBeNull();

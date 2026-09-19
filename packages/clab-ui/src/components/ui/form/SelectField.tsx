@@ -13,7 +13,7 @@ import FormHelperText from "@mui/material/FormHelperText";
 import type { SxProps, Theme } from "@mui/material/styles";
 import ClearIcon from "@mui/icons-material/Clear";
 
-export interface SelectOption {
+interface SelectOption {
   value: string;
   label: string;
   icon?: React.ReactNode;

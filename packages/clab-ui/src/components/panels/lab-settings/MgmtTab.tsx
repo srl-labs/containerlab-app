@@ -38,6 +38,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
   <>
     <SettingsField title="Network Name" description="Docker network name (default: clab).">
       <TextField
+        slotProps={{ htmlInput: { "aria-label": "Network Name" } }}
         id="lab-mgmt-network-name"
         size="small"
         placeholder="Docker network name (default: clab)"
@@ -49,6 +50,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
     </SettingsField>
     <SettingsField title="IPv4 Subnet" description="Management IPv4 addressing.">
       <TextField
+        slotProps={{ select: { inputProps: { "aria-label": "IPv4 Subnet" } } }}
         id="lab-mgmt-ipv4-type"
         select
         size="small"
@@ -66,6 +68,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
       <>
         <SettingsField title="IPv4 Subnet CIDR" description="Custom IPv4 subnet, for example 172.100.100.0/24.">
           <TextField
+            slotProps={{ htmlInput: { "aria-label": "IPv4 Subnet CIDR" } }}
             id="lab-mgmt-ipv4-subnet"
             size="small"
             placeholder="e.g., 172.100.100.0/24"
@@ -77,6 +80,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         </SettingsField>
         <SettingsField title="IPv4 Gateway" description="Gateway address for the custom IPv4 subnet.">
           <TextField
+            slotProps={{ htmlInput: { "aria-label": "IPv4 Gateway" } }}
             id="lab-mgmt-ipv4-gateway"
             size="small"
             placeholder="e.g., 172.100.100.1"
@@ -88,6 +92,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         </SettingsField>
         <SettingsField title="IPv4 Range" description="Optional allocation range within the subnet.">
           <TextField
+            slotProps={{ htmlInput: { "aria-label": "IPv4 Range" } }}
             id="lab-mgmt-ipv4-range"
             size="small"
             placeholder="e.g., 172.100.100.128/25"
@@ -101,6 +106,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
     ) : null}
     <SettingsField title="IPv6 Subnet" description="Management IPv6 addressing.">
       <TextField
+        slotProps={{ select: { inputProps: { "aria-label": "IPv6 Subnet" } } }}
         id="lab-mgmt-ipv6-type"
         select
         size="small"
@@ -118,6 +124,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
       <>
         <SettingsField title="IPv6 Subnet CIDR" description="Custom IPv6 subnet, for example 3fff:172:100:100::/80.">
           <TextField
+            slotProps={{ htmlInput: { "aria-label": "IPv6 Subnet CIDR" } }}
             id="lab-mgmt-ipv6-subnet"
             size="small"
             placeholder="e.g., 3fff:172:100:100::/80"
@@ -129,6 +136,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         </SettingsField>
         <SettingsField title="IPv6 Gateway" description="Gateway address for the custom IPv6 subnet.">
           <TextField
+            slotProps={{ htmlInput: { "aria-label": "IPv6 Gateway" } }}
             id="lab-mgmt-ipv6-gateway"
             size="small"
             placeholder="e.g., 3fff:172:100:100::1"
@@ -142,6 +150,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
     ) : null}
     <SettingsField title="MTU" description="Defaults to the docker0 interface MTU.">
       <TextField
+        slotProps={{ htmlInput: { "aria-label": "MTU" } }}
         id="lab-mgmt-mtu"
         size="small"
         type="number"
@@ -154,6 +163,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
     </SettingsField>
     <SettingsField title="Bridge Name" description="Linux bridge name (default: br-<network-id>).">
       <TextField
+        slotProps={{ htmlInput: { "aria-label": "Bridge Name" } }}
         id="lab-mgmt-bridge"
         size="small"
         placeholder="Linux bridge name"

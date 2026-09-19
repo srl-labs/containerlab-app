@@ -482,6 +482,7 @@ function ManagedEndpointList(props: {
                     size="small"
                     variant="outlined"
                     onClick={() => props.onEdit(endpoint)}
+                    aria-label={`Edit ${endpoint.label}`}
                     disabled={props.busyKey !== null}
                     sx={{ minWidth: 0, px: 1 }}
                   >
@@ -491,6 +492,7 @@ function ManagedEndpointList(props: {
                     size="small"
                     variant="outlined"
                     onClick={() => props.onReconnect(endpoint)}
+                    aria-label={`Reconnect ${endpoint.label}`}
                     disabled={props.busyKey !== null}
                     sx={{ minWidth: 0, px: 1 }}
                   >
@@ -501,6 +503,7 @@ function ManagedEndpointList(props: {
                     variant="outlined"
                     color="error"
                     onClick={() => props.onRemove(endpoint)}
+                    aria-label={`Remove ${endpoint.label}`}
                     disabled={props.busyKey !== null}
                     sx={{ minWidth: 0, px: 1 }}
                   >

@@ -737,6 +737,7 @@ export function SettingsOverlay({
                 select
                 size="small"
                 value={currentTheme}
+                slotProps={{ select: { inputProps: { "aria-label": "Color theme" } } }}
                 onChange={(event) => {
                   const nextTheme = event.target.value;
                   if (nextTheme === "light" || nextTheme === "dark") onThemeChange(nextTheme);

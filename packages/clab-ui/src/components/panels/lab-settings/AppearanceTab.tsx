@@ -140,6 +140,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
     <>
       <SettingsField title="Style" description="Default link labels or telemetry-style appearance.">
         <TextField
+          slotProps={{ select: { inputProps: { "aria-label": "Style" } } }}
           select
           size="small"
           value={telemetryStyleValue}
@@ -174,7 +175,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             );
           }}
           slotProps={{
-            htmlInput: { min: 12, max: 240, step: 1 },
+            htmlInput: { "aria-label": "Node size", min: 12, max: 240, step: 1 },
             input: { endAdornment: <InputAdornment position="end">px</InputAdornment> }
           }}
           sx={{ width: 160 }}
@@ -196,7 +197,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             );
           }}
           slotProps={{
-            htmlInput: { min: 40, max: 400, step: 5 },
+            htmlInput: { "aria-label": "Interface size", min: 40, max: 400, step: 5 },
             input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
           }}
           sx={{ width: 160 }}
@@ -221,6 +222,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             description="Interface label format applied to every link."
           >
             <TextField
+              slotProps={{ select: { inputProps: { "aria-label": "Global override" } } }}
               select
               size="small"
               value={globalInterfaceOverrideSelection}
@@ -250,6 +252,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             description={`${filteredInterfaceRows.length} of ${interfaceRows.length} links shown.`}
           >
             <TextField
+              slotProps={{ htmlInput: { "aria-label": "Filter links" } }}
               size="small"
               placeholder="Search node or interface name"
               value={interfaceLinkFilter}

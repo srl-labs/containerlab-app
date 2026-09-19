@@ -45,6 +45,7 @@ export const GridTab: React.FC<GridTabProps> = ({
         <Box data-testid="lab-settings-grid-line-width" sx={{ width: 160 }}>
           <InputField
             id="lab-settings-grid-line-width"
+            ariaLabel="Stroke Width"
             type="number"
             value={String(gridLineWidth)}
             min={0.00001}
@@ -62,6 +63,7 @@ export const GridTab: React.FC<GridTabProps> = ({
       </SettingsField>
       <SettingsField title="Grid Style" description="Dotted points or quadratic lines.">
         <TextField
+          slotProps={{ select: { inputProps: { "aria-label": "Grid Style" } } }}
           data-testid="lab-settings-grid-style"
           select
           size="small"
@@ -82,6 +84,7 @@ export const GridTab: React.FC<GridTabProps> = ({
       <SettingsField title="Grid Color" description="Color of the canvas grid.">
         <Box sx={{ width: 180 }}>
           <ColorField
+            ariaLabel="Grid Color"
             value={gridColor ?? defaultGridColor}
             disabled={isReadOnly}
             onChange={(value) => onGridColorChange(value)}
@@ -107,6 +110,7 @@ export const GridTab: React.FC<GridTabProps> = ({
       >
         <Box sx={{ width: 180 }}>
           <ColorField
+            ariaLabel="Background Color"
             value={gridBgColor ?? themeBgColor}
             disabled={isReadOnly}
             onChange={(value) => onGridBgColorChange(value)}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
@@ -35,6 +35,7 @@ function disposeModel(object: THREE.Object3D) {
 }
 
 export function RailLogo(props: { showTooltip?: boolean }) {
+  const [tooltipOpen, setTooltipOpen] = useState(false);
   const { assetUrl: publicAssetUrl } = useWorkspaceHost();
   const hostRef = useRef<HTMLDivElement>(null);
   const kickRef = useRef<(spin: boolean) => void>(() => {});
@@ -176,7 +177,9 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       leaveDelay={0}
       placement="right"
       title="TopoViewer"
-      {...(props.showTooltip === true ? {} : { open: false })}
+      open={props.showTooltip === true && tooltipOpen}
+      onOpen={() => setTooltipOpen(true)}
+      onClose={() => setTooltipOpen(false)}
     >
       <IconButton
         size="small"
