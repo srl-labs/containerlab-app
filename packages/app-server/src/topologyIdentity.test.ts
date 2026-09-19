@@ -6,9 +6,11 @@ import {
   buildStandaloneTopologyRefFromPath,
   findRunningLabNameForTopology,
   normalizeStandaloneTopologyRef,
-  resolveCanonicalStandaloneTopologyRef
+  resolveCanonicalStandaloneTopologyRef,
+  resolveRunningLabNameForTopology,
+  TopologySourceConflictError
 } from "./topologyIdentity";
-import type { ClabApiClient, TopologyEntry } from "./clabApiClient";
+import type { ClabApiClient, TopologyEntry, InspectAllLabsResponse } from "./clabApiClient";
 
 test("normalizeStandaloneTopologyRef canonicalizes standalone paths", () => {
   const normalized = normalizeStandaloneTopologyRef({
@@ -95,4 +97,31 @@ test("findRunningLabNameForTopology resolves runtime lab by topology path", () =
   );
 
   assert.equal(runningLabName, "st");
+});
+
+test("absolute source identity overrides duplicate names and preserves case", () => {
+  const labs: InspectAllLabsResponse = { demo: [{
+    name: "clab-demo-n1", containerId: "cid", image: "alpine", kind: "linux",
+    state: "running", status: "Up", ipv4Address: "", ipv6Address: "",
+    labName: "demo", labPath: "/srv/shared/demo.clab.yml", absLabPath: "/srv/shared/demo.clab.yml",
+    group: "", owner: "alice"
+  }] };
+  const entry: TopologyEntry = { labName: "demo", yamlFileName: "@shared/demo.clab.yml", absolutePath: "/srv/shared/demo.clab.yml", annotationsFileName: "", hasAnnotations: false, deploymentState: "undeployed" };
+  const ref = buildStandaloneTopologyRef(entry, "endpoint-1");
+  assert.equal(ref.yamlPath, "@shared/demo.clab.yml");
+  assert.equal(ref.absoluteYamlPath, entry.absolutePath);
+  assert.equal(findRunningLabNameForTopology(labs, ref), "demo");
+  assert.equal(findRunningLabNameForTopology(labs, { ...ref, absoluteYamlPath: "/home/user/demo.clab.yml" }), undefined);
+  assert.equal(findRunningLabNameForTopology(labs, { ...ref, absoluteYamlPath: "/srv/shared/Demo.clab.yml" }), undefined);
+  assert.equal(findRunningLabNameForTopology(labs, { ...ref, absoluteYamlPath: undefined }), undefined);
+});
+
+test("runtime actions cannot fall back to a same-named lab from another source", async () => {
+  const client = { listLabs: async () => ({ demo: [{ labName: "demo", absLabPath: "/srv/shared/demo.clab.yml" }] }) } as unknown as ClabApiClient;
+  await assert.rejects(resolveRunningLabNameForTopology(client, "token", {
+    labName: "demo", yamlPath: "demo.clab.yml", absoluteYamlPath: "/home/alice/demo.clab.yml"
+  }, "demo"), TopologySourceConflictError);
+  await assert.rejects(resolveRunningLabNameForTopology(client, "token", {
+    labName: "demo", yamlPath: "@shared/demo.clab.yml"
+  }, "demo"), TopologySourceConflictError);
 });

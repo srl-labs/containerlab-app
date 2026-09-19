@@ -877,6 +877,28 @@ test("/api/runtime/file-explorer/file writes workspace file content", async (t) 
   });
 });
 
+test("workspace saves reject a second user's stale edit without overwriting the first", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => jsonResponse({ token: "test-token" }));
+  const fileUrl = "http://api.example.test/api/v1/labs/workspace/file?path=%40shared%2Fnotes.txt";
+  let content = "original";
+  context.fetchMock.on("GET", fileUrl, () => new Response(content));
+  context.fetchMock.on("PUT", fileUrl, (call) => {
+    content = call.body ?? "";
+    return jsonResponse({ success: true });
+  });
+  const alice = await loginEndpoint(context, { url: "http://api.example.test", username: "alice" });
+  const bob = await loginEndpoint(context, { url: "http://api.example.test", username: "bob" });
+  const results = await Promise.all([alice, bob].map((user, index) => context.app.inject({
+    method: "PUT", url: "/api/runtime/file-explorer/file?path=%40shared%2Fnotes.txt",
+    headers: { cookie: user.cookie, "x-endpoint-id": user.endpointId },
+    payload: { content: `edit ${index}`, originalContent: "original" }
+  })));
+  assert.deepEqual(results.map((result) => result.statusCode).sort(), [200, 409]);
+  assert.match(results.find((result) => result.statusCode === 409)!.body, /edits have been kept/);
+  assert.equal(context.fetchMock.calls.filter((call) => call.method === "PUT" && call.url.toString() === fileUrl).length, 1);
+});
+
 test("/api/runtime/file-explorer/file rejects large upstream files before reading", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "http://api.example.test/login", () => {
@@ -1171,6 +1193,25 @@ test("/api/runtime/labs/archive downloads tar.gz archives", async (t) => {
   assert.match(tarContent, /srl-mirroring-lab\/srl-mirroring-lab\.clab\.yml/);
   assert.match(tarContent, /srl-mirroring-lab\/configs\/leaf\.cfg/);
   assert.match(tarContent, /set \/ system/);
+});
+
+test("/api/runtime/labs/archive downloads one shared lab and rejects the shared root", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => jsonResponse({ token: "secret-token" }));
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/workspace/tree?path=%40shared%2Fdemo", () =>
+    jsonResponse([{ name: "demo.clab.yml", path: "@shared/demo/demo.clab.yml", kind: "file" }]));
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/workspace/file?path=%40shared%2Fdemo%2Fdemo.clab.yml", () =>
+    textResponse("name: shared-demo\n"));
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const headers = { cookie, "x-endpoint-id": endpointId };
+  const response = await context.app.inject({ method: "GET", url: "/api/runtime/labs/archive?path=%40shared%2Fdemo&format=zip", headers });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.match(response.headers["content-disposition"] as string, /filename="demo.zip"/);
+  assert.match(response.rawPayload.toString("utf8"), /name: shared-demo/);
+  for (const path of ["@shared", "@shared/demo/configs", "@shared/../demo"]) {
+    const invalid = await context.app.inject({ method: "GET", url: `/api/runtime/labs/archive?path=${encodeURIComponent(path)}`, headers });
+    assert.equal(invalid.statusCode, 400, invalid.body);
+  }
 });
 
 test("/api/runtime/labs/archive rejects nested folder download targets", async (t) => {

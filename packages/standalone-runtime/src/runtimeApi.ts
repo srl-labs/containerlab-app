@@ -282,10 +282,7 @@ export function resolveRuntimeRequestUrl(
 async function requestJson<T>(input: string, init?: RequestInit, endpointId?: string): Promise<T> {
   let response: Response;
   try {
-    response = await runtimeFetch(resolveRuntimeRequestUrl(input), {
-      credentials: "include",
-      ...init
-    });
+    response = await fetchRuntimeResource(input, init);
   } catch (error) {
     markEndpointUnavailable(endpointId, "offline");
     throw error;
@@ -303,6 +300,22 @@ async function requestJson<T>(input: string, init?: RequestInit, endpointId?: st
   }
 
   return (await response.json()) as T;
+}
+
+async function fetchRuntimeResource(input: string, init?: RequestInit): Promise<Response> {
+  const url = resolveRuntimeRequestUrl(input);
+  const options = { credentials: "include" as const, ...init };
+  try {
+    return await runtimeFetch(url, options);
+  } catch (error) {
+    // Creating/removing lab interfaces can briefly invalidate Chromium's network
+    // connections. Retry reads once before declaring the endpoint offline.
+    // Never replay a write: it may already have reached the server.
+    if (!(error instanceof TypeError) || (init?.method ?? "GET").toUpperCase() !== "GET" || init?.signal?.aborted) {
+      throw error;
+    }
+    return await runtimeFetch(url, options);
+  }
 }
 
 function filenameFromContentDisposition(header: string | null, fallback: string): string {
@@ -333,10 +346,7 @@ async function requestBlob(
 ): Promise<BinaryDownloadResult> {
   let response: Response;
   try {
-    response = await runtimeFetch(resolveRuntimeRequestUrl(input), {
-      credentials: "include",
-      ...init
-    });
+    response = await fetchRuntimeResource(input, init);
   } catch (error) {
     markEndpointUnavailable(endpointId, "offline");
     throw error;
@@ -690,6 +700,7 @@ export async function writeFileExplorerFile(input: {
   endpointId: string;
   path: string;
   content: string;
+  originalContent?: string;
 }): Promise<void> {
   await requestJson<{ success: boolean }>(
     `/api/runtime/file-explorer/file?path=${encodeURIComponent(input.path)}`,
@@ -697,7 +708,7 @@ export async function writeFileExplorerFile(input: {
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: input.path, content: input.content })
+        body: JSON.stringify({ path: input.path, content: input.content, originalContent: input.originalContent })
       },
       input.endpointId
     ),

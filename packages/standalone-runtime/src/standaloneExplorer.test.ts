@@ -14,6 +14,8 @@ import {
 } from "./runtimeActionFlows";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { TopologyFileEntry } from "./standaloneHostShared";
+import type { LabState } from "./stores/labStore";
+import { explorerPreferences } from "./standaloneExplorerActions";
 
 type ExplorerSnapshotMessage = Extract<
   ExplorerIncomingMessage,
@@ -65,12 +67,13 @@ function createExplorerBridge(input: {
   defaultExpandExplorerTrees?: boolean;
   endpoints?: EndpointConfig[];
   topologyFiles?: TopologyFileEntry[];
+  labs?: Map<string, LabState>;
 } = {}) {
   return createStandaloneExplorerBridge({
     debounceMs: 0,
     defaultExpandExplorerTrees: input.defaultExpandExplorerTrees,
     getEndpoints: () => input.endpoints ?? [],
-    getLabs: () => new Map(),
+    getLabs: () => input.labs ?? new Map(),
     invalidateTopologyFileListCache: () => {},
     openFileEditor: async () => {},
     runLifecycle: async () => {},
@@ -436,6 +439,47 @@ test("undeployed labs hide dot-prefixed filenames but keep visible files in dot-
       `local-lab:${SANDBOX_ENDPOINT.id}:.clab/visible.clab.yml`,
     ].sort(),
   );
+});
+
+test("shared sources stay visible and editable when non-owned personal labs are hidden", async (t) => {
+  installSandboxFetch(t, {});
+  const previous = explorerPreferences.showNonOwnedLabs;
+  explorerPreferences.showNonOwnedLabs = false;
+  t.after(() => { explorerPreferences.showNonOwnedLabs = previous; });
+  const shared = topologyFile("@shared/demo.clab.yml", "demo");
+  shared.topologyRef.absoluteYamlPath = "/srv/shared/demo.clab.yml";
+  const personal = topologyFile("demo.clab.yml", "demo");
+  personal.topologyRef.absoluteYamlPath = "/home/local/.clab/demo.clab.yml";
+  const labs = new Map<string, LabState>([
+    ["shared", { endpointId: SANDBOX_ENDPOINT.id, name: "demo", owner: "someone-else", topologyPath: shared.topologyRef.absoluteYamlPath, containers: new Map() }],
+    ["private", { endpointId: SANDBOX_ENDPOINT.id, name: "private", owner: "someone-else", topologyPath: "/home/other/private.clab.yml", containers: new Map() }],
+  ]);
+  const bridge = createExplorerBridge({ endpoints: [SANDBOX_ENDPOINT], topologyFiles: [shared, personal], labs });
+  const snapshot = await waitForExplorerSnapshot(bridge);
+  const nodes = sectionById(snapshot, "runningLabs").nodes;
+  const sharedNode = findNode(nodes, `running-lab:${SANDBOX_ENDPOINT.id}:demo`);
+  assert.ok(sharedNode);
+  assert.equal(sharedNode.workspaceScope, "shared");
+  assert.match(sharedNode.tooltip ?? "", /Everyone on this server/);
+  assert.equal(findNode(nodes, `running-lab:${SANDBOX_ENDPOINT.id}:private`), undefined);
+  assert.ok(findNode(nodes, `local-lab:${SANDBOX_ENDPOINT.id}:demo.clab.yml`));
+  assert.equal(findNode(nodes, `local-lab:${SANDBOX_ENDPOINT.id}:@shared/demo.clab.yml`), undefined);
+});
+
+test("shared workspace root supports creation and upload but cannot be renamed or deleted", async (t) => {
+  installSandboxFetch(t, { "": [{ endpointId: SANDBOX_ENDPOINT.id, name: "@shared", path: "@shared", kind: "directory", hasChildren: true }] });
+  const bridge = createExplorerBridge({ endpoints: [SANDBOX_ENDPOINT], defaultExpandExplorerTrees: true });
+  const pending = waitForExplorerSnapshotMatching(bridge, (value) => fileExplorerHasNode(value, `file:${SANDBOX_ENDPOINT.id}:@shared`));
+  bridge.explorer.connect();
+  const snapshot = await pending;
+  const root = findNode(fileRootNode(snapshot).children, `file:${SANDBOX_ENDPOINT.id}:@shared`);
+  assert.ok(root);
+  assert.equal(root.label, "Shared labs");
+  const commands = root.actions.map((action) => action.commandId);
+  assert.ok(commands.includes("containerlab.editor.topoViewerEditor"));
+  assert.ok(commands.includes("containerlab.file.upload"));
+  assert.ok(!commands.includes("containerlab.file.rename"));
+  assert.ok(!commands.includes("containerlab.file.delete"));
 });
 
 test("pages sandbox default expansion opens endpoint and file explorer trees", async (t) => {

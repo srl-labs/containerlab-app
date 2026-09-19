@@ -8,6 +8,7 @@ export {
 } from "./client";
 
 export { TopologyHostCore as TopologySessionCore } from "../core/host/TopologyHostCore";
+export { runDocumentOperation } from "../core/host/documentQueue";
 
 export * from "../core/messages/extension";
 export * from "../core/messages/webview";

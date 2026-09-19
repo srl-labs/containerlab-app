@@ -15,7 +15,8 @@ import type { EndpointEntry } from "./endpointSessionStore.ts";
 import {
   extractEndpointIdFromTopologyId,
   resolveCanonicalStandaloneTopologyRef,
-  resolveRunningLabNameForTopology
+  resolveRunningLabNameForTopology,
+  TopologySourceConflictError
 } from "./topologyIdentity.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { streamResponseHeaders } from "./streamResponseHeaders.ts";
@@ -456,6 +457,9 @@ export function registerLabProxy(
         const running = await client.isLabRunning(endpoint.token, target.labName);
         return reply.send({ success: true, running });
       } catch (error) {
+        if (error instanceof TopologySourceConflictError) {
+          return reply.send({ success: true, running: false });
+        }
         return handleRouteError(reply, error);
       }
     }

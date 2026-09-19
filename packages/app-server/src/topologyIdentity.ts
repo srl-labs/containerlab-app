@@ -9,6 +9,14 @@ import type {
 
 const ENDPOINT_TOPOLOGY_ID_SEPARATOR = "::";
 
+export class TopologySourceConflictError extends Error {
+  readonly status = 409;
+
+  constructor(labName: string) {
+    super(`The running lab "${labName}" cannot be matched to this topology file. Open that lab from Running Labs, or use a different lab name.`);
+  }
+}
+
 function normalizeTopologyPath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/").replace(/^\.\//, "");
 }
@@ -72,11 +80,21 @@ function runtimeLabMatchesTopologyPath(
 
 export function findRunningLabNameForTopology(
   labs: InspectAllLabsResponse,
-  topologyRef: Pick<TopologyRef, "labName" | "yamlPath">
+  topologyRef: Pick<TopologyRef, "labName" | "yamlPath" | "absoluteYamlPath">
 ): string | undefined {
   const normalizedPath = normalizeTopologyPath(topologyRef.yamlPath);
   const normalizedLabName = topologyRef.labName.trim().toLowerCase();
   const entries = Object.entries(labs);
+
+  if (topologyRef.absoluteYamlPath) {
+    const absolutePath = normalizeTopologyPath(topologyRef.absoluteYamlPath);
+    const match = entries.find(([, containers]) => containers.some((container) =>
+      normalizeTopologyPath(runtimeContainerString(container, "absLabPath", "abs_lab_path", "labPath", "lab_path") ?? "") === absolutePath
+    ));
+    return match ? runtimeLabName(match[0], match[1]) : undefined;
+  }
+
+  if (normalizedPath.startsWith("@shared/")) return undefined;
 
   if (normalizedPath) {
     const pathMatches = entries.filter(([, containers]) =>
@@ -112,15 +130,24 @@ export function findRunningLabNameForTopology(
 export async function resolveRunningLabNameForTopology(
   client: ClabApiClient,
   token: string,
-  topologyRef: Pick<TopologyRef, "labName" | "yamlPath">,
+  topologyRef: Pick<TopologyRef, "labName" | "yamlPath" | "absoluteYamlPath">,
   fallbackLabName: string
 ): Promise<string> {
+  const requiresSourceMatch = Boolean(topologyRef.absoluteYamlPath) || normalizeTopologyPath(topologyRef.yamlPath).startsWith("@shared/");
+  let labs: InspectAllLabsResponse;
   try {
-    const runningLabName = findRunningLabNameForTopology(await client.listLabs(token), topologyRef);
-    return runningLabName ?? fallbackLabName;
-  } catch {
+    labs = await client.listLabs(token);
+  } catch (error) {
+    if (requiresSourceMatch) throw error;
     return fallbackLabName;
   }
+  const runningLabName = findRunningLabNameForTopology(labs, topologyRef);
+  if (!runningLabName && requiresSourceMatch && findRunningLabNameForTopology(labs, {
+    labName: fallbackLabName, yamlPath: ""
+  })) {
+    throw new TopologySourceConflictError(fallbackLabName);
+  }
+  return runningLabName ?? fallbackLabName;
 }
 
 function buildStandaloneTopologyId(yamlPath: string): string {
@@ -179,7 +206,7 @@ export function normalizeStandaloneTopologyRef(
 }
 
 export function buildStandaloneTopologyRef(
-  entry: Pick<TopologyEntry, "annotationsFileName" | "hasAnnotations" | "labName" | "yamlFileName">,
+  entry: Pick<TopologyEntry, "annotationsFileName" | "hasAnnotations" | "labName" | "yamlFileName" | "absolutePath">,
   endpointId?: string
 ): TopologyRef {
   return normalizeStandaloneTopologyRef({
@@ -188,6 +215,7 @@ export function buildStandaloneTopologyRef(
       : buildStandaloneTopologyId(entry.yamlFileName),
     labName: entry.labName,
     yamlPath: normalizeTopologyPath(entry.yamlFileName),
+    ...(entry.absolutePath ? { absoluteYamlPath: normalizeTopologyPath(entry.absolutePath) } : {}),
     annotationsPath: entry.hasAnnotations
       ? normalizeTopologyPath(entry.annotationsFileName)
       : undefined,

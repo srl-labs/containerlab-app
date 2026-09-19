@@ -61,18 +61,6 @@ export interface ActiveRuntimeOptionSelectionDialogRequest {
   title: string;
 }
 
-interface TopologyFileNameDialogRequest {
-  defaultValue?: string;
-  message?: string;
-  title?: string;
-}
-
-export interface ActiveTopologyFileNameDialogRequest {
-  defaultValue: string;
-  message: string;
-  title: string;
-}
-
 export interface EndpointSelectionOption {
   description?: string;
   label: string;
@@ -171,9 +159,6 @@ export function normalizeTopologyFileNameForCreate(fileName: string): string {
   return `${trimmed}.clab.yml`;
 }
 
-type TopologyFileNameDialogRequester = (
-  request: ActiveTopologyFileNameDialogRequest
-) => Promise<string | undefined>;
 type EndpointSelectionDialogRequester = (
   request: ActiveEndpointSelectionDialogRequest
 ) => Promise<string | undefined>;
@@ -193,24 +178,13 @@ type RuntimeOptionSelectionDialogRequester = (
   request: ActiveRuntimeOptionSelectionDialogRequest
 ) => Promise<string | undefined>;
 
-let requestTopologyFileNameFromDialog: TopologyFileNameDialogRequester | null = null;
 let requestEndpointSelectionFromDialog: EndpointSelectionDialogRequester | null = null;
 let requestCreateTopologyFromDialog: CreateTopologyDialogRequester | null = null;
+const createTopologyDialogWaiters = new Set<(requester: CreateTopologyDialogRequester) => void>();
 let requestCloneRepoFromDialog: CloneRepoDialogRequester | null = null;
 let requestRuntimeConfirmFromDialog: RuntimeConfirmDialogRequester | null = null;
 let requestRuntimeTextInputFromDialog: RuntimeTextInputDialogRequester | null = null;
 let requestRuntimeOptionSelectionFromDialog: RuntimeOptionSelectionDialogRequester | null = null;
-
-export function setTopologyFileNameDialogRequester(
-  requester: TopologyFileNameDialogRequester
-): () => void {
-  requestTopologyFileNameFromDialog = requester;
-  return () => {
-    if (requestTopologyFileNameFromDialog === requester) {
-      requestTopologyFileNameFromDialog = null;
-    }
-  };
-}
 
 export function setEndpointSelectionDialogRequester(
   requester: EndpointSelectionDialogRequester
@@ -227,6 +201,8 @@ export function setCreateTopologyDialogRequester(
   requester: CreateTopologyDialogRequester
 ): () => void {
   requestCreateTopologyFromDialog = requester;
+  for (const resolve of createTopologyDialogWaiters) resolve(requester);
+  createTopologyDialogWaiters.clear();
   return () => {
     if (requestCreateTopologyFromDialog === requester) {
       requestCreateTopologyFromDialog = null;
@@ -357,33 +333,6 @@ export function promptForOptionSelection(
   return Promise.resolve(undefined);
 }
 
-function normalizeTopologyFileNameDialogRequest(
-  request?: TopologyFileNameDialogRequest
-): ActiveTopologyFileNameDialogRequest {
-  return {
-    title: request?.title?.trim() || "Create Topology File",
-    message: request?.message?.trim() || "Enter a file name for the new topology file.",
-    defaultValue: request?.defaultValue ?? DEFAULT_TOPOLOGY_FILE_NAME
-  };
-}
-
-function promptForTopologyFileName(
-  request?: TopologyFileNameDialogRequest
-): Promise<string | undefined> {
-  const normalizedRequest = normalizeTopologyFileNameDialogRequest(request);
-  if (requestTopologyFileNameFromDialog) {
-    return requestTopologyFileNameFromDialog(normalizedRequest);
-  }
-  return promptForTextInput({
-    title: normalizedRequest.title,
-    message: normalizedRequest.message,
-    label: "Topology file name",
-    defaultValue: normalizedRequest.defaultValue,
-    confirmLabel: "Create",
-    helperText: `Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`
-  });
-}
-
 function normalizeEndpointSelectionDialogRequest(
   request: EndpointSelectionDialogRequest
 ): ActiveEndpointSelectionDialogRequest {
@@ -448,35 +397,15 @@ export async function promptForCreateTopology(
   if (normalizedRequest.endpointOptions.length === 0 || !normalizedRequest.defaultEndpointId) {
     return undefined;
   }
-  if (requestCreateTopologyFromDialog) {
-    const result = await requestCreateTopologyFromDialog(normalizedRequest);
-    return result
-      ? {
-          ...result,
-          fileName: normalizeTopologyFileNameForCreate(result.fileName)
-        }
-      : undefined;
-  }
-
-  const endpointId = await promptForEndpointSelection({
-    title: "Select Endpoint",
-    message: normalizedRequest.message,
-    confirmLabel: "Use Endpoint",
-    options: normalizedRequest.endpointOptions,
-    preferredValue: normalizedRequest.defaultEndpointId
-  });
-  if (!endpointId) {
-    return undefined;
-  }
-  const fileName = await promptForTopologyFileName({
-    defaultValue: normalizedRequest.defaultFileName,
-    title: normalizedRequest.title,
-    message: "Enter a file name for the new topology file."
-  });
-  if (!fileName) {
-    return undefined;
-  }
-  return { endpointId, fileName: normalizeTopologyFileNameForCreate(fileName) };
+  // The dialog host loads lazily. Early clicks must still use its location
+  // selector instead of falling back to a native filename prompt.
+  const requester = requestCreateTopologyFromDialog ?? await new Promise<CreateTopologyDialogRequester>(
+    (resolve) => createTopologyDialogWaiters.add(resolve)
+  );
+  const result = await requester(normalizedRequest);
+  return result
+    ? { ...result, fileName: normalizeTopologyFileNameForCreate(result.fileName) }
+    : undefined;
 }
 
 function normalizeCloneRepoDialogRequest(request: CloneRepoDialogRequest): ActiveCloneRepoDialogRequest {

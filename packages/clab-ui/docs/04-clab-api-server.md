@@ -38,6 +38,10 @@
 
 Ownership checks intentionally use `404` in many mismatch cases so the API does not reveal resource existence to unauthorized users.
 
+When `CLAB_SHARED_LABS_ROOT` is configured, its files appear under `@shared/`. All authenticated API users can edit and operate these labs, including labs deployed by another user. Terminal and capture sessions remain owned by the user who creates each session.
+
+Topology discovery supplies `absolutePath` alongside the virtual `yamlFileName`. Standalone hosts match that absolute path against runtime `absLabPath` to identify the deployed source. Operations still use the virtual path. A personal file with the same lab name must not inherit the shared lab's running state or lifecycle actions. Servers without the optional metadata retain legacy personal-lab matching; shared sources are not matched by name alone.
+
 !!! info "Common status meaning"
     - `401`: no valid bearer token
     - `403`: authenticated, but missing a required elevated privilege

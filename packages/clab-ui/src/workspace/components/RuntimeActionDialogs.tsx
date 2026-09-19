@@ -26,11 +26,13 @@ import {
   TableHead,
   TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography
 } from "@mui/material";
 
 import type { InspectContainerInfo, InspectLabResponse, InspectAllLabsResponse, NetemFields, RuntimeTargetRequest,ContainerState,InterfaceNetemPatch,LabState } from "../types";
-import { findLabStateForTopology } from "../state/documentUtils";
+import { findLabStateForTopology, isSharedWorkspacePath } from "../state/documentUtils";
 
 import { runtimeUiActions, useRuntimeUiStore } from "../state/runtimeUiStore";
 import {
@@ -42,14 +44,12 @@ import {
   setRuntimeConfirmDialogRequester,
   setRuntimeOptionSelectionDialogRequester,
   setRuntimeTextInputDialogRequester,
-  setTopologyFileNameDialogRequester,
   type ActiveCloneRepoDialogRequest,
   type ActiveCreateTopologyDialogRequest,
   type ActiveEndpointSelectionDialogRequest,
   type ActiveRuntimeConfirmDialogRequest,
   type ActiveRuntimeOptionSelectionDialogRequest,
   type ActiveRuntimeTextInputDialogRequest,
-  type ActiveTopologyFileNameDialogRequest,
   type CloneRepoDialogResult,
   type CloneRepoDialogTarget,
   type CreateTopologyDialogResult,
@@ -65,11 +65,6 @@ interface InspectGroup {
 interface NetemInterfaceRow {
   name: string;
   label: string;
-}
-
-interface TopologyFileNameDialogState {
-  request: ActiveTopologyFileNameDialogRequest;
-  resolve: (value: string | undefined) => void;
 }
 
 interface EndpointSelectionDialogState {
@@ -224,13 +219,15 @@ function findRuntimeContainer(
   const topologyHint = input.topologyRef?.yamlPath
     ? {
         topologyId: input.topologyRef.topologyId,
+        absoluteYamlPath: input.topologyRef.absoluteYamlPath,
         yamlPath: input.topologyRef.yamlPath,
         labName: input.topologyRef.labName,
         endpointId: input.endpointId
       }
     : undefined;
   const lab = findLabStateForTopology(topologyHint, labs);
-  const candidateLabs = lab ? [lab] : [...labs.values()];
+  let candidateLabs = lab ? [lab] : [...labs.values()];
+  if (!lab && topologyHint?.absoluteYamlPath) candidateLabs = [];
 
   let bestContainer: ContainerState | undefined;
   let bestScore = 0;
@@ -879,26 +876,93 @@ function CloneRepoDialogView(props: {
   );
 }
 
+function createTopologyFileNameError(fileName: string): string {
+  if (isSharedWorkspacePath(fileName)) {
+    return "Choose Shared above and enter the file name without @shared/.";
+  }
+  if (fileName.split("/").some((part) => !part || part === "." || part === "..")) {
+    return "Enter a file name or a relative folder path within the selected location.";
+  }
+  return "";
+}
+
 function CreateTopologyDialogView(props: {
   closeCreateTopologyDialog: (value: CreateTopologyDialogResult | undefined) => void;
-  createTopologyDialog: CreateTopologyDialogState | null;
-  createTopologyEndpointIsValid: boolean;
-  createTopologyEndpointValue: string;
-  createTopologyFileNameInput: string;
-  setCreateTopologyEndpointValue: (value: string) => void;
-  setCreateTopologyFileNameInput: (value: string) => void;
-  submitCreateTopologyDialog: () => void;
-  trimmedCreateTopologyFileNameInput: string;
+  createTopologyDialog: CreateTopologyDialogState;
 }) {
-  const request = props.createTopologyDialog?.request;
+  const { listFileExplorerDirectory } = useWorkspaceHost().api;
+  const { request } = props.createTopologyDialog;
+  const [endpointId, setEndpointId] = useState(request.defaultEndpointId);
+  const [location, setLocation] = useState<"personal" | "shared">(
+    isSharedWorkspacePath(request.defaultFileName) ? "shared" : "personal"
+  );
+  const [fileName, setFileName] = useState(() => request.defaultFileName.replace(/^@shared\//, ""));
+  const [workspace, setWorkspace] = useState<{
+    endpointId: string;
+    shared: boolean;
+    error?: string;
+  } | null>(null);
+  const currentWorkspace = workspace?.endpointId === endpointId ? workspace : null;
+  const sharedAvailable = currentWorkspace?.shared === true;
+  const sharedUnavailable = currentWorkspace !== null && location === "shared" && !sharedAvailable;
+  const trimmedFileName = fileName.trim().replace(/\\/g, "/");
+  const fileNameError = trimmedFileName ? createTopologyFileNameError(trimmedFileName) : "";
+  let locationDescription = "Checking available locations…";
+  if (currentWorkspace) {
+    locationDescription = location === "shared"
+      ? "Everyone signed in to this API server can edit, deploy, and destroy this lab."
+      : "Saved in your personal workspace.";
+  }
+  if (sharedUnavailable) {
+    locationDescription = "Shared is no longer available on this server. Choose Personal to save in your workspace.";
+  }
+  const canSubmit = Boolean(
+    currentWorkspace && !currentWorkspace.error && !sharedUnavailable && trimmedFileName && !fileNameError &&
+    request.endpointOptions.some((option) => option.value === endpointId)
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void listFileExplorerDirectory(endpointId).then(
+      (entries) => {
+        if (!cancelled) {
+          setWorkspace({
+            endpointId,
+            shared: entries.some((entry) => entry.kind === "directory" && entry.path === "@shared")
+          });
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setWorkspace({
+            endpointId,
+            shared: false,
+            error: "Could not check available locations. Close this dialog and try again."
+          });
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [endpointId, listFileExplorerDirectory]);
+
+  const submit = (): void => {
+    if (!canSubmit) return;
+    props.closeCreateTopologyDialog({
+      endpointId,
+      fileName: `${location === "shared" ? "@shared/" : ""}${normalizeTopologyFileNameForCreate(trimmedFileName)}`
+    });
+  };
+
   return (
     <Dialog
-      open={props.createTopologyDialog !== null}
+      open
       onClose={() => props.closeCreateTopologyDialog(undefined)}
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
+      <DialogTitle>{request.title}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           <Typography
@@ -907,26 +971,66 @@ function CreateTopologyDialogView(props: {
               color: "text.secondary"
             }}
           >
-            {request?.message}
+            {request.message}
           </Typography>
           <CloneRepoEndpointField
-            endpointOptions={request?.endpointOptions ?? []}
-            value={props.createTopologyEndpointValue}
-            setValue={props.setCreateTopologyEndpointValue}
+            endpointOptions={request.endpointOptions}
+            value={endpointId}
+            setValue={(value) => {
+              if (value === endpointId) return;
+              setEndpointId(value);
+              setLocation("personal");
+              setWorkspace(null);
+            }}
           />
+          <Stack spacing={1}>
+            <Typography id="create-topology-location-label" variant="body2">
+              Location
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              aria-labelledby="create-topology-location-label"
+              value={location}
+              disabled={!currentWorkspace || Boolean(currentWorkspace.error)}
+              sx={{
+                "& .MuiToggleButton-root": { textTransform: "none" },
+                "& .MuiToggleButton-root.Mui-selected": {
+                  bgcolor: "primary.main",
+                  color: "primary.contrastText",
+                  "&:hover": { bgcolor: "primary.dark" }
+                }
+              }}
+              onChange={(_event, value: "personal" | "shared" | null) => {
+                if (value) setLocation(value);
+              }}
+            >
+              <ToggleButton value="personal">Personal</ToggleButton>
+              {sharedAvailable ? <ToggleButton value="shared">Shared</ToggleButton> : null}
+            </ToggleButtonGroup>
+            {currentWorkspace?.error ? (
+              <Alert severity="error">{currentWorkspace.error}</Alert>
+            ) : (
+              <Typography variant="body2" color="text.secondary" aria-live="polite">
+                {locationDescription}
+              </Typography>
+            )}
+          </Stack>
           <TextField
             autoFocus
             fullWidth
             label="Topology file name"
-            value={props.createTopologyFileNameInput}
-            onChange={(event) => props.setCreateTopologyFileNameInput(event.target.value)}
+            value={fileName}
+            onChange={(event) => setFileName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
-                props.submitCreateTopologyDialog();
+                submit();
               }
             }}
-            helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
+            error={Boolean(fileNameError)}
+            helperText={fileNameError || `Example: ${DEFAULT_TOPOLOGY_FILE_NAME}. You can include a subfolder.`}
           />
         </Stack>
       </DialogContent>
@@ -934,69 +1038,10 @@ function CreateTopologyDialogView(props: {
         <Button onClick={() => props.closeCreateTopologyDialog(undefined)}>Cancel</Button>
         <Button
           variant="contained"
-          onClick={props.submitCreateTopologyDialog}
-          disabled={
-            !props.createTopologyEndpointIsValid || !props.trimmedCreateTopologyFileNameInput
-          }
+          onClick={submit}
+          disabled={!canSubmit}
         >
-          {request?.confirmLabel ?? "Create"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function TopologyFileNameDialogView(props: {
-  closeTopologyFileNameDialog: (value: string | undefined) => void;
-  setTopologyFileNameInput: (value: string) => void;
-  submitTopologyFileNameDialog: () => void;
-  topologyFileNameDialog: TopologyFileNameDialogState | null;
-  topologyFileNameInput: string;
-  trimmedTopologyFileNameInput: string;
-}) {
-  const request = props.topologyFileNameDialog?.request;
-  return (
-    <Dialog
-      open={props.topologyFileNameDialog !== null}
-      onClose={() => props.closeTopologyFileNameDialog(undefined)}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>{request?.title ?? "Create Topology File"}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            {request?.message}
-          </Typography>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Topology file name"
-            value={props.topologyFileNameInput}
-            onChange={(event) => props.setTopologyFileNameInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                props.submitTopologyFileNameDialog();
-              }
-            }}
-            helperText={`Example: ${DEFAULT_TOPOLOGY_FILE_NAME}`}
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => props.closeTopologyFileNameDialog(undefined)}>Cancel</Button>
-        <Button
-          variant="contained"
-          onClick={props.submitTopologyFileNameDialog}
-          disabled={!props.trimmedTopologyFileNameInput}
-        >
-          Create
+          {request.confirmLabel}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1308,18 +1353,11 @@ export function RuntimeActionDialogs() {
     {}
   );
   const [netemPendingInterface, setNetemPendingInterface] = useState<string | null>(null);
-  const [topologyFileNameDialog, setTopologyFileNameDialog] =
-    useState<TopologyFileNameDialogState | null>(null);
-  const [topologyFileNameInput, setTopologyFileNameInput] = useState(DEFAULT_TOPOLOGY_FILE_NAME);
   const [endpointSelectionDialog, setEndpointSelectionDialog] =
     useState<EndpointSelectionDialogState | null>(null);
   const [endpointSelectionValue, setEndpointSelectionValue] = useState("");
   const [createTopologyDialog, setCreateTopologyDialog] =
     useState<CreateTopologyDialogState | null>(null);
-  const [createTopologyEndpointValue, setCreateTopologyEndpointValue] = useState("");
-  const [createTopologyFileNameInput, setCreateTopologyFileNameInput] = useState(
-    DEFAULT_TOPOLOGY_FILE_NAME
-  );
   const [cloneRepoDialog, setCloneRepoDialog] = useState<CloneRepoDialogState | null>(null);
   const [cloneRepoEndpointValue, setCloneRepoEndpointValue] = useState("");
   const [cloneRepoMode, setCloneRepoMode] = useState<"url" | "popular">("url");
@@ -1337,7 +1375,6 @@ export function RuntimeActionDialogs() {
   const [runtimeOptionSelectionDialog, setRuntimeOptionSelectionDialog] =
     useState<RuntimeOptionSelectionDialogState | null>(null);
   const [runtimeOptionSelectionValue, setRuntimeOptionSelectionValue] = useState("");
-  const topologyFileNameDialogRef = useRef<TopologyFileNameDialogState | null>(null);
   const endpointSelectionDialogRef = useRef<EndpointSelectionDialogState | null>(null);
   const createTopologyDialogRef = useRef<CreateTopologyDialogState | null>(null);
   const cloneRepoDialogRef = useRef<CloneRepoDialogState | null>(null);
@@ -1383,8 +1420,6 @@ export function RuntimeActionDialogs() {
     () => netemFieldsFromRuntimeContainer(runtimeContainer),
     [runtimeContainer]
   );
-  const trimmedTopologyFileNameInput = topologyFileNameInput.trim();
-  const trimmedCreateTopologyFileNameInput = createTopologyFileNameInput.trim();
   const trimmedCloneRepoSourceUrlInput = cloneRepoSourceUrlInput.trim();
   const trimmedCloneRepoLabNameOverrideInput = cloneRepoLabNameOverrideInput.trim();
   const trimmedRuntimeTextInputValue = runtimeTextInputValue.trim();
@@ -1399,15 +1434,6 @@ export function RuntimeActionDialogs() {
           )
         : false,
     [endpointSelectionDialog, endpointSelectionValue]
-  );
-  const createTopologyEndpointIsValid = useMemo(
-    () =>
-      createTopologyDialog
-        ? createTopologyDialog.request.endpointOptions.some(
-            (option) => option.value === createTopologyEndpointValue
-          )
-        : false,
-    [createTopologyDialog, createTopologyEndpointValue]
   );
   const cloneRepoEndpointIsValid = useMemo(
     () =>
@@ -1443,10 +1469,6 @@ export function RuntimeActionDialogs() {
   const cloneRepoCanSubmit = cloneRepoEndpointIsValid && cloneRepoResolvedSourceUrl.length > 0;
 
   useEffect(() => {
-    topologyFileNameDialogRef.current = topologyFileNameDialog;
-  }, [topologyFileNameDialog]);
-
-  useEffect(() => {
     endpointSelectionDialogRef.current = endpointSelectionDialog;
   }, [endpointSelectionDialog]);
 
@@ -1469,22 +1491,6 @@ export function RuntimeActionDialogs() {
   useEffect(() => {
     runtimeOptionSelectionDialogRef.current = runtimeOptionSelectionDialog;
   }, [runtimeOptionSelectionDialog]);
-
-  useEffect(() => {
-    const cleanup = setTopologyFileNameDialogRequester(
-      (request) =>
-        new Promise((resolve) => {
-          setTopologyFileNameDialog((current) => {
-            current?.resolve(undefined);
-            return { request, resolve };
-          });
-        })
-    );
-    return () => {
-      cleanup();
-      topologyFileNameDialogRef.current?.resolve(undefined);
-    };
-  }, []);
 
   useEffect(() => {
     const cleanup = setEndpointSelectionDialogRequester(
@@ -1583,26 +1589,11 @@ export function RuntimeActionDialogs() {
   }, []);
 
   useEffect(() => {
-    if (!topologyFileNameDialog) {
-      return;
-    }
-    setTopologyFileNameInput(topologyFileNameDialog.request.defaultValue);
-  }, [topologyFileNameDialog]);
-
-  useEffect(() => {
     if (!endpointSelectionDialog) {
       return;
     }
     setEndpointSelectionValue(endpointSelectionDialog.request.preferredValue);
   }, [endpointSelectionDialog]);
-
-  useEffect(() => {
-    if (!createTopologyDialog) {
-      return;
-    }
-    setCreateTopologyEndpointValue(createTopologyDialog.request.defaultEndpointId);
-    setCreateTopologyFileNameInput(createTopologyDialog.request.defaultFileName);
-  }, [createTopologyDialog]);
 
   useEffect(() => {
     if (!cloneRepoDialog) {
@@ -1894,24 +1885,6 @@ export function RuntimeActionDialogs() {
     }
   };
 
-  const closeTopologyFileNameDialog = useCallback((value: string | undefined): void => {
-    setTopologyFileNameDialog((current) => {
-      if (!current) {
-        return current;
-      }
-      current.resolve(value);
-      return null;
-    });
-  }, []);
-
-  const submitTopologyFileNameDialog = useCallback((): void => {
-    const value = trimmedTopologyFileNameInput;
-    if (!value) {
-      return;
-    }
-    closeTopologyFileNameDialog(value);
-  }, [closeTopologyFileNameDialog, trimmedTopologyFileNameInput]);
-
   const closeEndpointSelectionDialog = useCallback((value: string | undefined): void => {
     setEndpointSelectionDialog((current) => {
       if (!current) {
@@ -1941,21 +1914,6 @@ export function RuntimeActionDialogs() {
     },
     []
   );
-
-  const submitCreateTopologyDialog = useCallback((): void => {
-    if (!createTopologyEndpointIsValid || !trimmedCreateTopologyFileNameInput) {
-      return;
-    }
-    closeCreateTopologyDialog({
-      endpointId: createTopologyEndpointValue,
-      fileName: normalizeTopologyFileNameForCreate(trimmedCreateTopologyFileNameInput)
-    });
-  }, [
-    closeCreateTopologyDialog,
-    createTopologyEndpointIsValid,
-    createTopologyEndpointValue,
-    trimmedCreateTopologyFileNameInput
-  ]);
 
   const closeCloneRepoDialog = useCallback((value: CloneRepoDialogResult | undefined): void => {
     setCloneRepoDialog((current) => {
@@ -2120,24 +2078,6 @@ export function RuntimeActionDialogs() {
         <CreateTopologyDialogView
           closeCreateTopologyDialog={closeCreateTopologyDialog}
           createTopologyDialog={createTopologyDialog}
-          createTopologyEndpointIsValid={createTopologyEndpointIsValid}
-          createTopologyEndpointValue={createTopologyEndpointValue}
-          createTopologyFileNameInput={createTopologyFileNameInput}
-          setCreateTopologyEndpointValue={setCreateTopologyEndpointValue}
-          setCreateTopologyFileNameInput={setCreateTopologyFileNameInput}
-          submitCreateTopologyDialog={submitCreateTopologyDialog}
-          trimmedCreateTopologyFileNameInput={trimmedCreateTopologyFileNameInput}
-        />
-      ) : null}
-
-      {topologyFileNameDialog ? (
-        <TopologyFileNameDialogView
-          closeTopologyFileNameDialog={closeTopologyFileNameDialog}
-          setTopologyFileNameInput={setTopologyFileNameInput}
-          submitTopologyFileNameDialog={submitTopologyFileNameDialog}
-          topologyFileNameDialog={topologyFileNameDialog}
-          topologyFileNameInput={topologyFileNameInput}
-          trimmedTopologyFileNameInput={trimmedTopologyFileNameInput}
         />
       ) : null}
 

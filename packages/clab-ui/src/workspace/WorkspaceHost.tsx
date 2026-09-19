@@ -31,7 +31,8 @@ export interface WorkspaceHost {
   };
   api: {
     fetchEndpointHealthMetrics: (endpointId: string, signal?: AbortSignal) => Promise<EndpointHealthMetrics>;
-    writeFileExplorerFile: (document: { endpointId: string; path: string; content: string }) => Promise<void>;
+    listFileExplorerDirectory: (endpointId: string, parentPath?: string) => Promise<FileExplorerEntry[]>;
+    writeFileExplorerFile: (document: { endpointId: string; path: string; content: string; originalContent?: string }) => Promise<void>;
     fetchVersionInfo: (endpointId?: string) => Promise<VersionResponse>;
     fetchVersionCheck: (endpointId?: string) => Promise<VersionCheckResponse>;
     fetchEdgeSharkStatus: (endpointId?: string) => Promise<EdgeSharkStatusResponse>;

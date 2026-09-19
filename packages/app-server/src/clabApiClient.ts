@@ -85,6 +85,7 @@ interface LoginRequest {
 
 export interface TopologyEntry {
   labName: string;
+  absolutePath?: string;
   yamlFileName: string;
   annotationsFileName: string;
   hasAnnotations: boolean;

@@ -1,5 +1,5 @@
 import type { WorkspaceHost } from "@containerlab/clab-ui/workspace";
-import { writeFileExplorerFile, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
+import { listFileExplorerDirectory, writeFileExplorerFile, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
 import { fetchEndpointHealthMetrics } from "./endpointHealth";
 import { getStandaloneBackend } from "./backend";
 import { publicAssetUrl } from "./publicAssetUrl";
@@ -27,6 +27,7 @@ const idleExplorer: WorkspaceHost["explorer"] = {
 };
 
 const runtimeApi: WorkspaceHost["api"] = {
+  listFileExplorerDirectory,
   writeFileExplorerFile,
   fetchVersionInfo,
   fetchVersionCheck,
@@ -46,6 +47,7 @@ const runtimeApi: WorkspaceHost["api"] = {
 
 /** Empty runtime results for hosts that only edit topology files. */
 const idleRuntimeApi: WorkspaceHost["api"] = {
+  listFileExplorerDirectory,
   writeFileExplorerFile,
   fetchVersionInfo,
   fetchVersionCheck,
@@ -69,6 +71,7 @@ const idleRuntimeApi: WorkspaceHost["api"] = {
     protocol: target.protocol,
     state: "closed",
     createdAt: "",
+    expiresAt: "",
     lastActivity: ""
   }),
   closeTerminalSession: async () => {},

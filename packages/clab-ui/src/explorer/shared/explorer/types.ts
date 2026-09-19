@@ -34,6 +34,7 @@ export interface ExplorerNode {
   id: string;
   label: string;
   description?: string;
+  workspaceScope?: "shared";
   tooltip?: string;
   contextValue?: string;
   endpointId?: string;
