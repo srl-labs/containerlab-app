@@ -8,6 +8,13 @@ When your API server enables a shared workspace, **Shared labs** appears in its
 File Explorer. Everyone signed in to that server can read, edit, deploy, operate,
 and destroy labs in this folder. Terminals and capture sessions remain personal.
 
+When creating a topology, choose **Personal** or **Shared** under **Location**
+and enter a normal filename, such as `my-lab.clab.yml`. There is no need to enter
+the shared workspace prefix. **Personal** is the default; opening **New Topology
+File** from the Shared labs folder preselects **Shared**. The Shared option is
+available only on servers with a shared workspace. Switching endpoints resets
+the location to Personal.
+
 Use the folder's menu to create a topology, create a subfolder, or upload files.
 Shared topologies also appear in the running and undeployed lab lists with a
 **Shared** badge. You can open and edit a shared lab deployed by someone else,

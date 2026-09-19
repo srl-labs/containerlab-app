@@ -199,15 +199,24 @@ test("two users share the complete lab lifecycle and keep private files isolated
     expect((await privateRead.json() as { content: string }).content).toBe(topology);
 
     const newPath = `${sharedDir}/draft.clab.yml`;
+    await page.locator('[data-explorer-node-row="true"]').filter({ has: page.getByText(lab, { exact: true }) }).first().click({ button: "right" });
+    await page.getByTestId("context-menu").last().getByText("New Topology File", { exact: true }).click();
+    const nestedDialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
+    await expect(nestedDialog.getByRole("button", { name: "Shared", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(nestedDialog.getByLabel("Topology file name", { exact: true })).toHaveValue(`${lab}/new-lab.clab.yml`);
+    await nestedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await page.getByText("Shared labs", { exact: true }).click({ button: "right" });
     const menu = page.getByTestId("context-menu").last();
     await expect(menu.getByText("Delete", { exact: true })).toHaveCount(0);
     await expect(menu.getByText("Rename", { exact: true })).toHaveCount(0);
     await menu.getByText("New Topology File", { exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
-    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("@shared/new-lab.clab.yml");
-    await dialog.getByLabel("Topology file name", { exact: true }).fill(newPath);
+    await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
+    await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft.clab.yml`);
+    await expect(dialog).toContainText("Everyone signed in to this API server can edit, deploy, and destroy this lab.");
     await page.screenshot({ path: testInfo.outputPath("shared-create-lab.png"), fullPage: true });
+    await dialog.screenshot({ path: testInfo.outputPath("shared-create-dialog.png") });
     const draftCreated = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/runtime/topology-file/create");
     await dialog.getByRole("button", { name: "Create", exact: true }).click();
     const draftResponse = await draftCreated;
@@ -215,6 +224,24 @@ test("two users share the complete lab lifecycle and keep private files isolated
     const draft = await draftResponse.json() as { topologyRef: TopologyRef };
     expect(draft.topologyRef.yamlPath).toBe(newPath);
     expect((await ownerApi.get(`/api/v1/labs/workspace/file?path=${encodeURIComponent(newPath)}`)).status()).toBe(200);
+
+    await page.getByRole("button", { name: "New Topology File", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
+    const personalDraftPath = `${lab}/personal-draft.clab.yml`;
+    await dialog.getByLabel("Topology file name", { exact: true }).fill(personalDraftPath);
+    await expect(dialog).toContainText("Saved in your personal workspace.");
+    await page.screenshot({ path: testInfo.outputPath("personal-create-lab.png"), fullPage: true });
+    await dialog.screenshot({ path: testInfo.outputPath("personal-create-dialog.png") });
+    const personalCreated = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/runtime/topology-file/create");
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    const personalResponse = await personalCreated;
+    expect(personalResponse.status()).toBe(200);
+    expect((await personalResponse.json() as { topologyRef: TopologyRef }).topologyRef.yamlPath).toBe(personalDraftPath);
+    expect((await collaboratorApi.get(`/api/v1/labs/workspace/file?path=${encodeURIComponent(personalDraftPath)}`)).status()).toBe(200);
+    expect((await ownerApi.get(`/api/v1/labs/workspace/file?path=${encodeURIComponent(personalDraftPath)}`)).status()).toBe(404);
+
     const notesPath = `${sharedDir}/notes.txt`;
     expect((await ownerApi.put(`/api/v1/labs/workspace/file?path=${encodeURIComponent(notesPath)}`, { data: "Original notes" })).status()).toBe(200);
     const saveNotes = (user: ConnectedUser, content: string) => user.page.request.put(`https://localhost:5173/api/runtime/file-explorer/file?path=${encodeURIComponent(notesPath)}`, {
