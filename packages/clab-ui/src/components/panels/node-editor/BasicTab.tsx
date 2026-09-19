@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
+import type { SxProps, Theme } from "@mui/material/styles";
 import RotateLeftIcon from "@mui/icons-material/RotateLeft";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -28,6 +29,19 @@ import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
+
+const DIRECTION_SELECT_SX: SxProps<Theme> = {
+  height: 40,
+  boxSizing: "border-box",
+  "& .MuiSelect-select": {
+    display: "flex",
+    alignItems: "center",
+    boxSizing: "border-box",
+    height: "100%",
+    py: 0,
+    "& .MuiSvgIcon-root": { fontSize: 18 }
+  }
+};
 
 // Icon options for dropdown (static, defined outside component)
 const ICON_OPTIONS = [
@@ -404,36 +418,46 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
       : "#000000";
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-        <SelectField
-          id="node-label-position"
-          label="Label Position"
-          value={data.labelPosition ?? "bottom"}
-          onChange={(value) => onChange({ labelPosition: value })}
-          options={NODE_LABEL_POSITION_OPTIONS}
-        />
-        <SelectField
-          id="node-direction"
-          label="Label Text Direction"
-          value={data.direction ?? "right"}
-          onChange={(value) => onChange({ direction: value })}
-          options={NODE_DIRECTION_OPTIONS}
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: 1.5,
+        alignItems: "center"
+      }}
+    >
+      <SelectField
+        id="node-label-position"
+        label="Label Position"
+        value={data.labelPosition ?? "bottom"}
+        onChange={(value) => onChange({ labelPosition: value })}
+        options={NODE_LABEL_POSITION_OPTIONS}
+      />
+      <SelectField
+        id="node-direction"
+        label="Label Text Direction"
+        value={data.direction ?? "right"}
+        onChange={(value) => onChange({ direction: value })}
+        options={NODE_DIRECTION_OPTIONS}
+        sx={DIRECTION_SELECT_SX}
+      />
+      <Box sx={{ gridColumn: "1 / -1" }}>
+        <ColorField
+          id="node-label-bg-color"
+          label="Label Background"
+          value={pickerColor}
+          onChange={(value) => onChange({ labelBackgroundColor: value })}
+          disabled={isTransparent}
         />
       </Box>
-      <ColorField
-        id="node-label-bg-color"
-        label="Label Background"
-        value={pickerColor}
-        onChange={(value) => onChange({ labelBackgroundColor: value })}
-        disabled={isTransparent}
-      />
-      <CheckboxField
-        id="node-label-bg-transparent"
-        label="Transparent"
-        checked={isTransparent}
-        onChange={(checked) => onChange({ labelBackgroundColor: checked ? "transparent" : "" })}
-      />
+      <Box sx={{ gridColumn: "1 / -1" }}>
+        <CheckboxField
+          id="node-label-bg-transparent"
+          label="Transparent"
+          checked={isTransparent}
+          onChange={(checked) => onChange({ labelBackgroundColor: checked ? "transparent" : "" })}
+        />
+      </Box>
     </Box>
   );
 };
@@ -527,7 +551,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
       </PanelSection>
 
       {!isCustomTemplate && (
-        <PanelSection title="Label & Direction" bodySx={{ p: 2 }}>
+        <PanelSection title="Label & Direction">
           <LabelAndDirectionFields data={data} onChange={onChange} />
         </PanelSection>
       )}

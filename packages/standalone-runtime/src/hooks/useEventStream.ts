@@ -1,26 +1,18 @@
+import { getStandaloneBackend } from "../backend";
 import { useEffect, useRef } from "react";
 
 import { useEndpointStore, type EndpointConfig } from "../stores/endpointStore";
 import { useLabStore, type EventData } from "../stores/labStore";
 import { standaloneServerUrl } from "../standaloneServerOrigin";
-import { isPagesRuntimeMode } from "../runtimeMode";
 
 function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
   const processEvent = useLabStore((state) => state.processEvent);
   const setLabConnected = useLabStore((state) => state.setConnected);
   const setEndpointStatus = useEndpointStore((state) => state.setStatus);
   const sourcesRef = useRef<Map<string, EventSource>>(new Map());
-  const pagesMode = isPagesRuntimeMode();
 
   useEffect(() => {
-    if (pagesMode) {
-      for (const source of sourcesRef.current.values()) {
-        source.close();
-      }
-      sourcesRef.current.clear();
-      return;
-    }
-
+    if (!getStandaloneBackend().capabilities.events) return;
     const streamableEndpoints = endpoints.filter(
       (endpoint) => endpoint.status === "connected" || endpoint.status === "offline"
     );
@@ -68,7 +60,7 @@ function useMultiEndpointEventStreams(endpoints: EndpointConfig[]): void {
         setEndpointStatus(endpoint.id, "offline");
       };
     }
-  }, [endpoints, pagesMode, processEvent, setEndpointStatus, setLabConnected]);
+  }, [endpoints, processEvent, setEndpointStatus, setLabConnected]);
 
   useEffect(() => {
     const sources = sourcesRef.current;

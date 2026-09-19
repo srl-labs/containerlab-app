@@ -815,7 +815,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
     ): Promise<void> => {
       if (!lifecycleActionsAvailable) {
         runtimeUiActions.notify(
-          "Deploy and lifecycle actions are not available in GitHub Pages mode.",
+          "This action is not available.",
           "warning"
         );
         return;
@@ -1230,7 +1230,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.deployPopular": () =>
         lifecycleActionsAvailable
           ? clonePopularFlow("deploy")
-          : runtimeUiActions.notify("Deploy is not available in GitHub Pages mode.", "warning"),
+          : runtimeUiActions.notify("This action is not available.", "warning"),
       "containerlab.images.manage": runtimeUiActions.openImageManager,
       "containerlab.inspectAll": runtimeUiActions.openInspectAll,
       "containerlab.inspectOneLab": () => {

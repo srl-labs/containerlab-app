@@ -101,6 +101,59 @@
       "types": "./dist/utils/filterUtils.d.ts",
       "import": "./dist/explorer/filter.js",
       "default": "./dist/explorer/filter.js"
+    },
+    "./workspace": {
+      "types": "./dist/workspace/index.d.ts",
+      "import": "./dist/workspace/index.js"
+    },
+    "./workspace/editor": {
+      "types": "./dist/workspace/editor.d.ts",
+      "import": "./dist/workspace/editor.js"
+    },
+    "./workspace/settings": {
+      "types": "./dist/workspace/settings.d.ts",
+      "import": "./dist/workspace/settings.js"
+    },
+    "./workspace/login": {
+      "types": "./dist/workspace/login.d.ts",
+      "import": "./dist/workspace/login.js"
+    },
+    "./workspace/dialogs": {
+      "types": "./dist/workspace/dialogs.d.ts",
+      "import": "./dist/workspace/dialogs.js"
+    },
+    "./workspace/terminal": {
+      "types": "./dist/workspace/terminal.d.ts",
+      "import": "./dist/workspace/terminal.js"
+    },
+    "./workspace/empty-state": {
+      "types": "./dist/workspace/empty-state.d.ts",
+      "import": "./dist/workspace/empty-state.js"
+    },
+    "./workspace/state": {
+      "types": "./dist/workspace/state/index.d.ts",
+      "import": "./dist/workspace/state/index.js"
+    },
+    "./workspace/types": {
+      "types": "./dist/workspace/types.d.ts",
+      "import": "./dist/workspace/types.js"
+    },
+    "./workspace/bootstrap": {
+      "types": "./dist/workspace/bootstrap.d.ts",
+      "import": "./dist/workspace/bootstrap.js"
+    },
+    "./workspace/yaml": {
+      "types": "./dist/workspace/yaml.d.ts",
+      "import": "./dist/workspace/yaml.js"
+    },
+    "./settings": {
+      "types": "./dist/settings/index.d.ts",
+      "import": "./dist/settings/index.js"
+    },
+    "./settings/schema": {
+      "types": "./dist/settings/schema.d.ts",
+      "import": "./dist/settings/schema.js",
+      "default": "./dist/settings/schema.js"
     }
   },
   "scripts": {
@@ -145,7 +198,10 @@
     "@mui/system": "catalog:",
     "@types/d3-force": "catalog:",
     "@types/geojson": "catalog:",
-    "use-sync-external-store": "catalog:"
+    "use-sync-external-store": "catalog:",
+    "@xterm/xterm": "catalog:",
+    "@xterm/addon-fit": "catalog:",
+    "three": "catalog:"
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
@@ -162,7 +218,8 @@
     "react-dom": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "@types/three": "catalog:"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

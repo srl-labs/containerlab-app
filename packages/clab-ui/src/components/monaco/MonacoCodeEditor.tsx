@@ -250,13 +250,13 @@ const DEV_MONACO_COLORS = {
     wordHighlightStrong: "#0e639c40"
   },
   dark: {
-    bg: "#1e1e1e",
-    fg: "#cccccc",
-    sel: "#264f78",
-    inactiveSel: "#3a3d41",
-    selectionHighlight: "#add6ff26",
-    wordHighlight: "#575757b8",
-    wordHighlightStrong: "#004972b8"
+    bg: "#000000",
+    fg: "#ececec",
+    sel: "#2a2a2a",
+    inactiveSel: "#1a1a1a",
+    selectionHighlight: "#ffffff14",
+    wordHighlight: "#ffffff18",
+    wordHighlightStrong: "#ffffff28"
   }
 } as const;
 

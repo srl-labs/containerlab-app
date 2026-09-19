@@ -11,6 +11,7 @@ import { normalizeHexColor } from "../../../utils/color";
 interface ColorFieldProps {
   id?: string;
   label?: string;
+  ariaLabel?: string;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -25,6 +26,7 @@ const HEX_TEXT_REGEX = /^[0-9A-Fa-f]{0,6}$/;
 export const ColorField: React.FC<ColorFieldProps> = ({
   id,
   label,
+  ariaLabel,
   value,
   onChange,
   disabled,
@@ -156,7 +158,7 @@ export const ColorField: React.FC<ColorFieldProps> = ({
         disabled={disabled}
         fullWidth
         slotProps={{
-          htmlInput: { maxLength: 7 },
+          htmlInput: { "aria-label": ariaLabel, maxLength: 7 },
           input: {
             startAdornment: (
               <InputAdornment position="start" sx={{ mr: 0.75 }}>

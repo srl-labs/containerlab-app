@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
@@ -291,6 +292,9 @@ export interface StandaloneExplorerBridgeOptions {
   invalidateTopologyFileListCache: (endpointId?: string) => void;
   defaultExpandExplorerTrees?: boolean;
   lifecycleActionsAvailable?: boolean;
+  endpointManagementAvailable?: boolean;
+  repositoriesAvailable?: boolean;
+  archivesAvailable?: boolean;
   openFileEditor: (document: FileExplorerDocument & { title: string }) => Promise<void> | void;
   runLifecycle: (
     endpoint: LifecycleCommandEndpoint,
@@ -371,7 +375,7 @@ function normalizePopularRepos(value: unknown): PopularLabRepo[] {
 
 export async function fetchPopularRepos(): Promise<PopularLabRepo[]> {
   try {
-    const response = await fetch(standaloneServerUrl("/api/runtime/popular-repos"), {
+    const response = await runtimeFetch(standaloneServerUrl("/api/runtime/popular-repos"), {
       credentials: "include"
     });
     if (!response.ok) {

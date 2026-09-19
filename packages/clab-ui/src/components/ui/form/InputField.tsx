@@ -17,6 +17,7 @@ interface InputFieldProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  ariaLabel?: string;
   placeholder?: string;
   type?: "text" | "number";
   min?: number;
@@ -297,6 +298,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   value,
   onChange,
   label,
+  ariaLabel,
   placeholder,
   type = "text",
   min,
@@ -373,6 +375,7 @@ export const InputField: React.FC<InputFieldProps> = ({
       sx={getInputSx(isNumberField)}
       slotProps={{
         htmlInput: {
+          "aria-label": ariaLabel,
           min,
           max,
           step

@@ -473,6 +473,12 @@
       {
         "command": "containerlab.treeView.runningLabs.showNonOwnedLabs",
         "title": "Show non-owned"
+      },
+      {
+        "command": "containerlab.settings.open",
+        "title": "Open Settings",
+        "category": "Containerlab",
+        "icon": "$(settings-gear)"
       }
     ],
     "submenus": [
@@ -740,6 +746,13 @@
           "command": "containerlab.lab.graph.drawio.interactive",
           "group": "graph@0"
         }
+      ],
+      "view/title": [
+        {
+          "command": "containerlab.settings.open",
+          "when": "view == containerlabExplorerWebview",
+          "group": "navigation@100"
+        }
       ]
     },
     "keybindings": [
@@ -817,7 +830,9 @@
           "containerlab.gotty.port": {
             "type": "number",
             "default": 8080,
-            "description": "Port for GoTTY web terminal."
+            "description": "Port for GoTTY web terminal.",
+            "minimum": 1,
+            "maximum": 65535
           },
           "containerlab.runtime": {
             "type": "string",
@@ -848,6 +863,44 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "Enable interface statistics (RX/TX bytes, packets, etc.) in the explorer. Disable to reduce resource usage."
+          }
+        }
+      },
+      {
+        "title": "Appearance",
+        "order": 1.5,
+        "properties": {
+          "containerlab.appearance.colorScheme": {
+            "type": "string",
+            "default": "vscode",
+            "enum": [
+              "vscode",
+              "light",
+              "dark"
+            ],
+            "enumDescriptions": [
+              "Follow the current VS Code theme, including high contrast.",
+              "Use a light theme in Containerlab views.",
+              "Use a dark theme in Containerlab views."
+            ],
+            "description": "Color scheme for Containerlab views. Changes apply immediately."
+          },
+          "containerlab.appearance.fontSize": {
+            "type": "number",
+            "default": 0,
+            "minimum": 0,
+            "maximum": 24,
+            "description": "Interface font size in pixels (10\u201324). Set to 0 to follow VS Code. Does not change topology labels or terminal output."
+          },
+          "containerlab.appearance.fontFamily": {
+            "type": "string",
+            "default": "",
+            "description": "Font family for Containerlab controls. Leave empty to follow VS Code. For example: Inter, Segoe UI, sans-serif."
+          },
+          "containerlab.appearance.reduceMotion": {
+            "type": "boolean",
+            "default": false,
+            "description": "Minimize interface animations and transitions in Containerlab views."
           }
         }
       },
@@ -949,7 +1002,9 @@
           "containerlab.node.telnetPort": {
             "type": "number",
             "default": 5000,
-            "description": "Port to connect when telnetting to the node with 'docker exec -it <node> telnet 127.0.0.1 <port>'"
+            "description": "Port to connect when telnetting to the node with 'docker exec -it <node> telnet 127.0.0.1 <port>'",
+            "minimum": 1,
+            "maximum": 65535
           },
           "containerlab.extras.fcli.extraDockerArgs": {
             "type": "string",
@@ -970,7 +1025,9 @@
           "containerlab.capture.packetflixPort": {
             "type": "number",
             "default": 5001,
-            "markdownDescription": "Port for the **Packetflix WebSocket endpoint** used by Edgeshark packet capture. This is where Edgeshark connects to stream captured packets."
+            "markdownDescription": "Port for the **Packetflix WebSocket endpoint** used by Edgeshark packet capture. This is where Edgeshark connects to stream captured packets.",
+            "minimum": 1,
+            "maximum": 65535
           },
           "containerlab.capture.preferredAction": {
             "type": "string",
@@ -1008,7 +1065,7 @@
           },
           "containerlab.capture.wireshark.stayOpenInBackground": {
             "type": "boolean",
-            "default": "true",
+            "default": true,
             "description": "Keep Wireshark VNC sessions alive, even when the capture tab is not active. Enabling this will consume more memory on both the client and remote containerlab host system."
           },
           "containerlab.capture.wireshark.vncCaptureHostname": {

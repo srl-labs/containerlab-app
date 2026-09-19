@@ -5,8 +5,6 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "../fixtures/browserErrors";
 
 const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
-const SEL_SETTINGS_PANEL = '[data-testid="standalone-settings-panel"]';
-const SEL_OPEN_DIALOG = '[data-testid="standalone-settings-open-dialog"]';
 const SEL_SETTINGS_DIALOG = '[data-testid="standalone-settings-dialog"]';
 const SEL_SETTINGS_CLOSE = '[data-testid="standalone-settings-close"]';
 const SEL_NAV_ENDPOINTS = '[data-testid="standalone-settings-nav-endpoints"]';
@@ -14,7 +12,6 @@ const SEL_NAV_GENERAL = '[data-testid="standalone-settings-nav-general"]';
 const SEL_NAV_TERMINAL = '[data-testid="standalone-settings-nav-terminal"]';
 const SEL_NAV_ABOUT = '[data-testid="standalone-settings-nav-about"]';
 const SEL_SAVE_TERMINAL = '[data-testid="standalone-settings-save-terminal"]';
-const SEL_THEME_LIGHT = '[data-testid="standalone-settings-theme-light"]';
 const SEL_FONT_PRESET_15 = '[data-testid="standalone-settings-font-size-preset-15"]';
 
 test.describe("Standalone Settings Dialog", () => {
@@ -39,16 +36,14 @@ test.describe("Standalone Settings Dialog", () => {
       );
     });
     await page.goto("/");
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
   });
 
   async function openSettings(page: Page) {
     await page.locator(SEL_SETTINGS_BUTTON).click();
-    const panel = page.locator(SEL_SETTINGS_PANEL);
-    await expect(panel).toBeVisible();
-    await panel.locator(SEL_OPEN_DIALOG).click();
     const dialog = page.locator(SEL_SETTINGS_DIALOG);
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("settings-layout")).toBeVisible();
     return dialog;
   }
 
@@ -139,16 +134,12 @@ test.describe("Standalone Settings Dialog", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
 
-  test("quick panel keeps connection status and logout close to the gear button", async ({ page }) => {
-    await page.locator(SEL_SETTINGS_BUTTON).click();
-
-    const panel = page.locator(SEL_SETTINGS_PANEL);
-    await expect(panel).toBeVisible();
-    await expect(panel.getByText("Quick Settings")).toBeVisible();
-    await expect(panel.getByRole("button", { name: "General Settings" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
-    await expect(panel.getByRole("button", { name: "Inspect Labs" })).toHaveCount(0);
-    await expect(panel.getByRole("button", { name: "About" })).toHaveCount(0);
+  test("settings opens directly from the shared rail and exposes disconnect", async ({ page }) => {
+    const dialog = await openSettings(page);
+    await expect(dialog.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeFocused();
   });
 
   test("opens the standalone settings dialog with section navigation", async ({ page }) => {
@@ -168,8 +159,8 @@ test.describe("Standalone Settings Dialog", () => {
 
     await dialog.locator(SEL_NAV_ABOUT).click();
     await expect(dialog.getByRole("heading", { name: "About", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "TopoViewer", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Documentation", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Containerlab App", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Documentation", exact: true })).toHaveCount(0);
     await expect(dialog.getByRole("heading", { name: "Team", exact: true })).toBeVisible();
     await expect(dialog.getByRole("heading", { name: "Source Code", exact: true })).toHaveCount(0);
     await expect(dialog.getByRole("link", { name: /vscode-containerlab/ })).toHaveCount(0);
@@ -255,7 +246,7 @@ test.describe("Standalone Settings Dialog", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
 
     const dialog = await openSettings(page);
     await dialog.locator(SEL_NAV_ENDPOINTS).click();
@@ -263,153 +254,35 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByText("Memory")).toBeVisible();
     await expect(dialog.getByText("Disk")).toBeVisible();
     await expect(dialog.getByText("8 cores")).toBeVisible();
+    await expect(dialog.getByText("12%", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("46%", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("68%", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("4.0 GiB / 8.0 GiB", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("100 GiB / 200 GiB on /", { exact: true })).toBeVisible();
   });
 
-  test("shows endpoint health stats on explorer endpoint hover", async ({ page }) => {
-    await page.addInitScript(() => {
-      class MockEventSource extends EventTarget {
-        onopen: ((event: Event) => void) | null = null;
-        onmessage: ((event: MessageEvent) => void) | null = null;
-        onerror: ((event: Event) => void) | null = null;
-        readyState = 0;
-        url: string;
-
-        constructor(url: string) {
-          super();
-          this.url = url;
-          window.setTimeout(() => {
-            this.readyState = 1;
-            this.onopen?.(new Event("open"));
-            this.dispatchEvent(new Event("open"));
-          }, 0);
-        }
-
-        close(): void {
-          this.readyState = 2;
-        }
-      }
-
-      window.EventSource = MockEventSource as unknown as typeof EventSource;
-    });
-    await page.route("**/auth/me**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          endpoints: [
-            {
-              id: "test-endpoint",
-              url: "https://localhost:8090",
-              label: "Test Endpoint",
-              username: "admin",
-              sessionDuration: "24h",
-              status: "connected",
-              connected: true
-            }
-          ]
-        })
-      });
-    });
-    await page.route("**/files**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([])
-      });
-    });
-    await page.route("**/api/runtime/ui/custom-nodes**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ customNodes: [], defaultNode: "" })
-      });
-    });
-    const metricsResponse = page.waitForResponse("**/auth/endpoints/test-endpoint/metrics");
-    await page.route("**/auth/endpoints/test-endpoint/metrics", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          serverInfo: {
-            version: "test",
-            uptime: "1m",
-            startTime: "2026-04-24T00:00:00Z"
-          },
-          metrics: {
-            cpu: { usagePercent: 12.4, numCPU: 8 },
-            mem: { usagePercent: 45.6, usedMem: 4_294_967_296, totalMem: 8_589_934_592 },
-            disk: {
-              path: "/",
-              usagePercent: 67.8,
-              usedDisk: 107_374_182_400,
-              totalDisk: 214_748_364_800
-            }
-          }
-        })
-      });
-    });
-
-    await page.goto("/", { waitUntil: "domcontentloaded" });
-    const endpointRow = page
-      .locator('[data-explorer-node-row="true"]')
-      .filter({ hasText: "Test Endpoint" })
-      .filter({ hasText: "localhost:8090" });
-    await expect(endpointRow).toBeVisible();
-    await metricsResponse;
-    await page.waitForTimeout(100);
-
-    await endpointRow.hover();
-    const tooltip = page.getByRole("tooltip");
-    await expect(tooltip).toContainText("CPU: 12% (8 cores)");
-    await expect(tooltip).toContainText("Memory: 46% (4.0 GiB / 8.0 GiB)");
-    await expect(tooltip).toContainText("Disk: 68% (100 GiB / 200 GiB on /)");
-  });
-
-  test("endpoint explorer quick actions and blank endpoint area menu expose endpoint workflows", async ({ page }) => {
+  test("the rail exposes topology creation and endpoint management", async ({ page }) => {
     await mockConnectedEndpointExplorer(page);
+    await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({ json: [] }));
+    await page.getByRole("button", { name: "Labs", exact: true }).click();
+    await page.getByRole("button", { name: "New Topology File", exact: true }).first().click();
+    const create = page.getByRole("dialog", { name: "Create Topology File", exact: true });
+    await expect(create).toBeVisible();
+    await expect(create.getByLabel("Topology file name", { exact: true })).toBeVisible();
+    await expect(create.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+    await create.getByRole("button", { name: "Cancel", exact: true }).click();
+    await page.getByRole("button", { name: "Close explorer", exact: true }).click();
 
-    const endpointRow = page
-      .locator('[data-explorer-node-row="true"]')
-      .filter({ hasText: "Test Endpoint" })
-      .filter({ hasText: "localhost:8090" });
-    await expect(endpointRow).toBeVisible();
-
-    await endpointRow.hover();
-    const newTopologyButton = endpointRow.getByRole("button", { name: "New topology file" });
-    await newTopologyButton.hover();
-    await expect(page.getByRole("tooltip", { name: "New Topology File" })).toBeVisible();
-
-    await page.mouse.move(0, 0);
-    const cloneButton = endpointRow.getByRole("button", { name: "Clone repository" });
-    await endpointRow.hover();
-    await cloneButton.hover();
-    await expect(page.getByRole("tooltip", { name: "Clone Repository" })).toBeVisible();
-
-    await page.mouse.move(0, 0);
-    await endpointRow.click({ button: "right" });
-    const endpointMenu = page.locator('[data-testid="context-menu"]').last();
-    await expect(endpointMenu.getByText("New Topology File", { exact: true })).toBeVisible();
-    await expect(endpointMenu.getByText("Clone Repository", { exact: true })).toBeVisible();
-    await expect(endpointMenu.getByText("Capture", { exact: true })).toBeVisible();
-    await expect(endpointMenu.getByText("Topology", { exact: true })).toHaveCount(0);
-    await expect(endpointMenu.getByText("Other", { exact: true })).toHaveCount(0);
-
-    await page.keyboard.press("Escape");
-    const rowBox = await endpointRow.boundingBox();
-    if (!rowBox) {
-      throw new Error("Expected endpoint row to have a bounding box");
-    }
-    await page.mouse.click(rowBox.x + 12, rowBox.y + rowBox.height + 16, { button: "right" });
-    const blankAreaMenu = page.locator('[data-testid="context-menu"]').last();
-    await blankAreaMenu.getByText("Add Endpoint", { exact: true }).click();
-
-    const dialog = page.locator(SEL_SETTINGS_DIALOG);
-    await expect(dialog).toBeVisible();
+    const dialog = await openSettings(page);
+    await dialog.locator(SEL_NAV_ENDPOINTS).click();
     await expect(dialog.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Edit Test Endpoint", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Reconnect Test Endpoint", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Remove Test Endpoint", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Add Endpoint", exact: true })).toBeVisible();
   });
 
-  test("opens Help & Feedback links from the explorer", async ({ page }) => {
+  test("opens documentation from the Help & Feedback rail button", async ({ page }) => {
     await page.evaluate(() => {
       const targetWindow = window as typeof window & {
         __standaloneOpenedLinks?: Array<{
@@ -429,12 +302,7 @@ test.describe("Standalone Settings Dialog", () => {
       };
     });
 
-    const documentationRow = page
-      .locator('[data-explorer-node-row="true"]')
-      .filter({ hasText: "Containerlab Documentation" });
-
-    await expect(documentationRow).toBeVisible();
-    await documentationRow.click();
+    await page.getByRole("button", { name: "Help & Feedback", exact: true }).click();
 
     await expect
       .poll(() =>
@@ -452,7 +320,7 @@ test.describe("Standalone Settings Dialog", () => {
       .toEqual({
         features: "noopener,noreferrer",
         target: "_blank",
-        url: "https://containerlab.dev/"
+        url: "https://containerlab.app"
       });
   });
 
@@ -544,8 +412,9 @@ test.describe("Standalone Settings Dialog", () => {
   test("theme and terminal settings persist across reload", async ({ page }) => {
     const dialog = await openSettings(page);
 
-    await dialog.locator(SEL_THEME_LIGHT).click();
-    await expect(dialog.locator(SEL_THEME_LIGHT)).toHaveAttribute("aria-pressed", "true");
+    await dialog.getByRole("combobox", { name: "Color theme" }).click();
+    await page.getByRole("option", { name: "Light", exact: true }).click();
+    await expect(dialog.getByRole("combobox", { name: "Color theme" })).toHaveText("Light");
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-theme")))
       .toBe("light");
@@ -562,10 +431,10 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog).not.toBeVisible();
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible();
+    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
 
     const reloadedDialog = await openSettings(page);
-    await expect(reloadedDialog.locator(SEL_THEME_LIGHT)).toHaveAttribute("aria-pressed", "true");
+    await expect(reloadedDialog.getByRole("combobox", { name: "Color theme" })).toHaveText("Light");
 
     await reloadedDialog.locator(SEL_NAV_TERMINAL).click();
     await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");

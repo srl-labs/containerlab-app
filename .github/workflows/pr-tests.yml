@@ -76,6 +76,9 @@ jobs:
       - name: Web E2E
         run: pnpm --filter containerlab-app-web run test:e2e
 
+      - name: Public sandbox workspace E2E
+        run: pnpm --filter containerlab-app-web-public run test:e2e
+
       - name: Web base path regressions
         run: pnpm --filter containerlab-app-web run test:base-path
 

@@ -66,6 +66,7 @@ interface CanvasState {
     | null;
   easterEggGlow: EasterEggGlow | null;
   fitViewRequestId: number;
+  nodeFilter: string;
 }
 
 interface CanvasActions {
@@ -75,6 +76,7 @@ interface CanvasActions {
   setAnnotationHandlers: (handlers: AnnotationHandlers | null) => void;
   setEasterEggGlow: (glow: EasterEggGlow | null) => void;
   requestFitView: () => void;
+  setNodeFilter: (nodeFilter: string) => void;
 }
 
 export type CanvasStore = CanvasState & CanvasActions;
@@ -178,7 +180,8 @@ const initialState: CanvasState = {
   annotationHandlers: null,
   getAnnotationGeoUpdate: null,
   easterEggGlow: null,
-  fitViewRequestId: 0
+  fitViewRequestId: 0,
+  nodeFilter: ""
 };
 
 // ============================================================================
@@ -221,6 +224,9 @@ export const useCanvasStore = createWithEqualityFn<CanvasStore>((set) => ({
   },
   requestFitView: () => {
     set((state) => ({ fitViewRequestId: state.fitViewRequestId + 1 }));
+  },
+  setNodeFilter: (nodeFilter) => {
+    set({ nodeFilter });
   }
 }));
 

@@ -1,7 +1,7 @@
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { expect, test } from "../fixtures/topoviewer";
-import { rightClick } from "../helpers/react-flow-helpers";
+import { fitGraph, getEmptyCanvasArea, rightClick } from "../helpers/react-flow-helpers";
 
 const DATACENTER_FILE = "datacenter.clab.yml";
 
@@ -31,7 +31,6 @@ interface TopoViewerApi {
   unlock(): Promise<void>;
   lock(): Promise<void>;
   fit(): Promise<void>;
-  getCanvas(): Locator;
   getAnnotationsFromFile(
     filename: "datacenter.clab.yml"
   ): Promise<{ freeTextAnnotations?: FreeTextFileEntry[] }>;
@@ -50,8 +49,9 @@ async function setup(page: Page, api: TopoViewerApi) {
   await api.setEditMode();
   await api.unlock();
   await page.waitForTimeout(500);
-  await api.fit();
-  await page.waitForTimeout(300);
+  // Keep the annotation reachable when clicking it opens the floating editor.
+  await page.getByTestId("panel-toggle-btn").click();
+  await fitGraph(page);
 }
 
 async function setupLocked(page: Page, api: TopoViewerApi) {
@@ -61,8 +61,9 @@ async function setupLocked(page: Page, api: TopoViewerApi) {
   await api.setEditMode();
   await api.lock();
   await page.waitForTimeout(500);
-  await api.fit();
-  await page.waitForTimeout(300);
+  // Keep the annotation reachable when clicking it opens the floating editor.
+  await page.getByTestId("panel-toggle-btn").click();
+  await fitGraph(page);
 }
 
 async function getFirstTextAnnotation(api: TopoViewerApi): Promise<FreeTextFileEntry> {
@@ -155,9 +156,8 @@ test.describe("Free Text Inline Editing", () => {
     const api = topoViewerPage as unknown as TopoViewerApi;
     await setup(page, api);
 
-    const canvasBox = await api.getCanvas().boundingBox();
-    expect(canvasBox).not.toBeNull();
-    await rightClick(page, canvasBox!.x + 200, canvasBox!.y + 200);
+    const area = await getEmptyCanvasArea(page);
+    await rightClick(page, area.x + area.width / 2, area.y + area.height / 2);
     const addTextItem = page.locator(SEL_ADD_TEXT_ITEM);
     await expect(addTextItem).toBeVisible();
     await addTextItem.click();
@@ -167,7 +167,8 @@ test.describe("Free Text Inline Editing", () => {
     await input.fill("Created inline");
 
     // Clicking elsewhere on the canvas blurs the editor and commits.
-    await page.mouse.click(canvasBox!.x + 420, canvasBox!.y + 320);
+    const blurArea = await getEmptyCanvasArea(page);
+    await page.mouse.click(blurArea.x + blurArea.width / 2, blurArea.y + blurArea.height / 2);
     await expect(input).not.toBeVisible();
 
     await expect

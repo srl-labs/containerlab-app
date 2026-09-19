@@ -9,6 +9,8 @@ import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 
 import { useGraphStore } from "../../../stores/graphStore";
+import { useCanvasStore } from "../../../stores/canvasStore";
+import { floatingRadius } from "../../../theme/surfaces";
 import { getNodesBoundingBox, isTopoNodeLike } from "../../../utils/graphQueryUtils";
 
 import { formatMatchCountText, getCombinedMatches } from "./findNodeSearchUtils";
@@ -19,6 +21,7 @@ export interface FindNodeSearchWidgetProps {
   description?: React.ReactNode;
   dense?: boolean;
   showTipsHeader?: boolean;
+  variant?: "panel" | "toolbar";
 }
 
 export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
@@ -26,7 +29,8 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
   isActive,
   description,
   dense = false,
-  showTipsHeader = false
+  showTipsHeader = false,
+  variant = "panel"
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,19 +39,42 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
     () => useGraphStore.getState().nodes.filter((node) => isTopoNodeLike(node)),
     []
   );
+  const setNodeFilter = useCanvasStore((state) => state.setNodeFilter);
 
   useEffect(() => {
-    if (isActive) {
+    if (isActive && variant !== "toolbar") {
       setTimeout(() => {
         inputRef.current?.focus();
         inputRef.current?.select();
       }, 50);
     }
-  }, [isActive]);
+  }, [isActive, variant]);
 
   useEffect(() => {
-    if (!isActive) setMatchCount(null);
-  }, [isActive]);
+    if (!isActive) {
+      setMatchCount(null);
+      if (variant === "toolbar") setNodeFilter("");
+    }
+  }, [isActive, setNodeFilter, variant]);
+
+  useEffect(() => {
+    if (variant !== "toolbar") return;
+    const term = searchTerm.trim();
+    setNodeFilter(term);
+    if (!term) {
+      setMatchCount(null);
+      return;
+    }
+    const currentNodes = rfInstance
+      ? rfInstance.getNodes().filter((node) => isTopoNodeLike(node))
+      : getCurrentNodes();
+    setMatchCount(getCombinedMatches(currentNodes, searchTerm).length);
+  }, [getCurrentNodes, rfInstance, searchTerm, setNodeFilter, variant]);
+
+  useEffect(() => {
+    if (variant !== "toolbar") return;
+    return () => setNodeFilter("");
+  }, [setNodeFilter, variant]);
 
   const handleSearch = useCallback(() => {
     if (!searchTerm.trim()) {
@@ -87,10 +114,78 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
       if (e.key === "Enter") {
         e.preventDefault();
         handleSearch();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleClear();
       }
     },
-    [handleSearch]
+    [handleSearch, handleClear]
   );
+
+  if (variant === "toolbar") {
+    return (
+      <Box
+        aria-live="polite"
+        data-match-count={matchCount === null ? undefined : formatMatchCountText(matchCount)}
+        data-testid="navbar-find-node"
+        sx={{ display: "flex", alignItems: "center", mx: 0.5 }}
+        title={matchCount !== null ? formatMatchCountText(matchCount) : undefined}
+      >
+        <TextField
+          disabled={!isActive}
+          hiddenLabel
+          onKeyDown={handleKeyDown}
+          inputRef={inputRef}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Filter"
+          size="small"
+          value={searchTerm}
+          variant="filled"
+          data-testid="find-node-input"
+          sx={{
+            width: 120,
+            "& .MuiFilledInput-root": {
+              height: 32,
+              fontSize: 13,
+              borderRadius: floatingRadius,
+              overflow: "hidden",
+              bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 12%, transparent)",
+              "&:hover": {
+                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 16%, transparent)"
+              },
+              "&.Mui-focused": {
+                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 18%, transparent)"
+              },
+              "&.Mui-disabled": {
+                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 6%, transparent)"
+              },
+              "& .MuiFilledInput-input": { py: 0, px: 1.25, height: 32, boxSizing: "border-box" }
+            }
+          }}
+          slotProps={{
+            htmlInput: { "aria-label": "Find nodes" },
+            input: {
+              disableUnderline: true,
+              endAdornment: searchTerm ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    data-testid="find-node-clear-btn"
+                    edge="end"
+                    aria-label="Clear node search"
+                    onClick={handleClear}
+                    size="small"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : undefined
+            }
+          }}
+        />
+      </Box>
+    );
+  }
 
   const mbInput = dense ? 1.5 : 2;
   const mbActions = dense ? 1.5 : 2;
@@ -126,11 +221,13 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           onKeyDown={handleKeyDown}
           data-testid="find-node-input"
           slotProps={{
+            htmlInput: { "aria-label": "Find nodes" },
             input: {
               endAdornment: searchTerm ? (
                 <InputAdornment position="end">
                   <IconButton
                     size="small"
+                    aria-label="Clear node search"
                     onClick={handleClear}
                     edge="end"
                     data-testid="find-node-clear-btn"

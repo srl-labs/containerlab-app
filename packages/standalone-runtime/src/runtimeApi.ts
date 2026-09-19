@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 import type {
   SaveConfigResponse,
   TerminalProtocol,
@@ -58,15 +59,13 @@ import { extractEndpointIdFromTopologyId } from "./standaloneHostShared";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import { useEndpointStore } from "./stores/endpointStore";
 import { useLabStore } from "./stores/labStore";
-import { isPagesRuntimeMode, PAGES_SANDBOX_ENDPOINT_ID } from "./runtimeMode";
-
 export interface RuntimeTargetRequest {
   endpointId?: string;
   sessionId?: string;
   topologyRef?: TopologyRef;
 }
 
-export interface InspectContainerInfo {
+interface InspectContainerInfo {
   name: string;
   containerId: string;
   image: string;
@@ -267,9 +266,6 @@ function markEndpointUnavailable(
   if (!endpointId) {
     return;
   }
-  if (isPagesRuntimeMode() && endpointId === PAGES_SANDBOX_ENDPOINT_ID) {
-    return;
-  }
   useLabStore.getState().setConnected(endpointId, false);
   useEndpointStore.getState().setStatus(endpointId, status);
 }
@@ -310,7 +306,7 @@ async function fetchRuntimeResource(input: string, init?: RequestInit): Promise<
   const url = resolveRuntimeRequestUrl(input);
   const options = { credentials: "include" as const, ...init };
   try {
-    return await fetch(url, options);
+    return await runtimeFetch(url, options);
   } catch (error) {
     // Creating/removing lab interfaces can briefly invalidate Chromium's network
     // connections. Retry reads once before declaring the endpoint offline.
@@ -318,7 +314,7 @@ async function fetchRuntimeResource(input: string, init?: RequestInit): Promise<
     if (!(error instanceof TypeError) || (init?.method ?? "GET").toUpperCase() !== "GET" || init?.signal?.aborted) {
       throw error;
     }
-    return await fetch(url, options);
+    return await runtimeFetch(url, options);
   }
 }
 
@@ -936,7 +932,7 @@ export async function fetchUiIcons(target: RuntimeTargetRequest): Promise<IconLi
 async function deleteUiIconIfExists(iconName: string, endpointId?: string): Promise<void> {
   let response: Response;
   try {
-    response = await fetch(
+    response = await runtimeFetch(
       resolveRuntimeRequestUrl(`/api/runtime/ui/icons/${encodeURIComponent(iconName)}`),
       withEndpointHeaders({ method: "DELETE" }, endpointId)
     );
@@ -1103,17 +1099,4 @@ export async function deleteTopologyFile(target: RuntimeTargetRequest): Promise<
     asJsonBody(target, endpointId),
     endpointId
   );
-}
-
-export function normalizeNetemFields(value: unknown): NetemFields {
-  if (!isRecord(value)) {
-    return { delay: "", jitter: "", loss: "", rate: "", corruption: "" };
-  }
-  return {
-    delay: typeof value.delay === "string" ? value.delay : "",
-    jitter: typeof value.jitter === "string" ? value.jitter : "",
-    loss: typeof value.loss === "string" ? value.loss : "",
-    rate: typeof value.rate === "string" ? value.rate : "",
-    corruption: typeof value.corruption === "string" ? value.corruption : ""
-  };
 }

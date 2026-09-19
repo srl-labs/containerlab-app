@@ -7,6 +7,7 @@ const reactTopoViewerEntry = path.join(__dirname, "src/webviews/reactTopoViewer/
 const explorerWebviewEntry = path.join(__dirname, "src/webviews/explorer/entry.tsx");
 const inspectWebviewEntry = path.join(__dirname, "src/webviews/inspect/entry.tsx");
 const imageManagerWebviewEntry = path.join(__dirname, "src/webviews/imageManager/entry.tsx");
+const settingsWebviewEntry = path.join(__dirname, "src/webviews/settings/entry.tsx");
 const welcomeWebviewEntry = path.join(__dirname, "src/webviews/welcome/entry.tsx");
 const nodeImpairmentsWebviewEntry = path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx");
 const wiresharkVncWebviewEntry = path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx");
@@ -270,11 +271,11 @@ async function build() {
 
   const welcomeWebviewBuild = esbuild.build({
     ...commonOptions,
-    entryPoints: [welcomeWebviewEntry],
+    entryPoints: { welcomePageWebview: welcomeWebviewEntry, settingsWebview: settingsWebviewEntry },
     platform: "browser",
     format: "iife",
     target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/welcomePageWebview.js",
+    outdir: "dist",
     plugins: [
       ignoreCssPlugin,
       reactSingletonAliasPlugin
@@ -436,11 +437,11 @@ async function build() {
 
     const welcomeWebCtx = await esbuild.context({
       ...commonOptions,
-      entryPoints: [welcomeWebviewEntry],
+      entryPoints: { welcomePageWebview: welcomeWebviewEntry, settingsWebview: settingsWebviewEntry },
       platform: "browser",
       format: "iife",
       target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/welcomePageWebview.js",
+      outdir: "dist",
       plugins: [
         ignoreCssPlugin,
         reactSingletonAliasPlugin

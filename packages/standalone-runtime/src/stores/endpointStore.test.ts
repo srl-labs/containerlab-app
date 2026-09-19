@@ -6,7 +6,6 @@ import {
   isValidEndpointSessionDuration,
   useEndpointStore
 } from "./endpointStore";
-import { PAGES_SANDBOX_ENDPOINT_ID } from "../runtimeMode";
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -103,7 +102,7 @@ test("hydratePersisted defaults missing sessionDuration to 24h", () => {
 test("pages sandbox endpoint is never persisted or hydrated as a real endpoint", () => {
   const store = useEndpointStore.getState();
   store.addEndpoint({
-    id: PAGES_SANDBOX_ENDPOINT_ID,
+    id: "pages-sandbox",
     url: "local://containerlab-pages",
     label: "Local workspace",
     username: "local",
@@ -131,7 +130,7 @@ test("pages sandbox endpoint is never persisted or hydrated as a real endpoint",
     "clab-standalone-endpoints",
     JSON.stringify([
       {
-        id: PAGES_SANDBOX_ENDPOINT_ID,
+        id: "pages-sandbox",
         url: "local://containerlab-pages",
         label: "Local workspace",
         username: "local"
@@ -229,4 +228,23 @@ test("isValidEndpointSessionDuration accepts free-form durations", () => {
   assert.equal(isValidEndpointSessionDuration("2w"), true);
   assert.equal(isValidEndpointSessionDuration("forever"), false);
   assert.equal(isValidEndpointSessionDuration(""), false);
+});
+
+test("a host without endpoint management preserves saved server profiles", async () => {
+  const { configureStandaloneBackend, getStandaloneBackend } = await import("../backend");
+  const previous = getStandaloneBackend();
+  const profiles = '[{"id":"saved-server","url":"https://lab.example"}]';
+  localStorage.setItem("clab-standalone-endpoints", profiles);
+  configureStandaloneBackend({ ...previous, capabilities: { ...previous.capabilities, endpoints: false } });
+  try {
+    useEndpointStore.getState().setEndpoints([{
+      id: "local-workspace", url: "local://workspace", label: "Local workspace", username: "",
+      sessionDuration: "24h", status: "connected", connected: true
+    }]);
+    assert.equal(localStorage.getItem("clab-standalone-endpoints"), profiles);
+    useEndpointStore.getState().clear();
+    assert.equal(localStorage.getItem("clab-standalone-endpoints"), profiles);
+  } finally {
+    configureStandaloneBackend(previous);
+  }
 });

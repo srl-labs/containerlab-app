@@ -1,3 +1,8 @@
+import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "./standaloneTheme";
+import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import { connectWorkspaceExplorer, workspaceHost } from "./workspaceHost";
+import { getStandaloneBackend, runtimeFetch } from "./backend";
 import {
   StandaloneLabTabs,
   StandaloneFileEditor,
@@ -24,7 +29,6 @@ import {
   applyThemeVars,
   createApiClabUiHost,
   createClabUiRuntime,
-  createPortal,
   createRoot,
   useCallback,
   useEffect,
@@ -101,7 +105,7 @@ import {
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
-import { isPagesRuntimeMode } from "./runtimeMode";
+import { listFileExplorerDirectory, readFileExplorerFile } from "./runtimeApi";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -122,10 +126,7 @@ const LazyRuntimeTerminalWindows = lazy(async () => {
   return { default: module.RuntimeTerminalWindows };
 });
 
-const LazyRuntimeActionDialogs = lazy(async () => {
-  const module = await import("./components/RuntimeActionDialogs");
-  return { default: module.RuntimeActionDialogs };
-});
+import { RuntimeActionDialogs } from "./components/RuntimeActionDialogs";
 
 const LazySettingsOverlay = lazy(async () => {
   const module = await import("./components/SettingsOverlay");
@@ -339,19 +340,10 @@ function loadPersistedTheme(): "light" | "dark" {
   return readPersistedStandaloneTheme() ?? "dark";
 }
 
-function persistTheme(theme: "light" | "dark"): void {
-  try {
-    localStorage.setItem("clab-standalone-theme", theme);
-  } catch {
-    /* ignore */
-  }
-}
-
 currentTheme = loadPersistedTheme();
 
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
-const RUNTIME_CHROME_DEFER_MS = 1000;
 function getConfiguredEndpoints() {
   return Array.from(useEndpointStore.getState().endpoints.values());
 }
@@ -424,6 +416,9 @@ async function refreshRuntimeStoreForTopology(target: {
   sessionId?: string;
   topologyRef: TopologyRef;
 }): Promise<void> {
+  if (!getStandaloneBackend().capabilities.lifecycle) {
+    return;
+  }
   const endpointId = extractEndpointIdFromTopologyId(
     target.topologyRef.topologyId,
   );
@@ -642,12 +637,15 @@ const lifecycleManager = createStandaloneLifecycleManager({
 
 const explorerBridge = createStandaloneExplorerBridge({
   debounceMs: EXPLORER_REFRESH_DEBOUNCE_MS,
+  lifecycleActionsAvailable: getStandaloneBackend().capabilities.lifecycle,
+  endpointManagementAvailable: getStandaloneBackend().capabilities.endpoints,
+  repositoriesAvailable: getStandaloneBackend().capabilities.repositories,
+  archivesAvailable: getStandaloneBackend().capabilities.archives,
+  defaultExpandExplorerTrees: !getStandaloneBackend().capabilities.lifecycle,
   getEndpoints: getConfiguredEndpoints,
   getLabs: () => useLabStore.getState().labs,
   invalidateTopologyFileListCache:
     topologyManager.invalidateTopologyFileListCache,
-  defaultExpandExplorerTrees: isPagesRuntimeMode(),
-  lifecycleActionsAvailable: !isPagesRuntimeMode(),
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
   openFileEditor: openWorkspaceFileInTab,
@@ -662,6 +660,35 @@ const explorerBridge = createStandaloneExplorerBridge({
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
+
+connectWorkspaceExplorer({
+  listTopologies: () => topologyManager.listTopologyFiles(),
+  listDirectory: async (parentPath) => {
+    const endpointId = getConnectedEndpointIdForUiAssets();
+    if (!endpointId) return [];
+    return listFileExplorerDirectory(endpointId, parentPath);
+  },
+  subscribe(listener) {
+    const unsubFiles = getStandaloneBackend().subscribeFiles?.(() => listener()) ?? (() => {});
+    const unsubExplorer = explorerBridge.explorer.subscribe(() => listener());
+    return () => {
+      unsubFiles();
+      unsubExplorer();
+    };
+  },
+  createTopology: () => {
+    void explorerBridge.createTopologyFile();
+  },
+  openTopology: (topologyRef) => openTopologyInTab(topologyRef),
+  openFile: async (entry) => {
+    if (entry.topologyRef) {
+      await openTopologyInTab(entry.topologyRef, { endpointId: entry.endpointId });
+      return;
+    }
+    const document = await readFileExplorerFile(entry.endpointId, entry.path);
+    openWorkspaceFileInTab({ ...document, title: entry.name });
+  },
+});
 
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
   return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
@@ -899,6 +926,7 @@ function handleGrafanaBundleExport(msg: VscodeMessage): void {
 }
 
 function handleNodeTerminalCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   if (
     !target ||
@@ -916,6 +944,7 @@ function handleNodeTerminalCommand(msg: VscodeMessage): void {
 }
 
 function handleNodeLogsCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   if (
     !target ||
@@ -932,6 +961,7 @@ function handleNodeLogsCommand(msg: VscodeMessage): void {
 }
 
 function handleNodeLifecycleCommand(msg: VscodeMessage): void {
+  if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
   const nodeName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
   let action: "start" | "stop" | "restart" | null = null;
@@ -1237,21 +1267,11 @@ function setupStandaloneUiHost(): void {
     }
 
     if (msg.command === MSG_CANCEL_LAB_LIFECYCLE) {
-      if (isPagesRuntimeMode()) {
-        return;
-      }
       lifecycleManager.cancel();
       return;
     }
 
     if (isStandaloneLifecycleCommand(msg.command)) {
-      if (isPagesRuntimeMode()) {
-        runtimeUiActions.notify(
-          "Deploy is not available in GitHub Pages mode.",
-          "warning",
-        );
-        return;
-      }
       const lifecycleCommand = msg.command;
       void lifecycleManager.run(lifecycleCommand).catch((error: unknown) => {
         console.error(`[Standalone] lifecycle command failed:`, error);
@@ -1272,6 +1292,7 @@ function setupStandaloneUiHost(): void {
   };
 
   const apiHost = createApiClabUiHost({
+    fetchImpl: runtimeFetch,
     explorer: explorerBridge.explorer,
     images: {
       async listImages(options): Promise<ContainerImageSummary[]> {
@@ -1321,14 +1342,6 @@ function setupStandaloneUiHost(): void {
       revision,
       command,
     );
-    if (isPagesRuntimeMode() && response.type === "topology-host:ack") {
-      const endpointId =
-        extractEndpointIdFromTopologyId(context.topologyRef?.topologyId) ??
-        topologyManager.getCurrentEndpointId() ??
-        getDefaultEndpointId();
-      topologyManager.invalidateTopologyFileListCache(endpointId);
-      explorerBridge.invalidateFileExplorerCache(endpointId);
-    }
     return response;
   };
 
@@ -1371,25 +1384,14 @@ function renderApp(): void {
     throw new Error("Standalone runtime not configured");
   }
 
-  reactRoot.render(<StandaloneApp />);
-}
-
-function useDeferredRuntimeChrome(): boolean {
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(
-      () => setReady(true),
-      RUNTIME_CHROME_DEFER_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, []);
-  return ready;
+  reactRoot.render(<WorkspaceHostProvider host={workspaceHost}><StandaloneApp /></WorkspaceHostProvider>);
 }
 
 /**
  * Root component that handles auth and renders the app.
  */
 function StandaloneApp() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     addEndpoint,
     defaultApiUrl,
@@ -1408,6 +1410,9 @@ function StandaloneApp() {
     setEndpointSessionDuration,
   } = useAuth();
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
+  const [tabOrientation, setTabOrientation] = useState<TabOrientation>(
+    () => readPersistedTabOrientation() ?? "vertical",
+  );
   const [terminalPreferences, setTerminalPreferences] =
     useState<TerminalPreferences>(() => loadTerminalPreferences());
   const imageManagerOpen = useRuntimeUiStore((state) => state.imageManagerOpen);
@@ -1419,8 +1424,6 @@ function StandaloneApp() {
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
     return activeTab?.kind ?? null;
   });
-  const runtimeChromeReady = useDeferredRuntimeChrome();
-  const runtimeDialogsReady = isPagesRuntimeMode() || runtimeChromeReady;
 
   const startupScreen = useMemo(
     () => resolveStandaloneStartupScreen(endpointList),
@@ -1429,7 +1432,7 @@ function StandaloneApp() {
 
   const handleWorkspaceFileEvent = useCallback(
     (endpointId: string, event: WorkspaceFileEvent) => {
-      if (workspaceEventTouchesTopology(event.path)) {
+      if (event.path === undefined || workspaceEventTouchesTopology(event.path)) {
         topologyManager.invalidateTopologyFileListCache(endpointId);
       }
       explorerBridge.invalidateFileExplorerCache(endpointId);
@@ -1580,7 +1583,12 @@ function StandaloneApp() {
     currentTheme = nextTheme;
     setTheme(nextTheme);
     applyThemeVars(nextTheme);
-    persistTheme(nextTheme);
+    persistStandaloneTheme(nextTheme);
+  }, []);
+
+  const handleTabOrientationChange = useCallback((next: TabOrientation) => {
+    setTabOrientation(next);
+    persistTabOrientation(next);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -1626,22 +1634,7 @@ function StandaloneApp() {
     [updateEndpoint],
   );
 
-  if (loading) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100vh",
-          color:
-            "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #d4d4d4))",
-        }}
-      >
-        Loading...
-      </div>
-    );
-  }
+  if (loading) return <LoadingScreen />;
 
   if (startupScreen === "login") {
     return (
@@ -1668,23 +1661,39 @@ function StandaloneApp() {
       <App
         initialData={initialData}
         runtime={standaloneRuntime!}
-        lifecycleActionsAvailable={!isPagesRuntimeMode()}
+        lifecycleActionsAvailable={getStandaloneBackend().capabilities.lifecycle}
         slots={{
-          header: (
-            <StandaloneLabTabs
-              onActivate={activateLabTabById}
-              onClose={closeLabTabAndActivateNext}
+          sidebar: (
+            <WorkspaceSidebar
+              colorScheme={theme}
+              onColorSchemeChange={handleThemeChange}
+              onOpenSettings={() => setSettingsOpen(true)}
+              tabs={
+                tabOrientation === "vertical" ? (
+                  <StandaloneLabTabs
+                    orientation="vertical"
+                    onActivate={activateLabTabById}
+                    onClose={closeLabTabAndActivateNext}
+                  />
+                ) : undefined
+              }
             />
           ),
+          header:
+            tabOrientation === "horizontal" ? (
+              <StandaloneLabTabs
+                onActivate={activateLabTabById}
+                onClose={closeLabTabAndActivateNext}
+              />
+            ) : undefined,
           content:
             activeLabTabKind === "file" ? (
               <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />
             ) : undefined,
-          emptyState: <StandaloneLabEmptyState />,
+          emptyState: <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} />,
         }}
       />
-      {runtimeDialogsReady ? (
-        <>
+      <>
           <MuiThemeProvider>
             {terminalCount > 0 ? (
               <Suspense fallback={null}>
@@ -1694,9 +1703,7 @@ function StandaloneApp() {
                 />
               </Suspense>
             ) : null}
-            <Suspense fallback={null}>
-              <LazyRuntimeActionDialogs />
-            </Suspense>
+            <RuntimeActionDialogs />
             {imageManagerOpen ? (
               <Suspense fallback={null}>
                 <LazyContainerlabImageManagerDialog
@@ -1717,7 +1724,12 @@ function StandaloneApp() {
             ) : null}
           </MuiThemeProvider>
           <SettingsOverlayMounted
+            open={settingsOpen}
+            onOpen={() => setSettingsOpen(true)}
+            onClose={() => setSettingsOpen(false)}
             currentTheme={theme}
+            tabOrientation={tabOrientation}
+            onTabOrientationChange={handleTabOrientationChange}
             defaultApiUrl={defaultApiUrl}
             endpoints={endpointList}
             onAddEndpoint={handleAddEndpoint}
@@ -1732,16 +1744,18 @@ function StandaloneApp() {
             onSaveTerminalPreferences={handleSaveTerminalPreferences}
             terminalPreferences={terminalPreferences}
           />
-        </>
-      ) : null}
+      </>
     </>
   );
 }
 
 /**
- * Settings overlay mounted in its own root div.
+ * Compose shared settings with the runtime backend operations.
  */
 function SettingsOverlayMounted(props: {
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   currentTheme: "light" | "dark";
   defaultApiUrl: string;
   endpoints: ReturnType<typeof useAuth>["endpointList"];
@@ -1779,15 +1793,17 @@ function SettingsOverlayMounted(props: {
     },
   ) => void;
   onThemeChange: (nextTheme: "light" | "dark") => void;
+  tabOrientation: TabOrientation;
+  onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
 }) {
-  const overlayContainer = document.getElementById("settings-overlay");
-  if (!overlayContainer) return null;
-
-  return createPortal(
+  return (
     <MuiThemeProvider>
       <Suspense fallback={null}>
         <LazySettingsOverlay
+          open={props.open}
+          onOpen={props.onOpen}
+          onClose={props.onClose}
           currentTheme={props.currentTheme}
           defaultApiUrl={props.defaultApiUrl}
           endpoints={props.endpoints}
@@ -1795,6 +1811,8 @@ function SettingsOverlayMounted(props: {
           onExportEndpoints={props.onExportEndpoints}
           onImportEndpoints={props.onImportEndpoints}
           onThemeChange={props.onThemeChange}
+          tabOrientation={props.tabOrientation}
+          onTabOrientationChange={props.onTabOrientationChange}
           onLogout={props.onLogout}
           onReconnectEndpoint={props.onReconnectEndpoint}
           onRemoveEndpoint={props.onRemoveEndpoint}
@@ -1804,8 +1822,7 @@ function SettingsOverlayMounted(props: {
           terminalPreferences={props.terminalPreferences}
         />
       </Suspense>
-    </MuiThemeProvider>,
-    overlayContainer,
+    </MuiThemeProvider>
   );
 }
 

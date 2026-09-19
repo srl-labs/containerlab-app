@@ -2567,7 +2567,7 @@ function ExplorerSectionCard({
   );
 }
 
-export function ContainerlabExplorerView() {
+export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSectionIds?: readonly ExplorerSectionId[] } = {}) {
   const host = useClabUiHost();
   const [sections, setSections] = useState<ExplorerSectionSnapshot[]>([]);
   const [sectionOrder, setSectionOrder] = useState<ExplorerSectionId[]>(EXPLORER_SECTION_ORDER);
@@ -2806,12 +2806,12 @@ export function ContainerlabExplorerView() {
     const visible: ExplorerSectionSnapshot[] = [];
     for (const sectionId of sectionOrder) {
       const section = sectionsById.get(sectionId);
-      if (section) {
+      if (section && (!visibleSectionIds || visibleSectionIds.includes(sectionId))) {
         visible.push(section);
       }
     }
     return visible;
-  }, [sectionOrder, sectionsById]);
+  }, [sectionOrder, sectionsById, visibleSectionIds]);
 
   const orderedSectionIds = useMemo(() => orderedSections.map((s) => s.id), [orderedSections]);
 

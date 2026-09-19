@@ -11,8 +11,8 @@ const ATTR_DATA_TESTID = "data-testid";
  * - Fit to viewport
  * - Layout dropdown (MUI Menu)
  * - Link labels dropdown (MUI Menu)
- * - Grid settings (Lab Settings > Appearance)
- * - Shortcuts/About modals (MUI Dialog)
+ * - Grid settings (Lab Settings > Grid)
+ * - Shortcuts modal (MUI Dialog)
  * - Shortcut display toggle
  */
 test.describe("Navbar Interactions", () => {
@@ -26,15 +26,13 @@ test.describe("Navbar Interactions", () => {
   test.describe("Basic Button Visibility", () => {
     test("navbar has all expected buttons", async ({ page }) => {
       const expectedButtons = [
-        "navbar-lab-settings",
         "navbar-fit-viewport",
         "navbar-split-view",
         "navbar-layout",
         "navbar-find-node",
         "navbar-link-labels",
         "navbar-capture",
-        "navbar-shortcuts",
-        "navbar-about"
+        "navbar-more"
       ];
 
       for (const testId of expectedButtons) {
@@ -133,6 +131,7 @@ test.describe("Navbar Interactions", () => {
       const beforeWidth = beforeBox?.width ?? 0;
       expect(beforeWidth).toBeGreaterThan(0);
 
+      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
@@ -148,7 +147,7 @@ test.describe("Navbar Interactions", () => {
       await page.getByRole("option", { name: /^Telemetry Style$/ }).click();
       await page.waitForTimeout(100);
 
-      const nodeSizeInput = modal.getByLabel("Node size");
+      const nodeSizeInput = modal.getByRole("spinbutton", { name: "Node size", exact: true });
       await nodeSizeInput.fill("80");
       await page.waitForTimeout(200);
       await page.locator('[data-testid="lab-settings-close-btn"]').click();
@@ -167,86 +166,65 @@ test.describe("Navbar Interactions", () => {
   });
 
   test.describe("Grid Settings", () => {
-    test("grid settings are available in Lab Settings > Appearance", async ({ page }) => {
+    test("grid settings are available in Lab Settings > Grid", async ({ page }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
       await expect(modal).toBeVisible();
 
-      await modal.locator('[data-testid="lab-settings-tab-appearance"]').click();
-      await page.waitForTimeout(200);
-      await modal.locator('[data-testid="lab-settings-appearance-subtab-grid"]').click();
+      await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
       await page.waitForTimeout(200);
 
       const gridSection = modal.locator('[data-testid="lab-settings-grid-settings"]');
-      await expect(gridSection).toBeVisible();
-
-      // Verify slider exists (MUI Slider)
-      const slider = gridSection.locator('[data-testid="lab-settings-grid-line-width"]');
-      await expect(slider).toBeVisible();
-
-      // Verify toggle buttons exist (Dotted/Quadratic)
-      const toggleGroup = gridSection.locator('[data-testid="lab-settings-grid-style"]');
-      await expect(toggleGroup).toBeVisible();
+      await expect(gridSection.getByRole("spinbutton", { name: "Stroke Width", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("combobox", { name: "Grid Style", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Grid Color", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Background Color", exact: true })).toBeVisible();
     });
   });
 
   test.describe("Panel Toggles", () => {
-    test("shortcuts and about buttons open their respective modals", async ({ page }) => {
-      // Test shortcuts modal
+    test("shortcuts button opens the shortcuts modal", async ({ page }) => {
       const shortcutsBtn = page.locator('[data-testid="navbar-shortcuts"]');
+      await page.locator('[data-testid="navbar-more"]').click();
       await shortcutsBtn.click();
       await page.waitForTimeout(300);
 
       const shortcutsModal = page.locator('[data-testid="shortcuts-modal"]');
       await expect(shortcutsModal).toBeVisible();
 
-      // Close shortcuts (press Escape)
       await page.keyboard.press("Escape");
       await page.waitForTimeout(200);
       await expect(shortcutsModal).not.toBeVisible();
-
-      // Test about modal
-      const aboutBtn = page.locator('[data-testid="navbar-about"]');
-      await aboutBtn.click();
-      await page.waitForTimeout(300);
-
-      const aboutModal = page.locator('[data-testid="about-modal"]');
-      await expect(aboutModal).toBeVisible();
     });
   });
 
   test.describe("Shortcut Display Toggle", () => {
     test("clicking shortcut display toggles the icon", async ({ page }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       const shortcutDisplayBtn = page.locator('[data-testid="navbar-shortcut-display"]');
       await expect(shortcutDisplayBtn).toBeVisible();
 
-      // Get initial icon (VisibilityOff when disabled)
       const initialIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // Click to toggle
       await shortcutDisplayBtn.click();
-      await page.waitForTimeout(200);
-
-      // Icon should have changed (VisibilityOff <-> Visibility)
+      await page.locator('[data-testid="navbar-more"]').click();
       const toggledIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // Toggle back
       await shortcutDisplayBtn.click();
-      await page.waitForTimeout(200);
-
+      await page.locator('[data-testid="navbar-more"]').click();
       const restoredIcon = await shortcutDisplayBtn.locator("svg").getAttribute(ATTR_DATA_TESTID);
 
-      // State should have toggled and been restored
       expect(initialIcon).toBe(restoredIcon);
       expect(initialIcon).not.toBe(toggledIcon);
     });
 
     test("shortcut display shows keypresses when enabled", async ({ page, topoViewerPage }) => {
+      await page.locator('[data-testid="navbar-more"]').click();
       const shortcutDisplayBtn = page.locator('[data-testid="navbar-shortcut-display"]');
       await expect(shortcutDisplayBtn).toBeVisible();
 
-      // Enable shortcut display.
       await shortcutDisplayBtn.click();
       await page.waitForTimeout(200);
 

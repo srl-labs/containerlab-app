@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "../fixtures/topoviewer";
-import { shiftClick, rightClick } from "../helpers/react-flow-helpers";
+import { fitGraph, shiftClick, rightClick } from "../helpers/react-flow-helpers";
 
 // Test file names
 const TOPOLOGY_FILE = "empty.clab.yml";
@@ -95,6 +95,7 @@ async function createGroupFromNodes(
 }
 
 async function openGroupContextMenu(page: Page, groupId: string) {
+  await fitGraph(page);
   const groupNode = page.locator(`[data-testid="group-node-${groupId}"]`);
   await groupNode.waitFor({ state: "visible", timeout: 5000 });
   const box = await groupNode.boundingBox();

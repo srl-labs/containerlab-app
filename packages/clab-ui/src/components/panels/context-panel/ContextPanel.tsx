@@ -1,6 +1,6 @@
 /* eslint-disable import-x/max-dependencies */
 // Context-sensitive panel with palette, info, and editor tabs.
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -17,6 +17,7 @@ import Typography from "@mui/material/Typography";
 import { useIsLocked } from "../../../stores/topoViewerStore";
 import type { NodeData, LinkData } from "../../../hooks/ui";
 import { useContextPanelContent } from "../../../hooks/ui/useContextPanelContent";
+import { floatingRadius } from "../../../theme/surfaces";
 
 import type {
   ContextPanelEditorState,
@@ -26,9 +27,6 @@ import type {
 import { PaletteView } from "./views";
 
 const MIN_WIDTH = 500;
-function getMaxWidth() {
-  return Math.floor(window.innerWidth / 2);
-}
 const TEXT_SECONDARY = "text.secondary";
 const ACTION_HOVER = "action.hover";
 
@@ -54,7 +52,7 @@ function getSideConfig(side: "left" | "right"): SideConfig {
       positionProp: "left",
       openIcon: ChevronRightIcon,
       closeIcon: ChevronLeftIcon,
-      borderRadius: "0 4px 4px 0",
+      borderRadius: `0 ${floatingRadius} ${floatingRadius} 0`,
       borderZeroProp: "borderLeft",
       moveTargetLabel: "right"
     };
@@ -66,7 +64,7 @@ function getSideConfig(side: "left" | "right"): SideConfig {
     positionProp: "right",
     openIcon: ChevronLeftIcon,
     closeIcon: ChevronRightIcon,
-    borderRadius: "4px 0 0 4px",
+    borderRadius: `${floatingRadius} 0 0 ${floatingRadius}`,
     borderZeroProp: "borderRight",
     moveTargetLabel: "left"
   };
@@ -150,7 +148,7 @@ const ToggleHandle: React.FC<{
     <Box
       sx={{
         position: "absolute",
-        [sideConfig.positionProp]: anchorOffset,
+        [sideConfig.positionProp]: isOpen ? `min(${anchorOffset}px, 70%)` : 0,
         top: "50%",
         transform: "translateY(-50%)",
         transition: isDragging
@@ -168,6 +166,9 @@ const ToggleHandle: React.FC<{
     >
       <Tooltip title={toggleTitle} placement={sideConfig.tooltipPlacement}>
         <Box
+          component="button"
+          type="button"
+          aria-label={toggleTitle}
           onClick={handleToggle}
           data-testid="panel-toggle-btn"
           sx={{ ...handleStyle, height: 48 }}
@@ -180,7 +181,7 @@ const ToggleHandle: React.FC<{
           title={`Move panel to ${sideConfig.moveTargetLabel}`}
           placement={sideConfig.tooltipPlacement}
         >
-          <Box onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
+          <Box component="button" type="button" aria-label={`Move panel to ${sideConfig.moveTargetLabel}`} onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
             <SwapHorizIcon sx={{ fontSize: 14, color: TEXT_SECONDARY }} />
           </Box>
         </Tooltip>
@@ -199,10 +200,16 @@ function usePanelResize(sideRef: React.RefObject<string>) {
       e.preventDefault();
       isDraggingRef.current = true;
       setIsDragging(true);
+      const editor = (e.currentTarget as HTMLElement).closest("[data-testid='topoviewer-editor']");
       const onMouseMove = (ev: MouseEvent) => {
         if (!isDraggingRef.current) return;
-        const newWidth = sideRef.current === "left" ? ev.clientX : window.innerWidth - ev.clientX;
-        setPanelWidth(Math.min(getMaxWidth(), Math.max(MIN_WIDTH, newWidth)));
+        const rect = editor?.getBoundingClientRect();
+        const newWidth =
+          sideRef.current === "left"
+            ? ev.clientX - (rect?.left ?? 0)
+            : (rect?.right ?? window.innerWidth) - ev.clientX;
+        const maxWidth = Math.floor((rect?.width ?? window.innerWidth) / 2);
+        setPanelWidth(Math.min(maxWidth, Math.max(MIN_WIDTH, newWidth)));
       };
       const onMouseUp = () => {
         isDraggingRef.current = false;
@@ -244,6 +251,7 @@ export interface ContextPanelProps {
   onClose: () => void;
   onBack: () => void;
   onToggleSide: () => void;
+  onWidthChange?: (width: number) => void;
   rfInstance: ReactFlowInstance | null;
   palette: ContextPanelPaletteProps;
   view: ContextPanelViewProps;
@@ -257,6 +265,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   onClose,
   onBack,
   onToggleSide,
+  onWidthChange,
   palette,
   view,
   editor
@@ -271,6 +280,8 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
   const sideRef = useRef(side);
   sideRef.current = side;
   const { panelWidth, isDragging, handleResizeStart } = usePanelResize(sideRef);
+  useEffect(() => { onWidthChange?.(panelWidth); }, [onWidthChange, panelWidth]);
+
 
   const setFooterRef = useCallback((ref: FooterRef | null) => {
     const changed = hasFooterRefChanged(footerRef.current, ref);
@@ -327,6 +338,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
           "& .MuiDrawer-paper": {
             position: "absolute",
             width: panelWidth,
+            maxWidth: "70%",
             boxShadow: 4,
             [sideLayout.border]: 1,
             borderColor: "divider",
@@ -379,6 +391,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         <Box
           sx={{
             flexGrow: 1,
+            minHeight: 0,
             overflow: "auto"
           }}
         >
@@ -397,6 +410,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         )}
 
         <Box
+          data-testid="context-panel-resize-handle"
           onMouseDown={handleResizeStart}
           sx={{
             position: "absolute",

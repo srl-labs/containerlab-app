@@ -681,3 +681,64 @@ You should not rely on:
 
 If you need a new integration hook, add it to the package API intentionally.
 Do not reach into internals from the consumer.
+
+## One UI, host-specific composition
+
+`clab-ui` owns presentation: semantic theme colors, topology chrome, explorer,
+settings, login forms, file editors, document tabs, dialogs and terminal views.
+Apps supply backend operations and host capabilities; they should not copy those
+components, target test selectors to change layout, or replace browser globals.
+
+Web, desktop and the public sandbox compose the same optional workspace entries.
+VS Code uses its native activity bar and editor tabs and imports only the shared
+editor, explorer and feature views it needs. Coherent design means shared controls,
+interaction patterns and theme tokens; it does not require drawing a second tab
+bar inside a VS Code editor.
+
+| Entry | Purpose |
+| --- | --- |
+| `@containerlab/clab-ui/workspace` | `WorkspaceHostProvider`, navigation rail and document tabs |
+| `…/workspace/editor` | Document editor views |
+| `…/workspace/settings` | Shared settings and endpoint management views |
+| `…/workspace/login`, `…/workspace/bootstrap` | Authentication presentation and initial loading screen |
+| `…/workspace/dialogs`, `…/workspace/terminal` | Action dialogs and terminal views |
+| `…/workspace/empty-state` | Shared empty workspace presentation |
+| `…/workspace/state`, `…/workspace/types` | UI state and host data contracts |
+| `…/workspace/yaml` | YAML model helpers without importing editor views |
+
+Provide a stable `WorkspaceHost` object through `WorkspaceHostProvider`. It supplies
+operations, live lab subscriptions, asset URLs, and native terminal-window opening.
+The UI never imports a particular application's API implementation. Mount action
+dialogs when mounting navigation so the first action can immediately open a dialog.
+The navigation rail stays on the left and supports pointer and keyboard resizing.
+The editor owns the floating node palette, whose side can be changed independently
+of the rail; the topology toolbar stays on the opposite side of the editor.
+Native hosts retain their own navigation. Pass `onCreateLab` to `AttractorEmptyState` to connect
+the shared empty-state action to the host's existing topology creation operation.
+Its dotted artwork is bundled as SVG paths and paints with the component. The
+original noise and twinkle animation varies the dots' size and brightness with a
+slight boost in contrast and tempo. Hover makes scattered dots twinkle independently;
+pointer movement leaves a short fading trail, and clicks add colored impulses. The WebGL 2
+animation pauses while the page is hidden; reduced motion or
+unavailable WebGL keeps the static artwork. It needs no image request or worker.
+Regenerate the paths and baked logo sample with `pnpm generate:empty-state`.
+Optional editor, settings and terminal views can be loaded on demand.
+
+The repository's `standalone-runtime` owns session/authentication orchestration,
+endpoint selection and backend I/O, and connects those operations to the shared
+views. Its default transport uses the app server. The sandbox calls
+`configureStandaloneBackend(createSandboxTransport())` before importing the same
+runtime entry point. Its transport persists files locally and reports unavailable
+lifecycle, endpoint, repository and archive capabilities. The runtime maps these
+to available explorer commands; presentation stays in this package.
+
+Use `App`'s `header`, `sidebar`, `content` and `emptyState` slots for composition.
+Document tabs sit above the document; the properties/YAML panel shares the document
+area and respects its bounds. Do not position UI by querying another component's
+DOM. Shared floating surfaces use host theme tokens, with opaque high-contrast
+fallbacks; decorative animation respects reduced motion.
+
+Workspace entries are deliberately absent from the root and explorer export graphs.
+The packed-consumer check verifies that embedding these two entries does not pull
+in the standalone workspace, xterm or Three.js. The package build emits optional
+entries, while each app bundles only its reachable imports.

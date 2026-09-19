@@ -9,8 +9,6 @@ import { normalizeBasePath } from "../../packages/app-server/src/basePath.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
-const runtimeMode = process.env.VITE_CLAB_RUNTIME_MODE ?? "standalone";
-const pagesMode = runtimeMode === "pages";
 const apiServerPort = process.env.PORT ?? "3001";
 const webProtocol = parseBooleanEnv(process.env.WEB_TLS_ENABLE, true) ? "https" : "http";
 const apiServerTarget = `${webProtocol}://localhost:${apiServerPort}`;
@@ -19,9 +17,7 @@ const serverBasePath = normalizeBasePath(process.env.WEB_BASE_PATH);
 export default defineConfig(({ command }) => {
   const webTls = command === "serve" ? resolveWebTlsConfig() : undefined;
   const standaloneBasePath = command === "serve" ? `${serverBasePath}/` : "./";
-  const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? (
-    pagesMode ? "/containerlab-app/" : standaloneBasePath
-  );
+  const publicBasePath = process.env.VITE_PUBLIC_BASE_PATH ?? standaloneBasePath;
 
   return {
     plugins: [
@@ -39,7 +35,6 @@ export default defineConfig(({ command }) => {
       })
     ],
     define: {
-      "import.meta.env.VITE_CLAB_RUNTIME_MODE": JSON.stringify(runtimeMode),
       "import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN": JSON.stringify(apiServerTarget)
     },
     base: publicBasePath,

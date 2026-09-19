@@ -629,7 +629,6 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 export const useMode = () => useTopoViewerStore((state) => state.mode);
 
 /** Get lab name */
-export const useLabName = () => useTopoViewerStore((state) => state.labName);
 
 /** Get deployment state */
 export const useDeploymentState = () => useTopoViewerStore((state) => state.deploymentState);

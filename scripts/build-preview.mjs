@@ -43,4 +43,4 @@ for (const file of await readdir(site, { recursive: true })) {
   const updated = html.replaceAll('href="https://srl-labs.github.io/containerlab-app/"', 'href="/sandbox/"');
   if (updated !== html) await writeFile(filename, updated);
 }
-await cp(path.join(root, "apps/web/dist/client"), path.join(site, "sandbox"), { recursive: true });
+await cp(path.join(root, "apps/web-public/dist/client"), path.join(site, "sandbox"), { recursive: true });

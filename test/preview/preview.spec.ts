@@ -31,18 +31,16 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
 
   // The sandbox must create and reopen files without a backend at its new path.
-  const created = await page.evaluate(async () => {
-    const response = await fetch("/api/runtime/topology-file/create", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fileName: "preview.clab.yml" })
-    });
-    return response.json();
-  });
-  expect(created).toHaveProperty("topologyRef");
+  await page.getByRole("button", { name: "New Topology File", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Topology file name" }).fill("preview.clab.yml");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const tab = page.getByRole("tab", { name: "preview Close preview", exact: true });
+  await expect(tab).toHaveAttribute("aria-selected", "true");
   await page.reload();
   await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  const files = await page.evaluate(async () => (await fetch("/files")).json());
-  expect(JSON.stringify(files)).toContain("preview.clab.yml");
+  await page.getByText("preview.clab.yml", { exact: true }).dblclick();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);
 });

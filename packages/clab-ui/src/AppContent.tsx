@@ -26,6 +26,7 @@ import { ReactFlowCanvas } from "./components/canvas";
 import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
+import { NodeTemplateModal } from "./components/panels/node-editor/NodeTemplateModal";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
 import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
@@ -85,6 +86,7 @@ import {
   toNetemState
 } from "./utils/netemOverrides";
 import { isRecord } from "./core/utilities/typeHelpers";
+import { readPersistedAutoOpenPalette, readPersistedAutoOpenPaletteOnSelect, readPersistedDefaultLabLocked } from "./workspace/state/themePreferences";
 
 type LayoutControls = ReturnType<typeof useLayoutControls>;
 const DEV_EXPLORER_DEFER_MS = 300;
@@ -117,16 +119,6 @@ const LazySvgExportModal = React.lazy(async () => {
 const LazyBulkLinkModal = React.lazy(async () => {
   const module = await import("./components/panels/BulkLinkModal");
   return { default: module.BulkLinkModal };
-});
-
-const LazyAboutModal = React.lazy(async () => {
-  const module = await import("./components/panels/AboutModal");
-  return { default: module.AboutModal };
-});
-
-const LazyFindNodePopover = React.lazy(async () => {
-  const module = await import("./components/panels/FindNodePopover");
-  return { default: module.FindNodePopover };
 });
 
 const TOPO_NODE_TYPES = new Set<string>([
@@ -312,6 +304,8 @@ export interface AppLayoutOptions {
     content?: React.ReactNode;
     /** Content rendered over an empty canvas. */
     emptyState?: React.ReactNode;
+    /** Shared workspace navigation supplied by the host composition. */
+    sidebar?: React.ReactNode;
   };
   lifecycleActionsAvailable?: boolean;
 }
@@ -587,6 +581,7 @@ function DeferredDevExplorerView() {
 type AppContentStateSlice = Pick<
   TopoViewerState,
   | "labName"
+  | "yamlFileName"
   | "mode"
   | "labSettings"
   | "canUndo"
@@ -617,6 +612,7 @@ type AppContentStateSlice = Pick<
 function selectAppContentState(state: TopoViewerState): AppContentStateSlice {
   return {
     labName: state.labName,
+    yamlFileName: state.yamlFileName,
     mode: state.mode,
     labSettings: state.labSettings,
     canUndo: state.canUndo,
@@ -709,10 +705,11 @@ export const AppContent: React.FC<AppContentProps> = ({
   viewerOptions,
   lifecycleActionsAvailable = true
 }) => {
+  const [contextPanelWidth, setContextPanelWidth] = React.useState(0);
   const viewerOnly = chrome === "viewer" || slots?.content != null;
   const host = useClabUiHost();
   const sessionClient = useTopologySessionClient();
-  const { renderAboutModal, renderDeployMenuItems } = useClabUiRuntime();
+  const { renderDeployMenuItems } = useClabUiRuntime();
   const state = useTopoViewerStore(selectAppContentState, shallow);
   const topoActions = useTopoViewerActions();
   const graphActions = useGraphActions();
@@ -724,8 +721,8 @@ export const AppContent: React.FC<AppContentProps> = ({
   const interactionMode = getInteractionMode(state.mode, isProcessing);
   const isDevMock = isDevMockWebview(host);
   const showDevExplorer = React.useMemo(
-    () => isDevMock && !isDevExplorerDisabledByUrl(),
-    [isDevMock]
+    () => !slots?.sidebar && isDevMock && !isDevExplorerDisabledByUrl(),
+    [isDevMock, slots?.sidebar]
   );
   useDevMockTrafficStats(shouldCollectDevMockTrafficStats(host, isDevMock, interactionMode));
   const { layoutRef, devExplorerWidth, isDevExplorerDragging, handleDevExplorerResizeStart } =
@@ -1086,6 +1083,32 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   const shortcutDisplay = useShortcutDisplay();
   const panelVisibility = usePanelVisibility();
+  const panelSide = panelVisibility.panelSide;
+  const initializedPaletteTopology = React.useRef<string | null>(null);
+  const { handleOpenContextPanel } = panelVisibility;
+
+  React.useEffect(() => {
+    // Wait for the lab snapshot before checking whether its canvas is empty.
+    if (viewerOnly || !hasActiveTopology || state.labName.length === 0) return;
+    const topologyKey = JSON.stringify([topologyViewportKey, state.yamlFileName]);
+    if (initializedPaletteTopology.current === topologyKey) return;
+    initializedPaletteTopology.current = topologyKey;
+
+    useTopoViewerStore.setState({ isLocked: readPersistedDefaultLabLocked() });
+
+    if (useGraphStore.getState().nodes.length === 0 && readPersistedAutoOpenPalette()) {
+      // Keep the palette open through selection changes, but allow manual dismissal.
+      handleOpenContextPanel("manual");
+      setPaletteTabRequest({ tabId: "nodes" });
+    }
+  }, [
+    viewerOnly,
+    hasActiveTopology,
+    state.labName,
+    state.yamlFileName,
+    topologyViewportKey,
+    handleOpenContextPanel
+  ]);
 
   const clearAllEditingState = React.useCallback(() => {
     topoActions.editNode(null);
@@ -1233,7 +1256,8 @@ export const AppContent: React.FC<AppContentProps> = ({
       !viewerOnly &&
       hasContextContent &&
       !isProcessing &&
-      !panelVisibility.isContextPanelOpen
+      !panelVisibility.isContextPanelOpen &&
+      readPersistedAutoOpenPaletteOnSelect()
     ) {
       panelVisibility.handleOpenContextPanel("auto");
     }
@@ -1373,12 +1397,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (hasActiveTopology) {
       return;
     }
-    if (!panelVisibility.isContextPanelOpen) {
-      panelVisibility.handleOpenContextPanel("manual");
-    }
-    if (panelVisibility.findPopoverPosition !== null) {
-      panelVisibility.handleCloseFindPopover();
-    }
     if (panelVisibility.showLabSettingsModal) {
       panelVisibility.handleCloseLabSettings();
     }
@@ -1432,25 +1450,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     void saveViewerSettings(sessionClient, { showDummyLinks: next });
   }, [sessionClient, topoActions]);
 
-  let aboutModal: React.ReactNode = null;
-  if (panelVisibility.showAboutPanel) {
-    if (renderAboutModal) {
-      aboutModal = renderAboutModal({
-        isOpen: panelVisibility.showAboutPanel,
-        onClose: panelVisibility.handleCloseAbout
-      });
-    } else {
-      aboutModal = (
-        <React.Suspense fallback={null}>
-          <LazyAboutModal
-            isOpen={panelVisibility.showAboutPanel}
-            onClose={panelVisibility.handleCloseAbout}
-          />
-        </React.Suspense>
-      );
-    }
-  }
-
   return (
     <MuiThemeProvider>
       <Box
@@ -1468,40 +1467,11 @@ export const AppContent: React.FC<AppContentProps> = ({
           onLockedAction={handleLockedAction}
           runtimeRef={annotationRuntimeRef}
         />
-        {!viewerOnly && (
-          <Navbar
-            lifecycleActionsAvailable={lifecycleActionsAvailable}
-            hasActiveTopology={hasActiveTopology}
-            onZoomToFit={handleZoomToFit}
-            layout={layoutControls.layout}
-            onLayoutChange={layoutControls.setLayout}
-            onLabSettings={panelVisibility.handleShowLabSettings}
-            onToggleSplit={handleToggleSplit}
-            onFindNode={panelVisibility.handleOpenFindPopover}
-            onCaptureViewport={panelVisibility.handleShowSvgExport}
-            onShowShortcuts={panelVisibility.handleShowShortcuts}
-            onShowAbout={panelVisibility.handleShowAbout}
-            onShowBulkLink={panelVisibility.handleShowBulkLink}
-            linkLabelMode={state.linkLabelMode}
-            onLinkLabelModeChange={handleLinkLabelModeChange}
-            showDummyLinks={state.showDummyLinks}
-            onToggleDummyLinks={handleToggleDummyLinks}
-            shortcutDisplayEnabled={shortcutDisplay.isEnabled}
-            onToggleShortcutDisplay={shortcutDisplay.toggle}
-            canUndo={undoRedo.canUndo}
-            canRedo={undoRedo.canRedo}
-            onUndo={undoRedo.undo}
-            onRedo={undoRedo.redo}
-            onLogoClick={easterEgg.handleLogoClick}
-            logoClickProgress={easterEgg.state.progress}
-            isPartyMode={easterEgg.state.isPartyMode}
-            renderDeployMenuItems={renderDeployMenuItems}
-          />
-        )}
         <Box
           ref={layoutRef}
           sx={{ display: "flex", flexGrow: 1, overflow: "hidden", position: "relative" }}
         >
+          {slots?.sidebar}
           {showDevExplorer && (
             <Box
               sx={{
@@ -1538,91 +1508,6 @@ export const AppContent: React.FC<AppContentProps> = ({
               />
             </Box>
           )}
-          {!viewerOnly && hasActiveTopology && (
-            <ContextPanel
-              isOpen={panelVisibility.isContextPanelOpen}
-              side={panelVisibility.panelSide}
-              onOpen={panelVisibility.handleOpenContextPanel}
-              onClose={panelVisibility.handleCloseContextPanel}
-              onBack={handleContextPanelBack}
-              onToggleSide={panelVisibility.handleTogglePanelSide}
-              rfInstance={rfInstance}
-              palette={{
-                mode: state.mode,
-                requestedTab: paletteTabRequest,
-
-                onEditCustomNode: customNodeCommands.onEditCustomNode,
-                onDeleteCustomNode: customNodeCommands.onDeleteCustomNode,
-                onSetDefaultCustomNode: customNodeCommands.onSetDefaultCustomNode
-              }}
-              view={{
-                selectedNodeData: selectionData.selectedNodeData,
-                selectedLinkData: selectionData.selectedLinkData
-              }}
-              editor={{
-                editingNodeData: selectionData.editingNodeData,
-                editingNodeInheritedProps: selectionData.editingNodeInheritedProps,
-                onOpenSelectedNodeEditor: handleOpenSelectedNodeEditor,
-                nodeEditorHandlers: {
-                  handleClose: nodeEditorHandlers.handleClose,
-                  handleSave: nodeEditorHandlers.handleSave,
-                  handleApply: nodeEditorHandlers.handleApply,
-                  previewVisuals: nodeEditorHandlers.previewVisuals,
-                  handleDelete: selectionData.editingNodeData
-                    ? () => graphHandlers.handleDeleteNode(selectionData.editingNodeData!.id)
-                    : undefined
-                },
-                editingLinkData: selectionData.editingLinkData,
-                linkEditorHandlers: {
-                  handleClose: linkEditorHandlers.handleClose,
-                  handleSave: linkEditorHandlers.handleSave,
-                  handleApply: linkEditorHandlers.handleApply,
-                  previewOffset: linkEditorHandlers.previewOffset,
-                  revertOffset: linkEditorHandlers.revertOffset,
-                  handleDelete: selectionData.editingLinkData
-                    ? () => graphHandlers.handleDeleteLink(selectionData.editingLinkData!.id)
-                    : undefined
-                },
-                editingNetworkData: selectionData.editingNetworkData,
-                networkEditorHandlers: {
-                  handleClose: networkEditorHandlers.handleClose,
-                  handleSave: handleNetworkSave,
-                  handleApply: handleNetworkApply
-                },
-                linkImpairmentData: selectionData.selectedLinkImpairmentData,
-                linkImpairmentHandlers: {
-                  onError: handleLinkImpairmentError,
-                  onApply: handleLinkImpairmentApply,
-                  onSave: handleLinkImpairmentSave,
-                  onClose: () => topoActions.editImpairment(null)
-                },
-                editingTextAnnotation: annotationUiState.editingTextAnnotation,
-                textAnnotationHandlers: {
-                  onApply: annotationActions.applyTextAnnotationEdit,
-                  onClose: annotationUiActions.closeTextEditor,
-                  onDelete: annotationActions.deleteTextAnnotation
-                },
-                editingShapeAnnotation: annotationUiState.editingShapeAnnotation,
-                shapeAnnotationHandlers: {
-                  onApply: annotationActions.applyShapeAnnotationEdit,
-                  onClose: annotationUiActions.closeShapeEditor,
-                  onDelete: annotationActions.deleteShapeAnnotation
-                },
-                editingTrafficRateAnnotation: annotationUiState.editingTrafficRateAnnotation,
-                trafficRateAnnotationHandlers: {
-                  onApply: annotationActions.applyTrafficRateAnnotationEdit,
-                  onClose: annotationUiActions.closeTrafficRateEditor,
-                  onDelete: annotationActions.deleteTrafficRateAnnotation
-                },
-                editingGroup: annotationUiState.editingGroup,
-                groupHandlers: {
-                  onApply: annotationActions.applyGroupEdit,
-                  onClose: annotationUiActions.closeGroupEditor,
-                  onDelete: annotationActions.deleteGroup
-                }
-              }}
-            />
-          )}
           <Box
             component="main"
             sx={{
@@ -1630,27 +1515,151 @@ export const AppContent: React.FC<AppContentProps> = ({
               minWidth: 0,
               overflow: "hidden",
               position: "relative",
+              zIndex: 0,
               display: "flex",
               flexDirection: "column"
             }}
           >
             {slots?.header && <Box sx={{ flexShrink: 0 }}>{slots.header}</Box>}
-            <Box sx={{ flex: 1, minHeight: 0, position: "relative" }}>
-              <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
-                <GraphCanvasMain
-                  canvasRef={reactFlowRef}
-                  canvasProps={canvasProps}
-                  showDummyLinks={state.showDummyLinks}
-                  edgeAnnotationLookup={edgeAnnotationLookup}
-                  endpointLabelOffset={state.endpointLabelOffset}
-                  endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
+            <Box data-testid="topoviewer-editor" sx={{ flex: 1, minHeight: 0, display: "flex", position: "relative",
+              "--clab-ui-panel-right": !viewerOnly && panelVisibility.isContextPanelOpen && panelSide === "right" ? `min(${contextPanelWidth}px, 70%)` : "0px",
+              "--clab-ui-panel-left": !viewerOnly && panelVisibility.isContextPanelOpen && panelSide === "left" ? `min(${contextPanelWidth}px, 70%)` : "0px"
+            }}>
+              {!viewerOnly && hasActiveTopology && (
+                <ContextPanel
+                  onWidthChange={setContextPanelWidth}
+                  isOpen={panelVisibility.isContextPanelOpen}
+                  side={panelSide}
+                  onOpen={panelVisibility.handleOpenContextPanel}
+                  onClose={panelVisibility.handleCloseContextPanel}
+                  onBack={handleContextPanelBack}
+                  onToggleSide={panelVisibility.handleTogglePanelSide}
+                  rfInstance={rfInstance}
+                  palette={{
+                    mode: state.mode,
+                    requestedTab: paletteTabRequest,
+
+                    onEditCustomNode: customNodeCommands.onEditCustomNode,
+                    onDeleteCustomNode: customNodeCommands.onDeleteCustomNode,
+                    onSetDefaultCustomNode: customNodeCommands.onSetDefaultCustomNode
+                  }}
+                  view={{
+                    selectedNodeData: selectionData.selectedNodeData,
+                    selectedLinkData: selectionData.selectedLinkData
+                  }}
+                  editor={{
+                    editingNodeData: selectionData.editingNodeData,
+                    editingNodeInheritedProps: selectionData.editingNodeInheritedProps,
+                    onOpenSelectedNodeEditor: handleOpenSelectedNodeEditor,
+                    nodeEditorHandlers: {
+                      handleClose: nodeEditorHandlers.handleClose,
+                      handleSave: nodeEditorHandlers.handleSave,
+                      handleApply: nodeEditorHandlers.handleApply,
+                      previewVisuals: nodeEditorHandlers.previewVisuals,
+                      handleDelete: selectionData.editingNodeData
+                        ? () => graphHandlers.handleDeleteNode(selectionData.editingNodeData!.id)
+                        : undefined
+                    },
+                    editingLinkData: selectionData.editingLinkData,
+                    linkEditorHandlers: {
+                      handleClose: linkEditorHandlers.handleClose,
+                      handleSave: linkEditorHandlers.handleSave,
+                      handleApply: linkEditorHandlers.handleApply,
+                      previewOffset: linkEditorHandlers.previewOffset,
+                      revertOffset: linkEditorHandlers.revertOffset,
+                      handleDelete: selectionData.editingLinkData
+                        ? () => graphHandlers.handleDeleteLink(selectionData.editingLinkData!.id)
+                        : undefined
+                    },
+                    editingNetworkData: selectionData.editingNetworkData,
+                    networkEditorHandlers: {
+                      handleClose: networkEditorHandlers.handleClose,
+                      handleSave: handleNetworkSave,
+                      handleApply: handleNetworkApply
+                    },
+                    linkImpairmentData: selectionData.selectedLinkImpairmentData,
+                    linkImpairmentHandlers: {
+                      onError: handleLinkImpairmentError,
+                      onApply: handleLinkImpairmentApply,
+                      onSave: handleLinkImpairmentSave,
+                      onClose: () => topoActions.editImpairment(null)
+                    },
+                    editingTextAnnotation: annotationUiState.editingTextAnnotation,
+                    textAnnotationHandlers: {
+                      onApply: annotationActions.applyTextAnnotationEdit,
+                      onClose: annotationUiActions.closeTextEditor,
+                      onDelete: annotationActions.deleteTextAnnotation
+                    },
+                    editingShapeAnnotation: annotationUiState.editingShapeAnnotation,
+                    shapeAnnotationHandlers: {
+                      onApply: annotationActions.applyShapeAnnotationEdit,
+                      onClose: annotationUiActions.closeShapeEditor,
+                      onDelete: annotationActions.deleteShapeAnnotation
+                    },
+                    editingTrafficRateAnnotation: annotationUiState.editingTrafficRateAnnotation,
+                    trafficRateAnnotationHandlers: {
+                      onApply: annotationActions.applyTrafficRateAnnotationEdit,
+                      onClose: annotationUiActions.closeTrafficRateEditor,
+                      onDelete: annotationActions.deleteTrafficRateAnnotation
+                    },
+                    editingGroup: annotationUiState.editingGroup,
+                    groupHandlers: {
+                      onApply: annotationActions.applyGroupEdit,
+                      onClose: annotationUiActions.closeGroupEditor,
+                      onDelete: annotationActions.deleteGroup
+                    }
+                  }}
                 />
-                <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} />
+              )}
+              <Box sx={{ flex: 1, minWidth: 0, position: "relative", overflow: "hidden" }}>
+                {slots?.emptyState}
+                <Box sx={{ height: "100%", display: slots?.content != null ? "none" : "block" }}>
+                  {hasActiveTopology && (
+                    <>
+                      <GraphCanvasMain
+                        canvasRef={reactFlowRef}
+                        canvasProps={canvasProps}
+                        showDummyLinks={state.showDummyLinks}
+                        edgeAnnotationLookup={edgeAnnotationLookup}
+                        endpointLabelOffset={state.endpointLabelOffset}
+                        endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
+                      />
+                      <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} side={panelSide} />
+                    </>
+                  )}
+                </Box>
+                {slots?.content}
+                {!viewerOnly && hasActiveTopology && (
+                  <Navbar
+                    lifecycleActionsAvailable={lifecycleActionsAvailable}
+                    hasActiveTopology={hasActiveTopology}
+                    barSide={panelSide === "left" ? "right" : "left"}
+                    rfInstance={rfInstance}
+                    onZoomToFit={handleZoomToFit}
+                    layout={layoutControls.layout}
+                    onLayoutChange={layoutControls.setLayout}
+                    onLabSettings={panelVisibility.handleShowLabSettings}
+                    onToggleSplit={handleToggleSplit}
+                    onCaptureViewport={panelVisibility.handleShowSvgExport}
+                    onShowShortcuts={panelVisibility.handleShowShortcuts}
+                    onShowBulkLink={panelVisibility.handleShowBulkLink}
+                    linkLabelMode={state.linkLabelMode}
+                    onLinkLabelModeChange={handleLinkLabelModeChange}
+                    showDummyLinks={state.showDummyLinks}
+                    onToggleDummyLinks={handleToggleDummyLinks}
+                    shortcutDisplayEnabled={shortcutDisplay.isEnabled}
+                    onToggleShortcutDisplay={shortcutDisplay.toggle}
+                    canUndo={undoRedo.canUndo}
+                    canRedo={undoRedo.canRedo}
+                    onUndo={undoRedo.undo}
+                    onRedo={undoRedo.redo}
+                    renderDeployMenuItems={renderDeployMenuItems}
+                  />
+                )}
+                <EasterEggRenderer easterEgg={easterEgg} />
+                {!viewerOnly && hasActiveTopology && <NodeTemplateModal />}
+                <ToastContainer toasts={toasts} onDismiss={dismissToast} />
               </Box>
-              {slots?.content}
-              {slots?.emptyState}
-              <EasterEggRenderer easterEgg={easterEgg} />
-              <ToastContainer toasts={toasts} onDismiss={dismissToast} />
             </Box>
           </Box>
         </Box>
@@ -1700,18 +1709,6 @@ export const AppContent: React.FC<AppContentProps> = ({
               mode={interactionMode}
               isLocked={isInteractionLocked}
               onClose={panelVisibility.handleCloseBulkLink}
-            />
-          </React.Suspense>
-        ) : null}
-        {aboutModal}
-
-        {/* Popovers */}
-        {panelVisibility.findPopoverPosition ? (
-          <React.Suspense fallback={null}>
-            <LazyFindNodePopover
-              anchorPosition={panelVisibility.findPopoverPosition}
-              onClose={panelVisibility.handleCloseFindPopover}
-              rfInstance={rfInstance}
             />
           </React.Suspense>
         ) : null}

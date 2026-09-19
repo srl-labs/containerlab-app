@@ -62,12 +62,12 @@ jobs:
         run: pnpm docs:build
 
       - name: Include documentation alongside sandbox
-        run: cp -R site apps/web/dist/client/docs
+        run: cp -R site apps/web-public/dist/client/docs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:
-          path: apps/web/dist/client
+          path: apps/web-public/dist/client
 
   deploy:
     runs-on: ubuntu-latest

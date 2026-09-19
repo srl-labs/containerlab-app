@@ -1,21 +1,14 @@
 /* eslint-disable import-x/max-dependencies */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { Edge } from "@xyflow/react";
-import CheckIcon from "@mui/icons-material/Check";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
+import InputAdornment from "@mui/material/InputAdornment";
 import MenuItem from "@mui/material/MenuItem";
-import Paper from "@mui/material/Paper";
-import Slider from "@mui/material/Slider";
 import Switch from "@mui/material/Switch";
-import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
+import { SettingsField } from "../../../settings/SettingsField";
 import { useEdges } from "../../../stores/graphStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import {
@@ -32,9 +25,6 @@ import {
   resolveInterfaceOverrideValue,
   splitInterfaceParts
 } from "../../../utils/telemetryInterfaceLabels";
-import { invertHexColor, resolveComputedColor } from "../../../utils/color";
-import type { GridSettingsControlsProps } from "../GridSettingsPopover";
-import { ColorField, InputField } from "../../ui/form";
 
 interface EdgeInterfaceRow {
   edgeId: string;
@@ -44,23 +34,18 @@ interface EdgeInterfaceRow {
   targetEndpoint: string;
 }
 
-interface AppearanceTabProps extends GridSettingsControlsProps {
+interface AppearanceTabProps {
   isReadOnly: boolean;
   showRateLabels: boolean;
   onShowRateLabelsChange: (enabled: boolean) => void;
 }
 
 type TelemetryStyleValue = "default" | "telemetry-style";
-type AppearanceSubTab = "style" | "grid";
 
 function asNonEmptyString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
-}
-
-function isGridStyle(value: unknown): value is GridSettingsControlsProps["gridStyle"] {
-  return value === "dotted" || value === "quadratic";
 }
 
 function extractEdgeInterfaceRows(edges: Edge[]): EdgeInterfaceRow[] {
@@ -82,23 +67,12 @@ function extractEdgeInterfaceRows(edges: Edge[]): EdgeInterfaceRow[] {
 }
 
 export const AppearanceTab: React.FC<AppearanceTabProps> = ({
-  gridLineWidth,
-  onGridLineWidthChange,
-  gridStyle,
-  onGridStyleChange,
-  gridColor,
-  onGridColorChange,
-  gridBgColor,
-  onGridBgColorChange,
-  onResetGridColors,
   isReadOnly,
   showRateLabels,
   onShowRateLabelsChange
 }) => {
   const edges = useEdges();
-  const [activeSubTab, setActiveSubTab] = useState<AppearanceSubTab>("style");
   const [interfaceLinkFilter, setInterfaceLinkFilter] = useState("");
-  const [themeBgColor, setThemeBgColor] = useState("#1e1e1e");
 
   const linkLabelMode = useTopoViewerStore((state) => state.linkLabelMode);
   const lastNonTelemetryLinkLabelMode = useTopoViewerStore(
@@ -131,11 +105,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const telemetryStyleValue: TelemetryStyleValue =
     linkLabelMode === "telemetry-style" ? "telemetry-style" : "default";
   const isTelemetryStyleEnabled = telemetryStyleValue === "telemetry-style";
-  const hasCustomGridColors = gridColor !== null || gridBgColor !== null;
-
-  useEffect(() => {
-    setThemeBgColor(resolveComputedColor("--vscode-editor-background", "#1e1e1e"));
-  }, []);
 
   const interfaceRows = useMemo(() => extractEdgeInterfaceRows(edges), [edges]);
 
@@ -167,379 +136,234 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
     return maxCount;
   }, [interfaceEndpoints]);
 
-  const effectiveGridBgColor = gridBgColor ?? themeBgColor;
-  const defaultGridColor = invertHexColor(effectiveGridBgColor);
-
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Tabs
-        value={activeSubTab}
-        onChange={(_event, value) => setActiveSubTab(value === "grid" ? "grid" : "style")}
-        variant="fullWidth"
-      >
-        <Tab label="Style" value="style" data-testid="lab-settings-appearance-subtab-style" />
-        <Tab label="Grid Settings" value="grid" data-testid="lab-settings-appearance-subtab-grid" />
-      </Tabs>
-
-      {activeSubTab === "style" ? (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          <TextField
-            select
-            size="small"
-            label="Style"
-            value={telemetryStyleValue}
-            disabled={isReadOnly}
-            onChange={(e) => {
-              if (isReadOnly) return;
-              const value = e.target.value;
-              const nextLinkLabelMode =
-                value === "telemetry-style" ? "telemetry-style" : lastNonTelemetryLinkLabelMode;
-              setLinkLabelMode(nextLinkLabelMode);
-            }}
-            data-testid="lab-settings-telemetry-style"
+    <>
+      <SettingsField title="Style" description="Default link labels or telemetry-style appearance.">
+        <TextField
+          slotProps={{ select: { inputProps: { "aria-label": "Style" } } }}
+          select
+          size="small"
+          value={telemetryStyleValue}
+          disabled={isReadOnly}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            const value = e.target.value;
+            const nextLinkLabelMode =
+              value === "telemetry-style" ? "telemetry-style" : lastNonTelemetryLinkLabelMode;
+            setLinkLabelMode(nextLinkLabelMode);
+          }}
+          data-testid="lab-settings-telemetry-style"
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="default">Default</MenuItem>
+          <MenuItem value="telemetry-style">Telemetry Style</MenuItem>
+        </TextField>
+      </SettingsField>
+      <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
+        <TextField
+          id="telemetry-node-size"
+          size="small"
+          type="number"
+          value={String(telemetryNodeSizePx)}
+          disabled={isReadOnly}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setTelemetryNodeSizePx(
+              clampTelemetryNodeSizePx(
+                parseBoundedNumber(e.target.value, 12, 240, DEFAULT_TELEMETRY_NODE_SIZE_PX)
+              )
+            );
+          }}
+          slotProps={{
+            htmlInput: { "aria-label": "Node size", min: 12, max: 240, step: 1 },
+            input: { endAdornment: <InputAdornment position="end">px</InputAdornment> }
+          }}
+          sx={{ width: 160 }}
+        />
+      </SettingsField>
+      <SettingsField title="Interface size" description="Telemetry interface label size as a percent of node size.">
+        <TextField
+          id="telemetry-interface-size"
+          size="small"
+          type="number"
+          value={String(telemetryInterfaceSizePercent)}
+          disabled={isReadOnly}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setTelemetryInterfaceSizePercent(
+              clampTelemetryInterfaceSizePercent(
+                parseBoundedNumber(e.target.value, 40, 400, DEFAULT_TELEMETRY_INTERFACE_SIZE_PERCENT)
+              )
+            );
+          }}
+          slotProps={{
+            htmlInput: { "aria-label": "Interface size", min: 40, max: 400, step: 5 },
+            input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+          }}
+          sx={{ width: 160 }}
+        />
+      </SettingsField>
+      <SettingsField title="Show rate labels" description="Show traffic rate labels on links.">
+        <Switch
+          size="small"
+          checked={showRateLabels}
+          disabled={isReadOnly}
+          slotProps={{ input: { "aria-label": "Show rate labels" } }}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            onShowRateLabelsChange(e.target.checked);
+          }}
+        />
+      </SettingsField>
+      {isTelemetryStyleEnabled ? (
+        <>
+          <SettingsField
+            title="Global override"
+            description="Interface label format applied to every link."
           >
-            <MenuItem value="default">Default</MenuItem>
-            <MenuItem value="telemetry-style">Telemetry Style</MenuItem>
-          </TextField>
-
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-            <InputField
-              id="telemetry-node-size"
-              label="Node size"
-              type="number"
-              value={String(telemetryNodeSizePx)}
-              min={12}
-              max={240}
-              step={1}
-              suffix="px"
-              disabled={isReadOnly}
-              onChange={(value) => {
-                if (isReadOnly) return;
-                const nextTelemetryNodeSizePx = clampTelemetryNodeSizePx(
-                  parseBoundedNumber(value, 12, 240, DEFAULT_TELEMETRY_NODE_SIZE_PX)
-                );
-                setTelemetryNodeSizePx(nextTelemetryNodeSizePx);
-              }}
-            />
-            <InputField
-              id="telemetry-interface-size"
-              label="Interface size"
-              type="number"
-              value={String(telemetryInterfaceSizePercent)}
-              min={40}
-              max={400}
-              step={5}
-              suffix="%"
-              disabled={isReadOnly}
-              onChange={(value) => {
-                if (isReadOnly) return;
-                const nextTelemetryInterfaceSizePercent = clampTelemetryInterfaceSizePercent(
-                  parseBoundedNumber(value, 40, 400, DEFAULT_TELEMETRY_INTERFACE_SIZE_PERCENT)
-                );
-                setTelemetryInterfaceSizePercent(nextTelemetryInterfaceSizePercent);
-              }}
-            />
-          </Box>
-
-          <Paper
-            variant="outlined"
-            sx={{
-              px: 1.5,
-              py: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 1.5,
-              minHeight: 40
-            }}
-          >
-            <Typography id="show-rate-labels-label" variant="body2" sx={{ minWidth: 0 }}>
-              Show rate labels
-            </Typography>
-            <Switch
+            <TextField
+              slotProps={{ select: { inputProps: { "aria-label": "Global override" } } }}
+              select
               size="small"
-              checked={showRateLabels}
+              value={globalInterfaceOverrideSelection}
               disabled={isReadOnly}
-              slotProps={{ input: { "aria-labelledby": "show-rate-labels-label" } }}
               onChange={(e) => {
                 if (isReadOnly) return;
-                onShowRateLabelsChange(e.target.checked);
+                setTelemetryGlobalInterfaceOverrideSelection(e.target.value);
               }}
-              sx={{ flexShrink: 0 }}
-            />
-          </Paper>
-
-          {isTelemetryStyleEnabled ? (
-            <>
-              <TextField
-                select
-                size="small"
-                label="Global override (all interfaces)"
-                value={globalInterfaceOverrideSelection}
-                disabled={isReadOnly}
-                onChange={(e) => {
-                  if (isReadOnly) return;
-                  setTelemetryGlobalInterfaceOverrideSelection(e.target.value);
-                }}
-              >
-                <MenuItem value={INTERFACE_SELECT_AUTO}>Auto</MenuItem>
-                <MenuItem value={INTERFACE_SELECT_FULL}>Full interface name</MenuItem>
-                {Array.from({ length: maxInterfacePartCount }, (_, index) => index + 1).map(
-                  (partIndex) => (
-                    <MenuItem
-                      key={`global-interface-part-${partIndex}`}
-                      value={`${GLOBAL_INTERFACE_PART_INDEX_PREFIX}${partIndex}`}
-                    >
-                      Part {partIndex}
-                    </MenuItem>
-                  )
-                )}
-              </TextField>
-              <TextField
-                size="small"
-                label="Filter links"
-                placeholder="Search node or interface name"
-                value={interfaceLinkFilter}
-                disabled={isReadOnly}
-                onChange={(e) => setInterfaceLinkFilter(e.target.value)}
-              />
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "text.secondary"
-                }}
-              >
-                {filteredInterfaceRows.length} of {interfaceRows.length} links shown
-              </Typography>
-              <Box
-                sx={{
-                  maxHeight: 360,
-                  overflowY: "auto",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 1
-                }}
-              >
-                {filteredInterfaceRows.length === 0 ? (
-                  <Paper variant="outlined" sx={{ p: 1.5 }}>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        color: "text.secondary"
-                      }}
-                    >
-                      No links match the current filter.
-                    </Typography>
-                  </Paper>
-                ) : (
-                  filteredInterfaceRows.map((row) => {
-                    const sourceParts = splitInterfaceParts(row.sourceEndpoint);
-                    const targetParts = splitInterfaceParts(row.targetEndpoint);
-                    return (
-                      <Paper key={row.edgeId} variant="outlined" sx={{ p: 1.5 }}>
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            color: "text.secondary"
-                          }}
-                        >
-                          {row.source} {"<->"} {row.target}
-                        </Typography>
-                        <Box
-                          sx={{
-                            mt: 1,
-                            display: "grid",
-                            gridTemplateColumns: "1fr 1fr",
-                            gap: 1
-                          }}
-                        >
-                          <TextField
-                            select
-                            size="small"
-                            label={row.sourceEndpoint}
-                            value={getInterfaceSelectionValue(
-                              row.sourceEndpoint,
-                              interfaceLabelOverrides
-                            )}
-                            disabled={isReadOnly}
-                            onChange={(e) => {
-                              if (isReadOnly) return;
-                              setTelemetryInterfaceLabelOverride(
-                                row.sourceEndpoint,
-                                resolveInterfaceOverrideValue(row.sourceEndpoint, e.target.value)
-                              );
-                            }}
-                          >
-                            <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
-                            <MenuItem value={INTERFACE_SELECT_FULL}>
-                              Full: {row.sourceEndpoint}
-                            </MenuItem>
-                            {sourceParts.map((part, idx) => (
-                              <MenuItem
-                                key={`${row.edgeId}-source-${idx}-${part}`}
-                                value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
-                              >
-                                Part {idx + 1}: {part}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                          <TextField
-                            select
-                            size="small"
-                            label={row.targetEndpoint}
-                            value={getInterfaceSelectionValue(
-                              row.targetEndpoint,
-                              interfaceLabelOverrides
-                            )}
-                            disabled={isReadOnly}
-                            onChange={(e) => {
-                              if (isReadOnly) return;
-                              setTelemetryInterfaceLabelOverride(
-                                row.targetEndpoint,
-                                resolveInterfaceOverrideValue(row.targetEndpoint, e.target.value)
-                              );
-                            }}
-                          >
-                            <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
-                            <MenuItem value={INTERFACE_SELECT_FULL}>
-                              Full: {row.targetEndpoint}
-                            </MenuItem>
-                            {targetParts.map((part, idx) => (
-                              <MenuItem
-                                key={`${row.edgeId}-target-${idx}-${part}`}
-                                value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
-                              >
-                                Part {idx + 1}: {part}
-                              </MenuItem>
-                            ))}
-                          </TextField>
-                        </Box>
-                      </Paper>
-                    );
-                  })
-                )}
-              </Box>
-            </>
-          ) : null}
-        </Box>
-      ) : null}
-
-      {activeSubTab === "grid" ? (
-        <Box
-          data-testid="lab-settings-grid-settings"
-          sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            Stroke Width
-          </Typography>
-          <Slider
-            data-testid="lab-settings-grid-line-width"
-            size="small"
-            value={gridLineWidth}
-            disabled={isReadOnly}
-            onChange={(_event: Event, value: number | number[]) => {
-              if (isReadOnly) return;
-              const width = Array.isArray(value) ? value[0] : value;
-              onGridLineWidthChange(width);
-            }}
-            min={0.00001}
-            max={2}
-            step={0.1}
-            valueLabelDisplay="auto"
-          />
-
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            Grid Style
-          </Typography>
-          <ToggleButtonGroup
-            data-testid="lab-settings-grid-style"
-            value={gridStyle}
-            exclusive
-            disabled={isReadOnly}
-            onChange={(_event, value) => {
-              if (isReadOnly) return;
-              if (isGridStyle(value)) {
-                onGridStyleChange(value);
-              }
-            }}
-            size="small"
-            fullWidth
-            sx={{
-              "& .MuiToggleButton-root": {
-                borderColor: "divider"
-              },
-              "& .MuiToggleButton-root.Mui-selected": {
-                backgroundColor: "action.selected",
-                borderColor: "primary.main",
-                color: "text.primary",
-                fontWeight: 600
-              },
-              "& .MuiToggleButton-root.Mui-selected:hover": {
-                backgroundColor: "action.selected"
-              }
-            }}
-          >
-            <ToggleButton value="dotted">
-              {gridStyle === "dotted" ? <CheckIcon fontSize="small" sx={{ mr: 0.5 }} /> : null}
-              Dotted
-            </ToggleButton>
-            <ToggleButton value="quadratic">
-              {gridStyle === "quadratic" ? <CheckIcon fontSize="small" sx={{ mr: 0.5 }} /> : null}
-              Quadratic
-            </ToggleButton>
-          </ToggleButtonGroup>
-
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            Grid Color
-          </Typography>
-          <ColorField
-            value={gridColor ?? defaultGridColor}
-            disabled={isReadOnly}
-            onChange={(value) => onGridColorChange(value)}
-          />
-
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            Background Color
-          </Typography>
-          <ColorField
-            value={gridBgColor ?? themeBgColor}
-            disabled={isReadOnly}
-            onChange={(value) => onGridBgColorChange(value)}
-          />
-
-          {hasCustomGridColors ? (
-            <Button
-              size="small"
-              variant="text"
-              startIcon={<RestartAltIcon />}
-              disabled={isReadOnly}
-              onClick={onResetGridColors}
+              sx={{ minWidth: 180 }}
             >
-              Reset to theme colors
-            </Button>
-          ) : null}
-        </Box>
+              <MenuItem value={INTERFACE_SELECT_AUTO}>Auto</MenuItem>
+              <MenuItem value={INTERFACE_SELECT_FULL}>Full interface name</MenuItem>
+              {Array.from({ length: maxInterfacePartCount }, (_, index) => index + 1).map(
+                (partIndex) => (
+                  <MenuItem
+                    key={`global-interface-part-${partIndex}`}
+                    value={`${GLOBAL_INTERFACE_PART_INDEX_PREFIX}${partIndex}`}
+                  >
+                    Part {partIndex}
+                  </MenuItem>
+                )
+              )}
+            </TextField>
+          </SettingsField>
+          <SettingsField
+            title="Filter links"
+            description={`${filteredInterfaceRows.length} of ${interfaceRows.length} links shown.`}
+          >
+            <TextField
+              slotProps={{ htmlInput: { "aria-label": "Filter links" } }}
+              size="small"
+              placeholder="Search node or interface name"
+              value={interfaceLinkFilter}
+              disabled={isReadOnly}
+              onChange={(e) => setInterfaceLinkFilter(e.target.value)}
+              sx={{ minWidth: 220 }}
+            />
+          </SettingsField>
+          <SettingsField
+            title="Interface labels"
+            description="Override the label format per link endpoint."
+            wide
+          >
+            <Box
+              sx={{
+                maxHeight: 360,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 1
+              }}
+            >
+              {filteredInterfaceRows.length === 0 ? (
+                <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                  No links match the current filter.
+                </Typography>
+              ) : (
+                filteredInterfaceRows.map((row) => {
+                  const sourceParts = splitInterfaceParts(row.sourceEndpoint);
+                  const targetParts = splitInterfaceParts(row.targetEndpoint);
+                  return (
+                    <Box key={row.edgeId} sx={{ display: "grid", rowGap: 1 }}>
+                      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                        {row.source} {"<->"} {row.target}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 1
+                        }}
+                      >
+                        <TextField
+                          select
+                          size="small"
+                          label={row.sourceEndpoint}
+                          value={getInterfaceSelectionValue(
+                            row.sourceEndpoint,
+                            interfaceLabelOverrides
+                          )}
+                          disabled={isReadOnly}
+                          onChange={(e) => {
+                            if (isReadOnly) return;
+                            setTelemetryInterfaceLabelOverride(
+                              row.sourceEndpoint,
+                              resolveInterfaceOverrideValue(row.sourceEndpoint, e.target.value)
+                            );
+                          }}
+                        >
+                          <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
+                          <MenuItem value={INTERFACE_SELECT_FULL}>
+                            Full: {row.sourceEndpoint}
+                          </MenuItem>
+                          {sourceParts.map((part, idx) => (
+                            <MenuItem
+                              key={`${row.edgeId}-source-${idx}-${part}`}
+                              value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
+                            >
+                              Part {idx + 1}: {part}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                        <TextField
+                          select
+                          size="small"
+                          label={row.targetEndpoint}
+                          value={getInterfaceSelectionValue(
+                            row.targetEndpoint,
+                            interfaceLabelOverrides
+                          )}
+                          disabled={isReadOnly}
+                          onChange={(e) => {
+                            if (isReadOnly) return;
+                            setTelemetryInterfaceLabelOverride(
+                              row.targetEndpoint,
+                              resolveInterfaceOverrideValue(row.targetEndpoint, e.target.value)
+                            );
+                          }}
+                        >
+                          <MenuItem value={INTERFACE_SELECT_AUTO}>Auto (use global)</MenuItem>
+                          <MenuItem value={INTERFACE_SELECT_FULL}>
+                            Full: {row.targetEndpoint}
+                          </MenuItem>
+                          {targetParts.map((part, idx) => (
+                            <MenuItem
+                              key={`${row.edgeId}-target-${idx}-${part}`}
+                              value={`${INTERFACE_SELECT_TOKEN_PREFIX}${part}`}
+                            >
+                              Part {idx + 1}: {part}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Box>
+                    </Box>
+                  );
+                })
+              )}
+            </Box>
+          </SettingsField>
+        </>
       ) : null}
-    </Box>
+    </>
   );
 };

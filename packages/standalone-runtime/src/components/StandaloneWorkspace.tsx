@@ -1,14 +1,13 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo } from "react";
 
+import type { TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { useEndpointStore } from "../stores/endpointStore";
 import { isFileLabTab, useLabTabsStore } from "../stores/labTabsStore";
 import { LabTabsBar } from "./LabTabsBar";
+import { AttractorEmptyState } from "./AttractorEmptyState";
 
 const FileEditor = lazy(async () => ({
   default: (await import("./FileEditorTabPanel")).FileEditorTabPanel
-}));
-const EmptyState = lazy(async () => ({
-  default: (await import("./AttractorEmptyState")).AttractorEmptyState
 }));
 
 interface TabActions {
@@ -16,7 +15,7 @@ interface TabActions {
   onClose: (tabId: string) => Promise<void>;
 }
 
-export function StandaloneLabTabs({ onActivate, onClose }: TabActions) {
+export function StandaloneLabTabs({ onActivate, onClose, orientation = "horizontal" }: TabActions & { orientation?: TabOrientation }) {
   const tabs = useLabTabsStore((state) => state.tabs);
   const activeTabId = useLabTabsStore((state) => state.activeTabId);
   const endpoints = useEndpointStore((state) => state.endpoints);
@@ -29,6 +28,7 @@ export function StandaloneLabTabs({ onActivate, onClose }: TabActions) {
       tabs={tabs}
       activeTabId={activeTabId}
       endpointLabels={endpointLabels}
+      orientation={orientation}
       onActivate={(id) => {
         void onActivate(id);
       }}
@@ -56,21 +56,8 @@ export function StandaloneFileEditor({ onClose }: Pick<TabActions, "onClose">) {
   );
 }
 
-export function StandaloneLabEmptyState() {
+export function StandaloneLabEmptyState({ onCreateLab }: { onCreateLab: () => Promise<void> }) {
   const hasTabs = useLabTabsStore((state) => state.tabs.length > 0);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (hasTabs) {
-      setReady(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setReady(true), 750);
-    return () => window.clearTimeout(timer);
-  }, [hasTabs]);
-  if (hasTabs || !ready) return null;
-  return (
-    <Suspense fallback={null}>
-      <EmptyState occlusionLeft={0} occlusionRight={0} />
-    </Suspense>
-  );
+  if (hasTabs) return null;
+  return <AttractorEmptyState onCreateLab={() => { void onCreateLab(); }} />;
 }

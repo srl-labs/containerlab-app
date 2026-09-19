@@ -4,6 +4,7 @@ import { test, expect } from "../fixtures/topoviewer";
 const TOPOLOGY_FILE = "simple.clab.yml";
 
 async function openYamlEditor(page: Page): Promise<void> {
+  await page.getByTestId("navbar-split-view").click();
   await page.locator('[data-testid="panel-tab-yaml"]').click();
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 15000 });
   await page.waitForFunction(() => {
