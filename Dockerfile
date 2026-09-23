@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # The build emits portable JavaScript and static assets for both runtime architectures.
-FROM --platform=$BUILDPLATFORM node:24.21.0-alpine AS deps
+FROM --platform=$BUILDPLATFORM node:26.9.0-alpine AS deps
 
 WORKDIR /app
 
@@ -31,7 +31,7 @@ COPY packages/standalone-runtime ./packages/standalone-runtime
 
 RUN pnpm web
 
-FROM node:24.21.0-alpine AS runtime
+FROM node:26.9.0-alpine AS runtime
 
 ENV NODE_ENV=production
 ENV PORT=3001
