@@ -1,4 +1,10 @@
-export { expect, test, type BrowserErrorOptions } from "./browserErrors";
+export {
+  expect,
+  expectNoBrowserErrors,
+  test,
+  watchBrowserErrors,
+  type BrowserErrorOptions
+} from "./browserErrors";
 export { defineHostSuiteConfig, type HostSuiteOptions } from "./config";
 export {
   connected,

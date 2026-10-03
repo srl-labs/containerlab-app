@@ -49,6 +49,20 @@ jobs:
           test -n "$(find apps/desktop/release -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$(find apps/desktop/release -maxdepth 1 -name '*.rpm' -print -quit)"
 
+      - name: Smoke test the packaged app
+        run: xvfb-run -a pnpm --filter containerlab-desktop exec playwright test --config test/playwright.config.ts
+        env:
+          DESKTOP_EXECUTABLE: ${{ github.workspace }}/apps/desktop/release/linux-unpacked/containerlab-desktop.bin
+
+      - name: Upload desktop smoke test report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-playwright-report
+          path: apps/desktop/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Upload Linux package artifacts
         uses: actions/upload-artifact@v7
         with:

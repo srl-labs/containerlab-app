@@ -97,10 +97,11 @@ pnpm test:ui       # clab-ui harness: editor and shared views against an in-memo
 pnpm test:pages    # sandbox: the shared standalone workspace, without a backend
 pnpm test:web      # web: endpoints, sign-in, settings and shared workspaces against the app server
 pnpm test:vscode   # VS Code extension smoke tests
+pnpm test:desktop  # Electron smoke tests: app server, native edit menu, window and link policy
 pnpm preview:build && pnpm preview:test  # combined documentation and sandbox site
 ```
 
-UI, sandbox and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
+UI, sandbox and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code and desktop tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` or `xvfb-run -a pnpm test:desktop` if necessary.
 
 ### Where tests belong
 
@@ -115,7 +116,7 @@ differs from the other hosts.
 | `packages/standalone-runtime` | unit | Session, endpoint and backend orchestration shared by web, desktop and the sandbox, and the shared startup page and assets. |
 | `apps/web-public` | browser | The shared standalone workspace (rail, explorer, document tabs, empty state, panels and narrow layouts) for web, desktop and the sandbox, the sandbox's capabilities, and its published build at a subpath. |
 | `apps/web` | browser | App-server flows: endpoints and sign-in, endpoint settings, shared workspace locations and base paths. |
-| `apps/desktop` | unit | Electron navigation, window and external-link policy, environment parsing and the edit menu. |
+| `apps/desktop` | unit, smoke | Electron navigation, window and external-link policy, environment parsing and the edit menu. The smoke suite launches the app; CI runs it against the packaged Linux build. |
 | `apps/vscode-containerlab` | unit, smoke | Extension commands, tree views and webview routing against the real `@containerlab/clab-ui/session` protocol. |
 
 A new host transport runs `describeTopologyHostContract` from

@@ -34,14 +34,17 @@
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "@types/node": "catalog:",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "@playwright/test": "catalog:",
+    "@srl-labs/containerlab-test-kit": "workspace:*"
   },
   "scripts": {
     "start": "electron --ozone-platform=x11 .",
     "dev": "pnpm --filter containerlab-app-web run build && pnpm run build && pnpm run start",
     "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
     "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
+    "test:e2e": "pnpm run build && playwright test --config test/playwright.config.ts",
     "package": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --publish never",
     "package:linux": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux --publish never",
     "package:appimage": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --linux AppImage --publish never",
@@ -50,7 +53,7 @@
     "package:mac": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --mac dmg --universal --publish never",
     "package:win": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --win nsis --x64 --publish never",
     "package:dir": "pnpm --filter containerlab-app-web run build && pnpm run build && node scripts/package-app.mjs --dir --publish never",
-    "lint": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin src"
+    "lint": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin src test"
   },
   "build": {
     "appId": "dev.containerlab.desktop",

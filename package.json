@@ -34,6 +34,7 @@
     "test:ui": "pnpm --filter @containerlab/clab-ui run test:browser",
     "test:web": "pnpm ui && pnpm --filter containerlab-app-web run test:e2e",
     "test:vscode": "pnpm ui && pnpm --filter vscode-containerlab run test:e2e",
+    "test:desktop": "pnpm ui && pnpm --filter containerlab-app-web run build && pnpm --filter containerlab-desktop run test:e2e",
     "test:package": "pnpm ui:pack && node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz",
     "sync:schema": "node scripts/sync-clab-schema.mjs",
     "generate:empty-state": "node scripts/generate-empty-state-artwork.mjs",

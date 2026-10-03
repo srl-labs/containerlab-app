@@ -419,6 +419,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/app-server
     devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.63.0
+      '@srl-labs/containerlab-test-kit':
+        specifier: workspace:*
+        version: link:../../packages/test-kit
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.5
