@@ -37,7 +37,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "scripts/fixtures/clab-ui-consumer.ts"
     ],
     // Python documentation tooling is installed through uv.lock.
-    ignoreBinaries: ["uv"]
+    ignoreBinaries: ["uv"],
+    // run-stress-api-bff.mjs starts the app server through node_modules/.bin/tsx.
+    ignoreDependencies: ["tsx"]
   },
   "apps/desktop": {
     entry: ["scripts/after-pack.cjs"],

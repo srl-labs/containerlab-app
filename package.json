@@ -52,8 +52,8 @@
     "knip": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:",
-    "yaml": "catalog:"
+    "yaml": "catalog:",
+    "@srl-labs/containerlab-test-kit": "workspace:*"
   },
   "packageManager": "pnpm@12.4.2"
 }

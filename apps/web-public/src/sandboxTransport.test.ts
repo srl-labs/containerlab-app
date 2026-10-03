@@ -1,32 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createApiClabUiHost } from "@containerlab/clab-ui/host";
 import { createMemorySandboxBackend } from "./sandboxBackend";
 import { createSandboxTransport } from "./sandboxTransport";
 
-// Exercise the actual shared host protocol against the local adapter, including a deployment prefix.
-test("shared topology host edits and persists a sandbox document", async () => {
+// Edits through the shared host protocol are covered by topologyHostContract.test.ts.
+test("sandbox transport leaves browser globals alone and disposes sessions", async () => {
   const backend = createMemorySandboxBackend();
-  const transport = createSandboxTransport(backend);
   const originalFetch = globalThis.fetch;
-  const topologyRef = await backend.createTopologyFile("lab.clab.yml");
-  const session = backend.createSession(topologyRef);
-  const host = createApiClabUiHost({
-    baseUrl: "http://localhost/sandbox/",
-    fetchImpl: transport.fetch,
-    postMessage: () => {},
-    targetWindow: new EventTarget() as unknown as Window
-  });
-  const before = await host.topology.requestSnapshot(session, {});
-  const content = "name: edited\ntopology:\n  nodes:\n    router:\n      kind: linux\n      image: alpine:latest\n";
-  const response = await host.topology.dispatchCommand(session, before.revision, {
-    command: "setYamlContent", payload: { content }
-  });
-  assert.notEqual(response.type, "topology-host:error");
-  const after = await host.topology.requestSnapshot(session, {});
-  assert.equal(after.labName, "edited");
-  assert.equal(after.nodes[0]?.id, "router");
-  assert.equal((await backend.readFile("lab.clab.yml")).content, content);
+  const transport = createSandboxTransport(backend);
+  const session = backend.createSession(await backend.createTopologyFile("lab.clab.yml"));
   assert.equal(globalThis.fetch, originalFetch, "the adapter must never replace browser globals");
   const deleted = await transport.fetch(`http://localhost/sandbox/api/topology/sessions/${session.sessionId}`, { method: "DELETE" });
   assert.equal(deleted.status, 200);

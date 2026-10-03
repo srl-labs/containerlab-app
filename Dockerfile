@@ -18,6 +18,7 @@ COPY packages/app-contract/package.json packages/app-contract/package.json
 COPY packages/app-server/package.json packages/app-server/package.json
 COPY packages/clab-ui/package.json packages/clab-ui/package.json
 COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
+COPY packages/test-kit/package.json packages/test-kit/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 

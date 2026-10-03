@@ -58,6 +58,7 @@
     "postcss-import": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "@srl-labs/containerlab-test-kit": "workspace:*"
   }
 }

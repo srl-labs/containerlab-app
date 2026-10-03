@@ -28,7 +28,8 @@
     "typescript": "catalog:",
     "tsx": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:"
+    "oxlint-tsgolint": "catalog:",
+    "vite": "catalog:"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

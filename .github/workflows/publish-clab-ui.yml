@@ -55,6 +55,9 @@ jobs:
       - name: Build and pack UI
         run: pnpm ui:pack
 
+      - name: Check the built UI against the host contract
+        run: pnpm --filter @srl-labs/containerlab-test-kit run test:unit
+
       - name: Validate the release tarball with npm consumers
         run: node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz
 

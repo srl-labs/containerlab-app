@@ -41,6 +41,7 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "@playwright/test": "catalog:"
+    "@playwright/test": "catalog:",
+    "@srl-labs/containerlab-test-kit": "workspace:*"
   }
 }
