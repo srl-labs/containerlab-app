@@ -1,9 +1,8 @@
 import path from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { expect, test, type Page } from "@playwright/test";
-import { build, createServer, preview, type PreviewServer, type ViteDevServer } from "vite";
+import type { Page } from "@playwright/test";
+import { expect, stubEventSource, test } from "@srl-labs/containerlab-test-kit/playwright";
+import { createServer, type ViteDevServer } from "vite";
 import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
 
 import { buildDetachedTerminalUrl } from "../../../../../packages/standalone-runtime/src/runtimeDetachedTerminal";
@@ -18,6 +17,7 @@ const savedEndpoint = {
 };
 
 async function mockRuntime(page: Page, basePath: string): Promise<void> {
+  await stubEventSource(page);
   await page.route("**/*", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     const relative = pathname.slice(basePath.length);
@@ -143,55 +143,3 @@ for (const mode of ["production", "development"] as const) {
     });
   }
 }
-
-test("built sandbox loads at a subpath and opens a topology without backend requests", async ({ page }) => {
-  const sandboxRoot = path.resolve(webRoot, "../web-public");
-  const outDir = await mkdtemp(path.join(tmpdir(), "clab-sandbox-base-path-"));
-  let server: PreviewServer | undefined;
-  try {
-    // Build the current sandbox into a fresh directory; never reuse a prior app's output.
-    await build({
-      configFile: path.join(sandboxRoot, "vite.config.ts"),
-      base: "/containerlab-app/",
-      logLevel: "error",
-      build: { outDir, emptyOutDir: true }
-    });
-    server = await preview({
-      configFile: false,
-      root: sandboxRoot,
-      base: "/containerlab-app/",
-      build: { outDir },
-      preview: { host: "127.0.0.1", port: 0 }
-    });
-    const address = server.httpServer.address();
-    if (address === null || typeof address === "string") throw new Error("Pages preview did not listen");
-    const networkRequests: string[] = [];
-    const browserErrors: string[] = [];
-    page.on("pageerror", (error) => browserErrors.push(error.message));
-    page.on("request", (request) => {
-      if (/\/(?:api|auth)\/|\/files(?:\?|$)/.test(new URL(request.url()).pathname)) networkRequests.push(request.url());
-    });
-    await page.goto(`http://127.0.0.1:${address.port}/containerlab-app/`);
-    await expect(page.getByTestId("workspace-sidebar")).toBeVisible();
-    await page.getByRole("button", { name: "Create a lab", exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await dialog.getByRole("textbox", { name: "Topology file name" }).fill("base-path.clab.yml");
-    await dialog.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("tab", { name: "base-path", exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(page.locator(".react-flow")).toBeVisible();
-    await page.getByTestId("navbar-split-view").click();
-    await expect(page.locator(".monaco-editor .view-lines")).toContainText("name: base-path");
-    expect(networkRequests).toEqual([]);
-    expect(browserErrors).toEqual([]);
-  } finally {
-    try {
-      const httpServer = server?.httpServer;
-      if (httpServer) {
-        await new Promise<void>((resolve, reject) => httpServer.close((error) => error ? reject(error) : resolve()));
-      }
-    } finally {
-      await rm(outDir, { recursive: true, force: true });
-    }
-  }
-});

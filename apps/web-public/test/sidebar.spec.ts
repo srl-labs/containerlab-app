@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, waitForWorkspace } from "@srl-labs/containerlab-test-kit/playwright";
 
 test("only the hovered rail item animates, without resizing the rail or editor", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -6,7 +6,7 @@ test("only the hovered rail item animates, without resizing the rail or editor",
     "motion.clab.yml": "name: motion\ntopology:\n  nodes:\n    router1:\n      kind: linux\n      image: alpine:latest\n    router2:\n      kind: linux\n      image: alpine:latest\n  links:\n    - endpoints: [router1:eth1, router2:eth1]\n"
   })));
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   await page.mouse.move(400, 200);
   await rail.getByRole("button", { name: "Labs", exact: true }).click();
@@ -61,7 +61,7 @@ test("only the hovered rail item animates, without resizing the rail or editor",
 
 test("hover labels fit their text even when page JavaScript cannot run", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   await expect(rail).toBeVisible();
   await page.mouse.move(400, 200);
@@ -75,7 +75,7 @@ test("hover labels fit their text even when page JavaScript cannot run", async (
       await expect(button.getByTestId("rail-item-surface")).toHaveCSS("opacity", "1");
       const sizes = await button.evaluate((element) => ({
         button: element.getBoundingClientRect().width,
-        label: element.querySelector(".MuiTypography-root")!.getBoundingClientRect().width
+        label: element.querySelector("[data-testid='rail-item-label']")!.getBoundingClientRect().width
       }));
       expect(sizes.button).toBeCloseTo(sizes.label + 56, 0);
       await expect(rail).toHaveCSS("width", "48px");
@@ -87,7 +87,7 @@ test("hover labels fit their text even when page JavaScript cannot run", async (
 
 test("pinning survives reload, unpins under the pointer and adapts to a narrow window", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   const sidebar = page.getByTestId("workspace-sidebar");
   const initial = (await sidebar.boundingBox())!;
@@ -114,7 +114,7 @@ test("pinning survives reload, unpins under the pointer and adapts to a narrow w
 
 test("carved labels fit each item and keep the surrounding explorer clickable", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   const labs = rail.getByRole("button", { name: "Labs", exact: true });
   const files = rail.getByRole("button", { name: "Files", exact: true });
@@ -142,7 +142,7 @@ test("carved labels fit each item and keep the surrounding explorer clickable", 
 test("closing the explorer preserves expanded folders and reopening works from the keyboard", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("clab-pages-sandbox-files-v1", JSON.stringify({ "folder/notes.txt": "notes" })));
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   const sidebar = page.getByTestId("workspace-sidebar");
   const files = rail.getByRole("button", { name: "Files", exact: true });
@@ -167,7 +167,7 @@ test("closing the explorer preserves expanded folders and reopening works from t
 
 test("sidebar resize supports keyboard and pointer capture without losing its preferred width", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   await page.getByRole("button", { name: "Labs", exact: true }).click();
   const resize = page.getByRole("separator", { name: "Resize sidebar" });
   await resize.focus();
@@ -187,7 +187,7 @@ test("sidebar resize supports keyboard and pointer capture without losing its pr
   await page.mouse.up();
   await expect(resize).toHaveAttribute("aria-valuenow", "380");
   await page.reload();
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   await page.getByRole("button", { name: "Labs", exact: true }).click();
   await expect(resize).toHaveAttribute("aria-valuenow", "380");
   await page.setViewportSize({ width: 500, height: 700 });
@@ -206,7 +206,7 @@ test("rail honors reduced motion and remains usable when storage is blocked", as
     Storage.prototype.setItem = () => { throw new DOMException("Storage disabled", "SecurityError"); };
   });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   await expect(rail.getByRole("button", { name: "Pin", exact: true })).toHaveCSS("transition-duration", "0s");
   await rail.getByRole("button", { name: "Pin", exact: true }).click();

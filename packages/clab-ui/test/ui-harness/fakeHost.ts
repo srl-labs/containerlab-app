@@ -1,5 +1,6 @@
 import type { ClabUiHost, ClabUiTopoViewerEvent } from "../../src/host/contracts";
 import type { CustomIconInfo } from "../../src/core/types/icons";
+import type { TopologyAnnotations } from "../../src/core/types/topology";
 import {
   TopologySessionCore,
   type FileSystemAdapter,
@@ -107,7 +108,7 @@ export interface FakeClabUiHost extends ClabUiHost {
     getFiles(): Map<string, string>;
     listTopologyFiles(): Array<{ filename: string; hasAnnotations: boolean }>;
     loadTopologyFile(filePath: string): Promise<TopologySnapshot>;
-    readAnnotationsFile(filename: string): Promise<unknown>;
+    readAnnotationsFile(filename: string): Promise<TopologyAnnotations>;
     readYamlFile(filename: string): Promise<string>;
     resetFiles(): Promise<void>;
     emitCurrentSnapshot(): Promise<void>;

@@ -124,6 +124,7 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
             component="span"
             variant="body2"
             noWrap
+            data-testid="rail-item-label"
             sx={{
               flexShrink: 0, opacity: "var(--rail-label-opacity)", transform: "translateX(var(--rail-label-offset))",
               transition: `opacity ${MOTION}, transform ${MOTION}`

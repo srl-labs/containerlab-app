@@ -4,13 +4,18 @@ import * as path from "path";
 
 import type { Locator, TestInfo } from "@playwright/test";
 import { test as base } from "@playwright/test";
+import type { Edge } from "@xyflow/react";
+
+import type { NetworkType } from "../../../src/core/types/editors";
+import type { TopologyAnnotations } from "../../../src/core/types/topology";
+import type { BrowserDevApi } from "../devApi";
 
 // Test selectors
 const CANVAS_SELECTOR = ".react-flow";
 
 // Node type constants (used in browser-side code)
-const TOPOLOGY_NODE_TYPE = "topology-node";
-const NETWORK_NODE_TYPE = "network-node";
+const TOPOLOGY_NODE_TYPE = "topology-node" as const;
+const NETWORK_NODE_TYPE = "network-node" as const;
 
 /**
  * Generate a unique session ID for test isolation
@@ -48,97 +53,6 @@ interface EdgeMatchParams {
   targetEndpoint: string;
 }
 
-type BrowserMode = "edit" | "view";
-
-interface BrowserNodeLike {
-  id: string;
-  type?: string;
-  selected?: boolean;
-  position: { x: number; y: number };
-  data?: {
-    sourceEndpoint?: string;
-    targetEndpoint?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-interface BrowserEdgeLike {
-  id: string;
-  source: string;
-  target: string;
-  selected?: boolean;
-  sourceEndpoint?: string;
-  targetEndpoint?: string;
-  data?: {
-    sourceEndpoint?: string;
-    targetEndpoint?: string;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
-interface BrowserReactFlowLike {
-  getNodes?: () => BrowserNodeLike[];
-  setNodes?: (nodes: BrowserNodeLike[]) => void;
-  getEdges?: () => BrowserEdgeLike[];
-  setEdges?: (edges: BrowserEdgeLike[]) => void;
-  getViewport?: () => { x: number; y: number; zoom: number };
-  setViewport?: (viewport: { x: number; y: number; zoom: number }) => void;
-  fitView?: (options?: { padding?: number; maxZoom?: number }) => void;
-}
-
-interface BrowserDevApi {
-  rfInstance?: BrowserReactFlowLike | null;
-  mode?: () => string;
-  setMode?: (mode: BrowserMode) => void;
-  setModeState?: (mode: BrowserMode) => void;
-  isLocked?: () => boolean;
-  setLocked?: (locked: boolean) => void;
-  setLayout?: (layout: string) => void;
-  getReactGroups?: () => Array<{ id: string }>;
-  groupsCount?: number;
-  createGroupFromSelected?: () => void;
-  loadTopologyFile?: (file: string, sessionId?: string) => Promise<void>;
-  getYamlFromFile?: (filename: string) => Promise<string>;
-  getAnnotationsFromFile?: (filename: string) => Promise<unknown>;
-  listTopologyFiles?: () => Array<{ filename: string; hasAnnotations: boolean }>;
-  resetFiles?: () => Promise<void>;
-  emitCurrentSnapshot?: () => Promise<void>;
-  writeYamlFile?: (filename: string, content: string) => Promise<void>;
-  writeAnnotationsFile?: (filename: string, content: unknown) => Promise<void>;
-  getCurrentFile?: () => unknown;
-  selectNodesForClipboard?: (ids: string[]) => void;
-  selectNode?: (id: string) => void;
-  selectedNode?: () => string | null;
-  clearNodeSelection?: () => void;
-  selectEdge?: (id: string) => void;
-  selectedEdge?: () => string | null;
-  undoRedo?: { canUndo?: boolean; canRedo?: boolean };
-  handleNodeCreatedCallback?: (
-    nodeId: string,
-    nodeElement: Record<string, unknown>,
-    position: { x: number; y: number }
-  ) => void;
-  handleEdgeCreated?: (
-    sourceId: string,
-    targetId: string,
-    edgeData: {
-      id: string;
-      source: string;
-      target: string;
-      sourceEndpoint: string;
-      targetEndpoint: string;
-    }
-  ) => void;
-  createNetworkAtPosition?: (position: { x: number; y: number }, networkType: string) => unknown;
-  stateManager?: {
-    groups?: { selectGroup?: (id: string) => void };
-    getAnnotations?: () => { nodeAnnotations?: Array<{ id: string; group?: string }> } | undefined;
-  };
-  groups?: { selectGroup?: (id: string) => void };
-}
-
 const dispatchGroupKeyboardEvent = (): void => {
   const event = new KeyboardEvent("keydown", {
     key: "g",
@@ -162,7 +76,7 @@ function browserCreateGroup(): CreateGroupResult {
   const rf = dev?.rfInstance;
   const getSelected = (): string[] => {
     if (rf == null) return [];
-    const nodes = rf.getNodes?.() ?? [];
+    const nodes = rf.getNodes();
     return nodes.filter((node) => node.selected === true).map((node) => node.id);
   };
   const getGroupCount = (): number => (dev?.getReactGroups?.() ?? []).length;
@@ -204,7 +118,7 @@ function browserHasMatchingEdge({
   const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
   const rf = dev?.rfInstance;
   if (rf == null) return false;
-  const edges = rf.getEdges?.() ?? [];
+  const edges = rf.getEdges();
   const specialPrefixes = ["host:", "mgmt-net:", "macvlan:", "vxlan:", "vxlan-stitch:", "dummy"];
   const isSpecial = (id: string) => specialPrefixes.some((prefix) => id.startsWith(prefix));
   const matchNode = (edgeNode: string, expected: string) => {
@@ -212,7 +126,7 @@ function browserHasMatchingEdge({
     return isSpecial(expected) && edgeNode.startsWith(`${expected}:`);
   };
   const matches = (
-    edge: BrowserEdgeLike,
+    edge: Edge,
     expectedSource: string,
     expectedTarget: string,
     expectedSourceEndpoint: string,
@@ -221,8 +135,8 @@ function browserHasMatchingEdge({
     if (!matchNode(edge.source, expectedSource) || !matchNode(edge.target, expectedTarget)) {
       return false;
     }
-    const edgeSourceEndpoint = edge.data?.sourceEndpoint ?? edge.sourceEndpoint;
-    const edgeTargetEndpoint = edge.data?.targetEndpoint ?? edge.targetEndpoint;
+    const edgeSourceEndpoint = edge.data?.sourceEndpoint;
+    const edgeTargetEndpoint = edge.data?.targetEndpoint;
     const sourceEndpointMatches =
       edgeSourceEndpoint === expectedSourceEndpoint ||
       (isSpecial(expectedSource) && (edgeSourceEndpoint === "" || edgeSourceEndpoint == null));
@@ -263,79 +177,6 @@ function browserGetGroupDebugInfo(): GroupDebugInfo {
  * Topology files available in dev/topologies/ (file-based)
  */
 type TopologyFileName = string;
-
-/**
- * Annotations structure from file API
- */
-interface TopologyAnnotations {
-  nodeAnnotations?: Array<{
-    id: string;
-    position?: { x: number; y: number };
-    groupId?: string;
-    group?: string;
-    level?: string;
-    icon?: string;
-    iconColor?: string;
-    labelPosition?: string;
-    direction?: string;
-    labelBackgroundColor?: string;
-  }>;
-  freeTextAnnotations?: Array<{ id: string; text: string; position: { x: number; y: number } }>;
-  freeShapeAnnotations?: Array<{
-    id: string;
-    shapeType: string;
-    position: { x: number; y: number };
-  }>;
-  trafficRateAnnotations?: Array<{
-    id: string;
-    label?: string;
-    nodeId?: string;
-    interfaceName?: string;
-    mode?: "chart" | "text";
-    textMetric?: "combined" | "rx" | "tx";
-    position: { x: number; y: number };
-    width?: number;
-    height?: number;
-    borderWidth?: number;
-  }>;
-  groupStyleAnnotations?: Array<{
-    id: string;
-    name: string;
-    parentId?: string;
-    position?: { x: number; y: number };
-    zIndex?: number;
-  }>;
-  networkNodeAnnotations?: Array<{
-    id: string;
-    type: string;
-    label: string;
-    position: { x: number; y: number };
-  }>;
-  edgeAnnotations?: Array<{
-    id?: string;
-    source?: string;
-    target?: string;
-    sourceEndpoint?: string;
-    targetEndpoint?: string;
-    endpointLabelOffsetEnabled?: boolean;
-    endpointLabelOffset?: number;
-  }>;
-  viewerSettings?: {
-    endpointLabelOffsetEnabled?: boolean;
-    endpointLabelOffset?: number;
-    gridLineWidth?: number;
-    gridStyle?: "dotted" | "quadratic";
-    style?: "default" | "telemetry-style";
-    linkLabelMode?: "show-all" | "on-select" | "hide" | "telemetry-style";
-    lastNonTelemetryLinkLabelMode?: "show-all" | "on-select" | "hide";
-    telemetryNodeSizePx?: number;
-    telemetryInterfaceSizePercent?: number;
-    showRateLabels?: boolean;
-    showDummyLinks?: boolean;
-    autoCreateTrafficRateAnnotations?: boolean;
-  };
-  aliasEndpointAnnotations?: Array<{ id: string }>;
-}
 
 /**
  * Helper interface for interacting with TopoViewer
@@ -483,7 +324,10 @@ interface TopoViewerPage {
   createNode(nodeId: string, position: { x: number; y: number }, kind?: string): Promise<void>;
 
   /** Create a network node (host, mgmt-net, macvlan, vxlan, vxlan-stitch, dummy, bridge, ovs-bridge) */
-  createNetwork(position: { x: number; y: number }, networkType: string): Promise<string | null>;
+  createNetwork(
+    position: { x: number; y: number },
+    networkType: NetworkType
+  ): Promise<string | null>;
 
   /** Create a link between two nodes */
   createLink(
@@ -502,10 +346,10 @@ interface TopoViewerPage {
   /** Reset all topology and annotation files to defaults (for test isolation) */
   resetFiles(): Promise<void>;
 
-  /** Select a group by ID (programmatic) */
+  /** Select a group and its member nodes (programmatic) */
   selectGroup(groupId: string): Promise<void>;
 
-  /** Get member node IDs for a group */
+  /** Get member node IDs for a group from the annotations file */
   getGroupMembers(groupId: string): Promise<string[]>;
 
   /** Perform copy (Ctrl+C) */
@@ -628,22 +472,24 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         // Wait a bit for any auto-load to settle
         await page.waitForTimeout(300);
 
-        // Load file-based topology via dev API with session ID
+        // Load file-based topology via dev API
         // Retry up to 3 times if loading fails
         const maxRetries = 3;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
             // Load the file
             const loadResult = await page.evaluate(
-              async ({ file, sid }) => {
+              async (file) => {
                 try {
-                  await (window as { __DEV__?: BrowserDevApi }).__DEV__.loadTopologyFile(file, sid);
+                  const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+                  if (!dev) throw new Error("__DEV__ API not available");
+                  await dev.loadTopologyFile(file);
                   return { success: true };
                 } catch (e: any) {
                   return { success: false, error: e?.message ?? String(e) };
                 }
               },
-              { file: filename, sid: sessionId }
+              filename
             );
 
             if (!loadResult.success) {
@@ -655,7 +501,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
               (expectedFile) => {
                 const currentFile = (
                   window as { __DEV__?: BrowserDevApi }
-                ).__DEV__?.getCurrentFile?.();
+                ).__DEV__?.getCurrentFile();
                 if (typeof currentFile !== "string" || currentFile.length === 0) return false;
                 return currentFile.endsWith(expectedFile);
               },
@@ -670,7 +516,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
                   const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
                   const rf = dev?.rfInstance;
                   if (!rf) return false;
-                  const nodes = rf.getNodes?.() ?? [];
+                  const nodes = rf.getNodes();
                   // Prefer topology nodes, but fall back to any node count
                   const topoNodes = nodes.filter(
                     (n: any) => n.type === types.topo || n.type === types.network
@@ -688,7 +534,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
               () => {
                 const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
                 const rf = dev?.rfInstance;
-                return rf !== undefined && rf !== null;
+                return rf !== undefined;
               },
               undefined,
               { timeout: 10000, polling: 100 }
@@ -712,8 +558,8 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
       },
 
       getCurrentFile: async () => {
-        const currentFile = await page.evaluate<unknown>(() => {
-          return (window as { __DEV__?: BrowserDevApi }).__DEV__.getCurrentFile();
+        const currentFile = await page.evaluate(() => {
+          return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getCurrentFile() ?? null;
         });
         if (typeof currentFile !== "string" || currentFile.length === 0) return null;
         return path.basename(currentFile);
@@ -723,9 +569,9 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             return await page.evaluate((file) => {
-              return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getAnnotationsFromFile?.(
-                file
-              );
+              const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+              if (!dev) throw new Error("__DEV__ API not available");
+              return dev.getAnnotationsFromFile(file);
             }, filename);
           } catch (err) {
             if (attempt === 2) throw err;
@@ -746,7 +592,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         for (let attempt = 0; attempt < 3; attempt++) {
           try {
             const yaml = await page.evaluate((file) => {
-              return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getYamlFromFile?.(file);
+              return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getYamlFromFile(file);
             }, filename);
             if (typeof yaml !== "string") throw new Error(`Failed to read YAML: ${filename}`);
             return yaml;
@@ -760,7 +606,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       listTopologyFiles: async () => {
         return await page.evaluate(() => {
-          return (window as { __DEV__?: BrowserDevApi }).__DEV__?.listTopologyFiles?.() ?? [];
+          return (window as { __DEV__?: BrowserDevApi }).__DEV__?.listTopologyFiles() ?? [];
         });
       },
 
@@ -783,7 +629,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           () => {
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
-            return rf !== undefined && rf !== null && typeof rf.getNodes === "function";
+            return rf !== undefined && typeof rf.getNodes === "function";
           },
           undefined,
           { timeout: 30000, polling: 200 }
@@ -791,7 +637,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
         // If a non-empty file is loaded, wait for topology nodes to exist
         const currentFile = await page.evaluate<unknown>(
-          () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.getCurrentFile?.() ?? null
+          () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.getCurrentFile() ?? null
         );
         const currentFileName =
           typeof currentFile === "string" && currentFile.length > 0
@@ -807,7 +653,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
               const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
               const rf = dev?.rfInstance;
               if (!rf) return false;
-              const nodes = rf.getNodes?.() ?? [];
+              const nodes = rf.getNodes();
               return nodes.some((n: any) => n.type === types.topo || n.type === types.network);
             },
             { topo: TOPOLOGY_NODE_TYPE, network: NETWORK_NODE_TYPE },
@@ -816,12 +662,12 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         }
 
         // If topology nodes exist, wait for at least one to render in the DOM
-        const firstNodeId = await page.evaluate<string | null>(
+        const firstNodeId = await page.evaluate(
           (types) => {
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return null;
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             const topoNode = nodes.find(
               (n: any) => n.type === types.topo || n.type === types.network
             );
@@ -849,7 +695,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return false;
-          const nodes = rf.getNodes?.() ?? [];
+          const nodes = rf.getNodes();
           if (nodes.length <= 1) return false; // 1 or no nodes don't need layout
 
           // Check if all nodes are at the same position
@@ -873,7 +719,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         // Call fitView to ensure proper viewport
         await page.evaluate(() => {
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          dev?.rfInstance?.fitView?.({ padding: 0.2, maxZoom: 1.2 });
+          void dev?.rfInstance?.fitView({ padding: 0.2, maxZoom: 1.2 });
         });
 
         // Wait for fitView animation
@@ -896,7 +742,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return 0;
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             // Filter out non-topology nodes (annotations, etc.)
             return nodes.filter((n: any) => n.type === types.topo || n.type === types.network)
               .length;
@@ -910,7 +756,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return { x: 0, y: 0 };
-          const nodes = rf.getNodes?.() ?? [];
+          const nodes = rf.getNodes();
           const node = nodes.find((n: any) => n.id === id);
           if (!node) return { x: 0, y: 0 };
           return node.position;
@@ -931,11 +777,11 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const rf = (window as { __DEV__?: BrowserDevApi }).__DEV__?.rfInstance;
             if (!rf) return null;
 
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             const node = nodes.find((n: any) => n.id === id);
             if (!node) return null;
 
-            const vp = rf.getViewport?.() ?? { x: 0, y: 0, zoom: 1 };
+            const vp = rf.getViewport();
             const container = document.querySelector(sel);
             const rect = container?.getBoundingClientRect();
             const ox = rect?.left ?? 0;
@@ -958,12 +804,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       setEditMode: async () => {
         await page.evaluate(() => {
-          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          if (dev?.setModeState) {
-            dev.setModeState("edit");
-            return;
-          }
-          dev?.setMode?.("edit");
+          (window as { __DEV__?: BrowserDevApi }).__DEV__?.setModeState?.("edit");
         });
         await page.waitForFunction(
           () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.mode?.() === "edit",
@@ -974,12 +815,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       setViewMode: async () => {
         await page.evaluate(() => {
-          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          if (dev?.setModeState) {
-            dev.setModeState("view");
-            return;
-          }
-          dev?.setMode?.("view");
+          (window as { __DEV__?: BrowserDevApi }).__DEV__?.setModeState?.("view");
         });
         await page.waitForFunction(
           () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.mode?.() === "view",
@@ -990,7 +826,9 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       unlock: async () => {
         await page.evaluate(() => {
-          (window as { __DEV__?: BrowserDevApi }).__DEV__.setLocked(false);
+          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+          if (!dev?.setLocked) throw new Error("setLocked not available");
+          dev.setLocked(false);
         });
         await page.waitForFunction(
           () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.isLocked?.() === false,
@@ -1001,7 +839,9 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       lock: async () => {
         await page.evaluate(() => {
-          (window as { __DEV__?: BrowserDevApi }).__DEV__.setLocked(true);
+          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+          if (!dev?.setLocked) throw new Error("setLocked not available");
+          dev.setLocked(true);
         });
         await page.waitForFunction(
           () => (window as { __DEV__?: BrowserDevApi }).__DEV__?.isLocked?.() === true,
@@ -1012,7 +852,9 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       isLocked: async () => {
         return await page.evaluate(() => {
-          return (window as { __DEV__?: BrowserDevApi }).__DEV__.isLocked();
+          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+          if (!dev?.isLocked) throw new Error("isLocked not available");
+          return dev.isLocked();
         });
       },
 
@@ -1022,7 +864,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return [];
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             return nodes
               .filter((n: any) => n.type === types.topo || n.type === types.network)
               .map((n: any) => n.id);
@@ -1089,7 +931,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return [];
-          const edges = rf.getEdges?.() ?? [];
+          const edges = rf.getEdges();
           return edges.map((e: any) => e.id);
         });
       },
@@ -1099,7 +941,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return [];
-          const edges = rf.getEdges?.() ?? [];
+          const edges = rf.getEdges();
           return edges.map((e: any) => ({
             id: e.id,
             source: e.source,
@@ -1116,7 +958,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return null;
-            const edges = rf.getEdges?.() ?? [];
+            const edges = rf.getEdges();
             const matches = (edge: any) => {
               const data = edge.data ?? {};
               const se = data.sourceEndpoint;
@@ -1135,12 +977,14 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             };
             const edge = edges.find(matches);
             if (!edge) return null;
+            const se = edge.data?.sourceEndpoint;
+            const te = edge.data?.targetEndpoint;
             return {
               id: edge.id,
               source: edge.source,
               target: edge.target,
-              sourceEndpoint: edge.data?.sourceEndpoint,
-              targetEndpoint: edge.data?.targetEndpoint
+              sourceEndpoint: typeof se === "string" ? se : undefined,
+              targetEndpoint: typeof te === "string" ? te : undefined
             };
           },
           { source, target, sourceEndpoint, targetEndpoint }
@@ -1152,7 +996,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return 0;
-          const edges = rf.getEdges?.() ?? [];
+          const edges = rf.getEdges();
           return edges.length;
         });
       },
@@ -1168,7 +1012,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           // Also set React Flow edge.selected property
           const rf = dev?.rfInstance;
           if (rf) {
-            const edges = rf.getEdges?.() ?? [];
+            const edges = rf.getEdges();
             const updatedEdges = edges.map((e: any) => ({
               ...e,
               selected: e.id === id
@@ -1195,7 +1039,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         return await page.evaluate(() => {
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
-          const viewport = rf?.getViewport?.();
+          const viewport = rf?.getViewport();
           return viewport?.zoom ?? 1;
         });
       },
@@ -1204,7 +1048,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         return await page.evaluate(() => {
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
-          const viewport = rf?.getViewport?.() ?? { x: 0, y: 0 };
+          const viewport = rf?.getViewport() ?? { x: 0, y: 0 };
           return { x: viewport.x, y: viewport.y };
         });
       },
@@ -1215,14 +1059,14 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (rf?.setViewport) {
-              const viewport = rf.getViewport?.() ?? { x: 0, y: 0, zoom: 1 };
+              const viewport = rf.getViewport();
               const container = document.querySelector(sel);
               const rect = container?.getBoundingClientRect();
               const centerX = rect ? rect.width / 2 : 0;
               const centerY = rect ? rect.height / 2 : 0;
               const modelCenterX = (centerX - viewport.x) / viewport.zoom;
               const modelCenterY = (centerY - viewport.y) / viewport.zoom;
-              rf.setViewport({
+              void rf.setViewport({
                 x: centerX - modelCenterX * z,
                 y: centerY - modelCenterY * z,
                 zoom: z
@@ -1240,8 +1084,8 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (rf?.setViewport) {
-              const viewport = rf.getViewport?.() ?? { x: 0, y: 0, zoom: 1 };
-              rf.setViewport({ x: px, y: py, zoom: viewport.zoom });
+              const viewport = rf.getViewport();
+              void rf.setViewport({ x: px, y: py, zoom: viewport.zoom });
             }
           },
           { px: x, py: y }
@@ -1252,7 +1096,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
       fit: async () => {
         await page.evaluate(() => {
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          dev?.rfInstance?.fitView?.({ padding: 0.1, maxZoom: 1.2 });
+          void dev?.rfInstance?.fitView({ padding: 0.1, maxZoom: 1.2 });
         });
         await page.waitForTimeout(300);
       },
@@ -1263,7 +1107,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return [];
-          const nodes = rf.getNodes?.() ?? [];
+          const nodes = rf.getNodes();
           return nodes
             .filter((n: any) => n.type === types.topo || n.type === types.network)
             .filter((n: any) => n.selected === true)
@@ -1278,7 +1122,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return [];
-          const edges = rf.getEdges?.() ?? [];
+          const edges = rf.getEdges();
           return edges.filter((e) => e.selected === true).map((e) => e.id);
         });
       },
@@ -1294,7 +1138,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           // Clear edge selection too
           const rf = dev?.rfInstance;
           if (rf) {
-            const edges = rf.getEdges?.() ?? [];
+            const edges = rf.getEdges();
             const updatedEdges = edges.map((e: any) => ({
               ...e,
               selected: false
@@ -1406,7 +1250,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return false;
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             return nodes.some((n: any) => n.id === id);
           },
           nodeId,
@@ -1479,7 +1323,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       createNetwork: async (
         position: { x: number; y: number },
-        networkType: string
+        networkType: NetworkType
       ): Promise<string | null> => {
         // Wait for createNetworkAtPosition to be available
         await page.waitForFunction(
@@ -1502,7 +1346,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         }
 
         // Create the network node
-        const networkId = await page.evaluate<unknown>(
+        const networkId = await page.evaluate(
           ({ pos, type }) => {
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             if (!dev?.createNetworkAtPosition) {
@@ -1521,7 +1365,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
             const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
             const rf = dev?.rfInstance;
             if (!rf) return false;
-            const nodes = rf.getNodes?.() ?? [];
+            const nodes = rf.getNodes();
             return nodes.some((n: any) => n.id === id);
           },
           networkId,
@@ -1536,7 +1380,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
           const rf = dev?.rfInstance;
           if (!rf) return [];
-          const nodes = rf.getNodes?.() ?? [];
+          const nodes = rf.getNodes();
           return nodes.filter((n: any) => n.type === cloudType).map((n: any) => n.id);
         }, NETWORK_NODE_TYPE);
       },
@@ -1566,37 +1410,30 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
       resetFiles: async () => {
         await ensureDevApiReady();
         await page.evaluate(async () => {
-          await (window as { __DEV__?: BrowserDevApi }).__DEV__?.resetFiles?.();
+          await (window as { __DEV__?: BrowserDevApi }).__DEV__?.resetFiles();
         });
         await page.waitForTimeout(100);
       },
 
       selectGroup: async (groupId: string) => {
-        await page.evaluate((id) => {
+        const memberIds = await topoViewerPage.getGroupMembers(groupId);
+        await page.evaluate((ids) => {
           const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          if (dev?.stateManager?.groups?.selectGroup) {
-            dev.stateManager.groups.selectGroup(id);
-          } else if (dev?.groups?.selectGroup) {
-            dev.groups.selectGroup(id);
+          if (!dev?.selectNodesForClipboard) {
+            throw new Error("selectNodesForClipboard not available");
           }
-        }, groupId);
+          dev.selectNodesForClipboard(ids);
+        }, [groupId, ...memberIds]);
         await page.waitForTimeout(100);
       },
 
       getGroupMembers: async (groupId: string) => {
-        return await page.evaluate((id) => {
-          const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
-          const annotations = dev?.stateManager?.getAnnotations?.();
-          const nodeAnnotations = annotations?.nodeAnnotations;
-          if (!Array.isArray(nodeAnnotations)) return [];
-          const groupPrefix = id.split("__")[0];
-          return nodeAnnotations
-            .filter((n: { id: string; group?: string }) => {
-              if (n.group === id) return true;
-              return typeof n.group === "string" && n.group.startsWith(groupPrefix);
-            })
-            .map((n: { id: string; group?: string }) => n.id);
-        }, groupId);
+        const currentFile = await topoViewerPage.getCurrentFile();
+        if (currentFile == null) return [];
+        const annotations = await topoViewerPage.getAnnotationsFromFile(currentFile);
+        return (annotations.nodeAnnotations ?? [])
+          .filter((annotation) => annotation.groupId === groupId)
+          .map((annotation) => annotation.id);
       },
 
       copy: async () => {
@@ -1682,13 +1519,6 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         });
 
         if (isContextPanelOpen) {
-          // Prefer returning to palette, then closing the panel completely.
-          const backBtn = page.locator('[data-testid="panel-back-btn"]');
-          if (await backBtn.isVisible().catch(() => false)) {
-            await backBtn.click();
-            await page.waitForTimeout(100);
-          }
-
           const toggleBtn = page.locator('[data-testid="panel-toggle-btn"]');
           if (await toggleBtn.isVisible().catch(() => false)) {
             await toggleBtn.click();
@@ -1735,12 +1565,6 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
         });
 
         if (isContextPanelOpen) {
-          const backBtn = page.locator('[data-testid="panel-back-btn"]');
-          if (await backBtn.isVisible().catch(() => false)) {
-            await backBtn.click();
-            await page.waitForTimeout(200);
-          }
-
           const toggleBtn = page.locator('[data-testid="panel-toggle-btn"]');
           if (await toggleBtn.isVisible().catch(() => false)) {
             await toggleBtn.click();
@@ -1760,7 +1584,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
       writeYamlFile: async (filename: string, content: string) => {
         await page.evaluate(
           async ({ file, nextContent }) => {
-            await (window as { __DEV__?: BrowserDevApi }).__DEV__?.writeYamlFile?.(
+            await (window as { __DEV__?: BrowserDevApi }).__DEV__?.writeYamlFile(
               file,
               nextContent
             );
@@ -1772,7 +1596,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
       writeAnnotationsFile: async (filename: string, content: object) => {
         await page.evaluate(
           async ({ file, nextContent }) => {
-            await (window as { __DEV__?: BrowserDevApi }).__DEV__?.writeAnnotationsFile?.(
+            await (window as { __DEV__?: BrowserDevApi }).__DEV__?.writeAnnotationsFile(
               file,
               nextContent
             );
@@ -1783,13 +1607,13 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
 
       emitCurrentSnapshot: async () => {
         await page.evaluate(async () => {
-          await (window as { __DEV__?: BrowserDevApi }).__DEV__?.emitCurrentSnapshot?.();
+          await (window as { __DEV__?: BrowserDevApi }).__DEV__?.emitCurrentSnapshot();
         });
       },
 
       readYamlFile: async (filename: string) => {
         const yaml = await page.evaluate((file) => {
-          return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getYamlFromFile?.(file);
+          return (window as { __DEV__?: BrowserDevApi }).__DEV__?.getYamlFromFile(file);
         }, filename);
         if (typeof yaml !== "string") throw new Error(`Failed to read YAML: ${filename}`);
         return yaml;

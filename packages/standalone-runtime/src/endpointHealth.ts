@@ -30,5 +30,9 @@ export async function fetchEndpointHealthMetrics(
   if (!response.ok) {
     throw new Error(await readEndpointHealthError(response));
   }
-  return (await response.json()) as EndpointHealthMetrics;
+  const payload = (await response.json()) as Partial<EndpointHealthMetrics> | null;
+  if (typeof payload?.metrics !== "object" || payload.metrics === null) {
+    throw new Error("Health stats response did not include metrics");
+  }
+  return payload as EndpointHealthMetrics;
 }

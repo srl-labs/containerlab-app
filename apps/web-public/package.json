@@ -13,7 +13,7 @@
     "build": "vite build --config vite.config.ts",
     "preview": "vite preview --config vite.config.ts",
     "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
     "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",

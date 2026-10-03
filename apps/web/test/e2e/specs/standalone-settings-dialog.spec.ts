@@ -2,17 +2,14 @@ import fs from "node:fs/promises";
 
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "../fixtures/browserErrors";
-
-const SEL_SETTINGS_BUTTON = '[data-testid="standalone-settings-button"]';
-const SEL_SETTINGS_DIALOG = '[data-testid="standalone-settings-dialog"]';
-const SEL_SETTINGS_CLOSE = '[data-testid="standalone-settings-close"]';
-const SEL_NAV_ENDPOINTS = '[data-testid="standalone-settings-nav-endpoints"]';
-const SEL_NAV_GENERAL = '[data-testid="standalone-settings-nav-general"]';
-const SEL_NAV_TERMINAL = '[data-testid="standalone-settings-nav-terminal"]';
-const SEL_NAV_ABOUT = '[data-testid="standalone-settings-nav-about"]';
-const SEL_SAVE_TERMINAL = '[data-testid="standalone-settings-save-terminal"]';
-const SEL_FONT_PRESET_15 = '[data-testid="standalone-settings-font-size-preset-15"]';
+import {
+  connected,
+  expect,
+  mockStandaloneApi,
+  seedEndpoints,
+  test,
+  TEST_ENDPOINT
+} from "@srl-labs/containerlab-test-kit/playwright";
 
 test.describe("Standalone Settings Dialog", () => {
   test.beforeEach(async ({ page }) => {
@@ -22,115 +19,22 @@ test.describe("Standalone Settings Dialog", () => {
         localStorage.removeItem("clab-standalone-terminal-settings");
         localStorage.setItem("clab-standalone-settings-test-seeded", "true");
       }
-      localStorage.setItem(
-        "clab-standalone-endpoints",
-        JSON.stringify([
-          {
-            id: "test-endpoint",
-            url: "https://localhost:8090",
-            label: "Test Endpoint",
-            username: "admin",
-            sessionDuration: "24h"
-          }
-        ])
-      );
     });
+    await seedEndpoints(page, [TEST_ENDPOINT]);
     await page.goto("/");
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
   });
 
   async function openSettings(page: Page) {
-    await page.locator(SEL_SETTINGS_BUTTON).click();
-    const dialog = page.locator(SEL_SETTINGS_DIALOG);
+    await page.getByTestId("standalone-settings-button").click();
+    const dialog = page.getByTestId("standalone-settings-dialog");
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId("settings-layout")).toBeVisible();
     return dialog;
   }
 
   async function mockConnectedEndpointExplorer(page: Page) {
-    await page.addInitScript(() => {
-      class MockEventSource extends EventTarget {
-        onopen: ((event: Event) => void) | null = null;
-        onmessage: ((event: MessageEvent) => void) | null = null;
-        onerror: ((event: Event) => void) | null = null;
-        readyState = 0;
-        url: string;
-
-        constructor(url: string) {
-          super();
-          this.url = url;
-          window.setTimeout(() => {
-            this.readyState = 1;
-            this.onopen?.(new Event("open"));
-            this.dispatchEvent(new Event("open"));
-          }, 0);
-        }
-
-        close(): void {
-          this.readyState = 2;
-        }
-      }
-
-      window.EventSource = MockEventSource as unknown as typeof EventSource;
-    });
-    await page.route("**/auth/me**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          endpoints: [
-            {
-              id: "test-endpoint",
-              url: "https://localhost:8090",
-              label: "Test Endpoint",
-              username: "admin",
-              sessionDuration: "24h",
-              status: "connected",
-              connected: true
-            }
-          ]
-        })
-      });
-    });
-    await page.route("**/files**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([])
-      });
-    });
-    await page.route("**/api/runtime/ui/custom-nodes**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ customNodes: [], defaultNode: "" })
-      });
-    });
-    await page.route("**/auth/endpoints/test-endpoint/metrics", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          serverInfo: {
-            version: "test",
-            uptime: "1m",
-            startTime: "2026-04-24T00:00:00Z"
-          },
-          metrics: {
-            cpu: { usagePercent: 12.4, numCPU: 8 },
-            mem: { usagePercent: 45.6, usedMem: 4_294_967_296, totalMem: 8_589_934_592 },
-            disk: {
-              path: "/",
-              usagePercent: 67.8,
-              usedDisk: 107_374_182_400,
-              totalDisk: 214_748_364_800
-            }
-          }
-        })
-      });
-    });
-
+    await mockStandaloneApi(page, { endpoints: [connected(TEST_ENDPOINT)] });
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
 
@@ -139,25 +43,25 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(dialog.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeFocused();
+    await expect(page.getByTestId("standalone-settings-button")).toBeFocused();
   });
 
   test("opens the standalone settings dialog with section navigation", async ({ page }) => {
     const dialog = await openSettings(page);
 
-    await expect(dialog.locator(SEL_SETTINGS_CLOSE)).toBeVisible();
-    await expect(dialog.locator(SEL_NAV_GENERAL)).toBeVisible();
-    await expect(dialog.locator(SEL_NAV_TERMINAL)).toBeVisible();
-    await expect(dialog.locator(SEL_NAV_ABOUT)).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-close")).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-nav-general")).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-nav-terminal")).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-nav-about")).toBeVisible();
 
-    await dialog.locator(SEL_NAV_TERMINAL).click();
+    await dialog.getByTestId("standalone-settings-nav-terminal").click();
     await expect(dialog.getByRole("heading", { name: "Terminal", exact: true })).toBeVisible();
     await expect(dialog.getByLabel("SSH User Mapping JSON")).toBeVisible();
     await expect(dialog.getByLabel("Telnet Port")).toBeVisible();
     await expect(dialog.getByLabel("Terminal Font Size")).toBeVisible();
-    await expect(dialog.locator(SEL_FONT_PRESET_15)).toBeVisible();
+    await expect(dialog.getByTestId("standalone-settings-font-size-preset-15")).toBeVisible();
 
-    await dialog.locator(SEL_NAV_ABOUT).click();
+    await dialog.getByTestId("standalone-settings-nav-about").click();
     await expect(dialog.getByRole("heading", { name: "About", exact: true })).toBeVisible();
     await expect(dialog.getByRole("heading", { name: "Containerlab App", exact: true })).toBeVisible();
     await expect(dialog.getByRole("heading", { name: "Documentation", exact: true })).toHaveCount(0);
@@ -169,58 +73,7 @@ test.describe("Standalone Settings Dialog", () => {
   });
 
   test("shows endpoint health stats when a connected endpoint is available", async ({ page }) => {
-    await page.addInitScript(() => {
-      class MockEventSource extends EventTarget {
-        onopen: ((event: Event) => void) | null = null;
-        onmessage: ((event: MessageEvent) => void) | null = null;
-        onerror: ((event: Event) => void) | null = null;
-        readyState = 0;
-        url: string;
-
-        constructor(url: string) {
-          super();
-          this.url = url;
-          window.setTimeout(() => {
-            this.readyState = 1;
-            this.onopen?.(new Event("open"));
-            this.dispatchEvent(new Event("open"));
-          }, 0);
-        }
-
-        close(): void {
-          this.readyState = 2;
-        }
-      }
-
-      window.EventSource = MockEventSource as unknown as typeof EventSource;
-    });
-    await page.route("**/auth/me**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          authenticated: true,
-          endpoints: [
-            {
-              id: "test-endpoint",
-              url: "https://localhost:8090",
-              label: "Test Endpoint",
-              username: "admin",
-              sessionDuration: "24h",
-              status: "connected",
-              connected: true
-            }
-          ]
-        })
-      });
-    });
-    await page.route("**/api/runtime/ui/custom-nodes**", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ customNodes: [], defaultNode: "" })
-      });
-    });
+    await mockStandaloneApi(page, { endpoints: [connected(TEST_ENDPOINT)] });
     await page.route("**/auth/endpoints/test-endpoint/metrics", async (route) => {
       await route.fulfill({
         status: 200,
@@ -246,10 +99,10 @@ test.describe("Standalone Settings Dialog", () => {
     });
 
     await page.goto("/", { waitUntil: "domcontentloaded" });
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
 
     const dialog = await openSettings(page);
-    await dialog.locator(SEL_NAV_ENDPOINTS).click();
+    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
     await expect(dialog.getByText("CPU")).toBeVisible();
     await expect(dialog.getByText("Memory")).toBeVisible();
     await expect(dialog.getByText("Disk")).toBeVisible();
@@ -274,7 +127,7 @@ test.describe("Standalone Settings Dialog", () => {
     await page.getByRole("button", { name: "Close explorer", exact: true }).click();
 
     const dialog = await openSettings(page);
-    await dialog.locator(SEL_NAV_ENDPOINTS).click();
+    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
     await expect(dialog.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Edit Test Endpoint", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Reconnect Test Endpoint", exact: true })).toBeVisible();
@@ -326,10 +179,10 @@ test.describe("Standalone Settings Dialog", () => {
 
   test("exports and imports endpoint profiles from settings", async ({ page }) => {
     const dialog = await openSettings(page);
-    await dialog.locator(SEL_NAV_ENDPOINTS).click();
+    await dialog.getByTestId("standalone-settings-nav-endpoints").click();
 
     const downloadPromise = page.waitForEvent("download");
-    await dialog.locator('[data-testid="standalone-endpoints-export"]').click();
+    await dialog.getByTestId("standalone-endpoints-export").click();
     const download = await downloadPromise;
     const downloadPath = await download.path();
     expect(download.suggestedFilename()).toBe("containerlab-app-endpoints.json");
@@ -357,7 +210,7 @@ test.describe("Standalone Settings Dialog", () => {
     expect(exported).not.toContain("connected");
 
     const fileChooserPromise = page.waitForEvent("filechooser");
-    await dialog.locator('[data-testid="standalone-endpoints-import"]').click();
+    await dialog.getByTestId("standalone-endpoints-import").click();
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles({
       name: "endpoints.json",
@@ -387,12 +240,12 @@ test.describe("Standalone Settings Dialog", () => {
 
   test("invalid terminal settings stay blocked with inline validation", async ({ page }) => {
     const dialog = await openSettings(page);
-    await dialog.locator(SEL_NAV_TERMINAL).click();
+    await dialog.getByTestId("standalone-settings-nav-terminal").click();
 
     const telnetField = dialog.getByLabel("Telnet Port");
     const sshMappingField = dialog.getByLabel("SSH User Mapping JSON");
     const fontSizeField = dialog.getByLabel("Terminal Font Size");
-    const saveButton = dialog.locator(SEL_SAVE_TERMINAL);
+    const saveButton = dialog.getByTestId("standalone-settings-save-terminal");
 
     await telnetField.fill("70000");
     await expect(dialog.getByText("Telnet port must be an integer between 1 and 65535.")).toBeVisible();
@@ -419,24 +272,24 @@ test.describe("Standalone Settings Dialog", () => {
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-theme")))
       .toBe("light");
 
-    await dialog.locator(SEL_NAV_TERMINAL).click();
+    await dialog.getByTestId("standalone-settings-nav-terminal").click();
     await dialog.getByLabel("SSH User Mapping JSON").fill('{\n  "custom_kind": "operator"\n}');
     await dialog.getByLabel("Telnet Port").fill("6001");
-    await dialog.locator(SEL_FONT_PRESET_15).click();
+    await dialog.getByTestId("standalone-settings-font-size-preset-15").click();
     await expect(dialog.getByLabel("Terminal Font Size")).toHaveValue("15");
-    await dialog.locator(SEL_SAVE_TERMINAL).click();
-    await expect(dialog.locator(SEL_SAVE_TERMINAL)).toBeEnabled();
+    await dialog.getByTestId("standalone-settings-save-terminal").click();
+    await expect(dialog.getByTestId("standalone-settings-save-terminal")).toBeEnabled();
 
-    await dialog.locator(SEL_SETTINGS_CLOSE).click();
+    await dialog.getByTestId("standalone-settings-close").click();
     await expect(dialog).not.toBeVisible();
 
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator(SEL_SETTINGS_BUTTON)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
 
     const reloadedDialog = await openSettings(page);
     await expect(reloadedDialog.getByRole("combobox", { name: "Color theme" })).toHaveText("Light");
 
-    await reloadedDialog.locator(SEL_NAV_TERMINAL).click();
+    await reloadedDialog.getByTestId("standalone-settings-nav-terminal").click();
     await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");
     await expect(reloadedDialog.getByLabel("Terminal Font Size")).toHaveValue("15");
     await expect(reloadedDialog.getByLabel("SSH User Mapping JSON")).toHaveValue(

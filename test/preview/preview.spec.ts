@@ -1,9 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { createTopologyFile, expect, test, waitForWorkspace } from "@srl-labs/containerlab-test-kit/playwright";
 
 test("docs, nested guides and the sandbox work in one static preview", async ({ page, baseURL }) => {
   const origin = new URL(baseURL!).origin;
   const failures: string[] = [];
-  page.on("pageerror", (error) => failures.push(error.message));
   page.on("response", (response) => {
     if (new URL(response.url()).origin === origin && response.status() >= 400) {
       failures.push(`${response.status()} ${response.url()}`);
@@ -26,27 +25,15 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   await expect(sandboxLink).toHaveJSProperty("href", `${origin}/sandbox/`);
   await sandboxLink.click();
   await expect(page).toHaveURL(`${origin}/sandbox/`);
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  await page.reload();
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
+  await waitForWorkspace(page);
 
   // The sandbox must create and reopen files without a backend at its new path.
-  const sidebar = page.getByTestId("workspace-sidebar");
-  const openLabs = async () => {
-    const labs = sidebar.getByRole("button", { name: "Labs", exact: true });
-    if (await labs.getAttribute("aria-expanded") !== "true") await labs.click();
-  };
-  await openLabs();
-  await sidebar.getByRole("button", { name: "New Topology File", exact: true }).first().click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Topology file name" }).fill("preview.clab.yml");
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  const tab = page.getByRole("tab", { name: "preview", exact: true });
-  await expect(tab).toHaveAttribute("aria-selected", "true");
+  const tab = await createTopologyFile(page, "preview");
   await page.reload();
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  await openLabs();
+  await waitForWorkspace(page);
+  const sidebar = page.getByTestId("workspace-sidebar");
+  const labs = page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true });
+  if ((await labs.getAttribute("aria-expanded")) !== "true") await labs.click();
   await sidebar.getByRole("button", { name: /preview\.clab\.yml/ }).click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);

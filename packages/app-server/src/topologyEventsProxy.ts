@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { Response } from "undici";
 
 import type { ClabApiClient } from "./clabApiClient.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
@@ -39,7 +40,7 @@ function isTopologyDocumentEventLine(line: string): boolean {
 }
 
 async function forwardTopologyEvents(
-  body: ReadableStream<Uint8Array>,
+  body: NonNullable<Response["body"]>,
   reply: FastifyReply,
   isAborted: () => boolean,
   options: ForwardTopologyEventsOptions = {},

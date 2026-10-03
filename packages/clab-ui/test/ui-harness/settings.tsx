@@ -25,10 +25,18 @@ const appearance = {
   reduceMotion: false,
 };
 Object.assign(window, { __CLAB_APPEARANCE__: appearance });
+// The JSON import types keys missing from a group as optional `undefined`.
+const configuration: Array<{
+  properties: Partial<Record<string, SettingSchema>>;
+}> = manifest.contributes.configuration;
 const definitions = createSettingsCatalog(
-  manifest.contributes.configuration as Array<{
-    properties: Record<string, SettingSchema>;
-  }>,
+  configuration.map((group) => ({
+    properties: Object.fromEntries(
+      Object.entries(group.properties).filter(
+        (entry): entry is [string, SettingSchema] => entry[1] !== undefined,
+      ),
+    ),
+  })),
 );
 const saved: Record<SettingsTarget, Record<string, unknown>> = {
   user: {},

@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+
+import { expect, test, waitForWorkspace } from "@srl-labs/containerlab-test-kit/playwright";
 
 async function sampleWaves(page: Page) {
   return page.getByTestId("empty-state-waves").evaluate((canvas) => new Promise<{ visible: number; colored: number; signature: number }>((resolve) => {
@@ -21,42 +23,46 @@ async function sampleWaves(page: Page) {
   }));
 }
 
-test("dotted artwork is present with the first workspace render without a fallback or worker", async ({ page }) => {
-  await page.addInitScript(() => {
-    window.Worker = new Proxy(window.Worker, {
-      construct() { throw new DOMException("Workers blocked", "SecurityError"); }
+test.describe("when the logo request fails", () => {
+  test.use({ allowedBrowserErrors: [/net::ERR_FAILED/] });
+
+  test("dotted artwork is present with the first workspace render without a fallback or worker", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.Worker = new Proxy(window.Worker, {
+        construct() { throw new DOMException("Workers blocked", "SecurityError"); }
+      });
+      Object.defineProperty(window, "OffscreenCanvas", { value: undefined });
+      const observer = new MutationObserver(() => {
+        if (!document.querySelector("[data-testid='workspace-sidebar']")) return;
+        const empty = document.querySelector("[data-testid='standalone-empty-lab-state']");
+        document.documentElement.dataset.firstWorkspaceHasArtwork = String(
+          !!empty?.querySelector("[data-testid='empty-state-artwork'] path") && !empty.querySelector("img, canvas")
+        );
+        observer.disconnect();
+      });
+      observer.observe(document, { childList: true, subtree: true });
     });
-    Object.defineProperty(window, "OffscreenCanvas", { value: undefined });
-    const observer = new MutationObserver(() => {
-      if (!document.querySelector("[data-testid='workspace-sidebar']")) return;
-      const empty = document.querySelector("[data-testid='standalone-empty-lab-state']");
-      document.documentElement.dataset.firstWorkspaceHasArtwork = String(
-        !!empty?.querySelector("[data-testid='empty-state-artwork'] path") && !empty.querySelector("img, canvas")
-      );
-      observer.disconnect();
-    });
-    observer.observe(document, { childList: true, subtree: true });
+    // The rail's optional logo may request this file; the empty workspace must not need it.
+    await page.route("**/containerlab.svg", (route) => route.abort());
+    await page.goto("/");
+    await waitForWorkspace(page);
+    await expect(page.locator("html")).toHaveAttribute("data-first-workspace-has-artwork", "true");
+    const artwork = page.getByTestId("empty-state-artwork");
+    await expect(artwork).toBeVisible();
+    await expect(artwork).toHaveCSS("color", "rgb(255, 255, 255)");
+    await page.getByRole("button", { name: "Light mode", exact: true }).click();
+    await expect(artwork).toHaveCSS("color", "rgb(0, 0, 0)");
+    expect(page.workers()).toHaveLength(0);
+    await page.getByRole("button", { name: "Create a lab", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
   });
-  // The rail's optional logo may request this file; the empty workspace must not need it.
-  await page.route("**/containerlab.svg", (route) => route.abort());
-  await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("html")).toHaveAttribute("data-first-workspace-has-artwork", "true");
-  const artwork = page.getByTestId("empty-state-artwork");
-  await expect(artwork).toBeVisible();
-  await expect(artwork).toHaveCSS("color", "rgb(255, 255, 255)");
-  await page.getByRole("button", { name: "Light mode", exact: true }).click();
-  await expect(artwork).toHaveCSS("color", "rgb(0, 0, 0)");
-  expect(page.workers()).toHaveLength(0);
-  await page.getByRole("button", { name: "Create a lab", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
 });
 
 test("dotted artwork animates without interaction and while hovering or pinning the rail", async ({ page }) => {
   await page.setViewportSize({ width: 2560, height: 1440 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();
   const bounds = (await waves.boundingBox())!;
@@ -79,12 +85,10 @@ test("dotted artwork animates without interaction and while hovering or pinning 
 });
 
 test("hover twinkles and colored click ripples settle back to the ongoing ambient animation", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const artwork = page.getByTestId("empty-state-artwork");
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();
@@ -122,35 +126,38 @@ test("hover twinkles and colored click ripples settle back to the ongoing ambien
   await expect(waves).toBeVisible();
   await page.getByRole("button", { name: "Create a lab", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  expect(errors).toEqual([]);
 });
 
-test("unavailable WebGL preserves the artwork and workspace actions", async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.addInitScript(() => {
-    HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
-      apply(target, receiver, args) {
-        if (args[0] === "webgl2") return null;
-        return Reflect.apply(target, receiver, args) as unknown;
-      }
+test.describe("without WebGL", () => {
+  test.use({ allowedBrowserErrors: [/Error creating WebGL context/] });
+
+  test("unavailable WebGL preserves the artwork and workspace actions", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.addInitScript(() => {
+      HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
+        apply(target, receiver, args) {
+          if (args[0] === "webgl2") return null;
+          return Reflect.apply(target, receiver, args) as unknown;
+        }
+      });
     });
+    await page.goto("/");
+    await waitForWorkspace(page);
+    const artwork = page.getByTestId("empty-state-artwork");
+    await expect(artwork).toBeVisible();
+    const bounds = (await artwork.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await expect(artwork).toBeVisible();
+    await expect(page.getByTestId("empty-state-waves")).toHaveCount(0);
+    await page.getByRole("button", { name: "Create a lab", exact: true }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
   });
-  await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
-  const artwork = page.getByTestId("empty-state-artwork");
-  await expect(artwork).toBeVisible();
-  const bounds = (await artwork.boundingBox())!;
-  await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-  await expect(artwork).toBeVisible();
-  await expect(page.getByTestId("empty-state-waves")).toHaveCount(0);
-  await page.getByRole("button", { name: "Create a lab", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
 });
 
 test("waves recover to the SVG when their graphics context is lost", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const artwork = page.getByTestId("empty-state-artwork");
   const waves = page.getByTestId("empty-state-waves");
   await expect(waves).toBeVisible();

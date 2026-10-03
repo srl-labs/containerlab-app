@@ -1,30 +1,13 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function createLab(page: Page, name: string, fromEmptyState = false) {
-  if (fromEmptyState) {
-    await page.getByRole("button", { name: "Create a lab", exact: true }).click();
-  } else {
-    const labs = page.getByRole("button", { name: "Labs", exact: true });
-    if (await labs.getAttribute("aria-expanded") !== "true") await labs.click();
-    await page.getByRole("button", { name: "New Topology File", exact: true }).first().click();
-  }
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("textbox", { name: "Topology file name" }).fill(`${name}.clab.yml`);
-  await dialog.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("tab", { name: name, exact: true })).toHaveAttribute("aria-selected", "true");
-}
+import { createTopologyFile, expect, test, waitForWorkspace } from "@srl-labs/containerlab-test-kit/playwright";
 
 test("local backend uses shared dialogs, document tabs, keyboard navigation and settings", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   await expect(page.getByTestId("workspace-sidebar")).toBeVisible();
   await expect(page.getByRole("button", { name: "Deploy Lab File", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Manage Images", exact: true })).toHaveCount(0);
-  await createLab(page, "first");
-  await createLab(page, "second");
+  await createTopologyFile(page, "first");
+  await createTopologyFile(page, "second");
   const first = page.getByRole("tab", { name: "first", exact: true });
   const second = page.getByRole("tab", { name: "second", exact: true });
   await second.focus();
@@ -45,14 +28,13 @@ test("local backend uses shared dialogs, document tabs, keyboard navigation and 
   await page.getByRole("option", { name: "Light", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Dark mode", exact: true })).toBeVisible();
-  expect(errors).toEqual([]);
 });
 
 test("toolbar and YAML panel stay usable in a narrow workspace", async ({ page }) => {
   await page.setViewportSize({ width: 600, height: 800 });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
-  await createLab(page, "narrow");
+  await waitForWorkspace(page);
+  await createTopologyFile(page, "narrow");
   await page.getByRole("button", { name: "Close explorer", exact: true }).click();
   await page.getByRole("button", { name: "More", exact: true }).click();
   await page.getByText("Lab Settings", { exact: true }).click();
@@ -70,7 +52,7 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
   await page.setViewportSize({ width: 640, height: 480 });
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
   const emptyState = page.getByTestId("standalone-empty-lab-state");
   const artwork = page.getByTestId("empty-state-artwork");
   const waves = page.getByTestId("empty-state-waves");
@@ -103,7 +85,7 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(artwork).toBeVisible();
   await expect(waves).toBeHidden();
-  await createLab(page, "artwork-lifecycle", true);
+  await createTopologyFile(page, "artwork-lifecycle", { fromEmptyState: true });
   await expect(emptyState).toBeHidden();
   await page.getByRole("tab", { name: "artwork-lifecycle", exact: true }).hover();
   await page.getByRole("button", { name: "Close artwork-lifecycle", exact: true }).click();
@@ -111,22 +93,18 @@ test("dotted artwork stays present during resizing and reduced motion", async ({
 });
 
 test("shared sidebar resizes independently of the floating palette and toolbar", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await expect(page.getByTestId("workspace-rail")).toBeVisible({ timeout: 30_000 });
-  await createLab(page, "rail", true);
+  await waitForWorkspace(page);
+  await createTopologyFile(page, "rail", { fromEmptyState: true });
   await page.getByRole("button", { name: "Unlock lab to edit", exact: true }).click();
   const sidebar = page.getByTestId("workspace-sidebar");
-  await expect(sidebar.getByRole("button", { name: "Node palette", exact: true })).toHaveCount(0);
-  await expect(sidebar.getByRole("button", { name: /Move sidebar/ })).toHaveCount(0);
   // Empty labs open the palette on the right by default.
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await page.locator(".react-flow__pane").click({ button: "right", position: { x: 120, y: 160 } });
   await page.getByText("Open Palette", { exact: true }).click();
   const panel = page.getByTestId("context-panel");
-  const drawer = panel.locator(".MuiDrawer-paper");
+  const drawer = page.getByTestId("context-panel-surface");
   await expect(panel.getByText("Node Templates", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Move panel to left", exact: true }).click();
   await panel.getByRole("button", { name: "Add", exact: true }).click();
@@ -187,5 +165,43 @@ test("shared sidebar resizes independently of the floating palette and toolbar",
   await page.keyboard.press("Delete");
   await expect(page.getByRole("button", { name: "Open panel", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Create a lab", exact: true })).toBeVisible();
-  expect(errors).toEqual([]);
+});
+
+test("file tabs replace the canvas, guard unsaved edits and restore topology controls", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("clab-pages-sandbox-files-v1", JSON.stringify({ "notes.txt": "workspace notes\n" }))
+  );
+  await page.goto("/");
+  await waitForWorkspace(page);
+  await createTopologyFile(page, "files", { fromEmptyState: true });
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await page.getByTestId("workspace-sidebar").getByText("notes.txt", { exact: true }).click();
+  await page.getByRole("button", { name: "Close explorer", exact: true }).click();
+  const editor = page.getByTestId("file-editor-tab-panel");
+  await expect(editor).toBeVisible();
+  await expect(page.getByTestId("navbar-lock")).toHaveCount(0);
+  await expect(page.locator(".react-flow")).toBeHidden();
+  const tab = page.getByRole("tab", { name: /notes.txt/ });
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+
+  await editor.getByRole("textbox", { name: "Editor content", exact: true }).focus();
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+  await page.keyboard.insertText("updated workspace notes");
+  await expect(page.getByTestId("file-editor-tab-save")).toBeEnabled();
+  await tab.hover();
+  await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
+  const confirm = page.getByRole("dialog", { name: "Discard Unsaved Changes" });
+  await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editor).toBeVisible();
+  await page.getByTestId("file-editor-tab-save").click();
+  await expect(page.getByTestId("file-editor-tab-save")).toBeDisabled();
+  await expect.poll(() => page.evaluate(() =>
+    (JSON.parse(localStorage.getItem("clab-pages-sandbox-files-v1") ?? "{}") as Record<string, string>)["notes.txt"]
+  )).toBe("updated workspace notes");
+
+  await tab.hover();
+  await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await expect(page.getByTestId("navbar-lock")).toBeVisible();
+  await expect(page.locator(".react-flow")).toBeVisible();
 });

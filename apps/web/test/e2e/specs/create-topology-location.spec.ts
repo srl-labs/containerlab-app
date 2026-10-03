@@ -1,30 +1,31 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import {
+  connected,
+  expect,
+  mockStandaloneApi,
+  seedEndpoints,
+  test,
+  waitForWorkspace
+} from "@srl-labs/containerlab-test-kit/playwright";
 
 const endpoints = [
   { id: "team", label: "Team server", url: "https://team.example" },
   { id: "personal", label: "Personal server", url: "https://personal.example" }
-].map((endpoint) => ({ ...endpoint, username: "tester", sessionDuration: "24h", status: "connected", connected: true }));
+].map((endpoint) => connected({ ...endpoint, username: "tester", sessionDuration: "24h" }));
+
+// Submissions are answered with 409 so the dialog stays open instead of opening an editor.
+test.use({ allowedBrowserErrors: [/status of 409 \(Conflict\)/] });
 
 async function setup(page: Page) {
-  await page.addInitScript((profiles) => {
-    localStorage.setItem("clab-standalone-endpoints", JSON.stringify(profiles));
-    window.EventSource = class extends EventTarget {
-      readyState = 1;
-      close() {}
-    } as unknown as typeof EventSource;
-  }, endpoints);
-  await page.route("**/auth/me", (route) => route.fulfill({ json: { authenticated: true, endpoints } }));
-  await page.route("**/files**", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/runtime/inspect/all", (route) => route.fulfill({ json: {} }));
-  await page.route("**/api/runtime/ui/custom-nodes", (route) => route.fulfill({ json: { customNodes: [], defaultNode: "" } }));
-  await page.route("**/auth/endpoints/*/metrics", (route) => route.fulfill({ json: { metrics: {} } }));
+  await seedEndpoints(page, endpoints);
+  await mockStandaloneApi(page, { endpoints });
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({
     json: route.request().headers()["x-endpoint-id"] === "team"
       ? [{ endpointId: "team", name: "@shared", path: "@shared", kind: "directory", hasChildren: false }]
       : []
   }));
   await page.goto("/");
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
+  await waitForWorkspace(page);
 }
 
 async function openCreate(page: Page) {

@@ -168,6 +168,7 @@ test.describe("Annotation rotation", () => {
       );
     await expect.poll(async () => (await readLine())?.position.x).toBeCloseTo(160, 5);
     const rotated = await readLine();
+    if (!rotated?.endPosition) throw new Error("rotation-line has no persisted end position");
     expect(rotated.endPosition.x).toBeCloseTo(160, 5);
     expect(
       Math.hypot(
@@ -248,6 +249,7 @@ test.describe("Annotation rotation", () => {
         const line = (await topoViewerPage.getAnnotationsFromFile(FILE)).freeShapeAnnotations?.find(
           (a: { id: string }) => a.id === "geo-rotation-line"
         );
+        if (!line?.geoCoordinates || !line.endGeoCoordinates) return Number.POSITIVE_INFINITY;
         return Math.abs(line.geoCoordinates.lng - line.endGeoCoordinates.lng);
       })
       .toBeLessThan(0.00001);

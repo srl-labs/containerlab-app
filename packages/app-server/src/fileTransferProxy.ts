@@ -1,5 +1,6 @@
 import { gzipSync } from "node:zlib";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Response } from "undici";
 
 import {
   getHttpErrorStatus,

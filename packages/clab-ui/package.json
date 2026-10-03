@@ -159,7 +159,7 @@
   "scripts": {
     "build": "node ./build.mjs",
     "build:viewer": "vite build --config vite.viewer.config.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/ui-harness/tsconfig.json --noEmit",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
     "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
     "lint:ts:fix": "oxlint --import-plugin --react-plugin --jsx-a11y-plugin . --fix --fix-suggestions",

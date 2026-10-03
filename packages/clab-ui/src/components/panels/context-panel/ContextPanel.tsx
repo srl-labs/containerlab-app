@@ -330,6 +330,7 @@ export const ContextPanel: React.FC<ContextPanelProps> = ({
         open={isOpen}
         transitionDuration={250}
         data-testid="context-panel"
+        slotProps={{ paper: { "data-testid": "context-panel-surface" } as React.HTMLAttributes<HTMLDivElement> }}
         sx={{
           position: "absolute",
           inset: 0,

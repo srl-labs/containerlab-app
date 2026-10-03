@@ -4,6 +4,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { runDocumentOperation } from "@containerlab/clab-ui/session";
+import type { Response } from "undici";
 import {
   getHttpErrorStatus,
   type ClabApiClient,
@@ -120,7 +121,7 @@ function resolveFileEndpoint(
 }
 
 async function forwardNdjsonAsSse(
-  body: ReadableStream<Uint8Array>,
+  body: NonNullable<Response["body"]>,
   reply: FastifyReply,
   isAborted: () => boolean,
 ): Promise<void> {

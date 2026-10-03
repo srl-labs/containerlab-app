@@ -13,7 +13,7 @@
     "dev:local": "pnpm run dev",
     "build": "vite build --config vite.config.ts && pnpm run build:server",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/server/index.cjs --sourcemap",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p test/e2e/tsconfig.json --noEmit",
     "typecheck:local-ui": "pnpm run typecheck",
     "lint": "pnpm run typecheck && pnpm run lint:ts",
     "lint:ts": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin .",
