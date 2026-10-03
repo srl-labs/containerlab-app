@@ -82,10 +82,10 @@ This builds the checked-out workspace for your current Docker platform. Follow t
 
 ```sh
 pnpm check         # dependency and release-version policies
-pnpm typecheck     # build UI, check policies, typecheck all workspaces
+pnpm typecheck     # build UI, check policies, typecheck all workspaces including test code
 pnpm lint
 pnpm knip          # unused files, exports, types, and dependencies across workspaces
-pnpm test          # all unit suites and release-routing tests
+pnpm test          # all unit suites, host contracts and release-routing tests
 pnpm test:package  # strict public API and npm tarball validation
 ```
 
@@ -93,12 +93,38 @@ Install Playwright's browser once, then select a browser suite:
 
 ```sh
 pnpm exec playwright install chromium
-pnpm test:ui
-pnpm test:web
-pnpm test:vscode
+pnpm test:ui       # clab-ui harness: editor and shared views against an in-memory host
+pnpm test:pages    # sandbox: the shared standalone workspace, without a backend
+pnpm test:web      # web: endpoints, sign-in, settings and shared workspaces against the app server
+pnpm test:vscode   # VS Code extension smoke tests
+pnpm preview:build && pnpm preview:test  # combined documentation and sandbox site
 ```
 
-UI and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
+UI, sandbox and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code E2E tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` if necessary.
+
+### Where tests belong
+
+Test behaviour once, in the package that implements it. A host only adds tests for what
+differs from the other hosts.
+
+| Package | Suites | Covers |
+| --- | --- | --- |
+| `packages/clab-ui` | unit, browser harness | Presentation and UI state, including the `workspace` views. The harness renders the real `App` with an in-memory host. A theme-token test keeps every token the UI reads defined for standalone hosts. |
+| `packages/test-kit` | unit | The executable `ClabUiHost` topology contract and its reference run over the VS Code webview transport. |
+| `packages/app-server`, `apps/web-public` | unit | Their transports, including the same topology contract run through the app server and through the sandbox backend. |
+| `packages/standalone-runtime` | unit | Session, endpoint and backend orchestration shared by web, desktop and the sandbox, and the shared startup page and assets. |
+| `apps/web-public` | browser | The shared standalone workspace (rail, explorer, document tabs, empty state, panels and narrow layouts) for web, desktop and the sandbox, the sandbox's capabilities, and its published build at a subpath. |
+| `apps/web` | browser | App-server flows: endpoints and sign-in, endpoint settings, shared workspace locations and base paths. |
+| `apps/desktop` | unit | Electron navigation, window and external-link policy, environment parsing and the edit menu. |
+| `apps/vscode-containerlab` | unit, smoke | Extension commands, tree views and webview routing against the real `@containerlab/clab-ui/session` protocol. |
+
+A new host transport runs `describeTopologyHostContract` from
+`@srl-labs/containerlab-test-kit/contracts`. Browser suites use
+`defineHostSuiteConfig` and the `test` fixture from
+`@srl-labs/containerlab-test-kit/playwright`, which fails a test on unexpected console or
+page errors, and its standalone helpers instead of copying mocks. Standalone hosts
+serve `WORKSPACE_ASSETS` from `packages/standalone-runtime/public` and render their page
+shell with `standaloneStartupShell()`, so web, desktop and the sandbox start identically.
 
 The shared-workspace browser test is opt-in. Start a test API server with
 `CLAB_SHARED_LABS_ROOT` set to a dedicated test directory and source-path discovery
@@ -136,7 +162,8 @@ apps/web-public               local-storage backend for the shared standalone wo
 apps/desktop                  Electron host
 apps/vscode-containerlab      VS Code extension
 packages/app-server           shared Fastify BFF used by web and desktop
-packages/standalone-runtime   backend adapters, sessions and shared UI composition
+packages/standalone-runtime   backend adapters, sessions, shared UI composition and page assets
+packages/test-kit             private host contract suites and browser test conventions
 packages/app-contract         shared browser-facing DTO types
 packages/clab-ui              shared publishable UI, themes and optional workspace views
 packages/clab-viewer          independently publishable standalone viewer
@@ -158,5 +185,4 @@ three application hosts consume the local UI workspace through the root lockfile
 
 UI changes belong in `packages/clab-ui`; app code supplies backend operations and
 capabilities. See [UI composition and ownership](packages/clab-ui/INTEGRATORS.md#one-ui-host-specific-composition).
-Run `pnpm test:pages` for sandbox workspace, keyboard tab navigation and narrow-layout
-coverage, alongside `pnpm test:web`, `pnpm test:ui` and `pnpm test:package`.
+See [Where tests belong](#where-tests-belong) before adding a browser test.

@@ -595,6 +595,12 @@ to own:
 - icon list/upload/delete flows
 - SVG export handling
 
+Every host's topology transport must behave the same way. In this repository,
+`describeTopologyHostContract` from the private `@srl-labs/containerlab-test-kit` package
+checks loading, acknowledged and stale commands, undo and redo, and external edits through
+`ClabUiHost.topology`. It runs against the VS Code webview transport, the app server and the
+sandbox backend.
+
 If you implement a custom host directly, these are the relevant `/host`
 contracts:
 
@@ -647,6 +653,10 @@ Recommended package usage:
 - import `@containerlab/clab-ui/styles/global.css` once
 - wrap with `MuiThemeProvider`
 - apply CSS variables with `applyThemeVars(...)` if your host controls theme mode
+
+The UI reads `--vscode-*` theme tokens. VS Code provides them; `DARK_VARS` and `LIGHT_VARS`
+define the same set for every other host. Any token the UI reads must be in both maps, or
+always carry a fallback when only VS Code defines it, so a host never renders unstyled parts.
 
 ## Local Workspace and External Consumer Checks
 
@@ -708,6 +718,9 @@ bar inside a VS Code editor.
 
 Provide a stable `WorkspaceHost` object through `WorkspaceHostProvider`. It supplies
 operations, live lab subscriptions, asset URLs, and native terminal-window opening.
+`assetUrl` resolves the brand assets listed in `WORKSPACE_ASSETS` (from `…/workspace/types`);
+a host must serve every one. Pass the startup logo's URL to `LoadingScreen` as `logoUrl` so
+the loading view matches the host page's own startup screen.
 The UI never imports a particular application's API implementation. Mount action
 dialogs when mounting navigation so the first action can immediately open a dialog.
 The navigation rail stays on the left and supports pointer and keyboard resizing.

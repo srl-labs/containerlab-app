@@ -17,56 +17,30 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
   PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
 
 jobs:
   deploy:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.CLOUDFLARE_PAGES_PROJECT_NAME != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - name: Validate project name
         run: '[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$ || "$PROJECT_NAME" =~ ^[a-z0-9]$ ]]'
 
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
+      # The PR test workflow already built and tested this site for the same commit.
       - name: Select commit preview
+        env:
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          COMMIT_SHA=$(git rev-parse HEAD)
           echo "SANDBOX_COMMIT_SHA=$COMMIT_SHA" >> "$GITHUB_ENV"
           echo "SANDBOX_BRANCH=${COMMIT_SHA:0:12}-pr" >> "$GITHUB_ENV"
 
-      - uses: pnpm/action-setup@v6
+      - name: Download tested preview
+        uses: actions/download-artifact@v8
         with:
-          run_install: false
-          standalone: true
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-
-      - name: Build docs and sandbox preview
-        run: pnpm preview:build
-        env:
-          PREVIEW_SITE_URL: https://${{ env.SANDBOX_BRANCH }}.${{ env.PROJECT_NAME }}.pages.dev/
-
-      - name: Install Playwright headless shell
-        run: pnpm exec playwright install --with-deps --only-shell chromium
-
-      - name: Test combined preview
-        run: pnpm preview:test
+          name: preview-site
+          path: site
 
       - name: Prepare Cloudflare CLI directory
         run: |
