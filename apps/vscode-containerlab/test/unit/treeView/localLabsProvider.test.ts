@@ -4,10 +4,7 @@
  *
  * The provider scans the workspace for clab topology files and exposes them as
  * tree nodes. These tests stub the VS Code APIs so the provider can execute in
- * a plain Node.js environment. They assert that:
- *   1. When no topology files are discovered, the provider returns `undefined`.
- *   2. Running labs are filtered from the results and the remaining labs are
- *      returned alphabetically.
+ * a plain Node.js environment.
  */
 import Module from "module";
 import path from "path";
@@ -25,9 +22,6 @@ const originalResolve = (Module as any)._resolveFilename;
 ) {
   if (request === "vscode") {
     return path.join(__dirname, "..", "..", "helpers", "vscode-stub.js");
-  }
-  if (request.includes("utils/utils")) {
-    return path.join(__dirname, "..", "..", "helpers", "utils-stub.js");
   }
   return originalResolve.call(this, request, parent, isMain, options);
 };
@@ -70,16 +64,6 @@ describe("LocalLabTreeDataProvider", () => {
     vscodeStub.workspace.createFileSystemWatcher = createFileWatcher;
     vscodeStub.workspace.findFiles = emptyFindFiles;
     vscodeStub.EventEmitter = EventEmitterStub as any;
-    try {
-      delete require.cache[require.resolve("../../../src/utils/utils")];
-    } catch {
-      /* ignore if module not in cache */
-    }
-    try {
-      delete require.cache[require.resolve("../../helpers/utils-stub")];
-    } catch {
-      /* ignore cleanup errors */
-    }
     globals.setFavoriteLabs(new Set());
     globals.setExtensionContext({ globalState: { update: sinon.stub().resolves() } } as any);
     // Stub outputChannel with log methods
@@ -149,9 +133,8 @@ describe("LocalLabTreeDataProvider", () => {
     expect(await provider.getChildren(undefined)).to.be.undefined;
   });
 
-  // Labs that are currently running should be filtered out and the remaining
-  // entries returned in alphabetical order.
-  it("filters running labs and sorts results", async () => {
+  // Labs that are currently running are listed by the running labs view instead.
+  it("hides labs that are already deployed", async () => {
     sinon
       .stub(vscodeStub.workspace, "findFiles")
       .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
@@ -184,25 +167,24 @@ describe("LocalLabTreeDataProvider", () => {
     expect(nodes![1].label).to.equal("a");
   });
 
-  it("places favorite labs first and keeps deploy context", async () => {
+  it("lists favorite labs before other labs in the same folder", async () => {
+    const alpha = "/workspace/a/alpha.clab.yml";
+    const zulu = "/workspace/a/zulu.clab.yml";
     sinon
       .stub(vscodeStub.workspace, "findFiles")
-      .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
-
-    globals.favoriteLabs.add(LAB_B);
+      .resolves([vscodeStub.Uri.file(alpha), vscodeStub.Uri.file(zulu)]);
+    globals.favoriteLabs.add(zulu);
 
     const provider = new LocalLabTreeDataProvider();
-    const nodes = await provider.getChildren(undefined);
+    const [folder] = (await provider.getChildren(undefined))!;
+    const labs = (await provider.getChildren(folder)) as ClabLabTreeNode[];
 
-    expect(nodes).to.have.lengthOf(2);
-    const firstFolder = nodes![0];
-    expect(firstFolder.label).to.equal("a");
-    const secondFolder = nodes![1];
-    expect(secondFolder.label).to.equal("b");
-    const children = await provider.getChildren(secondFolder);
-    const favChild = children![0] as ClabLabTreeNode;
-    expect(favChild.contextValue).to.equal("containerlabLabUndeployedFavorite");
-    expect(favChild.favorite).to.be.true;
+    expect(labs.map((lab) => lab.labPath.absolute)).to.deep.equal([zulu, alpha]);
+    expect(labs.map((lab) => lab.contextValue)).to.deep.equal([
+      "containerlabLabUndeployedFavorite",
+      "containerlabLabUndeployed"
+    ]);
+    expect(labs.map((lab) => lab.favorite)).to.deep.equal([true, false]);
   });
 
   it("keeps favorites that no longer exist and displays them", async () => {

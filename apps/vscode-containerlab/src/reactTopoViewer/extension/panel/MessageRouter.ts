@@ -289,7 +289,7 @@ export class MessageRouter {
     }
     const config: CustomNodeConfig = { name, kind };
     for (const [key, value] of Object.entries(payload)) {
-      if (key === "name" || key === "kind") continue;
+      if (key === "name" || key === "kind" || key === "command") continue;
       config[key] = value;
     }
     return config;

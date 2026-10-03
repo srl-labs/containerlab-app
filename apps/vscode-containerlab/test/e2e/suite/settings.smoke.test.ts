@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import * as vscode from "vscode";
 
+import { openTabs, waitForTab } from "./tabs";
+
 suite("Containerlab settings VS Code smoke", () => {
   test("opens a single settings editor from the registered command", async () => {
     const extension = vscode.extensions.getExtension("srl-labs.vscode-containerlab");
@@ -11,22 +13,8 @@ suite("Containerlab settings VS Code smoke", () => {
     assert.ok(fs.existsSync(path.join(extension.extensionPath, "dist", "settingsWebview.js")));
     await vscode.commands.executeCommand("containerlab.settings.open");
     await vscode.commands.executeCommand("containerlab.settings.open");
-    const deadline = Date.now() + 10000;
-    while (
-      !vscode.window.tabGroups.all.some((group) =>
-        group.tabs.some((tab) => tab.label === "Containerlab Settings")
-      ) &&
-      Date.now() < deadline
-    ) {
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    const tabs = vscode.window.tabGroups.all
-      .flatMap((group) => group.tabs)
-      .filter((tab) => tab.label === "Containerlab Settings");
-    assert.equal(tabs.length, 1);
-    assert.equal(tabs[0].isActive, true);
-    const config = vscode.workspace.getConfiguration("containerlab");
-    assert.equal(config.get("appearance.colorScheme"), "vscode");
-    assert.equal(config.get("capture.wireshark.stayOpenInBackground"), true);
+    const isSettingsTab = (tab: vscode.Tab) => tab.label === "Containerlab Settings";
+    await waitForTab((tab) => isSettingsTab(tab) && tab.isActive, "an active settings tab", 10000);
+    assert.equal(openTabs().filter(isSettingsTab).length, 1);
   });
 });

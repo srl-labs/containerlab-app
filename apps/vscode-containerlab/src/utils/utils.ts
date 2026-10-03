@@ -19,7 +19,7 @@ export function stripAnsi(input: string): string {
   return input.replace(escapeSeq, "").replace(controlSeq, "");
 }
 
-export function stripFileName(p: string): string {
+function stripFileName(p: string): string {
   return p.substring(0, p.lastIndexOf("/"));
 }
 

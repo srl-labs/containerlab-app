@@ -1,23 +1,19 @@
-export const instances: any[] = [];
+import type { ClabCommand as RealClabCommand } from "../../src/commands/clabCommand";
+
+type ClabCommandArgs = ConstructorParameters<typeof RealClabCommand>;
+
+export const instances: ClabCommand[] = [];
 
 export class ClabCommand {
-  public action: string;
-  public node: any;
-  public spinnerMessages: any;
-  public runArgs: any[] | undefined;
+  public readonly args: ClabCommandArgs;
+  public runArgs: string[] | undefined;
 
-  constructor(action: string, node: any, spinnerMessages?: any) {
-    this.action = action;
-    this.node = node;
-    this.spinnerMessages = spinnerMessages ?? {
-      progressMsg: action === "deploy" ? "Deploying Lab... " : `${action}ing Lab... `,
-      successMsg:
-        action === "deploy" ? "Lab deployed successfully!" : `Lab ${action}ed successfully!`
-    };
+  constructor(...args: ClabCommandArgs) {
+    this.args = args;
     instances.push(this);
   }
 
-  run(args?: string[]) {
-    this.runArgs = args;
+  async run(flags?: string[]): Promise<void> {
+    this.runArgs = flags;
   }
 }

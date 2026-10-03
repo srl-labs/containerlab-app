@@ -44,6 +44,7 @@ function getStubPath(request: string): string | null {
 describe("deploy command", () => {
   let deploy: Function;
   let clabStub: any;
+  let graphStub: any;
 
   before(() => {
     clearModuleCache();
@@ -62,6 +63,7 @@ describe("deploy command", () => {
     };
 
     clabStub = require("../../helpers/clabCommand-stub");
+    graphStub = require("../../helpers/graph-stub");
     const deployModule = require("../../../src/commands/deploy");
     deploy = deployModule.deploy;
   });
@@ -73,6 +75,7 @@ describe("deploy command", () => {
 
   beforeEach(() => {
     clabStub.instances.length = 0;
+    graphStub.createdHandlers.length = 0;
     sinon.spy(clabStub.ClabCommand.prototype, "run");
   });
 
@@ -80,20 +83,24 @@ describe("deploy command", () => {
     sinon.restore();
   });
 
-  // Should instantiate ClabCommand with the selected node and execute it.
-  it("creates ClabCommand and runs it", async () => {
+  it("runs containerlab deploy for the node with TopoViewer lifecycle handlers", async () => {
     const node = { labPath: { absolute: "/home/user/lab.yml" } } as any;
     await deploy(node);
 
-    expect(clabStub.instances.length).to.equal(1);
-    const instance = clabStub.instances[0];
-    expect(instance.action).to.equal("deploy");
-    expect(instance.node).to.equal(node);
-    expect(instance.spinnerMessages.progressMsg).to.equal("Deploying Lab... ");
-    expect(instance.spinnerMessages.successMsg).to.equal("Lab deployed successfully!");
+    expect(clabStub.instances).to.have.lengthOf(1);
+    const [action, commandNode, , , , onSuccess, onFailure, onOutputLine] =
+      clabStub.instances[0].args;
+    expect(action).to.equal("deploy");
+    expect(commandNode).to.equal(node);
+
+    expect(graphStub.createdHandlers).to.have.lengthOf(1);
+    const { commandType, handlers } = graphStub.createdHandlers[0];
+    expect(commandType).to.equal("deploy");
+    expect(onSuccess).to.equal(handlers.onSuccess);
+    expect(onFailure).to.equal(handlers.onFailure);
+    expect(onOutputLine).to.equal(handlers.onOutputLine);
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
     expect(spy.calledOnceWithExactly()).to.be.true;
-    expect(instance.runArgs).to.be.undefined;
   });
 });
