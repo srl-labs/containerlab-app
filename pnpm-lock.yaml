@@ -419,6 +419,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/app-server
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.5
       electron:
         specifier: 'catalog:'
         version: 44.4.1(supports-color@8.1.1)
@@ -437,6 +440,9 @@ importers:
       oxlint-tsgolint:
         specifier: 'catalog:'
         version: 7.0.2001
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.13
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

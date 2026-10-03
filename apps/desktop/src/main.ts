@@ -14,7 +14,17 @@ import path from "node:path";
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 
-import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
+import { createContainerlabAppServer, parseBooleanEnv } from "@srl-labs/containerlab-app-server";
+
+import {
+  buildEditMenu,
+  decideNavigation,
+  decideWindowOpen,
+  isAllowedExternalUrl,
+  parsePortEnv,
+  type EditMenuAction,
+  type EditMenuEntry
+} from "./desktopPolicy.ts";
 
 const APP_NAME = "Containerlab";
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
@@ -37,21 +47,6 @@ function installApplicationMenu(): void {
 }
 
 installApplicationMenu();
-
-function parseBooleanEnv(value: string | undefined, defaultValue = false): boolean {
-  if (value === undefined || value.trim() === "") {
-    return defaultValue;
-  }
-  return ["1", "true", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
-function parsePortEnv(value: string | undefined, defaultValue: number): number {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) {
-    return parsed;
-  }
-  return defaultValue;
-}
 
 function isAddressInUse(error: unknown): boolean {
   if (typeof error !== "object" || error === null) {
@@ -124,48 +119,10 @@ const captureWindows = new Set<BrowserWindow>();
 const terminalWindows = new Set<BrowserWindow>();
 let isQuitting = false;
 
-function parseAppUrl(rawUrl: string, serverOrigin: string): URL | null {
-  try {
-    return new URL(rawUrl, serverOrigin);
-  } catch {
-    return null;
-  }
-}
-
-function isSameOriginAppUrl(rawUrl: string, serverOrigin: string): boolean {
-  return parseAppUrl(rawUrl, serverOrigin)?.origin === serverOrigin;
-}
-
-function isWiresharkCaptureUrl(rawUrl: string, serverOrigin: string): boolean {
-  const parsed = parseAppUrl(rawUrl, serverOrigin);
-  return parsed?.origin === serverOrigin && parsed.pathname === "/wireshark.html";
-}
-
-function isTerminalUrl(rawUrl: string, serverOrigin: string): boolean {
-  const parsed = parseAppUrl(rawUrl, serverOrigin);
-  return parsed?.origin === serverOrigin && parsed.pathname === "/terminal.html";
-}
-
 function openExternalUrl(rawUrl: string): void {
-  void shell.openExternal(rawUrl);
-}
-
-type EditMenuAction =
-  | "undo"
-  | "redo"
-  | "cut"
-  | "copy"
-  | "paste"
-  | "delete"
-  | "selectAll"
-  | "openLink"
-  | "copyLink";
-
-interface EditMenuItem {
-  id: EditMenuAction | "sep";
-  label?: string;
-  enabled?: boolean;
-  separator?: boolean;
+  if (isAllowedExternalUrl(rawUrl)) {
+    void shell.openExternal(rawUrl);
+  }
 }
 
 const SELECTABLE_SELECTOR =
@@ -179,41 +136,6 @@ const SELECTION_GUARD_CSS = `
     -webkit-user-select: text !important; user-select: text !important;
   }
 `;
-
-function buildEditMenuItems(params: ContextMenuParams): EditMenuItem[] {
-  const { editFlags } = params;
-  const items: EditMenuItem[] = [];
-
-  if (params.isEditable) {
-    items.push(
-      { id: "undo", label: "Undo", enabled: editFlags.canUndo },
-      { id: "redo", label: "Redo", enabled: editFlags.canRedo },
-      { id: "sep", separator: true },
-      { id: "cut", label: "Cut", enabled: editFlags.canCut },
-      { id: "copy", label: "Copy", enabled: editFlags.canCopy },
-      { id: "paste", label: "Paste", enabled: editFlags.canPaste },
-      { id: "delete", label: "Delete", enabled: editFlags.canDelete },
-      { id: "sep", separator: true },
-      { id: "selectAll", label: "Select All", enabled: editFlags.canSelectAll }
-    );
-  } else if (params.selectionText || editFlags.canCopy) {
-    items.push({
-      id: "copy",
-      label: "Copy",
-      enabled: Boolean(params.selectionText) || editFlags.canCopy
-    });
-    items.push({ id: "selectAll", label: "Select All", enabled: true });
-  }
-
-  if (params.linkURL) {
-    if (items.length) items.push({ id: "sep", separator: true });
-    items.push(
-      { id: "openLink", label: "Open Link", enabled: true },
-      { id: "copyLink", label: "Copy Link", enabled: true }
-    );
-  }
-  return items;
-}
 
 function runEditMenuAction(
   webContents: WebContents,
@@ -259,8 +181,8 @@ function runEditMenuAction(
     case "selectAll":
       void webContents
         .executeJavaScript(selectAtPoint, true)
-        .then((ok: unknown) => {
-          if (!ok) webContents.selectAll();
+        .then((selected: unknown) => {
+          if (selected !== true) webContents.selectAll();
         })
         .catch(() => webContents.selectAll());
       break;
@@ -273,226 +195,46 @@ function runEditMenuAction(
   }
 }
 
-// Runs in the page. Prefer live MuiMenu colours when a menu is already open.
-const SHOW_EDIT_CONTEXT_MENU_JS = `function (p) {
-  return new Promise(function (resolve) {
-    var ROOT_ID = "clab-desktop-edit-context-menu-root";
-    var prev = document.getElementById(ROOT_ID);
-    if (prev) {
-      prev.dispatchEvent(new Event("clab-context-menu-close"));
-      if (prev.isConnected) prev.remove();
-    }
+function isOverSelectableText(
+  webContents: WebContents,
+  point: { x: number; y: number }
+): Promise<boolean> {
+  return webContents
+    .executeJavaScript(
+      `(() => {
+        const el = document.elementFromPoint(${point.x}, ${point.y});
+        return Boolean(el && el.closest(${JSON.stringify(SELECTABLE_SELECTOR)}));
+      })()`,
+      true
+    )
+    .then((result: unknown) => result === true)
+    .catch(() => false);
+}
 
-    var contextTarget = document.elementFromPoint(p.x, p.y);
-    var editTarget = p.isEditable && contextTarget
-      ? contextTarget.closest("input, textarea, [contenteditable]:not([contenteditable='false'])")
-      : null;
-
-    function cssVar(names, fallback) {
-      var css = getComputedStyle(document.documentElement);
-      for (var i = 0; i < names.length; i++) {
-        var v = css.getPropertyValue(names[i]).trim();
-        if (v) return v;
-      }
-      return fallback;
-    }
-    function isDark(color) {
-      color = String(color);
-      var r = 255, g = 255, b = 255;
-      if (color.charAt(0) === "#" && color.length >= 7) {
-        var n = parseInt(color.slice(1, 7), 16);
-        r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
-      } else {
-        var parts = color.replace(/[^0-9,]/g, "").split(",");
-        if (parts.length >= 3) { r = +parts[0]; g = +parts[1]; b = +parts[2]; }
-      }
-      return (r * 299 + g * 587 + b * 114) / 1000 < 140;
-    }
-    function isTransparent(color) {
-      return !color || color === "transparent" || color === "rgba(0, 0, 0, 0)";
-    }
-    function colorAtPoint(property, fallback) {
-      var el = contextTarget;
-      while (el) {
-        var value = getComputedStyle(el)[property];
-        if (!isTransparent(value)) return value;
-        el = el.parentElement;
-      }
-      return fallback;
-    }
-
-    var sample = document.querySelector(".MuiMenu-paper");
-    var bg, fg, border, hover, hoverFg, sepColor, font;
-    if (sample) {
-      var s = getComputedStyle(sample);
-      bg = s.backgroundColor;
-      fg = s.color;
-      border = s.borderColor && s.borderColor !== "rgba(0, 0, 0, 0)"
-        ? s.borderColor
-        : cssVar(["--vscode-panel-border"], "rgba(128,128,128,.35)");
-    } else {
-      var contextBg = colorAtPoint("backgroundColor", "#ffffff");
-      var contextFg = colorAtPoint("color", "#333333");
-      var editorBg = cssVar(
-        ["--vscode-editor-background", "--clab-ui-editor-background"],
-        contextBg
-      );
-      var dark = isDark(editorBg);
-      bg = cssVar(
-        ["--vscode-sideBar-background", "--vscode-menu-background", "--vscode-dropdown-background"],
-        dark ? "#252526" : "#f3f3f3"
-      );
-      fg = cssVar(
-        ["--vscode-menu-foreground", "--vscode-sideBar-foreground", "--vscode-foreground"],
-        dark ? "#cccccc" : contextFg
-      );
-      border = cssVar(["--vscode-menu-border", "--vscode-panel-border"], "rgba(128,128,128,.35)");
-    }
-    hover = cssVar(
-      ["--vscode-menu-selectionBackground", "--vscode-list-hoverBackground"],
-      isDark(bg) ? "#2a2d2e" : "rgba(0,0,0,.06)"
-    );
-    hoverFg = cssVar(["--vscode-menu-selectionForeground", "--vscode-list-hoverForeground"], fg);
-    sepColor = cssVar(["--vscode-menu-separatorBackground", "--vscode-panel-border"], border);
-    font = cssVar(["--clab-ui-font-family", "--vscode-font-family"], "Roboto, Helvetica, Arial, sans-serif");
-
-    var root = document.createElement("div");
-    root.id = ROOT_ID;
-    root.setAttribute("data-testid", "context-menu");
-    root.style.cssText = "position:fixed;inset:0;z-index:2147483646;background:transparent;font-family:" + font;
-    var menu = document.createElement("div");
-    menu.setAttribute("role", "menu");
-    menu.setAttribute("aria-label", "Edit menu");
-    menu.style.cssText = "position:fixed;left:" + p.x + "px;top:" + p.y + "px;min-width:180px;max-width:280px;padding:4px 0;margin:0;background:" + bg + ";color:" + fg + ";border:1px solid " + border + ";border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.18);box-sizing:border-box;font-size:13px;line-height:1.4;user-select:none";
-
-    var done = false;
-    var enabledButtons = [];
-    function consumeKey(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    }
-    function restoreEditFocus() {
-      if (!editTarget || !editTarget.isConnected || typeof editTarget.focus !== "function") return;
-      try { editTarget.focus({ preventScroll: true }); } catch (_) { editTarget.focus(); }
-    }
-    function finish(v) {
-      if (done) return;
-      done = true;
-      window.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("blur", onWindowBlur);
-      root.remove();
-      restoreEditFocus();
-      resolve(v);
-    }
-    function focusButton(index) {
-      if (!enabledButtons.length) return;
-      var next = (index + enabledButtons.length) % enabledButtons.length;
-      enabledButtons[next].focus({ preventScroll: true });
-    }
-    function onKeyDown(e) {
-      if (e.key === "Escape") {
-        consumeKey(e);
-        finish(null);
-        return;
-      }
-      var current = enabledButtons.indexOf(document.activeElement);
-      if (e.key === "ArrowDown" || (e.key === "Tab" && !e.shiftKey)) {
-        consumeKey(e);
-        focusButton(current + 1);
-      } else if (e.key === "ArrowUp" || (e.key === "Tab" && e.shiftKey)) {
-        consumeKey(e);
-        focusButton(current < 0 ? enabledButtons.length - 1 : current - 1);
-      } else if (e.key === "Home") {
-        consumeKey(e);
-        focusButton(0);
-      } else if (e.key === "End") {
-        consumeKey(e);
-        focusButton(enabledButtons.length - 1);
-      } else if ((e.key === "Enter" || e.key === " ") && current >= 0) {
-        consumeKey(e);
-        enabledButtons[current].click();
-      }
-    }
-    function onWindowBlur() { finish(null); }
-    root.addEventListener("clab-context-menu-close", function () { finish(null); });
-    root.addEventListener("mousedown", function (e) { e.preventDefault(); if (e.target === root) finish(null); });
-    root.addEventListener("contextmenu", function (e) { e.preventDefault(); finish(null); });
-    window.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("blur", onWindowBlur);
-
-    for (var i = 0; i < p.items.length; i++) {
-      var item = p.items[i];
-      if (item.separator) {
-        var sep = document.createElement("div");
-        sep.style.cssText = "height:1px;margin:4px 0;background:" + sepColor;
-        menu.appendChild(sep);
-        continue;
-      }
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.textContent = item.label;
-      btn.disabled = !item.enabled;
-      btn.setAttribute("role", "menuitem");
-      btn.tabIndex = -1;
-      btn.setAttribute("data-testid", "context-menu-item-" + item.id);
-      btn.style.cssText = "display:block;width:100%;border:0;background:transparent;color:inherit;text-align:left;padding:4px 12px;min-height:28px;font:inherit;cursor:" + (item.enabled ? "pointer" : "default") + ";opacity:" + (item.enabled ? "1" : ".4");
-      if (item.enabled) {
-        enabledButtons.push(btn);
-        (function (id, b) {
-          b.addEventListener("mouseenter", function () { b.style.background = hover; b.style.color = hoverFg; });
-          b.addEventListener("mouseleave", function () { b.style.background = "transparent"; b.style.color = "inherit"; });
-          b.addEventListener("focus", function () { b.style.background = hover; b.style.color = hoverFg; });
-          b.addEventListener("blur", function () { b.style.background = "transparent"; b.style.color = "inherit"; });
-          b.addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); finish(id); });
-        })(item.id, btn);
-      }
-      menu.appendChild(btn);
-    }
-    root.appendChild(menu);
-    var modalRoot = contextTarget && contextTarget.closest(".MuiModal-root");
-    (modalRoot || document.documentElement).appendChild(root);
-    if (p.keyboardInvocation) focusButton(0);
-    requestAnimationFrame(function () {
-      var r = menu.getBoundingClientRect();
-      var left = p.x, top = p.y;
-      if (left + r.width > window.innerWidth - 4) left = Math.max(4, window.innerWidth - r.width - 4);
-      if (top + r.height > window.innerHeight - 4) top = Math.max(4, window.innerHeight - r.height - 4);
-      menu.style.left = left + "px";
-      menu.style.top = top + "px";
-    });
-  });
-}`;
-
-function showAppStyledContextMenu(
+function showEditContextMenu(
   window: BrowserWindow,
   params: ContextMenuParams,
-  items: EditMenuItem[]
+  entries: EditMenuEntry[]
 ): void {
-  const payload = {
-    x: params.x,
-    y: params.y,
-    isEditable: params.isEditable,
-    keyboardInvocation: params.menuSourceType === "keyboard",
-    items: items.map((item, index) => ({
-      id: item.id,
-      label: item.label ?? "",
-      enabled: item.enabled !== false,
-      separator: Boolean(item.separator),
-      key: index
-    }))
-  };
-
-  void window.webContents
-    .executeJavaScript(`(${SHOW_EDIT_CONTEXT_MENU_JS})(${JSON.stringify(payload)})`, true)
-    .then((action: unknown) => {
-      if (typeof action !== "string" || action === "sep") return;
-      runEditMenuAction(window.webContents, action as EditMenuAction, params.linkURL, {
-        x: params.x,
-        y: params.y
-      });
-    })
-    .catch(() => undefined);
+  const point = { x: params.x, y: params.y };
+  const template = entries.map<MenuItemConstructorOptions>((entry) =>
+    "id" in entry
+      ? {
+          ...entry,
+          click: () => {
+            runEditMenuAction(window.webContents, entry.id, params.linkURL, point);
+          }
+        }
+      : entry
+  );
+  // Keyboard invocation anchors the menu at the focused element, not the pointer.
+  const position = params.menuSourceType === "keyboard" ? point : {};
+  Menu.buildFromTemplate(template).popup({
+    window,
+    frame: params.frame ?? undefined,
+    sourceType: params.menuSourceType,
+    ...position
+  });
 }
 
 function applyDesktopPageChrome(window: BrowserWindow): void {
@@ -504,28 +246,13 @@ function applyDesktopPageChrome(window: BrowserWindow): void {
 
   window.webContents.on("context-menu", (_event, params) => {
     void (async () => {
-      let items = buildEditMenuItems(params);
-      if (!items.length) {
-        const overText = await window.webContents
-          .executeJavaScript(
-            `(() => {
-              const el = document.elementFromPoint(${params.x}, ${params.y});
-              return Boolean(el && el.closest(${JSON.stringify(SELECTABLE_SELECTOR)}));
-            })()`,
-            true
-          )
-          .catch(() => false);
-        if (!overText) return;
-        items = [
-          {
-            id: "copy",
-            label: "Copy",
-            enabled: Boolean(params.selectionText) || params.editFlags.canCopy
-          },
-          { id: "selectAll", label: "Select All", enabled: true }
-        ];
+      let entries = buildEditMenu(params);
+      if (entries.length === 0 && (await isOverSelectableText(window.webContents, params))) {
+        entries = buildEditMenu(params, true);
       }
-      showAppStyledContextMenu(window, params, items);
+      if (entries.length > 0 && !window.isDestroyed()) {
+        showEditContextMenu(window, params, entries);
+      }
     })();
   });
 }
@@ -533,18 +260,28 @@ function applyDesktopPageChrome(window: BrowserWindow): void {
 function applyNavigationPolicy(window: BrowserWindow, serverOrigin: string): void {
   applyDesktopPageChrome(window);
   window.webContents.on("will-navigate", (event, url) => {
-    if (!isSameOriginAppUrl(url, serverOrigin)) {
-      event.preventDefault();
+    const decision = decideNavigation(url, serverOrigin);
+    if (decision === "allow") {
+      return;
+    }
+    event.preventDefault();
+    if (decision === "external") {
       openExternalUrl(url);
     }
   });
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isWiresharkCaptureUrl(url, serverOrigin)) {
-      openWiresharkCaptureWindow(url, serverOrigin);
-    } else if (isTerminalUrl(url, serverOrigin)) {
-      openTerminalWindow(url, serverOrigin);
-    } else {
-      openExternalUrl(url);
+    switch (decideWindowOpen(url, serverOrigin)) {
+      case "wireshark":
+        openWiresharkCaptureWindow(url, serverOrigin);
+        break;
+      case "terminal":
+        openTerminalWindow(url, serverOrigin);
+        break;
+      case "external":
+        openExternalUrl(url);
+        break;
+      case "block":
+        break;
     }
     return { action: "deny" };
   });
@@ -624,7 +361,7 @@ async function startLocalAppServer(): Promise<string> {
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
-    logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG),
+    logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG, false),
     sessionPersistenceFile: resolveSessionPersistenceFile(),
     staticClientRoot: resolveStaticClientRoot()
   });
