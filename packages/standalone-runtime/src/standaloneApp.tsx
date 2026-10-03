@@ -1634,7 +1634,7 @@ function StandaloneApp() {
     [updateEndpoint],
   );
 
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen logoUrl={publicAssetUrl("clab-animated-no-logo.svg")} />;
 
   if (startupScreen === "login") {
     return (

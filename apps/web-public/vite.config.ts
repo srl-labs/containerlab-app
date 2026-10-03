@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { standalonePublicDir, standaloneStartupShell } from "@srl-labs/containerlab-standalone-runtime/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,11 +51,12 @@ export default defineConfig(({ command }) => ({
   plugins: [
     react({
       include: /\.(?:jsx|tsx)$/
-    })
+    }),
+    standaloneStartupShell()
   ],
   base: publicBasePath,
   root: __dirname,
-  publicDir: path.resolve(__dirname, "resources"),
+  publicDir: standalonePublicDir,
   resolve: {
     alias: [
       ...(command === "serve" ? clabUiDevAliases() : []),
@@ -111,7 +113,7 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     outDir: path.resolve(__dirname, "dist/client"),
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         main: path.resolve(__dirname, "index.html")
       }

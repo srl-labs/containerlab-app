@@ -1,5 +1,15 @@
 import type { TopologyRef } from "../session";
 
+/** Brand assets used by the shared workspace views; every host serves all of them. */
+export const WORKSPACE_ASSETS = [
+  "containerlab.svg",
+  "containerlab-animated.svg",
+  "clab-animated-no-logo.svg",
+  "model.gltf"
+] as const;
+
+export type WorkspaceAsset = (typeof WORKSPACE_ASSETS)[number];
+
 export interface RuntimeTargetRequest {
   endpointId?: string;
   sessionId?: string;

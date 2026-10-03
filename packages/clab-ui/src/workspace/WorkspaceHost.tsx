@@ -3,7 +3,7 @@ import type { TopologyRef } from "../session";
 import type {
   EdgeSharkStatusResponse, EndpointHealthMetrics, FileExplorerEntry, InspectAllLabsResponse, InspectLabResponse,
   InterfaceNetemPatch, LabState, LogsResponse, RuntimeTargetRequest, TerminalProtocol,
-  TerminalSessionInfo, VersionCheckResponse, VersionResponse
+  TerminalSessionInfo, VersionCheckResponse, VersionResponse, WorkspaceAsset
 } from "./types";
 import type { TopologyFileEntry } from "./state/documentUtils";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
@@ -14,7 +14,7 @@ type InterfaceTarget = NodeTarget & { interfaceName: string };
 /** Operations and live data supplied by the embedding host, never imported from an app. */
 export interface WorkspaceHost {
   capabilities: { lifecycle: boolean; endpoints: boolean };
-  assetUrl: (path: string) => string;
+  assetUrl: (asset: WorkspaceAsset) => string;
   openTerminalWindow: (pane: RuntimeTerminalPane) => void;
   labs: {
     getSnapshot: () => Map<string, LabState>;

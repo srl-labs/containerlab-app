@@ -2,18 +2,19 @@ import React, { useCallback, useEffect, useState, type CSSProperties, type FormE
 import { ENDPOINT_EXPORT_FILENAME, DEFAULT_ENDPOINT_SESSION_DURATION, isValidEndpointSessionDuration } from "../endpoints";
 import type { EndpointImportResult, EndpointSessionDuration } from "../types";
 
-export function LoadingScreen() {
+/** Matches the host page's startup screen so loading does not flash a different design. */
+export function LoadingScreen({ logoUrl }: { logoUrl?: string }) {
   return (
-    <div style={{
+    <div data-testid="workspace-loading" style={{
       alignItems: "center",
-      background: "var(--clab-ui-editor-background, #1e1e1e)",
-      color: "var(--clab-ui-editor-foreground, #d4d4d4)",
+      background: "var(--clab-ui-editor-background, #000000)",
+      color: "var(--clab-ui-editor-foreground, #ececec)",
       display: "flex",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
       height: "100vh",
       justifyContent: "center"
     }}>
-      containerlab
+      {logoUrl ? <img src={logoUrl} alt="Containerlab" width={136} height={136} /> : "containerlab"}
     </div>
   );
 }

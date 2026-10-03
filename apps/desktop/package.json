@@ -57,7 +57,7 @@
     "productName": "Containerlab",
     "copyright": "Copyright \u00a9 srl-labs",
     "electronVersion": "44.4.1",
-    "icon": "../web/resources/containerlab.png",
+    "icon": "../../packages/standalone-runtime/public/containerlab.png",
     "afterPack": "scripts/after-pack.cjs",
     "asar": true,
     "files": [
@@ -70,7 +70,7 @@
         "to": "web-client"
       },
       {
-        "from": "../web/resources/containerlab.png",
+        "from": "../../packages/standalone-runtime/public/containerlab.png",
         "to": "containerlab.png"
       },
       {

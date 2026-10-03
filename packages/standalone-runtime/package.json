@@ -12,7 +12,8 @@
     "./wireshark-vnc-main": "./src/wiresharkVncMain.tsx",
     "./backend": "./src/backend.ts",
     "./host": "./src/standaloneHostShared.ts",
-    "./endpoints": "./src/stores/endpointStore.ts"
+    "./endpoints": "./src/stores/endpointStore.ts",
+    "./vite": "./src/viteStartupShell.ts"
   },
   "dependencies": {
     "@containerlab/clab-ui": "workspace:*",

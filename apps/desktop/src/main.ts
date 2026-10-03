@@ -103,9 +103,9 @@ function resolveWindowIcon(): string | undefined {
   return firstExistingFile([
     ...candidates,
     path.resolve(process.resourcesPath, "containerlab.png"),
-    path.resolve(electronApp.getAppPath(), "apps/web/resources/containerlab.png"),
-    path.resolve(process.cwd(), "../web/resources/containerlab.png"),
-    path.resolve(process.cwd(), "apps/web/resources/containerlab.png")
+    path.resolve(electronApp.getAppPath(), "packages/standalone-runtime/public/containerlab.png"),
+    path.resolve(process.cwd(), "../../packages/standalone-runtime/public/containerlab.png"),
+    path.resolve(process.cwd(), "packages/standalone-runtime/public/containerlab.png")
   ]);
 }
 

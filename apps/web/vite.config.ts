@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseBooleanEnv } from "../../packages/app-server/src/env.ts";
 import { resolveWebTlsConfig } from "../../packages/app-server/src/tlsConfig.ts";
 import { normalizeBasePath } from "../../packages/app-server/src/basePath.ts";
+import { standalonePublicDir, standaloneStartupShell } from "@srl-labs/containerlab-standalone-runtime/vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(__dirname, "../..");
@@ -32,14 +33,15 @@ export default defineConfig(({ command }) => {
       },
       react({
         include: /\.(?:jsx|tsx)$/
-      })
+      }),
+      standaloneStartupShell()
     ],
     define: {
       "import.meta.env.VITE_CLAB_STANDALONE_SERVER_ORIGIN": JSON.stringify(apiServerTarget)
     },
     base: publicBasePath,
     root: __dirname,
-    publicDir: path.resolve(__dirname, "resources"),
+    publicDir: standalonePublicDir,
     resolve: {
       alias: [
         {
