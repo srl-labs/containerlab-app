@@ -5,7 +5,7 @@ import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
-import { parseStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
+import { parseStandaloneTheme, resolveStandaloneTheme } from "@containerlab/clab-ui/workspace/state";
 
 interface WiresharkVncInitialData {
   iframeUrl: string;

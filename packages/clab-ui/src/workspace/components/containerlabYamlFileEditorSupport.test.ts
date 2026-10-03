@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type * as monaco from "@containerlab/clab-ui/monaco/core";
-import { attachContainerlabYamlSupport } from "./containerlabYamlFileEditorSupport.ts";
+import type * as monaco from "monaco-editor";
+import { attachContainerlabYamlSupport } from "./containerlabYamlFileEditorSupport";
 
 test("file editor shares schema completions and scopes providers to attached models", () => {
   let completion: monaco.languages.CompletionItemProvider | undefined;

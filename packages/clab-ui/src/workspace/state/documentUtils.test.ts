@@ -1,27 +1,38 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { ContainerState, EndpointConfig, LabState } from "../types";
 import {
   buildStandaloneTopologyRefFromPath,
   findLabStateForTopology,
   isTopologyRunning,
   resolveStandaloneLoadTopologyTarget,
-  topologyPathsLikelyMatch
-} from "./standaloneHostShared";
-import type { ContainerState, LabState } from "./stores/labStore";
-import type { TopologyFileEntry } from "./standaloneHostShared";
-import type { EndpointConfig } from "./stores/endpointStore";
+  topologyPathsLikelyMatch,
+  type TopologyFileEntry
+} from "./documentUtils";
 
 const ENDPOINT_ID = "endpoint-1";
 
-function buildContainer(labName: string, labPath: string): ContainerState {
+function buildEndpoint(username: string): EndpointConfig {
+  return {
+    id: ENDPOINT_ID,
+    url: "http://api.example.test",
+    label: "API",
+    username,
+    sessionDuration: "24h",
+    status: "connected",
+    connected: true
+  };
+}
+
+function buildContainer(labName: string, labPath: string, owner: string): ContainerState {
   return {
     endpointId: ENDPOINT_ID,
     name: `clab-${labName}-srl1`,
     containerId: `cid-${labName}`,
     labName,
     labPath,
-    owner: "user",
+    owner,
     nodeName: "srl1",
     kind: "nokia_srlinux",
     image: "ghcr.io/nokia/srlinux:latest",
@@ -33,21 +44,35 @@ function buildContainer(labName: string, labPath: string): ContainerState {
   };
 }
 
-function buildLabs(): Map<string, LabState> {
+function buildLabs(
+  labName = "runtime-lab",
+  topologyPath = "/labs/demo-a.clab.yml",
+  owner = "user"
+): Map<string, LabState> {
   return new Map([
     [
-      "runtime-lab",
+      labName,
       {
         endpointId: ENDPOINT_ID,
-        name: "runtime-lab",
-        owner: "user",
-        topologyPath: "/labs/demo-a.clab.yml",
-        containers: new Map([
-          ["clab-runtime-lab-srl1", buildContainer("runtime-lab", "/labs/demo-a.clab.yml")]
-        ])
+        name: labName,
+        owner,
+        topologyPath,
+        containers: new Map([[`clab-${labName}-srl1`, buildContainer(labName, topologyPath, owner)]])
       }
     ]
   ]);
+}
+
+function buildTopologyEntry(path: string): TopologyFileEntry {
+  return {
+    endpointId: ENDPOINT_ID,
+    filename: path,
+    path,
+    hasAnnotations: true,
+    labName: "demo",
+    deploymentState: "undeployed",
+    topologyRef: buildStandaloneTopologyRefFromPath(path, "demo", ENDPOINT_ID)
+  };
 }
 
 test("findLabStateForTopology and isTopologyRunning match by yamlPath", () => {
@@ -112,7 +137,7 @@ test("collaborators open shared running sources in edit mode from either explore
     endpointId: ENDPOINT_ID, filename: "demo.clab.yml", path: topologyRef.yamlPath,
     hasAnnotations: false, topologyRef
   };
-  const endpoints = [{ id: ENDPOINT_ID, username: "collaborator" }] as EndpointConfig[];
+  const endpoints = [buildEndpoint("collaborator")];
   for (const requestedRef of [topologyRef, buildStandaloneTopologyRefFromPath(topologyRef.absoluteYamlPath, "runtime-lab", ENDPOINT_ID)]) {
     const target = resolveStandaloneLoadTopologyTarget({ topologyRef: requestedRef, endpointId: ENDPOINT_ID, files: [entry], labs, endpoints });
     assert.equal(target?.sourcePreference, "api-file");
@@ -121,4 +146,41 @@ test("collaborators open shared running sources in edit mode from either explore
   const privateEntry = { ...entry, path: "demo.clab.yml", topologyRef: { ...topologyRef, yamlPath: "demo.clab.yml" } };
   const privateTarget = resolveStandaloneLoadTopologyTarget({ topologyRef: privateEntry.topologyRef, endpointId: ENDPOINT_ID, files: [privateEntry], labs, endpoints });
   assert.equal(privateTarget?.sourcePreference, "running-lab-doc");
+});
+
+test("non-owned running lab uses running documents instead of a matching API file entry", () => {
+  const path = "/home/alice/.clab/demo/demo.clab.yml";
+  const topologyRef = buildStandaloneTopologyRefFromPath(path, "demo", ENDPOINT_ID);
+  const fileEntry = buildTopologyEntry(path);
+  fileEntry.topologyRef.annotationsPath = "test-owned/demo.clab.yml.annotations.json";
+
+  const target = resolveStandaloneLoadTopologyTarget({
+    topologyRef,
+    endpointId: ENDPOINT_ID,
+    deploymentState: "deployed",
+    endpoints: [buildEndpoint("test")],
+    files: [fileEntry],
+    labs: buildLabs("demo", path, "alice")
+  });
+
+  assert.equal(target?.sourcePreference, "running-lab-doc");
+  assert.deepEqual(target?.canonicalTopologyRef, topologyRef);
+});
+
+test("owned running lab keeps the canonical API file entry", () => {
+  const path = "/home/alice/.clab/demo/demo.clab.yml";
+  const topologyRef = buildStandaloneTopologyRefFromPath(path, "demo", ENDPOINT_ID);
+  const fileEntry = buildTopologyEntry(path);
+
+  const target = resolveStandaloneLoadTopologyTarget({
+    topologyRef,
+    endpointId: ENDPOINT_ID,
+    deploymentState: "deployed",
+    endpoints: [buildEndpoint("alice")],
+    files: [fileEntry],
+    labs: buildLabs("demo", path, "alice")
+  });
+
+  assert.equal(target?.sourcePreference, "api-file");
+  assert.equal(target?.canonicalTopologyRef, fileEntry.topologyRef);
 });

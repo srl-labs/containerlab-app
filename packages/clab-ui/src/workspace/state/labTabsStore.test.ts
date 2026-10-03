@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { type TopologyRef } from "@containerlab/clab-ui/session";
+import type { TopologyRef } from "../../session";
 
 import { resolveFileTab, resolveLabTab, useLabTabsStore } from "./labTabsStore";
 
@@ -44,7 +44,7 @@ test("openOrFocusTab adds once and focuses existing tabs without duplicates", ()
   assert.equal(useLabTabsStore.getState().activeTabId, tab.id);
 });
 
-test("openOrFocusTab opens workspace files as editable tabs", () => {
+test("openOrFocusTab opens workspace files as tabs and keeps unsaved edits when refocused", () => {
   const store = useLabTabsStore.getState();
   const tab = resolveFileTab({
     endpointId: "ep-1",

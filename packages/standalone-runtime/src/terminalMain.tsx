@@ -1,4 +1,13 @@
 import { WorkspaceHostProvider } from "@containerlab/clab-ui/workspace";
+import {
+  loadTerminalPreferences,
+  persistTerminalPreferences,
+  resolveStandaloneTheme,
+  runtimeUiActions,
+  useRuntimeUiStore,
+  type RuntimeTerminalPane,
+  type TerminalPreferences
+} from "@containerlab/clab-ui/workspace/state";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
@@ -6,17 +15,6 @@ import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
 import { workspaceHost } from "./workspaceHost";
 import { DetachedTerminalView } from "./components/RuntimeTerminalWindows";
 import { detachedTerminalTargetFromLocation } from "./runtimeDetachedTerminal";
-import {
-  loadTerminalPreferences,
-  persistTerminalPreferences,
-  type TerminalPreferences
-} from "./runtimeTerminalSettings";
-import {
-  runtimeUiActions,
-  useRuntimeUiStore,
-  type RuntimeTerminalPane
-} from "./stores/runtimeUiStore";
-import { resolveStandaloneTheme } from "./standaloneTheme";
 
 function terminalPaneById(panes: RuntimeTerminalPane[], paneId: string | null): RuntimeTerminalPane | undefined {
   return (paneId ? panes.find((pane) => pane.id === paneId) : undefined) ?? panes[0];

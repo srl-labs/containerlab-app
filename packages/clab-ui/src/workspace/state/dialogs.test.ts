@@ -5,7 +5,7 @@ import {
   normalizeTopologyFileNameForCreate,
   promptForCreateTopology,
   setCreateTopologyDialogRequester
-} from "./runtimeActionFlows";
+} from "./dialogs";
 
 test("normalizeTopologyFileNameForCreate appends .clab.yml to extensionless names", () => {
   assert.equal(normalizeTopologyFileNameForCreate("demo"), "demo.clab.yml");

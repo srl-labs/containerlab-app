@@ -6,7 +6,7 @@ import {
   parseTabOrientation,
   readPersistedStandaloneTheme,
   resolveStandaloneTheme
-} from "./standaloneTheme";
+} from "./themePreferences";
 
 function withGlobalProperty<T>(name: "document" | "localStorage", value: unknown, run: () => T): T {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);

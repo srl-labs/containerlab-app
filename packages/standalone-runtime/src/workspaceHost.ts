@@ -5,7 +5,7 @@ import { getStandaloneBackend } from "./backend";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { buildDetachedTerminalUrl } from "./runtimeDetachedTerminal";
 import { useLabStore } from "./stores/labStore";
-import { runtimeUiActions } from "./stores/runtimeUiStore";
+import { runtimeUiActions } from "@containerlab/clab-ui/workspace/state";
 
 class IdleWebSocket extends EventTarget {
   readonly readyState = 3;

@@ -1,8 +1,7 @@
 import { lazy, Suspense, useMemo } from "react";
 
-import type { TabOrientation } from "@containerlab/clab-ui/workspace/state";
+import { isFileLabTab, useLabTabsStore, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { useEndpointStore } from "../stores/endpointStore";
-import { isFileLabTab, useLabTabsStore } from "../stores/labTabsStore";
 import { LabTabsBar } from "./LabTabsBar";
 import { AttractorEmptyState } from "./AttractorEmptyState";
 

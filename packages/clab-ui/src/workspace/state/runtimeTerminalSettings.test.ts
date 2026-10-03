@@ -24,7 +24,7 @@ test("normalizeTerminalPreferences falls back to defaults for invalid input", ()
   assert.equal(preferences.fontSize, DEFAULT_TERMINAL_FONT_SIZE);
 });
 
-test("normalizeTerminalPreferences merges custom SSH users and valid telnet/font defaults", () => {
+test("normalizeTerminalPreferences merges custom SSH users and keeps valid telnet port and font size", () => {
   const preferences = normalizeTerminalPreferences({
     sshUserMapping: {
       nokia_srlinux: "clab",

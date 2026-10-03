@@ -3,7 +3,7 @@ import { standaloneServerUrl } from "./standaloneServerOrigin";
 
 import type { EndpointHealthMetrics } from "@containerlab/clab-ui/workspace/types";
 export type { EndpointHealthMetrics } from "@containerlab/clab-ui/workspace/types";
-export { formatEndpointHealthPercent, formatEndpointHealthBytes, formatEndpointHealthUsedTotal, formatEndpointHealthTooltip } from "@containerlab/clab-ui/workspace/state";
+export { formatEndpointHealthTooltip } from "@containerlab/clab-ui/workspace/state";
 
 async function readEndpointHealthError(response: Response): Promise<string> {
   const payload = (await response.json().catch(() => ({}))) as { error?: unknown; message?: unknown };

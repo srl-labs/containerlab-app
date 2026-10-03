@@ -1,6 +1,6 @@
 import { BootstrapLoginPage } from "@containerlab/clab-ui/workspace/bootstrap";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
-import { resolveStandaloneTheme } from "./standaloneTheme";
+import { resolveStandaloneTheme } from "@containerlab/clab-ui/workspace/state";
 /**
  * Lightweight standalone entry point.
  *

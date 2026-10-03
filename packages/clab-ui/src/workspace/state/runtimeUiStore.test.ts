@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { TopologyRef } from "@containerlab/clab-ui/session";
+import type { TopologyRef } from "../../session";
 
 import { useRuntimeUiStore } from "./runtimeUiStore";
 
@@ -114,7 +114,7 @@ test("focusTerminal restores the shell when focusing a pane", () => {
   assert.equal(useRuntimeUiStore.getState().terminalShell.minimized, false);
 });
 
-test("setTerminalSession stores runtime terminal session separately from topology session", () => {
+test("setTerminalSession stores the terminal session separately from the topology session", () => {
   const terminalId = openSshTerminal();
 
   useRuntimeUiStore.getState().setTerminalSession(terminalId, "runtime-terminal-session-1");

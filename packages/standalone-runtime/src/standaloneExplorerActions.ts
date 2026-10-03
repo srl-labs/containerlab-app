@@ -14,7 +14,7 @@ import {
 } from "./runtimeActionFlows";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { ContainerState, LabState } from "./stores/labStore";
-import { runtimeUiActions } from "./stores/runtimeUiStore";
+import { runtimeUiActions } from "@containerlab/clab-ui/workspace/state";
 import type {
   DeploymentState,
   ExplorerTreeItem,

@@ -6,7 +6,7 @@ import {
   formatEndpointHealthBytes,
   formatEndpointHealthPercent,
   formatEndpointHealthUsedTotal
-} from "./endpointHealth";
+} from "./health";
 
 test("formatEndpointHealthPercent formats finite values", () => {
   assert.equal(formatEndpointHealthPercent(0), "0.0%");

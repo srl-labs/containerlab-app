@@ -1,4 +1,4 @@
-import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "./standaloneTheme";
+import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import { connectWorkspaceExplorer, workspaceHost } from "./workspaceHost";

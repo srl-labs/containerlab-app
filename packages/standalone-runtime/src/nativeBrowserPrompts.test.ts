@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const scannedRoots = [
   "packages/standalone-runtime/src",
+  "packages/clab-ui/src/workspace",
   "apps/web/src",
   "apps/desktop/src",
   "packages/app-server/src"
