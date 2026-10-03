@@ -31,16 +31,23 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
 
   // The sandbox must create and reopen files without a backend at its new path.
-  await page.getByRole("button", { name: "New Topology File", exact: true }).click();
+  const sidebar = page.getByTestId("workspace-sidebar");
+  const openLabs = async () => {
+    const labs = sidebar.getByRole("button", { name: "Labs", exact: true });
+    if (await labs.getAttribute("aria-expanded") !== "true") await labs.click();
+  };
+  await openLabs();
+  await sidebar.getByRole("button", { name: "New Topology File", exact: true }).first().click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Topology file name" }).fill("preview.clab.yml");
   await dialog.getByRole("button", { name: "Create", exact: true }).click();
   await expect(dialog).toBeHidden();
-  const tab = page.getByRole("tab", { name: "preview Close preview", exact: true });
+  const tab = page.getByRole("tab", { name: "preview", exact: true });
   await expect(tab).toHaveAttribute("aria-selected", "true");
   await page.reload();
   await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  await page.getByText("preview.clab.yml", { exact: true }).dblclick();
+  await openLabs();
+  await sidebar.getByRole("button", { name: /preview\.clab\.yml/ }).click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);
 });
