@@ -21,6 +21,7 @@
     "web:local": "pnpm ui && pnpm --filter containerlab-app-web run dev",
     "desktop": "pnpm ui && pnpm --filter containerlab-desktop run package",
     "desktop:local": "pnpm ui && pnpm --filter containerlab-desktop run dev",
+    "electron:local": "pnpm desktop:local",
     "desktop:windows": "node apps/desktop/scripts/dev-windows.mjs",
     "pages": "pnpm ui && pnpm --filter containerlab-app-web-public run build",
     "pages:local": "pnpm --filter containerlab-app-web-public run dev",

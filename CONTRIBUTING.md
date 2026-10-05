@@ -24,7 +24,7 @@ Run these commands from the monorepo root:
 | Shared UI library | `pnpm ui` | `pnpm ui:local` — UI harness with source hot reload |
 | VS Code | `pnpm vsix` | `pnpm vsix:local` — same VSIX built from the working tree |
 | Web | `pnpm web` | `pnpm web:local` — API-backed Vite development server |
-| Desktop | `pnpm desktop` | `pnpm desktop:local` — build and launch Electron |
+| Desktop | `pnpm desktop` | `pnpm desktop:local` (or `pnpm electron:local`) — build and launch Electron |
 | Browser sandbox | `pnpm pages` | `pnpm pages:local` — local sandbox without an API server |
 
 **Every app uses the checked-out `packages/clab-ui` workspace, including uncommitted edits.** Build/package and app development commands rebuild its public `dist/` exports first. Nothing downloads a published UI package, and no sibling checkout is needed. `vsix:local` is an explicit alias for `vsix`.
