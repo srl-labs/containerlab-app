@@ -21,6 +21,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LinkIcon from "@mui/icons-material/Link";
 import LogoutIcon from "@mui/icons-material/Logout";
+import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SettingsIcon from "@mui/icons-material/Settings";
 import TerminalIcon from "@mui/icons-material/Terminal";
@@ -51,6 +52,7 @@ import { SettingsLayout } from "../../settings/SettingsLayout";
 import { SettingsField } from "../../settings/SettingsField";
 import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
 import { AboutSettingsContent } from "./AboutSettingsContent";
+import { AppearanceSettingsContent } from "./AppearanceSettingsContent";
 import { EndpointManager } from "./EndpointManager";
 import {
   persistAutoOpenPalette,
@@ -59,15 +61,17 @@ import {
   readPersistedAutoOpenPalette,
   readPersistedAutoOpenPaletteOnSelect,
   readPersistedDefaultLabLocked,
+  type StandaloneAppearance,
   type TabOrientation
 } from "../state/themePreferences";
 
-type SettingsSectionKey = "endpoints" | "general" | "terminal" | "capture" | "about";
+type SettingsSectionKey = "endpoints" | "general" | "appearance" | "terminal" | "capture" | "about";
 
 interface SettingsOverlayProps {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  appearance: StandaloneAppearance;
   currentTheme: "light" | "dark";
   defaultApiUrl: string;
   endpoints: EndpointConfig[];
@@ -104,7 +108,7 @@ interface SettingsOverlayProps {
       notify?: boolean;
     }
   ) => void;
-  onThemeChange: (nextTheme: "light" | "dark") => void;
+  onAppearanceChange: (next: StandaloneAppearance) => void;
   tabOrientation?: TabOrientation;
   onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -157,8 +161,14 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "general",
     label: "General",
-    description: "Theme and workspace behavior",
+    description: "Workspace behavior",
     icon: <SettingsIcon fontSize="small" />
+  },
+  {
+    key: "appearance",
+    label: "Appearance",
+    description: "Color mode, themes and custom colors",
+    icon: <PaletteOutlinedIcon fontSize="small" />
   },
   {
     key: "terminal",
@@ -513,6 +523,7 @@ export function SettingsOverlay({
   open,
   onOpen,
   onClose,
+  appearance,
   currentTheme,
   defaultApiUrl,
   endpoints,
@@ -525,7 +536,7 @@ export function SettingsOverlay({
   onUpdateEndpoint,
   onSetEndpointSessionDuration,
   onSaveTerminalPreferences,
-  onThemeChange,
+  onAppearanceChange,
   tabOrientation = "horizontal",
   onTabOrientationChange,
   terminalPreferences
@@ -728,30 +739,6 @@ export function SettingsOverlay({
       case "general":
         return (
           <>
-            <SectionCard
-              title="Color Theme"
-              description="Choose the color scheme for the app."
-              wide={false}
-            >
-              <TextField
-                select
-                size="small"
-                value={currentTheme}
-                slotProps={{ select: { inputProps: { "aria-label": "Color theme" } } }}
-                onChange={(event) => {
-                  const nextTheme = event.target.value;
-                  if (nextTheme === "light" || nextTheme === "dark") onThemeChange(nextTheme);
-                }}
-                sx={{ minWidth: 160 }}
-              >
-                <MenuItem value="light" data-testid="standalone-settings-theme-light">
-                  Light
-                </MenuItem>
-                <MenuItem value="dark" data-testid="standalone-settings-theme-dark">
-                  Dark
-                </MenuItem>
-              </TextField>
-            </SectionCard>
             {onTabOrientationChange ? (
               <SectionCard
                 title="Open Tabs"
@@ -826,6 +813,14 @@ export function SettingsOverlay({
               />
             </SectionCard>
           </>
+        );
+      case "appearance":
+        return (
+          <AppearanceSettingsContent
+            appearance={appearance}
+            currentTheme={currentTheme}
+            onAppearanceChange={onAppearanceChange}
+          />
         );
       case "terminal":
         return (

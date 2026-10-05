@@ -194,8 +194,14 @@ function applyFileEditorMonacoTheme(): string {
         "--clab-ui-editor-foreground",
         getCssVar("--vscode-editor-foreground", colors.fg),
       ),
-      "editor.selectionBackground": colors.sel,
-      "editor.inactiveSelectionBackground": colors.inactiveSel,
+      "editor.selectionBackground": getCssVar(
+        "--vscode-editor-selectionBackground",
+        colors.sel,
+      ),
+      "editor.inactiveSelectionBackground": getCssVar(
+        "--vscode-editor-inactiveSelectionBackground",
+        colors.inactiveSel,
+      ),
       "editor.selectionHighlightBackground": colors.selectionHighlight,
       "editor.wordHighlightBackground": colors.wordHighlight,
       "editor.wordHighlightStrongBackground": colors.wordHighlightStrong,

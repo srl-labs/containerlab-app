@@ -1,16 +1,17 @@
 import { WorkspaceHostProvider } from "@containerlab/clab-ui/workspace";
 import {
+  applyStandaloneAppearance,
   loadTerminalPreferences,
   persistTerminalPreferences,
-  resolveStandaloneTheme,
   runtimeUiActions,
   useRuntimeUiStore,
   type RuntimeTerminalPane,
-  type TerminalPreferences
+  type TerminalPreferences,
+  watchStandaloneAppearance
 } from "@containerlab/clab-ui/workspace/state";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
+import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
 
 import { installDesktopChrome } from "./desktopChrome";
 import { workspaceHost } from "./workspaceHost";
@@ -68,10 +69,9 @@ function DetachedTerminalApp() {
 }
 
 function main(): void {
-  const theme = resolveStandaloneTheme();
-  document.documentElement.classList.toggle("light", theme === "light");
+  applyStandaloneAppearance();
+  watchStandaloneAppearance(() => applyStandaloneAppearance());
   installDesktopChrome();
-  applyThemeVars(theme);
 
   const rootElement = document.getElementById("root");
   if (!rootElement) {

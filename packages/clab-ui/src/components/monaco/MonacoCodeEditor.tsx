@@ -238,8 +238,8 @@ function ensureMonacoConfiguredOnce(): void {
   monacoConfigured = true;
 }
 
-/** Hardcoded Monaco colours per mode – used in dev where CSS vars lag behind the class toggle. */
-const DEV_MONACO_COLORS = {
+/** Monaco colours per mode, for hosts that leave the theme tokens undefined. */
+const FALLBACK_MONACO_COLORS = {
   light: {
     bg: "#ffffff",
     fg: "#333333",
@@ -263,27 +263,28 @@ const DEV_MONACO_COLORS = {
 function applyVscodeThemeToMonaco(isDevMock: boolean): void {
   const mode = detectColorMode(isDevMock);
   const themeName = mode === "light" ? "topoviewer-vscode-light" : "topoviewer-vscode-dark";
-  const c = DEV_MONACO_COLORS[mode];
+  const c = FALLBACK_MONACO_COLORS[mode];
 
-  // In dev mode, CssBaseline re-renders asynchronously so CSS variables still
-  // hold the *previous* theme's values when the MutationObserver fires.
-  // Use hardcoded colours keyed off the detected mode instead.
-  const dev = isDevMock;
-  const background = dev
-    ? c.bg
-    : getCssVar("--clab-ui-editor-background", getCssVar("--vscode-editor-background", c.bg));
-  const foreground = dev
-    ? c.fg
-    : getCssVar("--clab-ui-editor-foreground", getCssVar("--vscode-editor-foreground", c.fg));
+  // Standalone hosts set the theme class and variables together, so the
+  // variables are current whenever the MutationObserver fires.
   monaco.editor.defineTheme(themeName, {
     base: mode === "light" ? "vs" : "vs-dark",
     inherit: true,
     rules: [],
     colors: {
-      "editor.background": background,
-      "editor.foreground": foreground,
-      "editor.selectionBackground": c.sel,
-      "editor.inactiveSelectionBackground": c.inactiveSel,
+      "editor.background": getCssVar(
+        "--clab-ui-editor-background",
+        getCssVar("--vscode-editor-background", c.bg)
+      ),
+      "editor.foreground": getCssVar(
+        "--clab-ui-editor-foreground",
+        getCssVar("--vscode-editor-foreground", c.fg)
+      ),
+      "editor.selectionBackground": getCssVar("--vscode-editor-selectionBackground", c.sel),
+      "editor.inactiveSelectionBackground": getCssVar(
+        "--vscode-editor-inactiveSelectionBackground",
+        c.inactiveSel
+      ),
       "editor.selectionHighlightBackground": c.selectionHighlight,
       "editor.wordHighlightBackground": c.wordHighlight,
       "editor.wordHighlightStrongBackground": c.wordHighlightStrong

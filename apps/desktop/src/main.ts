@@ -40,10 +40,10 @@ const DEFAULT_DESKTOP_PORT = 32180;
 const SHUTDOWN_TIMEOUT_MS = 3_000;
 const IS_MAC = process.platform === "darwin";
 const IS_LINUX = process.platform === "linux";
-// The app's default (dark) theme until the page reports the one in use.
+// The app's default (Dark Modern) theme until the page reports the one in use.
 const INITIAL_OVERLAY: TitleBarOverlay = {
-  color: "#000000",
-  symbolColor: "#ececec",
+  color: "#1f1f1f",
+  symbolColor: "#cccccc",
   height: TITLEBAR_HEIGHT
 };
 

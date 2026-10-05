@@ -15,7 +15,7 @@ body {
 }
 #root { width: 100%; height: 100%; }
 .startup-fallback {
-  align-items: center; background: #000000; display: flex; inset: 0;
+  align-items: center; background: var(--vscode-editor-background, #1f1f1f); display: flex; inset: 0;
   justify-content: center; position: fixed;
 }
 .startup-fallback img { display: block; height: 136px; width: 136px; }

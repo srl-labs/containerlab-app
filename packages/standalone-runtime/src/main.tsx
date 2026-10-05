@@ -1,6 +1,5 @@
 import { BootstrapLoginPage } from "@containerlab/clab-ui/workspace/bootstrap";
-import { applyThemeVars } from "@containerlab/clab-ui/theme";
-import { resolveStandaloneTheme } from "@containerlab/clab-ui/workspace/state";
+import { applyStandaloneAppearance } from "@containerlab/clab-ui/workspace/state";
 /**
  * Lightweight standalone entry point.
  *
@@ -132,7 +131,7 @@ function BootstrapApp() {
 }
 
 installDesktopChrome({ title: "Containerlab" });
-applyThemeVars(resolveStandaloneTheme());
+applyStandaloneAppearance();
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("Root element not found");

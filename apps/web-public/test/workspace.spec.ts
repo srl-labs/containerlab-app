@@ -24,8 +24,8 @@ test("local backend uses shared dialogs, document tabs, keyboard navigation and 
   await expect(settings).toBeVisible();
   await expect(page.getByTestId("standalone-settings-nav-endpoints")).toHaveCount(0);
   await expect(page.getByTestId("standalone-settings-nav-terminal")).toHaveCount(0);
-  await settings.getByRole("combobox", { name: "Color theme" }).click();
-  await page.getByRole("option", { name: "Light", exact: true }).click();
+  await page.getByTestId("standalone-settings-nav-appearance").click();
+  await settings.getByRole("button", { name: "Light", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Dark mode", exact: true })).toBeVisible();
 });
