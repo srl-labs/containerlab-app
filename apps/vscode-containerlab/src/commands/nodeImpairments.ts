@@ -4,7 +4,7 @@ import type { NetemFields } from "@containerlab/clab-ui/node-impairments";
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { outputChannel, containerlabBinaryPath } from "../globals";
 import { runCommand } from "../utils/utils";
-import { getNodeImpairmentsWebviewHtml } from "../webviews/nodeImpairments/nodeImpairmentsWebviewHtml";
+import { NODE_IMPAIRMENTS_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 /**
  * Raw netem item from CLI JSON output
@@ -256,10 +256,15 @@ export async function manageNodeImpairments(
   const iconUri = vscode.Uri.joinPath(context.extensionUri, "resources", "containerlab.svg");
   panel.iconPath = iconUri;
 
-  panel.webview.html = getNodeImpairmentsWebviewHtml(panel.webview, context.extensionUri, {
-    nodeName: node.name,
-    interfacesData: netemMap
-  });
+  panel.webview.html = createPanelWebviewHtml(
+    NODE_IMPAIRMENTS_PANEL,
+    panel.webview,
+    context.extensionUri,
+    {
+      nodeName: node.name,
+      interfacesData: netemMap
+    }
+  );
 
   panel.webview.onDidReceiveMessage(
     async (msg: { command: string; data?: Record<string, NetemFields> }) => {

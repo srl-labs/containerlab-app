@@ -1,7 +1,7 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
 import { SettingsApp, type SettingsSnapshot } from "@containerlab/clab-ui/settings";
 import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
+
+import { renderWebview } from "../shared/mountWebview";
 
 const requests = new Map<
   string,
@@ -48,16 +48,12 @@ function subscribe(listener: (snapshot: SettingsSnapshot) => void): () => void {
     subscribers.delete(listener);
   };
 }
-const root = document.getElementById("root");
-if (root)
-  createRoot(root).render(
-    <React.StrictMode>
-      <MuiThemeProvider>
-        <SettingsApp
-          initial={window.__INITIAL_DATA__ as SettingsSnapshot}
-          request={request}
-          subscribe={subscribe}
-        />
-      </MuiThemeProvider>
-    </React.StrictMode>
-  );
+renderWebview(
+  <MuiThemeProvider>
+    <SettingsApp
+      initial={window.__INITIAL_DATA__ as SettingsSnapshot}
+      request={request}
+      subscribe={subscribe}
+    />
+  </MuiThemeProvider>
+);

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { isSettingsRecord, type SettingsTarget } from "@containerlab/clab-ui/settings/schema";
-import { createReactWebviewHtml } from "../shared/reactWebviewHtml";
+import { SETTINGS_PANEL, createPanelWebviewHtml } from "../shared/webviewPanels";
 import { SettingsService } from "./settingsService";
 
 export function registerSettings(context: vscode.ExtensionContext): void {
@@ -90,14 +90,12 @@ export function registerSettings(context: vscode.ExtensionContext): void {
         listener.dispose();
         if (panel === current) panel = undefined;
       });
-      current.webview.html = createReactWebviewHtml({
-        webview: current.webview,
-        extensionUri: context.extensionUri,
-        scriptFile: "settingsWebview.js",
-        title: "Containerlab Settings",
-        initialData: service.snapshot(target),
-        webviewKind: "containerlab-settings"
-      });
+      current.webview.html = createPanelWebviewHtml(
+        SETTINGS_PANEL,
+        current.webview,
+        context.extensionUri,
+        service.snapshot(target)
+      );
     }),
     { dispose: () => panel?.dispose() }
   );

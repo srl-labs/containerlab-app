@@ -4,7 +4,7 @@ import type { InspectContainerData } from "@containerlab/clab-ui/inspect";
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
 import * as inspector from "../treeView/inspector";
-import { getInspectWebviewHtml } from "../webviews/inspect/inspectWebviewHtml";
+import { INSPECT_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 // Store the current panel and context for refresh functionality
 let currentPanel: vscode.WebviewPanel | undefined;
@@ -152,9 +152,14 @@ function showInspectWebview(
 ) {
   if (currentPanel) {
     currentPanel.title = title;
-    currentPanel.webview.html = getInspectWebviewHtml(currentPanel.webview, extensionUri, {
-      containers
-    });
+    currentPanel.webview.html = createPanelWebviewHtml(
+      INSPECT_PANEL,
+      currentPanel.webview,
+      extensionUri,
+      {
+        containers
+      }
+    );
     return;
   }
 
@@ -221,5 +226,7 @@ function showInspectWebview(
     }
   });
 
-  panel.webview.html = getInspectWebviewHtml(panel.webview, extensionUri, { containers });
+  panel.webview.html = createPanelWebviewHtml(INSPECT_PANEL, panel.webview, extensionUri, {
+    containers
+  });
 }

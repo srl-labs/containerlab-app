@@ -5,7 +5,7 @@ import * as utils from "../utils";
 import type { ClabInterfaceTreeNode } from "../treeView/common";
 import { genPacketflixURI, getHostname, setSessionHostname } from "../utils/packetflix";
 import type { ImagePullPolicy } from "../utils/consts";
-import { getWiresharkVncWebviewHtml } from "../webviews/wiresharkVnc/wiresharkVncWebviewHtml";
+import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import {
   DEFAULT_WIRESHARK_VNC_DOCKER_IMAGE,
   DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY,
@@ -332,7 +332,7 @@ export async function captureEdgesharkVNC(
     );
   }
 
-  panel.webview.html = getWiresharkVncWebviewHtml(panel.webview, extensionUri, {
+  panel.webview.html = createPanelWebviewHtml(WIRESHARK_VNC_PANEL, panel.webview, extensionUri, {
     iframeUrl,
     showVolumeTip: Boolean(volumeMount)
   });

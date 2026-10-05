@@ -1,6 +1,5 @@
 import { bootstrapImageManagerWebview } from "@containerlab/clab-ui/image-manager";
-import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 
-const runtime = createClabUiRuntime({ host: createWindowClabUiHost() });
+import { mountWebview } from "../shared/mountWebview";
 
-bootstrapImageManagerWebview(runtime);
+mountWebview(bootstrapImageManagerWebview);
