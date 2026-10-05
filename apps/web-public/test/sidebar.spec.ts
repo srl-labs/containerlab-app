@@ -90,11 +90,11 @@ test("pinning survives reload, unpins under the pointer and adapts to a narrow w
   await waitForWorkspace(page);
   const rail = page.getByTestId("workspace-rail");
   const sidebar = page.getByTestId("workspace-sidebar");
-  const initial = (await sidebar.boundingBox())!;
   await rail.getByRole("button", { name: "Pin", exact: true }).click();
   await expect(rail).toHaveAttribute("data-pinned", "true");
   await expect(rail).toHaveCSS("width", "196px");
-  expect((await sidebar.boundingBox())!.width).toBe(initial.width);
+  // The pinned rail is part of the layout, so the editor never sits underneath it.
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(196);
   await page.reload();
   await expect(rail).toBeVisible({ timeout: 30_000 });
   await expect(rail.getByRole("button", { name: "Unpin", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -107,6 +107,7 @@ test("pinning survives reload, unpins under the pointer and adapts to a narrow w
   await rail.getByRole("button", { name: "Unpin", exact: true }).click();
   await expect(rail).toHaveCSS("width", "48px");
   await expect(rail).toHaveAttribute("data-pinned", "false");
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(48);
   await page.reload();
   await expect(rail).toBeVisible({ timeout: 30_000 });
   await expect(rail.getByRole("button", { name: "Pin", exact: true })).toHaveAttribute("aria-pressed", "false");

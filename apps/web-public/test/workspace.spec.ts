@@ -123,13 +123,19 @@ test("shared sidebar resizes independently of the floating palette and toolbar",
   await page.mouse.up();
   await expect(resize).toHaveAttribute("aria-valuenow", "340");
 
-  const sidebarBounds = (await sidebar.boundingBox())!;
-  const editor = (await page.getByTestId("topoviewer-editor").boundingBox())!;
-  expect(sidebarBounds.x).toBe(0);
-  expect(editor.x).toBe(sidebarBounds.x + sidebarBounds.width);
+  // An open explorer is part of the layout: the editor starts where it ends instead of sitting under it.
+  const openSidebar = (await sidebar.boundingBox())!;
+  const openEditor = (await page.getByTestId("topoviewer-editor").boundingBox())!;
+  expect(openSidebar.x).toBe(0);
+  expect(openSidebar.width).toBe(48 + 340);
+  expect(openEditor.x).toBe(openSidebar.x + openSidebar.width);
   await expect(drawer).toHaveCSS("left", "0px");
 
   await page.getByRole("button", { name: "Close explorer", exact: true }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(48);
+  const sidebarBounds = (await sidebar.boundingBox())!;
+  await expect.poll(async () => (await page.getByTestId("topoviewer-editor").boundingBox())!.x).toBe(48);
+  const editor = (await page.getByTestId("topoviewer-editor").boundingBox())!;
   const panelResize = page.getByTestId("context-panel-resize-handle");
   const panelHandle = (await panelResize.boundingBox())!;
   await page.mouse.move(panelHandle.x + panelHandle.width / 2, panelHandle.y + 200);
@@ -222,6 +228,54 @@ test("the sandbox lists its topology files without any running-lab concepts", as
   }
   await sidebar.getByText("plain.clab.yml", { exact: true }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(1);
+  await page.waitForLoadState("networkidle");
   await expect(page.locator(".topology-node-runtime-badge")).toHaveCount(0);
   await expect(page.getByTestId("navbar-deploy")).toHaveCount(0);
+});
+
+test("the rail and explorer never cover the editor's toolbar or canvas", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.addInitScript(() =>
+    localStorage.setItem("clab-pages-sandbox-files-v1", JSON.stringify({
+      "cover.clab.yml": "name: cover\ntopology:\n  nodes:\n    a:\n      kind: linux\n      image: alpine:latest\n    b:\n      kind: linux\n      image: alpine:latest\n  links:\n    - endpoints: [a:eth1, b:eth1]\n"
+    }))
+  );
+  await page.goto("/");
+  await waitForWorkspace(page);
+  const rail = page.getByTestId("workspace-rail");
+  const sidebar = page.getByTestId("workspace-sidebar");
+  await rail.getByRole("button", { name: "Labs", exact: true }).click();
+  await sidebar.getByText("cover.clab.yml", { exact: true }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(2);
+
+  const covered = async () => {
+    const edge = (await sidebar.boundingBox())!;
+    const editor = (await page.getByTestId("topoviewer-editor").boundingBox())!;
+    const toolbar = (await page.getByTestId("topoviewer-navbar").boundingBox())!;
+    const nodes = await page.locator(".react-flow__node").evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().left)
+    );
+    return {
+      editorStart: editor.x - (edge.x + edge.width),
+      toolbarStart: toolbar.x - (edge.x + edge.width),
+      nodeStart: Math.min(...nodes) - (edge.x + edge.width)
+    };
+  };
+
+  // Open panel.
+  await expect.poll(async () => (await covered()).editorStart).toBe(0);
+  expect((await covered()).toolbarStart).toBeGreaterThanOrEqual(0);
+  expect((await covered()).nodeStart).toBeGreaterThanOrEqual(0);
+
+  // Open panel beside a pinned rail.
+  await rail.getByRole("button", { name: "Pin", exact: true }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(196 + 200);
+  await expect.poll(async () => (await covered()).editorStart).toBe(0);
+  expect((await covered()).toolbarStart).toBeGreaterThanOrEqual(0);
+
+  // Closed again, the editor gets the room back.
+  await page.getByRole("button", { name: "Close explorer", exact: true }).click();
+  await rail.getByRole("button", { name: "Unpin", exact: true }).click();
+  await expect.poll(async () => (await sidebar.boundingBox())!.width).toBe(48);
+  await expect.poll(async () => (await covered()).editorStart).toBe(0);
 });

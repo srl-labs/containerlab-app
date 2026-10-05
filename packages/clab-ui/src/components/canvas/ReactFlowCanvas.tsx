@@ -387,7 +387,8 @@ function useRenderConfig(
   nodeCount: number,
   edgeCount: number,
   linkLabelMode: EdgeLabelMode,
-  disableZoomTracking = false
+  disableZoomTracking = false,
+  suppressRuntimeBadges = false
 ) {
   const isLargeGraph =
     nodeCount >= LARGE_GRAPH_NODE_THRESHOLD || edgeCount >= LARGE_GRAPH_EDGE_THRESHOLD;
@@ -415,9 +416,10 @@ function useRenderConfig(
 
   const nodeRenderConfig = useMemo(
     () => ({
-      suppressLabels: isLowDetail
+      suppressLabels: isLowDetail,
+      suppressRuntimeBadges
     }),
-    [isLowDetail]
+    [isLowDetail, suppressRuntimeBadges]
   );
 
   return { isLargeGraph, isLowDetail, edgeRenderConfig, nodeRenderConfig };
@@ -1142,6 +1144,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       isContextPanelOpen = false,
       layout = "preset",
       readOnlyViewer = false,
+      suppressRuntimeBadges = false,
       viewerOptions,
       isGeoLayout = false,
       gridLineWidth = DEFAULT_GRID_LINE_WIDTH,
@@ -1549,7 +1552,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       allNodes.length,
       allEdges.length,
       linkLabelMode,
-      isGeoLayout
+      isGeoLayout,
+      suppressRuntimeBadges
     );
     const isGeoInteracting = getGeoInteractingState(isGeoLayout, geoLayout.isInteracting);
     const effectiveEdgeRenderConfig = useMemo(

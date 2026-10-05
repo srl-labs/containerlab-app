@@ -10,6 +10,7 @@ import type {
 export interface ExplorerNodeLabelProps {
   node: ExplorerNode;
   sectionId: ExplorerSectionId;
+  expanded?: boolean;
   onInvokeAction: (action: ExplorerAction) => void;
 }
 
@@ -27,6 +28,8 @@ export interface SectionToolbarProps {
 
 export interface ExplorerSectionCardProps {
   section: ExplorerSectionSnapshot;
+  /** Show the section as a bare tree when it is the only one on display and its title adds nothing. */
+  headerless?: boolean;
   expandedItems: string[];
   isCollapsed: boolean;
   isDropTarget: boolean;

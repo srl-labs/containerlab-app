@@ -96,9 +96,22 @@ export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSetti
   };
 
   return (
-    <Box ref={ref} data-testid="workspace-sidebar" sx={{ display: "flex", flexShrink: 0, alignSelf: "stretch", height: "100%", minHeight: 0, maxWidth: "65%", position: "relative", zIndex: 8, userSelect: isDragging ? "none" : undefined }}>
+    // The sidebar owns the space the pinned rail and the open panel cover, so the editor sits beside them.
+    <Box
+      ref={ref}
+      data-testid="workspace-sidebar"
+      style={{ width: railWidth + (open ? panelWidth : 0) }}
+      sx={{
+        display: "flex", flexShrink: 0, alignSelf: "stretch", height: "100%", minHeight: 0, maxWidth: "65%",
+        position: "relative", zIndex: 8, userSelect: isDragging ? "none" : undefined,
+        transition: isDragging ? "none" : WIDTH_MOTION,
+        ...REDUCE_MOTION
+      }}
+    >
       <Box sx={{
-        width: RAIL_WIDTH, flexShrink: 0, alignSelf: "stretch", height: "100%", position: "relative", zIndex: 3
+        width: railWidth, flexShrink: 0, alignSelf: "stretch", height: "100%", position: "relative", zIndex: 3,
+        transition: WIDTH_MOTION,
+        ...REDUCE_MOTION
       }}>
         <RailPinnedContext.Provider value={pinned}>
         <Box

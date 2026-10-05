@@ -1,33 +1,33 @@
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import AddIcon from "@mui/icons-material/Add";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
-import BuildIcon from "@mui/icons-material/Build";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
-import FilterAltIcon from "@mui/icons-material/FilterAlt";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import FilterAltOutlinedIcon from "@mui/icons-material/FilterAltOutlined";
+import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
-import LinkIcon from "@mui/icons-material/Link";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
-import ManageSearchIcon from "@mui/icons-material/ManageSearch";
-import NoteAddIcon from "@mui/icons-material/NoteAdd";
-import OpenInBrowserIcon from "@mui/icons-material/OpenInBrowser";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
+import LinkOffRoundedIcon from "@mui/icons-material/LinkOffRounded";
+import ManageSearchRoundedIcon from "@mui/icons-material/ManageSearchRounded";
+import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
+import OpenInBrowserOutlinedIcon from "@mui/icons-material/OpenInBrowserOutlined";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutlined";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutlined";
-import RefreshIcon from "@mui/icons-material/Refresh";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
-import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
-import SourceIcon from "@mui/icons-material/Source";
-import StarBorderIcon from "@mui/icons-material/StarBorder";
-import StopIcon from "@mui/icons-material/Stop";
-import TerminalIcon from "@mui/icons-material/Terminal";
-import TuneIcon from "@mui/icons-material/Tune";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import SettingsEthernetRoundedIcon from "@mui/icons-material/SettingsEthernetRounded";
+import SourceOutlinedIcon from "@mui/icons-material/SourceOutlined";
+import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
+import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import TerminalRoundedIcon from "@mui/icons-material/TerminalRounded";
+import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import type { SvgIconComponent } from "@mui/icons-material";
 import type { ContextMenuItem } from "../../components/context-menu/ContextMenu";
 import type { ExplorerAction } from "../shared/explorer/types";
@@ -135,60 +135,60 @@ const ACTION_GROUP_ORDER_BY_NODE_KIND: Record<ExplorerNodeKind, ActionGroupId[]>
 };
 
 const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
-  "containerlab.endpoint.add": AddIcon,
-  "containerlab.inspectall": ManageSearchIcon,
-  "containerlab.treeview.runninglabs.hidenonownedlabs": VisibilityOffIcon,
-  "containerlab.treeview.runninglabs.shownonownedlabs": VisibilityIcon,
+  "containerlab.endpoint.add": AddRoundedIcon,
+  "containerlab.inspectall": ManageSearchRoundedIcon,
+  "containerlab.treeview.runninglabs.hidenonownedlabs": VisibilityOffOutlinedIcon,
+  "containerlab.treeview.runninglabs.shownonownedlabs": VisibilityOutlinedIcon,
   "containerlab.images.manage": Inventory2OutlinedIcon,
-  "containerlab.editor.topoviewereditor": NoteAddIcon,
-  "containerlab.lab.clonerepo": SourceIcon,
-  "containerlab.lab.togglefavorite": StarBorderIcon,
-  "containerlab.lab.addtoworkspace": FolderOpenIcon,
+  "containerlab.editor.topoviewereditor": NoteAddOutlinedIcon,
+  "containerlab.lab.clonerepo": SourceOutlinedIcon,
+  "containerlab.lab.togglefavorite": StarBorderRoundedIcon,
+  "containerlab.lab.addtoworkspace": FolderOpenOutlinedIcon,
   "containerlab.lab.save": SaveOutlinedIcon,
-  "containerlab.lab.start": PlayArrowIcon,
-  "containerlab.lab.stop": StopIcon,
-  "containerlab.lab.restart": RefreshIcon,
-  "containerlab.node.start": PlayArrowIcon,
+  "containerlab.lab.start": PlayArrowRoundedIcon,
+  "containerlab.lab.stop": StopRoundedIcon,
+  "containerlab.lab.restart": RefreshRoundedIcon,
+  "containerlab.node.start": PlayArrowRoundedIcon,
   "containerlab.node.save": SaveOutlinedIcon,
   "containerlab.node.showlogs": ArticleOutlinedIcon,
-  "containerlab.node.stop": StopIcon,
-  "containerlab.node.restart": RefreshIcon,
+  "containerlab.node.stop": StopRoundedIcon,
+  "containerlab.node.restart": RefreshRoundedIcon,
   "containerlab.node.pause": PauseCircleOutlineIcon,
   "containerlab.node.unpause": PlayCircleOutlineIcon,
-  "containerlab.interface.setdelay": TuneIcon,
-  "containerlab.interface.setjitter": TuneIcon,
-  "containerlab.interface.setloss": TuneIcon,
-  "containerlab.interface.setrate": TuneIcon,
-  "containerlab.interface.setcorruption": TuneIcon,
-  "containerlab.lab.sshx.attach": LinkIcon,
-  "containerlab.lab.sshx.detach": LinkOffIcon,
-  "containerlab.lab.sshx.reattach": LinkIcon,
-  "containerlab.lab.sshx.copylink": LinkIcon,
-  "containerlab.lab.gotty.attach": OpenInBrowserIcon,
-  "containerlab.lab.gotty.detach": OpenInBrowserIcon,
-  "containerlab.lab.gotty.reattach": OpenInBrowserIcon,
-  "containerlab.lab.gotty.copylink": OpenInBrowserIcon,
+  "containerlab.interface.setdelay": TuneRoundedIcon,
+  "containerlab.interface.setjitter": TuneRoundedIcon,
+  "containerlab.interface.setloss": TuneRoundedIcon,
+  "containerlab.interface.setrate": TuneRoundedIcon,
+  "containerlab.interface.setcorruption": TuneRoundedIcon,
+  "containerlab.lab.sshx.attach": LinkRoundedIcon,
+  "containerlab.lab.sshx.detach": LinkOffRoundedIcon,
+  "containerlab.lab.sshx.reattach": LinkRoundedIcon,
+  "containerlab.lab.sshx.copylink": LinkRoundedIcon,
+  "containerlab.lab.gotty.attach": OpenInBrowserOutlinedIcon,
+  "containerlab.lab.gotty.detach": OpenInBrowserOutlinedIcon,
+  "containerlab.lab.gotty.reattach": OpenInBrowserOutlinedIcon,
+  "containerlab.lab.gotty.copylink": OpenInBrowserOutlinedIcon,
   "containerlab.file.open": ArticleOutlinedIcon,
-  "containerlab.file.opentopology": AccountTreeIcon,
-  "containerlab.file.newfile": NoteAddIcon,
-  "containerlab.file.newfolder": FolderOpenIcon,
+  "containerlab.file.opentopology": AccountTreeOutlinedIcon,
+  "containerlab.file.newfile": NoteAddOutlinedIcon,
+  "containerlab.file.newfolder": FolderOpenOutlinedIcon,
   "containerlab.file.download": DownloadOutlinedIcon,
   "containerlab.file.downloadarchive": DownloadOutlinedIcon,
   "containerlab.file.upload": FileUploadOutlinedIcon,
   "containerlab.lab.downloadarchive": DownloadOutlinedIcon,
-  "containerlab.install.edgeshark": SettingsEthernetIcon,
+  "containerlab.install.edgeshark": SettingsEthernetRoundedIcon,
   "containerlab.uninstall.edgeshark": DeleteOutlineIcon,
-  "containerlab.capture.killallwiresharkvnc": StopIcon,
-  "containerlab.set.sessionhostname": SettingsEthernetIcon,
-  "containerlab.endpoint.reconnect": RefreshIcon,
+  "containerlab.capture.killallwiresharkvnc": StopRoundedIcon,
+  "containerlab.set.sessionhostname": SettingsEthernetRoundedIcon,
+  "containerlab.endpoint.reconnect": RefreshRoundedIcon,
   "containerlab.endpoint.remove": DeleteOutlineIcon,
-  "containerlab.endpoint.copyurl": ContentCopyIcon
+  "containerlab.endpoint.copyurl": ContentCopyOutlinedIcon
 };
 
 const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
   { match: (command) => command.includes("upload"), icon: FileUploadOutlinedIcon },
   { match: (command) => command.includes("download"), icon: DownloadOutlinedIcon },
-  { match: (command) => command.includes("copy"), icon: ContentCopyIcon },
+  { match: (command) => command.includes("copy"), icon: ContentCopyOutlinedIcon },
   {
     match: (command) =>
       command.includes("destroy") || command.includes("delete") || command.includes("detach"),
@@ -196,38 +196,38 @@ const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
   },
   {
     match: (command) => command.includes("redeploy"),
-    icon: RefreshIcon
+    icon: RefreshRoundedIcon
   },
   {
     match: (command) => command.includes("restart"),
-    icon: RefreshIcon
+    icon: RefreshRoundedIcon
   },
-  { match: (command) => command.includes("stop"), icon: StopIcon },
+  { match: (command) => command.includes("stop"), icon: StopRoundedIcon },
   { match: (command) => command.includes("unpause"), icon: PlayCircleOutlineIcon },
   { match: (command) => command.includes("pause"), icon: PauseCircleOutlineIcon },
   {
     match: (command) =>
       command.includes("ssh") || command.includes("shell") || command.includes("telnet"),
-    icon: TerminalIcon
+    icon: TerminalRoundedIcon
   },
-  { match: (command) => command.includes("filter"), icon: FilterAltIcon },
+  { match: (command) => command.includes("filter"), icon: FilterAltOutlinedIcon },
   { match: (command) => command.includes(".save"), icon: SaveOutlinedIcon },
   {
     match: (command) => command.includes("showlogs") || command.includes("logs"),
     icon: ArticleOutlinedIcon
   },
-  { match: (command) => command.startsWith("containerlab.lab.fcli."), icon: BuildIcon },
-  { match: (command) => command.includes(".gotty."), icon: OpenInBrowserIcon },
-  { match: (command) => command.startsWith("containerlab.lab.graph."), icon: AccountTreeIcon },
+  { match: (command) => command.startsWith("containerlab.lab.fcli."), icon: BuildOutlinedIcon },
+  { match: (command) => command.includes(".gotty."), icon: OpenInBrowserOutlinedIcon },
+  { match: (command) => command.startsWith("containerlab.lab.graph."), icon: AccountTreeOutlinedIcon },
   {
     match: (command) =>
       command.includes("open") || command.includes("graph") || command.includes("inspect"),
-    icon: OpenInNewIcon
+    icon: OpenInNewRoundedIcon
   },
-  { match: (command) => command.includes("folder"), icon: FolderOpenIcon },
+  { match: (command) => command.includes("folder"), icon: FolderOpenOutlinedIcon },
   {
     match: (command) => command.includes("capture") || command.includes("impairment"),
-    icon: SettingsEthernetIcon
+    icon: SettingsEthernetRoundedIcon
   },
   {
     match: (command) =>
@@ -236,14 +236,14 @@ const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
       command.includes("loss") ||
       command.includes("rate") ||
       command.includes("corruption"),
-    icon: TuneIcon
+    icon: TuneRoundedIcon
   },
   {
     match: (command) =>
       command.includes("deploy") || command.includes("start") || command.includes("run"),
-    icon: PlayArrowIcon
+    icon: PlayArrowRoundedIcon
   },
-  { match: (command) => command.includes("link"), icon: LinkIcon }
+  { match: (command) => command.includes("link"), icon: LinkRoundedIcon }
 ];
 
 const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
@@ -364,7 +364,7 @@ export function actionIcon(action: ExplorerAction): SvgIconComponent {
     }
   }
 
-  return BuildIcon;
+  return BuildOutlinedIcon;
 }
 
 function actionGroupId(action: ExplorerAction): ActionGroupId {
@@ -396,19 +396,19 @@ const ACTION_GROUP_LABELS: Record<ActionGroupId, string> = {
 };
 
 const ACTION_GROUP_ICONS: Record<ActionGroupId, SvgIconComponent> = {
-  topology: FolderOpenIcon,
-  graph: AccountTreeIcon,
-  lifecycle: PlayArrowIcon,
+  topology: FolderOpenOutlinedIcon,
+  graph: AccountTreeOutlinedIcon,
+  lifecycle: PlayArrowRoundedIcon,
   save: SaveOutlinedIcon,
-  access: TerminalIcon,
-  sharing: LinkIcon,
-  network: SettingsEthernetIcon,
-  inspect: ManageSearchIcon,
-  copy: ContentCopyIcon,
-  tools: BuildIcon,
-  view: FilterAltIcon,
+  access: TerminalRoundedIcon,
+  sharing: LinkRoundedIcon,
+  network: SettingsEthernetRoundedIcon,
+  inspect: ManageSearchRoundedIcon,
+  copy: ContentCopyOutlinedIcon,
+  tools: BuildOutlinedIcon,
+  view: FilterAltOutlinedIcon,
   danger: DeleteOutlineIcon,
-  other: BuildIcon
+  other: BuildOutlinedIcon
 };
 
 const GRAPH_COMMAND_ORDER = new Map<string, number>([

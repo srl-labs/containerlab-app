@@ -1,5 +1,6 @@
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import UnfoldLessRoundedIcon from "@mui/icons-material/UnfoldLessRounded";
+import UnfoldMoreRoundedIcon from "@mui/icons-material/UnfoldMoreRounded";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Paper from "@mui/material/Paper";
@@ -9,7 +10,7 @@ import type { Theme } from "@mui/material/styles";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { ContextMenu } from "../../components/context-menu/ContextMenu";
 import { flattenExpandableNodeIds } from "../explorerUiState";
-import { COLOR_TEXT_PRIMARY, SECTION_HEADER_HEIGHT_PX } from "./constants";
+import { ROW_RADIUS_PX, SECTION_HEADER_HEIGHT_PX, TOOLBAR_ICON_BUTTON_SX, TREE_ROW_INSET_PX } from "./constants";
 import type { ExplorerSectionCardProps } from "./types";
 import { formatSectionTitle, isBareTreeSection, showSectionCount } from "./sectionModel";
 import { toContextMenuItem } from "./menuItems";
@@ -31,16 +32,18 @@ function getSectionPaperSx(isDropTarget: boolean, flexStyle: string) {
   };
 }
 
-function getSectionHeaderSx(_isCollapsed: boolean, isBeingDragged: boolean) {
+function getSectionHeaderSx(isBeingDragged: boolean) {
   return {
-    px: 0.35,
-    py: 0.1,
+    mx: `${TREE_ROW_INSET_PX}px`,
+    pl: "2px",
+    pr: "4px",
     height: SECTION_HEADER_HEIGHT_PX,
     minHeight: SECTION_HEADER_HEIGHT_PX,
     maxHeight: SECTION_HEADER_HEIGHT_PX,
     display: "flex",
     alignItems: "center",
-    gap: 0.2,
+    gap: "2px",
+    borderRadius: `${ROW_RADIUS_PX}px`,
     cursor: isBeingDragged ? "grabbing" : "grab",
     userSelect: "none",
     bgcolor: isBeingDragged ? "action.selected" : "transparent",
@@ -61,6 +64,7 @@ function getSectionHeaderSx(_isCollapsed: boolean, isBeingDragged: boolean) {
 
 export function ExplorerSectionCard({
   section,
+  headerless = false,
   expandedItems,
   isCollapsed,
   isDropTarget,
@@ -78,7 +82,7 @@ export function ExplorerSectionCard({
   onCollapseAllInSection
 }: Readonly<ExplorerSectionCardProps>) {
   const expandableIds = useMemo(() => flattenExpandableNodeIds(section.nodes), [section.nodes]);
-  const bareTreeSection = isBareTreeSection(section);
+  const bareTreeSection = headerless || isBareTreeSection(section);
   const [sectionMenuPosition, setSectionMenuPosition] = useState<{ x: number; y: number } | null>(
     null
   );
@@ -134,7 +138,7 @@ export function ExplorerSectionCard({
           draggable
           onDragStart={onSectionDragStart(section.id)}
           onDragEnd={onSectionDragEnd}
-          sx={{ ...getSectionHeaderSx(isCollapsed, isBeingDragged), flex: "0 0 auto" }}
+          sx={{ ...getSectionHeaderSx(isBeingDragged), flex: "0 0 auto" }}
         >
           <IconButton
             size="small"
@@ -144,13 +148,16 @@ export function ExplorerSectionCard({
               onToggleSectionCollapsed(section.id);
             }}
             aria-label={isCollapsed ? `Expand ${section.label}` : `Collapse ${section.label}`}
-            sx={{ color: COLOR_TEXT_PRIMARY, p: 0.25 }}
+            sx={{ color: "text.disabled", p: 0, width: 18, height: 18, "&:hover": { color: "text.primary", bgcolor: "transparent" } }}
           >
-            {isCollapsed ? (
-              <ChevronRightIcon fontSize="small" />
-            ) : (
-              <ExpandMoreIcon fontSize="small" />
-            )}
+            <ChevronRightRoundedIcon
+              sx={{
+                fontSize: 16,
+                transform: isCollapsed ? "none" : "rotate(90deg)",
+                transition: "transform 120ms ease",
+                "@media (prefers-reduced-motion: reduce)": { transition: "none" }
+              }}
+            />
           </IconButton>
 
           <Box
@@ -168,27 +175,13 @@ export function ExplorerSectionCard({
               {formatSectionTitle(section)}
             </Typography>
             {showSectionCount(section) && (
-              <Box
+              <Typography
                 className="explorer-section-count"
-                sx={(theme) => ({
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  px: 0.7,
-                  py: 0.05,
-                  minWidth: 18,
-                  borderRadius: 999,
-                  bgcolor: theme.alpha(theme.palette.text.primary, 0.08),
-                  color: "text.secondary"
-                })}
+                variant="caption"
+                sx={{ color: "text.disabled", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}
               >
-                <Typography
-                  variant="caption"
-                  sx={{ color: "inherit", lineHeight: 1.3, fontWeight: 700 }}
-                >
-                  {section.count}
-                </Typography>
-              </Box>
+                {section.count}
+              </Typography>
             )}
           </Box>
 
@@ -199,7 +192,7 @@ export function ExplorerSectionCard({
               <IconButton
                 size="small"
                 className="explorer-section-hover-actions"
-                sx={{ color: COLOR_TEXT_PRIMARY }}
+                sx={TOOLBAR_ICON_BUTTON_SX}
                 aria-label={allExpanded ? "Collapse all" : "Expand all"}
                 onClick={(event) => {
                   event.preventDefault();
@@ -212,9 +205,9 @@ export function ExplorerSectionCard({
                 }}
               >
                 {allExpanded ? (
-                  <ChevronRightIcon fontSize="small" />
+                  <UnfoldLessRoundedIcon sx={{ fontSize: 17 }} />
                 ) : (
-                  <ExpandMoreIcon fontSize="small" />
+                  <UnfoldMoreRoundedIcon sx={{ fontSize: 17 }} />
                 )}
               </IconButton>
             </Tooltip>
@@ -225,8 +218,8 @@ export function ExplorerSectionCard({
       {!isCollapsed && (
         <Box
           sx={{
-            px: bareTreeSection ? 0.15 : 0.3,
-            py: bareTreeSection ? 0.1 : 0.25,
+            px: 0,
+            py: "2px",
             flex: 1,
             minHeight: 0,
             overflowY: "auto"

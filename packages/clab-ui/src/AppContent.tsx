@@ -745,13 +745,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     host.topoViewer.dumpCssVars(sorted);
   }, [host]);
 
-  React.useEffect(() => {
-    // A host that cannot run labs has no deployment state worth badging on nodes.
-    if (lifecycleActionsAvailable) return;
-    const { nodeRenderConfig, setNodeRenderConfig } = useCanvasStore.getState();
-    setNodeRenderConfig({ ...nodeRenderConfig, suppressRuntimeBadges: true });
-  }, [lifecycleActionsAvailable]);
-
   const undoRedo = useUndoRedoControls(state.canUndo, state.canRedo);
   const { trigger: triggerLockShake } = useShakeAnimation();
 
@@ -1302,6 +1295,8 @@ export const AppContent: React.FC<AppContentProps> = ({
       topologyViewportKey,
       isContextPanelOpen: !viewerOnly && hasActiveTopology && panelVisibility.isContextPanelOpen,
       readOnlyViewer: viewerOnly,
+      // A host that cannot run labs has no deployment state worth badging on nodes.
+      suppressRuntimeBadges: viewerOnly || !lifecycleActionsAvailable,
       viewerOptions,
       onPaneClick: handleEmptyCanvasClick,
       layout: layoutControls.layout,
@@ -1335,6 +1330,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       topologyViewportKey,
       viewerOptions,
       viewerOnly,
+      lifecycleActionsAvailable,
       hasActiveTopology,
       panelVisibility.isContextPanelOpen,
       handleEmptyCanvasClick,

@@ -1,4 +1,4 @@
-import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
+import SettingsEthernetRoundedIcon from "@mui/icons-material/SettingsEthernetRounded";
 import type { ContextMenuItem } from "../../components/context-menu/ContextMenu";
 import type { ExplorerAction } from "../shared/explorer/types";
 import {
@@ -182,7 +182,7 @@ function buildEndpointMenuItems(
     {
       id: "group:endpoint:capture",
       label: "Capture",
-      icon: <SettingsEthernetIcon fontSize="small" />,
+      icon: <SettingsEthernetRoundedIcon fontSize="small" />,
       children: captureItems
     }
   ];

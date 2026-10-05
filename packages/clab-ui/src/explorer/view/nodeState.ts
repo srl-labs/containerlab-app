@@ -130,19 +130,8 @@ export function endpointStatusText(node: ExplorerNode, isEndpointRoot: boolean):
   return endpointStatusLabel(node.state, node.statusIndicator);
 }
 
-export function endpointDescriptionText(
-  secondaryText: string | undefined,
-  isEndpointRoot: boolean
-): string | null {
-  if (!isEndpointRoot || !secondaryText || secondaryText.trim().length === 0) {
-    return null;
-  }
-  return secondaryText;
-}
-
 interface ExplorerNodeDisplayFlags {
   inlineContainerStatus: string | undefined;
-  showSecondaryLine: boolean;
   showStatusDot: boolean;
   showFavoriteIcon: boolean;
   showSharedIcon: boolean;
@@ -163,13 +152,6 @@ export function deriveExplorerNodeDisplayFlags(
     node.contextValue === "containerlabInterfaceDown";
   return {
     inlineContainerStatus: isContainer ? secondaryText?.trim() : undefined,
-    showSecondaryLine:
-      Boolean(secondaryText) &&
-      !isContainer &&
-      !isInterface &&
-      !isEndpointRoot &&
-      !isEndpointSection &&
-      !isDisconnectedPlaceholder,
     showStatusDot:
       Boolean(node.statusIndicator) &&
       !isInterface &&

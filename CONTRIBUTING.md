@@ -101,6 +101,8 @@ pnpm test:desktop  # Electron smoke tests: app server, native edit menu, window 
 pnpm preview:build && pnpm preview:test  # combined documentation and sandbox site
 ```
 
+To look at the explorer against fixture data, run the UI harness server (`pnpm --filter @containerlab/clab-ui exec vite --config test/ui-harness/vite.config.ts`) and open `/explorer.html?mode=standalone`, with `mode` one of `standalone`, `vscode`, `sandbox` or `files`, plus `theme=light` or `width=240` as needed.
+
 UI, sandbox and web commands accept Playwright options, e.g. `pnpm test:ui --grep 'Canvas Interactions' --workers=2`. VS Code and desktop tests require a display on Linux; use `xvfb-run -a pnpm test:vscode` or `xvfb-run -a pnpm test:desktop` if necessary.
 
 ### Where tests belong

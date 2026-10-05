@@ -1,5 +1,4 @@
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
@@ -9,11 +8,11 @@ import { useCallback, useMemo } from "react";
 import type { ExplorerAction, ExplorerNode, ExplorerSectionId } from "../shared/explorer/types";
 import { flattenDescendantNodeIds, nextExpandedItemsForNodeToggle } from "../explorerUiState";
 import {
-  COLOR_TEXT_PRIMARY,
+  ROW_RADIUS_PX,
   TOOLBAR_ICON_BUTTON_SX,
-  TREE_DEPTH_INDENT,
   TREE_DISCLOSURE_SLOT_PX,
-  TREE_ROW_GAP
+  TREE_INDENT_PX,
+  TREE_ROW_INSET_PX
 } from "./constants";
 import type { SectionToolbarProps, SectionTreeProps } from "./types";
 import {
@@ -50,16 +49,28 @@ function SectionTreeNode({
     hasChildren &&
     (isEndpointRoot || isEndpointSection || isFileExplorerFolderNode(node.contextValue));
   const rowMinHeight = endpointRowHeight(isEndpointRoot, isEndpointSection);
+  const indent = depth * TREE_INDENT_PX;
 
   return (
     <Box>
-      <Stack
-        direction="row"
-        spacing={TREE_ROW_GAP}
+      <Box
+        className="explorer-tree-row"
         sx={{
+          display: "flex",
           alignItems: "center",
           minHeight: rowMinHeight,
-          pl: depth * TREE_DEPTH_INDENT
+          ml: `${TREE_ROW_INSET_PX}px`,
+          mr: `${TREE_ROW_INSET_PX}px`,
+          pl: `${indent + 2}px`,
+          pr: "4px",
+          borderRadius: `${ROW_RADIUS_PX}px`,
+          transition: "background-color 90ms ease",
+          "&:hover, &:has([data-menu-open='true'])": { bgcolor: "action.hover" },
+          "&:hover .explorer-tree-chevron": { color: "text.secondary" },
+          "&:hover .explorer-node-actions-trigger, &:focus-within .explorer-node-actions-trigger": {
+            opacity: 1,
+            pointerEvents: "auto"
+          }
         }}
       >
         <Box
@@ -74,11 +85,14 @@ function SectionTreeNode({
           {hasChildren && (
             <IconButton
               size="small"
+              className="explorer-tree-chevron"
               sx={{
                 width: TREE_DISCLOSURE_SLOT_PX,
                 height: TREE_DISCLOSURE_SLOT_PX,
                 p: 0,
-                color: COLOR_TEXT_PRIMARY
+                borderRadius: "4px",
+                color: "text.disabled",
+                "&:hover": { color: "text.primary", bgcolor: "transparent" }
               }}
               onClick={(event) => {
                 event.preventDefault();
@@ -87,11 +101,14 @@ function SectionTreeNode({
               }}
               aria-label={isExpanded ? `Collapse ${node.label}` : `Expand ${node.label}`}
             >
-              {isExpanded ? (
-                <ExpandMoreIcon fontSize="inherit" />
-              ) : (
-                <ChevronRightIcon fontSize="inherit" />
-              )}
+              <ChevronRightRoundedIcon
+                sx={{
+                  fontSize: 16,
+                  transform: isExpanded ? "rotate(90deg)" : "none",
+                  transition: "transform 120ms ease",
+                  "@media (prefers-reduced-motion: reduce)": { transition: "none" }
+                }}
+              />
             </IconButton>
           )}
         </Box>
@@ -107,12 +124,31 @@ function SectionTreeNode({
           }}
           sx={{ flex: 1, minWidth: 0, cursor: toggleOnRowClick ? "pointer" : "default" }}
         >
-          <ExplorerNodeLabel node={node} sectionId={sectionId} onInvokeAction={onInvokeAction} />
+          <ExplorerNodeLabel
+            node={node}
+            sectionId={sectionId}
+            expanded={isExpanded}
+            onInvokeAction={onInvokeAction}
+          />
         </Box>
-      </Stack>
+      </Box>
 
       {hasChildren && isExpanded && (
-        <Stack spacing={0.1}>
+        <Box
+          sx={{
+            position: "relative",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: `${TREE_ROW_INSET_PX + indent + 2 + TREE_DISCLOSURE_SLOT_PX / 2}px`,
+              width: "1px",
+              bgcolor: (theme) => theme.alpha(theme.palette.divider, 0.7),
+              pointerEvents: "none"
+            }
+          }}
+        >
           {node.children.map((child) => (
             <SectionTreeNode
               key={child.id}
@@ -124,7 +160,7 @@ function SectionTreeNode({
               onInvokeAction={onInvokeAction}
             />
           ))}
-        </Stack>
+        </Box>
       )}
     </Box>
   );
@@ -182,19 +218,14 @@ export function SectionTree({
 
   if (section.nodes.length === 0) {
     return (
-      <Typography
-        variant="body2"
-        sx={{
-          color: "text.secondary"
-        }}
-      >
+      <Typography variant="body2" sx={{ color: "text.secondary", fontSize: "0.78rem", px: 1.5, py: 1 }}>
         No items found.
       </Typography>
     );
   }
 
   return (
-    <Stack spacing={0.05} sx={{ minHeight: 0 }}>
+    <Stack spacing="1px" sx={{ minHeight: 0 }}>
       {section.nodes.map((node) => (
         <SectionTreeNode
           key={node.id}
@@ -231,7 +262,7 @@ export function SectionToolbarActions({ actions, onInvokeAction }: Readonly<Sect
                 onInvokeAction(action);
               }}
             >
-              <IconComponent fontSize="small" />
+              <IconComponent sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
         );

@@ -9,6 +9,8 @@ test("hosts can disable lifecycle controls while keeping topology editing availa
   await expect(page.getByTestId("navbar-deploy-menu")).toHaveCount(0);
   await expect(page.locator(".react-flow")).toBeVisible();
   await expect(page.locator(".react-flow__node").first()).toBeVisible();
+  // The badge is a lazy chunk: wait for it to be loadable before asserting it is absent.
+  await page.waitForLoadState("networkidle");
   await expect(page.locator(".topology-node-runtime-badge")).toHaveCount(0);
 
   await page.goto("/?fixture=simple.clab.yml");

@@ -5,14 +5,7 @@ import {
   type ExplorerSectionId,
   type ExplorerSectionSnapshot
 } from "../shared/explorer/types";
-import { COLOR_TEXT_DISABLED, SECTION_HEADER_HEIGHT_PX, STATUS_COLOR_MAP } from "./constants";
-
-export function statusColor(indicator: string | undefined): string {
-  if (!indicator) {
-    return COLOR_TEXT_DISABLED;
-  }
-  return STATUS_COLOR_MAP[indicator] || COLOR_TEXT_DISABLED;
-}
+import { SECTION_HEADER_HEIGHT_PX } from "./constants";
 
 export function indicatorThemeColor(theme: Theme, indicator: ExplorerNode["statusIndicator"]): string {
   switch (indicator) {

@@ -76,9 +76,16 @@ test("dotted artwork animates without interaction and while hovering or pinning 
   }
   await rail.getByRole("button", { name: "Pin", exact: true }).click();
   await expect(rail).toHaveAttribute("data-pinned", "true");
-  expect(await waves.boundingBox()).toEqual(bounds);
+  // A pinned rail takes its width from the workspace: the artwork moves aside instead of hiding under it.
+  const sidebar = page.getByTestId("workspace-sidebar");
+  await expect.poll(async () => {
+    const pinned = (await waves.boundingBox())!;
+    const pinnedSidebar = (await sidebar.boundingBox())!;
+    return pinned.x >= pinnedSidebar.x + pinnedSidebar.width && pinnedSidebar.width === 196;
+  }).toBe(true);
+  await expect(waves).toBeVisible();
   await rail.getByRole("button", { name: "Unpin", exact: true }).click();
-  expect(await waves.boundingBox()).toEqual(bounds);
+  await expect.poll(async () => await waves.boundingBox()).toEqual(bounds);
   await expect(waves).toBeVisible();
   expect((await sampleWaves(page)).visible).toBeGreaterThan(1000);
   expect(page.workers()).toHaveLength(0);

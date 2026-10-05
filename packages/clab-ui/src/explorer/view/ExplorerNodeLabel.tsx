@@ -1,9 +1,10 @@
-import LinkIcon from "@mui/icons-material/Link";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import NoteAddIcon from "@mui/icons-material/NoteAdd";
-import RefreshIcon from "@mui/icons-material/Refresh";
-import SourceIcon from "@mui/icons-material/Source";
-import StarIcon from "@mui/icons-material/Star";
+import CodeRoundedIcon from "@mui/icons-material/CodeRounded";
+import GroupsOutlinedIcon from "@mui/icons-material/GroupsOutlined";
+import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import NoteAddOutlinedIcon from "@mui/icons-material/NoteAddOutlined";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import type { SvgIconComponent } from "@mui/icons-material";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
@@ -13,13 +14,12 @@ import Typography from "@mui/material/Typography";
 import { type MouseEvent, useMemo } from "react";
 import { ContextMenu, type ContextMenuItem } from "../../components/context-menu/ContextMenu";
 import type { ExplorerAction, ExplorerNode } from "../shared/explorer/types";
-import { NODE_MARKER_SLOT_PX, TREE_ROW_GAP } from "./constants";
+import { NODE_MARKER_SLOT_PX, ROW_RADIUS_PX, TREE_ROW_GAP_PX } from "./constants";
 import type { ExplorerNodeLabelProps } from "./types";
-import { indicatorThemeColor, statusColor } from "./sectionModel";
+import { indicatorThemeColor } from "./sectionModel";
 import {
   type ExplorerEndpointQuickActionsState,
   deriveExplorerNodeDisplayFlags,
-  endpointDescriptionText,
   endpointRowHeight,
   endpointStatusText,
   explorerNodeLabelColor,
@@ -37,6 +37,52 @@ import {
   useShareActionHandler
 } from "./useNodeInteractions";
 
+const SMALL_ICON_BUTTON_SX = {
+  width: 22,
+  height: 22,
+  p: 0,
+  borderRadius: `${ROW_RADIUS_PX - 1}px`,
+  color: "text.secondary",
+  "&:hover": { color: "text.primary", bgcolor: "action.selected" }
+} as const;
+
+function portStateOf(node: ExplorerNode): "up" | "down" | undefined {
+  if (node.contextValue === "containerlabInterfaceUp") {
+    return "up";
+  }
+  return node.contextValue === "containerlabInterfaceDown" ? "down" : undefined;
+}
+
+function statusWord(status: string): string {
+  const word = status === "expired" ? "session expired" : status;
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+interface StatusDotProps {
+  indicator: ExplorerNode["statusIndicator"];
+  size?: number;
+}
+
+/** A solid dot with a soft halo; the only way the tree signals state besides text. */
+function StatusDot({ indicator, size = 7 }: Readonly<StatusDotProps>) {
+  return (
+    <Box
+      aria-hidden="true"
+      sx={(theme) => {
+        const tone = indicatorThemeColor(theme, indicator);
+        return {
+          width: size,
+          height: size,
+          borderRadius: "50%",
+          flex: "0 0 auto",
+          bgcolor: tone,
+          boxShadow: indicator && indicator !== "gray" ? `0 0 0 2.5px ${theme.alpha(tone, 0.18)}` : "none"
+        };
+      }}
+    />
+  );
+}
+
 interface ExplorerNodeTextBlockProps {
   node: ExplorerNode;
   hasEntryTooltip: boolean;
@@ -47,77 +93,78 @@ interface ExplorerNodeTextBlockProps {
   showStatusDot: boolean;
   showFavoriteIcon: boolean;
   showSharedIcon: boolean;
-  inlineContainerStatus: string | undefined;
-  showSecondaryLine: boolean;
-  secondaryText: string | undefined;
+  description: string | undefined;
+  isLab: boolean;
   handlePrimaryAction: (event: MouseEvent<HTMLElement>) => void;
   handleShareAction: (event: MouseEvent<HTMLElement>) => void;
 }
 
 interface ExplorerNodeMarkerProps {
   leadingIcon: ReturnType<typeof nodeLeadingIcon>;
-  isEndpointRoot: boolean;
   showStatusDot: boolean;
   statusIndicator: ExplorerNode["statusIndicator"];
+  portState: "up" | "down" | undefined;
+}
+
+/** Interfaces are hollow rings so they read as ports next to the solid dots of labs and nodes. */
+function PortRing({ state }: Readonly<{ state: "up" | "down" }>) {
+  return (
+    <Box
+      aria-hidden="true"
+      sx={{
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        flex: "0 0 auto",
+        border: "1.5px solid",
+        borderColor: state === "up" ? "success.main" : "text.disabled"
+      }}
+    />
+  );
 }
 
 function ExplorerNodeMarker({
   leadingIcon,
-  isEndpointRoot,
   showStatusDot,
-  statusIndicator
+  statusIndicator,
+  portState
 }: Readonly<ExplorerNodeMarkerProps>) {
-  const markerSlotPx =
-    leadingIcon && isEndpointRoot ? NODE_MARKER_SLOT_PX + 3 : NODE_MARKER_SLOT_PX;
-
+  if (!leadingIcon && !showStatusDot && !portState) {
+    return null;
+  }
   return (
     <Box
       sx={{
-        width: markerSlotPx,
-        flex: `0 0 ${markerSlotPx}px`,
+        width: NODE_MARKER_SLOT_PX,
+        flex: `0 0 ${NODE_MARKER_SLOT_PX}px`,
         display: "flex",
         alignItems: "center",
         justifyContent: "center"
       }}
     >
-      {leadingIcon ? (
-        <leadingIcon.Icon
-          fontSize="inherit"
-          sx={{
-            fontSize: isEndpointRoot ? 14 : 13,
-            color: leadingIcon.color,
-            flex: "0 0 auto"
-          }}
-        />
-      ) : (
-        showStatusDot && (
-          <Box
-            sx={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              flex: "0 0 auto",
-              bgcolor: statusColor(statusIndicator)
-            }}
-          />
-        )
+      {leadingIcon && (
+        <leadingIcon.Icon sx={{ fontSize: 16, color: leadingIcon.color, flex: "0 0 auto" }} />
       )}
+      {!leadingIcon && portState && <PortRing state={portState} />}
+      {!leadingIcon && !portState && showStatusDot && <StatusDot indicator={statusIndicator} />}
     </Box>
   );
 }
 
+const EMPHASIS_WEIGHT = { endpoint: 600, strong: 500, normal: 400, muted: 500 } as const;
+
 interface ExplorerNodePrimaryLabelProps {
   label: string;
-  isEndpointRoot: boolean;
-  isEndpointSection: boolean;
+  emphasis: "endpoint" | "strong" | "normal" | "muted";
   isDisconnectedPlaceholder: boolean;
+  color: string | undefined;
 }
 
 function ExplorerNodePrimaryLabel({
   label,
-  isEndpointRoot,
-  isEndpointSection,
-  isDisconnectedPlaceholder
+  emphasis,
+  isDisconnectedPlaceholder,
+  color
 }: Readonly<ExplorerNodePrimaryLabelProps>) {
   return (
     <Typography
@@ -125,16 +172,11 @@ function ExplorerNodePrimaryLabel({
       variant="body2"
       noWrap
       sx={{
-        flex: 1,
-        minWidth: 0,
-        fontWeight: isEndpointRoot || isEndpointSection ? 600 : undefined,
-        fontSize: isEndpointSection ? "0.72rem" : undefined,
-        letterSpacing: isEndpointSection ? "0.04em" : undefined,
-        color: explorerNodeLabelColor({
-          isEndpointRoot,
-          isEndpointSection,
-          isDisconnectedPlaceholder
-        }),
+        flex: "0 1 auto",
+        minWidth: "6ch",
+        fontWeight: EMPHASIS_WEIGHT[emphasis],
+        fontSize: emphasis === "muted" ? "0.78rem" : undefined,
+        color,
         fontStyle: isDisconnectedPlaceholder ? "italic" : undefined
       }}
     >
@@ -143,13 +185,44 @@ function ExplorerNodePrimaryLabel({
   );
 }
 
+interface EndpointStatusProps {
+  node: ExplorerNode;
+  status: string;
+}
+
+/** Connected endpoints show just the dot; anything else names its problem in plain words. */
+function EndpointStatus({ node, status }: Readonly<EndpointStatusProps>) {
+  const connected = status === "connected";
+  return (
+    <Tooltip title={statusWord(status)} placement="bottom" enterDelay={300} disableInteractive>
+      <Box
+        component="span"
+        sx={{ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: 0, flexShrink: 1, ml: "8px" }}
+      >
+        <StatusDot indicator={node.statusIndicator} />
+        {!connected && (
+          <Typography
+            variant="caption"
+            noWrap
+            sx={(theme) => ({
+              color: indicatorThemeColor(theme, node.statusIndicator),
+              fontWeight: 500,
+              fontSize: "0.7rem",
+              lineHeight: 1
+            })}
+          >
+            {statusWord(status)}
+          </Typography>
+        )}
+      </Box>
+    </Tooltip>
+  );
+}
+
 interface ExplorerNodeTrailingContentProps {
   node: ExplorerNode;
   showFavoriteIcon: boolean;
   showSharedIcon: boolean;
-  inlineContainerStatus: string | undefined;
-  endpointStatus: string | null;
-  endpointDescription: string | null;
   handleShareAction: (event: MouseEvent<HTMLElement>) => void;
 }
 
@@ -157,19 +230,23 @@ function ExplorerNodeTrailingContent({
   node,
   showFavoriteIcon,
   showSharedIcon,
-  inlineContainerStatus,
-  endpointStatus,
-  endpointDescription,
   handleShareAction
 }: Readonly<ExplorerNodeTrailingContentProps>) {
   return (
     <>
+      {node.workspaceScope === "shared" && (
+        <Tooltip title="Shared lab" placement="bottom" enterDelay={300} disableInteractive>
+          <GroupsOutlinedIcon
+            titleAccess="Shared lab"
+            sx={{ fontSize: 15, color: "text.secondary", flexShrink: 0, ml: "6px" }}
+          />
+        </Tooltip>
+      )}
       {showFavoriteIcon && (
-        <StarIcon
-          fontSize="inherit"
+        <StarRoundedIcon
           className="explorer-node-inline-icon explorer-node-inline-icon-favorite"
           aria-hidden="true"
-          sx={{ flexShrink: 0 }}
+          sx={{ fontSize: 14, flexShrink: 0, ml: "6px" }}
         />
       )}
       {showSharedIcon && (
@@ -178,75 +255,14 @@ function ExplorerNodeTrailingContent({
           className="explorer-node-inline-icon-button"
           onClick={handleShareAction}
           aria-label={node.shareAction?.label ?? "Open shared session"}
-          sx={{ flexShrink: 0 }}
+          sx={{ ...SMALL_ICON_BUTTON_SX, ml: "4px", flexShrink: 0 }}
         >
-          <LinkIcon
+          <LinkRoundedIcon
             className="explorer-node-inline-icon explorer-node-inline-icon-shared"
             aria-hidden="true"
-            sx={{
-              fontSize: "inherit"
-            }}
+            sx={{ fontSize: 15 }}
           />
         </IconButton>
-      )}
-      {inlineContainerStatus && (
-        <Typography
-          variant="caption"
-          noWrap
-          sx={{
-            color: "text.secondary",
-            flexShrink: 0
-          }}
-        >
-          {inlineContainerStatus}
-        </Typography>
-      )}
-      {endpointStatus && (
-        <Box
-          sx={(theme) => {
-            const tone = indicatorThemeColor(theme, node.statusIndicator);
-            return {
-              display: "inline-flex",
-              alignItems: "center",
-              px: "6px",
-              borderRadius: 8,
-              color: tone,
-              bgcolor: theme.alpha(tone, 0.15),
-              height: 16,
-              flexShrink: 0,
-              ml: "6px"
-            };
-          }}
-        >
-          <Typography
-            variant="caption"
-            sx={{
-              fontWeight: 500,
-              lineHeight: "16px",
-              color: "inherit",
-              letterSpacing: "0.03em",
-              fontSize: "0.65rem",
-              textTransform: "uppercase"
-            }}
-          >
-            {endpointStatus}
-          </Typography>
-        </Box>
-      )}
-      {endpointDescription && (
-        <Typography
-          variant="caption"
-          noWrap
-          sx={{
-            color: "text.secondary",
-            ml: "8px",
-            maxWidth: 120,
-            fontSize: "0.75rem",
-            flexShrink: 0
-          }}
-        >
-          {endpointDescription}
-        </Typography>
       )}
     </>
   );
@@ -286,16 +302,13 @@ function ExplorerEndpointActionButton({
           }}
           aria-label={ariaLabel}
           sx={{
-            width: 20,
-            height: 20,
-            p: 0.25,
-            color: "text.secondary",
+            ...SMALL_ICON_BUTTON_SX,
             opacity: 0,
             pointerEvents: "none",
             transition: "opacity 120ms ease"
           }}
         >
-          <Icon sx={{ fontSize: 14 }} />
+          <Icon sx={{ fontSize: 15 }} />
         </IconButton>
       </Box>
     </Tooltip>
@@ -316,19 +329,19 @@ function ExplorerEndpointQuickActions({
       <ExplorerEndpointActionButton
         action={actions.newTopologyAction}
         ariaLabel="New topology file"
-        icon={NoteAddIcon}
+        icon={NoteAddOutlinedIcon}
         onInvokeAction={onInvokeAction}
       />
       <ExplorerEndpointActionButton
         action={actions.cloneRepoAction}
         ariaLabel="Clone repository"
-        icon={SourceIcon}
+        icon={CodeRoundedIcon}
         onInvokeAction={onInvokeAction}
       />
       <ExplorerEndpointActionButton
         action={actions.reconnectAction}
         ariaLabel="Reconnect"
-        icon={RefreshIcon}
+        icon={RefreshRoundedIcon}
         onInvokeAction={onInvokeAction}
       />
     </>
@@ -345,14 +358,21 @@ function ExplorerNodeTextBlock({
   showStatusDot,
   showFavoriteIcon,
   showSharedIcon,
-  inlineContainerStatus,
-  showSecondaryLine,
-  secondaryText,
+  description,
+  isLab,
   handlePrimaryAction,
   handleShareAction
 }: Readonly<ExplorerNodeTextBlockProps>) {
   const endpointStatus = endpointStatusText(node, isEndpointRoot);
-  const endpointDescription = endpointDescriptionText(secondaryText, isEndpointRoot);
+  const deployed = isLab && Boolean(node.statusIndicator);
+  let emphasis: ExplorerNodePrimaryLabelProps["emphasis"] = "normal";
+  if (isEndpointRoot) {
+    emphasis = "endpoint";
+  } else if (deployed) {
+    emphasis = "strong";
+  } else if (isEndpointSection) {
+    emphasis = "muted";
+  }
 
   return (
     <Box
@@ -362,7 +382,7 @@ function ExplorerNodeTextBlock({
       <Tooltip
         title={hasEntryTooltip ? node.tooltip : ""}
         placement="bottom"
-        enterDelay={300}
+        enterDelay={500}
         disableInteractive
         disableHoverListener={!hasEntryTooltip}
         disableFocusListener={!hasEntryTooltip}
@@ -379,65 +399,50 @@ function ExplorerNodeTextBlock({
       >
         <Stack
           direction="row"
-          spacing={isEndpointRoot ? 0.45 : TREE_ROW_GAP}
-          sx={{
-            alignItems: "center",
-            minWidth: 0,
-            width: "100%"
-          }}
+          sx={{ alignItems: "center", gap: `${TREE_ROW_GAP_PX}px`, minWidth: 0, width: "100%" }}
         >
           <ExplorerNodeMarker
             leadingIcon={leadingIcon}
-            isEndpointRoot={isEndpointRoot}
             showStatusDot={showStatusDot}
             statusIndicator={node.statusIndicator}
+            portState={portStateOf(node)}
           />
           <ExplorerNodePrimaryLabel
             label={node.label}
-            isEndpointRoot={isEndpointRoot}
-            isEndpointSection={isEndpointSection}
+            emphasis={emphasis}
             isDisconnectedPlaceholder={isDisconnectedPlaceholder}
+            color={explorerNodeLabelColor({
+              isEndpointRoot,
+              isEndpointSection,
+              isDisconnectedPlaceholder
+            })}
           />
+          {endpointStatus && <EndpointStatus node={node} status={endpointStatus} />}
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{
+              flex: "1 1 0",
+              minWidth: 0,
+              flexShrink: 3,
+              ml: "10px",
+              textAlign: "right",
+              color: "text.secondary",
+              fontSize: "0.72rem",
+              // Names matter more than details once the pane gets narrow.
+              "@container (max-width: 250px)": { visibility: "hidden" }
+            }}
+          >
+            {description}
+          </Typography>
           <ExplorerNodeTrailingContent
             node={node}
             showFavoriteIcon={showFavoriteIcon}
             showSharedIcon={showSharedIcon}
-            inlineContainerStatus={inlineContainerStatus}
-            endpointStatus={endpointStatus}
-            endpointDescription={endpointDescription}
             handleShareAction={handleShareAction}
           />
-          {node.workspaceScope === "shared" && (
-            <Box
-              component="span"
-              aria-label="Shared lab"
-              sx={{
-                flexShrink: 0,
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 0.75,
-                px: 0.55,
-                fontSize: 10,
-                lineHeight: "17px",
-                color: "text.secondary"
-              }}
-            >
-              Shared
-            </Box>
-          )}
         </Stack>
       </Tooltip>
-      {showSecondaryLine && (
-        <Typography
-          variant="caption"
-          noWrap
-          sx={{
-            color: "text.secondary"
-          }}
-        >
-          {secondaryText}
-        </Typography>
-      )}
     </Box>
   );
 }
@@ -478,16 +483,13 @@ function ExplorerNodeActions({
         aria-label={`Actions for ${node.label}`}
         data-node-actions-trigger="true"
         sx={{
-          width: 20,
-          height: 20,
-          p: 0.25,
-          color: "text.secondary",
+          ...SMALL_ICON_BUTTON_SX,
           opacity: menuOpen ? 1 : 0,
           pointerEvents: menuOpen ? "auto" : "none",
           transition: "opacity 120ms ease"
         }}
       >
-        <MoreVertIcon fontSize="small" />
+        <MoreHorizRoundedIcon sx={{ fontSize: 17 }} />
       </IconButton>
       <ContextMenu
         isVisible={menuOpen}
@@ -502,9 +504,14 @@ function ExplorerNodeActions({
   );
 }
 
-export function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<ExplorerNodeLabelProps>) {
+export function ExplorerNodeLabel({
+  node,
+  sectionId,
+  expanded = false,
+  onInvokeAction
+}: Readonly<ExplorerNodeLabelProps>) {
   const hasEntryTooltip = Boolean(node.tooltip);
-  const leadingIcon = nodeLeadingIcon(node, sectionId);
+  const leadingIcon = nodeLeadingIcon(node, sectionId, expanded);
   const nodeKind = nodeKindFromContext(node.contextValue);
   const isEndpointRoot = isEndpointNode(node.contextValue);
   const isEndpointSection = isEndpointSectionNode(node.contextValue);
@@ -519,19 +526,14 @@ export function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<
     [menuActions, node.contextValue, nodeKind, onInvokeAction]
   );
   const secondaryText = node.description || node.statusDescription;
-  const {
-    inlineContainerStatus,
-    showSecondaryLine,
-    showStatusDot,
-    showFavoriteIcon,
-    showSharedIcon
-  } = deriveExplorerNodeDisplayFlags(
-    node,
-    secondaryText,
-    isEndpointRoot,
-    isEndpointSection,
-    isDisconnectedPlaceholder
-  );
+  const { inlineContainerStatus, showStatusDot, showFavoriteIcon, showSharedIcon } =
+    deriveExplorerNodeDisplayFlags(
+      node,
+      secondaryText,
+      isEndpointRoot,
+      isEndpointSection,
+      isDisconnectedPlaceholder
+    );
   const {
     menuPosition,
     menuOpenToLeft,
@@ -552,33 +554,15 @@ export function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<
     [isEndpointConnected, isEndpointRoot, node.actions]
   );
   const rowMinHeight = endpointRowHeight(isEndpointRoot, isEndpointSection);
+  const description = inlineContainerStatus ?? (isEndpointSection ? undefined : secondaryText);
 
   return (
     <Stack
       direction="row"
-      spacing={0.55}
       onContextMenu={handleRowContextMenu}
       data-explorer-node-row="true"
-      sx={{
-        alignItems: "center",
-        width: "100%",
-        minHeight: rowMinHeight,
-        borderRadius: 0.75,
-        px: isEndpointRoot ? 0.35 : 0.15,
-
-        "&:hover": {
-          bgcolor: "action.hover"
-        },
-
-        ...(menuOpen && {
-          bgcolor: "action.selected"
-        }),
-
-        "&:hover .explorer-node-actions-trigger, &:focus-within .explorer-node-actions-trigger": {
-          opacity: 1,
-          pointerEvents: "auto"
-        }
-      }}
+      data-menu-open={menuOpen ? "true" : undefined}
+      sx={{ alignItems: "center", gap: "2px", width: "100%", minHeight: rowMinHeight }}
     >
       <ExplorerNodeTextBlock
         node={node}
@@ -590,9 +574,8 @@ export function ExplorerNodeLabel({ node, sectionId, onInvokeAction }: Readonly<
         showStatusDot={showStatusDot}
         showFavoriteIcon={showFavoriteIcon}
         showSharedIcon={showSharedIcon}
-        inlineContainerStatus={inlineContainerStatus}
-        showSecondaryLine={showSecondaryLine}
-        secondaryText={secondaryText}
+        description={description}
+        isLab={nodeKind === "lab"}
         handlePrimaryAction={handlePrimaryAction}
         handleShareAction={handleShareAction}
       />

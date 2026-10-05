@@ -1,6 +1,8 @@
-import SearchIcon from "@mui/icons-material/Search";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
+import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
@@ -292,6 +294,9 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
     return visible;
   }, [sectionOrder, sectionsById, visibleSectionIds]);
 
+  // An embedding that shows one section (the rail's Files panel) already titles it.
+  const isSoleEmbeddedSection = visibleSectionIds !== undefined && orderedSections.length === 1;
+
   const orderedSectionIds = useMemo(() => orderedSections.map((s) => s.id), [orderedSections]);
 
   const floatingToolbarActions = useMemo(() => {
@@ -449,6 +454,7 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
         minHeight: 0,
         boxSizing: "border-box",
         overflow: "hidden",
+        containerType: "inline-size",
         display: "flex",
         flexDirection: "column",
         bgcolor: "background.paper",
@@ -488,15 +494,8 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
 
       <Stack
         direction="row"
-        spacing={1}
-        sx={{
-          alignItems: "center",
-          px: 0.75,
-          py: 0.5,
-          bgcolor: "background.paper",
-          borderBottom: 1,
-          borderColor: "divider"
-        }}
+        spacing={0.5}
+        sx={{ alignItems: "center", px: 1, pt: 1, pb: 0.75 }}
       >
         <TextField
           size="small"
@@ -504,14 +503,43 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
           value={filterText}
           placeholder="Filter labs, nodes, interfaces"
           onChange={(event) => handleFilterChange(event.target.value)}
+          sx={(theme) => ({
+            "& .MuiOutlinedInput-root": {
+              height: 30,
+              borderRadius: "8px",
+              fontSize: "0.8125rem",
+              bgcolor: theme.alpha(theme.palette.text.primary, 0.06),
+              transition: "background-color 90ms ease",
+              "& fieldset": { borderColor: "transparent", borderWidth: 1 },
+              "&:hover fieldset": { borderColor: theme.alpha(theme.palette.text.primary, 0.18) },
+              "&.Mui-focused": { bgcolor: theme.alpha(theme.palette.text.primary, 0.04) },
+              "&.Mui-focused fieldset": {
+                borderColor: theme.alpha(theme.palette.text.primary, 0.45),
+                borderWidth: 1
+              }
+            },
+            "& .MuiOutlinedInput-input": { py: 0, px: 0.5 }
+          })}
           slotProps={{
             input: {
               startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
+                <InputAdornment position="start" sx={{ mr: 0 }}>
+                  <SearchRoundedIcon sx={{ fontSize: 16, color: "text.disabled" }} />
                 </InputAdornment>
               ),
-              endAdornment: undefined
+              endAdornment:
+                filterText.length > 0 ? (
+                  <InputAdornment position="end" sx={{ ml: 0 }}>
+                    <IconButton
+                      size="small"
+                      aria-label="Clear filter"
+                      onClick={() => handleFilterChange("")}
+                      sx={{ p: 0.25, color: "text.secondary" }}
+                    >
+                      <CloseRoundedIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined
             }
           }}
         />
@@ -556,8 +584,9 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
                 )}
               <ExplorerSectionCard
                 section={section}
+                headerless={isSoleEmbeddedSection}
                 expandedItems={expandedBySection[section.id] ?? []}
-                isCollapsed={collapsedBySection[section.id] ?? false}
+                isCollapsed={!isSoleEmbeddedSection && (collapsedBySection[section.id] ?? false)}
                 isDropTarget={dragOverSection === section.id && draggingSection !== section.id}
                 isBeingDragged={draggingSection === section.id}
                 flexStyle={sectionFlexStyles[section.id] ?? "0 0 auto"}

@@ -33,11 +33,21 @@ export function ResizeDivider({ aboveId, belowId, onResizeStart }: Readonly<Resi
         height: RESIZE_DIVIDER_HEIGHT_PX,
         flex: `0 0 ${RESIZE_DIVIDER_HEIGHT_PX}px`,
         cursor: "row-resize",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        "&:hover": {
-          bgcolor: (theme: Theme) => theme.alpha(theme.palette.primary.main, 0.18)
+        position: "relative",
+        "&::after": {
+          content: '""',
+          position: "absolute",
+          left: 0,
+          right: 0,
+          top: "50%",
+          height: "1px",
+          transform: "translateY(-50%)",
+          bgcolor: "divider",
+          transition: "height 90ms ease, background-color 90ms ease"
+        },
+        "&:hover::after": {
+          height: "2px",
+          bgcolor: (theme: Theme) => theme.alpha(theme.palette.text.primary, 0.35)
         }
       }}
     />
