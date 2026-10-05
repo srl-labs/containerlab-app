@@ -6,7 +6,7 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import type { LabTab } from "../state/labTabsStore";
 import type { TabOrientation } from "../state/themePreferences";
-import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
+import { floatingRadius, floatingSurfaceSx, headerBarHeight } from "../../theme/surfaces";
 import { useRailPinned, WorkspaceRailItem } from "../WorkspaceRailItem";
 
 interface LabTabsBarProps {
@@ -96,8 +96,8 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
     <Box role="tablist" aria-label="Open lab tabs" aria-orientation={orientation} data-testid="lab-tabs" sx={vertical ? {
       display: "flex", flexDirection: "column", alignSelf: "stretch", width: "100%", minWidth: 0, gap: 0.75, py: 0.5, overflow: "visible"
     } : {
-      display: "flex", alignItems: "center", width: "100%", minHeight: 40, flexShrink: 0,
-      gap: 1, px: 1, py: 0.5, overflowX: "auto", overflowY: "hidden",
+      display: "flex", alignItems: "center", width: "100%", height: headerBarHeight, flexShrink: 0,
+      gap: 1, px: 1, overflowX: "auto", overflowY: "hidden",
       bgcolor: "var(--vscode-editor-background, var(--clab-ui-editor-background, #000))",
       borderBottom: "1px solid var(--clab-ui-panel-border, var(--vscode-panel-border, #888))"
     }}>
@@ -141,7 +141,7 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
             onMouseDown={(event) => { if (event.button === 1) event.preventDefault(); }}
             onKeyDown={keys.onKeyDown}
             sx={{
-              display: "flex", alignItems: "center", gap: 1, flex: "1 1 0", minWidth: 80, maxWidth: 240, height: 32, px: 1.25,
+              display: "flex", alignItems: "center", gap: 1, flex: "1 1 0", minWidth: 80, maxWidth: 240, height: 28, px: 1.25,
               overflow: "hidden", ...floatingSurfaceSx, borderRadius: floatingRadius, cursor: "pointer", userSelect: "none",
               color: active ? "primary.main" : "text.primary",
               bgcolor: active ? "action.selected" : floatingSurfaceSx.bgcolor,

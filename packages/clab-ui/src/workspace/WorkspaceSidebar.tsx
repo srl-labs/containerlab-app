@@ -15,7 +15,7 @@ import IconButton from "@mui/material/IconButton";
 import Typography from "@mui/material/Typography";
 import type { ExplorerSectionId } from "../explorer/shared/explorer/types";
 import { useHorizontalResize } from "../hooks/ui/useHorizontalResize";
-import { floatingSurfaceSx } from "../theme/surfaces";
+import { floatingSurfaceSx, headerBarHeight } from "../theme/surfaces";
 import { RailLogo } from "./RailLogo";
 import { RailPinnedContext, WorkspaceRailItem } from "./WorkspaceRailItem";
 
@@ -196,7 +196,7 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
           display: "flex",
           flexDirection: "column"
         }}>
-          <Box sx={{ display: "flex", alignItems: "center", px: 1, minHeight: 36, borderBottom: `1px solid ${RAIL_BORDER}` }}>
+          <Box sx={{ display: "flex", alignItems: "center", px: 1, height: headerBarHeight, flexShrink: 0, borderBottom: `1px solid ${RAIL_BORDER}` }}>
             <Typography noWrap variant="subtitle2" sx={{ flex: 1, minWidth: 0 }}>{VIEWS.find((entry) => entry.id === view)?.label}</Typography>
             <IconButton size="small" aria-label="Close explorer" onClick={closeExplorer}><CloseIcon fontSize="small" /></IconButton>
           </Box>
