@@ -19,6 +19,77 @@ export const CLAB_UI_VAR_ALIASES = {
   "--clab-ui-font-size": "--vscode-font-size"
 } as const;
 
+// xterm's ANSI theme keys and the VS Code terminal tokens that carry them.
+export const TERMINAL_ANSI_TOKENS = {
+  black: "--vscode-terminal-ansiBlack",
+  red: "--vscode-terminal-ansiRed",
+  green: "--vscode-terminal-ansiGreen",
+  yellow: "--vscode-terminal-ansiYellow",
+  blue: "--vscode-terminal-ansiBlue",
+  magenta: "--vscode-terminal-ansiMagenta",
+  cyan: "--vscode-terminal-ansiCyan",
+  white: "--vscode-terminal-ansiWhite",
+  brightBlack: "--vscode-terminal-ansiBrightBlack",
+  brightRed: "--vscode-terminal-ansiBrightRed",
+  brightGreen: "--vscode-terminal-ansiBrightGreen",
+  brightYellow: "--vscode-terminal-ansiBrightYellow",
+  brightBlue: "--vscode-terminal-ansiBrightBlue",
+  brightMagenta: "--vscode-terminal-ansiBrightMagenta",
+  brightCyan: "--vscode-terminal-ansiBrightCyan",
+  brightWhite: "--vscode-terminal-ansiBrightWhite"
+} as const;
+
+export type TerminalAnsiColors = Record<keyof typeof TERMINAL_ANSI_TOKENS, string>;
+
+export function terminalAnsiVars(colors: TerminalAnsiColors): VarMap {
+  const vars: VarMap = {};
+  let key: keyof TerminalAnsiColors;
+  for (key in TERMINAL_ANSI_TOKENS) {
+    vars[TERMINAL_ANSI_TOKENS[key]] = colors[key];
+  }
+  return vars;
+}
+
+// VS Code's default dark terminal palette.
+export const VSCODE_DARK_ANSI: TerminalAnsiColors = {
+  black: "#000000",
+  red: "#cd3131",
+  green: "#0dbc79",
+  yellow: "#e5e510",
+  blue: "#2472c8",
+  magenta: "#bc3fbc",
+  cyan: "#11a8cd",
+  white: "#e5e5e5",
+  brightBlack: "#666666",
+  brightRed: "#f14c4c",
+  brightGreen: "#23d18b",
+  brightYellow: "#f5f543",
+  brightBlue: "#3b8eea",
+  brightMagenta: "#d670d6",
+  brightCyan: "#29b8db",
+  brightWhite: "#e5e5e5"
+};
+
+// VS Code's light terminal palette, with the low-contrast greens and yellows darkened.
+export const VSCODE_LIGHT_ANSI: TerminalAnsiColors = {
+  black: "#000000",
+  red: "#cd3131",
+  green: "#008000",
+  yellow: "#795e26",
+  blue: "#0451a5",
+  magenta: "#bc05bc",
+  cyan: "#0598bc",
+  white: "#767676",
+  brightBlack: "#666666",
+  brightRed: "#cd3131",
+  brightGreen: "#16825d",
+  brightYellow: "#8f6d20",
+  brightBlue: "#0451a5",
+  brightMagenta: "#bc05bc",
+  brightCyan: "#0598bc",
+  brightWhite: "#ffffff"
+};
+
 // Dark palette — OLED black, not VS Code Dark+.
 export const DARK_VARS: VarMap = {
   "--vscode-editor-background": "#000000",
@@ -99,6 +170,10 @@ export const DARK_VARS: VarMap = {
   "--vscode-testing-iconPassed": "#3dd68c",
   "--vscode-charts-green": "#3dd68c",
   "--vscode-progressBar-background": "#ffffff",
+  "--vscode-editor-selectionBackground": "#2a2a2a",
+  "--vscode-editor-inactiveSelectionBackground": "#1a1a1a",
+  "--vscode-terminal-selectionBackground": "rgba(147, 197, 253, 0.22)",
+  ...terminalAnsiVars(VSCODE_DARK_ANSI),
   "--vscode-font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   "--vscode-font-size": "13px"
 };
@@ -183,6 +258,10 @@ export const LIGHT_VARS: VarMap = {
   "--vscode-testing-iconPassed": "#388a34",
   "--vscode-charts-green": "#16825d",
   "--vscode-progressBar-background": "#007acc",
+  "--vscode-editor-selectionBackground": "#add6ff",
+  "--vscode-editor-inactiveSelectionBackground": "#e5ebf1",
+  "--vscode-terminal-selectionBackground": "rgba(37, 99, 235, 0.18)",
+  ...terminalAnsiVars(VSCODE_LIGHT_ANSI),
   "--vscode-font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   "--vscode-font-size": "13px"
 };
@@ -197,14 +276,17 @@ function applyAliasVars(root: HTMLElement, vars: VarMap): void {
   }
 }
 
-export function applyThemeVars(mode: "light" | "dark"): void {
-  const vars = mode === "light" ? LIGHT_VARS : DARK_VARS;
+export function applyVarMap(vars: VarMap, mode: "light" | "dark"): void {
   const root = document.documentElement;
   for (const [key, value] of Object.entries(vars)) {
     root.style.setProperty(key, value);
   }
   applyAliasVars(root, vars);
   root.style.colorScheme = mode;
+}
+
+export function applyThemeVars(mode: "light" | "dark"): void {
+  applyVarMap(mode === "light" ? LIGHT_VARS : DARK_VARS, mode);
 }
 
 export function applyDevVars(mode: "light" | "dark"): void {

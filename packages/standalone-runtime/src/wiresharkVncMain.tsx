@@ -2,11 +2,14 @@ import { runtimeFetch } from "./backend";
 import { installDesktopChrome } from "./desktopChrome";
 import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
-import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
-import { parseStandaloneTheme, resolveStandaloneTheme } from "@containerlab/clab-ui/workspace/state";
+import {
+  applyStandaloneAppearance,
+  parseStandaloneTheme,
+  watchStandaloneAppearance
+} from "@containerlab/clab-ui/workspace/state";
 
 interface WiresharkVncInitialData {
   iframeUrl: string;
@@ -96,10 +99,10 @@ function renderFatalError(message: string): void {
 
 async function main(): Promise<void> {
   const { sessionId, endpointId, showVolumeTip, theme } = parseQuery();
-  const resolvedTheme = theme ?? resolveStandaloneTheme();
-  document.documentElement.classList.toggle("light", resolvedTheme === "light");
+  // A theme in the URL pins light or dark to match the capture session.
+  applyStandaloneAppearance(undefined, theme);
+  watchStandaloneAppearance(() => applyStandaloneAppearance(undefined, theme));
   installDesktopChrome();
-  applyThemeVars(resolvedTheme);
 
   if (!sessionId) {
     renderFatalError("Missing capture session id.");

@@ -1,4 +1,13 @@
-import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
+import {
+  applyStandaloneAppearance,
+  persistStandaloneAppearance,
+  persistTabOrientation,
+  readPersistedTabOrientation,
+  readStandaloneAppearance,
+  watchStandaloneAppearance,
+  type StandaloneAppearance,
+  type TabOrientation
+} from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
@@ -27,7 +36,6 @@ import {
   MSG_FIT_VIEWPORT,
   MSG_SVG_EXPORT_RESULT,
   MuiThemeProvider,
-  applyThemeVars,
   createApiClabUiHost,
   createClabUiRuntime,
   createRoot,
@@ -78,7 +86,6 @@ import {
   loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
-  readPersistedStandaloneTheme,
   reconcileUiIcons,
   removeRuntimeImage,
   replaceUiCustomNodes,
@@ -334,13 +341,7 @@ function pickFile(accept: string): Promise<File | null> {
 }
 
 // Theme management
-let currentTheme: "light" | "dark" = "dark";
-
-function loadPersistedTheme(): "light" | "dark" {
-  return readPersistedStandaloneTheme() ?? "dark";
-}
-
-currentTheme = loadPersistedTheme();
+let currentTheme: "light" | "dark" = resolveStandaloneTheme();
 
 const EXPLORER_REFRESH_DEBOUNCE_MS = 90;
 const TOPOLOGY_REFRESH_DEBOUNCE_MS = 120;
@@ -1377,6 +1378,7 @@ function StandaloneApp() {
     updateEndpoint,
     setEndpointSessionDuration,
   } = useAuth();
+  const [appearance, setAppearance] = useState<StandaloneAppearance>(readStandaloneAppearance);
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
   const [tabOrientation, setTabOrientation] = useState<TabOrientation>(
     () => readPersistedTabOrientation() ?? "vertical",
@@ -1546,13 +1548,32 @@ function StandaloneApp() {
     [removeEndpoint],
   );
 
-  const handleThemeChange = useCallback((nextTheme: "light" | "dark") => {
-    document.documentElement.classList.toggle("light", nextTheme === "light");
-    currentTheme = nextTheme;
-    setTheme(nextTheme);
-    applyThemeVars(nextTheme);
-    persistStandaloneTheme(nextTheme);
+  const showAppearance = useCallback((next: StandaloneAppearance) => {
+    currentTheme = applyStandaloneAppearance(next);
+    setAppearance(next);
+    setTheme(currentTheme);
   }, []);
+
+  const handleAppearanceChange = useCallback(
+    (next: StandaloneAppearance) => {
+      persistStandaloneAppearance(next);
+      showAppearance(next);
+    },
+    [showAppearance],
+  );
+
+  // System mode follows the OS; other windows may change the saved appearance.
+  useEffect(
+    () => watchStandaloneAppearance(() => showAppearance(readStandaloneAppearance())),
+    [showAppearance],
+  );
+
+  const handleThemeChange = useCallback(
+    (nextTheme: "light" | "dark") => {
+      handleAppearanceChange({ ...appearance, mode: nextTheme });
+    },
+    [appearance, handleAppearanceChange],
+  );
 
   const handleTabOrientationChange = useCallback((next: TabOrientation) => {
     setTabOrientation(next);
@@ -1696,6 +1717,7 @@ function StandaloneApp() {
             open={settingsOpen}
             onOpen={() => setSettingsOpen(true)}
             onClose={() => setSettingsOpen(false)}
+            appearance={appearance}
             currentTheme={theme}
             tabOrientation={tabOrientation}
             onTabOrientationChange={handleTabOrientationChange}
@@ -1704,7 +1726,7 @@ function StandaloneApp() {
             onAddEndpoint={handleAddEndpoint}
             onExportEndpoints={handleExportEndpoints}
             onImportEndpoints={handleImportEndpoints}
-            onThemeChange={handleThemeChange}
+            onAppearanceChange={handleAppearanceChange}
             onLogout={handleLogout}
             onReconnectEndpoint={handleReconnectEndpoint}
             onRemoveEndpoint={handleRemoveEndpoint}
@@ -1725,6 +1747,7 @@ function SettingsOverlayMounted(props: {
   open: boolean;
   onOpen: () => void;
   onClose: () => void;
+  appearance: StandaloneAppearance;
   currentTheme: "light" | "dark";
   defaultApiUrl: string;
   endpoints: ReturnType<typeof useAuth>["endpointList"];
@@ -1761,7 +1784,7 @@ function SettingsOverlayMounted(props: {
       notify?: boolean;
     },
   ) => void;
-  onThemeChange: (nextTheme: "light" | "dark") => void;
+  onAppearanceChange: (next: StandaloneAppearance) => void;
   tabOrientation: TabOrientation;
   onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -1773,13 +1796,14 @@ function SettingsOverlayMounted(props: {
           open={props.open}
           onOpen={props.onOpen}
           onClose={props.onClose}
+          appearance={props.appearance}
           currentTheme={props.currentTheme}
           defaultApiUrl={props.defaultApiUrl}
           endpoints={props.endpoints}
           onAddEndpoint={props.onAddEndpoint}
           onExportEndpoints={props.onExportEndpoints}
           onImportEndpoints={props.onImportEndpoints}
-          onThemeChange={props.onThemeChange}
+          onAppearanceChange={props.onAppearanceChange}
           tabOrientation={props.tabOrientation}
           onTabOrientationChange={props.onTabOrientationChange}
           onLogout={props.onLogout}
@@ -1798,12 +1822,7 @@ function SettingsOverlayMounted(props: {
 // Bootstrap
 
 export function mountStandaloneApp(): void {
-  if (currentTheme === "light") {
-    document.documentElement.classList.add("light");
-  } else {
-    document.documentElement.classList.remove("light");
-  }
-  applyThemeVars(currentTheme);
+  currentTheme = applyStandaloneAppearance();
   if (!standaloneRuntime) {
     setupStandaloneUiHost();
   }

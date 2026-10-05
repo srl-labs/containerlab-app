@@ -16,6 +16,9 @@ test.describe("Standalone Settings Dialog", () => {
     await page.addInitScript(() => {
       if (localStorage.getItem("clab-standalone-settings-test-seeded") !== "true") {
         localStorage.removeItem("clab-standalone-theme");
+        localStorage.removeItem("clab-standalone-light-theme");
+        localStorage.removeItem("clab-standalone-dark-theme");
+        localStorage.removeItem("clab-standalone-custom-themes");
         localStorage.removeItem("clab-standalone-terminal-settings");
         localStorage.setItem("clab-standalone-settings-test-seeded", "true");
       }
@@ -262,12 +265,108 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(saveButton).toBeDisabled();
   });
 
+  test("custom themes can be created, edited, exported, deleted and imported", async ({ page }) => {
+    const rootToken = (token: string) =>
+      page.evaluate((name) => document.documentElement.style.getPropertyValue(name), token);
+
+    // Dark Modern is the default dark theme.
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#1f1f1f");
+
+    const dialog = await openSettings(page);
+    await dialog.getByTestId("standalone-settings-nav-appearance").click();
+    await dialog.getByTestId("theme-card-dracula").click();
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#282a36");
+
+    // Customizing copies the theme, puts it in use and edits it live.
+    await dialog.getByTestId("theme-card-dracula").hover();
+    await dialog.getByTestId("theme-card-customize-dracula").click();
+    const editor = dialog.getByTestId("theme-editor");
+    await expect(editor.getByTestId("theme-editor-name")).toHaveValue("Dracula (custom)");
+    await editor.getByTestId("theme-editor-name").fill("Harbor");
+    await editor.getByTestId("theme-color-background").fill("#102030");
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#102030");
+    await editor.getByLabel("Terminal red").fill("#ff0000");
+    await expect.poll(() => rootToken("--vscode-terminal-ansiRed")).toBe("#ff0000");
+
+    // Clicking a part of the preview jumps to the color that paints it.
+    const preview = editor.getByTestId("theme-preview");
+    await preview.getByText("Deploy", { exact: true }).click();
+    await expect(editor.getByTestId("theme-color-accent")).toBeFocused();
+    await preview.getByText("View logs", { exact: true }).hover();
+    await expect(editor.getByText(/: click to edit$/)).toHaveText("Links: click to edit");
+    await preview.getByText("View logs", { exact: true }).click();
+    await expect(editor.getByTestId("theme-color-link")).toBeFocused();
+
+    await editor.getByTestId("theme-editor-export").click();
+    const download = page.waitForEvent("download");
+    await page.getByRole("menuitem", { name: "Download JSON file" }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toBe("harbor-color-theme.json");
+    const exported = JSON.parse(await fs.readFile(await file.path(), "utf8")) as Record<string, unknown>;
+    expect(exported).toMatchObject({
+      name: "Harbor",
+      type: "dark",
+      colors: { "editor.background": "#102030", "terminal.ansiRed": "#ff0000" },
+      containerlab: { base: "dracula" }
+    });
+
+    // Deleting the theme in use falls back to the theme it started from.
+    await editor.getByTestId("theme-editor-delete").click();
+    await page.getByTestId("theme-delete-confirm").click();
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#282a36");
+    await expect(dialog.getByTestId("theme-card-dracula")).toHaveAttribute("aria-pressed", "true");
+
+    // The export imports back, and VS Code color themes import too.
+    await dialog.getByTestId("theme-import").click();
+    const importDialog = page.getByTestId("theme-import-dialog");
+    await importDialog.getByRole("textbox", { name: "Theme JSON" }).fill(JSON.stringify(exported));
+    await importDialog.getByTestId("theme-import-submit").click();
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#102030");
+    await expect(dialog.getByRole("button", { name: "Harbor", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    await dialog.getByTestId("theme-import").click();
+    await importDialog
+      .getByRole("textbox", { name: "Theme JSON" })
+      .fill('{ "name": "Sand", "type": "light", "colors": { "editor.background": "#fdf6e3" } }');
+    await importDialog.getByTestId("theme-import-submit").click();
+    await dialog.getByTestId("standalone-settings-theme-light").click();
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#fdf6e3");
+    await dialog.getByTestId("standalone-settings-close").click();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#fdf6e3");
+    await page.getByRole("button", { name: "Dark mode", exact: true }).click();
+    await expect.poll(() => rootToken("--vscode-editor-background")).toBe("#102030");
+    await expect.poll(() => rootToken("--vscode-terminal-ansiRed")).toBe("#ff0000");
+  });
+
+  test("system color mode follows the OS scheme", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    const dialog = await openSettings(page);
+    await dialog.getByTestId("standalone-settings-nav-appearance").click();
+    await dialog.getByTestId("standalone-settings-theme-system").click();
+    await expect(page.locator("html")).not.toHaveClass(/\blight\b/);
+
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveClass(/\blight\b/);
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-theme")))
+      .toBe("system");
+  });
+
   test("theme and terminal settings persist across reload", async ({ page }) => {
     const dialog = await openSettings(page);
 
-    await dialog.getByRole("combobox", { name: "Color theme" }).click();
-    await page.getByRole("option", { name: "Light", exact: true }).click();
-    await expect(dialog.getByRole("combobox", { name: "Color theme" })).toHaveText("Light");
+    await dialog.getByTestId("standalone-settings-nav-appearance").click();
+    await dialog.getByTestId("standalone-settings-theme-light").click();
+    await expect(dialog.getByTestId("standalone-settings-theme-light")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-theme")))
       .toBe("light");
@@ -287,7 +386,11 @@ test.describe("Standalone Settings Dialog", () => {
     await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
 
     const reloadedDialog = await openSettings(page);
-    await expect(reloadedDialog.getByRole("combobox", { name: "Color theme" })).toHaveText("Light");
+    await reloadedDialog.getByTestId("standalone-settings-nav-appearance").click();
+    await expect(reloadedDialog.getByTestId("standalone-settings-theme-light")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
 
     await reloadedDialog.getByTestId("standalone-settings-nav-terminal").click();
     await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");

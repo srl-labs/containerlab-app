@@ -26,8 +26,10 @@ import ResetIcon from "@mui/icons-material/RestartAlt";
 import RestoreIcon from "@mui/icons-material/OpenInFull";
 import SplitIcon from "@mui/icons-material/ViewColumn";
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+
+import { TERMINAL_ANSI_TOKENS } from "../../theme/devTheme";
 
 
 import {
@@ -233,14 +235,22 @@ function isDarkColor(color: string): boolean {
   return luminance < 0.5;
 }
 
-function resolveTerminalTheme(element: HTMLElement | null) {
+function resolveTerminalTheme(element: HTMLElement | null): ITheme {
   const styles = getComputedStyle(element ?? document.body);
   const background = readCssColor(styles, "background-color", "#111827");
   const foreground = readCssColor(styles, "color", "#e5e7eb");
   const darkBackground = isDarkColor(background);
   const rootStyles = getComputedStyle(document.documentElement);
+  // Hosts without terminal tokens keep xterm's built-in ANSI palette.
+  const ansi = Object.fromEntries(
+    Object.entries(TERMINAL_ANSI_TOKENS).flatMap(([key, token]) => {
+      const value = rootStyles.getPropertyValue(token).trim();
+      return value ? [[key, value]] : [];
+    })
+  );
 
   return {
+    ...ansi,
     background,
     foreground,
     cursor: readCssColor(
@@ -251,7 +261,11 @@ function resolveTerminalTheme(element: HTMLElement | null) {
     selectionBackground: readCssColor(
       rootStyles,
       "--clab-ui-selection-background",
-      darkBackground ? "rgba(147, 197, 253, 0.22)" : "rgba(37, 99, 235, 0.18)"
+      readCssColor(
+        rootStyles,
+        "--vscode-terminal-selectionBackground",
+        darkBackground ? "rgba(147, 197, 253, 0.22)" : "rgba(37, 99, 235, 0.18)"
+      )
     )
   };
 }

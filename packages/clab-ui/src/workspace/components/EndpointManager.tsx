@@ -43,6 +43,7 @@ import {
 } from "../health";
 import type { EndpointUiAction } from "../state/endpointActions";
 import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../state/endpointStatus";
+import { downloadJsonFile, pickJsonFile } from "../../utils/jsonFile";
 
 interface EndpointManagerProps {
   defaultApiUrl: string;
@@ -84,45 +85,6 @@ type EndpointHealthState =
   | { status: "loading" }
   | { status: "ready"; metrics: EndpointHealthMetrics }
   | { status: "error"; message: string };
-
-function readEndpointImportFile(): Promise<File | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json,application/json";
-    input.style.position = "fixed";
-    input.style.left = "-9999px";
-
-    let settled = false;
-    const cleanup = (file: File | null) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      input.removeEventListener("change", handleChange);
-      input.removeEventListener("cancel", handleCancel);
-      input.remove();
-      resolve(file);
-    };
-    const handleChange = () => cleanup(input.files?.[0] ?? null);
-    const handleCancel = () => cleanup(null);
-
-    input.addEventListener("change", handleChange, { once: true });
-    input.addEventListener("cancel", handleCancel, { once: true });
-    document.body.appendChild(input);
-    input.click();
-  });
-}
-
-function downloadEndpointExport(content: string): void {
-  const blob = new Blob([content], { type: "application/json;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = ENDPOINT_EXPORT_FILENAME;
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 function formatEndpointImportResult(result: EndpointImportResult): string {
   if (result.total === 0) {
@@ -1063,7 +1025,7 @@ export function EndpointManager({
     setError(null);
     setNotice(null);
     try {
-      downloadEndpointExport(onExportEndpoints());
+      downloadJsonFile(ENDPOINT_EXPORT_FILENAME, onExportEndpoints());
       setNotice(
         `Exported ${sortedEndpoints.length} endpoint ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`
       );
@@ -1081,7 +1043,7 @@ export function EndpointManager({
     setError(null);
     setNotice(null);
     try {
-      const file = await readEndpointImportFile();
+      const file = await pickJsonFile();
       if (!file) {
         return;
       }

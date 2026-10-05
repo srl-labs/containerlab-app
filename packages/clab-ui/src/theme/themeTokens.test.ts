@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 
+import { APP_THEMES } from "./appThemes";
 import { DARK_VARS, LIGHT_VARS } from "./devTheme";
 
 // VS Code supplies these only in some themes or for its own editor; every use must
@@ -30,6 +31,16 @@ function tokensUsedBySource(): Map<string, string> {
 
 test("standalone light and dark palettes define the same theme tokens", () => {
   assert.deepEqual(Object.keys(LIGHT_VARS).sort(), Object.keys(DARK_VARS).sort());
+});
+
+test("every app theme defines the same theme tokens as the base palettes", () => {
+  const expected = Object.keys(DARK_VARS).sort();
+  for (const theme of APP_THEMES) {
+    assert.deepEqual(Object.keys(theme.vars).sort(), expected, `${theme.id} is missing or adds tokens`);
+    for (const [token, value] of Object.entries(theme.vars)) {
+      assert.ok(value.trim().length > 0, `${theme.id} leaves ${token} empty`);
+    }
+  }
 });
 
 test("every theme token the UI reads is defined for standalone hosts", () => {
