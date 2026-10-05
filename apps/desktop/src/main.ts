@@ -4,7 +4,10 @@ import {
   Menu,
   clipboard,
   dialog,
+  ipcMain,
+  screen,
   shell,
+  type BrowserWindowConstructorOptions,
   type ContextMenuParams,
   type MenuItemConstructorOptions,
   type WebContents
@@ -17,19 +20,32 @@ import type { FastifyInstance } from "fastify";
 import { createContainerlabAppServer, parseBooleanEnv } from "@srl-labs/containerlab-app-server";
 
 import {
+  TITLEBAR_HEIGHT,
   buildEditMenu,
   decideNavigation,
   decideWindowOpen,
   isAllowedExternalUrl,
   parsePortEnv,
+  parseTitleBarOverlay,
+  sanitizeWindowState,
   type EditMenuAction,
-  type EditMenuEntry
+  type EditMenuEntry,
+  type TitleBarOverlay,
+  type WindowState
 } from "./desktopPolicy.ts";
 
 const APP_NAME = "Containerlab";
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
 const DEFAULT_DESKTOP_PORT = 32180;
 const SHUTDOWN_TIMEOUT_MS = 3_000;
+const IS_MAC = process.platform === "darwin";
+const IS_LINUX = process.platform === "linux";
+// The app's default (dark) theme until the page reports the one in use.
+const INITIAL_OVERLAY: TitleBarOverlay = {
+  color: "#000000",
+  symbolColor: "#ececec",
+  height: TITLEBAR_HEIGHT
+};
 
 electronApp.setName(APP_NAME);
 
@@ -114,6 +130,7 @@ function resolveSessionPersistenceFile(): string {
 }
 
 let appServer: FastifyInstance | null = null;
+let appOrigin = "";
 let mainWindow: BrowserWindow | null = null;
 const captureWindows = new Set<BrowserWindow>();
 const terminalWindows = new Set<BrowserWindow>();
@@ -287,32 +304,111 @@ function applyNavigationPolicy(window: BrowserWindow, serverOrigin: string): voi
   });
 }
 
-function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
-  const icon = resolveWindowIcon();
-  const captureWindow = new BrowserWindow({
+function resolveWindowStateFile(): string {
+  return path.join(electronApp.getPath("userData"), "window-state.json");
+}
+
+function loadWindowState(): WindowState {
+  let saved: unknown;
+  try {
+    saved = JSON.parse(fs.readFileSync(resolveWindowStateFile(), "utf8"));
+  } catch {
+    saved = undefined;
+  }
+  return sanitizeWindowState(
+    saved,
+    screen.getAllDisplays().map((display) => display.workArea)
+  );
+}
+
+function saveWindowState(window: BrowserWindow): void {
+  if (window.isFullScreen()) {
+    return;
+  }
+  const state: WindowState = { ...window.getNormalBounds(), maximized: window.isMaximized() };
+  try {
+    fs.writeFileSync(resolveWindowStateFile(), JSON.stringify(state));
+  } catch {
+    // Losing the remembered size is harmless.
+  }
+}
+
+// Windows show immediately with the title bar's background color rather than waiting for
+// `ready-to-show`, which did not fire for the borderless window on X11 and left it hidden.
+// Every window is borderless: the page draws its own title bar strip, and the native
+// window controls are overlaid on it (traffic lights on macOS, a control overlay elsewhere).
+function windowChromeOptions(): BrowserWindowConstructorOptions {
+  return {
     autoHideMenuBar: true,
-    backgroundColor: "#07111f",
-    center: true,
-    height: 820,
-    icon,
-    minHeight: 560,
-    minWidth: 860,
-    parent: mainWindow ?? undefined,
-    show: false,
-    title: "Wireshark Capture",
+    backgroundColor: INITIAL_OVERLAY.color,
+    icon: resolveWindowIcon(),
+    titleBarStyle: "hidden",
+    // macOS keeps its traffic lights; `true` also exposes env(titlebar-area-*) so the page can
+    // leave room for them.
+    ...(IS_MAC
+      ? { titleBarOverlay: true, trafficLightPosition: { x: 16, y: (TITLEBAR_HEIGHT - 16) / 2 } }
+      : { titleBarOverlay: overlayOptions(INITIAL_OVERLAY) }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.cjs"),
       sandbox: true
-    },
+    }
+  };
+}
+
+// On Linux the overlay background is transparent so the page's strip shows through and
+// stays in the same compositor frame as the rest of the window; only the glyphs are native.
+function overlayOptions(overlay: TitleBarOverlay): Electron.TitleBarOverlayOptions {
+  return {
+    color: IS_LINUX ? "#00000000" : overlay.color,
+    symbolColor: overlay.symbolColor,
+    height: overlay.height
+  };
+}
+
+function applyTitleBarOverlay(window: BrowserWindow, overlay: TitleBarOverlay): void {
+  if (IS_MAC || window.isDestroyed()) {
+    return;
+  }
+  try {
+    window.setTitleBarOverlay(overlayOptions(overlay));
+    window.setBackgroundColor(overlay.color);
+  } catch {
+    // The overlay is unavailable in this environment (e.g. a window without one).
+  }
+}
+
+function isAppWindow(window: BrowserWindow | null): window is BrowserWindow {
+  return (
+    window !== null &&
+    (window === mainWindow || captureWindows.has(window) || terminalWindows.has(window))
+  );
+}
+
+ipcMain.on("containerlab:set-titlebar-overlay", (event, options: unknown) => {
+  const overlay = parseTitleBarOverlay(options);
+  const window = BrowserWindow.fromWebContents(event.sender);
+  if (!overlay || !isAppWindow(window) || URL.parse(event.senderFrame?.url ?? "")?.origin !== appOrigin) {
+    return;
+  }
+  applyTitleBarOverlay(window, overlay);
+});
+
+function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
+  const captureWindow = new BrowserWindow({
+    ...windowChromeOptions(),
+    center: true,
+    height: 820,
+    minHeight: 560,
+    minWidth: 860,
+    parent: mainWindow ?? undefined,
+    title: "Wireshark Capture",
     width: 1180
   });
 
   captureWindows.add(captureWindow);
   applyNavigationPolicy(captureWindow, serverOrigin);
-  captureWindow.once("ready-to-show", () => {
-    captureWindow.show();
-  });
   captureWindow.on("closed", () => {
     captureWindows.delete(captureWindow);
   });
@@ -325,31 +421,19 @@ function openWiresharkCaptureWindow(url: string, serverOrigin: string): void {
 }
 
 function openTerminalWindow(url: string, serverOrigin: string): void {
-  const icon = resolveWindowIcon();
   const terminalWindow = new BrowserWindow({
-    autoHideMenuBar: true,
-    backgroundColor: "#07111f",
+    ...windowChromeOptions(),
     center: true,
     height: 720,
-    icon,
     minHeight: 360,
     minWidth: 640,
     parent: mainWindow ?? undefined,
-    show: false,
     title: "Containerlab Terminal",
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    },
     width: 1000
   });
 
   terminalWindows.add(terminalWindow);
   applyNavigationPolicy(terminalWindow, serverOrigin);
-  terminalWindow.once("ready-to-show", () => {
-    terminalWindow.show();
-  });
   terminalWindow.on("closed", () => {
     terminalWindows.delete(terminalWindow);
   });
@@ -386,39 +470,41 @@ async function startLocalAppServer(): Promise<string> {
 async function createMainWindow(): Promise<void> {
   const serverUrl = await startLocalAppServer();
   const serverOrigin = new URL(serverUrl).origin;
-  const icon = resolveWindowIcon();
+  appOrigin = serverOrigin;
+  const state = loadWindowState();
 
-  mainWindow = new BrowserWindow({
-    autoHideMenuBar: true,
-    backgroundColor: "#07111f",
-    center: true,
-    height: 900,
-    icon,
+  const window = new BrowserWindow({
+    ...windowChromeOptions(),
+    center: state.x === undefined || state.y === undefined,
+    height: state.height,
     minHeight: 640,
     minWidth: 960,
-    show: false,
     title: APP_NAME,
-    webPreferences: {
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    },
-    width: 1280
+    width: state.width,
+    x: state.x,
+    y: state.y
   });
+  mainWindow = window;
+  if (!IS_MAC) {
+    window.setMenuBarVisibility(false);
+  }
 
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+  if (state.maximized) {
+    window.maximize();
+  }
+  window.on("close", () => {
+    saveWindowState(window);
   });
-  mainWindow.on("closed", () => {
+  window.on("closed", () => {
     mainWindow = null;
   });
-  mainWindow.on("page-title-updated", (event) => {
+  window.on("page-title-updated", (event) => {
     event.preventDefault();
-    mainWindow?.setTitle(APP_NAME);
+    window.setTitle(APP_NAME);
   });
-  applyNavigationPolicy(mainWindow, serverOrigin);
+  applyNavigationPolicy(window, serverOrigin);
 
-  await mainWindow.loadURL(serverUrl);
+  await window.loadURL(serverUrl);
 }
 
 async function stopLocalAppServer(): Promise<void> {

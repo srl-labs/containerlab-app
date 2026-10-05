@@ -7,6 +7,8 @@ import {
   decideWindowOpen,
   isAllowedExternalUrl,
   parsePortEnv,
+  parseTitleBarOverlay,
+  sanitizeWindowState,
   type EditMenuEntry,
   type EditMenuRequest
 } from "./desktopPolicy.ts";
@@ -192,5 +194,60 @@ describe("buildEditMenu", () => {
   test("plain UI surfaces get no menu unless the click is over selectable text", () => {
     assert.deepEqual(buildEditMenu(request()), []);
     assert.deepEqual(summarize(buildEditMenu(request(), true)), ["copy (disabled)", "selectAll"]);
+  });
+});
+
+describe("parseTitleBarOverlay", () => {
+  const valid = { color: "#000000", symbolColor: "#ececec", height: 40 };
+
+  test("accepts hex colors and a sane height", () => {
+    assert.deepEqual(parseTitleBarOverlay(valid), valid);
+    assert.deepEqual(parseTitleBarOverlay({ ...valid, color: "#00000000", height: 39.6 }), {
+      color: "#00000000",
+      symbolColor: "#ececec",
+      height: 40
+    });
+  });
+
+  test("rejects anything else the page could send", () => {
+    for (const value of [
+      null,
+      "x",
+      {},
+      { ...valid, color: "red" },
+      { ...valid, color: "#fff" },
+      { ...valid, symbolColor: "rgb(0,0,0)" },
+      { ...valid, height: 0 },
+      { ...valid, height: 500 },
+      { ...valid, height: Number.NaN },
+      { ...valid, height: "36" }
+    ]) {
+      assert.equal(parseTitleBarOverlay(value), null);
+    }
+  });
+});
+
+describe("sanitizeWindowState", () => {
+  const displays = [{ x: 0, y: 0, width: 1920, height: 1080 }];
+
+  test("falls back to the default size when nothing usable was saved", () => {
+    for (const saved of [undefined, null, "x", { width: 10, height: 10 }, { width: "1", height: "2" }]) {
+      assert.deepEqual(sanitizeWindowState(saved, displays), { width: 1280, height: 900, maximized: false });
+    }
+  });
+
+  test("restores size, position and maximized state", () => {
+    const saved = { x: 100, y: 50, width: 1400, height: 800, maximized: true };
+    assert.deepEqual(sanitizeWindowState(saved, displays), saved);
+  });
+
+  test("drops a position that is no longer on any display but keeps the size", () => {
+    const state = sanitizeWindowState({ x: 4000, y: 50, width: 1400, height: 800 }, displays);
+    assert.deepEqual(state, { width: 1400, height: 800, maximized: false });
+  });
+
+  test("drops a position whose title bar is above the display", () => {
+    const state = sanitizeWindowState({ x: 100, y: -300, width: 1400, height: 800 }, displays);
+    assert.equal(state.y, undefined);
   });
 });

@@ -1,5 +1,6 @@
 import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import { workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
@@ -1633,6 +1634,7 @@ function StandaloneApp() {
           sidebar: (
             <WorkspaceSidebar
               colorScheme={theme}
+              hideLogo={hasDesktopTitleBar()}
               onColorSchemeChange={handleThemeChange}
               onOpenSettings={() => setSettingsOpen(true)}
               tabs={

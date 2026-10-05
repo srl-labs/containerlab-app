@@ -228,7 +228,7 @@ export function LoginPage({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        minHeight: "100vh",
+        minHeight: "100%",
         px: 2,
         color: "#cccccc",
         background:

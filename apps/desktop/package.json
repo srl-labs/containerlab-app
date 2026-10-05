@@ -41,7 +41,7 @@
   "scripts": {
     "start": "electron --ozone-platform=x11 .",
     "dev": "pnpm --filter containerlab-app-web run build && pnpm run build && pnpm run start",
-    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/main.cjs --sourcemap --external:electron && esbuild src/preload.ts --bundle --platform=node --format=cjs --target=node24 --outfile=dist/preload.cjs --external:electron",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
     "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
     "test:e2e": "pnpm run build && playwright test --config test/playwright.config.ts",

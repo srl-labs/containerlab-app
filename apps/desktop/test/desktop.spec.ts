@@ -67,6 +67,57 @@ test("serves the shared app from its own server", async () => {
   await expectNoBrowserErrors(browserErrors.splice(0), test.info());
 });
 
+test("the window is borderless with the page drawing its own title bar", async () => {
+  const titlebar = mainWindow.locator(".clab-desktop-titlebar");
+  await expect(titlebar).toContainText("Containerlab");
+  await expect(titlebar).toHaveCSS("-webkit-app-region", "drag");
+  const { strip, root } = await mainWindow.evaluate(() => ({
+    strip: document.querySelector(".clab-desktop-titlebar")?.getBoundingClientRect().height,
+    root: document.getElementById("root")?.getBoundingClientRect().top
+  }));
+  expect(strip).toBe(40);
+  expect(root).toBe(40);
+
+  if (process.platform !== "darwin") {
+    // The native window controls are overlaid on the strip instead of a title bar.
+    const overlay = await mainWindow.evaluate(() => {
+      const controls = (navigator as Navigator & {
+        windowControlsOverlay?: { visible: boolean; getTitlebarAreaRect(): DOMRect };
+      }).windowControlsOverlay;
+      return { visible: controls?.visible, height: controls?.getTitlebarAreaRect().height };
+    });
+    expect(overlay).toEqual({ visible: true, height: 40 });
+  }
+  await expectNoBrowserErrors(browserErrors.splice(0), test.info());
+});
+
+test("the main process ignores malformed window control colors", async () => {
+  const calls = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows()[0];
+      const seen = Reflect.get(globalThis, "overlayCalls") as unknown[] | undefined;
+      if (!seen) {
+        const recorded: unknown[] = [];
+        Reflect.set(globalThis, "overlayCalls", recorded);
+        const original = win.setTitleBarOverlay.bind(win);
+        win.setTitleBarOverlay = (options) => {
+          recorded.push(options);
+          original(options);
+        };
+      }
+      return Reflect.get(globalThis, "overlayCalls") as unknown[];
+    });
+  await calls();
+  await mainWindow.evaluate(() => {
+    const bridge = Reflect.get(window, "containerlabDesktop") as { setTitleBarOverlay(options: unknown): void };
+    bridge.setTitleBarOverlay({ color: "red", symbolColor: "#ffffff", height: 40 });
+    bridge.setTitleBarOverlay({ color: "#101010", symbolColor: "#fafafa", height: 40 });
+  });
+  if (process.platform !== "darwin") {
+    await expect.poll(calls).toHaveLength(1);
+  }
+});
+
 test("text fields open the native edit menu", async () => {
   await app.evaluate(({ Menu }) => {
     const shown: string[][] = [];

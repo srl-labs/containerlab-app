@@ -1,4 +1,5 @@
 import { runtimeFetch } from "./backend";
+import { installDesktopChrome } from "./desktopChrome";
 import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
@@ -97,6 +98,7 @@ async function main(): Promise<void> {
   const { sessionId, endpointId, showVolumeTip, theme } = parseQuery();
   const resolvedTheme = theme ?? resolveStandaloneTheme();
   document.documentElement.classList.toggle("light", resolvedTheme === "light");
+  installDesktopChrome();
   applyThemeVars(resolvedTheme);
 
   if (!sessionId) {

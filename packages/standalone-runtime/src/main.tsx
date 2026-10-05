@@ -14,6 +14,7 @@ import React, {
 } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import { installDesktopChrome } from "./desktopChrome";
 import { useAuth } from "./hooks/useAuth";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
@@ -130,6 +131,7 @@ function BootstrapApp() {
   );
 }
 
+installDesktopChrome({ title: "Containerlab" });
 applyThemeVars(resolveStandaloneTheme());
 const container = document.getElementById("root");
 if (!container) {

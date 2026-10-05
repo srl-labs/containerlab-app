@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
 
+import { installDesktopChrome } from "./desktopChrome";
 import { workspaceHost } from "./workspaceHost";
 import { DetachedTerminalView } from "./components/RuntimeTerminalWindows";
 import { detachedTerminalTargetFromLocation } from "./runtimeDetachedTerminal";
@@ -69,6 +70,7 @@ function DetachedTerminalApp() {
 function main(): void {
   const theme = resolveStandaloneTheme();
   document.documentElement.classList.toggle("light", theme === "light");
+  installDesktopChrome();
   applyThemeVars(theme);
 
   const rootElement = document.getElementById("root");

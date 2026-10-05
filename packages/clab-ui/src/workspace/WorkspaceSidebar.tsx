@@ -58,8 +58,10 @@ function readPreferences(): { pinned: boolean; width: number } {
 }
 
 /** Standalone rail around the same explorer view VS Code shows in its sidebar. */
-export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSettings, tabs }: {
+export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeChange, onOpenSettings, tabs }: {
   colorScheme: "light" | "dark";
+  /** Omit the rail's logo row when the host already shows the logo, such as in a title bar. */
+  hideLogo?: boolean;
   onColorSchemeChange: (scheme: "light" | "dark") => void;
   onOpenSettings: () => void;
   tabs?: ReactNode;
@@ -136,10 +138,12 @@ export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSetti
             ...REDUCE_MOTION
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mx: 0.75, overflow: "hidden", height: 36, flexShrink: 0 }}>
-            <Box sx={{ width: 36, flexShrink: 0 }}><RailLogo showTooltip={!pinned} /></Box>
-            <Typography noWrap variant="body1" sx={{ fontWeight: 600 }}>Containerlab</Typography>
-          </Box>
+          {!hideLogo && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mx: 0.75, overflow: "hidden", height: 36, flexShrink: 0 }}>
+              <Box sx={{ width: 36, flexShrink: 0 }}><RailLogo showTooltip={!pinned} /></Box>
+              <Typography noWrap variant="body1" sx={{ fontWeight: 600 }}>Containerlab</Typography>
+            </Box>
+          )}
           {VIEWS.map(({ id, label, icon }) => (
             <WorkspaceRailItem key={id} pinned={pinned} label={label} active={open && view === id} expanded={open && view === id} controls="workspace-explorer" onClick={() => selectView(id)}>{icon}</WorkspaceRailItem>
           ))}

@@ -11,7 +11,7 @@ export function LoadingScreen({ logoUrl }: { logoUrl?: string }) {
       color: "var(--clab-ui-editor-foreground, #ececec)",
       display: "flex",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      height: "100vh",
+      height: "100%",
       justifyContent: "center"
     }}>
       {logoUrl ? <img src={logoUrl} alt="Containerlab" width={136} height={136} /> : "containerlab"}
@@ -28,7 +28,7 @@ const loginStyles = {
     display: "flex",
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     justifyContent: "center",
-    minHeight: "100vh",
+    minHeight: "100%",
     padding: 16
   },
   panel: {
