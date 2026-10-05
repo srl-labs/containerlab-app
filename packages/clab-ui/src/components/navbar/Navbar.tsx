@@ -1,7 +1,8 @@
-import { controlRadius, floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
+import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
 // Floating action bar for React TopoViewer.
 import React from "react";
 import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -12,7 +13,6 @@ import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-import type { Theme } from "@mui/material/styles";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import AddLinkRoundedIcon from "@mui/icons-material/AddLinkRounded";
@@ -55,6 +55,8 @@ const ERROR_MAIN = "error.main";
 const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
 const NAVBAR_Z_INDEX = 1100;
+/** Size container for the room between the side panels; the toolbar filter collapses when it is tight. */
+const TOOLBAR_CONTAINER = "topoviewer-toolbar";
 /** Inset of the floating bar from the canvas edges (px). */
 const FLOATING_NAVBAR_INSET = 8;
 /** Toolbar glyphs use the 18px icon size. */
@@ -73,27 +75,6 @@ const DANGER_MENU_ITEM_SX = {
   "& .MuiListItemIcon-root": { color: "inherit" }
 } as const;
 /** The node filter in the bar matches the explorer filter: slim, tinted, focus-colored outline. */
-function toolbarFilterSx(theme: Theme) {
-  const tint = (amount: number) => theme.alpha(theme.palette.text.primary, amount);
-  return {
-    "& [data-testid='navbar-find-node'] .MuiFilledInput-root": {
-      height: 28,
-      borderRadius: controlRadius,
-      bgcolor: tint(0.06),
-      transition: "background-color 120ms ease, box-shadow 120ms ease",
-      "&:hover": { bgcolor: tint(0.06), boxShadow: `inset 0 0 0 1px ${tint(0.18)}` },
-      "&.Mui-focused": {
-        bgcolor: tint(0.04),
-        boxShadow: `inset 0 0 0 1px ${theme.palette.action.focus}`
-      },
-      "&.Mui-disabled": { bgcolor: tint(0.04) },
-      "& .MuiFilledInput-input": { height: 28, px: 1 },
-      "& .MuiIconButton-root": { p: "2px", mr: "-4px" },
-      "& .MuiSvgIcon-root": { fontSize: 16 }
-    }
-  };
-}
-
 function pressedSx(pressed: boolean) {
   return pressed ? PRESSED_SX : undefined;
 }
@@ -477,22 +458,36 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
+    {/* Spans the canvas between the side panels, so the toolbar can adapt to the room it has. */}
+    <Box
+      sx={{
+        position: "absolute",
+        top: 0,
+        left: "var(--clab-ui-panel-left, 0px)",
+        right: "var(--clab-ui-panel-right, 0px)",
+        height: 0,
+        overflow: "visible",
+        pointerEvents: "none",
+        zIndex: NAVBAR_Z_INDEX,
+        containerType: "inline-size",
+        containerName: TOOLBAR_CONTAINER
+      }}
+    >
     <Paper
       ref={appBarRef}
       elevation={0}
       data-testid="topoviewer-navbar"
-      sx={[
-        {
-          ...floatingDockSx(barSide, "top"),
-          width: "auto",
-          maxWidth: `calc(100% - var(--clab-ui-panel-left, 0px) - var(--clab-ui-panel-right, 0px) - ${FLOATING_NAVBAR_INSET * 2}px)`,
-          overflow: "visible",
-          borderRadius: floatingRadius,
-          zIndex: NAVBAR_Z_INDEX,
-          ...floatingSurfaceSx
-        },
-        toolbarFilterSx
-      ]}
+      sx={{
+        position: "absolute",
+        top: FLOATING_NAVBAR_INSET,
+        [barSide]: FLOATING_NAVBAR_INSET,
+        width: "auto",
+        maxWidth: `calc(100% - ${FLOATING_NAVBAR_INSET * 2}px)`,
+        overflow: "visible",
+        borderRadius: floatingRadius,
+        pointerEvents: "auto",
+        ...floatingSurfaceSx
+      }}
     >
       <Toolbar
         variant="dense"
@@ -666,6 +661,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           isActive={isTopologyActive}
           rfInstance={rfInstance}
           variant="toolbar"
+          collapseBelow={`@container ${TOOLBAR_CONTAINER} (max-width: 640px)`}
         />
 
         {/* Undo - only show in edit mode */}
@@ -930,6 +926,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         </Menu>
       </Toolbar>
     </Paper>
+    </Box>
     <CanvasZoomControls
       barSide={barSide}
       zoomDisabled={zoomDisabled}

@@ -44,10 +44,15 @@ export function SettingsField({
         rowGap: inline ? 0 : 1.5,
         alignItems: "center",
         minWidth: 0,
-        "@container settings-content (max-width: 560px)": {
-          gridTemplateColumns: "minmax(0, 1fr)",
-          rowGap: 1.25,
-        },
+        // Narrow rows stack wide controls under their text; a switch stays beside it.
+        ...(compactControl
+          ? {}
+          : {
+              "@container settings-content (max-width: 560px)": {
+                gridTemplateColumns: "minmax(0, 1fr)",
+                rowGap: 1.25,
+              },
+            }),
       }}
     >
       <Box
@@ -114,10 +119,14 @@ export function SettingsField({
                 "& > .MuiFormControl-root": { width: "100%" },
               }
             : {}),
-          "@container settings-content (max-width: 560px)": {
-            width: "100%",
-            alignItems: fixedWidth ? "stretch" : "flex-start",
-          },
+          ...(compactControl
+            ? {}
+            : {
+                "@container settings-content (max-width: 560px)": {
+                  width: "100%",
+                  alignItems: fixedWidth ? "stretch" : "flex-start",
+                },
+              }),
         }}
       >
         {children}

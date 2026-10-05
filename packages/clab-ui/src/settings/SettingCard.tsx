@@ -100,6 +100,8 @@ export function SettingCard({
       setBusy(false);
     }
   };
+  // Picking a color scheme is the change itself, as its description promises, so it skips the draft.
+  const appliesOnPick = definition.key === "containerlab.appearance.colorScheme";
   let sourceLabel = target === "user" ? "Default" : "Inherited";
   if (current.overridden)
     sourceLabel = target === "user" ? "User" : "Workspace";
@@ -285,7 +287,14 @@ export function SettingCard({
         <SettingInput
           definition={definition}
           text={text}
-          onChange={edit}
+          onChange={
+            appliesOnPick
+              ? (value) => {
+                  edit(value);
+                  void save(false, value);
+                }
+              : edit
+          }
           busy={busy}
           validation={dirty ? validation : undefined}
         />

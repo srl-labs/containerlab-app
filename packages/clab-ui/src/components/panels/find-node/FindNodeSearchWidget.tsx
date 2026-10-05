@@ -5,12 +5,14 @@ import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
 import InputAdornment from "@mui/material/InputAdornment";
 import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import type { Theme } from "@mui/material/styles";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 
 import { useGraphStore } from "../../../stores/graphStore";
 import { useCanvasStore } from "../../../stores/canvasStore";
-import { floatingRadius } from "../../../theme/surfaces";
+import { controlRadius } from "../../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import { getNodesBoundingBox, isTopoNodeLike } from "../../../utils/graphQueryUtils";
 
@@ -23,6 +25,30 @@ export interface FindNodeSearchWidgetProps {
   dense?: boolean;
   showTipsHeader?: boolean;
   variant?: "panel" | "toolbar";
+  /** Toolbar only: a container query below which the empty filter collapses to a search button. */
+  collapseBelow?: string;
+}
+
+/** The toolbar filter: a slim tinted field that matches the explorer filter. */
+function toolbarFieldSx(theme: Theme) {
+  const tint = (amount: number) => theme.alpha(theme.palette.text.primary, amount);
+  return {
+    width: 120,
+    "& .MuiFilledInput-root": {
+      height: 28,
+      fontSize: 13,
+      borderRadius: controlRadius,
+      overflow: "hidden",
+      bgcolor: tint(0.06),
+      transition: "background-color 120ms ease, box-shadow 120ms ease",
+      "&:hover": { bgcolor: tint(0.06), boxShadow: `inset 0 0 0 1px ${tint(0.18)}` },
+      "&.Mui-focused": { bgcolor: tint(0.04), boxShadow: `inset 0 0 0 1px ${theme.palette.action.focus}` },
+      "&.Mui-disabled": { bgcolor: tint(0.04) },
+      "& .MuiFilledInput-input": { py: 0, px: 1, height: 28, boxSizing: "border-box" },
+      "& .MuiIconButton-root": { p: "2px", mr: "-4px" },
+      "& .MuiSvgIcon-root": { fontSize: 16 }
+    }
+  } as const;
 }
 
 export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
@@ -31,10 +57,12 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
   description,
   dense = false,
   showTipsHeader = false,
-  variant = "panel"
+  variant = "panel",
+  collapseBelow
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [matchCount, setMatchCount] = useState<number | null>(null);
   const getCurrentNodes = useCallback(
     () => useGraphStore.getState().nodes.filter((node) => isTopoNodeLike(node)),
@@ -125,18 +153,57 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
   );
 
   if (variant === "toolbar") {
+    // Expanded or holding a filter, the field stays open whatever the room.
+    const collapsed = collapseBelow !== undefined && !expanded && !searchTerm;
     return (
       <Box
         aria-live="polite"
         data-match-count={matchCount === null ? undefined : formatMatchCountText(matchCount)}
         data-testid="navbar-find-node"
-        sx={{ display: "flex", alignItems: "center", mx: 0.5 }}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          // The field's height, so the bar keeps its height when the field collapses.
+          minHeight: 28,
+          mx: 0.5,
+          "& .find-node-expand": { display: "none" },
+          ...(collapseBelow && collapsed
+            ? {
+                [collapseBelow]: {
+                  mx: 0,
+                  "& .find-node-field": { display: "none" },
+                  "& .find-node-expand": { display: "inline-flex" }
+                }
+              }
+            : {})
+        }}
         title={matchCount !== null ? formatMatchCountText(matchCount) : undefined}
       >
+        {collapseBelow !== undefined && (
+          <Tooltip title="Find nodes">
+            <span className="find-node-expand">
+              <IconButton
+                aria-label="Find nodes"
+                size="small"
+                disabled={!isActive}
+                onClick={() => {
+                  setExpanded(true);
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              >
+                <SearchIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
         <TextField
+          className="find-node-field"
           disabled={!isActive}
           hiddenLabel
           onKeyDown={handleKeyDown}
+          onBlur={() => {
+            if (!searchTerm) setExpanded(false);
+          }}
           inputRef={inputRef}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Filter"
@@ -144,26 +211,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           value={searchTerm}
           variant="filled"
           data-testid="find-node-input"
-          sx={{
-            width: 120,
-            "& .MuiFilledInput-root": {
-              height: 32,
-              fontSize: 13,
-              borderRadius: floatingRadius,
-              overflow: "hidden",
-              bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 12%, transparent)",
-              "&:hover": {
-                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 16%, transparent)"
-              },
-              "&.Mui-focused": {
-                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 18%, transparent)"
-              },
-              "&.Mui-disabled": {
-                bgcolor: "color-mix(in srgb, var(--vscode-foreground, #fff) 6%, transparent)"
-              },
-              "& .MuiFilledInput-input": { py: 0, px: 1.25, height: 32, boxSizing: "border-box" }
-            }
-          }}
+          sx={toolbarFieldSx}
           slotProps={{
             htmlInput: { "aria-label": "Find nodes" },
             input: {

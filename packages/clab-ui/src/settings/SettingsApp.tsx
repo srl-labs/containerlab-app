@@ -293,6 +293,7 @@ export function SettingsApp({
             <Button
               size="small"
               variant="text"
+              startIcon={<PaletteOutlinedIcon />}
               onClick={() => {
                 void action("colorTheme");
               }}
