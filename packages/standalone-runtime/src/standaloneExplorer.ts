@@ -970,6 +970,16 @@ export function createStandaloneExplorerBridge(
     const runningByEndpoint = collectRunningLabItemsByEndpoint(files);
     const localByEndpoint = collectLocalLabItemsByEndpoint(files);
 
+    if (!lifecycleActionsAvailable && options.endpointManagementAvailable === false) {
+      // Nothing can run and there is a single workspace: list the topology files directly.
+      return filterTreeItems(
+        endpoints
+          .filter((endpoint) => endpoint.connected)
+          .flatMap((endpoint) => localByEndpoint.get(endpoint.id) ?? []),
+        filterText,
+      );
+    }
+
     const endpointItems = endpoints.map((endpoint) => {
       if (!endpoint.connected) {
         const placeholderLabel = disconnectedEndpointLabel(endpoint.status);

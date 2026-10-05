@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  getRuntimeContainersForLab,
-  getRuntimeContainersForTopology,
-  runtimeContainersEqual,
-  runtimeContainersTopologyEqual
-} from "./runtimeData";
+import { runtimeContainersEqual, runtimeContainersTopologyEqual } from "@containerlab/clab-ui/host";
+import { getRuntimeContainersForLab, getRuntimeContainersForTopology } from "./runtimeData";
 import { buildStandaloneTopologyRefFromPath } from "./standaloneHostShared";
 import type { ContainerState, LabState } from "./stores/labStore";
 

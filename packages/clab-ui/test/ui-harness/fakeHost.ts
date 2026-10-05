@@ -1,4 +1,5 @@
 import type { ClabUiHost, ClabUiTopoViewerEvent } from "../../src/host/contracts";
+import { defaultSchemaData } from "../../src/core/schema";
 import type { CustomIconInfo } from "../../src/core/types/icons";
 import type { TopologyAnnotations } from "../../src/core/types/topology";
 import {
@@ -260,6 +261,12 @@ export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiH
     meta: {
       isDevMock: true,
       disableDevMockTraffic: true
+    },
+
+    editorData: {
+      getSchema: () => defaultSchemaData,
+      getDockerImages: () => [],
+      subscribeDockerImages: () => () => {}
     },
 
     explorer: {

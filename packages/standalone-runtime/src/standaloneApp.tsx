@@ -1,7 +1,7 @@
 import { persistStandaloneTheme, persistTabOrientation, readPersistedTabOrientation, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
-import { connectWorkspaceExplorer, workspaceHost } from "./workspaceHost";
+import { workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import {
   StandaloneLabTabs,
@@ -105,7 +105,6 @@ import {
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
-import { listFileExplorerDirectory, readFileExplorerFile } from "./runtimeApi";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -660,35 +659,6 @@ const explorerBridge = createStandaloneExplorerBridge({
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
-
-connectWorkspaceExplorer({
-  listTopologies: () => topologyManager.listTopologyFiles(),
-  listDirectory: async (parentPath) => {
-    const endpointId = getConnectedEndpointIdForUiAssets();
-    if (!endpointId) return [];
-    return listFileExplorerDirectory(endpointId, parentPath);
-  },
-  subscribe(listener) {
-    const unsubFiles = getStandaloneBackend().subscribeFiles?.(() => listener()) ?? (() => {});
-    const unsubExplorer = explorerBridge.explorer.subscribe(() => listener());
-    return () => {
-      unsubFiles();
-      unsubExplorer();
-    };
-  },
-  createTopology: () => {
-    void explorerBridge.createTopologyFile();
-  },
-  openTopology: (topologyRef) => openTopologyInTab(topologyRef),
-  openFile: async (entry) => {
-    if (entry.topologyRef) {
-      await openTopologyInTab(entry.topologyRef, { endpointId: entry.endpointId });
-      return;
-    }
-    const document = await readFileExplorerFile(entry.endpointId, entry.path);
-    openWorkspaceFileInTab({ ...document, title: entry.name });
-  },
-});
 
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
   return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
@@ -1293,6 +1263,7 @@ function setupStandaloneUiHost(): void {
 
   const apiHost = createApiClabUiHost({
     fetchImpl: runtimeFetch,
+    initialData: { dockerImages: initialData.dockerImages },
     explorer: explorerBridge.explorer,
     images: {
       async listImages(options): Promise<ContainerImageSummary[]> {
@@ -1368,10 +1339,6 @@ let reactRoot: ReactRoot | null =
   standaloneWindowState.__clabStandaloneReactRoot ?? null;
 
 function renderApp(): void {
-  (window as unknown as Record<string, unknown>).__INITIAL_DATA__ = initialData;
-  (window as unknown as Record<string, unknown>).__DOCKER_IMAGES__ =
-    initialData.dockerImages;
-
   const container = document.getElementById("root");
   if (!container) throw new Error("Root element not found");
 

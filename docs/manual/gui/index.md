@@ -67,6 +67,8 @@ The Explorer can:
 * group labs by API endpoint in standalone apps
 * hide labs owned by other users when the API server provides ownership metadata
 
+The Explorer is the same view in every GUI. In VS Code it is the Containerlab view in the activity bar. In Desktop and Web it opens from the **Labs** and **Files** buttons in the left rail: **Labs** shows running and undeployed labs, and **Files** shows the files of your lab workspace.
+
 VS Code discovers topology files from the open workspace and running labs from the Containerlab host. Desktop and Web discover files and running labs through the API server endpoints you sign in to. When multiple endpoints are connected, the Explorer groups labs and files by endpoint so one GUI can operate several lab hosts without mixing their state.
 
 ## Explore the GUI

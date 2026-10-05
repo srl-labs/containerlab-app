@@ -139,7 +139,7 @@ test("carved labels fit each item and keep the surrounding explorer clickable", 
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
-test("closing the explorer preserves expanded folders and reopening works from the keyboard", async ({ page }) => {
+test("closing the explorer preserves folder state and reopening works from the keyboard", async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("clab-pages-sandbox-files-v1", JSON.stringify({ "folder/notes.txt": "notes" })));
   await page.goto("/");
   await waitForWorkspace(page);
@@ -147,14 +147,16 @@ test("closing the explorer preserves expanded folders and reopening works from t
   const sidebar = page.getByTestId("workspace-sidebar");
   const files = rail.getByRole("button", { name: "Files", exact: true });
   await files.click();
-  await sidebar.getByText("folder", { exact: true }).click();
   await expect(sidebar.getByText("notes.txt", { exact: true })).toBeVisible();
+  await sidebar.getByText("folder", { exact: true }).click();
+  await expect(sidebar.getByText("notes.txt", { exact: true })).toBeHidden();
   await page.getByRole("button", { name: "Close explorer", exact: true }).click();
   await expect(page.locator("#workspace-explorer")).toHaveAttribute("aria-hidden", "true");
   await expect(page.locator("#workspace-explorer")).toHaveCSS("width", "0px");
   await expect(files).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(sidebar.getByText("notes.txt", { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: "Expand folder" })).toBeVisible();
+  await expect(sidebar.getByText("notes.txt", { exact: true })).toBeHidden();
   await page.keyboard.press("Shift+Tab");
   const labs = rail.getByRole("button", { name: "Labs", exact: true });
   await expect(labs).toBeFocused();
@@ -163,6 +165,8 @@ test("closing the explorer preserves expanded folders and reopening works from t
   await expect(labs).toHaveCSS("width", "36px");
   await expect(rail).toHaveCSS("width", "48px");
   await expect(labs).toBeFocused();
+  await sidebar.getByRole("button", { name: "Expand folder" }).click();
+  await expect(sidebar.getByText("notes.txt", { exact: true })).toBeVisible();
 });
 
 test("sidebar resize supports keyboard and pointer capture without losing its preferred width", async ({ page }) => {

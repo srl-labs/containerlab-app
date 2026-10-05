@@ -34,7 +34,7 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   const sidebar = page.getByTestId("workspace-sidebar");
   const labs = page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true });
   if ((await labs.getAttribute("aria-expanded")) !== "true") await labs.click();
-  await sidebar.getByRole("button", { name: /preview\.clab\.yml/ }).click();
+  await sidebar.getByText("preview.clab.yml", { exact: true }).click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);
 });

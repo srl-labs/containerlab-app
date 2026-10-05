@@ -1333,9 +1333,6 @@ export function ImageManagerApp({
 
 export function bootstrapImageManagerWebview(runtime: ClabUiRuntime): void {
   const initialData = (window.__INITIAL_DATA__ ?? {}) as ImageManagerInitialData;
-  if (initialData.schemaData) {
-    window.__SCHEMA_DATA__ = initialData.schemaData as typeof window.__SCHEMA_DATA__;
-  }
 
   const container = document.getElementById("root");
   if (!container) {

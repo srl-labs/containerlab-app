@@ -1,11 +1,12 @@
 /**
  * useSchema - Hook to access containerlab schema data for kind/type options
  *
- * Hosts can override bundled schema data via window.__SCHEMA_DATA__.
+ * Hosts can override bundled schema data through the host editor data.
  */
 import { useState, useMemo, useCallback } from "react";
 
-import { defaultSchemaData } from "../../core/schema";
+import { defaultSchemaData, type SchemaData as HostSchemaData } from "../../core/schema";
+import { useClabUiHost } from "../../host";
 import { log } from "../../utils/logger";
 
 /**
@@ -18,17 +19,6 @@ export interface SrosComponentTypes {
   mda: string[];
   xiom: string[];
   xiomMda: string[];
-}
-
-// Extend Window to include schema data
-declare global {
-  interface Window {
-    __SCHEMA_DATA__?: {
-      kinds: string[];
-      typesByKind: Record<string, string[]>;
-      srosComponentTypes?: SrosComponentTypes;
-    };
-  }
 }
 
 const EMPTY_SROS_TYPES: SrosComponentTypes = {
@@ -56,11 +46,11 @@ interface UseSchemaResult extends SchemaData {
 
 /**
  * Load host-provided schema data or fall back to the bundled containerlab schema.
- * Schema data is synchronously available (window.__SCHEMA_DATA__ is injected
- * before React renders), so this runs as a lazy state initializer.
+ * Schema data is synchronously available from the host, so this runs as a
+ * lazy state initializer.
  */
-function buildSchemaData(): SchemaData {
-  const data = window.__SCHEMA_DATA__ ?? defaultSchemaData;
+function buildSchemaData(hostSchema: HostSchemaData | undefined): SchemaData {
+  const data = hostSchema ?? defaultSchemaData;
 
   const kinds = Array.isArray(data.kinds) ? data.kinds : [];
   const typesByKind = new Map<string, string[]>();
@@ -98,7 +88,8 @@ export function useSchema(): UseSchemaResult {
   // Initialize synchronously (lazy initializer) instead of via a mount effect;
   // this avoids a wasted first render where isLoaded is false and consumers
   // flash a loading state.
-  const [schemaData] = useState<SchemaData>(buildSchemaData);
+  const host = useClabUiHost();
+  const [schemaData] = useState<SchemaData>(() => buildSchemaData(host.editorData?.getSchema()));
 
   // Get types for a specific kind
   const getTypesForKind = useCallback(

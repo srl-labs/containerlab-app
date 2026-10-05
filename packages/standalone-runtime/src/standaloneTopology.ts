@@ -2,6 +2,8 @@ import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import {
   createTopologySyncController,
+  runtimeContainersEqual,
+  runtimeContainersTopologyEqual,
   type HostRuntimeContainer
 } from "@containerlab/clab-ui/host";
 import {
@@ -14,11 +16,7 @@ import {
 } from "@containerlab/clab-ui/session";
 
 import { fetchUiIcons } from "./runtimeApi";
-import {
-  getRuntimeContainersForTopology,
-  runtimeContainersEqual,
-  runtimeContainersTopologyEqual
-} from "./runtimeData";
+import { getRuntimeContainersForTopology } from "./runtimeData";
 import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standaloneDirtyState";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";

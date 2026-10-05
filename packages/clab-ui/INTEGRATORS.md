@@ -605,6 +605,7 @@ If you implement a custom host directly, these are the relevant `/host`
 contracts:
 
 - `ClabUiHost`
+- `ClabUiEditorDataHost`
 - `ClabUiExplorerHost`
 - `ClabUiTopoViewerHost`
 
@@ -635,6 +636,23 @@ Important topo viewer events:
 - `fitViewport`
 - `svgExportResult`
 
+### Editor data
+
+`ClabUiHost.editorData` supplies the reference data the node editor offers: the
+containerlab schema (`getSchema`, falling back to the bundled schema) and the images the
+host can run (`getDockerImages`, plus `subscribeDockerImages` for live updates).
+`createWindowClabUiHost` fills it from the injected `window.__INITIAL_DATA__`
+(`schemaData`, `dockerImages`) and from `docker-images-updated` messages, or from the
+`initialData` option. Do not set globals or dispatch DOM events for this data.
+
+### Runtime containers
+
+Hosts describe running containers to the editor as `HostRuntimeContainer` values.
+Build them with `normalizeRuntimeContainer` (numeric strings are parsed, empty stats and
+netem state are dropped, interfaces are sorted) instead of mapping fields by hand.
+`runtimeContainersEqual` and `runtimeContainersTopologyEqual` compare two snapshots, with
+or without live interface counters, so a host can skip redundant graph updates.
+
 ## Explorer Integration
 
 If your product embeds the explorer UI, use:
@@ -645,6 +663,11 @@ If your product embeds the explorer UI, use:
 
 If you already have a product-specific explorer backend, prefer wiring it
 through the exported explorer controller/helpers rather than duplicating logic.
+
+The workspace rail renders this same view: its Labs panel shows the `runningLabs` and
+`localLabs` sections and its Files panel shows `fileExplorer`, through the
+`visibleSectionIds` prop. A host therefore supplies one explorer backend
+(`ClabUiHost.explorer`) for both the rail and VS Code's sidebar view.
 
 ## Theme Integration
 

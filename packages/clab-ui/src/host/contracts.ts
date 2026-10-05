@@ -5,6 +5,7 @@ import type {
 } from "../core/types/messages";
 import type { TopologyRef } from "../contract/topologyRef";
 import type { DeploymentState } from "../core/types/topology";
+import type { SchemaData } from "../core/schema";
 import type {
   ExplorerIncomingMessage,
   ExplorerUiState
@@ -183,6 +184,15 @@ export interface ClabUiImageHost {
   removeImage(request: ImageRemoveRequest): Promise<ImageActionResult>;
 }
 
+/** Editor reference data owned by the host: the schema and the images it can run. */
+export interface ClabUiEditorDataHost {
+  /** Host-provided containerlab schema; the bundled schema applies when absent. */
+  getSchema(): SchemaData | undefined;
+  /** Image references known to the host, or undefined until the host has provided them. */
+  getDockerImages(): string[] | undefined;
+  subscribeDockerImages(handler: (images: string[]) => void): () => void;
+}
+
 export interface ClabUiHost {
   postMessage(message: unknown): void;
   subscribe(handler: (event: MessageEvent<unknown>) => void): () => void;
@@ -190,6 +200,7 @@ export interface ClabUiHost {
     isDevMock?: boolean;
     disableDevMockTraffic?: boolean;
   };
+  editorData?: ClabUiEditorDataHost;
   explorer: ClabUiExplorerHost;
   images?: ClabUiImageHost;
   topoViewer: ClabUiTopoViewerHost;

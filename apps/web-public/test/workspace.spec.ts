@@ -205,3 +205,23 @@ test("file tabs replace the canvas, guard unsaved edits and restore topology con
   await expect(page.getByTestId("navbar-lock")).toBeVisible();
   await expect(page.locator(".react-flow")).toBeVisible();
 });
+
+test("the sandbox lists its topology files without any running-lab concepts", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("clab-pages-sandbox-files-v1", JSON.stringify({
+      "plain.clab.yml": "name: plain\ntopology:\n  nodes:\n    router1:\n      kind: linux\n      image: alpine:latest\n"
+    }))
+  );
+  await page.goto("/");
+  await waitForWorkspace(page);
+  await page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true }).click();
+  const sidebar = page.getByTestId("workspace-sidebar");
+  await expect(sidebar.getByText("plain.clab.yml", { exact: true })).toBeVisible();
+  for (const text of ["Connected", "Undeployed Labs", "Running Labs", "Endpoints"]) {
+    await expect(sidebar.getByText(text, { exact: false })).toHaveCount(0);
+  }
+  await sidebar.getByText("plain.clab.yml", { exact: true }).click();
+  await expect(page.locator(".react-flow__node")).toHaveCount(1);
+  await expect(page.locator(".topology-node-runtime-badge")).toHaveCount(0);
+  await expect(page.getByTestId("navbar-deploy")).toHaveCount(0);
+});

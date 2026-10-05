@@ -1,38 +1,29 @@
 /* eslint-disable import-x/max-dependencies -- Keep individual icon imports tree-shakeable. */
-import React, { useEffect, useRef, useState, type ReactNode } from "react";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import React, { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import CloseIcon from "@mui/icons-material/Close";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
-import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import FolderIcon from "@mui/icons-material/Folder";
-import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import LightModeIcon from "@mui/icons-material/LightMode";
-import NoteAddIcon from "@mui/icons-material/NoteAdd";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 import ScienceIcon from "@mui/icons-material/Science";
 import TuneIcon from "@mui/icons-material/Tune";
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
-import List from "@mui/material/List";
-import ListItemButton from "@mui/material/ListItemButton";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
+import type { ExplorerSectionId } from "../explorer/shared/explorer/types";
 import { useHorizontalResize } from "../hooks/ui/useHorizontalResize";
 import { floatingSurfaceSx } from "../theme/surfaces";
-import type { FileExplorerEntry } from "./types";
-import type { TopologyFileEntry } from "./state/documentUtils";
 import { RailLogo } from "./RailLogo";
-import { useWorkspaceHost } from "./WorkspaceHost";
 import { RailPinnedContext, WorkspaceRailItem } from "./WorkspaceRailItem";
 
+const Explorer = lazy(async () => ({ default: (await import("../explorer")).ContainerlabExplorerView }));
+const SECTIONS: Record<SidebarView, readonly ExplorerSectionId[]> = {
+  labs: ["runningLabs", "localLabs"],
+  files: ["fileExplorer"]
+};
 const VIEWS = [
   { id: "labs", label: "Labs", icon: <ScienceIcon fontSize="small" /> },
   { id: "files", label: "Files", icon: <FolderIcon fontSize="small" /> }
@@ -66,117 +57,13 @@ function readPreferences(): { pinned: boolean; width: number } {
   }
 }
 
-function useExplorerRevision(): number {
-  const { explorer } = useWorkspaceHost();
-  const [revision, setRevision] = useState(0);
-  useEffect(() => explorer.subscribe(() => setRevision((current) => current + 1)), [explorer]);
-  return revision;
-}
-
-function LabsPanel({ revision }: { revision: number }) {
-  const { explorer } = useWorkspaceHost();
-  const [topologies, setTopologies] = useState<TopologyFileEntry[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    void explorer.listTopologies().then((next) => {
-      if (!cancelled) setTopologies(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [explorer, revision]);
-  if (topologies.length === 0) {
-    return (
-      <Box sx={{ p: 2 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          No labs in this workspace.
-        </Typography>
-        <Button size="small" variant="outlined" startIcon={<NoteAddIcon />} onClick={explorer.createTopology}>
-          New Topology File
-        </Button>
-      </Box>
-    );
-  }
-  return (
-    <List dense>
-      {topologies.map((entry) => (
-        <ListItemButton key={`${entry.endpointId}:${entry.path}`} onClick={() => { void explorer.openTopology(entry.topologyRef); }} sx={{ "&:hover": { bgcolor: "action.hover" } }}>
-          <ListItemIcon sx={{ minWidth: 32 }}><AccountTreeIcon fontSize="small" /></ListItemIcon>
-          <ListItemText
-            primary={entry.labName ?? entry.filename}
-            secondary={entry.path}
-            slotProps={{ primary: { noWrap: true, variant: "body2" }, secondary: { noWrap: true } }}
-          />
-        </ListItemButton>
-      ))}
-    </List>
-  );
-}
-
-function EntryIcon(props: { entry: FileExplorerEntry; open: boolean }) {
-  if (props.entry.kind === "directory") {
-    return props.open ? <FolderOpenIcon fontSize="small" /> : <FolderIcon fontSize="small" />;
-  }
-  if (props.entry.topologyRef) return <AccountTreeIcon fontSize="small" />;
-  return <DescriptionOutlinedIcon fontSize="small" />;
-}
-
-function FileTree(props: { depth: number; parentPath: string; revision: number }) {
-  const { explorer } = useWorkspaceHost();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [entries, setEntries] = useState<FileExplorerEntry[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    void explorer.listDirectory(props.parentPath).then((next) => {
-      if (!cancelled) setEntries(next);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [explorer, props.parentPath, props.revision]);
-  return (
-    <List dense disablePadding>
-      {entries.map((entry) => {
-        const isOpen = expanded.has(entry.path);
-        const ExpandIcon = isOpen ? ExpandMoreIcon : ChevronRightIcon;
-        return (
-          <Box key={`${entry.endpointId}:${entry.path}`}>
-            <ListItemButton
-              sx={{ pl: 1 + props.depth * 1.5, "&:hover": { bgcolor: "action.hover" } }}
-              onClick={() => {
-                if (entry.kind === "directory") {
-                  setExpanded((current) => {
-                    const next = new Set(current);
-                    if (next.has(entry.path)) next.delete(entry.path);
-                    else next.add(entry.path);
-                    return next;
-                  });
-                  return;
-                }
-                void explorer.openFile(entry);
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 28 }}><EntryIcon entry={entry} open={isOpen} /></ListItemIcon>
-              {entry.kind === "directory" ? <ExpandIcon fontSize="small" sx={{ mr: 0.5 }} /> : null}
-              <ListItemText primary={entry.name} slotProps={{ primary: { noWrap: true, variant: "body2" } }} />
-            </ListItemButton>
-            {entry.kind === "directory" && isOpen ? <FileTree depth={props.depth + 1} parentPath={entry.path} revision={props.revision} /> : null}
-          </Box>
-        );
-      })}
-    </List>
-  );
-}
-
-/** Standalone labs and files rail. VS Code keeps its native explorer. */
+/** Standalone rail around the same explorer view VS Code shows in its sidebar. */
 export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSettings, tabs }: {
   colorScheme: "light" | "dark";
   onColorSchemeChange: (scheme: "light" | "dark") => void;
   onOpenSettings: () => void;
   tabs?: ReactNode;
 }) {
-  const { explorer } = useWorkspaceHost();
-  const revision = useExplorerRevision();
   const [view, setView] = useState<SidebarView>("labs");
   const [open, setOpen] = useState(false);
   const [preferences, setPreferences] = useState(readPreferences);
@@ -294,15 +181,12 @@ export function WorkspaceSidebar({ colorScheme, onColorSchemeChange, onOpenSetti
         }}>
           <Box sx={{ display: "flex", alignItems: "center", px: 1, minHeight: 36, borderBottom: `1px solid ${RAIL_BORDER}` }}>
             <Typography noWrap variant="subtitle2" sx={{ flex: 1, minWidth: 0 }}>{VIEWS.find((entry) => entry.id === view)?.label}</Typography>
-            {view === "labs" ? (
-              <Tooltip title="New Topology File">
-                <IconButton size="small" aria-label="New Topology File" onClick={explorer.createTopology}><NoteAddIcon fontSize="small" /></IconButton>
-              </Tooltip>
-            ) : null}
             <IconButton size="small" aria-label="Close explorer" onClick={closeExplorer}><CloseIcon fontSize="small" /></IconButton>
           </Box>
-          <Box sx={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-            {view === "labs" ? <LabsPanel revision={revision} /> : <FileTree depth={0} parentPath="" revision={revision} />}
+          <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <Suspense fallback={<Typography sx={{ p: 2 }} variant="body2" color="text.secondary">Loading explorer…</Typography>}>
+              <Explorer key={view} visibleSectionIds={SECTIONS[view]} />
+            </Suspense>
           </Box>
         </Box>
         <Box {...separatorProps} aria-label="Resize sidebar" aria-controls="workspace-explorer" sx={{

@@ -187,3 +187,8 @@ three application hosts consume the local UI workspace through the root lockfile
 UI changes belong in `packages/clab-ui`; app code supplies backend operations and
 capabilities. See [UI composition and ownership](packages/clab-ui/INTEGRATORS.md#one-ui-host-specific-composition).
 See [Where tests belong](#where-tests-belong) before adding a browser test.
+
+A new VS Code webview panel is declared once in
+`apps/vscode-containerlab/src/webviews/shared/webviewPanels.ts`, bundled by adding it to
+`iifeWebviewEntries` in `apps/vscode-containerlab/esbuild.config.js`, and started from an
+`entry.tsx` that calls `mountWebview`.

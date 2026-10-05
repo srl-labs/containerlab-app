@@ -17,15 +17,6 @@ class IdleWebSocket extends EventTarget {
   send = (): void => undefined;
 }
 
-const idleExplorer: WorkspaceHost["explorer"] = {
-  listTopologies: async () => [],
-  listDirectory: async () => [],
-  subscribe: () => () => {},
-  createTopology: () => {},
-  openTopology: () => {},
-  openFile: () => {}
-};
-
 const runtimeApi: WorkspaceHost["api"] = {
   listFileExplorerDirectory,
   writeFileExplorerFile,
@@ -78,13 +69,6 @@ const idleRuntimeApi: WorkspaceHost["api"] = {
   connectTerminalSessionWebSocket: () => new IdleWebSocket() as unknown as WebSocket
 };
 
-let explorer = idleExplorer;
-
-/** Replaces the idle explorer with host file and topology operations. */
-export function connectWorkspaceExplorer(next: WorkspaceHost["explorer"]): void {
-  explorer = next;
-}
-
 /** The adapter contains effects; clab-ui owns the views and their interaction state. */
 export const workspaceHost: WorkspaceHost = {
   get capabilities() { return getStandaloneBackend().capabilities; },
@@ -97,7 +81,6 @@ export const workspaceHost: WorkspaceHost = {
     subscribe: (listener) => useLabStore.subscribe(listener),
     updateInterfaceNetemState: (update) => useLabStore.getState().updateInterfaceNetemState(update)
   },
-  get explorer() { return explorer; },
   openTerminalWindow(pane) {
     if (!getStandaloneBackend().capabilities.lifecycle) return;
     const popup = window.open(buildDetachedTerminalUrl(pane), "_blank", "noopener,noreferrer");

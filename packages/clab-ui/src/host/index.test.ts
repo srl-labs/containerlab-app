@@ -184,3 +184,39 @@ test("API snapshots recover from a network change without replaying commands", a
   await assert.rejects(host.topology.requestSnapshot({ sessionId: "test" }), /Failed to fetch/);
   assert.equal(calls, 5);
 });
+
+test("createWindowClabUiHost serves injected editor data and live image updates", () => {
+  const targetWindow = new FakeWindow() as FakeWindow & { __INITIAL_DATA__?: unknown };
+  targetWindow.__INITIAL_DATA__ = {
+    dockerImages: ["alpine:latest"],
+    schemaData: {
+      kinds: ["linux"],
+      typesByKind: {},
+      srosComponentTypes: { sfm: [], cpm: [], card: [], mda: [], xiom: [], xiomMda: [] }
+    }
+  };
+
+  const { editorData } = createWindowClabUiHost({ targetWindow: targetWindow as unknown as Window });
+
+  assert.ok(editorData);
+  assert.deepEqual(editorData.getSchema()?.kinds, ["linux"]);
+  assert.deepEqual(editorData.getDockerImages(), ["alpine:latest"]);
+
+  const received: string[][] = [];
+  const unsubscribe = editorData.subscribeDockerImages((images) => received.push(images));
+  targetWindow.dispatch({ type: "docker-images-updated", dockerImages: ["srl:latest"] });
+  targetWindow.dispatch({ type: "docker-images-updated", dockerImages: "not-a-list" });
+  unsubscribe();
+  targetWindow.dispatch({ type: "docker-images-updated", dockerImages: ["ignored:latest"] });
+
+  assert.deepEqual(received, [["srl:latest"]]);
+  assert.deepEqual(editorData.getDockerImages(), ["ignored:latest"]);
+});
+
+test("createWindowClabUiHost reports images as not provided until the host sends them", () => {
+  const targetWindow = new FakeWindow();
+  const { editorData } = createWindowClabUiHost({ targetWindow: targetWindow as unknown as Window });
+
+  assert.equal(editorData?.getDockerImages(), undefined);
+  assert.equal(editorData?.getSchema(), undefined);
+});
