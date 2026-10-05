@@ -42,9 +42,12 @@ function dispatchDragEvent(page: Page, type: string, x: number, y: number): Prom
 }
 
 test.describe("Palette drag preview", () => {
-  test.beforeEach(async ({ topoViewerPage }) => {
+  test.beforeEach(async ({ page, topoViewerPage }) => {
     await topoViewerPage.gotoFile("simple.clab.yml");
     await topoViewerPage.waitForCanvasReady();
+    if (!(await page.getByTestId("panel-tab-nodes").isVisible())) {
+      await page.getByTestId("panel-toggle-btn").click();
+    }
     await topoViewerPage.setEditMode();
     await topoViewerPage.unlock();
   });

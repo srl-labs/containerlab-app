@@ -18,7 +18,7 @@ import {
   getExplorerCommandMetadata,
   invalidateExplorerContributionCache
 } from "./explorerSnapshotAdapter";
-import { createReactWebviewHtml } from "../shared/reactWebviewHtml";
+import { EXPLORER_PANEL, createPanelWebviewHtml } from "../shared/webviewPanels";
 
 const REFRESH_DEBOUNCE_MS = 120;
 const UI_STATE_KEY = "containerlabExplorer.uiState";
@@ -198,13 +198,7 @@ export class ContainerlabExplorerViewProvider
   }
 
   private getWebviewHtml(webview: vscode.Webview): string {
-    return createReactWebviewHtml({
-      webview,
-      extensionUri: this.context.extensionUri,
-      scriptFile: "containerlabExplorerView.js",
-      title: "Containerlab Explorer",
-      webviewKind: "containerlab-explorer"
-    });
+    return createPanelWebviewHtml(EXPLORER_PANEL, webview, this.context.extensionUri, undefined);
   }
 
   public dispose(): void {

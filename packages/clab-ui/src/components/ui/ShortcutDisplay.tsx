@@ -5,6 +5,8 @@
 import React from "react";
 import Box from "@mui/material/Box";
 
+import { floatingRadius } from "../../theme/surfaces";
+
 interface ShortcutDisplayItem {
   id: number;
   text: string;
@@ -12,21 +14,26 @@ interface ShortcutDisplayItem {
 
 interface ShortcutDisplayProps {
   shortcuts: ShortcutDisplayItem[];
+  side?: "left" | "right";
 }
 
-export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts }) => {
+export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts, side = "left" }) => {
   if (shortcuts.length === 0) return null;
+
+  const isLeft = side === "left";
 
   return (
     <Box
       className="shortcut-display"
       sx={{
-        position: "fixed",
+        position: "absolute",
         bottom: 16,
-        left: 16,
+        ...(isLeft
+          ? { left: "calc(var(--clab-ui-panel-left, 0px) + 16px)" }
+          : { right: "calc(var(--clab-ui-panel-right, 0px) + 16px)" }),
         display: "flex",
         flexDirection: "column-reverse",
-        alignItems: "flex-start",
+        alignItems: isLeft ? "flex-start" : "flex-end",
         gap: 0.5,
         zIndex: 100000,
         pointerEvents: "none"
@@ -39,7 +46,7 @@ export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts }) =
           sx={{
             px: 2,
             py: 0.75,
-            borderRadius: 2,
+            borderRadius: floatingRadius,
             boxShadow: 3,
             fontFamily: "sans-serif",
             fontSize: "0.875rem",

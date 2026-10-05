@@ -180,7 +180,7 @@ const SourceEditorTab: React.FC<{
   jsonSchema?: object;
   onChange: (next: string) => void;
 }> = ({ readOnly, error, language, value, jsonSchema, onChange }) => (
-  <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+  <Box sx={{ flex: 1, minHeight: 0, overflowY: "hidden", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
       <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
         {error}
@@ -691,7 +691,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   }, [annotationsDraft, sessionClient]);
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       <Box
         sx={{
           display: "flex",

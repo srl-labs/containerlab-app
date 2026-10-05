@@ -1,28 +1,7 @@
-/* global describe, it, after */
-import Module from "module";
-import path from "path";
-
+/* global describe, it */
 import { expect } from "chai";
 
-const originalResolve = (Module as any)._resolveFilename;
-(Module as any)._resolveFilename = function (
-  request: string,
-  parent: any,
-  isMain: boolean,
-  options: any
-) {
-  if (request === "vscode") {
-    return path.join(__dirname, "..", "..", "helpers", "vscode-stub.js");
-  }
-  return originalResolve.call(this, request, parent, isMain, options);
-};
-
 import { FilterUtils } from "../../../src/helpers/filterUtils";
-
-after(() => {
-  // Restore the original module resolver so subsequent tests use the
-  (Module as any)._resolveFilename = originalResolve;
-});
 
 describe("FilterUtils.createFilter - basic behavior", () => {
   it("returns always-true function for empty filter text", () => {
@@ -187,7 +166,7 @@ describe("FilterUtils.createFilter - advanced behavior", () => {
     expect(filter("pgw02")).to.be.false;
   });
 
-  it("handle complex regex with lookahead/lookbehind (if supported)", () => {
+  it("handles regex lookahead", () => {
     const filter = FilterUtils.createFilter(".*gw(?=\\d{2}).*");
 
     expect(filter("test-gw01-lab")).to.be.true;

@@ -53,6 +53,8 @@ import {
   useTopoViewerActions
 } from "../../stores";
 import { invertHexColor, resolveComputedColor } from "../../utils/color";
+import { isTopoNodeLike } from "../../utils/graphQueryUtils";
+import { getCombinedMatches } from "../panels/find-node/findNodeSearchUtils";
 import { ContextMenu } from "../context-menu/ContextMenu";
 
 import { AnnotationModeIndicator, HelperLines, LinkCreationIndicator } from "./CanvasOverlays";
@@ -385,7 +387,8 @@ function useRenderConfig(
   nodeCount: number,
   edgeCount: number,
   linkLabelMode: EdgeLabelMode,
-  disableZoomTracking = false
+  disableZoomTracking = false,
+  suppressRuntimeBadges = false
 ) {
   const isLargeGraph =
     nodeCount >= LARGE_GRAPH_NODE_THRESHOLD || edgeCount >= LARGE_GRAPH_EDGE_THRESHOLD;
@@ -413,9 +416,10 @@ function useRenderConfig(
 
   const nodeRenderConfig = useMemo(
     () => ({
-      suppressLabels: isLowDetail
+      suppressLabels: isLowDetail,
+      suppressRuntimeBadges
     }),
-    [isLowDetail]
+    [isLowDetail, suppressRuntimeBadges]
   );
 
   return { isLargeGraph, isLowDetail, edgeRenderConfig, nodeRenderConfig };
@@ -687,6 +691,28 @@ function getRenderableNodes(allNodes: Node[], nodesDraggable: boolean): Node[] {
     nextNodes.push({ ...node, draggable: false });
   }
   return changed ? nextNodes : allNodes;
+}
+
+const NODE_FILTER_DIM_CSS = "opacity:0.22";
+
+function buildNodeFilterCss(nodes: Node[], edges: Edge[], filter: string): string | null {
+  const term = filter.trim();
+  if (!term) return null;
+  const matched = new Set(
+    getCombinedMatches(nodes.filter(isTopoNodeLike), term).map((node) => node.id)
+  );
+  const dimNodes = nodes.filter((node) => !matched.has(node.id));
+  if (dimNodes.length === 0) return null;
+  const dimNodeIds = new Set(dimNodes.map((node) => node.id));
+  const parts = dimNodes.map(
+    (node) => `.react-flow__node[data-id="${CSS.escape(node.id)}"]{${NODE_FILTER_DIM_CSS}}`
+  );
+  for (const edge of edges) {
+    if (dimNodeIds.has(edge.source) && dimNodeIds.has(edge.target)) {
+      parts.push(`.react-flow__edge[data-id="${CSS.escape(edge.id)}"]{${NODE_FILTER_DIM_CSS}}`);
+    }
+  }
+  return parts.join("");
 }
 
 function getClosestReactFlowNodeId(target: EventTarget | null): string | null {
@@ -1118,6 +1144,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       isContextPanelOpen = false,
       layout = "preset",
       readOnlyViewer = false,
+      suppressRuntimeBadges = false,
       viewerOptions,
       isGeoLayout = false,
       gridLineWidth = DEFAULT_GRID_LINE_WIDTH,
@@ -1192,6 +1219,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         }),
         shallow
       );
+    const nodeFilter = useCanvasStore((s) => s.nodeFilter);
 
     // All nodes (topology + annotation) are now unified in propNodes
     const allNodes = useMemo<Node[]>(() => propNodes ?? [], [propNodes]);
@@ -1524,7 +1552,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       allNodes.length,
       allEdges.length,
       linkLabelMode,
-      isGeoLayout
+      isGeoLayout,
+      suppressRuntimeBadges
     );
     const isGeoInteracting = getGeoInteractingState(isGeoLayout, geoLayout.isInteracting);
     const effectiveEdgeRenderConfig = useMemo(
@@ -1780,6 +1809,10 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       () => getRenderableNodes(allNodes, nodesDraggable),
       [allNodes, nodesDraggable]
     );
+    const nodeFilterCss = useMemo(
+      () => buildNodeFilterCss(allNodes, allEdges, nodeFilter),
+      [allEdges, allNodes, nodeFilter]
+    );
     const effectiveGridColor = useMemo(() => {
       if (gridColor != null && gridColor.length > 0) return gridColor;
       const bg = gridBgColor ?? resolveComputedColor("--vscode-editor-background", "#1e1e1e");
@@ -1861,6 +1894,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         onContextMenu={handleCanvasContextMenu}
         onDoubleClickCapture={handleCanvasDoubleClickCapture}
       >
+        {nodeFilterCss ? <style data-testid="node-filter-style">{nodeFilterCss}</style> : null}
         {overlays.geoMapLayer}
         <ReactFlow
           nodes={renderNodes}

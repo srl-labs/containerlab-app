@@ -8,11 +8,16 @@ import "@fontsource/roboto/400.css";
 import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 
-import { vscodeTheme } from "./vscodeTheme";
+import { useAppearance } from "./useAppearance";
 
-export const MuiThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ThemeProvider theme={vscodeTheme}>
-    <CssBaseline enableColorScheme />
-    {children}
-  </ThemeProvider>
-);
+export const MuiThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const theme = useAppearance();
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline enableColorScheme />
+      {children}
+    </ThemeProvider>
+  );
+};

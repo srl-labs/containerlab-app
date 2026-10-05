@@ -8,7 +8,7 @@ All three apps share the same topology editor, so you can choose the environment
 [![Bluesky](https://img.shields.io/badge/follow-containerlab-1DA1F2?logo=bluesky&style=flat-square&color=00c9ff&labelColor=bec8d2)](https://bsky.app/profile/containerlab.dev)
 [![Discord](https://img.shields.io/discord/860500297297821756?style=flat-square&label=discord&logo=discord&color=00c9ff&labelColor=bec8d2)](https://discord.gg/vAyddtaEV9)
 
-![The shared Containerlab interface with the lab explorer and visual topology editor](apps/web/resources/screenshot.png)
+![The shared Containerlab interface with the lab explorer and visual topology editor](docs/images/gui/screenshot.png)
 
 ## Choose your app
 

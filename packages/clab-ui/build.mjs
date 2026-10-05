@@ -36,6 +36,20 @@ const copiedCssAssets = [
 ];
 
 const entryPoints = {
+  "settings/index": "src/settings/index.ts",
+  "settings/schema": "src/settings/schema.ts",
+  "workspace/yaml": "src/workspace/yaml.ts",
+  "workspace/bootstrap": "src/workspace/bootstrap.ts",
+  "workspace/index": "src/workspace/index.ts",
+  "workspace/editor": "src/workspace/editor.ts",
+  "workspace/settings": "src/workspace/settings.ts",
+  "workspace/login": "src/workspace/login.ts",
+  "workspace/dialogs": "src/workspace/dialogs.ts",
+  "workspace/terminal": "src/workspace/terminal.ts",
+  "workspace/empty-state": "src/workspace/empty-state.ts",
+  "workspace/state/index": "src/workspace/state/index.ts",
+  "workspace/types": "src/workspace/types.ts",
+
   index: "src/index.ts",
   "yaml/index": "src/yaml/index.ts",
   "host/index": "src/host/index.ts",

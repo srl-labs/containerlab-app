@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 
 import { extensionVersion } from "./globals";
 import { fallbackRepos, fetchPopularRepos, type PopularRepo } from "./helpers/popularLabs";
-import { getWelcomeWebviewHtml } from "./webviews/welcome/welcomeWebviewHtml";
+import { WELCOME_PANEL, createPanelWebviewHtml } from "./webviews/shared/webviewPanels";
 
 interface WebviewMessage {
   command: "createExample" | "dontShowAgain" | "getRepos";
@@ -139,7 +139,7 @@ topology:
       return "";
     }
 
-    return getWelcomeWebviewHtml(this.panel.webview, this.context.extensionUri, {
+    return createPanelWebviewHtml(WELCOME_PANEL, this.panel.webview, this.context.extensionUri, {
       extensionVersion: extensionVersion ?? "unknown"
     });
   }

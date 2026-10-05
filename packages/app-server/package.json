@@ -25,7 +25,8 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:"
+    "oxlint-tsgolint": "catalog:",
+    "@srl-labs/containerlab-test-kit": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

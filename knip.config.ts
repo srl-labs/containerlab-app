@@ -37,7 +37,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "scripts/fixtures/clab-ui-consumer.ts"
     ],
     // Python documentation tooling is installed through uv.lock.
-    ignoreBinaries: ["uv"]
+    ignoreBinaries: ["uv"],
+    // run-stress-api-bff.mjs starts the app server through node_modules/.bin/tsx.
+    ignoreDependencies: ["tsx"]
   },
   "apps/desktop": {
     entry: ["scripts/after-pack.cjs"],
@@ -47,6 +49,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   "apps/web": {
     entry: ["src/terminalMain.tsx", "src/wiresharkVncMain.tsx"]
   },
+  "apps/web-public": {},
   "apps/vscode-containerlab": {
     entry: ["src/webviews/*/entry.tsx", "test/**/*.test.ts"],
     ignoreDependencies: [
@@ -74,6 +77,8 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     entry: [
       ...uiSources.map(([, source]) => path.posix.relative(uiDirectory, source)),
       "src/viewer/entry.tsx",
+      "test/ui-harness/settings.tsx",
+      "test/ui-harness/explorer.tsx",
       "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",
       "docs/javascripts/mermaid-config.js"

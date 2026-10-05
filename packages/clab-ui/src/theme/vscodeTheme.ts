@@ -1,6 +1,7 @@
 // VS Code MUI theme config.
 // Palette values are CSS var() references — VS Code swaps them for light/dark.
 import { createTheme, type ThemeOptions } from "@mui/material/styles";
+import { floatingRadius } from "./surfaces";
 import { vscodePalette } from "./vscodePalette";
 export { vscodePalette } from "./vscodePalette";
 
@@ -63,18 +64,10 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       },
       [explorerScopedSelector(" .explorer-node-label")]: {
         fontSize: EXPLORER_FONT_SIZE,
-        fontWeight: 500,
-        lineHeight: 1.2
+        lineHeight: 1.25
       },
       [explorerScopedSelector(" .explorer-node-inline-icon")]: {
-        fontSize: "14px",
         flex: "0 0 auto"
-      },
-      [explorerScopedSelector(" .explorer-node-inline-icon-button")]: {
-        width: 18,
-        height: 18,
-        padding: 0,
-        color: "inherit"
       },
       [explorerScopedSelector(" .explorer-node-inline-icon-favorite")]: {
         color: "var(--vscode-charts-yellow, var(--vscode-editorWarning-foreground))"
@@ -83,11 +76,10 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         color: "var(--vscode-icon-foreground, var(--vscode-foreground))"
       },
       [explorerScopedSelector(" .explorer-section-title")]: {
-        fontSize: "10.5px",
-        fontWeight: 700,
+        fontSize: "12px",
+        fontWeight: 600,
         lineHeight: 1.2,
-        letterSpacing: "0.09em",
-        textTransform: "uppercase",
+        letterSpacing: "0.01em",
         color: "var(--vscode-descriptionForeground)"
       },
       "@keyframes shortcutFade": {
@@ -229,7 +221,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     }
   },
@@ -238,7 +231,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     }
   },
@@ -247,7 +241,8 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
       paper: {
         backgroundColor: vscodePalette.background.paper,
         color: vscodePalette.text.primary,
-        border: `1px solid ${vscodePalette.divider}`
+        border: `1px solid ${vscodePalette.divider}`,
+        borderRadius: floatingRadius
       }
     },
     defaultProps: {

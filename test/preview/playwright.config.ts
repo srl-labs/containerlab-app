@@ -1,14 +1,11 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineHostSuiteConfig } from "@srl-labs/containerlab-test-kit/playwright";
 
-export default defineConfig({
+export default defineHostSuiteConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
   outputDir: "../../test-results/preview",
-  use: {
-    ...devices["Desktop Chrome"],
-    baseURL: process.env.PREVIEW_TEST_URL ?? "http://127.0.0.1:8011/",
-    trace: "retain-on-failure"
-  },
+  reportDir: "../../playwright-report/preview",
+  baseURL: process.env.PREVIEW_TEST_URL ?? "http://127.0.0.1:8011/",
   webServer: process.env.PREVIEW_TEST_URL ? undefined : {
     command: "node test/docs/server.mjs",
     cwd: "../..",

@@ -8,13 +8,12 @@ import { createClabUiRuntime } from "../../src/host";
 import { applyThemeVars } from "../../src/theme";
 import "../../src/styles/global.css";
 
+import type { HarnessDevApi } from "./devApi";
 import { createFakeClabUiHost } from "./fakeHost";
 
 type HarnessWindow = Window & {
-  __DEV__?: Record<string, unknown>;
+  __DEV__?: HarnessDevApi;
   __INITIAL_DATA__?: Record<string, unknown>;
-  __SCHEMA_DATA__?: unknown;
-  __DOCKER_IMAGES__?: string[];
 };
 
 const harnessWindow = window as HarnessWindow;
@@ -53,8 +52,6 @@ harnessWindow.__DEV__ = {
     host.harness.writeAnnotationsFile(filename, content)
 };
 harnessWindow.__INITIAL_DATA__ = initialData;
-harnessWindow.__SCHEMA_DATA__ = defaultSchemaData;
-harnessWindow.__DOCKER_IMAGES__ = [];
 
 applyThemeVars(params.get("theme") === "light" ? "light" : "dark");
 

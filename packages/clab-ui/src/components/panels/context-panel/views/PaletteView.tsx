@@ -2,7 +2,6 @@
 import React, { useCallback, useMemo, useRef } from "react";
 
 import { PaletteSection } from "../../lab-drawer/PaletteSection";
-import { NodeTemplateModal } from "../../node-editor/NodeTemplateModal";
 import { usePanelTabVisibility } from "../../../../hooks/ui/usePanelTabVisibility";
 import type { NodeData, LinkData } from "../../../../hooks/ui";
 
@@ -172,7 +171,6 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
         showInfoTab={showInfoTab}
         infoTabTitle={infoTabTitle}
       />
-      <NodeTemplateModal />
     </>
   );
 };

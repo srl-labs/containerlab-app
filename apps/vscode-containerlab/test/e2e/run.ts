@@ -9,7 +9,7 @@ function writeSmokeTopology(workspacePath: string): string {
   fs.writeFileSync(
     topologyPath,
     [
-      "name: smoke",
+      "name: smoke-lab",
       "",
       "topology:",
       "  nodes:",

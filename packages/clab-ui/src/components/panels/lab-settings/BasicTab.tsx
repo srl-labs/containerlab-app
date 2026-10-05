@@ -1,8 +1,9 @@
 // Basic settings tab for lab settings.
 import React from "react";
-import Box from "@mui/material/Box";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
 
-import { InputField, SelectField, type SelectOption } from "../../ui/form";
+import { SettingsField } from "../../../settings/SettingsField";
 
 import type { BasicSettingsSetters, BasicSettingsState, PrefixType } from "./types";
 
@@ -12,43 +13,49 @@ interface BasicTabProps {
   isViewMode: boolean;
 }
 
-const PREFIX_TYPE_OPTIONS: SelectOption[] = [
-  { value: "default", label: "Default (clab)" },
-  { value: "custom", label: "Custom" },
-  { value: "no-prefix", label: "No prefix" }
-];
-
 export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode }) => (
-  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-    {/* Lab Name */}
-    <InputField
-      id="lab-basic-name"
-      label="Lab Name"
-      placeholder="Unique name for this topology"
-      value={basic.labName}
-      onChange={setBasic.setLabName}
-      disabled={isViewMode}
-    />
-
-    {/* Prefix */}
-    <SelectField
-      id="lab-basic-prefix-type"
-      label="Container Name Prefix"
-      value={basic.prefixType}
-      onChange={(v) => setBasic.setPrefixType(v as PrefixType)}
-      options={PREFIX_TYPE_OPTIONS}
-      disabled={isViewMode}
-    />
-
-    {basic.prefixType === "custom" && (
-      <InputField
-        id="lab-basic-custom-prefix"
-        label="Custom Prefix"
-        placeholder="Enter custom prefix"
-        value={basic.customPrefix}
-        onChange={setBasic.setCustomPrefix}
+  <>
+    <SettingsField title="Lab Name" description="Unique name for this topology.">
+      <TextField
+        slotProps={{ htmlInput: { "aria-label": "Lab Name" } }}
+        id="lab-basic-name"
+        size="small"
+        placeholder="Unique name for this topology"
+        value={basic.labName}
+        onChange={(event) => setBasic.setLabName(event.target.value)}
         disabled={isViewMode}
+        sx={{ minWidth: 220 }}
       />
-    )}
-  </Box>
+    </SettingsField>
+    <SettingsField title="Container Name Prefix" description="Prefix applied to deployed container names.">
+      <TextField
+        slotProps={{ select: { inputProps: { "aria-label": "Container Name Prefix" } } }}
+        id="lab-basic-prefix-type"
+        select
+        size="small"
+        value={basic.prefixType}
+        onChange={(event) => setBasic.setPrefixType(event.target.value as PrefixType)}
+        disabled={isViewMode}
+        sx={{ minWidth: 160 }}
+      >
+        <MenuItem value="default">Default (clab)</MenuItem>
+        <MenuItem value="custom">Custom</MenuItem>
+        <MenuItem value="no-prefix">No prefix</MenuItem>
+      </TextField>
+    </SettingsField>
+    {basic.prefixType === "custom" ? (
+      <SettingsField title="Custom Prefix" description="Used instead of the default clab prefix.">
+        <TextField
+          slotProps={{ htmlInput: { "aria-label": "Custom Prefix" } }}
+          id="lab-basic-custom-prefix"
+          size="small"
+          placeholder="Enter custom prefix"
+          value={basic.customPrefix}
+          onChange={(event) => setBasic.setCustomPrefix(event.target.value)}
+          disabled={isViewMode}
+          sx={{ minWidth: 160 }}
+        />
+      </SettingsField>
+    ) : null}
+  </>
 );

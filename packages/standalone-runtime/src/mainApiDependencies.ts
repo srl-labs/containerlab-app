@@ -1,16 +1,19 @@
 export {
+  getSessionHostnameOverride,
+  isFileLabTab,
+  loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
-  type TerminalPreferences
-} from "./runtimeTerminalSettings";
-export { createStandaloneExplorerBridge } from "./standaloneExplorer";
-export {
-  isFileLabTab,
+  readPersistedStandaloneTheme,
   resolveFileTab,
   resolveLabTab,
-  useLabTabsStore
-} from "./stores/labTabsStore";
-export { readPersistedStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
+  resolveStandaloneTheme,
+  runtimeUiActions,
+  useLabTabsStore,
+  useRuntimeUiStore,
+  type TerminalPreferences
+} from "@containerlab/clab-ui/workspace/state";
+export { createStandaloneExplorerBridge } from "./standaloneExplorer";
 export {
   buildPacketflixCapture,
   controlNodeLifecycle,
@@ -31,5 +34,3 @@ export {
   setDefaultUiCustomNode,
   uploadUiIcon
 } from "./runtimeApi";
-export { runtimeUiActions, useRuntimeUiStore } from "./stores/runtimeUiStore";
-export { getSessionHostnameOverride, loadCapturePreferences } from "./runtimeCaptureSettings";

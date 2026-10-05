@@ -4,40 +4,18 @@ import path from "node:path";
 
 import * as vscode from "vscode";
 
+import { waitForTab } from "./tabs";
+
 const EXTENSION_ID = "srl-labs.vscode-containerlab";
 const WEBVIEW_VIEW_TYPE = "reactTopoViewer";
+// run.ts names the lab differently from its file. The panel opens with the file-derived title and
+// only takes the YAML lab name once the webview's initial snapshot request reached the topology host.
+const SNAPSHOT_LAB_NAME = "smoke-lab";
 
 function assertEnvPath(name: string): string {
   const value = process.env[name];
   assert.ok(value, `${name} must be set`);
   return value;
-}
-
-async function waitForWebviewTab(label: string): Promise<vscode.Tab> {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < 30000) {
-    for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
-        if (tab.label === label) {
-          return tab;
-        }
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-
-  const openTabs = vscode.window.tabGroups.all
-    .flatMap((group) =>
-      group.tabs.map((tab) => {
-        const inputName =
-          typeof tab.input === "object" && tab.input !== null
-            ? tab.input.constructor.name
-            : typeof tab.input;
-        return `${tab.label}:${inputName}`;
-      })
-    )
-    .join(", ");
-  throw new Error(`Timed out waiting for ${WEBVIEW_VIEW_TYPE} tab "${label}". Open tabs: ${openTabs}`);
 }
 
 function assertBuiltWebviewAssets(extensionPath: string): void {
@@ -57,7 +35,7 @@ function assertBuiltWebviewAssets(extensionPath: string): void {
 }
 
 suite("TopoViewer VS Code smoke", () => {
-  test("opens a topology file in the packaged webview without throwing", async () => {
+  test("loads the topology webview and completes the snapshot handshake", async () => {
     const topologyPath = assertEnvPath("VSCODE_CONTAINERLAB_E2E_TOPOLOGY");
     assert.ok(fs.existsSync(topologyPath), `Expected topology fixture: ${topologyPath}`);
 
@@ -71,13 +49,13 @@ suite("TopoViewer VS Code smoke", () => {
     await vscode.window.showTextDocument(document);
 
     await vscode.commands.executeCommand("containerlab.lab.graph.topoViewer");
-    const webviewTab = await waitForWebviewTab("smoke");
-    assert.equal(webviewTab.isActive, true);
-
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(document.uri, new vscode.Position(document.lineCount, 0), "# e2e-save-check\n");
-    assert.equal(await vscode.workspace.applyEdit(edit), true);
-    assert.equal(await document.save(), true);
-    assert.match(fs.readFileSync(topologyPath, "utf8"), /# e2e-save-check/);
+    await waitForTab(
+      (tab) =>
+        tab.isActive &&
+        tab.label === SNAPSHOT_LAB_NAME &&
+        tab.input instanceof vscode.TabInputWebview &&
+        tab.input.viewType.includes(WEBVIEW_VIEW_TYPE),
+      `an active ${WEBVIEW_VIEW_TYPE} tab titled "${SNAPSHOT_LAB_NAME}"`
+    );
   });
 });

@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 import type { CustomIconInfo } from "../../../src/core/types/icons";
 import { getCustomIconUrl } from "../../../src/utils/iconUtils";
 
+import type { BrowserDevApi } from "../devApi";
 import { test, expect } from "../fixtures/topoviewer";
 
 const SIMPLE_FILE = "simple.clab.yml";
@@ -30,9 +31,9 @@ const CUSTOM_ICONS: CustomIconInfo[] = [
 
 async function loadCustomIcons(page: Page): Promise<void> {
   await page.evaluate((icons) => {
-    (
-      window as Window & { __DEV__: { setCustomIcons: (value: CustomIconInfo[]) => void } }
-    ).__DEV__.setCustomIcons(icons);
+    const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+    if (!dev) throw new Error("__DEV__ API not available");
+    dev.setCustomIcons(icons);
   }, CUSTOM_ICONS);
 }
 

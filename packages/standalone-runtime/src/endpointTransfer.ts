@@ -13,7 +13,6 @@ export type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contrac
 
 export const ENDPOINT_EXPORT_KIND = "containerlab-app.endpoints";
 export const ENDPOINT_EXPORT_VERSION = 1;
-export const ENDPOINT_EXPORT_FILENAME = "containerlab-app-endpoints.json";
 
 const LEGACY_ENDPOINT_EXPORT_KIND = "containerlab-web.endpoints";
 

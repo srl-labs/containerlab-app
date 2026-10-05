@@ -303,7 +303,12 @@ test.describe("GeoMap Layout", () => {
       })
       .toBe(true);
 
-    await page.click(GEO_MAP_CANVAS_SELECTOR, { position: { x: 10, y: 10 } });
+    // The floating panel covers the top-left corner; use empty map below the graph.
+    const map = page.locator(GEO_MAP_CANVAS_SELECTOR);
+    const mapBox = await map.boundingBox();
+    expect(mapBox).not.toBeNull();
+    const backgroundPosition = { x: mapBox!.width / 2, y: mapBox!.height - 10 };
+    await map.click({ position: backgroundPosition });
     await expect
       .poll(async () => topoViewerPage.getSelectedNodeIds(), {
         timeout: 3000,
@@ -322,7 +327,7 @@ test.describe("GeoMap Layout", () => {
       })
       .toBe(true);
 
-    await page.click(GEO_MAP_CANVAS_SELECTOR, { position: { x: 20, y: 20 } });
+    await map.click({ position: backgroundPosition });
     await expect
       .poll(async () => topoViewerPage.getSelectedEdgeIds(), {
         timeout: 3000,

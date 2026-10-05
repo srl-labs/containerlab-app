@@ -10,7 +10,7 @@ import {
   type KindImageReference
 } from "@containerlab/clab-ui/image-manager/catalog";
 
-import { getImageManagerWebviewHtml } from "../webviews/imageManager/imageManagerWebviewHtml";
+import { IMAGE_MANAGER_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import { pullDockerImage } from "../utils/docker/docker";
 import { listDockerImageSummaries, removeDockerImage } from "../utils/docker/images";
 import { getCustomNodesFromConfig } from "../reactTopoViewer/extension/services/schema";
@@ -213,7 +213,12 @@ export async function manageImages(context: vscode.ExtensionContext): Promise<vo
     currentPanel = undefined;
   });
 
-  panel.webview.html = getImageManagerWebviewHtml(panel.webview, context.extensionUri, {});
+  panel.webview.html = createPanelWebviewHtml(
+    IMAGE_MANAGER_PANEL,
+    panel.webview,
+    context.extensionUri,
+    {}
+  );
   panel.webview.onDidReceiveMessage((message: unknown) => {
     void respondToImageManagerRequest(panel, message);
   });

@@ -7,6 +7,11 @@ import { expect, test, type APIRequestContext, type Browser, type Page } from "@
 // Opt in against a disposable API server with CLAB_SHARED_LABS_ROOT configured.
 const envFile = process.env.CLAB_E2E_TEST_ENV;
 const env = envFile ? parseEnv(readFileSync(envFile, "utf8")) : {};
+function requiredEnv(name: string): string {
+  const value = env[name];
+  if (!value) throw new Error(`${name} is missing from ${envFile}`);
+  return value;
+}
 // Authentication requests contain test credentials; do not record them.
 test.use({ trace: "off", video: "off", viewport: { width: 1600, height: 1000 } });
 test.skip(!envFile, "Set CLAB_E2E_TEST_ENV to the API server's tests_go/.env");
@@ -45,7 +50,7 @@ async function connect(browser: Browser, username: string, password: string): Pr
     if (reason !== "net::ERR_ABORTED") console.warn("Browser request failed:", new URL(request.url()).pathname, reason);
   });
   await page.goto("https://localhost:5173/");
-  await page.getByLabel("API Endpoint", { exact: true }).fill(env.API_URL);
+  await page.getByLabel("API Endpoint", { exact: true }).fill(requiredEnv("API_URL"));
   await page.getByLabel("Label", { exact: true }).fill("Lab server");
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Password", { exact: true }).fill(password);
@@ -54,10 +59,8 @@ async function connect(browser: Browser, username: string, password: string): Pr
   const response = await added;
   expect(response.status()).toBe(200);
   const endpoint = await response.json() as { id: string };
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  await page.getByRole("button", { name: "Expand Lab server", exact: true }).first().click();
-  await page.getByRole("button", { name: "Expand Lab server", exact: true }).first().click();
-  await expect(page.getByText("Shared labs", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("standalone-settings-button")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Labs", exact: true }).click();
   return { page, endpointId: endpoint.id };
 }
 
@@ -88,17 +91,17 @@ test("two users share the complete lab lifecycle and keep private files isolated
   let browser: Browser | undefined;
   const clients: APIRequestContext[] = [];
   const login = async (username: string, secret: string) => {
-    const client = await playwright.request.newContext({ baseURL: env.API_URL, ignoreHTTPSErrors: true });
+    const client = await playwright.request.newContext({ baseURL: requiredEnv("API_URL"), ignoreHTTPSErrors: true });
     clients.push(client);
     const response = await client.post("/login", { data: { username, password: secret, sessionDuration: "1h" } });
     expect(response.status()).toBe(200);
     const body = await response.json() as { token: string };
-    const authenticated = await playwright.request.newContext({ baseURL: env.API_URL, ignoreHTTPSErrors: true, extraHTTPHeaders: { Authorization: `Bearer ${body.token}` } });
+    const authenticated = await playwright.request.newContext({ baseURL: requiredEnv("API_URL"), ignoreHTTPSErrors: true, extraHTTPHeaders: { Authorization: `Bearer ${body.token}` } });
     clients.push(authenticated);
     return authenticated;
   };
-  const admin = await login(env.SUPERUSER_USER, env.SUPERUSER_PASS);
-  const ownerApi = await login(env.APIUSER_USER, env.APIUSER_PASS);
+  const admin = await login(requiredEnv("SUPERUSER_USER"), requiredEnv("SUPERUSER_PASS"));
+  const ownerApi = await login(requiredEnv("APIUSER_USER"), requiredEnv("APIUSER_PASS"));
   let collaboratorApi: APIRequestContext | undefined;
   let userCreated = false;
   const topology = [
@@ -129,7 +132,7 @@ test("two users share the complete lab lifecycle and keep private files isolated
     // settle before loading Vite's modules; runtime actions are tested live below.
     await setTimeout(5_000);
     browser = await playwright.chromium.launch();
-    const owner = await connect(browser, env.APIUSER_USER, env.APIUSER_PASS);
+    const owner = await connect(browser, requiredEnv("APIUSER_USER"), requiredEnv("APIUSER_PASS"));
     sessions.push(owner);
     const colleague = await connect(browser, collaborator, password);
     sessions.push(colleague);
@@ -141,20 +144,13 @@ test("two users share the complete lab lifecycle and keep private files isolated
     expect((await topologyFiles(owner)).some((file) => file.path === privatePath)).toBe(false);
 
     const { page } = colleague;
-    for (const label of ["Running Labs", "Undeployed Labs"]) {
-      const expand = page.getByRole("button", { name: `Expand ${label}`, exact: true });
-      if (await expand.count()) await expand.click();
-    }
-    await page.getByRole("button", { name: "Expand Shared labs", exact: true }).click();
-    const labFolders = page.getByRole("button", { name: `Expand ${lab}`, exact: true });
-    await expect(labFolders).toHaveCount(2);
-    await labFolders.first().click();
-    await expect(page.getByText(`${lab} (${env.APIUSER_USER})`, { exact: true })).toBeVisible({ timeout: 45_000 });
-    const runningRow = page.locator('[data-explorer-node-row="true"]').filter({ hasText: `${lab} (${env.APIUSER_USER})` }).first();
-    await expect(runningRow.getByLabel("Shared lab", { exact: true })).toBeVisible();
-    await expect(page.getByText(`${lab}.clab.yml`, { exact: true }).first()).toBeVisible();
+    const sidebar = page.getByTestId("workspace-sidebar");
+    const sharedSource = sidebar.getByText(yamlPath, { exact: true });
+    await expect(sharedSource).toBeVisible({ timeout: 45_000 });
+    await expect(sidebar.getByText(privatePath, { exact: true })).toBeVisible();
     const sessionRequest = page.waitForRequest((request) => request.url().endsWith("/api/topology/sessions") && request.method() === "POST");
-    await runningRow.getByText(`${lab} (${env.APIUSER_USER})`, { exact: true }).click();
+    await sharedSource.click();
+    await page.getByRole("button", { name: "Close explorer", exact: true }).click();
     const opened = (await sessionRequest).postDataJSON() as { mode: string; sourcePreference: string; topologyRef: TopologyRef };
     expect(opened.mode).toBe("edit");
     expect(opened.sourcePreference).toBe("api-file");
@@ -199,19 +195,10 @@ test("two users share the complete lab lifecycle and keep private files isolated
     expect((await privateRead.json() as { content: string }).content).toBe(topology);
 
     const newPath = `${sharedDir}/draft.clab.yml`;
-    await page.locator('[data-explorer-node-row="true"]').filter({ has: page.getByText(lab, { exact: true }) }).first().click({ button: "right" });
-    await page.getByTestId("context-menu").last().getByText("New Topology File", { exact: true }).click();
-    const nestedDialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
-    await expect(nestedDialog.getByRole("button", { name: "Shared", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(nestedDialog.getByLabel("Topology file name", { exact: true })).toHaveValue(`${lab}/new-lab.clab.yml`);
-    await nestedDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await page.getByText("Shared labs", { exact: true }).click({ button: "right" });
-    const menu = page.getByTestId("context-menu").last();
-    await expect(menu.getByText("Delete", { exact: true })).toHaveCount(0);
-    await expect(menu.getByText("Rename", { exact: true })).toHaveCount(0);
-    await menu.getByText("New Topology File", { exact: true }).click();
+    await page.getByRole("button", { name: "Labs", exact: true }).click();
+    await page.getByRole("button", { name: "New Topology File", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
-    await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await dialog.getByRole("button", { name: "Shared", exact: true }).click();
     await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
     await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft.clab.yml`);
     await expect(dialog).toContainText("Everyone signed in to this API server can edit, deploy, and destroy this lab.");
@@ -263,15 +250,15 @@ test("two users share the complete lab lifecycle and keep private files isolated
     const inspected = await collaboratorApi.get(`/api/v1/labs/${lab}`);
     const containers = await inspected.json() as Array<{ owner: string }>;
     expect(containers).toHaveLength(3);
-    expect(containers.every((container) => container.owner === env.APIUSER_USER)).toBe(true);
+    expect(containers.every((container) => container.owner === requiredEnv("APIUSER_USER"))).toBe(true);
     await appPost(colleague, "/api/lab/destroy", { topologyRef: colleagueRef, cleanup: true });
-    await expect(page.getByText(`${lab} (${env.APIUSER_USER})`, { exact: true })).toHaveCount(0, { timeout: 30_000 });
+    await expect.poll(async () => (await appPost<{ running: boolean }>(colleague, "/api/lab/status", { topologyRef: colleagueRef })).running).toBe(false);
     expect((await ownerApi.get(`/api/v1/labs/workspace/file?path=${encodeURIComponent(yamlPath)}`)).status()).toBe(200);
-    await expect(page.getByLabel("Shared lab", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Reconnect", exact: true })).toHaveCount(0);
-    const sharedSourceRow = page.locator('[data-explorer-node-row="true"]')
-      .filter({ has: page.getByLabel("Shared lab", { exact: true }) }).filter({ hasText: `${lab}.clab.yml` }).first();
-    await sharedSourceRow.getByText(`${lab}.clab.yml`, { exact: true }).click();
+    const labsButton = page.getByRole("button", { name: "Labs", exact: true });
+    if (await labsButton.getAttribute("aria-expanded") !== "true") await labsButton.click();
+    await expect(sharedSource).toBeVisible({ timeout: 15_000 });
+    await sharedSource.click();
+    await page.getByRole("button", { name: "Close explorer", exact: true }).click();
     await expect(page.locator('.react-flow__node[data-id="spine"]')).toBeVisible();
     await page.mouse.move(950, 900);
     await page.screenshot({ path: testInfo.outputPath("shared-undeployed-lab.png"), fullPage: true });

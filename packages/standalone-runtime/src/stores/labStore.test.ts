@@ -566,7 +566,7 @@ test("processEvent marks die events as stopped until a removal event arrives", (
   assert.equal(useLabStore.getState().labs.size, 0);
 });
 
-test("removeLabByTopology removes endpoint-scoped lab state", () => {
+test("removeLabByTopology removes endpoint-scoped lab state so later events start from fresh records", () => {
   const store = useLabStore.getState();
 
   store.processEvent(ENDPOINT_ID, {
@@ -602,7 +602,6 @@ test("removeLabByTopology removes endpoint-scoped lab state", () => {
 
   const container = firstLab()?.containers.get("clab-demo-srl1");
   assert.equal(container?.state, "up");
-  assert.notEqual(container?.state, "exited");
 });
 
 test("replaceLabSnapshot refreshes state and drops stale containers", () => {

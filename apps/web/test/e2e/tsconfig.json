@@ -1,10 +1,4 @@
 {
-  "extends": "../../tsconfig.json",
-  "compilerOptions": {
-    "rootDir": "../..",
-    "outDir": "../../out/test/e2e",
-    "types": ["node"]
-  },
-  "include": ["**/*.ts"],
-  "exclude": ["reports/**"]
+  "extends": "../../../../tsconfig.base.json",
+  "include": ["**/*.ts"]
 }

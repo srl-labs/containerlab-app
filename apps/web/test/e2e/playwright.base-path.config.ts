@@ -1,10 +1,11 @@
-import { defineConfig } from "@playwright/test";
+import { defineHostSuiteConfig } from "@srl-labs/containerlab-test-kit/playwright";
 
-export default defineConfig({
+// Each spec starts its own production and development servers under a base path.
+export default defineHostSuiteConfig({
   testDir: "./base-path",
-  workers: 1,
+  reportDir: "../../playwright-report/base-path",
+  ciWorkers: 1,
+  localWorkers: 1,
   timeout: 90_000,
-  expect: { timeout: 30_000 },
-  reporter: "list",
-  use: { browserName: "chromium", actionTimeout: 15_000, navigationTimeout: 30_000, trace: "retain-on-failure" }
+  expectTimeout: 30_000
 });

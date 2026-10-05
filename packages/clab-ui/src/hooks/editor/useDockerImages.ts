@@ -1,18 +1,12 @@
 /**
  * useDockerImages - Hook to access docker images for image/version dropdowns
  *
- * Docker images are loaded by the extension and passed via window.__DOCKER_IMAGES__
- * Updates are received via the 'docker-images-updated' custom event
+ * Docker images come from the host editor data, which also announces updates.
  */
 import { useState, useEffect, useMemo, useCallback } from "react";
 
+import { useClabUiHost } from "../../host";
 import { log } from "../../utils/logger";
-
-declare global {
-  interface Window {
-    __DOCKER_IMAGES__?: string[];
-  }
-}
 
 interface ImageVersionMap {
   baseImages: string[];
@@ -119,20 +113,17 @@ function joinImageVersion(base: string, version: string): string {
  * Hook to access docker images with base/version parsing
  */
 export function useDockerImages(): UseDockerImagesResult {
-  const [dockerImages, setDockerImages] = useState<string[]>(() => window.__DOCKER_IMAGES__ ?? []);
+  const { editorData } = useClabUiHost();
+  const [provided, setProvided] = useState<string[] | undefined>(() => editorData?.getDockerImages());
 
   useEffect(() => {
-    const handleUpdate: EventListener = (event) => {
-      if (!(event instanceof CustomEvent) || !Array.isArray(event.detail)) {
-        return;
-      }
-      const images = event.detail.filter((item): item is string => typeof item === "string");
+    setProvided(editorData?.getDockerImages());
+    return editorData?.subscribeDockerImages((images) => {
       log.info(`[useDockerImages] Received update with ${images.length} images`);
-      setDockerImages(images);
-    };
-    window.addEventListener("docker-images-updated", handleUpdate);
-    return () => window.removeEventListener("docker-images-updated", handleUpdate);
-  }, []);
+      setProvided(images);
+    });
+  }, [editorData]);
+  const dockerImages = useMemo(() => provided ?? [], [provided]);
 
   const { baseImages, versionsByImage } = useMemo(
     () => parseDockerImages(dockerImages),
@@ -157,7 +148,7 @@ export function useDockerImages(): UseDockerImagesResult {
     getVersionsForImage,
     parseImageString,
     combineImageVersion,
-    isLoaded: dockerImages.length > 0 || typeof window.__DOCKER_IMAGES__ !== "undefined",
+    isLoaded: provided !== undefined,
     hasImages: baseImages.length > 0
   };
 }

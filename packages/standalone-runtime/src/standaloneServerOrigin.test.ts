@@ -19,22 +19,9 @@ test("resolveStandaloneServerOrigin routes Vite dev traffic to standalone backen
     resolveStandaloneServerOrigin(
       { origin: "https://localhost:5174" },
       "https://localhost:3000",
-      true,
-      "standalone"
+      true
     ),
     "https://localhost:3000"
-  );
-});
-
-test("resolveStandaloneServerOrigin keeps Pages mode on the current origin", () => {
-  assert.equal(
-    resolveStandaloneServerOrigin(
-      { origin: "https://localhost:5174" },
-      "https://localhost:3000",
-      true,
-      "pages"
-    ),
-    "https://localhost:5174"
   );
 });
 
@@ -65,20 +52,11 @@ test("app base resolution handles directories and HTML entrypoints", () => {
 
 test("standalone requests retain the base path and target the configured server", () => {
   assert.equal(
-    standaloneServerUrl("/api/config", "https://backend.test", "/tools/clab/", "standalone"),
+    standaloneServerUrl("/api/config", "https://backend.test", "/tools/clab/"),
     "https://backend.test/tools/clab/api/config"
   );
   assert.equal(
-    standaloneServerUrl("/auth/endpoints/saved/reconnect", "https://backend.test", "/", "standalone"),
+    standaloneServerUrl("/auth/endpoints/saved/reconnect", "https://backend.test", "/"),
     "https://backend.test/auth/endpoints/saved/reconnect"
   );
-});
-
-test("Pages keeps API routes at the root independently of the site path", () => {
-  for (const path of ["/files", "/api/topology/sessions", "/auth/me", "/api/events"]) {
-    assert.equal(
-      standaloneServerUrl(path, "https://pages.test", "/containerlab-app/", "pages"),
-      `https://pages.test${path}`
-    );
-  }
 });

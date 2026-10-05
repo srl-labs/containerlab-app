@@ -4,6 +4,7 @@ import { test, expect } from "../fixtures/topoviewer";
 const TOPOLOGY_FILE = "simple.clab.yml";
 
 async function openYamlEditor(page: Page): Promise<void> {
+  await page.getByTestId("navbar-split-view").click();
   await page.locator('[data-testid="panel-tab-yaml"]').click();
   await expect(page.locator(".monaco-editor")).toBeVisible({ timeout: 15000 });
   await page.waitForFunction(() => {
@@ -193,7 +194,6 @@ test.describe("Monaco YAML source editor", () => {
     await topoViewerPage.setEditMode();
     await topoViewerPage.unlock();
     await openYamlEditor(page);
-    await expect(page.getByTestId("source-editor-suggestions-toggle")).toHaveCount(0);
 
     await setEditorValue(page, "topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n", 4, 26);
     await selectEditorRange(page, {

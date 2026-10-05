@@ -11,12 +11,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable
 COPY scripts/check-package-manager.mjs scripts/check-package-manager.mjs
 COPY apps/web/package.json apps/web/package.json
+COPY apps/web-public/package.json apps/web-public/package.json
 COPY apps/desktop/package.json apps/desktop/package.json
 COPY apps/vscode-containerlab/package.json apps/vscode-containerlab/package.json
 COPY packages/app-contract/package.json packages/app-contract/package.json
 COPY packages/app-server/package.json packages/app-server/package.json
 COPY packages/clab-ui/package.json packages/clab-ui/package.json
 COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
+COPY packages/test-kit/package.json packages/test-kit/package.json
 
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile --store-dir=/pnpm/store
 

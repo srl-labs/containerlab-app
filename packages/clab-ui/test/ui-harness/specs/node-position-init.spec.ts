@@ -82,7 +82,7 @@ function detectDrift(
     const atT2 = positionsT2[nodeId];
     const inReact = reactPositions[nodeId];
 
-    if (atT0 === undefined || atT2 === undefined) continue;
+    if (expected === undefined || atT0 === undefined || atT2 === undefined) continue;
 
     // Check if positions changed between T0 and T2
     const deltaT0T2 = Math.abs(atT0.x - atT2.x) + Math.abs(atT0.y - atT2.y);

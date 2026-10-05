@@ -4,12 +4,16 @@ const fs = require("fs");
 const { execSync } = require("child_process");
 
 const reactTopoViewerEntry = path.join(__dirname, "src/webviews/reactTopoViewer/entry.tsx");
-const explorerWebviewEntry = path.join(__dirname, "src/webviews/explorer/entry.tsx");
-const inspectWebviewEntry = path.join(__dirname, "src/webviews/inspect/entry.tsx");
-const imageManagerWebviewEntry = path.join(__dirname, "src/webviews/imageManager/entry.tsx");
-const welcomeWebviewEntry = path.join(__dirname, "src/webviews/welcome/entry.tsx");
-const nodeImpairmentsWebviewEntry = path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx");
-const wiresharkVncWebviewEntry = path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx");
+// Single-file webviews; each key becomes dist/<key>.js.
+const iifeWebviewEntries = {
+  containerlabExplorerView: path.join(__dirname, "src/webviews/explorer/entry.tsx"),
+  welcomePageWebview: path.join(__dirname, "src/webviews/welcome/entry.tsx"),
+  settingsWebview: path.join(__dirname, "src/webviews/settings/entry.tsx"),
+  inspectWebview: path.join(__dirname, "src/webviews/inspect/entry.tsx"),
+  imageManagerWebview: path.join(__dirname, "src/webviews/imageManager/entry.tsx"),
+  nodeImpairmentsWebview: path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx"),
+  wiresharkVncWebview: path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx")
+};
 const clabUiGlobalCss = require.resolve("@containerlab/clab-ui/styles/global.css");
 
 function findPackageRootFromEntry(entryPath) {
@@ -216,6 +220,21 @@ async function build() {
     logLevel: "info"
   };
 
+  const browserTarget = ["es2020", "chrome90", "firefox90", "safari14.1"];
+  const iifeWebviewOptions = {
+    ...commonOptions,
+    platform: "browser",
+    format: "iife",
+    target: browserTarget,
+    outdir: "dist",
+    plugins: [ignoreCssPlugin, reactSingletonAliasPlugin],
+    jsx: "automatic",
+    loader: browserAssetLoaders,
+    define: {
+      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
+    }
+  };
+
   // Build extension (Node.js)
   const extensionBuild = esbuild.build({
     ...commonOptions,
@@ -236,7 +255,7 @@ async function build() {
     platform: "browser",
     format: "esm",
     splitting: true,
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
+    target: browserTarget,
     outdir: "dist",
     chunkNames: "topoviewer-chunks/[name]-[hash]",
     plugins: [
@@ -250,112 +269,9 @@ async function build() {
     }
   });
 
-  const explorerWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [explorerWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/containerlabExplorerView.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
-  });
-
-  const welcomeWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [welcomeWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/welcomePageWebview.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
-  });
-
-  const inspectWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [inspectWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/inspectWebview.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
-  });
-
-  const imageManagerWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [imageManagerWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/imageManagerWebview.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
-  });
-
-  const nodeImpairmentsWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [nodeImpairmentsWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/nodeImpairmentsWebview.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
-  });
-
-  const wiresharkVncWebviewBuild = esbuild.build({
-    ...commonOptions,
-    entryPoints: [wiresharkVncWebviewEntry],
-    platform: "browser",
-    format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-    outfile: "dist/wiresharkVncWebview.js",
-    plugins: [
-      ignoreCssPlugin,
-      reactSingletonAliasPlugin
-    ],
-    jsx: "automatic",
-    loader: browserAssetLoaders,
-    define: {
-      "process.env.NODE_ENV": isDev ? '"development"' : '"production"'
-    }
+  const iifeWebviewBuild = esbuild.build({
+    ...iifeWebviewOptions,
+    entryPoints: iifeWebviewEntries
   });
 
   // Build Monaco workers for webview (separate files for CSP-friendly worker-src)
@@ -364,7 +280,7 @@ async function build() {
     entryPoints: monacoWorkerEntries,
     platform: "browser",
     format: "iife",
-    target: ["es2020", "chrome90", "firefox90", "safari14.1"],
+    target: browserTarget,
     outdir: "dist",
     plugins: [ignoreCssPlugin]
   });
@@ -373,12 +289,7 @@ async function build() {
   await Promise.all([
     extensionBuild,
     webviewBuild,
-    explorerWebviewBuild,
-    welcomeWebviewBuild,
-    inspectWebviewBuild,
-    imageManagerWebviewBuild,
-    nodeImpairmentsWebviewBuild,
-    wiresharkVncWebviewBuild,
+    iifeWebviewBuild,
     monacoWorkersBuild,
     copyFonts(),
     copyMapLibreWorker(),
@@ -408,7 +319,7 @@ async function build() {
       platform: "browser",
       format: "esm",
       splitting: true,
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
+      target: browserTarget,
       outdir: "dist",
       chunkNames: "topoviewer-chunks/[name]-[hash]",
       plugins: [
@@ -419,94 +330,9 @@ async function build() {
       loader: browserAssetLoaders
     });
 
-    const explorerWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [explorerWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/containerlabExplorerView.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
-    });
-
-    const welcomeWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [welcomeWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/welcomePageWebview.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
-    });
-
-    const inspectWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [inspectWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/inspectWebview.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
-    });
-
-    const imageManagerWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [imageManagerWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/imageManagerWebview.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
-    });
-
-    const nodeImpairmentsWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [nodeImpairmentsWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/nodeImpairmentsWebview.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
-    });
-
-    const wiresharkVncWebCtx = await esbuild.context({
-      ...commonOptions,
-      entryPoints: [wiresharkVncWebviewEntry],
-      platform: "browser",
-      format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
-      outfile: "dist/wiresharkVncWebview.js",
-      plugins: [
-        ignoreCssPlugin,
-        reactSingletonAliasPlugin
-      ],
-      jsx: "automatic",
-      loader: browserAssetLoaders
+    const iifeWebCtx = await esbuild.context({
+      ...iifeWebviewOptions,
+      entryPoints: iifeWebviewEntries
     });
 
     const monacoWorkersCtx = await esbuild.context({
@@ -514,7 +340,7 @@ async function build() {
       entryPoints: monacoWorkerEntries,
       platform: "browser",
       format: "iife",
-      target: ["es2020", "chrome90", "firefox90", "safari14.1"],
+      target: browserTarget,
       outdir: "dist",
       plugins: [ignoreCssPlugin]
     });
@@ -522,12 +348,7 @@ async function build() {
     await Promise.all([
       extCtx.watch(),
       webCtx.watch(),
-      explorerWebCtx.watch(),
-      welcomeWebCtx.watch(),
-      inspectWebCtx.watch(),
-      imageManagerWebCtx.watch(),
-      nodeImpairmentsWebCtx.watch(),
-      wiresharkVncWebCtx.watch(),
+      iifeWebCtx.watch(),
       monacoWorkersCtx.watch()
     ]);
 

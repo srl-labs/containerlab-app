@@ -4,6 +4,7 @@
 
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { Response } from "undici";
 
 import {
   getHttpErrorStatus,

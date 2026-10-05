@@ -20,8 +20,6 @@ export interface ClabUiExtensions {
     isViewerMode: boolean;
     closeMenu: () => void;
   }) => React.ReactNode;
-  /** Replace the built-in About dialog (navbar info button) with a custom one. */
-  renderAboutModal?: (context: { isOpen: boolean; onClose: () => void }) => React.ReactNode;
   /** Palette tab ids to hide (e.g. "json"). */
   disabledTabIds?: string[];
   /** Override built-in palette tab labels by id (e.g. { nodes: "Templates" }). */

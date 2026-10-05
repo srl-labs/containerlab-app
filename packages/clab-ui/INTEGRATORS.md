@@ -595,10 +595,17 @@ to own:
 - icon list/upload/delete flows
 - SVG export handling
 
+Every host's topology transport must behave the same way. In this repository,
+`describeTopologyHostContract` from the private `@srl-labs/containerlab-test-kit` package
+checks loading, acknowledged and stale commands, undo and redo, and external edits through
+`ClabUiHost.topology`. It runs against the VS Code webview transport, the app server and the
+sandbox backend.
+
 If you implement a custom host directly, these are the relevant `/host`
 contracts:
 
 - `ClabUiHost`
+- `ClabUiEditorDataHost`
 - `ClabUiExplorerHost`
 - `ClabUiTopoViewerHost`
 
@@ -629,6 +636,23 @@ Important topo viewer events:
 - `fitViewport`
 - `svgExportResult`
 
+### Editor data
+
+`ClabUiHost.editorData` supplies the reference data the node editor offers: the
+containerlab schema (`getSchema`, falling back to the bundled schema) and the images the
+host can run (`getDockerImages`, plus `subscribeDockerImages` for live updates).
+`createWindowClabUiHost` fills it from the injected `window.__INITIAL_DATA__`
+(`schemaData`, `dockerImages`) and from `docker-images-updated` messages, or from the
+`initialData` option. Do not set globals or dispatch DOM events for this data.
+
+### Runtime containers
+
+Hosts describe running containers to the editor as `HostRuntimeContainer` values.
+Build them with `normalizeRuntimeContainer` (numeric strings are parsed, empty stats and
+netem state are dropped, interfaces are sorted) instead of mapping fields by hand.
+`runtimeContainersEqual` and `runtimeContainersTopologyEqual` compare two snapshots, with
+or without live interface counters, so a host can skip redundant graph updates.
+
 ## Explorer Integration
 
 If your product embeds the explorer UI, use:
@@ -640,6 +664,11 @@ If your product embeds the explorer UI, use:
 If you already have a product-specific explorer backend, prefer wiring it
 through the exported explorer controller/helpers rather than duplicating logic.
 
+The workspace rail renders this same view: its Labs panel shows the `runningLabs` and
+`localLabs` sections and its Files panel shows `fileExplorer`, through the
+`visibleSectionIds` prop. A host therefore supplies one explorer backend
+(`ClabUiHost.explorer`) for both the rail and VS Code's sidebar view.
+
 ## Theme Integration
 
 Recommended package usage:
@@ -647,6 +676,10 @@ Recommended package usage:
 - import `@containerlab/clab-ui/styles/global.css` once
 - wrap with `MuiThemeProvider`
 - apply CSS variables with `applyThemeVars(...)` if your host controls theme mode
+
+The UI reads `--vscode-*` theme tokens. VS Code provides them; `DARK_VARS` and `LIGHT_VARS`
+define the same set for every other host. Any token the UI reads must be in both maps, or
+always carry a fallback when only VS Code defines it, so a host never renders unstyled parts.
 
 ## Local Workspace and External Consumer Checks
 
@@ -681,3 +714,67 @@ You should not rely on:
 
 If you need a new integration hook, add it to the package API intentionally.
 Do not reach into internals from the consumer.
+
+## One UI, host-specific composition
+
+`clab-ui` owns presentation: semantic theme colors, topology chrome, explorer,
+settings, login forms, file editors, document tabs, dialogs and terminal views.
+Apps supply backend operations and host capabilities; they should not copy those
+components, target test selectors to change layout, or replace browser globals.
+
+Web, desktop and the public sandbox compose the same optional workspace entries.
+VS Code uses its native activity bar and editor tabs and imports only the shared
+editor, explorer and feature views it needs. Coherent design means shared controls,
+interaction patterns and theme tokens; it does not require drawing a second tab
+bar inside a VS Code editor.
+
+| Entry | Purpose |
+| --- | --- |
+| `@containerlab/clab-ui/workspace` | `WorkspaceHostProvider`, navigation rail and document tabs |
+| `…/workspace/editor` | Document editor views |
+| `…/workspace/settings` | Shared settings and endpoint management views |
+| `…/workspace/login`, `…/workspace/bootstrap` | Authentication presentation and initial loading screen |
+| `…/workspace/dialogs`, `…/workspace/terminal` | Action dialogs and terminal views |
+| `…/workspace/empty-state` | Shared empty workspace presentation |
+| `…/workspace/state`, `…/workspace/types` | UI state and host data contracts |
+| `…/workspace/yaml` | YAML model helpers without importing editor views |
+
+Provide a stable `WorkspaceHost` object through `WorkspaceHostProvider`. It supplies
+operations, live lab subscriptions, asset URLs, and native terminal-window opening.
+`assetUrl` resolves the brand assets listed in `WORKSPACE_ASSETS` (from `…/workspace/types`);
+a host must serve every one. Pass the startup logo's URL to `LoadingScreen` as `logoUrl` so
+the loading view matches the host page's own startup screen.
+The UI never imports a particular application's API implementation. Mount action
+dialogs when mounting navigation so the first action can immediately open a dialog.
+The navigation rail stays on the left and supports pointer and keyboard resizing.
+The editor owns the floating node palette, whose side can be changed independently
+of the rail; the topology toolbar stays on the opposite side of the editor.
+Native hosts retain their own navigation. Pass `onCreateLab` to `AttractorEmptyState` to connect
+the shared empty-state action to the host's existing topology creation operation.
+Its dotted artwork is bundled as SVG paths and paints with the component. The
+original noise and twinkle animation varies the dots' size and brightness with a
+slight boost in contrast and tempo. Hover makes scattered dots twinkle independently;
+pointer movement leaves a short fading trail, and clicks add colored impulses. The WebGL 2
+animation pauses while the page is hidden; reduced motion or
+unavailable WebGL keeps the static artwork. It needs no image request or worker.
+Regenerate the paths and baked logo sample with `pnpm generate:empty-state`.
+Optional editor, settings and terminal views can be loaded on demand.
+
+The repository's `standalone-runtime` owns session/authentication orchestration,
+endpoint selection and backend I/O, and connects those operations to the shared
+views. Its default transport uses the app server. The sandbox calls
+`configureStandaloneBackend(createSandboxTransport())` before importing the same
+runtime entry point. Its transport persists files locally and reports unavailable
+lifecycle, endpoint, repository and archive capabilities. The runtime maps these
+to available explorer commands; presentation stays in this package.
+
+Use `App`'s `header`, `sidebar`, `content` and `emptyState` slots for composition.
+Document tabs sit above the document; the properties/YAML panel shares the document
+area and respects its bounds. Do not position UI by querying another component's
+DOM. Shared floating surfaces use host theme tokens, with opaque high-contrast
+fallbacks; decorative animation respects reduced motion.
+
+Workspace entries are deliberately absent from the root and explorer export graphs.
+The packed-consumer check verifies that embedding these two entries does not pull
+in the standalone workspace, xterm or Three.js. The package build emits optional
+entries, while each app bundles only its reachable imports.

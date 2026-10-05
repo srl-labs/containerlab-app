@@ -1,9 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { createTopologyFile, expect, test, waitForWorkspace } from "@srl-labs/containerlab-test-kit/playwright";
 
 test("docs, nested guides and the sandbox work in one static preview", async ({ page, baseURL }) => {
   const origin = new URL(baseURL!).origin;
   const failures: string[] = [];
-  page.on("pageerror", (error) => failures.push(error.message));
   page.on("response", (response) => {
     if (new URL(response.url()).origin === origin && response.status() >= 400) {
       failures.push(`${response.status()} ${response.url()}`);
@@ -26,23 +25,16 @@ test("docs, nested guides and the sandbox work in one static preview", async ({ 
   await expect(sandboxLink).toHaveJSProperty("href", `${origin}/sandbox/`);
   await sandboxLink.click();
   await expect(page).toHaveURL(`${origin}/sandbox/`);
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  await page.reload();
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
+  await waitForWorkspace(page);
 
   // The sandbox must create and reopen files without a backend at its new path.
-  const created = await page.evaluate(async () => {
-    const response = await fetch("/api/runtime/topology-file/create", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ fileName: "preview.clab.yml" })
-    });
-    return response.json();
-  });
-  expect(created).toHaveProperty("topologyRef");
+  const tab = await createTopologyFile(page, "preview");
   await page.reload();
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-  const files = await page.evaluate(async () => (await fetch("/files")).json());
-  expect(JSON.stringify(files)).toContain("preview.clab.yml");
+  await waitForWorkspace(page);
+  const sidebar = page.getByTestId("workspace-sidebar");
+  const labs = page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true });
+  if ((await labs.getAttribute("aria-expanded")) !== "true") await labs.click();
+  await sidebar.getByText("preview.clab.yml", { exact: true }).click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
   expect(failures).toEqual([]);
 });

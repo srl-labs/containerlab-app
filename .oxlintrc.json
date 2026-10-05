@@ -302,7 +302,8 @@
         "test/**/*.ts",
         "test/**/*.tsx",
         "**/*.test.ts",
-        "**/*.test.tsx"
+        "**/*.test.tsx",
+        "**/test-kit/src/**/*.ts"
       ],
       "rules": {
         "@typescript-eslint/no-explicit-any": "off",

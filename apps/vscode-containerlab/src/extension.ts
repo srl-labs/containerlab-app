@@ -44,6 +44,9 @@ import {
 } from "./services";
 import { ContainerlabExplorerViewProvider } from "./webviews/explorer/containerlabExplorerViewProvider";
 
+import { registerSettings } from "./webviews/settings/settingsPanel";
+import { registerAppearanceUpdates } from "./webviews/shared/appearance";
+
 let explorerViewProvider: ContainerlabExplorerViewProvider | undefined;
 
 function isE2ESmokeTest(): boolean {
@@ -586,6 +589,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const channel = vscode.window.createOutputChannel("Containerlab", { log: true });
   setOutputChannel(channel);
   context.subscriptions.push(channel);
+  registerSettings(context);
+  registerAppearanceUpdates(context);
   const e2eSmokeTest = isE2ESmokeTest();
   outputChannel.info("Registered output channel sucessfully.");
   outputChannel.info(`Detected platform: ${process.platform}`);

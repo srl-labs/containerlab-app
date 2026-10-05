@@ -162,12 +162,14 @@ export interface ReactFlowCanvasProps {
   edges?: TopoEdge[];
   /** Stable key for the currently active topology, used to preserve per-topology viewport */
   topologyViewportKey?: string | null;
-  /** Whether the left ContextPanel (palette) is currently open */
+  /** Whether the ContextPanel (palette) is currently open */
   isContextPanelOpen?: boolean;
   /** Current layout (used for geo layout transitions) */
   layout?: LayoutName;
   /** Pure embedded viewer mode: pan/zoom only, no selection, dragging, or context menus. */
   readOnlyViewer?: boolean;
+  /** Hide the deployment-state badge on nodes, for hosts that cannot run labs. */
+  suppressRuntimeBadges?: boolean;
   viewerOptions?: {
     onNodeSelect?: (nodeId: string | null) => void;
     onInit?: (instance: ReactFlowInstance) => void;

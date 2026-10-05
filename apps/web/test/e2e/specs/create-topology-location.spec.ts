@@ -1,36 +1,35 @@
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import {
+  connected,
+  expect,
+  mockStandaloneApi,
+  seedEndpoints,
+  test,
+  waitForWorkspace
+} from "@srl-labs/containerlab-test-kit/playwright";
 
 const endpoints = [
   { id: "team", label: "Team server", url: "https://team.example" },
   { id: "personal", label: "Personal server", url: "https://personal.example" }
-].map((endpoint) => ({ ...endpoint, username: "tester", sessionDuration: "24h", status: "connected", connected: true }));
+].map((endpoint) => connected({ ...endpoint, username: "tester", sessionDuration: "24h" }));
+
+// Submissions are answered with 409 so the dialog stays open instead of opening an editor.
+test.use({ allowedBrowserErrors: [/status of 409 \(Conflict\)/] });
 
 async function setup(page: Page) {
-  await page.addInitScript((profiles) => {
-    localStorage.setItem("clab-standalone-endpoints", JSON.stringify(profiles));
-    window.EventSource = class extends EventTarget {
-      readyState = 1;
-      close() {}
-    } as unknown as typeof EventSource;
-  }, endpoints);
-  await page.route("**/auth/me", (route) => route.fulfill({ json: { authenticated: true, endpoints } }));
-  await page.route("**/files**", (route) => route.fulfill({ json: [] }));
-  await page.route("**/api/runtime/inspect/all", (route) => route.fulfill({ json: {} }));
-  await page.route("**/api/runtime/ui/custom-nodes", (route) => route.fulfill({ json: { customNodes: [], defaultNode: "" } }));
-  await page.route("**/auth/endpoints/*/metrics", (route) => route.fulfill({ json: { metrics: {} } }));
+  await seedEndpoints(page, endpoints);
+  await mockStandaloneApi(page, { endpoints });
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({
     json: route.request().headers()["x-endpoint-id"] === "team"
       ? [{ endpointId: "team", name: "@shared", path: "@shared", kind: "directory", hasChildren: false }]
       : []
   }));
   await page.goto("/");
-  await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
+  await waitForWorkspace(page);
 }
 
 async function openCreate(page: Page) {
-  const row = page.locator('[data-explorer-node-row="true"]').filter({ hasText: "Team server" }).filter({ hasText: "team.example" });
-  await row.hover();
-  await row.getByRole("button", { name: "New topology file", exact: true }).click();
+  await page.getByRole("button", { name: "Create a lab", exact: true }).click();
   return page.getByRole("dialog", { name: "Create Topology File", exact: true });
 }
 
@@ -124,17 +123,15 @@ test("workspace lookup errors prevent creation until availability can be checked
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
 });
 
-test("a removed shared workspace requires choosing Personal before creating", async ({ page }) => {
+test("reopening the dialog checks whether the shared workspace is still available", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: "Expand Team server", exact: true }).last().click();
-  await expect(page.getByText("Shared labs", { exact: true })).toBeVisible();
+  let dialog = await openCreate(page);
+  await dialog.getByRole("button", { name: "Shared", exact: true }).click();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({ json: [] }));
-  await page.getByText("Shared labs", { exact: true }).click({ button: "right" });
-  await page.getByTestId("context-menu").last().getByText("New Topology File", { exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
-  await expect(dialog).toContainText("Shared is no longer available on this server.");
+  dialog = await openCreate(page);
+  await expect(dialog).toContainText("Saved in your personal workspace.");
   await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
-  await dialog.getByRole("button", { name: "Personal", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
 });

@@ -1,10 +1,12 @@
+import { runtimeFetch } from "./backend";
+import { installDesktopChrome } from "./desktopChrome";
 import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 import { applyThemeVars } from "@containerlab/clab-ui/theme";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
-import { parseStandaloneTheme, resolveStandaloneTheme } from "./standaloneTheme";
+import { parseStandaloneTheme, resolveStandaloneTheme } from "@containerlab/clab-ui/workspace/state";
 
 interface WiresharkVncInitialData {
   iframeUrl: string;
@@ -54,7 +56,7 @@ function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): 
     return;
   }
 
-  void fetch(closePath, {
+  void runtimeFetch(closePath, {
     method: "POST",
     keepalive: true,
     credentials: "same-origin"
@@ -96,6 +98,7 @@ async function main(): Promise<void> {
   const { sessionId, endpointId, showVolumeTip, theme } = parseQuery();
   const resolvedTheme = theme ?? resolveStandaloneTheme();
   document.documentElement.classList.toggle("light", resolvedTheme === "light");
+  installDesktopChrome();
   applyThemeVars(resolvedTheme);
 
   if (!sessionId) {

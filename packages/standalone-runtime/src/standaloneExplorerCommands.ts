@@ -1,5 +1,12 @@
 import type { TopologyRef } from "@containerlab/clab-ui/session";
-import { dispatchEndpointUiAction } from "./endpointActions";
+import {
+  dispatchEndpointUiAction,
+  getSessionHostnameOverride,
+  loadCapturePreferences,
+  resolveStandaloneTheme,
+  runtimeUiActions,
+  setSessionHostnameOverride
+} from "@containerlab/clab-ui/workspace/state";
 import {
   buildPacketflixCapture,
   closeAllWiresharkVncSessions,
@@ -35,12 +42,6 @@ import {
   type CloneRepoDialogTarget
 } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
-import { runtimeUiActions } from "./stores/runtimeUiStore";
-import {
-  getSessionHostnameOverride,
-  loadCapturePreferences,
-  setSessionHostnameOverride
-} from "./runtimeCaptureSettings";
 import type { LifecycleCommandEndpoint } from "./standaloneHostShared";
 import {
   findLabStateForTopology,
@@ -51,7 +52,6 @@ import {
   isSharedWorkspacePath,
   safeFilename
 } from "./standaloneHostShared";
-import { resolveStandaloneTheme } from "./standaloneTheme";
 import { toggleStandaloneFavorite } from "./standaloneFavorites";
 import {
   type ShareActionKind,
@@ -815,7 +815,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
     ): Promise<void> => {
       if (!lifecycleActionsAvailable) {
         runtimeUiActions.notify(
-          "Deploy and lifecycle actions are not available in GitHub Pages mode.",
+          "This action is not available.",
           "warning"
         );
         return;
@@ -1230,7 +1230,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.deployPopular": () =>
         lifecycleActionsAvailable
           ? clonePopularFlow("deploy")
-          : runtimeUiActions.notify("Deploy is not available in GitHub Pages mode.", "warning"),
+          : runtimeUiActions.notify("This action is not available.", "warning"),
       "containerlab.images.manage": runtimeUiActions.openImageManager,
       "containerlab.inspectAll": runtimeUiActions.openInspectAll,
       "containerlab.inspectOneLab": () => {

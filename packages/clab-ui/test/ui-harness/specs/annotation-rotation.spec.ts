@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "../fixtures/topoviewer";
+import { fitGraph } from "../helpers/react-flow-helpers";
 
 const FILE = "datacenter.clab.yml";
 const TEXT_ID = "text-title";
@@ -118,6 +119,7 @@ test.describe("Annotation rotation", () => {
     await expect(computed).toHaveAttribute("readonly", "");
     const expectedAngle = Number(await computed.inputValue());
     await page.getByRole("button", { name: "Copy rotation", exact: true }).click();
+    await fitGraph(page);
     await openText(page);
     await page.getByRole("button", { name: "Apply copied rotation", exact: true }).click();
     await expect
@@ -166,6 +168,7 @@ test.describe("Annotation rotation", () => {
       );
     await expect.poll(async () => (await readLine())?.position.x).toBeCloseTo(160, 5);
     const rotated = await readLine();
+    if (!rotated?.endPosition) throw new Error("rotation-line has no persisted end position");
     expect(rotated.endPosition.x).toBeCloseTo(160, 5);
     expect(
       Math.hypot(
@@ -185,6 +188,8 @@ test.describe("Annotation rotation", () => {
   }) => {
     await openText(page);
     const dial = page.getByRole("button", { name: "Rotation dial", exact: true });
+    // Wait for the panel's opening transition before measuring pointer coordinates.
+    await dial.hover();
     const bounds = await dial.boundingBox();
     expect(bounds).not.toBeNull();
     await page.keyboard.down("Shift");
@@ -244,6 +249,7 @@ test.describe("Annotation rotation", () => {
         const line = (await topoViewerPage.getAnnotationsFromFile(FILE)).freeShapeAnnotations?.find(
           (a: { id: string }) => a.id === "geo-rotation-line"
         );
+        if (!line?.geoCoordinates || !line.endGeoCoordinates) return Number.POSITIVE_INFINITY;
         return Math.abs(line.geoCoordinates.lng - line.endGeoCoordinates.lng);
       })
       .toBeLessThan(0.00001);

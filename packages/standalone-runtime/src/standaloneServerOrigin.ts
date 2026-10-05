@@ -1,5 +1,3 @@
-import { standaloneRuntimeMode, type StandaloneRuntimeMode } from "./runtimeMode";
-
 function configuredStandaloneServerOrigin(): string {
   const env = (import.meta as ImportMeta & {
     env?: { VITE_CLAB_STANDALONE_SERVER_ORIGIN?: string };
@@ -23,13 +21,8 @@ function normalizeOrigin(value: string): string | null {
 export function resolveStandaloneServerOrigin(
   location: Pick<Location, "origin"> = window.location,
   configuredOrigin = configuredStandaloneServerOrigin(),
-  useConfiguredOrigin = shouldUseConfiguredStandaloneServerOrigin(),
-  runtimeMode: StandaloneRuntimeMode = standaloneRuntimeMode()
+  useConfiguredOrigin = shouldUseConfiguredStandaloneServerOrigin()
 ): string {
-  if (runtimeMode === "pages") {
-    return location.origin;
-  }
-
   if (!useConfiguredOrigin) {
     return location.origin;
   }
@@ -54,10 +47,7 @@ export function resolveAppBasePath(baseUri: string = documentBaseUri()): string 
 export function standaloneServerUrl(
   path: string,
   origin = resolveStandaloneServerOrigin(),
-  basePath = resolveAppBasePath(),
-  runtimeMode: StandaloneRuntimeMode = standaloneRuntimeMode()
+  basePath = resolveAppBasePath()
 ): string {
-  // Pages handles these routes in the browser, independently of the static site path.
-  const apiBasePath = runtimeMode === "pages" ? "/" : basePath;
-  return new URL(path.replace(/^\/+/, ""), `${origin}${apiBasePath}`).toString();
+  return new URL(path.replace(/^\/+/, ""), `${origin}${basePath}`).toString();
 }

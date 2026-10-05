@@ -21,7 +21,11 @@ import {
   buildRuntimeNodeUpdates,
   createRuntimeContainerDataProvider
 } from "@containerlab/clab-ui/session";
-import type { HostRuntimeContainer, HostRuntimeInterface } from "@containerlab/clab-ui/host";
+import {
+  normalizeRuntimeContainer,
+  type HostRuntimeContainer,
+  type RuntimeContainerInput
+} from "@containerlab/clab-ui/host";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import {
   extractEndpointIdFromTopologyId,
@@ -29,107 +33,8 @@ import {
   resolveCanonicalStandaloneTopologyRef
 } from "./topologyIdentity.ts";
 
-interface RuntimeContainerPayload {
-  name: string;
-  nodeName: string;
-  labName: string;
-  state: string;
-  kind: string;
-  image: string;
-  ipv4Address: string;
-  ipv6Address: string;
-  interfaces?: RuntimeInterfacePayload[];
-}
-
-interface RuntimeInterfaceStatsPayload {
-  rxBps?: number;
-  txBps?: number;
-  rxPps?: number;
-  txPps?: number;
-  rxBytes?: number;
-  txBytes?: number;
-  rxPackets?: number;
-  txPackets?: number;
-  statsIntervalSeconds?: number;
-}
-
-interface RuntimeInterfacePayload {
-  name: string;
-  alias: string;
-  label?: string;
-  mac: string;
-  mtu: number;
-  state: string;
-  type: string;
-  ifIndex?: number;
-  stats?: RuntimeInterfaceStatsPayload;
-  netemState?: {
-    delay?: string;
-    jitter?: string;
-    loss?: string;
-    rate?: string;
-    corruption?: string;
-  };
-}
-
-function toFiniteNumber(value: number | string | undefined): number | undefined {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : undefined;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function toRuntimeInterface(iface: RuntimeInterfacePayload): HostRuntimeInterface {
-  return {
-    name: iface.name ?? "",
-    alias: iface.alias ?? "",
-    label: iface.label,
-    mac: iface.mac ?? "",
-    mtu: toFiniteNumber(iface.mtu) ?? 0,
-    state: iface.state ?? "",
-    type: iface.type ?? "",
-    ifIndex: toFiniteNumber(iface.ifIndex),
-    stats: iface.stats
-      ? {
-          rxBps: toFiniteNumber(iface.stats.rxBps),
-          txBps: toFiniteNumber(iface.stats.txBps),
-          rxPps: toFiniteNumber(iface.stats.rxPps),
-          txPps: toFiniteNumber(iface.stats.txPps),
-          rxBytes: toFiniteNumber(iface.stats.rxBytes),
-          txBytes: toFiniteNumber(iface.stats.txBytes),
-          rxPackets: toFiniteNumber(iface.stats.rxPackets),
-          txPackets: toFiniteNumber(iface.stats.txPackets),
-          statsIntervalSeconds: toFiniteNumber(iface.stats.statsIntervalSeconds)
-        }
-      : undefined,
-    netemState: iface.netemState
-      ? {
-          delay: iface.netemState.delay,
-          jitter: iface.netemState.jitter,
-          loss: iface.netemState.loss,
-          rate: iface.netemState.rate,
-          corruption: iface.netemState.corruption
-      }
-      : undefined
-  };
-}
-
-function toRuntimeContainers(containers: RuntimeContainerPayload[]): HostRuntimeContainer[] {
-  return containers.map((container) => ({
-    name: container.name ?? "",
-    nodeName: container.nodeName ?? "",
-    labName: container.labName ?? "",
-    state: container.state ?? "",
-    kind: container.kind ?? "",
-    image: container.image ?? "",
-    ipv4Address: container.ipv4Address ?? "",
-    ipv6Address: container.ipv6Address ?? "",
-    interfaces: (container.interfaces ?? []).map((iface) => toRuntimeInterface(iface))
-  }));
+function toRuntimeContainers(containers: RuntimeContainerInput[]): HostRuntimeContainer[] {
+  return containers.map((container) => normalizeRuntimeContainer(container));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -330,7 +235,7 @@ interface SnapshotRequest {
   mode?: "edit" | "view";
   deploymentState?: DeploymentState;
   sourcePreference?: "api-file" | "running-lab-doc";
-  runtimeContainers?: RuntimeContainerPayload[];
+  runtimeContainers?: RuntimeContainerInput[];
   externalChange?: boolean;
 }
 
@@ -339,7 +244,7 @@ interface CommandRequest {
   topologyRef?: TopologyRef;
   mode?: "edit" | "view";
   deploymentState?: DeploymentState;
-  runtimeContainers?: RuntimeContainerPayload[];
+  runtimeContainers?: RuntimeContainerInput[];
   baseRevision: number;
   command: TopologyHostCommand;
 }

@@ -1,6 +1,6 @@
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
-import type { RuntimeTerminalProtocol, RuntimeTerminalRequest } from "./stores/runtimeUiStore";
+import type { RuntimeTerminalProtocol, RuntimeTerminalRequest } from "@containerlab/clab-ui/workspace/state";
 
 const DETACHED_TERMINAL_TARGET_PARAM = "target";
 

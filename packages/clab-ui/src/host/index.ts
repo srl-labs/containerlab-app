@@ -10,7 +10,9 @@ import {
   type TopologySessionClient
 } from "../session/client";
 import { resolveWindowVsCodeApi, type WindowVsCodeApiLike } from "../utils/vscodeApi";
+import type { SchemaData } from "../core/schema";
 import type {
+  ClabUiEditorDataHost,
   ClabUiExplorerHost,
   ClabUiHost,
   ClabUiImageHost,
@@ -27,6 +29,12 @@ import { isRecord } from "../core/utilities/typeHelpers";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./runtimeContext";
+export * from "./runtimeModel";
+
+function newId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);
+}
+
 type FetchLike = typeof fetch;
 type TopologyHostMessageType =
   | "topology-host:snapshot"
@@ -55,6 +63,9 @@ interface WindowHostOptions {
   targetWindow?: Window;
   vscodeApi?: WindowVsCodeApiLike;
   postMessage?: (message: unknown) => void;
+  editorData?: ClabUiEditorDataHost;
+  /** Bootstrap data for the window-backed editor data; defaults to the page's injected initial data. */
+  initialData?: { schemaData?: SchemaData; dockerImages?: string[] };
   explorer?: ClabUiExplorerHost;
   images?: ClabUiImageHost;
   topoViewer?: ClabUiTopoViewerHost;
@@ -304,6 +315,53 @@ function resolveTopologyPath(context: TopologyUiContext): string | undefined {
   return context.path ?? context.topologyRef?.yamlPath;
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
+function isSchemaData(value: unknown): value is SchemaData {
+  return isRecord(value) && Array.isArray(value.kinds) && isRecord(value.typesByKind);
+}
+
+function createWindowEditorData(
+  targetWindow: Window,
+  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void,
+  options: WindowHostOptions
+): ClabUiEditorDataHost {
+  const injected = (targetWindow as Window & { __INITIAL_DATA__?: unknown }).__INITIAL_DATA__;
+  const initialData: Record<string, unknown> =
+    options.initialData ?? (isRecord(injected) ? injected : {});
+  const schema = isSchemaData(initialData.schemaData) ? initialData.schemaData : undefined;
+  let dockerImages = isStringArray(initialData.dockerImages) ? initialData.dockerImages : undefined;
+  const handlers = new Set<(images: string[]) => void>();
+
+  subscribe((event) => {
+    const message = event.data;
+    if (
+      !isRecord(message) ||
+      message.type !== "docker-images-updated" ||
+      !isStringArray(message.dockerImages)
+    ) {
+      return;
+    }
+    dockerImages = message.dockerImages;
+    for (const handler of handlers) {
+      handler(message.dockerImages);
+    }
+  });
+
+  return {
+    getSchema: () => schema,
+    getDockerImages: () => dockerImages,
+    subscribeDockerImages(handler) {
+      handlers.add(handler);
+      return () => {
+        handlers.delete(handler);
+      };
+    }
+  };
+}
+
 function createMessageSubscription(targetWindow: Window) {
   return (handler: (event: MessageEvent<unknown>) => void): (() => void) => {
     const listener = (event: Event) => {
@@ -455,7 +513,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         timeoutMs = 30_000
       ): Promise<T> => {
         ensureListener();
-        const requestId = globalThis.crypto.randomUUID();
+        const requestId = newId();
         return new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             if (!pending.has(requestId)) {
@@ -547,7 +605,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         timeoutMs = 30_000
       ): Promise<TopologyHostResponseMessage | TopologySnapshot> => {
         ensureListener();
-        const requestId = globalThis.crypto.randomUUID();
+        const requestId = newId();
         return new Promise((resolve, reject) => {
           const timeoutId = setTimeout(() => {
             if (!pending.has(requestId)) {
@@ -607,6 +665,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         options.meta?.disableDevMockTraffic ??
         resolvedVsCodeApi?.__disableDevMockTraffic__ === true
     },
+    editorData: options.editorData ?? createWindowEditorData(targetWindow, subscribe, options),
     explorer,
     images,
     topoViewer,

@@ -60,7 +60,6 @@ declare global {
   interface Window {
     __DEV__?: DevModeInterface;
     __INITIAL_DATA__?: unknown;
-    __DOCKER_IMAGES__?: string[];
     maplibreStyle?: StyleSpecification;
     maplibreWorkerUrl?: string;
     maplibreWorkerSourceBase64?: string;

@@ -1,44 +1,24 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import { Box, Typography } from "@mui/material";
-import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
-
-import {
-  RuntimeTerminalPaneView
-} from "./components/RuntimeTerminalWindows";
-import { detachedTerminalTargetFromLocation } from "./runtimeDetachedTerminal";
+import { WorkspaceHostProvider } from "@containerlab/clab-ui/workspace";
 import {
   loadTerminalPreferences,
   persistTerminalPreferences,
-  type TerminalPreferences
-} from "./runtimeTerminalSettings";
-import {
+  resolveStandaloneTheme,
   runtimeUiActions,
   useRuntimeUiStore,
-  type RuntimeTerminalPane
-} from "./stores/runtimeUiStore";
-import { resolveStandaloneTheme } from "./standaloneTheme";
+  type RuntimeTerminalPane,
+  type TerminalPreferences
+} from "@containerlab/clab-ui/workspace/state";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { applyThemeVars, MuiThemeProvider } from "@containerlab/clab-ui/theme";
+
+import { installDesktopChrome } from "./desktopChrome";
+import { workspaceHost } from "./workspaceHost";
+import { DetachedTerminalView } from "./components/RuntimeTerminalWindows";
+import { detachedTerminalTargetFromLocation } from "./runtimeDetachedTerminal";
 
 function terminalPaneById(panes: RuntimeTerminalPane[], paneId: string | null): RuntimeTerminalPane | undefined {
   return (paneId ? panes.find((pane) => pane.id === paneId) : undefined) ?? panes[0];
-}
-
-function FatalMessage({ message }: { message: string }) {
-  return (
-    <Box
-      sx={{
-        alignItems: "center",
-        bgcolor: "background.default",
-        color: "text.primary",
-        display: "flex",
-        height: "100%",
-        justifyContent: "center",
-        p: 2
-      }}
-    >
-      <Typography variant="body2">{message}</Typography>
-    </Box>
-  );
 }
 
 function DetachedTerminalApp() {
@@ -70,36 +50,27 @@ function DetachedTerminalApp() {
     []
   );
 
+  let message = "Opening terminal...";
   if (!target) {
-    return <FatalMessage message="Missing or invalid terminal target." />;
-  }
-
-  if (!pane) {
-    return <FatalMessage message={openedPaneIdRef.current ? "Terminal closed." : "Opening terminal..."} />;
+    message = "Missing or invalid terminal target.";
+  } else if (openedPaneIdRef.current) {
+    message = "Terminal closed.";
   }
 
   return (
-    <Box
-      sx={{
-        bgcolor: "background.default",
-        height: "100%",
-        minHeight: 0
-      }}
-    >
-      <RuntimeTerminalPaneView
-        active
-        hidden={false}
-        onSaveTerminalPreferences={handleSaveTerminalPreferences}
-        paneState={pane}
-        terminalPreferences={terminalPreferences}
-      />
-    </Box>
+    <DetachedTerminalView
+      pane={pane}
+      message={message}
+      onSaveTerminalPreferences={handleSaveTerminalPreferences}
+      terminalPreferences={terminalPreferences}
+    />
   );
 }
 
 function main(): void {
   const theme = resolveStandaloneTheme();
   document.documentElement.classList.toggle("light", theme === "light");
+  installDesktopChrome();
   applyThemeVars(theme);
 
   const rootElement = document.getElementById("root");
@@ -109,7 +80,9 @@ function main(): void {
 
   createRoot(rootElement).render(
     <MuiThemeProvider>
-      <DetachedTerminalApp />
+      <WorkspaceHostProvider host={workspaceHost}>
+        <DetachedTerminalApp />
+      </WorkspaceHostProvider>
     </MuiThemeProvider>
   );
 }

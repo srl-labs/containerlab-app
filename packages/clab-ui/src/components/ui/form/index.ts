@@ -1,6 +1,6 @@
 // Shared form components.
 export { InputField } from "./InputField";
-export { SelectField, type SelectOption } from "./SelectField";
+export { SelectField } from "./SelectField";
 export { CheckboxField } from "./CheckboxField";
 export { ColorField } from "./ColorField";
 export { DynamicList } from "./DynamicList";

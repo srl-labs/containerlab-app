@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { test, expect } from "../fixtures/topoviewer";
+import { getEmptyCanvasArea } from "../helpers/react-flow-helpers";
 
 const FILE = "network.clab.yml";
 const dummyNodes = (page: Page) => page.locator('.react-flow__node[data-id="dummy0"]');
@@ -10,6 +11,12 @@ async function toggleDummyLinks(page: Page, currentlyHidden = false): Promise<vo
   const toggle = page.getByRole("menuitemcheckbox", { name: "Hide Dummy Links" });
   await expect(toggle).toHaveAttribute("aria-checked", String(currentlyHidden));
   await toggle.click();
+  await expect(toggle).toBeHidden();
+}
+
+async function focusCanvas(page: Page): Promise<void> {
+  const area = await getEmptyCanvasArea(page);
+  await page.mouse.click(area.x + area.width / 2, area.y + area.height / 2);
 }
 
 test.describe("Dummy link visibility", () => {
@@ -223,7 +230,7 @@ topology:
     await topoViewerPage.unlock();
     await toggleDummyLinks(page);
     await expect(dummyNodes(page)).toBeHidden();
-    await topoViewerPage.getCanvas().click({ position: { x: 10, y: 10 } });
+    await focusCanvas(page);
     await page.keyboard.press("Control+A");
     await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toContain("srl1");
     expect(await topoViewerPage.getSelectedNodeIds()).not.toContain("dummy0");
@@ -233,7 +240,7 @@ topology:
 
     await toggleDummyLinks(page, true);
     await expect(dummyNodes(page)).toBeVisible();
-    await topoViewerPage.getCanvas().click({ position: { x: 10, y: 10 } });
+    await focusCanvas(page);
     await page.keyboard.press("Control+A");
     await expect.poll(() => topoViewerPage.getSelectedNodeIds()).toContain("dummy0");
     expect(await topoViewerPage.getSelectedEdgeIds()).toHaveLength(

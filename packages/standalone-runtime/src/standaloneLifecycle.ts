@@ -1,3 +1,4 @@
+import { runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
 import { createLifecycleCommandController } from "@containerlab/clab-ui/host";
 import {
@@ -232,7 +233,7 @@ async function queryLabRunningState(target: {
   if (target.sessionId) {
     payload.sessionId = target.sessionId;
   }
-  const response = await fetch(standaloneServerUrl("/api/lab/status"), {
+  const response = await runtimeFetch(standaloneServerUrl("/api/lab/status"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
@@ -411,7 +412,7 @@ export function createStandaloneLifecycleManager(
       payload.sessionId = invokeOptions.sessionId;
     }
 
-    const response = await fetch(standaloneServerUrl(`/api/lab/${endpoint}/stream`), {
+    const response = await runtimeFetch(standaloneServerUrl(`/api/lab/${endpoint}/stream`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",

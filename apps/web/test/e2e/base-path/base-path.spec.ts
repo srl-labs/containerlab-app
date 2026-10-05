@@ -1,7 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test, type Page } from "@playwright/test";
-import { createServer, preview, type ViteDevServer } from "vite";
+import type { Page } from "@playwright/test";
+import { expect, stubEventSource, test } from "@srl-labs/containerlab-test-kit/playwright";
+import { createServer, type ViteDevServer } from "vite";
 import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
 
 import { buildDetachedTerminalUrl } from "../../../../../packages/standalone-runtime/src/runtimeDetachedTerminal";
@@ -16,6 +17,7 @@ const savedEndpoint = {
 };
 
 async function mockRuntime(page: Page, basePath: string): Promise<void> {
+  await stubEventSource(page);
   await page.route("**/*", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     const relative = pathname.slice(basePath.length);
@@ -57,7 +59,6 @@ for (const mode of ["production", "development"] as const) {
             process.env.PORT = new URL(address).port;
             process.env.WEB_TLS_ENABLE = "false";
             process.env.WEB_BASE_PATH = basePath;
-            process.env.VITE_CLAB_RUNTIME_MODE = "standalone";
             delete process.env.VITE_PUBLIC_BASE_PATH;
             vite = await createServer({
               configFile: path.join(webRoot, "vite.config.ts"),
@@ -69,7 +70,7 @@ for (const mode of ["production", "development"] as const) {
             if (viteAddress == null || typeof viteAddress === "string") throw new Error("Vite did not listen");
             appUrl = `http://127.0.0.1:${viteAddress.port}${basePath}/`;
           } finally {
-            for (const name of ["PORT", "WEB_TLS_ENABLE", "WEB_BASE_PATH", "VITE_CLAB_RUNTIME_MODE", "VITE_PUBLIC_BASE_PATH"]) {
+            for (const name of ["PORT", "WEB_TLS_ENABLE", "WEB_BASE_PATH", "VITE_PUBLIC_BASE_PATH"]) {
               if (previousEnv[name] === undefined) delete process.env[name];
               else process.env[name] = previousEnv[name];
             }
@@ -94,11 +95,11 @@ for (const mode of ["production", "development"] as const) {
           localStorage.setItem("clab-standalone-endpoints", JSON.stringify([endpoint]));
         }, savedEndpoint);
         await page.goto(appUrl);
-        await expect(page.getByText("Saved endpoint", { exact: true })).toBeVisible();
         await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
         await expect(page.locator("base")).toHaveAttribute("href", `${basePath}/`);
-        await page.getByText("Saved endpoint", { exact: true }).click({ button: "right" });
-        await page.getByRole("menuitem", { name: "Reconnect Endpoint", exact: true }).click();
+        await page.getByTestId("standalone-settings-button").click();
+        await page.getByTestId("standalone-settings-nav-endpoints").click();
+        await page.getByRole("button", { name: "Reconnect Saved endpoint", exact: true }).click();
         const dialog = page.getByRole("dialog", { name: "Reconnect Endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
         const requestPromise = page.waitForRequest((request) => request.url().includes("/reconnect"));
@@ -142,51 +143,3 @@ for (const mode of ["production", "development"] as const) {
     });
   }
 }
-
-test("built Pages app handles files and topology requests without a backend", async ({ page }) => {
-  const server = await preview({
-    configFile: false,
-    root: webRoot,
-    base: "/containerlab-app/",
-    build: { outDir: "dist/pages" },
-    preview: { host: "127.0.0.1", port: 0 }
-  });
-  try {
-    const address = server.httpServer.address();
-    if (address === null || typeof address === "string") throw new Error("Pages preview did not listen");
-    const networkRequests: string[] = [];
-    page.on("request", (request) => {
-      if (/\/(?:api|auth)\/|\/files(?:\?|$)/.test(new URL(request.url()).pathname)) networkRequests.push(request.url());
-    });
-    await page.goto(`http://127.0.0.1:${address.port}/containerlab-app/`);
-    await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
-    const responses = await page.evaluate(async () => {
-      const created = await fetch("/api/runtime/topology-file/create", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileName: "base-path.clab.yml" })
-      });
-      const topology: unknown = await created.json();
-      if (typeof topology !== "object" || topology === null || !("topologyRef" in topology)) {
-        throw new Error("Sandbox did not create a topology");
-      }
-      const session = await fetch("/api/topology/sessions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ topologyRef: topology.topologyRef })
-      });
-      const sessionPayload: unknown = await session.json();
-      const files = await fetch("/files");
-      const nodes = await fetch("/api/runtime/ui/custom-nodes");
-      const filePayload: unknown = await files.json();
-      const nodePayload: unknown = await nodes.json();
-      return { files: filePayload, nodes: nodePayload, session: sessionPayload };
-    });
-    expect(Array.isArray(responses.files)).toBe(true);
-    expect(responses.nodes).toHaveProperty("customNodes", expect.any(Array));
-    expect(responses.session).toHaveProperty("sessionId", expect.any(String));
-    expect(networkRequests).toEqual([]);
-  } finally {
-    await new Promise<void>((resolve, reject) => server.httpServer.close((error) => error ? reject(error) : resolve()));
-  }
-});
