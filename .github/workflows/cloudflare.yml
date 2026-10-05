@@ -1,0 +1,67 @@
+name: Deploy to CF Pages (prod)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+  PREVIEW_SITE_URL: ${{ vars.CLOUDFLARE_SITE_URL || 'https://containerlab.app/' }}
+
+jobs:
+  deploy:
+    if: github.repository == 'srl-labs/containerlab-app' && vars.CLOUDFLARE_PAGES_PROJECT_NAME != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: cloudflare-production
+      url: ${{ env.PREVIEW_SITE_URL }}
+    steps:
+      - name: Validate project name
+        run: '[[ "$PROJECT_NAME" =~ ^[a-z0-9][a-z0-9-]{0,57}[a-z0-9]$ || "$PROJECT_NAME" =~ ^[a-z0-9]$ ]]'
+
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+          standalone: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build docs and sandbox
+        run: pnpm preview:build
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      - name: Test combined site
+        run: pnpm preview:test
+
+      - name: Prepare Cloudflare CLI directory
+        run: |
+          mkdir -p "$RUNNER_TEMP/cloudflare-sandbox"
+          echo '{"private":true}' > "$RUNNER_TEMP/cloudflare-sandbox/package.json"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.131.1"
+          packageManager: npm
+          workingDirectory: ${{ runner.temp }}/cloudflare-sandbox
+          command: pages deploy "${{ github.workspace }}/site" --project-name=${{ env.PROJECT_NAME }} --branch=main --commit-hash=${{ github.sha }}
