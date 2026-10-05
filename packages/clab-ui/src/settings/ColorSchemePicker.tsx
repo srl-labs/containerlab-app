@@ -3,28 +3,29 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 
+import { DARK_VARS, LIGHT_VARS, type VarMap } from "../theme/devTheme";
+import { controlRadius, floatingRadius } from "../theme/surfaces";
+
+const SELECTED_RING =
+  "0 0 0 1px var(--clab-ui-button-background, var(--vscode-button-background))";
+
+/** Light and Dark preview their own palettes; Follow VS Code previews the host theme. */
+function schemeColors(vars?: VarMap) {
+  const color = (token: string) =>
+    vars ? vars[`--vscode-${token}`] : `var(--vscode-${token})`;
+  return {
+    background: color("editor-background"),
+    sidebar: color("sideBar-background"),
+    border: color("panel-border"),
+    line: color("descriptionForeground"),
+    accent: color("button-background"),
+  };
+}
+
 const SCHEMES = [
-  {
-    key: "vscode",
-    label: "Follow VS Code",
-    background: "background.default",
-    sidebar: "action.selected",
-    line: "text.secondary",
-  },
-  {
-    key: "light",
-    label: "Light",
-    background: "#f4f5f7",
-    sidebar: "#dce1e8",
-    line: "#bac2ce",
-  },
-  {
-    key: "dark",
-    label: "Dark",
-    background: "#141619",
-    sidebar: "#343943",
-    line: "#525967",
-  },
+  { key: "vscode", label: "Follow VS Code", colors: schemeColors() },
+  { key: "light", label: "Light", colors: schemeColors(LIGHT_VARS) },
+  { key: "dark", label: "Dark", colors: schemeColors(DARK_VARS) },
 ] as const;
 export type SettingsColorScheme = (typeof SCHEMES)[number]["key"];
 export function ColorSchemePicker({
@@ -65,36 +66,38 @@ export function ColorSchemePicker({
               testIdPrefix ? `${testIdPrefix}${scheme.key}` : undefined
             }
             sx={{
-              p: 0.875,
+              p: 0.5,
               display: "block",
-              textTransform: "none",
               color: "text.primary",
-              border: "1px solid",
-              borderColor: value === scheme.key ? "text.primary" : "divider",
-              boxShadow:
-                value === scheme.key ? "inset 0 0 0 1px currentColor" : "none",
-              borderRadius: 1.5,
+              borderColor: value === scheme.key ? "primary.main" : "divider",
+              boxShadow: value === scheme.key ? SELECTED_RING : "none",
+              borderRadius: floatingRadius,
+              "&:hover": {
+                borderColor:
+                  value === scheme.key ? "primary.main" : "text.secondary",
+              },
             }}
           >
             <Box
+              style={{
+                background: scheme.colors.background,
+                borderColor: scheme.colors.border,
+              }}
               sx={{
-                height: 42,
-                borderRadius: 0.75,
-                bgcolor: scheme.background,
-                border: 1,
-                borderColor: "divider",
+                height: 44,
+                borderRadius: controlRadius,
+                border: "1px solid",
                 display: "flex",
-                p: 0.5,
-                gap: 0.5,
-                mb: 0.5,
+                overflow: "hidden",
+                mb: 0.75,
               }}
             >
               <Box
-                sx={{
-                  width: "25%",
-                  bgcolor: scheme.sidebar,
-                  borderRadius: 0.5,
+                style={{
+                  background: scheme.colors.sidebar,
+                  borderColor: scheme.colors.border,
                 }}
+                sx={{ width: "28%", borderRight: "1px solid" }}
               />
               <Box
                 sx={{
@@ -102,29 +105,36 @@ export function ColorSchemePicker({
                   display: "flex",
                   flexDirection: "column",
                   gap: 0.5,
-                  pt: 0.5,
+                  p: 0.75,
                 }}
               >
-                {[75, 95, 55].map((width) => (
+                {[70, 90, 50].map((width) => (
                   <Box
                     key={width}
+                    style={{ background: scheme.colors.line }}
                     sx={{
                       width: `${width}%`,
                       height: 3,
                       borderRadius: 1,
-                      bgcolor: scheme.line,
                       opacity: 0.6,
                     }}
                   />
                 ))}
+                <Box
+                  style={{ background: scheme.colors.accent }}
+                  sx={{
+                    mt: "auto",
+                    alignSelf: "flex-end",
+                    width: 18,
+                    height: 6,
+                    borderRadius: "2px",
+                  }}
+                />
               </Box>
             </Box>
             <Typography
-              sx={{
-                fontWeight: 550,
-                fontSize: "calc(0.72rem * var(--settings-font-scale, 1))",
-                lineHeight: 1.5,
-              }}
+              variant="body2"
+              sx={{ fontWeight: 500, pb: 0.25, textAlign: "center" }}
             >
               {scheme.label}
             </Typography>

@@ -35,7 +35,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Basic Information" withTopDivider={false}>
+      <PanelSection title="Basic Information">
         <InputField
           id="group-name"
           label="Group Name"
@@ -64,7 +64,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
 
       <PanelSection
         title="Background"
-        bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
+        bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
       >
         <ColorField
           label="Color"
@@ -133,7 +133,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
         </Box>
       </PanelSection>
 
-      <PanelSection title="Label" bodySx={{ p: 2 }}>
+      <PanelSection title="Label">
         <ColorField
           label="Text Color"
           value={style.labelColor ?? style.color ?? "#ebecf0"}

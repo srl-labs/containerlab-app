@@ -4,7 +4,7 @@ import Box from "@mui/material/Box";
 
 import { getRecordUnknown, getString } from "../../../../core/utilities/typeHelpers";
 import type { NodeData } from "../../../../hooks/ui";
-import { PanelSectionHeader, ReadOnlyCopyField } from "../../../ui/form";
+import { PanelSection, ReadOnlyCopyField } from "../../../ui/form";
 
 export interface NodeInfoViewProps {
   nodeData: NodeData | null;
@@ -58,28 +58,25 @@ export const NodeInfoView: React.FC<NodeInfoViewProps> = ({ nodeData }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSectionHeader title="Node" withTopDivider={true} />
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+      <PanelSection title="Node">
         <ReadOnlyCopyField label="Name" value={nodeName} />
-      </Box>
+      </PanelSection>
 
-      <PanelSectionHeader title="Properties" withTopDivider={true} />
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+      <PanelSection title="Properties">
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ReadOnlyCopyField label="Kind" value={kind} />
           <ReadOnlyCopyField label="State" value={state} />
         </Box>
         <ReadOnlyCopyField label="Image" value={image} />
-      </Box>
+      </PanelSection>
 
-      <PanelSectionHeader title="Management" withTopDivider={true} />
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+      <PanelSection title="Management">
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <ReadOnlyCopyField label="IPv4" value={mgmtIpv4} mono />
           <ReadOnlyCopyField label="IPv6" value={mgmtIpv6} mono />
         </Box>
         <ReadOnlyCopyField label="FQDN" value={fqdn} mono />
-      </Box>
+      </PanelSection>
     </Box>
   );
 };

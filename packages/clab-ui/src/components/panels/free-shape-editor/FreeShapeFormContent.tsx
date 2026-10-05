@@ -49,7 +49,7 @@ function toBorderStyle(value: string): FreeShapeAnnotation["borderStyle"] {
 
 const ShapeSection: React.FC<SectionProps> = ({ formData, updateField, isLine }) => {
   return (
-    <PanelSection title="Shape" withTopDivider={false}>
+    <PanelSection title="Shape">
       <>
         <SelectField
           id="shape-type"
@@ -102,8 +102,7 @@ const FillSection: React.FC<SectionProps> = ({ formData, updateField, isLine }) 
       bodySx={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr",
-        gap: 1.5,
-        p: 2
+        gap: 1.5
       }}
     >
       <>

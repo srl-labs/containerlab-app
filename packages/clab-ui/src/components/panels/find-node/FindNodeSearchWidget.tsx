@@ -11,6 +11,7 @@ import ClearIcon from "@mui/icons-material/Clear";
 import { useGraphStore } from "../../../stores/graphStore";
 import { useCanvasStore } from "../../../stores/canvasStore";
 import { floatingRadius } from "../../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import { getNodesBoundingBox, isTopoNodeLike } from "../../../utils/graphQueryUtils";
 
 import { formatMatchCountText, getCombinedMatches } from "./findNodeSearchUtils";
@@ -240,15 +241,9 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           }}
         />
         <IconButton
-          color="primary"
           onClick={handleSearch}
           data-testid="find-node-search-btn"
-          sx={{
-            bgcolor: "primary.main",
-            color: "primary.contrastText",
-            "&:hover": { bgcolor: "primary.dark" },
-            borderRadius: 1
-          }}
+          sx={{ width: 32, height: 32, border: 1, borderColor: "divider" }}
         >
           <SearchIcon fontSize="small" />
         </IconButton>
@@ -279,7 +274,8 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
             color: "text.secondary",
             pl: 2,
             m: 0,
-            "& li": { mb: 0.25 }
+            "& li": { mb: 0.25 },
+            "& code": { fontFamily: MONO_FONT_FAMILY }
           }}
         >
           <li>

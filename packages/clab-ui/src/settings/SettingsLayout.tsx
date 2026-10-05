@@ -52,8 +52,8 @@ export function SettingsLayout({
         color: "text.primary",
         containerType: "inline-size",
         containerName: "settings-layout",
+        // Inputs keep a fixed size in the theme; settings follow the host font size.
         "--settings-font-scale": (theme) => theme.typography.fontSize / 13,
-        "& .MuiButton-root": { textTransform: "none" },
         "& .MuiInputBase-root": {
           fontSize: "calc(0.8125rem * var(--settings-font-scale, 1))",
         },
@@ -62,29 +62,26 @@ export function SettingsLayout({
       <Box
         component="header"
         sx={{
-          px: 2,
-          minHeight: 50,
+          pl: 2.5,
+          pr: 1.5,
+          minHeight: 48,
           display: "flex",
           alignItems: "center",
-          gap: 1,
+          gap: 1.25,
           borderBottom: 1,
           borderColor: "divider",
           flexShrink: 0,
         }}
       >
-        <TuneIcon sx={{ fontSize: 20, color: "text.secondary" }} />
-        <Typography
-          id={titleId}
-          component="h1"
-          sx={{
-            fontSize: "calc(1rem * var(--settings-font-scale, 1))",
-            fontWeight: 650,
-            letterSpacing: "-0.02em",
-          }}
-        >
+        <TuneIcon
+          sx={{ fontSize: 18, color: "var(--vscode-icon-foreground)" }}
+        />
+        <Typography id={titleId} component="h1" variant="h6">
           {title}
         </Typography>
-        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
+        <Box
+          sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}
+        >
           {headerActions}
         </Box>
       </Box>
@@ -110,7 +107,7 @@ export function SettingsLayout({
             borderColor: "divider",
             bgcolor: "transparent",
             "@container settings-layout (min-width: 720px)": {
-              width: 196,
+              width: 208,
               borderBottom: 0,
               borderRight: 1,
               borderColor: "divider",
@@ -127,7 +124,8 @@ export function SettingsLayout({
             <Box
               sx={{
                 mt: "auto",
-                p: 1.5,
+                px: 2,
+                py: 1.5,
                 display: "none",
                 "@container settings-layout (min-width: 720px)": {
                   display: "block",
@@ -151,8 +149,8 @@ export function SettingsLayout({
             <Box
               data-testid="settings-toolbar"
               sx={{
-                px: 2,
-                py: 1.25,
+                px: { xs: 2, sm: 3 },
+                py: 1.5,
                 borderBottom: 1,
                 borderColor: "divider",
                 flexShrink: 0,
@@ -168,13 +166,20 @@ export function SettingsLayout({
               minHeight: 0,
               minWidth: 0,
               overflow: "auto",
-              px: { xs: 1.5, sm: 2.5 },
-              py: 2,
+              px: { xs: 2, sm: 3 },
+              pt: 2.5,
+              pb: 3,
               display: "grid",
               alignContent: "start",
               rowGap: 2,
               containerType: "inline-size",
               containerName: "settings-content",
+              // Consecutive setting rows read as one list, split by hairlines.
+              "& [data-settings-row] + [data-settings-row]": {
+                pt: 2,
+                borderTop: 1,
+                borderColor: "divider",
+              },
             }}
           >
             <Box
@@ -184,27 +189,17 @@ export function SettingsLayout({
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: 1,
+                mb: 0.5,
               }}
             >
-              <Box>
-                <Typography
-                  component="h2"
-                  sx={{
-                    fontSize: "calc(1.125rem * var(--settings-font-scale, 1))",
-                    fontWeight: 650,
-                    letterSpacing: "-0.025em",
-                  }}
-                >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography component="h2" variant="h5">
                   {sectionTitle}
                 </Typography>
                 {sectionDescription && (
                   <Typography
                     variant="body2"
-                    sx={{
-                      mt: 0.25,
-                      fontSize: "calc(0.75rem * var(--settings-font-scale, 1))",
-                      color: "text.secondary",
-                    }}
+                    sx={{ mt: 0.5, color: "text.secondary" }}
                   >
                     {sectionDescription}
                   </Typography>
@@ -220,8 +215,8 @@ export function SettingsLayout({
         <Box
           component="footer"
           sx={{
-            px: 2,
-            py: 0.75,
+            px: 2.5,
+            py: 1.25,
             borderTop: 1,
             borderColor: "divider",
             display: "flex",

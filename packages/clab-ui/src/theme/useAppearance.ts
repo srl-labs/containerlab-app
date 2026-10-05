@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createTheme } from "@mui/material/styles";
+import { typographyFor } from "./typography";
 import { vscodeTheme } from "./vscodeTheme";
 import { CLAB_UI_VAR_ALIASES, DARK_VARS, LIGHT_VARS } from "./devTheme";
 
@@ -96,11 +97,7 @@ export function useAppearance() {
   return useMemo(() => {
     if (!appearance) return vscodeTheme;
     const typography = createTheme({
-      typography: {
-        fontFamily: "var(--clab-ui-font-family, var(--vscode-font-family))",
-        fontSize: appearance.fontSize || nativeFontSize,
-        overline: { fontWeight: 500, letterSpacing: "0.5px" },
-      },
+      typography: typographyFor(appearance.fontSize || nativeFontSize),
     }).typography;
     return { ...vscodeTheme, typography };
   }, [appearance, nativeFontSize]);

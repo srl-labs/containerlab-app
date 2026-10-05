@@ -10,7 +10,6 @@ import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormHelperText from "@mui/material/FormHelperText";
-import type { SxProps, Theme } from "@mui/material/styles";
 import ClearIcon from "@mui/icons-material/Clear";
 
 interface SelectOption {
@@ -31,13 +30,24 @@ interface SelectFieldProps {
   helperText?: string;
   required?: boolean;
   clearable?: boolean;
-  sx?: SxProps<Theme>;
 }
 
 const INLINE_FLEX_DISPLAY = "inline-flex";
 const INLINE_FLEX_ALIGN_SX = {
   display: INLINE_FLEX_DISPLAY,
   alignItems: "center"
+} as const;
+
+// A flex value box keeps icon options from adding baseline space to the field height.
+const SELECT_VALUE_SX = {
+  "& .MuiSelect-select": { display: "flex", alignItems: "center" }
+} as const;
+
+// Option icons stay at 16px so a select with icons is as tall as one without.
+const OPTION_ICON_SX = {
+  ...INLINE_FLEX_ALIGN_SX,
+  color: "text.secondary",
+  "& .MuiSvgIcon-root": { fontSize: 16 }
 } as const;
 
 function renderOptionLabel(
@@ -51,7 +61,7 @@ function renderOptionLabel(
 
   return (
     <Box sx={{ ...INLINE_FLEX_ALIGN_SX, gap }}>
-      <Box component="span" sx={INLINE_FLEX_ALIGN_SX}>
+      <Box component="span" sx={OPTION_ICON_SX}>
         {icon}
       </Box>
       <span>{label}</span>
@@ -69,8 +79,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   disabled,
   helperText,
   required,
-  clearable,
-  sx
+  clearable
 }) => {
   const hasLabel = label !== undefined && label.length > 0;
   const hasPlaceholder = placeholder !== undefined && placeholder.length > 0;
@@ -87,7 +96,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
         onChange={(e) => onChange(e.target.value)}
         label={label}
         displayEmpty={hasPlaceholder && !hasLabel}
-        sx={sx}
+        sx={SELECT_VALUE_SX}
         renderValue={(selected): React.ReactElement => {
           const selectedValue = String(selected);
           const option = options.find((opt) => opt.value === selectedValue);

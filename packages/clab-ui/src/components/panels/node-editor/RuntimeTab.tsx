@@ -28,7 +28,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Container Settings" withTopDivider={false}>
+      <PanelSection title="Container Settings">
         <InputField
           id="node-user"
           label="User"

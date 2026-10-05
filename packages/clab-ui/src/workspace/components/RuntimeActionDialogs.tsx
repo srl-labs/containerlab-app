@@ -55,6 +55,9 @@ import {
   type CreateTopologyDialogResult,
   type EndpointSelectionOption
 } from "../state/dialogs";
+import { floatingShadow } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
+import { VersionList } from "./AboutSettingsContent";
 import { FileEditorDialog } from "./FileEditorDialog";
 
 interface InspectGroup {
@@ -96,6 +99,9 @@ interface RuntimeOptionSelectionDialogState {
   request: ActiveRuntimeOptionSelectionDialogRequest;
   resolve: (value: string | undefined) => void;
 }
+
+/** Quiet, centered note for dialogs with nothing to list. */
+const EMPTY_STATE_SX = { py: 3, textAlign: "center", color: "text.secondary" } as const;
 
 const DEFAULT_NETEM_FIELDS: NetemFields = {
   delay: "0ms",
@@ -343,16 +349,22 @@ function InspectDialogView(props: {
             size="small"
             fullWidth
           />
-          {props.inspectLoading ? <Typography>Loading inspect data...</Typography> : null}
+          {props.inspectLoading ? (
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Loading inspect data…
+            </Typography>
+          ) : null}
           {props.inspectError ? <Alert severity="error">{props.inspectError}</Alert> : null}
           {!props.inspectLoading &&
           !props.inspectError &&
           props.filteredInspectGroups.length === 0 ? (
-            <Alert severity="info">No matching running lab data.</Alert>
+            <Typography variant="body2" sx={EMPTY_STATE_SX}>
+              No matching running lab data.
+            </Typography>
           ) : null}
           {props.filteredInspectGroups.map((group) => (
             <Box key={group.labName}>
-              <Typography variant="h6" sx={{ mb: 1 }}>
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>
                 {group.labName}
               </Typography>
               <TableContainer component={Paper} variant="outlined">
@@ -395,7 +407,7 @@ function InspectDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={props.closeInspect}>Close</Button>
+        <Button variant="text" onClick={props.closeInspect}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -428,7 +440,7 @@ function LogsDialogView(props: {
       <DialogTitle>{props.logsRequest?.title ?? "Node Logs"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ pt: 1, alignItems: { sm: "center" } }}>
             <TextField
               label="Tail"
               value={props.logsTail}
@@ -458,8 +470,10 @@ function LogsDialogView(props: {
               Export
             </Button>
             <FormControlLabel
+              sx={{ ml: { sm: 0.5 } }}
               control={
                 <Switch
+                  size="small"
                   checked={props.logsFollow}
                   onChange={(event) => props.setLogsFollow(event.target.checked)}
                 />
@@ -467,9 +481,13 @@ function LogsDialogView(props: {
               label="Follow"
             />
           </Stack>
-          {props.logsLoading ? <Typography>Loading logs...</Typography> : null}
+          {props.logsLoading ? (
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Loading logs…
+            </Typography>
+          ) : null}
           {props.logsError ? <Alert severity="error">{props.logsError}</Alert> : null}
-          <Typography variant="body2" sx={{ opacity: 0.8 }}>
+          <Typography variant="body2" sx={{ color: "text.secondary" }}>
             {logLineSummary}
           </Typography>
           <Paper
@@ -479,14 +497,16 @@ function LogsDialogView(props: {
               bgcolor: "background.default",
               maxHeight: 480,
               overflow: "auto",
-              p: 2
+              px: 1.5,
+              py: 1.25
             }}
           >
             <Typography
               component="pre"
               sx={{
-                fontFamily: "monospace",
-                fontSize: "0.8rem",
+                fontFamily: MONO_FONT_FAMILY,
+                fontSize: 12,
+                lineHeight: 1.6,
                 margin: 0,
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
@@ -499,7 +519,7 @@ function LogsDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={props.closeLogs}>Close</Button>
+        <Button variant="text" onClick={props.closeLogs}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -520,34 +540,26 @@ function VersionDialogView(props: {
       fullWidth
     >
       <DialogTitle>Version Information</DialogTitle>
-      <DialogContent dividers>
+      <DialogContent>
         <Stack spacing={2}>
-          {props.versionLoading ? <Typography>Loading version details...</Typography> : null}
-          {props.versionError ? <Alert severity="error">{props.versionError}</Alert> : null}
-          {props.versionInfo ? (
-            <TextField
-              label="Containerlab Version"
-              value={props.versionInfo}
-              fullWidth
-              multiline
-              minRows={6}
-              slotProps={{ input: { readOnly: true } }}
-            />
+          {props.versionLoading ? (
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Loading version details…
+            </Typography>
           ) : null}
-          {props.versionCheck ? (
-            <TextField
-              label="Update Check"
-              value={props.versionCheck}
-              fullWidth
-              multiline
-              minRows={3}
-              slotProps={{ input: { readOnly: true } }}
+          {props.versionError ? <Alert severity="error">{props.versionError}</Alert> : null}
+          {props.versionInfo || props.versionCheck ? (
+            <VersionList
+              rows={[
+                ...(props.versionInfo ? [{ label: "Containerlab version", value: props.versionInfo }] : []),
+                ...(props.versionCheck ? [{ label: "Update check", value: props.versionCheck, mono: false }] : [])
+              ]}
             />
           ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={runtimeUiActions.closeVersion}>Close</Button>
+        <Button variant="text" onClick={runtimeUiActions.closeVersion}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -573,11 +585,18 @@ function NetemDialogView(props: {
       <DialogTitle>{props.netemRequest?.title ?? "Manage Impairments"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
-          {props.netemLoading ? <Typography>Loading impairment state...</Typography> : null}
+          {props.netemLoading ? (
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Loading impairment state…
+            </Typography>
+          ) : null}
           {props.netemError ? <Alert severity="error">{props.netemError}</Alert> : null}
           {props.netemContainerName ? (
-            <Typography variant="body2" sx={{ opacity: 0.8 }}>
-              Container: {props.netemContainerName}
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
+              Container:{" "}
+              <Box component="span" sx={{ color: "text.primary", fontFamily: MONO_FONT_FAMILY, fontSize: 12 }}>
+                {props.netemContainerName}
+              </Box>
             </Typography>
           ) : null}
           <TableContainer component={Paper} variant="outlined">
@@ -598,7 +617,9 @@ function NetemDialogView(props: {
                   const fields = normalizeNetemFields(props.netemFieldsByInterface[row.name]);
                   return (
                     <TableRow key={row.name}>
-                      <TableCell>{row.label}</TableCell>
+                      <TableCell sx={{ fontFamily: MONO_FONT_FAMILY, fontSize: 12, whiteSpace: "nowrap" }}>
+                        {row.label}
+                      </TableCell>
                       {(
                         ["delay", "jitter", "loss", "rate", "corruption"] as Array<
                           keyof NetemFields
@@ -639,8 +660,7 @@ function NetemDialogView(props: {
                           </Button>
                           <Button
                             size="small"
-                            color="warning"
-                            variant="outlined"
+                            variant="text"
                             onClick={() => void props.clearNetem(row.name)}
                             disabled={props.netemPendingInterface === row.name}
                           >
@@ -655,12 +675,14 @@ function NetemDialogView(props: {
             </Table>
           </TableContainer>
           {!props.netemLoading && interfaceRows.length === 0 ? (
-            <Alert severity="info">No runtime interface data is available for this node.</Alert>
+            <Typography variant="body2" sx={EMPTY_STATE_SX}>
+              No runtime interface data is available for this node.
+            </Typography>
           ) : null}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={props.closeNetem}>Close</Button>
+        <Button variant="text" onClick={props.closeNetem}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -718,7 +740,12 @@ function CloneRepoEndpointField(props: {
 }) {
   if (props.endpointOptions.length <= 1) {
     return (
-      <Typography variant="body2">Endpoint: {props.endpointOptions[0]?.label ?? ""}</Typography>
+      <Typography variant="caption" sx={{ color: "text.secondary" }}>
+        Endpoint:{" "}
+        <Box component="span" sx={{ color: "text.primary", fontWeight: 500 }}>
+          {props.endpointOptions[0]?.label ?? ""}
+        </Box>
+      </Typography>
     );
   }
   return (
@@ -796,8 +823,8 @@ function CloneRepoDialogView(props: {
       fullWidth
     >
       <DialogTitle>{request?.title ?? "Clone Repository"}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
             variant="body2"
             sx={{
@@ -863,7 +890,7 @@ function CloneRepoDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeCloneRepoDialog(undefined)}>Cancel</Button>
+        <Button variant="text" onClick={() => props.closeCloneRepoDialog(undefined)}>Cancel</Button>
         <Button
           variant="contained"
           onClick={props.submitCloneRepoDialog}
@@ -963,8 +990,8 @@ function CreateTopologyDialogView(props: {
       fullWidth
     >
       <DialogTitle>{request.title}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
             variant="body2"
             sx={{
@@ -983,36 +1010,28 @@ function CreateTopologyDialogView(props: {
               setWorkspace(null);
             }}
           />
-          <Stack spacing={1}>
-            <Typography id="create-topology-location-label" variant="body2">
-              Location
-            </Typography>
-            <ToggleButtonGroup
-              exclusive
-              fullWidth
-              size="small"
-              aria-labelledby="create-topology-location-label"
-              value={location}
-              disabled={!currentWorkspace || Boolean(currentWorkspace.error)}
-              sx={{
-                "& .MuiToggleButton-root": { textTransform: "none" },
-                "& .MuiToggleButton-root.Mui-selected": {
-                  bgcolor: "primary.main",
-                  color: "primary.contrastText",
-                  "&:hover": { bgcolor: "primary.dark" }
-                }
-              }}
-              onChange={(_event, value: "personal" | "shared" | null) => {
-                if (value) setLocation(value);
-              }}
-            >
-              <ToggleButton value="personal">Personal</ToggleButton>
-              {sharedAvailable ? <ToggleButton value="shared">Shared</ToggleButton> : null}
-            </ToggleButtonGroup>
+          <Stack spacing={0.75}>
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+              <Typography id="create-topology-location-label" variant="body2" sx={{ fontWeight: 500 }}>
+                Location
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                aria-labelledby="create-topology-location-label"
+                value={location}
+                disabled={!currentWorkspace || Boolean(currentWorkspace.error)}
+                onChange={(_event, value: "personal" | "shared" | null) => {
+                  if (value) setLocation(value);
+                }}
+              >
+                <ToggleButton value="personal">Personal</ToggleButton>
+                {sharedAvailable ? <ToggleButton value="shared">Shared</ToggleButton> : null}
+              </ToggleButtonGroup>
+            </Stack>
             {currentWorkspace?.error ? (
               <Alert severity="error">{currentWorkspace.error}</Alert>
             ) : (
-              <Typography variant="body2" color="text.secondary" aria-live="polite">
+              <Typography variant="caption" color="text.secondary" aria-live="polite">
                 {locationDescription}
               </Typography>
             )}
@@ -1035,7 +1054,7 @@ function CreateTopologyDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeCreateTopologyDialog(undefined)}>Cancel</Button>
+        <Button variant="text" onClick={() => props.closeCreateTopologyDialog(undefined)}>Cancel</Button>
         <Button
           variant="contained"
           onClick={submit}
@@ -1065,8 +1084,8 @@ function EndpointSelectionDialogView(props: {
       fullWidth
     >
       <DialogTitle>{request?.title ?? "Select Endpoint"}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
             variant="body2"
             sx={{
@@ -1085,7 +1104,7 @@ function EndpointSelectionDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeEndpointSelectionDialog(undefined)}>Cancel</Button>
+        <Button variant="text" onClick={() => props.closeEndpointSelectionDialog(undefined)}>Cancel</Button>
         <Button
           variant="contained"
           onClick={props.submitEndpointSelectionDialog}
@@ -1123,13 +1142,13 @@ function RuntimeConfirmDialogView(props: {
   return (
     <Dialog open onClose={() => props.closeRuntimeConfirmDialog(false)} maxWidth="xs" fullWidth>
       <DialogTitle>{request.title}</DialogTitle>
-      <DialogContent dividers>
+      <DialogContent>
         <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>
           {request.message}
         </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeRuntimeConfirmDialog(false)}>
+        <Button variant="text" onClick={() => props.closeRuntimeConfirmDialog(false)}>
           {request.cancelLabel}
         </Button>
         <Button
@@ -1165,8 +1184,8 @@ function RuntimeTextInputDialogView(props: {
       fullWidth
     >
       <DialogTitle>{request.title}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
           {request.message ? (
             <Typography
               variant="body2"
@@ -1197,7 +1216,7 @@ function RuntimeTextInputDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeRuntimeTextInputDialog(undefined)}>
+        <Button variant="text" onClick={() => props.closeRuntimeTextInputDialog(undefined)}>
           {request.cancelLabel}
         </Button>
         <Button
@@ -1233,8 +1252,8 @@ function RuntimeOptionSelectionDialogView(props: {
       fullWidth
     >
       <DialogTitle>{request.title}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2} sx={{ pt: 0.5 }}>
+      <DialogContent>
+        <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
             variant="body2"
             sx={{
@@ -1254,7 +1273,7 @@ function RuntimeOptionSelectionDialogView(props: {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => props.closeRuntimeOptionSelectionDialog(undefined)}>
+        <Button variant="text" onClick={() => props.closeRuntimeOptionSelectionDialog(undefined)}>
           {request.cancelLabel}
         </Button>
         <Button
@@ -1288,11 +1307,11 @@ function RuntimeSnackbarView(props: {
         onClose={props.closeSnackbar}
         severity={severity}
         variant="outlined"
-        sx={(theme) => ({
+        sx={{
           alignItems: "flex-start",
           bgcolor: "background.paper",
           borderColor: `${severity}.main`,
-          boxShadow: theme.shadows[6],
+          boxShadow: floatingShadow,
           color: "text.primary",
           width: "100%",
           "& .MuiAlert-icon": {
@@ -1305,7 +1324,7 @@ function RuntimeSnackbarView(props: {
             whiteSpace: "pre-wrap",
             wordBreak: "break-word"
           }
-        })}
+        }}
       >
         {props.snackbar.message}
       </Alert>

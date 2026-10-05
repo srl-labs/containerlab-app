@@ -27,8 +27,23 @@ import type {
 import { PaletteView } from "./views";
 
 const MIN_WIDTH = 500;
-const TEXT_SECONDARY = "text.secondary";
 const ACTION_HOVER = "action.hover";
+
+const HANDLE_BUTTON_SX = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  p: 0,
+  border: 0,
+  bgcolor: "transparent",
+  color: "text.secondary",
+  cursor: "pointer",
+  transition: "color 120ms ease, background-color 120ms ease",
+  "&:hover": { bgcolor: ACTION_HOVER, color: "text.primary" },
+  "&:focus-visible": { outline: "1px solid var(--vscode-focusBorder)", outlineOffset: -1 }
+} as const;
+const HANDLE_ICON_SX = { fontSize: 16 } as const;
 
 type BannerRef = EditorBannerRef;
 type FooterRef = EditorFooterRef;
@@ -130,22 +145,9 @@ const ToggleHandle: React.FC<{
     onOpen();
   }, [isOpen, onBack, onClose, onOpen]);
 
-  const handleStyle = {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: 20,
-    cursor: "pointer",
-    borderRadius: sideConfig.borderRadius,
-    border: 1,
-    [sideConfig.borderZeroProp]: 0,
-    borderColor: "divider",
-    bgcolor: "background.paper",
-    "&:hover": { bgcolor: ACTION_HOVER }
-  };
-
   return (
     <Box
+      data-testid="context-panel-handle"
       sx={{
         position: "absolute",
         [sideConfig.positionProp]: isOpen ? `min(${anchorOffset}px, 70%)` : 0,
@@ -160,8 +162,13 @@ const ToggleHandle: React.FC<{
         zIndex: 1201,
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        gap: 0.5
+        width: 22,
+        overflow: "hidden",
+        bgcolor: "background.paper",
+        border: 1,
+        [sideConfig.borderZeroProp]: 0,
+        borderColor: "divider",
+        borderRadius: sideConfig.borderRadius
       }}
     >
       <Tooltip title={toggleTitle} placement={sideConfig.tooltipPlacement}>
@@ -171,9 +178,9 @@ const ToggleHandle: React.FC<{
           aria-label={toggleTitle}
           onClick={handleToggle}
           data-testid="panel-toggle-btn"
-          sx={{ ...handleStyle, height: 48 }}
+          sx={{ ...HANDLE_BUTTON_SX, height: 36 }}
         >
-          <ActiveIcon sx={{ fontSize: 16, color: TEXT_SECONDARY }} />
+          <ActiveIcon sx={HANDLE_ICON_SX} />
         </Box>
       </Tooltip>
       {isOpen && (
@@ -181,8 +188,14 @@ const ToggleHandle: React.FC<{
           title={`Move panel to ${sideConfig.moveTargetLabel}`}
           placement={sideConfig.tooltipPlacement}
         >
-          <Box component="button" type="button" aria-label={`Move panel to ${sideConfig.moveTargetLabel}`} onClick={onToggleSide} sx={{ ...handleStyle, height: 24 }}>
-            <SwapHorizIcon sx={{ fontSize: 14, color: TEXT_SECONDARY }} />
+          <Box
+            component="button"
+            type="button"
+            aria-label={`Move panel to ${sideConfig.moveTargetLabel}`}
+            onClick={onToggleSide}
+            sx={{ ...HANDLE_BUTTON_SX, height: 28, borderTop: 1, borderColor: "divider" }}
+          >
+            <SwapHorizIcon sx={HANDLE_ICON_SX} />
           </Box>
         </Tooltip>
       )}

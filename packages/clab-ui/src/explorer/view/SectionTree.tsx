@@ -64,7 +64,10 @@ function SectionTreeNode({
           pl: `${indent + 2}px`,
           pr: "4px",
           borderRadius: `${ROW_RADIUS_PX}px`,
-          transition: "background-color 90ms ease",
+          // Rows act like list items: double-clicking a name opens it instead of selecting text.
+          userSelect: "none",
+          transition: "background-color 120ms ease",
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
           "&:hover, &:has([data-menu-open='true'])": { bgcolor: "action.hover" },
           "&:hover .explorer-tree-chevron": { color: "text.secondary" },
           "&:hover .explorer-node-actions-trigger, &:focus-within .explorer-node-actions-trigger": {
@@ -218,7 +221,10 @@ export function SectionTree({
 
   if (section.nodes.length === 0) {
     return (
-      <Typography variant="body2" sx={{ color: "text.secondary", fontSize: "0.78rem", px: 1.5, py: 1 }}>
+      <Typography
+        variant="body2"
+        sx={{ color: "text.secondary", px: `${TREE_ROW_INSET_PX + 2 + TREE_DISCLOSURE_SLOT_PX}px`, py: 0.75 }}
+      >
         No items found.
       </Typography>
     );

@@ -16,14 +16,14 @@ import {
   Typography
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import DnsRoundedIcon from "@mui/icons-material/DnsRounded";
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
+import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import LinkIcon from "@mui/icons-material/Link";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SettingsIcon from "@mui/icons-material/Settings";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import UploadIcon from "@mui/icons-material/Upload";
 
@@ -50,7 +50,8 @@ import {
 } from "../endpoints";
 import { SettingsLayout } from "../../settings/SettingsLayout";
 import { SettingsField } from "../../settings/SettingsField";
-import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
+import { floatingSurfaceSx, overlayShadow } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { AboutSettingsContent } from "./AboutSettingsContent";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent";
 import { EndpointManager } from "./EndpointManager";
@@ -156,13 +157,13 @@ const SETTINGS_SECTIONS: Array<{
     key: "endpoints",
     label: "Endpoints",
     description: "Connection management and credentials",
-    icon: <DnsRoundedIcon fontSize="small" />
+    icon: <DnsOutlinedIcon fontSize="small" />
   },
   {
     key: "general",
     label: "General",
     description: "Workspace behavior",
-    icon: <SettingsIcon fontSize="small" />
+    icon: <SettingsOutlinedIcon fontSize="small" />
   },
   {
     key: "appearance",
@@ -180,13 +181,7 @@ const SETTINGS_SECTIONS: Array<{
     key: "capture",
     label: "Capture",
     description: "Edgeshark and packet capture helpers",
-    icon: (
-      <LinkIcon
-        sx={{
-          fontSize: "small"
-        }}
-      />
-    )
+    icon: <HubOutlinedIcon fontSize="small" />
   },
   {
     key: "about",
@@ -201,11 +196,17 @@ function SectionCard(props: {
   description: string;
   tone?: "info" | "success" | "warning" | "error";
   wide?: boolean;
+  /** Sizes the control to its content (switches) instead of the shared field width. */
+  compactControl?: boolean;
   children: React.ReactNode;
 }) {
-  const wide = props.wide ?? true;
   return (
-    <SettingsField title={props.title} description={props.description} wide={wide} compactControl={!wide}>
+    <SettingsField
+      title={props.title}
+      description={props.description}
+      wide={props.wide ?? true}
+      compactControl={props.compactControl}
+    >
       {props.children}
     </SettingsField>
   );
@@ -336,18 +337,7 @@ function CaptureSettingsSection(props: {
         tone={props.captureEndpoint && props.captureStatus?.running ? "success" : "warning"}
       >
         {props.captureError ? (
-          <Alert
-            severity="error"
-            variant="outlined"
-            sx={{
-              color: "text.primary",
-              borderColor: "error.main",
-              bgcolor: "background.paper",
-              "& .MuiAlert-icon": {
-                color: "error.main"
-              }
-            }}
-          >
+          <Alert severity="error">
             {props.captureError}
           </Alert>
         ) : null}
@@ -385,7 +375,7 @@ function CaptureSettingsSection(props: {
         />
         <Stack
           direction="row"
-          spacing={1.25}
+          spacing={1}
           sx={{
             flexWrap: "wrap"
           }}
@@ -444,7 +434,7 @@ function CaptureSettingsSection(props: {
         </Typography>
       </SectionCard>
       <SectionCard
-        title="Capture Defaults"
+        title="Capture defaults"
         description="Set per-endpoint defaults for generic capture commands and optional session hostname override."
         tone="info"
       >
@@ -453,22 +443,8 @@ function CaptureSettingsSection(props: {
           value={props.capturePreferences.preferredAction}
           onChange={props.handlePreferredCaptureActionChange}
           disabled={!props.captureEndpoint}
-          sx={{
-            alignSelf: "flex-start",
-            "& .MuiToggleButton-root": {
-              px: 1.75,
-              color: "text.primary",
-              borderColor: "divider"
-            },
-            "& .MuiToggleButton-root.Mui-selected": {
-              bgcolor: "action.selected",
-              color: "text.primary",
-              borderColor: "text.primary"
-            },
-            "& .MuiToggleButton-root.Mui-selected:hover": {
-              bgcolor: "action.hover"
-            }
-          }}
+          size="small"
+          sx={{ alignSelf: "flex-start" }}
         >
           <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
             Wireshark VNC
@@ -491,7 +467,7 @@ function CaptureSettingsSection(props: {
         />
         <Stack
           direction="row"
-          spacing={1.25}
+          spacing={1}
           sx={{
             flexWrap: "wrap"
           }}
@@ -506,7 +482,6 @@ function CaptureSettingsSection(props: {
           </Button>
           <Button
             variant="outlined"
-            color="warning"
             onClick={props.clearCaptureSessionHostname}
             disabled={!props.captureEndpoint}
             data-testid="standalone-settings-capture-session-hostname-clear"
@@ -741,7 +716,7 @@ export function SettingsOverlay({
           <>
             {onTabOrientationChange ? (
               <SectionCard
-                title="Open Tabs"
+                title="Open tabs"
                 description="Horizontal tabs sit above the editor. Vertical tabs sit in the workspace rail."
                 wide={false}
               >
@@ -753,7 +728,6 @@ export function SettingsOverlay({
                     const next = event.target.value;
                     if (next === "horizontal" || next === "vertical") onTabOrientationChange(next);
                   }}
-                  sx={{ minWidth: 160 }}
                 >
                   <MenuItem value="horizontal" data-testid="standalone-settings-tabs-horizontal">
                     Horizontal
@@ -768,6 +742,7 @@ export function SettingsOverlay({
               title="Automatically open palette"
               description="Open the node palette when you open an empty lab."
               wide={false}
+              compactControl
             >
               <Switch
                 size="small"
@@ -784,6 +759,7 @@ export function SettingsOverlay({
               title="Open palette on node click"
               description="Open the side panel when you click a node or link."
               wide={false}
+              compactControl
             >
               <Switch
                 size="small"
@@ -800,6 +776,7 @@ export function SettingsOverlay({
               title="Lock labs by default"
               description="Opened labs start locked until you unlock them."
               wide={false}
+              compactControl
             >
               <Switch
                 size="small"
@@ -825,7 +802,7 @@ export function SettingsOverlay({
       case "terminal":
         return (
             <SectionCard
-              title="Terminal Defaults"
+              title="Terminal defaults"
               description="Configure standalone defaults for SSH username resolution, telnet access, and font sizing."
               tone="info"
             >
@@ -843,12 +820,7 @@ export function SettingsOverlay({
                     : "JSON object mapping container kinds to default SSH usernames."
                 }
                 data-testid="standalone-settings-ssh-mapping"
-                sx={{
-                  "& textarea": {
-                    fontFamily: "monospace",
-                    fontSize: "0.85rem"
-                  }
-                }}
+                sx={{ "& textarea": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}
               />
               <TextField
                 label="Telnet Port"
@@ -916,31 +888,19 @@ export function SettingsOverlay({
                 Font size is global for all terminals. In terminal windows, use Actions or Alt+Up,
                 Alt+Down, Alt+0 for quick adjustment.
               </Typography>
-              {terminalDraft.error === null ? (
-                <Alert
-                  severity="info"
-                  variant="outlined"
-                  sx={{
-                    color: "text.primary",
-                    borderColor: "info.main",
-                    bgcolor: "background.paper",
-                    "& .MuiAlert-icon": {
-                      color: "info.main"
-                    }
-                  }}
-                >
-                  Saving writes normalized terminal preferences to local browser storage.
-                </Alert>
-              ) : null}
-              <Box>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
                 <Button
-                  variant="outlined"
                   onClick={handleSaveTerminalSettings}
                   disabled={terminalDraft.error !== null}
                   data-testid="standalone-settings-save-terminal"
                 >
                   Save Terminal Settings
                 </Button>
+                {terminalDraft.error === null ? (
+                  <Typography variant="caption" sx={{ color: "text.secondary" }}>
+                    Saved in this browser.
+                  </Typography>
+                ) : null}
               </Box>
             </SectionCard>
         );
@@ -1000,9 +960,9 @@ export function SettingsOverlay({
         paper: {
           sx: {
             ...floatingSurfaceSx,
+            boxShadow: overlayShadow,
             minHeight: { xs: "calc(100vh - 32px)", md: 560 },
             height: { xs: "calc(100vh - 32px)", md: "76vh" },
-            borderRadius: floatingRadius,
             overflow: "hidden"
           }
         }
@@ -1029,7 +989,6 @@ export function SettingsOverlay({
           <>
             {capabilities.endpoints ? (
               <Button
-                size="small"
                 variant="text"
                 color="error"
                 startIcon={<LogoutIcon />}
@@ -1040,7 +999,7 @@ export function SettingsOverlay({
             ) : (
               <span />
             )}
-            <Button size="small" onClick={handleCloseDialog}>
+            <Button variant="outlined" onClick={handleCloseDialog}>
               Close
             </Button>
           </>

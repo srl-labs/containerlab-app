@@ -35,7 +35,7 @@ const RUNTIME_OPTIONS = [
 ];
 
 const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
-  <PanelSection title="Resource Limits" withTopDivider={false} bodySx={{ p: 2 }}>
+  <PanelSection title="Resource Limits">
     <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
       <InputField
         id="node-cpu"
@@ -138,7 +138,7 @@ interface HealthCheckSectionProps {
 }
 
 const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, onUpdate }) => (
-  <PanelSection title="Health Check" bodySx={{ p: 2 }}>
+  <PanelSection title="Health Check">
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <InputField
         id="node-healthcheck-test"

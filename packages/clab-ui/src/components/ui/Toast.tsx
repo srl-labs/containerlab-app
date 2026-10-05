@@ -3,6 +3,8 @@ import React, { useState, useCallback } from "react";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 
+import { floatingShadow } from "../../theme/surfaces";
+
 export interface ToastMessage {
   id: string;
   message: string;
@@ -30,6 +32,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
           onClose={() => onDismiss(toast.id)}
           severity={toast.type ?? "info"}
           variant="filled"
+          sx={{ minWidth: 280, maxWidth: 480, boxShadow: floatingShadow }}
         >
           {toast.message}
         </Alert>

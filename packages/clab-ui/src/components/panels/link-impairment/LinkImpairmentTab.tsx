@@ -13,7 +13,7 @@ export interface LinkImpairmentTabProps {
 export const LinkImpairmentTab: React.FC<LinkImpairmentTabProps> = ({ data, onChange }) => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Impairment Settings" withTopDivider={false}>
+      <PanelSection title="Impairment Settings">
         <InputField
           id="delay"
           label="Delay"

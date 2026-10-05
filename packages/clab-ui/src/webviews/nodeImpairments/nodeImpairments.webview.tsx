@@ -1,9 +1,8 @@
 /* eslint-disable import-x/max-dependencies */
-import Alert from "@mui/material/Alert";
+import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import InputAdornment from "@mui/material/InputAdornment";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -17,7 +16,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
+import { MuiThemeProvider } from "../../theme/index";
+import { controlRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 
 import type { NetemDataMap, NetemFields, NodeImpairmentsInitialData } from "./types";
@@ -123,26 +124,30 @@ export function NodeImpairmentsApp(): React.JSX.Element {
         sx={{
           width: "100%",
           height: "100%",
-          p: 2,
           bgcolor: "background.default",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column"
         }}
       >
-        <Paper
-          variant="outlined"
+        <Box
           sx={{
-            p: 1.5,
+            px: 2,
+            py: 1.5,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 1,
-            flexWrap: "wrap"
+            gap: 1.5,
+            flexWrap: "wrap",
+            borderBottom: 1,
+            borderColor: "divider"
           }}
         >
-          <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-            Link Impairments: {nodeName}
+          <Typography variant="h6" sx={{ minWidth: 0 }}>
+            Link Impairments:{" "}
+            <Box component="span" sx={{ fontFamily: MONO_FONT_FAMILY, fontWeight: 500 }}>
+              {nodeName}
+            </Box>
           </Typography>
 
           <Stack direction="row" spacing={1}>
@@ -171,16 +176,32 @@ export function NodeImpairmentsApp(): React.JSX.Element {
               Refresh
             </Button>
           </Stack>
-        </Paper>
+        </Box>
 
-        <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", mt: 2 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", p: 2 }}>
           {sortedInterfaces.length === 0 ? (
-            <Alert severity="info" variant="outlined">
-              No interfaces available for this node.
-            </Alert>
+            <Stack spacing={1.5} sx={{ alignItems: "center", py: 8, color: "text.secondary" }}>
+              <SettingsEthernetIcon sx={{ fontSize: 28, opacity: 0.8 }} />
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                No interfaces available for this node.
+              </Typography>
+            </Stack>
           ) : (
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: "100%" }}>
-              <Table stickyHeader size="small" aria-label={`Link impairments table for ${nodeName}`}>
+            <TableContainer
+              sx={{
+                maxHeight: "100%",
+                border: 1,
+                borderColor: "divider",
+                borderRadius: controlRadius,
+                "& thead th": { bgcolor: "background.paper" },
+                "& tbody tr:last-of-type > td": { borderBottom: 0 }
+              }}
+            >
+              <Table
+                stickyHeader
+                size="small"
+                aria-label={`Link impairments table for ${nodeName}`}
+              >
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ whiteSpace: "nowrap" }}>Interface</TableCell>
@@ -198,14 +219,27 @@ export function NodeImpairmentsApp(): React.JSX.Element {
 
                     return (
                       <TableRow key={iface} hover>
-                        <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 500 }}>{iface}</TableCell>
+                        <TableCell
+                          sx={{
+                            whiteSpace: "nowrap",
+                            fontFamily: MONO_FONT_FAMILY,
+                            fontSize: 12,
+                            verticalAlign: "top",
+                            lineHeight: "32px"
+                          }}
+                        >
+                          {iface}
+                        </TableCell>
                         {FIELD_META.map((field) => {
                           const showDelayMessage = field.key === "delay" && hasValidationError;
                           const isErrorField =
                             hasValidationError && (field.key === "delay" || field.key === "jitter");
 
                           return (
-                            <TableCell key={`${iface}-${field.key}`} sx={{ minWidth: 148 }}>
+                            <TableCell
+                              key={`${iface}-${field.key}`}
+                              sx={{ minWidth: 148, verticalAlign: "top" }}
+                            >
                               <TextField
                                 fullWidth
                                 type={field.inputType}
@@ -215,7 +249,7 @@ export function NodeImpairmentsApp(): React.JSX.Element {
                                 helperText={
                                   showDelayMessage
                                     ? "A positive delay is required if jitter is set."
-                                    : " "
+                                    : undefined
                                 }
                                 onChange={(event) => {
                                   updateField(iface, field.key, event.target.value);
@@ -223,7 +257,12 @@ export function NodeImpairmentsApp(): React.JSX.Element {
                                 slotProps={{
                                   input: {
                                     endAdornment: (
-                                      <InputAdornment position="end">{field.unit}</InputAdornment>
+                                      <InputAdornment
+                                        position="end"
+                                        sx={{ "& .MuiTypography-root": { fontSize: 12 } }}
+                                      >
+                                        {field.unit}
+                                      </InputAdornment>
                                     )
                                   }
                                 }}

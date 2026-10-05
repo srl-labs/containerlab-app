@@ -1,12 +1,20 @@
 import React, { useEffect, useRef } from "react";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
+import Typography from "@mui/material/Typography";
 import type { LabTab } from "../state/labTabsStore";
 import type { TabOrientation } from "../state/themePreferences";
-import { floatingRadius, floatingSurfaceSx, headerBarHeight } from "../../theme/surfaces";
+import { controlRadius, headerBarHeight } from "../../theme/surfaces";
+
+const FOCUS_RING = "1px solid var(--clab-ui-focus-border, var(--vscode-focusBorder))";
+const STATE_MOTION = "background-color 120ms ease, color 120ms ease, opacity 120ms ease";
+// Keeps the " *" dirty marker in the tab's accessible name while the dot shows it visually.
+const VISUALLY_HIDDEN = {
+  position: "absolute", width: 1, height: 1, p: 0, m: "-1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0
+} as const;
 import { useRailPinned, WorkspaceRailItem } from "../WorkspaceRailItem";
 
 interface LabTabsBarProps {
@@ -35,17 +43,25 @@ function TabCloseButton({ title, tabId, onClose }: { title: string; tabId: strin
         onClose(tabId);
       }}
       onMouseDown={(event) => event.stopPropagation()}
-      sx={{
-        width: 22,
-        height: 22,
-        p: 0,
-        flexShrink: 0,
-        color: "inherit",
-        "&:hover": { bgcolor: "action.hover" }
-      }}
+      className="lab-tab-close"
+      sx={{ width: 20, height: 20, p: 0, flexShrink: 0, borderRadius: 1, color: "inherit" }}
     >
       <CloseIcon sx={{ fontSize: 14 }} />
     </IconButton>
+  );
+}
+
+function TabIcon({ kind, dirty = false, fontSize }: { kind: LabTab["kind"]; dirty?: boolean; fontSize: number }) {
+  const Icon = kind === "topology" ? AccountTreeOutlinedIcon : DescriptionOutlinedIcon;
+  return (
+    <Box component="span" sx={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+      <Icon sx={{ fontSize }} />
+      {dirty ? (
+        <Box aria-hidden="true" sx={{
+          position: "absolute", top: -2, right: -3, width: 6, height: 6, borderRadius: "50%", bgcolor: "currentColor"
+        }} />
+      ) : null}
+    </Box>
   );
 }
 
@@ -97,9 +113,11 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
       display: "flex", flexDirection: "column", alignSelf: "stretch", width: "100%", minWidth: 0, gap: 0.75, py: 0.5, overflow: "visible"
     } : {
       display: "flex", alignItems: "center", width: "100%", height: headerBarHeight, flexShrink: 0,
-      gap: 1, px: 1, overflowX: "auto", overflowY: "hidden",
-      bgcolor: "var(--vscode-editor-background, var(--clab-ui-editor-background, #000))",
-      borderBottom: "1px solid var(--clab-ui-panel-border, var(--vscode-panel-border, #888))"
+      gap: 0.5, px: 1, overflowX: "auto", overflowY: "hidden",
+      bgcolor: "background.default", borderBottom: 1, borderColor: "divider",
+      // A hairline scrollbar keeps overflowing tabs reachable without crowding the bar.
+      "&::-webkit-scrollbar": { height: 4 },
+      "&::-webkit-scrollbar-thumb": { border: 0 }
     }}>
       {tabs.map((tab, index) => {
         const active = tab.id === selectedId;
@@ -126,7 +144,7 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
                 <TabCloseButton title={tab.title} tabId={tab.id} onClose={close} />
               }
             >
-              {tab.kind === "topology" ? <AccountTreeIcon fontSize="small" /> : <DescriptionOutlinedIcon fontSize="small" />}
+              <TabIcon kind={tab.kind} dirty={dirty} fontSize={20} />
             </WorkspaceRailItem>
           );
         }
@@ -141,20 +159,33 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
             onMouseDown={(event) => { if (event.button === 1) event.preventDefault(); }}
             onKeyDown={keys.onKeyDown}
             sx={{
-              display: "flex", alignItems: "center", gap: 1, flex: "1 1 0", minWidth: 80, maxWidth: 240, height: 28, px: 1.25,
-              overflow: "hidden", ...floatingSurfaceSx, borderRadius: floatingRadius, cursor: "pointer", userSelect: "none",
-              color: active ? "primary.main" : "text.primary",
-              bgcolor: active ? "action.selected" : floatingSurfaceSx.bgcolor,
-              "&:hover": { bgcolor: active ? "action.selected" : "action.hover" },
-              "&:focus-visible": { outline: "1px solid var(--clab-ui-focus-border)", outlineOffset: 2 }
+              display: "flex", alignItems: "center", gap: 0.75, flex: "0 1 auto", minWidth: 96, maxWidth: 220, height: 28, pl: 1, pr: 0.5,
+              position: "relative", overflow: "hidden", borderRadius: controlRadius, cursor: "pointer", userSelect: "none",
+              color: active ? "text.primary" : "text.secondary",
+              bgcolor: active ? "action.selected" : "transparent",
+              transition: STATE_MOTION,
+              "&:hover": { bgcolor: active ? "action.selected" : "action.hover", color: "text.primary" },
+              "&:focus-visible": { outline: FOCUS_RING, outlineOffset: -1 },
+              // Inactive tabs reveal their close button on hover; unsaved tabs show a dot in its place.
+              "& .lab-tab-close": { opacity: active && !dirty ? 1 : 0, transition: STATE_MOTION },
+              "& .lab-tab-dirty": { opacity: dirty ? 1 : 0, transition: STATE_MOTION },
+              "&:hover .lab-tab-close, &:focus-within .lab-tab-close": { opacity: 1 },
+              "&:hover .lab-tab-dirty, &:focus-within .lab-tab-dirty": { opacity: 0 },
+              "@media (prefers-reduced-motion: reduce)": { transition: "none", "& .lab-tab-close, & .lab-tab-dirty": { transition: "none" } }
             }}>
-            <Box component="span" sx={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexGrow: 1, textAlign: "left" }}>
-              {tab.title}{dirty ? " *" : ""}
-            </Box>
-            {endpointLabels.size > 1 && <Box component="span" sx={{ fontSize: 10, px: 0.5, borderRadius: 1, border: "1px solid var(--clab-ui-panel-border)", whiteSpace: "nowrap" }}>
+            <TabIcon kind={tab.kind} fontSize={16} />
+            <Typography component="span" variant="body2" noWrap sx={{ flexGrow: 1, minWidth: 0, color: "inherit" }}>
+              {tab.title}{dirty ? <Box component="span" sx={VISUALLY_HIDDEN}> *</Box> : null}
+            </Typography>
+            {endpointLabels.size > 1 && <Typography component="span" variant="caption" noWrap sx={{ flexShrink: 0, color: "text.secondary" }}>
               {endpointLabels.get(tab.endpointId) ?? tab.endpointId}
-            </Box>}
-            <TabCloseButton title={tab.title} tabId={tab.id} onClose={close} />
+            </Typography>}
+            <Box sx={{ position: "relative", display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <Box aria-hidden="true" className="lab-tab-dirty" sx={{
+                position: "absolute", width: 8, height: 8, borderRadius: "50%", bgcolor: "currentColor", pointerEvents: "none"
+              }} />
+              <TabCloseButton title={tab.title} tabId={tab.id} onClose={close} />
+            </Box>
           </Box>
         );
       })}

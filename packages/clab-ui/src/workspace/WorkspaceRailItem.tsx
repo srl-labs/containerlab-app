@@ -2,6 +2,7 @@ import React, { createContext, useContext, useRef } from "react";
 import Box from "@mui/material/Box";
 import ButtonBase from "@mui/material/ButtonBase";
 import Typography from "@mui/material/Typography";
+import { controlRadius } from "../theme/surfaces";
 
 const MOTION = "160ms cubic-bezier(0.4, 0, 0.2, 1)";
 const REVEALED_STYLE = {
@@ -35,6 +36,8 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
   label, children, pinned, active, controls, expanded, onClick, testId, trailing, role, tabIndex, onKeyDown
 }, ref) {
   const itemRef = useRef<HTMLDivElement>(null);
+  // Views and tabs show where you are; toggles such as Pin only swap their icon.
+  const selected = active === true && (controls !== undefined || role === "tab");
   const suppress = () => {
     itemRef.current?.setAttribute("data-suppressed", "true");
   };
@@ -78,10 +81,12 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
         }}
         sx={{
           position: "absolute", inset: "0 auto 0 0", width: pinned ? "100%" : "max-content", maxWidth: "var(--rail-item-max-width)", height: "100%",
-          justifyContent: "flex-start", borderRadius: 1, overflow: "visible",
-          color: active === true ? "primary.main" : "text.primary",
-          transition: `max-width ${MOTION}`,
-          "&.Mui-focusVisible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: -2 },
+          justifyContent: "flex-start", borderRadius: controlRadius, overflow: "visible",
+          color: active === true ? "text.primary" : "text.secondary",
+          transition: `max-width ${MOTION}, color ${MOTION}`,
+          "&:hover, &.Mui-focusVisible": { color: "text.primary" },
+          // The focus ring follows the highlighted row, not the label carved beyond the rail.
+          "&.Mui-focusVisible": { outline: "none" },
           "@media (prefers-reduced-motion: reduce)": { transition: "none", "& *": { transition: "none" } }
         }}
       >
@@ -114,10 +119,19 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
           </Box>
         )}
         <Box sx={{
-          position: "absolute", inset: 0, borderRadius: "inherit", pointerEvents: "none",
-          bgcolor: active === true ? "action.selected" : "transparent",
-          ".workspace-rail-item:hover &": { bgcolor: "action.hover" }
+          position: "absolute", inset: "0 auto 0 0", width: pinned ? "100%" : 36, borderRadius: "inherit", pointerEvents: "none",
+          bgcolor: selected ? "action.selected" : "transparent",
+          transition: `background-color ${MOTION}`,
+          ".workspace-rail-item:hover &": { bgcolor: selected ? "action.selected" : "action.hover" },
+          ".Mui-focusVisible > &": { outline: "1px solid var(--clab-ui-focus-border, var(--vscode-focusBorder))", outlineOffset: -1 }
         }} />
+        {selected ? (
+          <Box aria-hidden="true" sx={{
+            position: "absolute", left: -6, top: 10, bottom: 10, width: 2, borderRadius: "0 2px 2px 0",
+            bgcolor: "primary.main", pointerEvents: "none",
+            "@media (forced-colors: active)": { bgcolor: "Highlight" }
+          }} />
+        ) : null}
         <Box sx={{ position: "relative", width: 36, height: 36, flexShrink: 0, display: "grid", placeItems: "center" }}>{children}</Box>
         <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, ml: 1, mr: trailing ? 0.5 : 1.5, pointerEvents: "none" }}>
           <Typography

@@ -14,6 +14,7 @@ import UploadFileIcon from "@mui/icons-material/UploadFile";
 
 import { DialogTitleWithClose } from "../../components/ui/dialog/DialogChrome";
 import { importCustomThemes, type CustomTheme } from "../../theme/customThemes";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { pickJsonFile } from "../../utils/jsonFile";
 
 const PLACEHOLDER = `{
@@ -63,7 +64,6 @@ export function ThemeImportDialog({
       maxWidth="sm"
       fullWidth
       data-testid="theme-import-dialog"
-      sx={{ "& .MuiButton-root": { textTransform: "none" } }}
     >
       <DialogTitleWithClose title="Import themes" onClose={close} />
       <DialogContent sx={{ display: "grid", gap: 2 }}>
@@ -73,11 +73,11 @@ export function ThemeImportDialog({
           from the ones it sets.
         </Typography>
         <Box>
-          <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => void importFile()}>
+          <Button variant="outlined" size="small" startIcon={<UploadFileIcon />} onClick={() => void importFile()}>
             Choose file…
           </Button>
         </Box>
-        <Divider sx={{ fontSize: "0.75rem", color: "text.secondary" }}>or paste JSON</Divider>
+        <Divider sx={{ typography: "caption", color: "text.secondary" }}>or paste JSON</Divider>
         <TextField
           multiline
           minRows={8}
@@ -91,10 +91,7 @@ export function ThemeImportDialog({
           }}
           slotProps={{ htmlInput: { "aria-label": "Theme JSON", spellCheck: false } }}
           sx={{
-            "& textarea": {
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-              fontSize: "0.8rem"
-            }
+            "& textarea": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 }
           }}
         />
         {error === null ? null : <Alert severity="error">{error}</Alert>}

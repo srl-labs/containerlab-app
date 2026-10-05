@@ -6,9 +6,7 @@ import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
-import InputAdornment from "@mui/material/InputAdornment";
+import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernetOutlined";
 import {
   endpointStatusHint,
   endpointStatusLabel,
@@ -16,6 +14,8 @@ import {
   endpointNeedsReconnect
 } from "../state/endpointStatus";
 import { useWorkspaceHost } from "../WorkspaceHost";
+import { dialogRadius, overlayShadow } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 
 import {
   endpointSessionDurationLabel,
@@ -91,8 +91,8 @@ function ReconnectCard({
       variant="outlined"
       sx={{
         p: 2,
-        borderColor: "#3c3c3c",
-        bgcolor: "rgba(255,255,255,0.02)"
+        borderColor: "divider",
+        bgcolor: "transparent"
       }}
     >
       <Stack spacing={1.5}>
@@ -103,29 +103,22 @@ function ReconnectCard({
             alignItems: "center"
           }}
         >
-          <SettingsEthernetIcon fontSize="small" sx={{ color: "#858585" }} />
+          <SettingsEthernetIcon sx={{ fontSize: 18, color: "text.secondary" }} />
           <Box sx={{ minWidth: 0 }}>
-            <Typography
-              variant="subtitle2"
-              noWrap
-              sx={{
-                fontWeight: 600
-              }}
-            >
+            <Typography variant="subtitle1" noWrap>
               {endpoint.label}
             </Typography>
             <Typography
-              variant="caption"
+              variant="body2"
               sx={{
-                color: "#858585",
-                fontFamily: "monospace",
-                fontSize: "0.75rem"
+                color: "text.secondary",
+                fontFamily: MONO_FONT_FAMILY
               }}
               noWrap
             >
               {endpointUrl} &middot; {endpoint.username}
             </Typography>
-            <Typography variant="caption" sx={{ color: "#858585", display: "block" }}>
+            <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
               Keep signed in: {endpointSessionDurationLabel(endpoint.sessionDuration)}
             </Typography>
           </Box>
@@ -145,7 +138,7 @@ function ReconnectCard({
           {endpointStatusLabel(endpoint.status)}. {endpointStatusHint(endpoint.status)}
         </Alert>
 
-        <Stack spacing={1}>
+        <Stack spacing={1} sx={{ pt: 0.5 }}>
           <TextField
             size="small"
             label="Username"
@@ -174,16 +167,7 @@ function ReconnectCard({
               }
             }}
             fullWidth
-            slotProps={{
-              inputLabel: { shrink: true },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockOutlinedIcon sx={{ fontSize: 16 }} />
-                  </InputAdornment>
-                )
-              }
-            }}
+            slotProps={{ inputLabel: { shrink: true } }}
           />
           <Button
             variant="contained"
@@ -196,7 +180,7 @@ function ReconnectCard({
               !password.trim() ||
               !endpointNeedsReconnect(endpoint.status)
             }
-            sx={{ textTransform: "none", flexShrink: 0 }}
+            sx={{ flexShrink: 0 }}
           >
             {busy ? "Connecting..." : "Connect"}
           </Button>
@@ -230,21 +214,25 @@ export function LoginPage({
         justifyContent: "center",
         minHeight: "100%",
         px: 2,
-        color: "#cccccc",
+        py: 3,
+        boxSizing: "border-box",
+        color: "text.primary",
         background:
-          "radial-gradient(ellipse at 50% 0%, rgba(60, 190, 239, 0.08) 0%, transparent 60%), #1e1e1e"
+          "radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--clab-ui-focus-border, var(--vscode-focusBorder)) 10%, transparent), transparent 60%), var(--clab-ui-editor-background, var(--vscode-editor-background))"
       }}
     >
       <Paper
-        elevation={8}
+        elevation={0}
         sx={{
-          p: { xs: 3, md: 4 },
-          width: "min(520px, 100%)",
-          bgcolor: "#252526",
-          color: "#cccccc",
+          p: { xs: 3, sm: 4 },
+          width: "min(440px, 100%)",
+          bgcolor: "background.paper",
+          backgroundImage: "none",
+          color: "text.primary",
           border: 1,
-          borderColor: "#3c3c3c",
-          borderRadius: 3
+          borderColor: "divider",
+          borderRadius: dialogRadius,
+          boxShadow: overlayShadow
         }}
       >
         <Box
@@ -252,25 +240,21 @@ export function LoginPage({
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            mb: 3
+            mb: 2
           }}
         >
           <Box
-            component="object"
-            type="image/svg+xml"
-            data={publicAssetUrl("containerlab-animated.svg")}
-            aria-label="Containerlab Logo"
-            sx={{
-              width: 200,
-              height: 154,
-              pointerEvents: "none"
-            }}
+            component="img"
+            src={publicAssetUrl("containerlab.svg")}
+            alt=""
+            aria-hidden="true"
+            sx={{ display: "block", width: 40, height: 40 }}
           />
-          <Typography variant="body2" sx={{ color: "#9d9d9d", mt: 1, textAlign: "center" }}>
-            {hasPersistedEndpoints
-              ? "Enter your password to reconnect to your endpoints."
-              : "Connect one or more `clab-api-server` endpoints to manage labs in the browser."}
-          </Typography>
+          {hasPersistedEndpoints ? (
+            <Typography variant="body2" sx={{ color: "text.secondary", mt: 2, textAlign: "center" }}>
+              Enter your password to reconnect to your endpoints.
+            </Typography>
+          ) : null}
         </Box>
 
         {hasPersistedEndpoints && !showAddForm ? (
@@ -293,8 +277,7 @@ export function LoginPage({
               onClick={() => setShowAddForm(true)}
               sx={{
                 alignSelf: "center",
-                textTransform: "none",
-                color: "#858585"
+                color: "text.secondary"
               }}
             >
               Manage saved endpoints
@@ -321,8 +304,7 @@ export function LoginPage({
                 onClick={() => setShowAddForm(false)}
                 sx={{
                   alignSelf: "center",
-                  textTransform: "none",
-                  color: "#858585"
+                  color: "text.secondary"
                 }}
               >
                 Back to reconnect

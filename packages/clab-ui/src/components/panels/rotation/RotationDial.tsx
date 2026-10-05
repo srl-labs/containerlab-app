@@ -66,22 +66,21 @@ export function RotationDial({
           }
         }}
         sx={{
-          width: 76,
-          height: 76,
+          width: 64,
+          height: 64,
           flexShrink: 0,
           p: 0,
           borderRadius: "50%",
           border: "1px solid",
           borderColor: "divider",
-          bgcolor: "background.default",
+          bgcolor: "transparent",
           color: "primary.main",
           position: "relative",
           cursor: onChange ? "ew-resize" : "default",
           touchAction: "none",
           "&:focus-visible": {
-            outline: "2px solid",
-            outlineColor: "primary.main",
-            outlineOffset: 3
+            outline: "1px solid var(--vscode-focusBorder)",
+            outlineOffset: 2
           },
           "&:disabled": { cursor: "default" }
         }}

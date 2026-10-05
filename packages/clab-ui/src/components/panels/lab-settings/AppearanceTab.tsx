@@ -153,7 +153,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             setLinkLabelMode(nextLinkLabelMode);
           }}
           data-testid="lab-settings-telemetry-style"
-          sx={{ minWidth: 160 }}
         >
           <MenuItem value="default">Default</MenuItem>
           <MenuItem value="telemetry-style">Telemetry Style</MenuItem>
@@ -178,7 +177,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             htmlInput: { "aria-label": "Node size", min: 12, max: 240, step: 1 },
             input: { endAdornment: <InputAdornment position="end">px</InputAdornment> }
           }}
-          sx={{ width: 160 }}
         />
       </SettingsField>
       <SettingsField title="Interface size" description="Telemetry interface label size as a percent of node size.">
@@ -200,7 +198,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
             htmlInput: { "aria-label": "Interface size", min: 40, max: 400, step: 5 },
             input: { endAdornment: <InputAdornment position="end">%</InputAdornment> }
           }}
-          sx={{ width: 160 }}
         />
       </SettingsField>
       <SettingsField title="Show rate labels" description="Show traffic rate labels on links.">
@@ -231,7 +228,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
                 if (isReadOnly) return;
                 setTelemetryGlobalInterfaceOverrideSelection(e.target.value);
               }}
-              sx={{ minWidth: 180 }}
             >
               <MenuItem value={INTERFACE_SELECT_AUTO}>Auto</MenuItem>
               <MenuItem value={INTERFACE_SELECT_FULL}>Full interface name</MenuItem>
@@ -258,7 +254,6 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
               value={interfaceLinkFilter}
               disabled={isReadOnly}
               onChange={(e) => setInterfaceLinkFilter(e.target.value)}
-              sx={{ minWidth: 220 }}
             />
           </SettingsField>
           <SettingsField

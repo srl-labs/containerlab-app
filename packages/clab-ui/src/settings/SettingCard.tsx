@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import Typography from "@mui/material/Typography";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import Tooltip from "@mui/material/Tooltip";
 import { SettingsField } from "./SettingsField";
@@ -113,7 +115,7 @@ export function SettingCard({
       sx={{ alignItems: "center", justifyContent: "flex-end" }}
     >
       {saved && !dirty && (
-        <CheckIcon sx={{ fontSize: 15 }} color="success" titleAccess="Saved" />
+        <CheckIcon sx={{ fontSize: 16 }} color="success" titleAccess="Saved" />
       )}
       {dirty && (
         <Button
@@ -133,15 +135,10 @@ export function SettingCard({
         <Button
           size="small"
           variant="text"
-          startIcon={<RestartAltIcon sx={{ fontSize: 14 }} />}
+          startIcon={<RestartAltIcon />}
           disabled={busy}
           onClick={() => {
             void save(true);
-          }}
-          sx={{
-            py: 0,
-            minHeight: 24,
-            fontSize: "calc(0.7rem * var(--settings-font-scale, 1))",
           }}
         >
           Reset
@@ -227,17 +224,22 @@ export function SettingCard({
       metadata={
         <>
           <Tooltip title={`${definition.key} · ${sourceLabel}`}>
-            <Typography
+            <Box
               component="span"
               tabIndex={0}
               sx={{
-                fontSize: "calc(0.65rem * var(--settings-font-scale, 1))",
+                display: "inline-flex",
                 color: "text.secondary",
                 cursor: "help",
+                borderRadius: "50%",
+                "&:hover": { color: "text.primary" },
+                "&:focus-visible": {
+                  outline: "1px solid var(--vscode-focusBorder)",
+                },
               }}
             >
-              ⓘ
-            </Typography>
+              <InfoOutlinedIcon sx={{ fontSize: 14 }} />
+            </Box>
           </Tooltip>
           {current.overridden && (
             <Chip
@@ -245,19 +247,15 @@ export function SettingCard({
               size="small"
               variant="outlined"
               sx={{
-                height: 17,
-                fontSize: "calc(0.6rem * var(--settings-font-scale, 1))",
+                height: 18,
+                typography: "caption",
+                color: "text.secondary",
+                "& .MuiChip-label": { px: 0.75 },
               }}
             />
           )}
           {definition.reloadRequired && (
-            <Typography
-              variant="caption"
-              sx={{
-                fontSize: "calc(0.65rem * var(--settings-font-scale, 1))",
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="caption" sx={{ color: "text.secondary" }}>
               Reload to apply
             </Typography>
           )}
@@ -278,12 +276,6 @@ export function SettingCard({
       {definition.type === "boolean" ? (
         <Switch
           size="small"
-          sx={{
-            "& .MuiSwitch-track": {
-              bgcolor: "text.secondary",
-              opacity: 0.4,
-            },
-          }}
           checked={text === "true"}
           disabled={busy}
           onChange={(_, checked) => edit(String(checked))}

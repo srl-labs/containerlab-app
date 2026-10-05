@@ -12,7 +12,7 @@ export function DetachedTerminalView({ pane, message, ...props }: Pick<PaneProps
   return <Box sx={{ bgcolor: "background.default", color: "text.primary", height: "100%", minHeight: 0 }}>
     {pane ? <RuntimeTerminalPaneView {...props} paneState={pane} active hidden={false} /> :
       <Box role="status" sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", p: 2 }}>
-        <Typography variant="body2">{message}</Typography>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>{message}</Typography>
       </Box>}
   </Box>;
 }

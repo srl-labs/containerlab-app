@@ -4,7 +4,9 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
+
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 
 import { normalizeHexColor } from "../../../utils/color";
 
@@ -18,7 +20,7 @@ interface ColorFieldProps {
   className?: string;
 }
 
-const SWATCH_SIZE = 22;
+const SWATCH_SIZE = 18;
 const COLOR_INPUT_THROTTLE_MS = 40;
 const LEADING_HASH_REGEX = /^#/;
 const HEX_TEXT_REGEX = /^[0-9A-Fa-f]{0,6}$/;
@@ -157,6 +159,7 @@ export const ColorField: React.FC<ColorFieldProps> = ({
         placeholder="000000"
         disabled={disabled}
         fullWidth
+        sx={{ "& .MuiInputBase-input": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}
         slotProps={{
           htmlInput: { "aria-label": ariaLabel, maxLength: 7 },
           input: {
@@ -167,15 +170,24 @@ export const ColorField: React.FC<ColorFieldProps> = ({
                   sx={{
                     width: SWATCH_SIZE,
                     height: SWATCH_SIZE,
-                    borderRadius: 0.5,
+                    borderRadius: 1,
                     backgroundColor: normalizedValue,
+                    // Keeps swatches that match the panel background visible.
+                    boxShadow:
+                      "inset 0 0 0 1px color-mix(in srgb, var(--vscode-foreground) 22%, transparent)",
                     cursor: disabled === true ? "default" : "pointer",
                     flexShrink: 0
                   }}
                 />
                 <Box
                   component="span"
-                  sx={{ ml: 0.75, color: "text.secondary", userSelect: "none" }}
+                  sx={{
+                    ml: 1,
+                    color: "text.secondary",
+                    fontFamily: MONO_FONT_FAMILY,
+                    fontSize: 12,
+                    userSelect: "none"
+                  }}
                 >
                   #
                 </Box>
@@ -188,9 +200,8 @@ export const ColorField: React.FC<ColorFieldProps> = ({
                   onClick={handleCopy}
                   disabled={disabled}
                   title="Copy hex color"
-                  sx={{ p: 0.25 }}
                 >
-                  <ContentCopyIcon fontSize="small" />
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </InputAdornment>
             )

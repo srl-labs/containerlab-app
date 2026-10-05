@@ -66,14 +66,7 @@ export function RotationAngleField({
           "aria-label": computed ? "Computed rotation angle" : "Rotation angle"
         }
       }}
-      sx={{
-        "& input": {
-          fontVariantNumeric: "tabular-nums",
-          fontSize: 20,
-          fontWeight: 500,
-          py: 1
-        }
-      }}
+      sx={{ "& input": { fontVariantNumeric: "tabular-nums" } }}
     />
   );
 }

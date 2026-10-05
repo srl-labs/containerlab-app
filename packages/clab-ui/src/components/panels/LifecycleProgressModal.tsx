@@ -20,6 +20,8 @@ import type {
   ProcessingMode
 } from "../../stores/topoViewerStore";
 import { calculateElapsedSeconds, formatElapsedSeconds } from "../../utils/lifecycleTimer";
+import { controlRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 
 interface LifecycleProgressModalProps {
   isOpen: boolean;
@@ -170,10 +172,11 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
           component="div"
           variant="body2"
           sx={{
-            fontFamily: "SFMono-Regular, Consolas, 'Liberation Mono', Menlo, Courier, monospace",
+            fontFamily: MONO_FONT_FAMILY,
+            fontSize: 12,
             whiteSpace: "pre-wrap",
             wordBreak: "break-word",
-            lineHeight: 1.4
+            lineHeight: 1.5
           }}
         >
           {entry.line}
@@ -190,12 +193,6 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
       fullWidth
       data-testid="lifecycle-progress-modal"
       slotProps={{
-        backdrop: {
-          sx: {
-            backdropFilter: "blur(2px)",
-            backgroundColor: "rgba(0, 0, 0, 0.35)"
-          }
-        },
         paper: {
           sx: {
             overflow: "hidden"
@@ -269,7 +266,7 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
           sx={{
             border: 1,
             borderColor: "divider",
-            borderRadius: 1,
+            borderRadius: controlRadius,
             bgcolor: "background.default",
             minHeight: 220,
             maxHeight: 320,
@@ -294,8 +291,7 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
         {isProcessing ? (
           <Button
             size="small"
-            color="secondary"
-            variant="contained"
+            variant="outlined"
             onClick={onCancel}
             data-testid="lifecycle-cancel-btn"
           >

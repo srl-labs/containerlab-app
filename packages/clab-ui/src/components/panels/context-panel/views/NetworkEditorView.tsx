@@ -2,13 +2,7 @@
 import React, { useCallback } from "react";
 import Box from "@mui/material/Box";
 
-import {
-  InputField,
-  FilterableDropdown,
-  Section,
-  KeyValueList,
-  PanelSection
-} from "../../../ui/form";
+import { InputField, FilterableDropdown, KeyValueList, PanelSection } from "../../../ui/form";
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
 import { useApplySaveHandlers, useFooterControlsRef } from "../../../../hooks/ui";
 import { useNetworkEditorForm } from "../../../../hooks/editor/useNetworkEditorForm";
@@ -82,7 +76,7 @@ const NetworkEditorContent: React.FC<{
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Network Configuration" withTopDivider={false}>
+      <PanelSection title="Network Configuration">
         <FilterableDropdown
           id="network-type"
           label="Network Type"
@@ -142,45 +136,43 @@ const NetworkEditorContent: React.FC<{
       {/* VXLAN Settings */}
       {VXLAN_TYPES.includes(formData.networkType) && (
         <PanelSection title="VXLAN Settings">
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <InputField
+            id="vxlan-remote"
+            label="Remote"
+            value={formData.vxlanRemote ?? ""}
+            onChange={(v) => onChange({ vxlanRemote: v })}
+            placeholder="Remote endpoint IP address"
+          />
+          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1.5 }}>
             <InputField
-              id="vxlan-remote"
-              label="Remote"
-              value={formData.vxlanRemote ?? ""}
-              onChange={(v) => onChange({ vxlanRemote: v })}
-              placeholder="Remote endpoint IP address"
+              id="vxlan-vni"
+              label="VNI"
+              value={formData.vxlanVni ?? ""}
+              onChange={(v) => onChange({ vxlanVni: v })}
+              placeholder="e.g., 100"
             />
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 1 }}>
-              <InputField
-                id="vxlan-vni"
-                label="VNI"
-                value={formData.vxlanVni ?? ""}
-                onChange={(v) => onChange({ vxlanVni: v })}
-                placeholder="e.g., 100"
-              />
-              <InputField
-                id="vxlan-dst-port"
-                label="Dst Port"
-                value={formData.vxlanDstPort ?? ""}
-                onChange={(v) => onChange({ vxlanDstPort: v })}
-                placeholder="e.g., 4789"
-              />
-              <InputField
-                id="vxlan-src-port"
-                label="Src Port"
-                value={formData.vxlanSrcPort ?? ""}
-                onChange={(v) => onChange({ vxlanSrcPort: v })}
-                placeholder="e.g., 0"
-              />
-            </Box>
+            <InputField
+              id="vxlan-dst-port"
+              label="Dst Port"
+              value={formData.vxlanDstPort ?? ""}
+              onChange={(v) => onChange({ vxlanDstPort: v })}
+              placeholder="e.g., 4789"
+            />
+            <InputField
+              id="vxlan-src-port"
+              label="Src Port"
+              value={formData.vxlanSrcPort ?? ""}
+              onChange={(v) => onChange({ vxlanSrcPort: v })}
+              placeholder="e.g., 0"
+            />
           </Box>
         </PanelSection>
       )}
 
       {/* Extended Properties */}
       {supportsExtendedProps(formData.networkType) && (
-        <PanelSection title="Extended Properties">
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <>
+          <PanelSection title="Extended Properties">
             <InputField
               id="network-mtu"
               label="MTU"
@@ -191,26 +183,26 @@ const NetworkEditorContent: React.FC<{
               min={1}
               max={65535}
             />
-            <Section title="Vars">
-              <KeyValueList
-                items={formData.vars ?? {}}
-                onChange={(items) => onChange({ vars: items })}
-                keyPlaceholder="Variable name"
-                valuePlaceholder="Value"
-                addLabel="Add Variable"
-              />
-            </Section>
-            <Section title="Labels">
-              <KeyValueList
-                items={formData.labels ?? {}}
-                onChange={(items) => onChange({ labels: items })}
-                keyPlaceholder="Label name"
-                valuePlaceholder="Value"
-                addLabel="Add Label"
-              />
-            </Section>
-          </Box>
-        </PanelSection>
+          </PanelSection>
+          <PanelSection title="Vars">
+            <KeyValueList
+              items={formData.vars ?? {}}
+              onChange={(items) => onChange({ vars: items })}
+              keyPlaceholder="Variable name"
+              valuePlaceholder="Value"
+              addLabel="Add Variable"
+            />
+          </PanelSection>
+          <PanelSection title="Labels">
+            <KeyValueList
+              items={formData.labels ?? {}}
+              onChange={(items) => onChange({ labels: items })}
+              keyPlaceholder="Label name"
+              valuePlaceholder="Value"
+              addLabel="Add Label"
+            />
+          </PanelSection>
+        </>
       )}
     </Box>
   );

@@ -1,104 +1,4 @@
 {
-  "nodeAnnotations": [
-    {
-      "id": "leaf1",
-      "position": {
-        "x": 70,
-        "y": 180
-      },
-      "icon": "leaf",
-      "iconColor": "#19826b",
-      "iconCornerRadius": 12,
-      "labelPosition": "bottom",
-      "labelBackgroundColor": "transparent"
-    },
-    {
-      "id": "spine1",
-      "position": {
-        "x": 430,
-        "y": 180
-      },
-      "icon": "spine",
-      "iconColor": "#4d6550",
-      "iconCornerRadius": 12,
-      "labelPosition": "bottom",
-      "labelBackgroundColor": "transparent"
-    },
-    {
-      "id": "leaf2",
-      "position": {
-        "x": 790,
-        "y": 180
-      },
-      "icon": "leaf",
-      "iconColor": "#19826b",
-      "iconCornerRadius": 12,
-      "labelPosition": "bottom",
-      "labelBackgroundColor": "transparent"
-    }
-  ],
-  "groupStyleAnnotations": [
-    {
-      "id": "rack-a",
-      "name": "01 / RACK A",
-      "level": "L1",
-      "position": {
-        "x": 25,
-        "y": 140
-      },
-      "width": 150,
-      "height": 170,
-      "backgroundColor": "#ffffff",
-      "backgroundOpacity": 85,
-      "borderColor": "#cddbd1",
-      "borderWidth": 1,
-      "borderStyle": "solid",
-      "borderRadius": 20,
-      "labelColor": "#4d695c",
-      "labelPosition": "top-left",
-      "zIndex": -5
-    },
-    {
-      "id": "transit",
-      "name": "02 / TRANSIT",
-      "level": "L1",
-      "position": {
-        "x": 385,
-        "y": 140
-      },
-      "width": 150,
-      "height": 170,
-      "backgroundColor": "#e6eddf",
-      "backgroundOpacity": 85,
-      "borderColor": "#bacdbb",
-      "borderWidth": 1,
-      "borderStyle": "solid",
-      "borderRadius": 20,
-      "labelColor": "#4d695c",
-      "labelPosition": "top-left",
-      "zIndex": -5
-    },
-    {
-      "id": "rack-b",
-      "name": "03 / RACK B",
-      "level": "L1",
-      "position": {
-        "x": 745,
-        "y": 140
-      },
-      "width": 150,
-      "height": 170,
-      "backgroundColor": "#ffffff",
-      "backgroundOpacity": 85,
-      "borderColor": "#cddbd1",
-      "borderWidth": 1,
-      "borderStyle": "solid",
-      "borderRadius": 20,
-      "labelColor": "#4d695c",
-      "labelPosition": "top-left",
-      "zIndex": -5
-    }
-  ],
   "freeTextAnnotations": [
     {
       "id": "paper-heading",
@@ -207,6 +107,113 @@
     }
   ],
   "freeShapeAnnotations": [],
+  "trafficRateAnnotations": [],
+  "groupStyleAnnotations": [
+    {
+      "id": "rack-a",
+      "name": "01 / RACK A",
+      "level": "L1",
+      "position": {
+        "x": 25,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#cddbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "transit",
+      "name": "02 / TRANSIT",
+      "level": "L1",
+      "position": {
+        "x": 385,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#e6eddf",
+      "backgroundOpacity": 85,
+      "borderColor": "#bacdbb",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "rack-b",
+      "name": "03 / RACK B",
+      "level": "L1",
+      "position": {
+        "x": 745,
+        "y": 140
+      },
+      "width": 150,
+      "height": 170,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#cddbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 20,
+      "labelColor": "#4d695c",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 70,
+        "y": 180
+      },
+      "icon": "leaf",
+      "iconColor": "#19826b",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "spine1",
+      "position": {
+        "x": 430,
+        "y": 180
+      },
+      "icon": "spine",
+      "iconColor": "#4d6550",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "interfacePattern": "e1-{n}"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 790,
+        "y": 180
+      },
+      "icon": "leaf",
+      "iconColor": "#19826b",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "interfacePattern": "e1-{n}"
+    }
+  ],
+  "edgeAnnotations": [],
+  "aliasEndpointAnnotations": [],
   "viewerSettings": {
     "linkLabelMode": "hide",
     "gridColor": "#ccd8cc",

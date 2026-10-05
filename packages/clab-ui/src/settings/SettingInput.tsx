@@ -48,10 +48,6 @@ export function SettingInput({
       onChange={(event) => onChange(event.target.value)}
       error={Boolean(validation)}
       helperText={validation}
-      sx={{
-        "& .MuiOutlinedInput-root": { borderRadius: 1.25 },
-        "& .MuiInputBase-input": { py: 1 },
-      }}
       slotProps={{
         htmlInput: {
           "aria-label": definition.title,

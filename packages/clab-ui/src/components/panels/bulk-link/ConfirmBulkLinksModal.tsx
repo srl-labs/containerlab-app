@@ -8,6 +8,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 
 import { DialogTitleWithClose } from "../../ui/dialog/DialogChrome";
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 
 interface ConfirmBulkLinksModalProps {
   isOpen: boolean;
@@ -29,17 +30,11 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
   <Dialog open={isOpen} onClose={onCancel} maxWidth="xs" fullWidth>
     <DialogTitleWithClose title="Bulk Link Creation" onClose={onCancel} />
     <DialogContent dividers>
-      <Box
-        sx={{
-          p: 1,
-          borderRadius: 0.5,
-          border: 1
-        }}
-      >
+      <Box>
         <Typography variant="body2">
           Create <strong>{count}</strong> new link{count === 1 ? "" : "s"}?
         </Typography>
-        <Box sx={{ mt: 0.5 }}>
+        <Box sx={{ mt: 1, "& code": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}>
           <Typography
             variant="caption"
             sx={{
@@ -60,8 +55,8 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
         </Box>
       </Box>
     </DialogContent>
-    <DialogActions sx={{ px: 2, py: 1.5 }}>
-      <Button size="small" onClick={onCancel}>
+    <DialogActions>
+      <Button variant="text" size="small" onClick={onCancel}>
         Cancel
       </Button>
       <Button size="small" onClick={onConfirm}>

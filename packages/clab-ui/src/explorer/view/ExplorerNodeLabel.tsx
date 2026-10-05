@@ -175,7 +175,6 @@ function ExplorerNodePrimaryLabel({
         flex: "0 1 auto",
         minWidth: "6ch",
         fontWeight: EMPHASIS_WEIGHT[emphasis],
-        fontSize: emphasis === "muted" ? "0.78rem" : undefined,
         color,
         fontStyle: isDisconnectedPlaceholder ? "italic" : undefined
       }}
@@ -207,7 +206,6 @@ function EndpointStatus({ node, status }: Readonly<EndpointStatusProps>) {
             sx={(theme) => ({
               color: indicatorThemeColor(theme, node.statusIndicator),
               fontWeight: 500,
-              fontSize: "0.7rem",
               lineHeight: 1
             })}
           >
@@ -428,7 +426,6 @@ function ExplorerNodeTextBlock({
               ml: "10px",
               textAlign: "right",
               color: "text.secondary",
-              fontSize: "0.72rem",
               // Names matter more than details once the pane gets narrow.
               "@container (max-width: 250px)": { visibility: "hidden" }
             }}

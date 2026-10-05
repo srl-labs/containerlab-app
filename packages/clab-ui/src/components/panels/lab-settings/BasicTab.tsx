@@ -24,7 +24,6 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
         value={basic.labName}
         onChange={(event) => setBasic.setLabName(event.target.value)}
         disabled={isViewMode}
-        sx={{ minWidth: 220 }}
       />
     </SettingsField>
     <SettingsField title="Container Name Prefix" description="Prefix applied to deployed container names.">
@@ -36,7 +35,6 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
         value={basic.prefixType}
         onChange={(event) => setBasic.setPrefixType(event.target.value as PrefixType)}
         disabled={isViewMode}
-        sx={{ minWidth: 160 }}
       >
         <MenuItem value="default">Default (clab)</MenuItem>
         <MenuItem value="custom">Custom</MenuItem>
@@ -53,7 +51,6 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
           value={basic.customPrefix}
           onChange={(event) => setBasic.setCustomPrefix(event.target.value)}
           disabled={isViewMode}
-          sx={{ minWidth: 160 }}
         />
       </SettingsField>
     ) : null}

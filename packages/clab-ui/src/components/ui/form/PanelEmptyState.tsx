@@ -15,7 +15,7 @@ export const PanelEmptyState: React.FC<PanelEmptyStateProps> = ({ icon, message 
       alignItems: "center",
       justifyContent: "center",
       height: "100%",
-      gap: 2,
+      gap: 1.5,
       color: "text.secondary",
       p: 4
     }}
@@ -24,7 +24,8 @@ export const PanelEmptyState: React.FC<PanelEmptyStateProps> = ({ icon, message 
     <Typography
       variant="body2"
       sx={{
-        textAlign: "center"
+        textAlign: "center",
+        maxWidth: 280
       }}
     >
       {message}

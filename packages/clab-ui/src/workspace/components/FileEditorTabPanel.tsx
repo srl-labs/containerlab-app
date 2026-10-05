@@ -1,7 +1,13 @@
 import { useWorkspaceHost } from "../WorkspaceHost";
 import * as monaco from "monaco-editor";
 import { useCallback, useEffect, useRef } from "react";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
 
+import { headerBarHeight } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 
 import {
   isFileLabTab,
@@ -19,19 +25,6 @@ interface FileEditorTabPanelProps {
   onClose: (tabId: string) => void;
   tab: FileLabTab;
 }
-
-const PANEL_BG =
-  "var(--clab-ui-editor-background, var(--vscode-editor-background, #000000))";
-const PANEL_FG =
-  "var(--clab-ui-editor-foreground, var(--vscode-editor-foreground, #ececec))";
-const BORDER = "var(--vscode-panel-border, rgba(128, 128, 128, 0.35))";
-const BUTTON_BG = "var(--vscode-button-background, #f2f2f2)";
-const BUTTON_FG = "var(--vscode-button-foreground, #000000)";
-const DISABLED_BG =
-  "var(--vscode-button-secondaryBackground, rgba(128, 128, 128, 0.25))";
-const ERROR_BG =
-  "var(--vscode-inputValidation-errorBackground, rgba(127, 29, 29, 0.35))";
-const ERROR_BORDER = "var(--vscode-inputValidation-errorBorder, #be1100)";
 
 const LANGUAGE_PATTERNS: Array<[RegExp, string]> = [
   [/\.drawio$/, "xml"],
@@ -375,110 +368,80 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
   }, [tab.content, tab.path]);
 
   return (
-    <div
+    <Box
       data-testid="file-editor-tab-panel"
-      style={{
+      sx={{
         position: "absolute",
         inset: 0,
         display: "flex",
         minHeight: 0,
         flexDirection: "column",
-        backgroundColor: PANEL_BG,
-        color: PANEL_FG,
+        bgcolor: "background.default",
+        color: "text.primary",
         pointerEvents: "auto",
       }}
     >
-      <div
-        style={{
+      {/* Same height as the explorer header so both bottom edges line up. */}
+      <Box
+        sx={{
           display: "flex",
           alignItems: "center",
-          gap: 12,
-          minHeight: 44,
-          padding: "0 12px",
-          borderBottom: `1px solid ${BORDER}`,
-          boxSizing: "border-box",
+          gap: 1,
+          height: headerBarHeight,
+          flexShrink: 0,
+          pl: 1.5,
+          pr: 1,
+          borderBottom: 1,
+          borderColor: "divider",
         }}
       >
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {tab.title}
-            {dirty ? " *" : ""}
-          </div>
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 11,
-              opacity: 0.75,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            Lab workspace/{tab.path}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={handleClose}
-          style={{
-            height: 28,
-            padding: "0 10px",
-            borderRadius: 4,
-            border: `1px solid ${BORDER}`,
-            backgroundColor: "transparent",
-            color: PANEL_FG,
-            cursor: "pointer",
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 1,
+            minWidth: 0,
+            flex: 1,
           }}
         >
+          <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0, maxWidth: "50%" }}>
+            {tab.title}
+            {dirty ? " *" : ""}
+          </Typography>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{ minWidth: 0, color: "text.secondary", fontFamily: MONO_FONT_FAMILY }}
+          >
+            Lab workspace/{tab.path}
+          </Typography>
+        </Box>
+        <Button size="small" variant="text" onClick={handleClose}>
           Close
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="small"
+          variant="contained"
           data-testid="file-editor-tab-save"
           disabled={!dirty || tab.saving}
           onClick={() => {
             void handleSave();
           }}
-          style={{
-            height: 28,
-            minWidth: 70,
-            padding: "0 12px",
-            borderRadius: 4,
-            border: "none",
-            backgroundColor: dirty && !tab.saving ? BUTTON_BG : DISABLED_BG,
-            color: BUTTON_FG,
-            cursor: dirty && !tab.saving ? "pointer" : "default",
-            opacity: dirty && !tab.saving ? 1 : 0.65,
-          }}
+          sx={{ minWidth: 64 }}
         >
           {tab.saving ? "Saving..." : "Save"}
-        </button>
-      </div>
+        </Button>
+      </Box>
       {tab.error ? (
-        <div
-          style={{
-            padding: "8px 12px",
-            borderBottom: `1px solid ${ERROR_BORDER}`,
-            backgroundColor: ERROR_BG,
-            fontSize: 12,
-          }}
-        >
+        <Alert severity="error" sx={{ flexShrink: 0, borderRadius: 0, borderWidth: 0, borderBottomWidth: 1 }}>
           {tab.error}
-        </div>
+        </Alert>
       ) : null}
       <div
         ref={containerRef}
         data-testid="file-editor-tab-monaco"
         style={{ flex: 1, minHeight: 0 }}
       />
-    </div>
+    </Box>
   );
 }

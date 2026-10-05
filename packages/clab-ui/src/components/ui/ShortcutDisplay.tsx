@@ -5,7 +5,7 @@
 import React from "react";
 import Box from "@mui/material/Box";
 
-import { floatingRadius } from "../../theme/surfaces";
+import { floatingRadius, floatingShadow } from "../../theme/surfaces";
 
 interface ShortcutDisplayItem {
   id: number;
@@ -44,14 +44,18 @@ export const ShortcutDisplay: React.FC<ShortcutDisplayProps> = ({ shortcuts, sid
           key={shortcut.id}
           className="shortcut-display-item"
           sx={{
-            px: 2,
+            px: 1.5,
             py: 0.75,
             borderRadius: floatingRadius,
-            boxShadow: 3,
-            fontFamily: "sans-serif",
-            fontSize: "0.875rem",
-            letterSpacing: "0.025em",
-            animation: "shortcutFade 2s ease-in-out forwards"
+            border: 1,
+            borderColor: "var(--vscode-editorWidget-border)",
+            bgcolor: "var(--vscode-editorWidget-background)",
+            color: "var(--vscode-editorWidget-foreground)",
+            boxShadow: floatingShadow,
+            fontSize: 13,
+            fontWeight: 500,
+            animation: "shortcutFade 2s ease-in-out forwards",
+            "@media (prefers-reduced-motion: reduce)": { animationTimingFunction: "steps(1, end)" }
           }}
         >
           {shortcut.text}

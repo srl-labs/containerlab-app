@@ -2,10 +2,7 @@ import React from "react";
 import Box from "@mui/material/Box";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
-import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
-
-import { floatingRadius } from "../theme/surfaces";
 
 export interface SettingsNavigationItem {
   key: string;
@@ -38,65 +35,60 @@ export function SettingsNavigation({
         overflow: "auto",
         "@container settings-layout (min-width: 720px)": {
           flexDirection: "column",
+          pt: 1.5,
         },
       }}
     >
-      {items.map((item) => (
-        <Tooltip
-          key={item.key}
-          title={item.description}
-          placement="right"
-          enterDelay={600}
-        >
+      {items.map((item) => {
+        const selected = item.key === active;
+        return (
           <ListItemButton
-            selected={item.key === active}
+            key={item.key}
+            selected={selected}
             onClick={() => onSelect(item.key)}
             aria-label={item.label}
             data-testid={
               testIdPrefix ? `${testIdPrefix}${item.key}` : undefined
             }
-            aria-current={item.key === active ? "page" : undefined}
+            aria-current={selected ? "page" : undefined}
             sx={{
-              borderRadius: floatingRadius,
+              minHeight: 32,
               px: 1.25,
-              py: 0.9,
-              gap: 1,
+              py: 0.5,
+              gap: 1.25,
               flex: "0 0 auto",
               minWidth: "max-content",
-              color: "text.secondary",
+              color: selected ? "text.primary" : "text.secondary",
+              transition: "background-color 120ms ease, color 120ms ease",
+              "&:hover": { color: "text.primary" },
               "@container settings-layout (min-width: 720px)": { minWidth: 0 },
-              "&.Mui-selected": {
-                bgcolor: "action.selected",
-                color: "text.primary",
-              },
-              "&.Mui-selected:hover": { bgcolor: "action.hover" },
+              "@media (prefers-reduced-motion: reduce)": { transition: "none" },
             }}
           >
             <Box
               sx={{
                 display: "flex",
-                "& svg": { fontSize: 17 },
-                opacity: item.key === active ? 1 : 0.8,
+                color: selected
+                  ? "var(--vscode-icon-foreground)"
+                  : "text.secondary",
+                "& svg": { fontSize: 16 },
               }}
             >
               {item.icon}
             </Box>
             <Typography
               noWrap
-              sx={{
-                fontSize: "calc(0.79rem * var(--settings-font-scale, 1))",
-                fontWeight: item.key === active ? 600 : 450,
-                flex: 1,
-              }}
+              variant="body1"
+              sx={{ flex: 1, fontWeight: selected ? 500 : 400 }}
             >
               {item.label}
             </Typography>
             {item.count !== undefined && (
               <Typography
                 component="span"
+                variant="caption"
                 sx={{
                   color: "text.secondary",
-                  fontSize: "calc(0.67rem * var(--settings-font-scale, 1))",
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -104,8 +96,8 @@ export function SettingsNavigation({
               </Typography>
             )}
           </ListItemButton>
-        </Tooltip>
-      ))}
+        );
+      })}
     </List>
   );
 }

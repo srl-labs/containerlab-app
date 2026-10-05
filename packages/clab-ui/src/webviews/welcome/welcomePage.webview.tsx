@@ -1,10 +1,9 @@
 /* eslint-disable import-x/max-dependencies */
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LaunchIcon from "@mui/icons-material/Launch";
-import StarIcon from "@mui/icons-material/Star";
-import Alert from "@mui/material/Alert";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Container from "@mui/material/Container";
 import Divider from "@mui/material/Divider";
@@ -13,7 +12,6 @@ import Link from "@mui/material/Link";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import Checkbox from "@mui/material/Checkbox";
@@ -21,7 +19,9 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
+import { MuiThemeProvider } from "../../theme/index";
+import { controlRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 import containerlabLogo from "../../assets/images/containerlab.svg";
 
@@ -119,21 +119,14 @@ export function WelcomePageApp(): React.JSX.Element {
           color: "text.primary"
         }}
       >
-        <Container maxWidth="xl" sx={{ py: 3 }}>
-          <Paper
-            variant="outlined"
-            sx={{
-              p: { xs: 2, md: 3 },
-              borderColor: "divider",
-              backgroundColor: (theme) => theme.alpha(theme.palette.background.paper, 0.92)
-            }}
-          >
+        <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 }, px: { xs: 2, md: 4 } }}>
+          <Stack spacing={4}>
             <Stack spacing={3}>
               <Stack
-                direction={{ xs: "column", md: "row" }}
+                direction="row"
                 spacing={2}
                 sx={{
-                  alignItems: "flex-start"
+                  alignItems: "center"
                 }}
               >
                 <Box
@@ -141,214 +134,235 @@ export function WelcomePageApp(): React.JSX.Element {
                   src={containerlabLogo}
                   alt="Containerlab"
                   sx={{
-                    width: { xs: 56, md: 64 },
-                    height: { xs: 56, md: 64 },
+                    width: { xs: 48, md: 56 },
+                    height: { xs: 48, md: 56 },
                     objectFit: "contain",
                     flexShrink: 0
                   }}
                 />
-                <Stack spacing={1} sx={{ minWidth: 0 }}>
-                  <Typography variant="h4" sx={{ lineHeight: 1.2 }}>
-                    Welcome to Containerlab
-                  </Typography>
+                <Stack spacing={0.75} sx={{ minWidth: 0 }}>
+                  <Typography variant="h4">Welcome to Containerlab</Typography>
                   <Stack
                     direction="row"
-                    spacing={1}
+                    spacing={2}
                     useFlexGap
                     sx={{
-                      flexWrap: "wrap"
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      rowGap: 0.5
                     }}
                   >
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={`Extension v${extensionVersion}`}
-                    />
+                    <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                      Extension v{extensionVersion}
+                    </Typography>
                     {COMMUNITY_LINKS.map((link) => (
-                      <Chip
+                      <Link
                         key={link.label}
-                        size="small"
-                        variant="outlined"
-                        label={link.label}
-                        component="a"
+                        variant="body2"
                         href={link.href}
-                        clickable
                         target="_blank"
                         rel="noreferrer noopener"
-                        icon={<LaunchIcon />}
-                      />
+                        sx={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          "& .MuiSvgIcon-root": { fontSize: 12 }
+                        }}
+                      >
+                        {link.label}
+                        <LaunchIcon />
+                      </Link>
                     ))}
                   </Stack>
                 </Stack>
               </Stack>
 
               <Divider />
+            </Stack>
 
-              <Stack
-                direction={{ xs: "column", lg: "row" }}
-                spacing={3}
-                sx={{
-                  alignItems: "stretch"
-                }}
-              >
-                <Stack spacing={3} sx={{ flex: "1 1 55%" }}>
-                  <Stack spacing={1.5}>
-                    <Typography variant="h6">Getting Started</Typography>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={{ xs: 4, md: 6 }}
+              sx={{
+                alignItems: "flex-start"
+              }}
+            >
+              <Stack spacing={4} sx={{ flex: "1 1 50%", minWidth: 0 }}>
+                <Stack spacing={1}>
+                  <Typography variant="h6">Getting Started</Typography>
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      color: "text.secondary"
+                    }}
+                  >
+                    The Containerlab extension integrates containerlab directly into VS Code,
+                    providing an explorer for managing labs and containers. Create, deploy, and
+                    manage network topologies with just a few clicks.
+                  </Typography>
+                  <Stack
+                    spacing={1}
+                    sx={{
+                      alignItems: "flex-start",
+                      pt: 1
+                    }}
+                  >
+                    <Button
+                      variant="contained"
+                      onClick={() => {
+                        postMessage({ command: "createExample" });
+                      }}
+                    >
+                      Create Example Topology
+                    </Button>
                     <Typography
-                      variant="body2"
+                      variant="caption"
                       sx={{
                         color: "text.secondary"
                       }}
                     >
-                      The Containerlab extension integrates containerlab directly into VS Code,
-                      providing an explorer for managing labs and containers.
+                      Creates{" "}
+                      <Box component="code" sx={{ fontFamily: MONO_FONT_FAMILY }}>
+                        example.clab.yml
+                      </Box>{" "}
+                      in your current workspace.
                     </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        color: "text.secondary"
-                      }}
-                    >
-                      Create, deploy, and manage network topologies with just a few clicks.
-                    </Typography>
-                    <Stack
-                      spacing={0.75}
-                      sx={{
-                        alignItems: "flex-start"
-                      }}
-                    >
-                      <Button
-                        variant="contained"
-                        onClick={() => {
-                          postMessage({ command: "createExample" });
-                        }}
-                      >
-                        Create Example Topology
-                      </Button>
-                      <Typography
-                        variant="caption"
-                        sx={{
-                          color: "text.secondary"
-                        }}
-                      >
-                        Creates `example.clab.yml` in your current workspace.
-                      </Typography>
-                    </Stack>
-                  </Stack>
-
-                  <Stack spacing={1.5}>
-                    <Typography variant="h6">Documentation and Resources</Typography>
-                    <List dense disablePadding>
-                      {RESOURCE_LINKS.map((link) => (
-                        <ListItem key={link.label} disableGutters sx={{ py: 0.25 }}>
-                          <Link href={link.href} target="_blank" rel="noreferrer noopener">
-                            {link.label}
-                          </Link>
-                        </ListItem>
-                      ))}
-                    </List>
-
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={dontShowAgain}
-                          onChange={(event) => {
-                            const checked = event.target.checked;
-                            setDontShowAgain(checked);
-                            postMessage({ command: "dontShowAgain", value: checked });
-                          }}
-                        />
-                      }
-                      label="Don't show this page again"
-                    />
                   </Stack>
                 </Stack>
 
-                <Stack spacing={1.5} sx={{ flex: "1 1 45%", minWidth: 0 }}>
-                  <Typography variant="h6">Popular Topologies</Typography>
+                <Stack spacing={1}>
+                  <Typography variant="h6">Documentation and Resources</Typography>
+                  <List dense disablePadding>
+                    {RESOURCE_LINKS.map((link) => (
+                      <ListItem key={link.label} disableGutters sx={{ py: 0.5 }}>
+                        <Link href={link.href} target="_blank" rel="noreferrer noopener">
+                          {link.label}
+                        </Link>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Stack>
 
-                  {usingFallback ? (
-                    <Alert severity="info" variant="outlined">
-                      Using cached repository data due to GitHub API limits or temporary failures.
-                    </Alert>
-                  ) : null}
+                <Box>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={dontShowAgain}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setDontShowAgain(checked);
+                          postMessage({ command: "dontShowAgain", value: checked });
+                        }}
+                      />
+                    }
+                    label="Don't show this page again"
+                  />
+                </Box>
+              </Stack>
 
-                  {isLoadingRepos ? (
-                    <Stack
-                      direction="row"
-                      spacing={1.5}
-                      sx={{
-                        alignItems: "center",
-                        py: 2,
-                        color: "text.secondary"
-                      }}
-                    >
-                      <CircularProgress size={18} />
-                      <Typography variant="body2">Loading popular repositories...</Typography>
-                    </Stack>
-                  ) : null}
+              <Stack spacing={1} sx={{ flex: "1 1 50%", minWidth: 0, width: "100%" }}>
+                <Typography variant="h6">Popular Topologies</Typography>
 
-                  {!isLoadingRepos && repos.length === 0 ? (
-                    <Alert severity="info" variant="outlined">
-                      No repositories found.
-                    </Alert>
-                  ) : null}
+                {usingFallback ? (
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 0.75,
+                      color: "text.secondary",
+                      "& .MuiSvgIcon-root": { fontSize: 14, mt: "1px" }
+                    }}
+                  >
+                    <InfoOutlinedIcon />
+                    Using cached repository data due to GitHub API limits or temporary failures.
+                  </Typography>
+                ) : null}
 
-                  {!isLoadingRepos && repos.length > 0 ? (
+                {isLoadingRepos ? (
+                  <Stack
+                    direction="row"
+                    spacing={1.5}
+                    sx={{
+                      alignItems: "center",
+                      py: 2,
+                      color: "text.secondary"
+                    }}
+                  >
+                    <CircularProgress size={16} />
+                    <Typography variant="body2">Loading popular repositories…</Typography>
+                  </Stack>
+                ) : null}
+
+                {!isLoadingRepos && repos.length === 0 ? (
+                  <Typography variant="body2" sx={{ color: "text.secondary", py: 2 }}>
+                    No repositories found.
+                  </Typography>
+                ) : null}
+
+                {!isLoadingRepos && repos.length > 0 ? (
+                  <Box>
                     <List
                       dense
                       disablePadding
                       sx={{
-                        maxHeight: 420,
+                        maxHeight: 480,
                         overflowY: "auto",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 1
+                        mx: -1
                       }}
                     >
                       {repos.map((repo) => (
-                        <ListItem key={repo.html_url} disablePadding divider>
+                        <ListItem key={repo.html_url} disablePadding>
                           <ListItemButton
                             component="a"
                             href={repo.html_url}
                             target="_blank"
                             rel="noreferrer noopener"
-                            sx={{ alignItems: "flex-start" }}
+                            sx={{
+                              alignItems: "flex-start",
+                              px: 1,
+                              py: 0.75,
+                              borderRadius: controlRadius
+                            }}
                           >
-                            <Stack spacing={0.5} sx={{ width: "100%", minWidth: 0 }}>
+                            <Stack spacing={0.25} sx={{ width: "100%", minWidth: 0 }}>
                               <Stack
                                 direction="row"
                                 spacing={1}
                                 sx={{
                                   alignItems: "center",
+                                  justifyContent: "space-between",
                                   minWidth: 0
                                 }}
                               >
                                 <Typography
                                   component="span"
-                                  variant="body2"
+                                  variant="body1"
+                                  noWrap
                                   sx={{
-                                    fontWeight: 600,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis"
+                                    fontWeight: 500
                                   }}
                                 >
                                   {repo.name}
                                 </Typography>
-                                <Chip
-                                  size="small"
-                                  variant="outlined"
-                                  icon={<StarIcon />}
-                                  label={repo.stargazers_count}
+                                <Typography
+                                  component="span"
+                                  variant="caption"
                                   sx={{
-                                    "& .MuiChip-icon": {
-                                      color: "warning.main"
-                                    }
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 0.25,
+                                    flexShrink: 0,
+                                    color: "text.secondary",
+                                    "& .MuiSvgIcon-root": { fontSize: 14 }
                                   }}
-                                />
+                                >
+                                  <StarBorderIcon />
+                                  {repo.stargazers_count}
+                                </Typography>
                               </Stack>
                               <Typography
-                                variant="caption"
+                                variant="body2"
                                 sx={{
                                   color: "text.secondary"
                                 }}
@@ -360,11 +374,11 @@ export function WelcomePageApp(): React.JSX.Element {
                         </ListItem>
                       ))}
                     </List>
-                  ) : null}
-                </Stack>
+                  </Box>
+                ) : null}
               </Stack>
             </Stack>
-          </Paper>
+          </Stack>
         </Container>
       </Box>
     </MuiThemeProvider>

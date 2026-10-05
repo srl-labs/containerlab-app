@@ -1,14 +1,14 @@
-import Alert from "@mui/material/Alert";
+import LightbulbOutlinedIcon from "@mui/icons-material/LightbulbOutlined";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import React from "react";
 import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../../host";
-import { MuiThemeProvider } from "@containerlab/clab-ui/theme";
+import { MuiThemeProvider } from "../../theme/index";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { useMessageListener, usePostMessage } from "../shared/hooks";
 
 import type { WiresharkVncInitialData } from "./types";
@@ -155,40 +155,49 @@ export function WiresharkVncApp(): React.JSX.Element {
               textAlign: "center"
             }}
           >
-            <Paper
-              variant="outlined"
+            <Stack
+              spacing={1}
               sx={{
-                px: 3,
-                py: 2.5,
-                maxWidth: 460,
-                bgcolor: (theme) => theme.alpha(theme.palette.background.paper, 0.92)
+                alignItems: "center",
+                maxWidth: 420
               }}
             >
-              <Stack
-                spacing={1.5}
-                sx={{
-                  alignItems: "center"
-                }}
-              >
-                <CircularProgress size={24} />
-                <Typography variant="subtitle1">Loading Wireshark...</Typography>
-                {showVolumeTip ? (
-                  <Alert severity="info" variant="outlined" sx={{ textAlign: "left" }}>
-                    Tip: Save pcap files to `/pcaps` to persist them in the lab directory.
-                  </Alert>
-                ) : null}
-                {retryInfo ? (
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary"
-                    }}
-                  >
-                    {retryInfo}
-                  </Typography>
-                ) : null}
-              </Stack>
-            </Paper>
+              <CircularProgress size={20} sx={{ mb: 1 }} />
+              <Typography variant="subtitle1">Loading Wireshark…</Typography>
+              {retryInfo ? (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary"
+                  }}
+                >
+                  {retryInfo}
+                </Typography>
+              ) : null}
+              {showVolumeTip ? (
+                <Typography
+                  variant="body2"
+                  sx={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 0.75,
+                    pt: 2,
+                    color: "text.secondary",
+                    textAlign: "left",
+                    "& .MuiSvgIcon-root": { fontSize: 16, mt: "1px", flexShrink: 0 }
+                  }}
+                >
+                  <LightbulbOutlinedIcon />
+                  <span>
+                    Save pcap files to{" "}
+                    <Box component="code" sx={{ fontFamily: MONO_FONT_FAMILY, fontSize: 12 }}>
+                      /pcaps
+                    </Box>{" "}
+                    to persist them in the lab directory.
+                  </span>
+                </Typography>
+              ) : null}
+            </Stack>
           </Stack>
         ) : null}
       </Box>

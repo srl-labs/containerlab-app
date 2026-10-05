@@ -389,7 +389,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
     <Box sx={{ flex: 1, overflow: "auto" }}>
       <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
-          <PanelSection title="Monitor" withTopDivider={false}>
+          <PanelSection title="Monitor">
             <>
               <SelectField
                 id="traffic-rate-mode"
@@ -481,7 +481,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
 
           <PanelSection
             title="Background"
-            bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, p: 2 }}
+            bodySx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}
           >
             <>
               <ColorField
@@ -565,7 +565,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
             </Box>
           </PanelSection>
 
-          <PanelSection title="Text" bodySx={{ p: 2 }}>
+          <PanelSection title="Text">
             <ColorField
               label="Text Color"
               value={resolvedFields.textColorValue}
@@ -574,7 +574,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
           </PanelSection>
 
           {mode === "chart" && (
-            <PanelSection title="Chart" bodySx={{ p: 2 }}>
+            <PanelSection title="Chart">
               <CheckboxField
                 id="traffic-rate-show-legend"
                 label="Show legend"
