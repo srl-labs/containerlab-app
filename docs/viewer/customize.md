@@ -170,13 +170,13 @@ A runnable Linux lab with two subnets and IP forwarding. Address labels explain 
 </div>
 
 <div class="studio-example" id="dual-homed" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / EMBER</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / BLUEPRINT</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
 
 Two spines, three leaves, and two hosts, each wired to a pair of leaves. Elbow links drop through the gaps between layers with right-angle bends, links between devices that face each other run straight, and a crossing shows a small gap so it never reads as a turn. Hover any link to light it up with both of its devices.
 
-<div class="studio-art" data-palette="ember">
+<div class="studio-art" data-palette="blueprint">
 
-```clab file="examples/dual-homed.clab.yml" annotations="examples/dual-homed.clab.yml.annotations.json" title="Dual-homed hosts" borderless="true" theme="dark" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="520"
+```clab file="examples/dual-homed.clab.yml" annotations="examples/dual-homed.clab.yml.annotations.json" title="Dual-homed hosts" borderless="true" theme="dark" grid="lines" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="560"
 ```
 
 </div>
@@ -194,7 +194,7 @@ A branch office as a clean schematic: two internet uplinks, an edge router, a re
 
 <div class="studio-art" data-palette="porcelain">
 
-```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" link-hover="true" fit-padding="0.06" height="680"
+```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" link-hover="true" fit-padding="0.06" height="640"
 ```
 
 </div>
@@ -208,7 +208,7 @@ A branch office as a clean schematic: two internet uplinks, an edge router, a re
 <div class="studio-example" id="frosted-glass" markdown>
 <div class="studio-example-heading" markdown="0"><span class="studio-number">08</span><div><span class="studio-eyebrow">SHOWCASE / FROSTED GLASS</span><h3>Clear as glass.</h3></div><span class="studio-count">6 nodes · 7 links</span></div>
 
-Every device sits in a frosted glass box: a faint white fill, a hairline border, and a blur of whatever glows behind it. Four soft glows give the glass something to bend, and elbow links keep the wiring calm. Hover a link to light it up with both of its devices.
+Every device sits in a frosted glass box: a faint white fill, a bright rim, and a strong blur of whatever glows behind it. Each card half covers a vivid glow, so the same edge stays crisp outside the glass and turns soft inside it, and small points of light melt into bokeh behind the cards. Elbow links keep the wiring calm. Hover a link to light it up with both of its devices.
 
 <div class="studio-art" data-palette="synthwave">
 

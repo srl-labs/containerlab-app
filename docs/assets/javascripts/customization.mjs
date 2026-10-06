@@ -5,7 +5,7 @@ const labs = {
   "security-zones": { title: "Trust boundaries", palette: "sandstone", number: "03" },
   "wan-ring": { title: "The scenic route", palette: "violet", number: "04" },
   "packet-walk": { title: "Follow the packet", palette: "mint", number: "05" },
-  "dual-homed": { title: "Two of everything", palette: "ember", number: "06" },
+  "dual-homed": { title: "Two of everything", palette: "blueprint", number: "06" },
   "branch-office": { title: "Every port, labeled", palette: "porcelain", number: "07" },
   "frosted-glass": { title: "Clear as glass", palette: "synthwave", number: "08" }
 };

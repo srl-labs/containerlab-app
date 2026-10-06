@@ -9,7 +9,7 @@ const labs = [
   { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." },
   { id: "dual-homed", nodes: 7, groups: 3, shapes: 0, text: "TWO OF EVERYTHING." },
   { id: "branch-office", nodes: 8, groups: 3, shapes: 0, text: "EVERY PORT, LABELED." },
-  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 4, text: "CLEAR AS GLASS." }
+  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 21, text: "CLEAR AS GLASS." }
 ];
 
 test("all gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {

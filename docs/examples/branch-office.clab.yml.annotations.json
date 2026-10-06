@@ -3,7 +3,7 @@
     {
       "id": "isp-a",
       "position": {
-        "x": 180,
+        "x": 40,
         "y": 110
       },
       "icon": "cloud",
@@ -16,7 +16,7 @@
     {
       "id": "isp-b",
       "position": {
-        "x": 460,
+        "x": 600,
         "y": 110
       },
       "icon": "cloud",
@@ -30,19 +30,20 @@
       "id": "edge",
       "position": {
         "x": 320,
-        "y": 290
+        "y": 110
       },
       "icon": "pe",
       "iconColor": "#bc5e59",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
-      "labelBackgroundColor": "transparent"
+      "labelBackgroundColor": "transparent",
+      "groupId": "internet"
     },
     {
       "id": "core1",
       "position": {
         "x": 180,
-        "y": 470
+        "y": 340
       },
       "icon": "switch",
       "iconColor": "#327f83",
@@ -55,7 +56,7 @@
       "id": "core2",
       "position": {
         "x": 460,
-        "y": 470
+        "y": 340
       },
       "icon": "switch",
       "iconColor": "#327f83",
@@ -68,7 +69,7 @@
       "id": "floor1",
       "position": {
         "x": 40,
-        "y": 670
+        "y": 570
       },
       "icon": "leaf",
       "iconColor": "#7774a6",
@@ -81,7 +82,7 @@
       "id": "floor2",
       "position": {
         "x": 320,
-        "y": 670
+        "y": 570
       },
       "icon": "leaf",
       "iconColor": "#7774a6",
@@ -94,7 +95,7 @@
       "id": "floor3",
       "position": {
         "x": 600,
-        "y": 670
+        "y": 570
       },
       "icon": "leaf",
       "iconColor": "#7774a6",
@@ -107,14 +108,14 @@
   "groupStyleAnnotations": [
     {
       "id": "internet",
-      "name": "INTERNET",
+      "name": "WAN EDGE",
       "level": "L1",
       "position": {
-        "x": 140,
-        "y": 85
+        "x": -45,
+        "y": 78
       },
-      "width": 400,
-      "height": 95,
+      "width": 765,
+      "height": 118,
       "backgroundColor": "#ffffff",
       "backgroundOpacity": 85,
       "borderColor": "#dccbd1",
@@ -131,10 +132,10 @@
       "level": "L1",
       "position": {
         "x": 140,
-        "y": 445
+        "y": 308
       },
-      "width": 400,
-      "height": 95,
+      "width": 420,
+      "height": 118,
       "backgroundColor": "#ffffff",
       "backgroundOpacity": 85,
       "borderColor": "#dccbd1",
@@ -150,11 +151,11 @@
       "name": "FLOORS",
       "level": "L1",
       "position": {
-        "x": 5,
-        "y": 645
+        "x": -45,
+        "y": 538
       },
-      "width": 670,
-      "height": 95,
+      "width": 765,
+      "height": 118,
       "backgroundColor": "#ffffff",
       "backgroundOpacity": 85,
       "borderColor": "#dccbd1",
@@ -204,6 +205,7 @@
     "linkLabelMode": "show-all",
     "gridColor": "#dccbd1",
     "gridLineWidth": 0.5,
-    "telemetryInterfaceSizePercent": 140
+    "telemetryInterfaceSizePercent": 130,
+    "nodeStyle": "boxed"
   }
 }
