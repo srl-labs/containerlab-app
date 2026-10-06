@@ -24,7 +24,7 @@ import type { LabSettings } from "./types";
 const LAB_SETTINGS_SECTIONS = [
   {
     key: "basic",
-    label: "Basic",
+    label: "General",
     description: "Lab name and container prefix",
     icon: <AccountTreeIcon fontSize="small" />
   },
