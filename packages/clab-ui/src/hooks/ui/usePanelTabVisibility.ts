@@ -18,6 +18,8 @@ export interface PanelTabVisibility {
   showEditTab: boolean;
   /** Edit tab represents a selected node; activating it must open the node editor. */
   editTabOpensSelectedNode: boolean;
+  /** Changes on every explicit request to open a topology editor. */
+  editorRequest: number;
   infoTabTitle?: string;
   editTabTitle?: string;
 }
@@ -43,6 +45,7 @@ export function usePanelTabVisibility(): PanelTabVisibility {
   const isLocked = useTopoViewerStore((state) => state.isLocked);
   const mode = useTopoViewerStore((state) => state.mode);
   const hasSelectedNode = useTopoViewerStore((state) => state.selectedNode !== null);
+  const editorRequest = useTopoViewerStore((state) => state.editorRequest);
 
   // Info tab: when node or link selection resolves to an info view
   // (useContextPanelContent gates that on deployment/read-only state).
@@ -76,6 +79,7 @@ export function usePanelTabVisibility(): PanelTabVisibility {
     showInfoTab,
     showEditTab,
     editTabOpensSelectedNode: !hasEditor && canEditSelectedNode,
+    editorRequest,
     infoTabTitle,
     editTabTitle
   };

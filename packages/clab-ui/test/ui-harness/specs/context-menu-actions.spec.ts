@@ -63,6 +63,31 @@ test.describe("Context Menu Actions", () => {
       await expect(panel.getByText("Node Editor", { exact: true })).toBeVisible();
     });
 
+    test("clicking Edit brings the open node editor back from another tab", async ({
+      page,
+      topoViewerPage
+    }) => {
+      const nodeIds = await topoViewerPage.getNodeIds();
+      const nodeBox = await topoViewerPage.getNodeBoundingBox(nodeIds[0]);
+      const openEditFromMenu = async () => {
+        await rightClick(page, nodeBox!.x + nodeBox!.width / 2, nodeBox!.y + nodeBox!.height / 2);
+        await page.locator(SEL_EDIT_NODE_ITEM).click();
+      };
+
+      await openEditFromMenu();
+      const editTab = page.locator('[data-testid="panel-tab-edit"]');
+      await expect(editTab).toHaveAttribute("aria-selected", "true");
+
+      await page.locator('[data-testid="panel-tab-nodes"]').click();
+      await expect(editTab).toHaveAttribute("aria-selected", "false");
+
+      await openEditFromMenu();
+      await expect(editTab).toHaveAttribute("aria-selected", "true");
+      await expect(
+        page.locator(SEL_CONTEXT_PANEL).getByText("Node Editor", { exact: true })
+      ).toBeVisible();
+    });
+
     test("clicking Delete removes the node", async ({ page, topoViewerPage }) => {
       const initialNodeCount = await topoViewerPage.getNodeCount();
       const nodeIds = await topoViewerPage.getNodeIds();

@@ -61,8 +61,14 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
     [onFooterRef]
   );
 
-  const { showInfoTab, showEditTab, editTabOpensSelectedNode, infoTabTitle, editTabTitle } =
-    usePanelTabVisibility();
+  const {
+    showInfoTab,
+    showEditTab,
+    editTabOpensSelectedNode,
+    editorRequest,
+    infoTabTitle,
+    editTabTitle
+  } = usePanelTabVisibility();
 
   // Selecting the Edit tab for a selected node opens the real node editor,
   // exactly like double-click or the context menu Edit action.
@@ -163,6 +169,7 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
         onSetDefaultCustomNode={onSetDefaultCustomNode}
         editTabContent={editTabContent}
         showEditTab={showEditTab}
+        editorRequest={editorRequest}
         editTabTitle={editTabTitle}
         onEditDelete={editDeleteHandler}
         onEditTabOpen={handleEditTabOpen}
