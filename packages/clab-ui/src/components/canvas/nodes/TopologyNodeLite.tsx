@@ -6,6 +6,7 @@ import type { NodeProps } from "@xyflow/react";
 
 import type { TopologyNodeData } from "../types";
 import { SELECTION_COLOR, DEFAULT_ICON_COLOR } from "../types";
+import { useNodeBoxAppearance } from "../../../stores/canvasStore";
 import {
   useDeploymentState,
   useNodeBoxSpacing,
@@ -29,11 +30,12 @@ function toTopologyNodeData(data: NodeProps["data"]): TopologyNodeData {
   };
 }
 
-const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
+const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const nodeData = toTopologyNodeData(data);
   const deploymentState = useDeploymentState();
   const isBoxed = useNodeStyle() === "boxed";
   const boxSpacing = useNodeBoxSpacing();
+  const boxAppearance = useNodeBoxAppearance(id, nodeData.box);
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
@@ -61,14 +63,14 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
       size={iconSize}
       boxed={isBoxed}
       boxSpacing={boxSpacing}
-      boxAppearance={nodeData.box}
+      boxAppearance={boxAppearance}
       selected={selected}
     />
   );
 };
 
 function areTopologyNodeLitePropsEqual(prev: NodeProps, next: NodeProps): boolean {
-  return prev.data === next.data && prev.selected === next.selected;
+  return prev.id === next.id && prev.data === next.data && prev.selected === next.selected;
 }
 
 export const TopologyNodeLite = memo(TopologyNodeLiteComponent, areTopologyNodeLitePropsEqual);

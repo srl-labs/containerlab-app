@@ -1,5 +1,5 @@
 // Box section of the node editor, shown in the boxed node style.
-import React, { useCallback, useMemo } from "react";
+import React, { memo, useCallback, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -89,23 +89,41 @@ function useThemeBoxColors(): Record<keyof typeof NODE_BOX_THEME_COLORS, string>
   );
 }
 
+/** Applies a change to the box look. */
+type BoxUpdate = (patch: Partial<NodeBoxAppearance>) => void;
+
+function boxPatch<K extends keyof NodeBoxAppearance>(
+  key: K,
+  value: NodeBoxAppearance[K]
+): Partial<NodeBoxAppearance> {
+  const patch: Partial<NodeBoxAppearance> = {};
+  patch[key] = value;
+  return patch;
+}
+
 interface BoxColorFieldProps {
   testId: string;
   label: string;
+  field: "color" | "borderColor" | "textColor";
   value: string | undefined;
   themeValue: string;
-  onChange: (value: string | undefined) => void;
+  onUpdate: BoxUpdate;
 }
 
 /** Color that follows the theme while unset; the reset button returns it to the theme. */
-const BoxColorField: React.FC<BoxColorFieldProps> = ({
+const BoxColorField = memo(function BoxColorField({
   testId,
   label,
+  field,
   value,
   themeValue,
-  onChange
-}) => {
+  onUpdate
+}: BoxColorFieldProps) {
   const isThemed = value === undefined;
+  const handleChange = useCallback(
+    (color: string | undefined) => onUpdate(boxPatch(field, color)),
+    [field, onUpdate]
+  );
   return (
     <Box data-testid={testId} sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -113,7 +131,7 @@ const BoxColorField: React.FC<BoxColorFieldProps> = ({
           id={`${testId}-input`}
           label={isThemed ? `${label} · Theme` : label}
           value={value ?? themeValue}
-          onChange={onChange}
+          onChange={handleChange}
         />
       </Box>
       <Tooltip title={isThemed ? "Follows the theme" : "Use theme color"}>
@@ -124,7 +142,7 @@ const BoxColorField: React.FC<BoxColorFieldProps> = ({
             data-testid={`${testId}-reset`}
             edge="end"
             disabled={isThemed}
-            onClick={() => onChange(undefined)}
+            onClick={() => handleChange(undefined)}
           >
             <RestartAltIcon sx={{ fontSize: 18 }} />
           </IconButton>
@@ -132,50 +150,73 @@ const BoxColorField: React.FC<BoxColorFieldProps> = ({
       </Tooltip>
     </Box>
   );
-};
+});
 
 interface SliderRowProps {
   testId: string;
   label: string;
+  field: "opacity" | "blur";
   value: number;
   min: number;
   max: number;
   unit: string;
-  onChange: (value: number) => void;
+  /** Called on release (and on each key press). */
+  onUpdate: BoxUpdate;
+  /** Called while dragging, to show the value on the canvas. */
+  onPreview: BoxUpdate;
 }
 
-const SliderRow: React.FC<SliderRowProps> = ({
+function sliderValue(next: number | number[]): number {
+  return Array.isArray(next) ? next[0] : next;
+}
+
+/**
+ * While dragging, only this row and the canvas preview follow the thumb; the
+ * form, and every field that renders from it, updates once on release.
+ */
+const SliderRow = memo(function SliderRow({
   testId,
   label,
+  field,
   value,
   min,
   max,
   unit,
-  onChange
-}) => (
-  <Box sx={CONTROL_ROW_SX}>
-    <Typography variant="body2" sx={CONTROL_LABEL_SX}>
-      {label}
-    </Typography>
-    <Slider
-      data-testid={testId}
-      size="small"
-      value={value}
-      min={min}
-      max={max}
-      step={1}
-      onChange={(_event: Event, next: number | number[]) =>
-        onChange(Array.isArray(next) ? next[0] : next)
-      }
-      slotProps={{ input: { "aria-label": label } }}
-      sx={{ flex: 1, mx: 0.5 }}
-    />
-    <Typography variant="body2" sx={CONTROL_VALUE_SX}>
-      {value}
-      {unit}
-    </Typography>
-  </Box>
-);
+  onUpdate,
+  onPreview
+}: SliderRowProps) {
+  const [dragValue, setDragValue] = useState<number | null>(null);
+  const shownValue = dragValue ?? value;
+  return (
+    <Box sx={CONTROL_ROW_SX}>
+      <Typography variant="body2" sx={CONTROL_LABEL_SX}>
+        {label}
+      </Typography>
+      <Slider
+        data-testid={testId}
+        size="small"
+        value={shownValue}
+        min={min}
+        max={max}
+        step={1}
+        onChange={(_event: Event, next: number | number[]) => {
+          setDragValue(sliderValue(next));
+          onPreview(boxPatch(field, sliderValue(next)));
+        }}
+        onChangeCommitted={(_event, next: number | number[]) => {
+          setDragValue(null);
+          onUpdate(boxPatch(field, sliderValue(next)));
+        }}
+        slotProps={{ input: { "aria-label": label } }}
+        sx={{ flex: 1, mx: 0.5 }}
+      />
+      <Typography variant="body2" sx={CONTROL_VALUE_SX}>
+        {shownValue}
+        {unit}
+      </Typography>
+    </Box>
+  );
+});
 
 interface SwitchRowProps {
   testId: string;
@@ -184,22 +225,24 @@ interface SwitchRowProps {
   onChange: (checked: boolean) => void;
 }
 
-const SwitchRow: React.FC<SwitchRowProps> = ({ testId, label, checked, onChange }) => (
-  <Box sx={{ ...CONTROL_ROW_SX, justifyContent: "space-between" }}>
-    <Typography variant="body2" sx={{ color: "text.secondary" }}>
-      {label}
-    </Typography>
-    <Switch
-      data-testid={testId}
-      size="small"
-      checked={checked}
-      onChange={(event) => onChange(event.target.checked)}
-      slotProps={{ input: { "aria-label": label } }}
-      // Flush with the field edges above.
-      sx={{ mr: 0 }}
-    />
-  </Box>
-);
+const SwitchRow = memo(function SwitchRow({ testId, label, checked, onChange }: SwitchRowProps) {
+  return (
+    <Box sx={{ ...CONTROL_ROW_SX, justifyContent: "space-between" }}>
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        {label}
+      </Typography>
+      <Switch
+        data-testid={testId}
+        size="small"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        slotProps={{ input: { "aria-label": label } }}
+        // Flush with the field edges above.
+        sx={{ mr: 0 }}
+      />
+    </Box>
+  );
+});
 
 function parseCornerRadius(text: string): number | undefined {
   if (text.trim().length === 0) return undefined;
@@ -211,15 +254,82 @@ function parseCornerRadius(text: string): number | undefined {
   );
 }
 
-export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange }) => {
+interface BoxShapeFieldsProps {
+  borderWidth: number;
+  cornerRadius: number | undefined;
+  onUpdate: BoxUpdate;
+}
+
+const BoxShapeFields = memo(function BoxShapeFields({
+  borderWidth,
+  cornerRadius,
+  onUpdate
+}: BoxShapeFieldsProps) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mt: 1 }}>
+      <Box data-testid="node-box-border-width">
+        <SelectField
+          id="node-box-border-width-select"
+          label="Border Width"
+          value={String(borderWidth)}
+          onChange={(value) => onUpdate({ borderWidth: Number(value) })}
+          options={BORDER_WIDTH_OPTIONS}
+        />
+      </Box>
+      <Box data-testid="node-box-radius">
+        <InputField
+          id="node-box-radius-input"
+          label="Corner Radius"
+          type="number"
+          value={cornerRadius === undefined ? "" : String(cornerRadius)}
+          onChange={(value) => onUpdate({ cornerRadius: parseCornerRadius(value) })}
+          placeholder="Auto"
+          clearable
+          min={NODE_BOX_CORNER_RADIUS_RANGE.min}
+          max={NODE_BOX_CORNER_RADIUS_RANGE.max}
+          suffix="px"
+        />
+      </Box>
+    </Box>
+  );
+});
+
+export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange, onPreview }) => {
   const box = useMemo(() => normalizeNodeBoxAppearance(data.box) ?? {}, [data.box]);
   const themeColors = useThemeBoxColors();
 
-  const update = useCallback(
-    (patch: Partial<NodeBoxAppearance>) => {
-      onChange({ box: normalizeNodeBoxAppearance({ ...box, ...patch }) });
+  // The callbacks read the latest box, so they stay stable and a change in one
+  // row does not re-render the others (color pickers report many per second).
+  const latestRef = useRef({ box, onChange, onPreview });
+  latestRef.current = { box, onChange, onPreview };
+
+  const update = useCallback<BoxUpdate>((patch) => {
+    const latest = latestRef.current;
+    latest.onChange({ box: normalizeNodeBoxAppearance({ ...latest.box, ...patch }) });
+  }, []);
+
+  const preview = useCallback<BoxUpdate>((patch) => {
+    const latest = latestRef.current;
+    latest.onPreview?.({ box: normalizeNodeBoxAppearance({ ...latest.box, ...patch }) });
+  }, []);
+
+  const handleGlassChange = useCallback(
+    (enabled: boolean) => {
+      if (!enabled) {
+        update({ blur: undefined });
+        return;
+      }
+      update({
+        blur: GLASS_DEFAULT_BLUR,
+        opacity: latestRef.current.box.opacity ?? GLASS_DEFAULT_OPACITY
+      });
     },
-    [box, onChange]
+    [update]
+  );
+
+  const handleShadowChange = useCallback(
+    (shadow: boolean) => update({ shadow: shadow ? undefined : false }),
+    [update]
   );
 
   const opacity = box.opacity ?? NODE_BOX_OPACITY_RANGE.default;
@@ -227,17 +337,6 @@ export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange }) => {
   const isGlass = blur > 0;
   const borderWidth = box.borderWidth ?? NODE_BOX_BORDER_WIDTH_RANGE.default;
   const hasCustomBox = Object.keys(box).length > 0;
-
-  const handleGlassChange = (enabled: boolean) => {
-    if (!enabled) {
-      update({ blur: undefined });
-      return;
-    }
-    update({
-      blur: GLASS_DEFAULT_BLUR,
-      opacity: box.opacity ?? GLASS_DEFAULT_OPACITY
-    });
-  };
 
   return (
     <>
@@ -261,19 +360,22 @@ export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange }) => {
           <BoxColorField
             testId="node-box-color"
             label="Fill Color"
+            field="color"
             value={box.color}
             themeValue={themeColors.fill}
-            onChange={(color) => update({ color })}
+            onUpdate={update}
           />
           <Box sx={{ mt: 0.5 }}>
             <SliderRow
               testId="node-box-opacity"
               label="Opacity"
+              field="opacity"
               value={opacity}
               min={NODE_BOX_OPACITY_RANGE.min}
               max={NODE_BOX_OPACITY_RANGE.max}
               unit="%"
-              onChange={(value) => update({ opacity: value })}
+              onUpdate={update}
+              onPreview={preview}
             />
             <SwitchRow
               testId="node-box-glass"
@@ -285,11 +387,13 @@ export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange }) => {
               <SliderRow
                 testId="node-box-blur"
                 label="Blur"
+                field="blur"
                 value={blur}
                 min={GLASS_MIN_BLUR}
                 max={NODE_BOX_BLUR_RANGE.max}
                 unit=" px"
-                onChange={(value) => update({ blur: value })}
+                onUpdate={update}
+                onPreview={preview}
               />
             )}
           </Box>
@@ -299,51 +403,33 @@ export const BoxAppearanceFields: React.FC<TabProps> = ({ data, onChange }) => {
           <BoxColorField
             testId="node-box-border-color"
             label="Border Color"
+            field="borderColor"
             value={box.borderColor}
             themeValue={themeColors.border}
-            onChange={(borderColor) => update({ borderColor })}
+            onUpdate={update}
           />
-          <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5, mt: 1 }}>
-            <Box data-testid="node-box-border-width">
-              <SelectField
-                id="node-box-border-width-select"
-                label="Border Width"
-                value={String(borderWidth)}
-                onChange={(value) => update({ borderWidth: Number(value) })}
-                options={BORDER_WIDTH_OPTIONS}
-              />
-            </Box>
-            <Box data-testid="node-box-radius">
-              <InputField
-                id="node-box-radius-input"
-                label="Corner Radius"
-                type="number"
-                value={box.cornerRadius === undefined ? "" : String(box.cornerRadius)}
-                onChange={(value) => update({ cornerRadius: parseCornerRadius(value) })}
-                placeholder="Auto"
-                clearable
-                min={NODE_BOX_CORNER_RADIUS_RANGE.min}
-                max={NODE_BOX_CORNER_RADIUS_RANGE.max}
-                suffix="px"
-              />
-            </Box>
-          </Box>
+          <BoxShapeFields
+            borderWidth={borderWidth}
+            cornerRadius={box.cornerRadius}
+            onUpdate={update}
+          />
         </Box>
 
         <Box sx={GROUP_SX}>
           <BoxColorField
             testId="node-box-text-color"
             label="Name Color"
+            field="textColor"
             value={box.textColor}
             themeValue={themeColors.text}
-            onChange={(textColor) => update({ textColor })}
+            onUpdate={update}
           />
           <Box sx={{ mt: 0.5 }}>
             <SwitchRow
               testId="node-box-shadow"
               label="Shadow"
               checked={box.shadow !== false}
-              onChange={(shadow) => update({ shadow: shadow ? undefined : false })}
+              onChange={handleShadowChange}
             />
           </Box>
         </Box>

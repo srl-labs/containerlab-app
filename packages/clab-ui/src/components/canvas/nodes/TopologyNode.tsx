@@ -11,6 +11,7 @@ import { generateEncodedSVG, type NodeType } from "../../../icons/SvgGenerator";
 import {
   useLinkCreationContext,
   useNodeRenderConfig,
+  useNodeBoxAppearance,
   useEasterEggGlow
 } from "../../../stores/canvasStore";
 import {
@@ -106,7 +107,7 @@ const SELECTED_OUTLINE = `2px solid ${SELECTION_COLOR}`;
 /**
  * TopologyNode component renders network device nodes with SVG icons
  */
-const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
+const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const nodeData = isTopologyNodeData(data) ? data : FALLBACK_NODE_DATA;
   const {
     label,
@@ -116,8 +117,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     state,
     labelPosition,
     direction,
-    labelBackgroundColor,
-    box
+    labelBackgroundColor
   } = nodeData;
   const { linkSourceNode } = useLinkCreationContext();
   const { suppressLabels, suppressRuntimeBadges } = useNodeRenderConfig();
@@ -129,6 +129,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
   const nodeBoxSpacing = useNodeBoxSpacing();
+  const box = useNodeBoxAppearance(id, nodeData.box);
   const boxLabel = useNodeBoxLabel(label, iconSize, isBoxed && !suppressLabels, nodeBoxSpacing);
   // Direction only applies to the icon style; boxed nodes keep the icon upright.
   const directionRotation = isBoxed ? 0 : getNodeDirectionRotation(direction);
@@ -272,7 +273,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
 };
 
 function areTopologyNodePropsEqual(prev: NodeProps, next: NodeProps): boolean {
-  return prev.data === next.data && prev.selected === next.selected;
+  return prev.id === next.id && prev.data === next.data && prev.selected === next.selected;
 }
 
 // Memoize to prevent unnecessary re-renders

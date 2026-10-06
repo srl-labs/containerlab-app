@@ -166,6 +166,39 @@ test.describe("Node editor box style", () => {
     await expect(page.getByRole("slider", { name: "Opacity" })).toHaveValue("40");
   });
 
+  test("dragging a slider previews on the canvas and updates the form on release", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await loadWithNodeStyle(topoViewerPage, "boxed");
+    await openNodeEditor(page, NODE_ID);
+    const slider = page.getByRole("slider", { name: "Opacity" });
+    const sliderRoot = page.locator('[data-testid="node-box-opacity"]');
+    // Hovering waits for the panel to finish sliding in, so the rect below is final.
+    await sliderRoot.hover();
+    const rail = await sliderRoot.boundingBox();
+    if (!rail) throw new Error("Opacity slider has no bounding box");
+    const y = rail.y + rail.height / 2;
+
+    await page.mouse.move(rail.x + rail.width - 1, y);
+    await page.mouse.down();
+    await page.mouse.move(rail.x + rail.width * 0.3, y, { steps: 8 });
+    const dragged = await slider.inputValue();
+    expect(Number(dragged)).toBeLessThan(100);
+    // The canvas follows the thumb; the form, and so Apply, waits for the release.
+    await expect.poll(() => boxBackground(page, NODE_ID)).toContain(`${dragged}%`);
+    await expect(page.locator(SEL_APPLY_BTN)).toHaveCount(0);
+
+    await page.mouse.up();
+    await expect(page.locator(SEL_APPLY_BTN)).toBeVisible();
+    await expect(slider).toHaveValue(dragged);
+
+    await page.locator(SEL_APPLY_BTN).click();
+    await expect
+      .poll(() => getNodeBoxAnnotation(topoViewerPage, NODE_ID), { timeout: 5000 })
+      .toEqual({ opacity: Number(dragged) });
+  });
+
   test("closing without applying reverts the preview", async ({ page, topoViewerPage }) => {
     await loadWithNodeStyle(topoViewerPage, "boxed");
     await openNodeEditor(page, NODE_ID);

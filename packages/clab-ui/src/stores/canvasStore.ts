@@ -8,6 +8,7 @@ import { createWithEqualityFn } from "zustand/traditional";
 import type { Edge, Node } from "@xyflow/react";
 
 import type { AnnotationHandlers, EdgeLabelMode } from "../components/canvas/types";
+import type { NodeBoxAppearance } from "../core/types/topology";
 
 interface EdgeRenderConfig {
   labelMode: EdgeLabelMode;
@@ -31,6 +32,12 @@ interface RGBColor {
 interface EasterEggGlow {
   color: RGBColor;
   intensity: number;
+}
+
+/** Box look the node editor shows on one node before it is applied */
+interface NodeBoxPreview {
+  nodeId: string;
+  box: NodeBoxAppearance | undefined;
 }
 
 interface ParallelEdgeInfo {
@@ -65,6 +72,8 @@ interface CanvasState {
       } | null)
     | null;
   easterEggGlow: EasterEggGlow | null;
+  /** Kept out of the graph so each slider step or color change repaints only that node */
+  nodeBoxPreview: NodeBoxPreview | null;
   fitViewRequestId: number;
   nodeFilter: string;
 }
@@ -75,6 +84,7 @@ interface CanvasActions {
   setNodeRenderConfig: (config: NodeRenderConfig) => void;
   setAnnotationHandlers: (handlers: AnnotationHandlers | null) => void;
   setEasterEggGlow: (glow: EasterEggGlow | null) => void;
+  setNodeBoxPreview: (preview: NodeBoxPreview | null) => void;
   requestFitView: () => void;
   setNodeFilter: (nodeFilter: string) => void;
 }
@@ -180,6 +190,7 @@ const initialState: CanvasState = {
   annotationHandlers: null,
   getAnnotationGeoUpdate: null,
   easterEggGlow: null,
+  nodeBoxPreview: null,
   fitViewRequestId: 0,
   nodeFilter: ""
 };
@@ -221,6 +232,9 @@ export const useCanvasStore = createWithEqualityFn<CanvasStore>((set) => ({
 
   setEasterEggGlow: (easterEggGlow) => {
     set({ easterEggGlow });
+  },
+  setNodeBoxPreview: (nodeBoxPreview) => {
+    set({ nodeBoxPreview });
   },
   requestFitView: () => {
     set((state) => ({ fitViewRequestId: state.fitViewRequestId + 1 }));
@@ -264,6 +278,18 @@ export const useAnnotationHandlers = () => useCanvasStore((state) => state.annot
 
 /** Get easter egg glow state */
 export const useEasterEggGlow = () => useCanvasStore((state) => state.easterEggGlow);
+
+/** Get a node's box look, with the node editor's unapplied preview on top */
+export function useNodeBoxAppearance(
+  nodeId: string,
+  box: NodeBoxAppearance | undefined
+): NodeBoxAppearance | undefined {
+  // Other nodes select null, so a preview only re-renders the node it is for.
+  const preview = useCanvasStore((state) =>
+    state.nodeBoxPreview?.nodeId === nodeId ? state.nodeBoxPreview : null
+  );
+  return preview ? preview.box : box;
+}
 
 /** Get fitView request id */
 export const useFitViewRequestId = () => useCanvasStore((state) => state.fitViewRequestId);
