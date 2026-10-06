@@ -51,6 +51,7 @@ test("the studio composes options and exports the customized annotations and rec
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(component).toHaveAttribute("view", "split");
   await expect(component).toHaveAttribute("link-style", "elbow");
+  await expect(component).toHaveAttribute("link-hover", "true");
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator("html")).toHaveAttribute("data-clab-theme", "dark");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(3);
@@ -65,6 +66,7 @@ test("the studio composes options and exports the customized annotations and rec
   expect(recipe).toContain('view="split"');
   expect(recipe).toContain('grid="lines"');
   expect(recipe).toContain('link-style="elbow"');
+  expect(recipe).toContain('link-hover="true"');
   expect(recipe).toContain("--clab-surface: #102d50");
   const pending = page.waitForEvent("download");
   await studio.getByRole("button", { name: "Annotations ↓" }).click();

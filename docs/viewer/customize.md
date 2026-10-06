@@ -23,7 +23,7 @@ Give the diagram as much thought as the lab. Explore eight distinct topologies, 
 
 Pick a lab. Change the atmosphere. Strip it back or bring every detail forward.
 
-Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Ember** for warm copper and coral, or **Porcelain** for a cream canvas with muted jewel tones. Set **Links** to **Elbow** to draw every link with right-angle bends, then hover a link to trace it from one device to the other.
+Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Ember** for warm copper and coral, or **Porcelain** for a cream canvas with muted jewel tones. Set **Links** to **Elbow** to draw every link with right-angle bends, and keep **Hover highlight** on to trace a link from one device to the other.
 
 <div class="studio-shell">
 <clab-customizer>
@@ -41,6 +41,7 @@ Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Em
 <label><input type="checkbox" name="notes" checked> Notes &amp; IPs</label>
 <label><input type="checkbox" name="shapes" checked> Shapes &amp; arrows</label>
 <label><input type="checkbox" name="node-labels" checked> Device names</label>
+<label><input type="checkbox" name="link-hover" checked> Hover highlight</label>
 <label><input type="checkbox" name="controls" checked> Zoom buttons</label>
 <label><input type="checkbox" name="zoom"> Wheel zoom</label>
 <label><input type="checkbox" name="pan" checked> Pan</label>
@@ -169,13 +170,13 @@ A runnable Linux lab with two subnets and IP forwarding. Address labels explain 
 </div>
 
 <div class="studio-example" id="dual-homed" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / BLUEPRINT</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / EMBER</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
 
 Two spines, three leaves, and two hosts, each wired to a pair of leaves. Elbow links drop through the gaps between layers with right-angle bends, links between devices that face each other run straight, and a crossing shows a small gap so it never reads as a turn. Hover any link to light it up with both of its devices.
 
-<div class="studio-art" data-palette="blueprint">
+<div class="studio-art" data-palette="ember">
 
-```clab file="examples/dual-homed.clab.yml" annotations="examples/dual-homed.clab.yml.annotations.json" title="Dual-homed hosts" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.10" height="520"
+```clab file="examples/dual-homed.clab.yml" annotations="examples/dual-homed.clab.yml.annotations.json" title="Dual-homed hosts" borderless="true" theme="dark" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="520"
 ```
 
 </div>
@@ -193,7 +194,7 @@ A branch office as a clean schematic: two internet uplinks, an edge router, a re
 
 <div class="studio-art" data-palette="porcelain">
 
-```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.10" height="560"
+```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" link-hover="true" fit-padding="0.06" height="680"
 ```
 
 </div>
@@ -211,7 +212,7 @@ Every device sits in a frosted glass box: a faint white fill, a hairline border,
 
 <div class="studio-art" data-palette="synthwave">
 
-```clab file="examples/frosted-glass.clab.yml" annotations="examples/frosted-glass.clab.yml.annotations.json" title="Frosted glass showcase" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.10" height="560"
+```clab file="examples/frosted-glass.clab.yml" annotations="examples/frosted-glass.clab.yml.annotations.json" title="Frosted glass showcase" borderless="true" theme="dark" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="560"
 ```
 
 </div>
@@ -232,6 +233,7 @@ Every device sits in a frosted glass box: a faint white fill, a hairline border,
 | Interface and addressing detail | Markdown `freeTextAnnotations` with monospace text and a background | Fabric field notes |
 | Direction and emphasis | `freeShapeAnnotations` lines, arrowheads, circles, and dashed borders | Follow the packet |
 | Link routing | `viewerSettings.linkStyle: "elbow"` in the annotations, or `link-style="elbow"` on the fence | Two of everything |
+| Tracing one link | `link-hover="true"` highlights a hovered link and both of its devices | Two of everything |
 | Readable cabling plans | Elbow links with `link-labels="show-all"`: each interface name reads along its own link | Every port, labeled |
 | Frosted glass devices | `viewerSettings.nodeStyle: "boxed"` and a per-node `box` with `blur`, a low `opacity`, and a light `borderColor`, over colored shapes | Clear as glass |
 | Mood of the canvas | CSS color tokens, a pinned theme, and a grid | Any lab → Blueprint palette |

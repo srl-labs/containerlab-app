@@ -203,6 +203,7 @@
     "linkStyle": "elbow",
     "linkLabelMode": "show-all",
     "gridColor": "#dccbd1",
-    "gridLineWidth": 0.5
+    "gridLineWidth": 0.5,
+    "telemetryInterfaceSizePercent": 140
   }
 }

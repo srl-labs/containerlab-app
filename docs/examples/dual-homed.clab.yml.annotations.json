@@ -7,7 +7,7 @@
         "y": 110
       },
       "icon": "spine",
-      "iconColor": "#a3e7ff",
+      "iconColor": "#ffb36b",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -20,7 +20,7 @@
         "y": 110
       },
       "icon": "spine",
-      "iconColor": "#a3e7ff",
+      "iconColor": "#ffb36b",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -33,7 +33,7 @@
         "y": 330
       },
       "icon": "leaf",
-      "iconColor": "#78b6f4",
+      "iconColor": "#ee8274",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -46,7 +46,7 @@
         "y": 330
       },
       "icon": "leaf",
-      "iconColor": "#78b6f4",
+      "iconColor": "#ee8274",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -59,7 +59,7 @@
         "y": 330
       },
       "icon": "leaf",
-      "iconColor": "#78b6f4",
+      "iconColor": "#ee8274",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -72,7 +72,7 @@
         "y": 560
       },
       "icon": "server",
-      "iconColor": "#e2efff",
+      "iconColor": "#e5c99a",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -85,7 +85,7 @@
         "y": 560
       },
       "icon": "server",
-      "iconColor": "#e2efff",
+      "iconColor": "#e5c99a",
       "iconCornerRadius": 12,
       "labelPosition": "bottom",
       "labelBackgroundColor": "transparent",
@@ -103,13 +103,13 @@
       },
       "width": 360,
       "height": 95,
-      "backgroundColor": "#153b63",
+      "backgroundColor": "#382322",
       "backgroundOpacity": 85,
-      "borderColor": "#386187",
+      "borderColor": "#68443a",
       "borderWidth": 1,
       "borderStyle": "solid",
       "borderRadius": 18,
-      "labelColor": "#a2c5e5",
+      "labelColor": "#d5b3a1",
       "labelPosition": "top-left",
       "zIndex": -5
     },
@@ -123,13 +123,13 @@
       },
       "width": 600,
       "height": 95,
-      "backgroundColor": "#153b63",
+      "backgroundColor": "#382322",
       "backgroundOpacity": 85,
-      "borderColor": "#386187",
+      "borderColor": "#68443a",
       "borderWidth": 1,
       "borderStyle": "solid",
       "borderRadius": 18,
-      "labelColor": "#a2c5e5",
+      "labelColor": "#d5b3a1",
       "labelPosition": "top-left",
       "zIndex": -5
     },
@@ -143,13 +143,13 @@
       },
       "width": 360,
       "height": 95,
-      "backgroundColor": "#153b63",
+      "backgroundColor": "#382322",
       "backgroundOpacity": 85,
-      "borderColor": "#386187",
+      "borderColor": "#68443a",
       "borderWidth": 1,
       "borderStyle": "solid",
       "borderRadius": 18,
-      "labelColor": "#a2c5e5",
+      "labelColor": "#d5b3a1",
       "labelPosition": "top-left",
       "zIndex": -5
     }
@@ -165,7 +165,7 @@
       "width": 600,
       "height": 60,
       "fontSize": 30,
-      "fontColor": "#ecf6ff",
+      "fontColor": "#fff1e5",
       "backgroundColor": "transparent",
       "fontFamily": "sans-serif",
       "roundedBackground": true
@@ -180,7 +180,7 @@
       "width": 600,
       "height": 40,
       "fontSize": 15,
-      "fontColor": "#a2c5e5",
+      "fontColor": "#d5b3a1",
       "backgroundColor": "transparent",
       "fontFamily": "sans-serif",
       "roundedBackground": true
@@ -190,7 +190,7 @@
   "viewerSettings": {
     "linkStyle": "elbow",
     "linkLabelMode": "on-select",
-    "gridColor": "#386187",
+    "gridColor": "#68443a",
     "gridLineWidth": 0.5
   }
 }
