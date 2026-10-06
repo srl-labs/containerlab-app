@@ -104,3 +104,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@fastify/static@10.1.4'
   - knip@6.36.0
+  - '@mui/x-charts@9.15.0'
+  - '@mui/x-charts-vendor@9.15.0'
+  - '@mui/x-internal-gestures@9.15.0'
+  - '@mui/x-internals@9.15.0'
