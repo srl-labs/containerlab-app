@@ -7,6 +7,8 @@ export interface ViewerOptions {
   linkLabels?: "show-all" | "on-select" | "hide";
   /** Straight lines or right-angle elbows; defaults to the style saved in the annotations. */
   linkStyle?: "straight" | "elbow";
+  /** Highlight a hovered link and both of its nodes, and fade the other links. Off by default. */
+  linkHover?: boolean;
   zoomOnScroll?: boolean;
   panOnDrag?: boolean;
   fitPadding?: number;

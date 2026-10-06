@@ -37,6 +37,8 @@ export function mountViewer(container: Element, options: MountViewerOptions): Ro
     linkSourceNode: null,
     annotationHandlers: null,
     easterEggGlow: null,
+    hoveredLink: null,
+    linkHoverHighlight: resolved.linkHover,
     nodeRenderConfig: { suppressLabels: !resolved.nodeLabels, suppressRuntimeBadges: true },
     edgeRenderConfig: {
       labelMode: resolved.linkLabels ?? useTopoViewerStore.getState().linkLabelMode,

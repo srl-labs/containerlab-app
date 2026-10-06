@@ -14,6 +14,7 @@ export function resolveViewerOptions(options: ViewerOptions = {}, borderless = f
     background: options.background ?? (borderless ? "none" : "dots"),
     transparent: options.transparent ?? borderless,
     nodeLabels: options.nodeLabels ?? true,
+    linkHover: options.linkHover ?? false,
     zoomOnScroll: options.zoomOnScroll ?? true,
     panOnDrag: options.panOnDrag ?? true,
     fitPadding: Number.isFinite(fitPadding) ? Math.min(2, Math.max(0, fitPadding)) : 0.25
@@ -33,7 +34,7 @@ export function isViewerOptions(value: unknown): value is ViewerOptions | undefi
   if (value === undefined) return true;
   if (!isRecord(value)) return false;
   const options = value;
-  for (const key of ["controls", "transparent", "nodeLabels", "zoomOnScroll", "panOnDrag"]) {
+  for (const key of ["controls", "transparent", "nodeLabels", "linkHover", "zoomOnScroll", "panOnDrag"]) {
     if (options[key] !== undefined && typeof options[key] !== "boolean") return false;
   }
   if (options.background !== undefined && !["dots", "lines", "none"].includes(String(options.background))) return false;

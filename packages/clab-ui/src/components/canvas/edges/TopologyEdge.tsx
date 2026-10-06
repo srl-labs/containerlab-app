@@ -1306,10 +1306,9 @@ function toElbowStroke(stroke: StrokeStyle, background: string): StrokeStyle {
 function useLinkHover(id: string, source: string, target: string) {
   const hoverState = useLinkHoverState(id);
   const setHoveredLink = useCanvasStore((state) => state.setHoveredLink);
-  const onMouseEnter = useCallback(
-    () => setHoveredLink({ id, source, target }),
-    [setHoveredLink, id, source, target]
-  );
+  const onMouseEnter = useCallback(() => {
+    if (useCanvasStore.getState().linkHoverHighlight) setHoveredLink({ id, source, target });
+  }, [setHoveredLink, id, source, target]);
   const onMouseLeave = useCallback(() => {
     if (useCanvasStore.getState().hoveredLink?.id === id) setHoveredLink(null);
   }, [setHoveredLink, id]);

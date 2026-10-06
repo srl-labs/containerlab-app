@@ -197,7 +197,7 @@ export class ClabTopology extends HTMLElement {
   viewerOptions() {
     const styles = getComputedStyle(this);
     const options = { appearance: {} };
-    for (const [attribute, key] of Object.entries({ controls: "controls", transparent: "transparent", "node-labels": "nodeLabels", zoom: "zoomOnScroll", pan: "panOnDrag" })) {
+    for (const [attribute, key] of Object.entries({ controls: "controls", transparent: "transparent", "node-labels": "nodeLabels", "link-hover": "linkHover", zoom: "zoomOnScroll", pan: "panOnDrag" })) {
       if (this.hasAttribute(attribute)) options[key] = booleanOption(this, attribute, true);
     }
     if (["dots", "lines", "none"].includes(this.getAttribute("grid"))) options.background = this.getAttribute("grid");

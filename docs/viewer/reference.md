@@ -19,6 +19,7 @@ Use a `clab` code fence at the top level of a Markdown page. Option values conta
 | `node-labels` | `true` | Show device names |
 | `link-labels` | Saved annotations, otherwise `show-all` | Interface labels: `show-all`, `on-select`, or `hide` |
 | `link-style` | Saved annotations, otherwise `straight` | `straight` lines, or `elbow` links with right-angle bends and labels that read along each link |
+| `link-hover` | `false` | Highlight a hovered link and both of its devices, and fade the other links |
 | `zoom`, `pan` | `true` | Enable wheel/pinch zoom and dragging the canvas independently. Use `zoom="false"` to let the page scroll over the diagram. |
 | `fit-padding` | `0.25` | Space around the fitted graph, from `0` to `2` |
 | `loading` | `lazy` | Start near the viewport; use `eager` for the main diagram at the top of a page |
@@ -144,6 +145,7 @@ frame.contentWindow.postMessage({
     nodeLabels: true,
     linkLabels: "on-select",
     linkStyle: "elbow", // or "straight"
+    linkHover: true,
     zoomOnScroll: false,
     panOnDrag: true,
     fitPadding: 0.15,

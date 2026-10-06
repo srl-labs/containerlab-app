@@ -86,6 +86,8 @@ interface CanvasState {
   fitViewRequestId: number;
   nodeFilter: string;
   hoveredLink: HoveredLink | null;
+  /** Whether hovering a link highlights it; embedders of the viewer opt in. */
+  linkHoverHighlight: boolean;
 }
 
 interface CanvasActions {
@@ -204,7 +206,8 @@ const initialState: CanvasState = {
   nodeBoxPreview: null,
   fitViewRequestId: 0,
   nodeFilter: "",
-  hoveredLink: null
+  hoveredLink: null,
+  linkHoverHighlight: true
 };
 
 // ============================================================================
