@@ -10,8 +10,10 @@ import type { ReactFlowInstance } from "@xyflow/react";
 import { log } from "../../utils/logger";
 import type { TopoNode, TopologyNodeData } from "../../core/types/graph";
 import type { CustomNodeTemplate } from "../../core/types/editors";
+import type { NodeBoxAppearance } from "../../core/types/topology";
 import { getUniqueId } from "../../core/utilities/idUtils";
 import { convertEditorDataToYaml } from "../../core/utilities/nodeEditorConversions";
+import { normalizeNodeBoxAppearance } from "../../core/utilities/nodeBoxAppearance";
 
 interface NodeCreationOptions {
   customNodes: CustomNodeTemplate[];
@@ -34,6 +36,7 @@ interface NodeData {
   topoViewerRole: string;
   iconColor?: string;
   iconCornerRadius?: number;
+  box?: NodeBoxAppearance;
   sourceEndpoint: string;
   targetEndpoint: string;
   containerDockerExtraAttribute: { state: string; status: string };
@@ -96,6 +99,10 @@ function applyOptionalNodeStyle(
   if (template?.iconCornerRadius !== undefined) {
     nodeData.iconCornerRadius = template.iconCornerRadius;
   }
+  const box = normalizeNodeBoxAppearance(template?.box);
+  if (box) {
+    nodeData.box = box;
+  }
 }
 
 function getResolvedKind(template: CustomNodeTemplate): string {
@@ -136,6 +143,7 @@ const TEMPLATE_EXCLUDED_FIELDS = new Set([
   "icon",
   "iconColor",
   "iconCornerRadius",
+  "box",
   "setDefault",
   "baseName",
   "interfacePattern",
@@ -223,6 +231,7 @@ function nodeDataToTopoNode(data: NodeData, position: { x: number; y: number }):
     image: data.extraData.image,
     iconColor: data.iconColor,
     iconCornerRadius: data.iconCornerRadius,
+    ...(data.box ? { box: data.box } : {}),
     extraData: data.extraData
   };
 

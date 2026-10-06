@@ -5,7 +5,8 @@ import React, { memo } from "react";
 import type { NodeProps } from "@xyflow/react";
 
 import { SELECTION_COLOR } from "../types";
-import { useTopoViewerStore } from "../../../stores/topoViewerStore";
+import { useNodeBoxSpacing,
+  useNodeStyle, useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
 import { LiteNodeShell } from "./NodeLiteBase";
@@ -14,11 +15,13 @@ import { getNetworkNodeTypeColor, toNetworkNodeData } from "./networkNodeShared"
 
 const NetworkNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const nodeData = toNetworkNodeData(data);
+  const isBoxed = useNodeStyle() === "boxed";
+  const boxSpacing = useNodeBoxSpacing();
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
   const color = getNetworkNodeTypeColor(nodeData.nodeType);
-  const rotation = getNodeDirectionRotation(nodeData.direction);
+  const rotation = isBoxed ? 0 : getNodeDirectionRotation(nodeData.direction);
 
   const iconStyle: React.CSSProperties = {
     width: iconSize,
@@ -26,11 +29,20 @@ const NetworkNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
     backgroundColor: color,
     borderRadius: 4,
     transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
-    outline: selected ? `2px solid ${SELECTION_COLOR}` : "none",
+    outline: selected && !isBoxed ? `2px solid ${SELECTION_COLOR}` : "none",
     outlineOffset: 1
   };
 
-  return <LiteNodeShell className="network-node-lite" iconStyle={iconStyle} size={iconSize} />;
+  return (
+    <LiteNodeShell
+      className="network-node-lite"
+      iconStyle={iconStyle}
+      size={iconSize}
+      boxed={isBoxed}
+      boxSpacing={boxSpacing}
+      selected={selected}
+    />
+  );
 };
 
 function areNetworkNodeLitePropsEqual(prev: NodeProps, next: NodeProps): boolean {

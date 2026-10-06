@@ -37,7 +37,7 @@ const LAB_SETTINGS_SECTIONS = [
   {
     key: "appearance",
     label: "Appearance",
-    description: "Link labels and telemetry appearance",
+    description: "Node style, link labels and telemetry appearance",
     icon: <PaletteOutlinedIcon fontSize="small" />
   },
   {

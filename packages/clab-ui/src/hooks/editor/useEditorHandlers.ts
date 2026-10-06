@@ -31,6 +31,10 @@ import { convertEditorDataToLinkSaveData } from "../../utils/linkEditorConversio
 import { BRIDGE_NETWORK_TYPES, getNetworkType } from "../../utils/networkNodeTypes";
 import { getViewportCenter } from "../../utils/viewportUtils";
 import { isRecord } from "../../core/utilities/typeHelpers";
+import {
+  isSameNodeBoxAppearance,
+  normalizeNodeBoxAppearance
+} from "../../core/utilities/nodeBoxAppearance";
 
 // ============================================================================
 // Types
@@ -127,23 +131,30 @@ function updateNodeExtraData(data: NodeEditorData): Record<string, unknown> {
   if ("labelBackgroundColor" in data) {
     newExtraData.labelBackgroundColor = data.labelBackgroundColor;
   }
+  if ("box" in data) {
+    newExtraData.box = normalizeNodeBoxAppearance(data.box);
+  }
   return newExtraData;
 }
 
-function updateNodeVisualPreview(
-  nodeId: string,
-  labelPosition: string | undefined,
-  direction: string | undefined,
-  labelBackgroundColor: string | undefined
-): void {
+/** Editor fields that are previewed on the canvas before saving */
+type NodeVisualPreview = Pick<
+  NodeEditorData,
+  "labelPosition" | "direction" | "labelBackgroundColor" | "box"
+>;
+
+function updateNodeVisualPreview(nodeId: string, visuals: NodeVisualPreview): void {
   const graphState = useGraphStore.getState();
   const node = graphState.nodes.find((entry) => entry.id === nodeId);
   if (!node) return;
   const currentData = node.data;
+  const { labelPosition, direction, labelBackgroundColor } = visuals;
+  const box = normalizeNodeBoxAppearance(visuals.box);
   if (
     currentData.labelPosition === labelPosition &&
     currentData.direction === direction &&
-    currentData.labelBackgroundColor === labelBackgroundColor
+    currentData.labelBackgroundColor === labelBackgroundColor &&
+    isSameNodeBoxAppearance(currentData.box, box)
   ) {
     return;
   }
@@ -151,7 +162,8 @@ function updateNodeVisualPreview(
     data: {
       labelPosition,
       direction,
-      labelBackgroundColor
+      labelBackgroundColor,
+      box
     }
   });
 }
@@ -434,12 +446,7 @@ export function useNodeEditorHandlers(
   React.useEffect(() => {
     const previous = initialDataRef.current;
     if (previous && previous.id !== editingNodeData?.id) {
-      updateNodeVisualPreview(
-        previous.id,
-        previous.labelPosition,
-        previous.direction,
-        previous.labelBackgroundColor
-      );
+      updateNodeVisualPreview(previous.id, previous);
     }
     if (editingNodeData) {
       initialDataRef.current = { ...editingNodeData };
@@ -451,12 +458,7 @@ export function useNodeEditorHandlers(
   const handleClose = React.useCallback(() => {
     const initialData = initialDataRef.current;
     if (initialData) {
-      updateNodeVisualPreview(
-        initialData.id,
-        initialData.labelPosition,
-        initialData.direction,
-        initialData.labelBackgroundColor
-      );
+      updateNodeVisualPreview(initialData.id, initialData);
     }
     initialDataRef.current = null;
     editNode(null);
@@ -508,12 +510,7 @@ export function useNodeEditorHandlers(
   const previewVisuals = React.useCallback((data: NodeEditorData) => {
     const initialData = initialDataRef.current;
     if (!initialData) return;
-    updateNodeVisualPreview(
-      initialData.id,
-      data.labelPosition,
-      data.direction,
-      data.labelBackgroundColor
-    );
+    updateNodeVisualPreview(initialData.id, data);
   }, []);
 
   return { handleClose, handleSave, handleApply, previewVisuals };

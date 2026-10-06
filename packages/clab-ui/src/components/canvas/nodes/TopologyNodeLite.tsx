@@ -6,7 +6,12 @@ import type { NodeProps } from "@xyflow/react";
 
 import type { TopologyNodeData } from "../types";
 import { SELECTION_COLOR, DEFAULT_ICON_COLOR } from "../types";
-import { useDeploymentState, useTopoViewerStore } from "../../../stores/topoViewerStore";
+import {
+  useDeploymentState,
+  useNodeBoxSpacing,
+  useNodeStyle,
+  useTopoViewerStore
+} from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
 import { LiteNodeShell } from "./NodeLiteBase";
@@ -27,12 +32,14 @@ function toTopologyNodeData(data: NodeProps["data"]): TopologyNodeData {
 const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const nodeData = toTopologyNodeData(data);
   const deploymentState = useDeploymentState();
+  const isBoxed = useNodeStyle() === "boxed";
+  const boxSpacing = useNodeBoxSpacing();
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
   const color = nodeData.iconColor ?? DEFAULT_ICON_COLOR;
   const corner = nodeData.iconCornerRadius ?? 4;
-  const rotation = getNodeDirectionRotation(nodeData.direction);
+  const rotation = isBoxed ? 0 : getNodeDirectionRotation(nodeData.direction);
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, nodeData.state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
 
@@ -43,11 +50,21 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
     borderRadius: corner,
     transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
     opacity: runtimeIconOpacity,
-    outline: selected ? `2px solid ${SELECTION_COLOR}` : "none",
+    outline: selected && !isBoxed ? `2px solid ${SELECTION_COLOR}` : "none",
     outlineOffset: 1
   };
 
-  return <LiteNodeShell className="topology-node-lite" iconStyle={iconStyle} size={iconSize} />;
+  return (
+    <LiteNodeShell
+      className="topology-node-lite"
+      iconStyle={iconStyle}
+      size={iconSize}
+      boxed={isBoxed}
+      boxSpacing={boxSpacing}
+      boxAppearance={nodeData.box}
+      selected={selected}
+    />
+  );
 };
 
 function areTopologyNodeLitePropsEqual(prev: NodeProps, next: NodeProps): boolean {

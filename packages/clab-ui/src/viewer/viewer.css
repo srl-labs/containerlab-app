@@ -12,6 +12,9 @@
   --topoviewer-edge-label-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
   --topoviewer-edge-label-outline: var(--viewer-background, var(--vscode-editor-background));
   --topoviewer-network-node-background: var(--vscode-sideBar-background);
+  --topoviewer-node-box-background: var(--viewer-surface, color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-editor-foreground)));
+  --topoviewer-node-box-border: var(--viewer-border, color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-editor-foreground)));
+  --topoviewer-node-box-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
 }
 .clab-viewer-canvas *, .clab-viewer-canvas *::before, .clab-viewer-canvas *::after { box-sizing: border-box; }
 html[data-clab-theme="dark"] {

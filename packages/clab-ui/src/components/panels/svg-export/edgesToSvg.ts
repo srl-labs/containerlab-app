@@ -8,6 +8,13 @@ import {
   getNodeIntersection,
   isVisuallyCanonicalDirection
 } from "../../canvas/edgeGeometry";
+import {
+  DEFAULT_NODE_BOX_SPACING,
+  DEFAULT_NODE_STYLE,
+  getNodeConnectionRect,
+  type NodeBoxSpacing,
+  type NodeStyle
+} from "../../canvas/nodeBox";
 import type { EdgeInfo } from "../../../stores/canvasStore";
 // Despite the hook-style name, useEdgeInfo is a plain cached function
 // (no React state) and is safe to call outside of components.
@@ -57,6 +64,9 @@ export interface EdgeSvgRenderOptions {
   globalInterfaceOverrideSelection?: string;
   /** Render endpoint labels like the canvas telemetry style (bubbles anchored at node sides). */
   telemetryStyleLabels?: boolean;
+  /** Boxed nodes attach links to the box outline instead of the icon. */
+  nodeStyle?: NodeStyle;
+  nodeBoxSpacing?: NodeBoxSpacing;
 }
 
 type InterfaceSide = "top" | "right" | "bottom" | "left";
@@ -86,6 +96,8 @@ interface ResolvedEdgeRenderOptions {
   interfaceLabelOverrides: Record<string, string>;
   globalInterfaceOverrideSelection: string;
   telemetryStyleLabels: boolean;
+  nodeStyle: NodeStyle;
+  nodeBoxSpacing: NodeBoxSpacing;
   /** Theme colors for the default-style pill labels */
   defaultLabelBackground: string;
   defaultLabelForeground: string;
@@ -137,6 +149,8 @@ function resolveEdgeRenderOptions(renderOptions?: EdgeSvgRenderOptions): Resolve
     globalInterfaceOverrideSelection:
       renderOptions?.globalInterfaceOverrideSelection ?? INTERFACE_SELECT_AUTO,
     telemetryStyleLabels: renderOptions?.telemetryStyleLabels === true,
+    nodeStyle: renderOptions?.nodeStyle ?? DEFAULT_NODE_STYLE,
+    nodeBoxSpacing: renderOptions?.nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
     defaultLabelBackground: resolveCssColor(
       "var(--topoviewer-edge-label-background)",
       EDGE_LABEL.backgroundColor
@@ -172,6 +186,17 @@ function getNodeRect(node: Node, nodeIconSize: number): NodeRect {
     width: nodeIconSize,
     height: nodeIconSize
   };
+}
+
+/** Rect links attach to: the icon, or the box around it in the boxed style. */
+function getNodeLinkRect(node: Node, renderOptions: ResolvedEdgeRenderOptions): NodeRect {
+  const { nodeIconSize, nodeStyle, nodeBoxSpacing } = renderOptions;
+  return getNodeConnectionRect(
+    getNodeRect(node, nodeIconSize),
+    nodeStyle,
+    nodeIconSize,
+    nodeBoxSpacing
+  );
 }
 
 function getRectCenter(rect: NodeRect): { x: number; y: number } {
@@ -236,7 +261,7 @@ function collectEdgeEndpointVectors(
   sourceEndpoint: string | null,
   targetEndpoint: string | null,
   nodeMap: Map<string, Node>,
-  nodeIconSize: number,
+  renderOptions: ResolvedEdgeRenderOptions,
   vectorsByNode: Map<string, Map<string, EndpointVector>>
 ): void {
   if (sourceEndpoint === null && targetEndpoint === null) return;
@@ -246,8 +271,8 @@ function collectEdgeEndpointVectors(
   const targetNode = nodeMap.get(edge.target);
   if (!sourceNode || !targetNode) return;
 
-  const sourceCenter = getRectCenter(getNodeRect(sourceNode, nodeIconSize));
-  const targetCenter = getRectCenter(getNodeRect(targetNode, nodeIconSize));
+  const sourceCenter = getRectCenter(getNodeLinkRect(sourceNode, renderOptions));
+  const targetCenter = getRectCenter(getNodeLinkRect(targetNode, renderOptions));
   const forwardDx = targetCenter.x - sourceCenter.x;
   const forwardDy = targetCenter.y - sourceCenter.y;
 
@@ -262,7 +287,7 @@ function collectEdgeEndpointVectors(
 function collectInterfaceAnchorInputs(
   edges: Edge[],
   nodeMap: Map<string, Node>,
-  nodeIconSize: number
+  renderOptions: ResolvedEdgeRenderOptions
 ): {
   endpointsByNode: Map<string, Set<string>>;
   vectorsByNode: Map<string, Map<string, EndpointVector>>;
@@ -281,7 +306,7 @@ function collectInterfaceAnchorInputs(
       sourceEndpoint,
       targetEndpoint,
       nodeMap,
-      nodeIconSize,
+      renderOptions,
       vectorsByNode
     );
   }
@@ -390,13 +415,13 @@ function buildInterfaceAnchorMap(
   const { endpointsByNode, vectorsByNode } = collectInterfaceAnchorInputs(
     edges,
     nodeMap,
-    renderOptions.nodeIconSize
+    renderOptions
   );
   const anchorsByNode: NodeInterfaceAnchorMap = new Map();
   for (const [nodeId, endpoints] of endpointsByNode) {
     const node = nodeMap.get(nodeId);
     if (!node) continue;
-    const rect = getNodeRect(node, renderOptions.nodeIconSize);
+    const rect = getNodeLinkRect(node, renderOptions);
     const nodeVectors = vectorsByNode.get(nodeId);
     const buckets = buildNodeSideAssignments(endpoints, nodeVectors, renderOptions);
     const endpointAnchors = assignNodeAnchors(rect, buckets);
@@ -768,7 +793,7 @@ function buildEdgeLabels(
  * Render a loop edge (self-referencing) to SVG
  */
 function renderLoopEdge(ctx: EdgeRenderContext, sourceNode: Node, loopIndex: number): string {
-  const rect = getNodeRect(sourceNode, ctx.renderOptions.nodeIconSize);
+  const rect = getNodeLinkRect(sourceNode, ctx.renderOptions);
   const { loop: loopLabelOffset } = resolveEdgeLabelOffsets(ctx.edgeData, ctx.renderOptions);
 
   const { path, sourceLabelPos, targetLabelPos } = buildLoopEdgePath(
@@ -840,8 +865,8 @@ function renderRegularEdge(
   targetNode: Node,
   parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | undefined
 ): string {
-  const sourceRect = getNodeRect(sourceNode, ctx.renderOptions.nodeIconSize);
-  const targetRect = getNodeRect(targetNode, ctx.renderOptions.nodeIconSize);
+  const sourceRect = getNodeLinkRect(sourceNode, ctx.renderOptions);
+  const targetRect = getNodeLinkRect(targetNode, ctx.renderOptions);
   const { sourceAnchor, targetAnchor } = resolveRegularEdgeAnchors(ctx, sourceNode, targetNode);
   const points = resolveEdgePointsWithInterfaceAnchors(
     sourceRect,

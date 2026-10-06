@@ -16,6 +16,8 @@ import {
 import {
   useCustomIcons,
   useDeploymentState,
+  useNodeBoxSpacing,
+  useNodeStyle,
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
 import { getCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
@@ -24,10 +26,12 @@ import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabel
 import {
   buildNodeLabelStyle,
   HIDDEN_HANDLE_STYLE,
+  getEasterEggGlowShadow,
   getNodeDirectionRotation,
   getNodeRuntimeIconOpacity,
   getNodeRuntimeBadgeState
 } from "./nodeStyles";
+import { NodeBox, useNodeBoxLabel } from "./NodeBox";
 
 const RuntimeBadge = React.lazy(() => import("./NodeRuntimeBadge"));
 
@@ -88,6 +92,7 @@ const CONTAINER_STYLE_LINK_TARGET: React.CSSProperties = {
 };
 
 const ICON_STYLE_BASE: React.CSSProperties = {
+  position: "relative",
   flexShrink: 0,
   backgroundSize: "cover",
   backgroundPosition: "center",
@@ -111,17 +116,22 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     state,
     labelPosition,
     direction,
-    labelBackgroundColor
+    labelBackgroundColor,
+    box
   } = nodeData;
   const { linkSourceNode } = useLinkCreationContext();
   const { suppressLabels, suppressRuntimeBadges } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
   const customIcons = useCustomIcons();
   const deploymentState = useDeploymentState();
+  const isBoxed = useNodeStyle() === "boxed";
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
-  const directionRotation = getNodeDirectionRotation(direction);
+  const nodeBoxSpacing = useNodeBoxSpacing();
+  const boxLabel = useNodeBoxLabel(label, iconSize, isBoxed && !suppressLabels, nodeBoxSpacing);
+  // Direction only applies to the icon style; boxed nodes keep the icon upright.
+  const directionRotation = isBoxed ? 0 : getNodeDirectionRotation(direction);
 
   // Check if this node is a valid link target (in link creation mode)
   const isLinkTarget = linkSourceNode !== null;
@@ -145,6 +155,8 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
 
+  const glowShadow = getEasterEggGlowShadow(easterEggGlow);
+
   // Build icon style with dynamic properties
   const iconStyle = useMemo((): React.CSSProperties => {
     const style: React.CSSProperties = {
@@ -156,17 +168,14 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
       transform: directionRotation !== 0 ? `rotate(${directionRotation}deg)` : undefined,
       opacity: runtimeIconOpacity,
       transition: "opacity 120ms ease-in-out",
-      // Use outline for selection - doesn't affect layout
-      outline: selected ? SELECTED_OUTLINE : "none",
+      // Use outline for selection - doesn't affect layout. The box shows it in the boxed style.
+      outline: selected && !isBoxed ? SELECTED_OUTLINE : "none",
       outlineOffset: 1
     };
 
     // Apply easter egg glow effect if active
-    if (easterEggGlow) {
-      const { color, intensity } = easterEggGlow;
-      const glowRadius = Math.round(8 + intensity * 12);
-      const glowAlpha = (0.4 + intensity * 0.4).toFixed(2);
-      style.boxShadow = `0 0 ${glowRadius}px rgba(${color.r}, ${color.g}, ${color.b}, ${glowAlpha})`;
+    if (glowShadow !== undefined && !isBoxed) {
+      style.boxShadow = glowShadow;
     }
 
     return style;
@@ -176,7 +185,8 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
     directionRotation,
     runtimeIconOpacity,
     selected,
-    easterEggGlow,
+    glowShadow,
+    isBoxed,
     iconSize
   ]);
 
@@ -207,7 +217,11 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
   );
 
   return (
-    <div style={containerStyle} className="topology-node">
+    <div
+      style={containerStyle}
+      className={isBoxed ? "topology-node topology-node-boxed" : "topology-node"}
+      title={isBoxed ? boxLabel.title : undefined}
+    >
       {/* Single source and target handles for edge connections.
           The floating edge style calculates actual connection points dynamically,
           so we only need one handle per type. */}
@@ -226,6 +240,19 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
         isConnectable={false}
       />
 
+      {isBoxed && (
+        <NodeBox
+          className="topology-node-box"
+          iconSize={iconSize}
+          spacing={nodeBoxSpacing}
+          labelText={suppressLabels ? undefined : boxLabel.text}
+          labelRef={boxLabel.labelRef}
+          appearance={box}
+          selected={selected}
+          glow={glowShadow}
+        />
+      )}
+
       {/* Node icon - hover effect for link creation handled via CSS */}
       <div style={iconStyle} className={iconClassName} />
       {!suppressRuntimeBadges && (
@@ -235,7 +262,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ data, selected }) => {
       )}
 
       {/* Node label */}
-      {!suppressLabels && (
+      {!suppressLabels && !isBoxed && (
         <div style={labelStyle} className="topology-node-label">
           {label}
         </div>

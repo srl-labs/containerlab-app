@@ -122,6 +122,17 @@ export function buildNodeLabelStyle(params: {
   }
 }
 
+/** Box shadow for the easter egg glow, or undefined when it is off. */
+export function getEasterEggGlowShadow(
+  glow: { color: { r: number; g: number; b: number }; intensity: number } | null
+): string | undefined {
+  if (!glow) return undefined;
+  const { color, intensity } = glow;
+  const glowRadius = Math.round(8 + intensity * 12);
+  const glowAlpha = (0.4 + intensity * 0.4).toFixed(2);
+  return `0 0 ${glowRadius}px rgba(${color.r}, ${color.g}, ${color.b}, ${glowAlpha})`;
+}
+
 export type NodeRuntimeBadgeState = "running" | "stopped" | "paused" | "undeployed";
 
 export function getNodeRuntimeIconOpacity(state: NodeRuntimeBadgeState): number {

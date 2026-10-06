@@ -103,6 +103,7 @@ const NODE_FALLBACK_PROPS = [
   "labelPosition",
   "direction",
   "labelBackgroundColor",
+  "box",
   "interfacePattern"
 ] as const;
 

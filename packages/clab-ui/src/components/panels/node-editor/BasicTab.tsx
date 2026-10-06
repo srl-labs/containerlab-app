@@ -22,12 +22,13 @@ import { IconSelectorModal } from "../../ui/IconSelectorModal";
 import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
 import { useSchema, useDockerImages } from "../../../hooks/editor";
-import { useCustomIcons } from "../../../stores/topoViewerStore";
+import { useCustomIcons, useNodeStyle } from "../../../stores/topoViewerStore";
 import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
+import { BoxAppearanceFields } from "./BoxAppearanceFields";
 
 // Icon options for dropdown (static, defined outside component)
 const ICON_OPTIONS = [
@@ -445,6 +446,8 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
 
 export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
   const isCustomTemplate = data.isCustomTemplate === true;
+  // Boxed nodes ignore label position, direction and background, so they get box options instead.
+  const isBoxed = useNodeStyle() === "boxed";
 
   // Get schema data (kinds and types)
   const { kinds, getTypesForKind, kindSupportsType, isLoaded } = useSchema();
@@ -531,7 +534,9 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
         <IconField data={data} onChange={onChange} />
       </PanelSection>
 
-      {!isCustomTemplate && (
+      {isBoxed && <BoxAppearanceFields data={data} onChange={onChange} />}
+
+      {!isBoxed && !isCustomTemplate && (
         <PanelSection title="Label & Direction">
           <LabelAndDirectionFields data={data} onChange={onChange} />
         </PanelSection>

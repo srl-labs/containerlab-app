@@ -39,7 +39,12 @@ import {
 } from "../../annotations/annotationNodeConverters";
 import { type ClabUiHost, useClabUiHost } from "../../host";
 import { useEdges } from "../../stores/graphStore";
-import { useTelemetryLabelSettings, useTopoViewerStore } from "../../stores/topoViewerStore";
+import {
+  useNodeBoxSpacing,
+  useNodeStyle,
+  useTelemetryLabelSettings,
+  useTopoViewerStore
+} from "../../stores/topoViewerStore";
 import {
   clampTelemetryInterfaceSizePercent,
   clampTelemetryNodeSizePx
@@ -393,6 +398,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   const host = useClabUiHost();
   const linkLabelMode = useTopoViewerStore((state) => state.linkLabelMode);
   const telemetryLabelSettings = useTelemetryLabelSettings();
+  const nodeStyle = useNodeStyle();
+  const nodeBoxSpacing = useNodeBoxSpacing();
   const [borderZoom, setBorderZoom] = useState(100);
   const [borderPadding, setBorderPadding] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
@@ -540,7 +547,9 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
             clampTelemetryInterfaceSizePercent(telemetryLabelSettings.interfaceSizePercent) / 100,
           interfaceLabelOverrides: telemetryLabelSettings.interfaceLabelOverrides,
           globalInterfaceOverrideSelection: telemetryLabelSettings.globalInterfaceOverrideSelection,
-          telemetryStyleLabels: linkLabelMode === "telemetry-style"
+          telemetryStyleLabels: linkLabelMode === "telemetry-style",
+          nodeStyle,
+          nodeBoxSpacing
         };
     const graphSvg = buildGraphSvg(
       rfInstance,
@@ -576,6 +585,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     effectiveInterfaceLabelOverrides,
     linkLabelMode,
     telemetryLabelSettings,
+    nodeStyle,
+    nodeBoxSpacing,
     rfInstance,
     borderZoom,
     customIcons,

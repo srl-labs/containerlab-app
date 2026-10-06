@@ -4,6 +4,19 @@ import type { Node } from "@xyflow/react";
 import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
 import { getCustomIconUrl } from "../../../utils/iconUtils";
+import type { NodeBoxAppearance } from "../../../core/types/topology";
+import {
+  DEFAULT_NODE_STYLE,
+  NODE_BOX_LABEL_FONT_SIZE_PX,
+  NODE_BOX_LABEL_FONT_WEIGHT,
+  NODE_BOX_LABEL_LINE_HEIGHT_PX,
+  fitNodeBoxLabel,
+  getNodeBoxMetrics,
+  resolveNodeBoxPaint,
+  type NodeBoxMetrics,
+  type NodeBoxSpacing,
+  type NodeStyle
+} from "../../canvas/nodeBox";
 
 import {
   NODE_ICON_SIZE,
@@ -12,9 +25,15 @@ import {
   DEFAULT_ICON_COLOR,
   getNetworkTypeColor,
   getRoleSvgType,
-  escapeXml
+  escapeXml,
+  resolveCssColor
 } from "./constants";
-import { sampleFontMetrics, truncateTextToWidth, type SampledFontMetrics } from "./textMetrics";
+import {
+  measureTextWidth,
+  sampleFontMetrics,
+  truncateTextToWidth,
+  type SampledFontMetrics
+} from "./textMetrics";
 
 // ============================================================================
 // Types
@@ -25,6 +44,25 @@ export type CustomIconMap = Map<string, string>;
 
 export interface NodeSvgRenderOptions {
   nodeIconSize?: number;
+  /** Boxed nodes draw a card around the icon with the name inside. */
+  nodeStyle?: NodeStyle;
+  nodeBoxSpacing?: NodeBoxSpacing;
+}
+
+/** Resolved boxed-style geometry, font and theme colors, shared by all nodes. */
+interface NodeBoxStyle {
+  spacing: NodeBoxSpacing | undefined;
+  metrics: NodeBoxMetrics;
+  font: SampledFontMetrics;
+  background: string;
+  border: string;
+  foreground: string;
+}
+
+/** How node names are drawn: a pill around the icon, or inside a box when `box` is set. */
+interface NodeLabelStyle {
+  font: SampledFontMetrics;
+  box?: NodeBoxStyle;
 }
 
 interface TopologyNodeData {
@@ -35,6 +73,7 @@ interface TopologyNodeData {
   labelPosition?: string;
   direction?: string;
   labelBackgroundColor?: string;
+  box?: NodeBoxAppearance;
   [key: string]: unknown;
 }
 
@@ -44,6 +83,7 @@ interface NetworkNodeData {
   labelPosition?: string;
   direction?: string;
   labelBackgroundColor?: string;
+  box?: NodeBoxAppearance;
   [key: string]: unknown;
 }
 
@@ -281,6 +321,134 @@ function buildNodeLabelSvg(
 }
 
 // ============================================================================
+// Node Box Builder
+// ============================================================================
+
+const NODE_BOX_FALLBACK_COLORS = {
+  background: "#252526",
+  border: "#3c3c3c",
+  foreground: "#cccccc"
+} as const;
+
+function resolveNodeBoxStyle(
+  iconSize: number,
+  spacing: NodeBoxSpacing | undefined,
+  labelFont: SampledFontMetrics
+): NodeBoxStyle {
+  const sampled = sampleFontMetrics(".topology-node-box-label");
+  const resolveVar = (name: string, fallback: string) =>
+    resolveCssColor(`var(${name}, ${fallback})`, fallback);
+  return {
+    spacing,
+    metrics: getNodeBoxMetrics(iconSize, spacing),
+    font: {
+      fontFamily: sampled?.fontFamily ?? labelFont.fontFamily,
+      fontSizePx: NODE_BOX_LABEL_FONT_SIZE_PX,
+      fontWeight: String(NODE_BOX_LABEL_FONT_WEIGHT),
+      lineHeightPx: NODE_BOX_LABEL_LINE_HEIGHT_PX
+    },
+    background: resolveVar("--topoviewer-node-box-background", NODE_BOX_FALLBACK_COLORS.background),
+    border: resolveVar("--topoviewer-node-box-border", NODE_BOX_FALLBACK_COLORS.border),
+    foreground: resolveVar("--topoviewer-node-box-foreground", NODE_BOX_FALLBACK_COLORS.foreground)
+  };
+}
+
+/**
+ * Card behind the icon. The stroke is inset by half its width so it covers
+ * the same pixels as the canvas CSS border box. Frosted glass and the drop
+ * shadow have no static SVG equivalent and are left out.
+ */
+function buildNodeBoxSvg(
+  iconX: number,
+  iconY: number,
+  box: NodeBoxStyle,
+  appearance: NodeBoxAppearance | undefined
+): string {
+  const { metrics } = box;
+  const paint = resolveNodeBoxPaint(appearance, metrics);
+  const fill = paint.fill !== undefined ? resolveCssColor(paint.fill, box.background) : box.background;
+  const inset = paint.borderWidth / 2;
+  const radius = Math.max(0, paint.cornerRadius - inset);
+  let svg = `<rect class="export-node-box" `;
+  svg += `x="${iconX + metrics.offsetX + inset}" y="${iconY + metrics.offsetY + inset}" `;
+  svg += `width="${metrics.width - paint.borderWidth}" `;
+  svg += `height="${metrics.height - paint.borderWidth}" `;
+  svg += `rx="${radius}" ry="${radius}" fill="${escapeXml(fill)}" `;
+  if (paint.fillOpacity < 1) svg += `fill-opacity="${paint.fillOpacity}" `;
+  if (paint.borderWidth > 0) {
+    const stroke =
+      paint.borderColor !== undefined ? resolveCssColor(paint.borderColor, box.border) : box.border;
+    svg += `stroke="${escapeXml(stroke)}" stroke-width="${paint.borderWidth}"`;
+  }
+  svg += `/>`;
+  return svg;
+}
+
+/** Name on one row at the bottom of the box, middle-truncated like the canvas. */
+function buildNodeBoxLabelSvg(
+  label: string,
+  iconX: number,
+  iconY: number,
+  iconSize: number,
+  box: NodeBoxStyle,
+  appearance: NodeBoxAppearance | undefined
+): string {
+  if (!label) return "";
+  const { metrics, font } = box;
+  const { text } = fitNodeBoxLabel(
+    label,
+    iconSize,
+    (value) => measureTextWidth(value, font),
+    box.spacing
+  );
+  const textColor = appearance?.textColor;
+  const foreground =
+    textColor !== undefined ? resolveCssColor(textColor, box.foreground) : box.foreground;
+  const rowTop =
+    iconY + metrics.offsetY + metrics.height - metrics.labelInset - NODE_BOX_LABEL_LINE_HEIGHT_PX;
+  const textX = iconX + iconSize / 2;
+  const textCenterY = rowTop + NODE_BOX_LABEL_LINE_HEIGHT_PX / 2;
+
+  let svg = `<text class="export-node-box-label" x="${textX}" y="${textCenterY}" `;
+  svg += `font-size="${font.fontSizePx}" font-weight="${font.fontWeight}" `;
+  svg += `font-family='${escapeXml(font.fontFamily)}' `;
+  svg += `dominant-baseline="central" `;
+  svg += `fill="${escapeXml(foreground)}" text-anchor="middle">`;
+  svg += escapeXml(text);
+  svg += `</text>`;
+  return svg;
+}
+
+/** Name for either style. The boxed style ignores label position, background and direction. */
+function buildNodeNameSvg(
+  label: string,
+  iconX: number,
+  iconY: number,
+  iconSize: number,
+  labelStyle: NodeLabelStyle,
+  data: {
+    labelPosition?: string;
+    direction?: string;
+    labelBackgroundColor?: string;
+    box?: NodeBoxAppearance;
+  }
+): string {
+  if (labelStyle.box) {
+    return buildNodeBoxLabelSvg(label, iconX, iconY, iconSize, labelStyle.box, data.box);
+  }
+  return buildNodeLabelSvg(
+    label,
+    iconX,
+    iconY,
+    iconSize,
+    labelStyle.font,
+    data.labelPosition,
+    data.direction,
+    data.labelBackgroundColor
+  );
+}
+
+// ============================================================================
 // Topology Node Builder
 // ============================================================================
 
@@ -289,7 +457,7 @@ function buildNodeLabelSvg(
  */
 function topologyNodeToSvg(
   node: Node,
-  labelFont: SampledFontMetrics,
+  labelStyle: NodeLabelStyle,
   customIconMap?: CustomIconMap,
   nodeIconSize: number = NODE_ICON_SIZE
 ): string {
@@ -300,8 +468,8 @@ function topologyNodeToSvg(
   const role = data.role ?? "pe";
   const iconColor = data.iconColor ?? DEFAULT_ICON_COLOR;
   const cornerRadius = data.iconCornerRadius ?? NODE_ICON_RADIUS;
-  const labelPosition = data.labelPosition;
-  const directionRotation = getNodeDirectionRotation(data.direction);
+  // Boxed nodes keep the icon upright, like the canvas.
+  const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
   // Check for custom icon first
   let iconSvgContent = "";
@@ -322,6 +490,7 @@ function topologyNodeToSvg(
   }
 
   let svg = `<g class="export-node topology-node" data-id="${escapeXml(node.id)}">`;
+  if (labelStyle.box) svg += buildNodeBoxSvg(x, y, labelStyle.box, data.box);
   const centerX = x + iconSize / 2;
   const centerY = y + iconSize / 2;
   svg += `<g transform="rotate(${directionRotation} ${centerX} ${centerY})">`;
@@ -339,16 +508,7 @@ function topologyNodeToSvg(
   svg += `</g>`;
 
   // Label
-  svg += buildNodeLabelSvg(
-    label,
-    x,
-    y,
-    iconSize,
-    labelFont,
-    labelPosition,
-    data.direction,
-    data.labelBackgroundColor
-  );
+  svg += buildNodeNameSvg(label, x, y, iconSize, labelStyle, data);
 
   svg += `</g>`;
   return svg;
@@ -364,7 +524,7 @@ function topologyNodeToSvg(
  */
 function networkNodeToSvg(
   node: Node,
-  labelFont: SampledFontMetrics,
+  labelStyle: NodeLabelStyle,
   nodeIconSize: number = NODE_ICON_SIZE
 ): string {
   const data = node.data as NetworkNodeData;
@@ -373,8 +533,8 @@ function networkNodeToSvg(
   const label = data.label ?? node.id;
   const nodeType = data.nodeType ?? "host";
   const iconColor = getNetworkTypeColor(nodeType);
-  const labelPosition = data.labelPosition;
-  const directionRotation = getNodeDirectionRotation(data.direction);
+  // Boxed nodes keep the icon upright, like the canvas.
+  const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
   // Generate cloud icon
   const dataUri = generateEncodedSVG("cloud", iconColor);
@@ -382,6 +542,7 @@ function networkNodeToSvg(
   const iconSvgContent = extractSvgContent(svgString, iconSize);
 
   let svg = `<g class="export-node network-node" data-id="${escapeXml(node.id)}">`;
+  if (labelStyle.box) svg += buildNodeBoxSvg(x, y, labelStyle.box, data.box);
   const centerX = x + iconSize / 2;
   const centerY = y + iconSize / 2;
   svg += `<g transform="rotate(${directionRotation} ${centerX} ${centerY})">`;
@@ -397,16 +558,7 @@ function networkNodeToSvg(
   svg += `</g>`;
 
   // Label (network nodes use slightly smaller font)
-  svg += buildNodeLabelSvg(
-    label,
-    x,
-    y,
-    iconSize,
-    labelFont,
-    labelPosition,
-    data.direction,
-    data.labelBackgroundColor
-  );
+  svg += buildNodeNameSvg(label, x, y, iconSize, labelStyle, data);
 
   svg += `</g>`;
   return svg;
@@ -428,6 +580,14 @@ export function renderNodesToSvg(
 ): string {
   const nodeIconSize = resolveNodeIconSize(renderOptions?.nodeIconSize);
   const labelFont = resolveNodeLabelFont();
+  const nodeStyle = renderOptions?.nodeStyle ?? DEFAULT_NODE_STYLE;
+  const labelStyle: NodeLabelStyle = {
+    font: labelFont,
+    box:
+      nodeStyle === "boxed"
+        ? resolveNodeBoxStyle(nodeIconSize, renderOptions?.nodeBoxSpacing, labelFont)
+        : undefined
+  };
   const skipTypes =
     annotationNodeTypes ??
     new Set(["free-text-annotation", "free-shape-annotation", "group-annotation"]);
@@ -442,9 +602,9 @@ export function renderNodesToSvg(
 
     // Render based on node type
     if (nodeType === "network-node") {
-      svg += networkNodeToSvg(node, labelFont, nodeIconSize);
+      svg += networkNodeToSvg(node, labelStyle, nodeIconSize);
     } else {
-      svg += topologyNodeToSvg(node, labelFont, customIconMap, nodeIconSize);
+      svg += topologyNodeToSvg(node, labelStyle, customIconMap, nodeIconSize);
     }
   }
 

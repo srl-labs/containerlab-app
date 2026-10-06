@@ -14,6 +14,7 @@ import {
   getRecord,
   getRecordUnknown
 } from "./typeHelpers";
+import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
 
 // ============================================================================
 // YAML -> NodeEditorData (for loading into editor)
@@ -36,6 +37,7 @@ function parseBasicProps(
   | "labelPosition"
   | "direction"
   | "labelBackgroundColor"
+  | "box"
 > {
   return {
     id: getString(rawData.id) ?? "",
@@ -51,7 +53,8 @@ function parseBasicProps(
     labelPosition: getString(rawData.labelPosition) ?? getString(extra.labelPosition),
     direction: getString(rawData.direction) ?? getString(extra.direction),
     labelBackgroundColor:
-      getString(rawData.labelBackgroundColor) ?? getString(extra.labelBackgroundColor)
+      getString(rawData.labelBackgroundColor) ?? getString(extra.labelBackgroundColor),
+    box: normalizeNodeBoxAppearance(rawData.box) ?? normalizeNodeBoxAppearance(extra.box)
   };
 }
 
@@ -673,7 +676,8 @@ export function convertEditorDataToNodeSaveData(
     interfacePattern: data.interfacePattern,
     labelPosition,
     direction,
-    labelBackgroundColor
+    labelBackgroundColor,
+    box: normalizeNodeBoxAppearance(data.box) ?? null
   };
 
   const saveData: NodeSaveData = {

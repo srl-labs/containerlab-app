@@ -313,9 +313,22 @@ type CustomNodeTemplate = {
   icon?: string;
   iconColor?: string;
   iconCornerRadius?: number;
+  box?: NodeBoxAppearance; // look in the boxed node style
   baseName?: string;
   interfacePattern?: string;
   setDefault?: boolean;
+};
+
+// Unset fields follow the theme.
+type NodeBoxAppearance = {
+  color?: string;
+  opacity?: number; // 0-100
+  blur?: number; // frosted glass in px, 0 = off
+  borderColor?: string;
+  borderWidth?: number; // 0-4
+  cornerRadius?: number;
+  textColor?: string;
+  shadow?: boolean; // default true
 };
 ```
 

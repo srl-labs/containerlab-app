@@ -11,11 +11,21 @@ import {
   useNodeRenderConfig,
   useEasterEggGlow
 } from "../../../stores/canvasStore";
-import { useTopoViewerStore } from "../../../stores/topoViewerStore";
+import {
+  useNodeBoxSpacing,
+  useNodeStyle,
+  useTopoViewerStore
+} from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
-import { buildNodeLabelStyle, HIDDEN_HANDLE_STYLE, getNodeDirectionRotation } from "./nodeStyles";
+import {
+  buildNodeLabelStyle,
+  HIDDEN_HANDLE_STYLE,
+  getEasterEggGlowShadow,
+  getNodeDirectionRotation
+} from "./nodeStyles";
 import { getNetworkNodeTypeColor, toNetworkNodeData } from "./networkNodeShared";
+import { NodeBox, useNodeBoxLabel } from "./NodeBox";
 
 const HANDLE_POSITIONS = [
   { position: Position.Top, id: "top" },
@@ -33,11 +43,15 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { linkSourceNode } = useLinkCreationContext();
   const { suppressLabels } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
+  const isBoxed = useNodeStyle() === "boxed";
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
+  const nodeBoxSpacing = useNodeBoxSpacing();
+  const boxLabel = useNodeBoxLabel(label, iconSize, isBoxed && !suppressLabels, nodeBoxSpacing);
   const [isHovered, setIsHovered] = useState(false);
-  const directionRotation = getNodeDirectionRotation(direction);
+  // Direction only applies to the icon style; boxed nodes keep the icon upright.
+  const directionRotation = isBoxed ? 0 : getNodeDirectionRotation(direction);
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
   }, []);
@@ -68,17 +82,20 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     cursor: isLinkTarget ? "crosshair" : undefined
   };
 
+  const glowShadow = getEasterEggGlowShadow(easterEggGlow);
+
   // Determine outline based on state - use outline to avoid layout shift
   const getOutlineStyle = (): React.CSSProperties => {
+    // The box shows selection, link target and glow in the boxed style
+    if (isBoxed) {
+      return { outline: "none" };
+    }
     // Easter egg glow takes priority
-    if (easterEggGlow) {
-      const { color, intensity } = easterEggGlow;
-      const glowRadius = Math.round(8 + intensity * 12);
-      const glowAlpha = (0.4 + intensity * 0.4).toFixed(2);
+    if (glowShadow !== undefined) {
       return {
         outline: selected ? `2px solid ${SELECTION_COLOR}` : "none",
         outlineOffset: 1,
-        boxShadow: `0 0 ${glowRadius}px rgba(${color.r}, ${color.g}, ${color.b}, ${glowAlpha})`
+        boxShadow: glowShadow
       };
     }
     if (showLinkTargetHighlight) {
@@ -101,6 +118,7 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   // Icon styles
   const iconStyle: React.CSSProperties = {
+    position: "relative",
     width: iconSize,
     height: iconSize,
     flexShrink: 0,
@@ -130,7 +148,8 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   return (
     <div
       style={containerStyle}
-      className="network-node"
+      className={isBoxed ? "network-node network-node-boxed" : "network-node"}
+      title={isBoxed ? boxLabel.title : undefined}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -154,11 +173,24 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
         </React.Fragment>
       ))}
 
+      {isBoxed && (
+        <NodeBox
+          className="network-node-box"
+          iconSize={iconSize}
+          spacing={nodeBoxSpacing}
+          labelText={suppressLabels ? undefined : boxLabel.text}
+          labelRef={boxLabel.labelRef}
+          selected={selected}
+          highlighted={showLinkTargetHighlight}
+          glow={glowShadow}
+        />
+      )}
+
       {/* Node icon */}
       <div style={iconStyle} className="network-node-icon" />
 
       {/* Node label */}
-      {!suppressLabels && (
+      {!suppressLabels && !isBoxed && (
         <div style={labelStyle} className="network-node-label">
           {label}
         </div>

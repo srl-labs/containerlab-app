@@ -8,7 +8,12 @@ import { EdgeLabelRenderer, useStore, type EdgeProps, type Edge, type Node } fro
 import { SELECTION_COLOR, type EdgeLabelMode } from "../types";
 import { useEdgeInfo, useEdgeRenderConfig } from "../../../stores/canvasStore";
 import { useEdges, useGraphStore } from "../../../stores/graphStore";
-import { useTelemetryLabelSettings, useDeploymentState } from "../../../stores/topoViewerStore";
+import {
+  useTelemetryLabelSettings,
+  useDeploymentState,
+  useNodeBoxSpacing,
+  useNodeStyle
+} from "../../../stores/topoViewerStore";
 import {
   calculateControlPoint,
   getEdgePoints,
@@ -16,6 +21,7 @@ import {
   getNodeIntersection,
   isVisuallyCanonicalDirection
 } from "../edgeGeometry";
+import { getNodeConnectionRect, type NodeBoxSpacing, type NodeStyle } from "../nodeBox";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
 import {
   clampTelemetryInterfaceSizePercent,
@@ -109,8 +115,13 @@ interface EndpointAssignment {
 
 type NodeInterfaceAnchorMap = Map<string, Map<string, InterfaceAnchor>>;
 
-interface TelemetryLabelRenderConfig {
+interface NodeShape {
   nodeIconSize: number;
+  nodeStyle: NodeStyle;
+  nodeBoxSpacing: NodeBoxSpacing;
+}
+
+interface TelemetryLabelRenderConfig extends NodeShape {
   interfaceScale: number;
   globalInterfaceOverrideSelection: string;
   interfaceLabelOverrides: Record<string, string>;
@@ -186,17 +197,34 @@ function normalizeEndpoint(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+/**
+ * Rect that links attach to: the icon, or the box around it in the boxed node
+ * style. The icon is horizontally centered within the node width.
+ */
+function getConnectionRectAt(
+  position: { x: number; y: number },
+  nodeWidth: number,
+  { nodeIconSize, nodeStyle, nodeBoxSpacing }: NodeShape
+): { x: number; y: number; width: number; height: number } {
+  return getNodeConnectionRect(
+    {
+      x: position.x + (nodeWidth - nodeIconSize) / 2,
+      y: position.y,
+      width: nodeIconSize,
+      height: nodeIconSize
+    },
+    nodeStyle,
+    nodeIconSize,
+    nodeBoxSpacing
+  );
+}
+
 function getNodeRect(
   node: Node,
-  nodeIconSize: number
+  shape: NodeShape
 ): { x: number; y: number; width: number; height: number } {
-  const measuredNodeWidth = typeof node.width === "number" ? node.width : nodeIconSize;
-  return {
-    x: node.position.x + (measuredNodeWidth - nodeIconSize) / 2,
-    y: node.position.y,
-    width: nodeIconSize,
-    height: nodeIconSize
-  };
+  const measuredNodeWidth = typeof node.width === "number" ? node.width : shape.nodeIconSize;
+  return getConnectionRectAt(node.position, measuredNodeWidth, shape);
 }
 
 function getRectCenter(rect: { x: number; y: number; width: number; height: number }): {
@@ -383,7 +411,7 @@ function collectEdgeEndpointVectors(
   targetEndpoint: string | null,
   nodeMap: Map<string, Node>,
   vectorsByNode: Map<string, Map<string, EndpointVector>>,
-  nodeIconSize: number
+  telemetryConfig: TelemetryLabelRenderConfig
 ): void {
   if (sourceEndpoint === null && targetEndpoint === null) return;
   if (edge.source === edge.target) return;
@@ -392,8 +420,8 @@ function collectEdgeEndpointVectors(
   const targetNode = nodeMap.get(edge.target);
   if (!sourceNode || !targetNode) return;
 
-  const sourceCenter = getRectCenter(getNodeRect(sourceNode, nodeIconSize));
-  const targetCenter = getRectCenter(getNodeRect(targetNode, nodeIconSize));
+  const sourceCenter = getRectCenter(getNodeRect(sourceNode, telemetryConfig));
+  const targetCenter = getRectCenter(getNodeRect(targetNode, telemetryConfig));
   const forwardDx = targetCenter.x - sourceCenter.x;
   const forwardDy = targetCenter.y - sourceCenter.y;
 
@@ -426,7 +454,7 @@ function buildInterfaceAnchorMap(
       targetEndpoint,
       nodeMap,
       vectorsByNode,
-      telemetryConfig.nodeIconSize
+      telemetryConfig
     );
   }
 
@@ -436,7 +464,7 @@ function buildInterfaceAnchorMap(
     if (!node) continue;
     const buckets = buildNodeSideAssignments(endpoints, vectorsByNode.get(nodeId), telemetryConfig);
     const endpointAnchors = assignNodeAnchors(
-      getNodeRect(node, telemetryConfig.nodeIconSize),
+      getNodeRect(node, telemetryConfig),
       buckets
     );
     anchorsByNode.set(nodeId, endpointAnchors);
@@ -449,6 +477,8 @@ let interfaceAnchorMapCache: {
   edgesRef: Edge[] | null;
   nodesRef: Node[] | null;
   nodeIconSize: number | null;
+  nodeStyle: NodeStyle | null;
+  nodeBoxSpacing: NodeBoxSpacing | null;
   interfaceScale: number | null;
   globalInterfaceOverrideSelection: string | null;
   interfaceLabelOverridesRef: Record<string, string> | null;
@@ -457,6 +487,8 @@ let interfaceAnchorMapCache: {
   edgesRef: null,
   nodesRef: null,
   nodeIconSize: null,
+  nodeStyle: null,
+  nodeBoxSpacing: null,
   interfaceScale: null,
   globalInterfaceOverrideSelection: null,
   interfaceLabelOverridesRef: null,
@@ -472,6 +504,8 @@ function getCachedInterfaceAnchorMap(
     interfaceAnchorMapCache.edgesRef === edges &&
     interfaceAnchorMapCache.nodesRef === nodes &&
     interfaceAnchorMapCache.nodeIconSize === telemetryConfig.nodeIconSize &&
+    interfaceAnchorMapCache.nodeStyle === telemetryConfig.nodeStyle &&
+    interfaceAnchorMapCache.nodeBoxSpacing === telemetryConfig.nodeBoxSpacing &&
     interfaceAnchorMapCache.interfaceScale === telemetryConfig.interfaceScale &&
     interfaceAnchorMapCache.globalInterfaceOverrideSelection ===
       telemetryConfig.globalInterfaceOverrideSelection &&
@@ -487,6 +521,8 @@ function getCachedInterfaceAnchorMap(
     edgesRef: edges,
     nodesRef: nodes,
     nodeIconSize: telemetryConfig.nodeIconSize,
+    nodeStyle: telemetryConfig.nodeStyle,
+    nodeBoxSpacing: telemetryConfig.nodeBoxSpacing,
     interfaceScale: telemetryConfig.interfaceScale,
     globalInterfaceOverrideSelection: telemetryConfig.globalInterfaceOverrideSelection,
     interfaceLabelOverridesRef: telemetryConfig.interfaceLabelOverrides,
@@ -760,13 +796,14 @@ function computeLoopGeometry(
   sourceNodeWidth: number,
   loopIndex: number,
   labelOffset: number,
-  nodeIconSize: number
+  nodeShape: NodeShape
 ): EdgeGeometry {
+  const rect = getConnectionRectAt(sourcePos, sourceNodeWidth, nodeShape);
   const loopGeometry = calculateLoopEdgeGeometry(
-    sourcePos.x + (sourceNodeWidth - nodeIconSize) / 2,
-    sourcePos.y,
-    nodeIconSize,
-    nodeIconSize,
+    rect.x,
+    rect.y,
+    rect.width,
+    rect.height,
     loopIndex,
     labelOffset
   );
@@ -861,25 +898,15 @@ function computeRegularGeometry(
   targetPos: { x: number; y: number },
   sourceNodeWidth: number,
   targetNodeWidth: number,
-  nodeIconSize: number,
+  nodeShape: NodeShape,
   parallelInfo: { index: number; total: number; isCanonicalDirection: boolean } | null,
   labelOffsets: Pick<EdgeLabelOffsets, "source" | "target">,
   sourceAnchor?: InterfaceAnchor,
   targetAnchor?: InterfaceAnchor,
   nodeProximateLabels = false
 ): EdgeGeometry {
-  const sourceRect = {
-    x: sourcePos.x + (sourceNodeWidth - nodeIconSize) / 2,
-    y: sourcePos.y,
-    width: nodeIconSize,
-    height: nodeIconSize
-  };
-  const targetRect = {
-    x: targetPos.x + (targetNodeWidth - nodeIconSize) / 2,
-    y: targetPos.y,
-    width: nodeIconSize,
-    height: nodeIconSize
-  };
+  const sourceRect = getConnectionRectAt(sourcePos, sourceNodeWidth, nodeShape);
+  const targetRect = getConnectionRectAt(targetPos, targetNodeWidth, nodeShape);
 
   const points = resolveEdgePointsWithInterfaceAnchors(
     sourceRect,
@@ -939,6 +966,12 @@ function useEdgeGeometry(
   telemetryConfig: TelemetryLabelRenderConfig | null
 ) {
   const nodeIconSize = telemetryConfig?.nodeIconSize ?? NODE_ICON_SIZE;
+  const nodeStyle = telemetryConfig?.nodeStyle ?? "icon";
+  const nodeBoxSpacing = telemetryConfig?.nodeBoxSpacing ?? "default";
+  const nodeShape = useMemo(
+    () => ({ nodeIconSize, nodeStyle, nodeBoxSpacing }),
+    [nodeIconSize, nodeStyle, nodeBoxSpacing]
+  );
   const sourceNode = useNodeGeometry(source, nodeIconSize);
   const targetNode = useNodeGeometry(target, nodeIconSize);
   const edges = useEdges();
@@ -973,7 +1006,7 @@ function useEdgeGeometry(
         sourceNodeWidth,
         loopInfo.loopIndex,
         labelOffsets.loop,
-        nodeIconSize
+        nodeShape
       );
     }
 
@@ -993,7 +1026,7 @@ function useEdgeGeometry(
       targetPos,
       sourceNodeWidth,
       targetNodeWidth,
-      nodeIconSize,
+      nodeShape,
       parallelInfo,
       { source: labelOffsets.source, target: labelOffsets.target },
       sourceAnchor,
@@ -1014,7 +1047,7 @@ function useEdgeGeometry(
     edgeData?.targetEndpoint,
     interfaceAnchorMap,
     labelMode,
-    nodeIconSize
+    nodeShape
   ]);
 }
 
@@ -1052,9 +1085,13 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
   const telemetryLabelSettings = useTelemetryLabelSettings();
   const edgeData = useMemo(() => toEdgeData(data), [data]);
   const { labelMode, suppressLabels, suppressHitArea } = useEdgeRenderConfig();
+  const nodeStyle = useNodeStyle();
+  const nodeBoxSpacing = useNodeBoxSpacing();
   const telemetryConfig = useMemo<TelemetryLabelRenderConfig>(
     () => ({
       nodeIconSize: clampTelemetryNodeSizePx(telemetryLabelSettings.nodeSizePx),
+      nodeStyle,
+      nodeBoxSpacing,
       interfaceScale:
         clampTelemetryInterfaceSizePercent(telemetryLabelSettings.interfaceSizePercent) / 100,
       globalInterfaceOverrideSelection: telemetryLabelSettings.globalInterfaceOverrideSelection,
@@ -1062,6 +1099,8 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
     }),
     [
       telemetryLabelSettings.nodeSizePx,
+      nodeStyle,
+      nodeBoxSpacing,
       telemetryLabelSettings.interfaceSizePercent,
       telemetryLabelSettings.globalInterfaceOverrideSelection,
       telemetryLabelSettings.interfaceLabelOverrides

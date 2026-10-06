@@ -7,7 +7,8 @@
 
 import * as YAML from "yaml";
 
-import type { ClabTopology } from "../types/topology";
+import type { ClabTopology, NodeBoxAppearance } from "../types/topology";
+import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 import type { SaveResult, IOLogger } from "./types";
 import { ERROR_NODES_NOT_MAP, noopLogger } from "./types";
@@ -124,6 +125,8 @@ export interface NodeAnnotationData {
   labelPosition?: string | null;
   direction?: string | null;
   labelBackgroundColor?: string | null;
+  /** Boxed node style look; null removes it */
+  box?: NodeBoxAppearance | null;
   /** Interface pattern for link creation - tracks template inheritance */
   interfacePattern?: string;
   /** Group ID for group membership */
@@ -580,6 +583,7 @@ export function applyAnnotationData(
     labelPosition?: string;
     direction?: string;
     labelBackgroundColor?: string;
+    box?: NodeBoxAppearance;
     interfacePattern?: string;
     groupId?: string;
   },
@@ -612,5 +616,14 @@ export function applyAnnotationData(
 
   if (data.iconCornerRadius !== undefined) {
     annotation.iconCornerRadius = data.iconCornerRadius;
+  }
+
+  if (data.box !== undefined) {
+    const box = normalizeNodeBoxAppearance(data.box);
+    if (box) {
+      annotation.box = box;
+    } else {
+      delete annotation.box;
+    }
   }
 }
