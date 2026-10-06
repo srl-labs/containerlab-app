@@ -2,6 +2,7 @@
 import type { Node, Edge } from "@xyflow/react";
 
 import type { TextStyle, BoxStyle, TrafficRateStyle } from "./annotationStyles";
+import type { NodeBoxAppearance } from "./topology";
 
 // ============================================================================
 // Node Data Types
@@ -20,6 +21,8 @@ export interface TopologyNodeData {
   labelPosition?: string;
   direction?: string;
   labelBackgroundColor?: string;
+  /** Box look in the boxed node style. */
+  box?: NodeBoxAppearance;
   state?: string;
   mgmtIpv4Address?: string;
   mgmtIpv6Address?: string;

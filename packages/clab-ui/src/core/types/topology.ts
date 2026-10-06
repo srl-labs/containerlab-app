@@ -193,6 +193,25 @@ export interface NetworkNodeAnnotation {
   level?: string;
 }
 
+/** Per-node look of the boxed node style. Unset fields follow the theme. */
+export interface NodeBoxAppearance {
+  /** Fill color (any CSS color). */
+  color?: string;
+  /** Fill opacity in percent, 0-100. */
+  opacity?: number;
+  /** Frosted glass: blur of what shows through the box, in px (0 = off). */
+  blur?: number;
+  borderColor?: string;
+  /** Border width in px, 0-4. */
+  borderWidth?: number;
+  /** Corner radius in px. */
+  cornerRadius?: number;
+  /** Color of the node name. */
+  textColor?: string;
+  /** Drop shadow, on unless false. */
+  shadow?: boolean;
+}
+
 /**
  * Node annotation for position, icon, and other visual settings.
  */
@@ -210,6 +229,8 @@ export interface NodeAnnotation {
   labelPosition?: string;
   direction?: string;
   labelBackgroundColor?: string;
+  /** Box look in the boxed node style. */
+  box?: NodeBoxAppearance;
   groupLabelPos?: string;
   /** Internal group ID for membership (preferred). */
   groupId?: string;
@@ -261,6 +282,8 @@ export interface TopologyAnnotations {
     style?: "default" | "telemetry-style";
     linkLabelMode?: "show-all" | "on-select" | "hide" | "telemetry-style";
     lastNonTelemetryLinkLabelMode?: "show-all" | "on-select" | "hide";
+    nodeStyle?: "icon" | "boxed";
+    nodeBoxSpacing?: "default" | "narrow";
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;

@@ -9,6 +9,8 @@ import { shallow } from "zustand/shallow";
 import { applyNodeChanges, applyEdgeChanges } from "@xyflow/react";
 import type { Node, Edge, NodeChange, EdgeChange } from "@xyflow/react";
 
+import { normalizeNodeBoxAppearance } from "../core/utilities/nodeBoxAppearance";
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -176,6 +178,9 @@ export const useGraphStore = createWithEqualityFn<GraphStore>((set, get) => ({
             typeof extraData.labelBackgroundColor === "string"
               ? extraData.labelBackgroundColor
               : undefined;
+        }
+        if ("box" in extraData) {
+          updatedData.box = normalizeNodeBoxAppearance(extraData.box);
         }
         return { ...node, data: updatedData };
       })

@@ -180,6 +180,35 @@ export function buildSvgDefs(): string {
 // Theme Color Resolution
 // ============================================================================
 
+const SRGB_COLOR_PATTERN =
+  /^color\(\s*srgb\s+([^\s/)]+)\s+([^\s/)]+)\s+([^\s/)]+)\s*(?:\/\s*([^\s)]+)\s*)?\)$/i;
+
+/** Parse a 0-1 number or a percentage; null for anything else (e.g. `none`). */
+function parseUnitValue(value: string): number | null {
+  const isPercent = value.endsWith("%");
+  const parsed = Number.parseFloat(isPercent ? value.slice(0, -1) : value);
+  if (!Number.isFinite(parsed)) return null;
+  const unit = isPercent ? parsed / 100 : parsed;
+  return Math.min(1, Math.max(0, unit));
+}
+
+/**
+ * Convert the `color(srgb r g b [/ a])` form browsers report for color-mix()
+ * to rgb()/rgba() with 0-255 channels, which SVG consumers understand.
+ * Other values are returned unchanged.
+ */
+export function normalizeSrgbColor(value: string): string {
+  const match = SRGB_COLOR_PATTERN.exec(value.trim());
+  if (!match) return value;
+  const channels = match.slice(1, 4).map(parseUnitValue);
+  const alphaValue = match.at(4);
+  const alpha = alphaValue === undefined ? 1 : parseUnitValue(alphaValue);
+  if (alpha === null || channels.some((channel) => channel === null)) return value;
+  const [r, g, b] = channels.map((channel) => Math.round((channel ?? 0) * 255));
+  if (alpha >= 1) return `rgb(${r}, ${g}, ${b})`;
+  return `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(3))})`;
+}
+
 /**
  * Resolve a CSS color expression (e.g. a `var()` chain) against the live
  * document so exported colors match the current theme. Returns the fallback
@@ -194,7 +223,7 @@ export function resolveCssColor(cssValue: string, fallback: string): string {
   document.body.appendChild(probe);
   const resolved = getComputedStyle(probe).color;
   probe.remove();
-  return resolved.length > 0 ? resolved : fallback;
+  return resolved.length > 0 ? normalizeSrgbColor(resolved) : fallback;
 }
 
 // ============================================================================

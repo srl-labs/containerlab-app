@@ -232,3 +232,33 @@ test("applySnapshotToStores defaults showDummyLinks to true when unset", () => {
 
   assert.equal(useTopoViewerStore.getState().showDummyLinks, true);
 });
+
+test("applySnapshotToStores keeps the node style per lab", () => {
+  useGraphStore.getState().setGraph([], []);
+  const client = createSessionClient();
+
+  applySnapshotToStores(
+    {
+      ...createSnapshot([]),
+      annotations: { viewerSettings: { nodeStyle: "boxed", nodeBoxSpacing: "narrow" } }
+    },
+    {},
+    client
+  );
+  assert.equal(useTopoViewerStore.getState().nodeStyle, "boxed");
+  assert.equal(useTopoViewerStore.getState().nodeBoxSpacing, "narrow");
+
+  // Another lab without the settings must not inherit the previous lab's look.
+  applySnapshotToStores(
+    {
+      ...createSnapshot([]),
+      yamlFileName: "other.clab.yml",
+      annotationsFileName: "other.clab.yml.annotations.json",
+      annotations: { viewerSettings: {} }
+    },
+    {},
+    client
+  );
+  assert.equal(useTopoViewerStore.getState().nodeStyle, "icon");
+  assert.equal(useTopoViewerStore.getState().nodeBoxSpacing, "default");
+});

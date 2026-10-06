@@ -8,6 +8,7 @@ import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
+import { parseNodeBoxSpacing, parseNodeStyle } from "../../canvas/nodeBox";
 import { SettingsField } from "../../../settings/SettingsField";
 import { useEdges } from "../../../stores/graphStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
@@ -79,6 +80,8 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
     (state) => state.lastNonTelemetryLinkLabelMode
   );
 
+  const nodeStyle = useTopoViewerStore((state) => state.nodeStyle);
+  const nodeBoxSpacing = useTopoViewerStore((state) => state.nodeBoxSpacing);
   const telemetryNodeSizePx = useTopoViewerStore((state) => state.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.telemetryInterfaceSizePercent
@@ -91,6 +94,8 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   );
 
   const setLinkLabelMode = useTopoViewerStore((state) => state.setLinkLabelMode);
+  const setNodeStyle = useTopoViewerStore((state) => state.setNodeStyle);
+  const setNodeBoxSpacing = useTopoViewerStore((state) => state.setNodeBoxSpacing);
   const setTelemetryNodeSizePx = useTopoViewerStore((state) => state.setTelemetryNodeSizePx);
   const setTelemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.setTelemetryInterfaceSizePercent
@@ -158,6 +163,48 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           <MenuItem value="telemetry-style">Telemetry Style</MenuItem>
         </TextField>
       </SettingsField>
+      <SettingsField
+        title="Node style"
+        description="Show nodes as icons, or as boxes with the node name inside."
+      >
+        <TextField
+          slotProps={{ select: { inputProps: { "aria-label": "Node style" } } }}
+          select
+          size="small"
+          value={nodeStyle}
+          disabled={isReadOnly}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setNodeStyle(parseNodeStyle(e.target.value) ?? "icon");
+          }}
+          data-testid="lab-settings-node-style"
+        >
+          <MenuItem value="icon">Icon</MenuItem>
+          <MenuItem value="boxed">Boxed</MenuItem>
+        </TextField>
+      </SettingsField>
+      {nodeStyle === "boxed" ? (
+        <SettingsField
+          title="Box spacing"
+          description="Room between each box outline and its icon and name."
+        >
+          <TextField
+            slotProps={{ select: { inputProps: { "aria-label": "Box spacing" } } }}
+            select
+            size="small"
+            value={nodeBoxSpacing}
+            disabled={isReadOnly}
+            onChange={(e) => {
+              if (isReadOnly) return;
+              setNodeBoxSpacing(parseNodeBoxSpacing(e.target.value) ?? "default");
+            }}
+            data-testid="lab-settings-node-box-spacing"
+          >
+            <MenuItem value="default">Default</MenuItem>
+            <MenuItem value="narrow">Narrow</MenuItem>
+          </TextField>
+        </SettingsField>
+      ) : null}
       <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
         <TextField
           id="telemetry-node-size"

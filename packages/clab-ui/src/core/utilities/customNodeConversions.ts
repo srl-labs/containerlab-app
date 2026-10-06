@@ -8,6 +8,8 @@ import type {
   CustomNodeTemplate
 } from "../types/editors";
 
+import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
+
 /**
  * Data format for saving custom node to extension.
  * Extends CustomNodeTemplate with oldName for update operations.
@@ -33,6 +35,7 @@ function buildCommonTemplateFields(data: TemplateFieldSource) {
     icon: data.icon,
     iconColor: data.iconColor,
     iconCornerRadius: data.iconCornerRadius,
+    box: normalizeNodeBoxAppearance(data.box),
 
     // Custom template specific
     baseName: data.baseName,

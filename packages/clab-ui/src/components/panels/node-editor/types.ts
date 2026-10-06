@@ -30,6 +30,8 @@ export const INTEGRATED_SROS_TYPES = _INTEGRATED_SROS_TYPES;
 export interface TabProps {
   data: NodeEditorData;
   onChange: (updates: Partial<NodeEditorData>) => void;
+  /** Show a change on the canvas without editing the form, e.g. while a slider is dragged */
+  onPreview?: (updates: Partial<NodeEditorData>) => void;
   /** Array of property names that are inherited from defaults/kinds/groups */
   inheritedProps?: string[];
 }

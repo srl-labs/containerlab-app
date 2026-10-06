@@ -59,12 +59,13 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   }, []);
 
   const handleSave = async () => {
-    if (!areTopologySettingsReadOnly) {
-      await state.handleSave();
-    }
+    // Save appearance before lab settings: every save pushes a host snapshot into the
+    // store, and appearance in that snapshot comes from the annotations file.
     const {
       linkLabelMode,
       lastNonTelemetryLinkLabelMode,
+      nodeStyle,
+      nodeBoxSpacing,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent
     } = useTopoViewerStore.getState();
@@ -82,6 +83,8 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       style,
       linkLabelMode,
       lastNonTelemetryLinkLabelMode: nextLastNonTelemetryLinkLabelMode,
+      nodeStyle,
+      nodeBoxSpacing,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,
@@ -97,6 +100,9 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       await saveAnnotationNodesAndViewerSettings(sessionClient, result.nodes, viewerSettings);
     } else {
       await saveViewerSettings(sessionClient, viewerSettings);
+    }
+    if (!areTopologySettingsReadOnly) {
+      await state.handleSave();
     }
     onClose();
   };

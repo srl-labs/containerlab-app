@@ -6,6 +6,8 @@
  * proper dependency direction (shared does not import from webview).
  */
 
+import type { NodeBoxAppearance } from "./topology";
+
 // ============================================================================
 // Node Editor Types
 // ============================================================================
@@ -140,6 +142,8 @@ export interface NodeEditorData extends SharedTemplateFields {
   labelPosition?: string;
   direction?: string;
   labelBackgroundColor?: string;
+  /** Box look in the boxed node style. */
+  box?: NodeBoxAppearance;
   // Custom node settings
   customName?: string;
   baseName?: string;
@@ -332,6 +336,7 @@ export interface CustomNodeTemplate extends SharedTemplateFields {
   icon?: string;
   iconColor?: string;
   iconCornerRadius?: number;
+  box?: NodeBoxAppearance;
   baseName?: string;
   interfacePattern?: string;
   setDefault?: boolean;
@@ -358,6 +363,7 @@ export interface CustomTemplateEditorData extends SharedTemplateFields {
   icon?: string;
   iconColor?: string;
   iconCornerRadius?: number;
+  box?: NodeBoxAppearance;
 
   // Custom template specific
   baseName?: string;

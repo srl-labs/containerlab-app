@@ -38,6 +38,7 @@ import {
 import type { LinkSaveData } from "./LinkPersistenceIO";
 import { addLinkToDoc, editLinkInDoc, deleteLinkFromDoc } from "./LinkPersistenceIO";
 import { isRecord } from "../utilities/typeHelpers";
+import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 // Types are available from ./NodePersistenceIO and ./LinkPersistenceIO directly
 
@@ -57,6 +58,12 @@ function toOptionalNullableString(value: unknown): string | null | undefined {
 
 function toOptionalNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
+}
+
+/** null or an all-default box clears the stored box; absent leaves it alone. */
+function toOptionalNodeBox(value: unknown): NodeAnnotationData["box"] {
+  if (value === undefined) return undefined;
+  return normalizeNodeBoxAppearance(value) ?? null;
 }
 
 function parseTopologyForInheritance(raw: unknown): ClabTopology {
@@ -377,6 +384,7 @@ export class TopologyIO {
       labelPosition: toOptionalNullableString(extraData.labelPosition),
       direction: toOptionalNullableString(extraData.direction),
       labelBackgroundColor: toOptionalNullableString(extraData.labelBackgroundColor),
+      box: toOptionalNodeBox(extraData.box),
       interfacePattern: toOptionalString(extraData.interfacePattern),
       groupId: includeGroupId ? toOptionalString(extraData.groupId) : undefined
     };
@@ -394,6 +402,7 @@ export class TopologyIO {
       annotationData.labelPosition !== undefined ||
       annotationData.direction !== undefined ||
       annotationData.labelBackgroundColor !== undefined ||
+      annotationData.box !== undefined ||
       Boolean(annotationData.interfacePattern)
     );
   }

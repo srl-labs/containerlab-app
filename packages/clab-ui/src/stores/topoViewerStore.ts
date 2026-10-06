@@ -12,6 +12,13 @@ import {
   clampEndpointLabelOffset
 } from "../annotations/endpointLabelOffset";
 
+import {
+  DEFAULT_NODE_BOX_SPACING,
+  DEFAULT_NODE_STYLE,
+  type NodeBoxSpacing,
+  type NodeStyle
+} from "../components/canvas/nodeBox";
+
 import { useAnnotationUIStore } from "./annotationUIStore";
 import { isRecord } from "../core/utilities/typeHelpers";
 
@@ -66,6 +73,8 @@ export interface TopoViewerState {
   showDummyLinks: boolean;
   endpointLabelOffsetEnabled: boolean;
   endpointLabelOffset: number;
+  nodeStyle: NodeStyle;
+  nodeBoxSpacing: NodeBoxSpacing;
   telemetryNodeSizePx: number;
   telemetryInterfaceSizePercent: number;
   showRateLabels: boolean;
@@ -115,6 +124,8 @@ export interface TopoViewerActions {
   setShowDummyLinks: (enabled: boolean) => void;
   toggleEndpointLabelOffset: () => void;
   setEndpointLabelOffset: (value: number) => void;
+  setNodeStyle: (style: NodeStyle) => void;
+  setNodeBoxSpacing: (spacing: NodeBoxSpacing) => void;
   setTelemetryNodeSizePx: (value: number) => void;
   setTelemetryInterfaceSizePercent: (value: number) => void;
   setShowRateLabels: (enabled: boolean) => void;
@@ -185,6 +196,8 @@ const initialState: TopoViewerState = {
   showDummyLinks: true,
   endpointLabelOffsetEnabled: true,
   endpointLabelOffset: DEFAULT_ENDPOINT_LABEL_OFFSET,
+  nodeStyle: DEFAULT_NODE_STYLE,
+  nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,
@@ -420,6 +433,14 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set({ endpointLabelOffset: next });
   },
 
+  setNodeStyle: (nodeStyle) => {
+    set({ nodeStyle });
+  },
+
+  setNodeBoxSpacing: (nodeBoxSpacing) => {
+    set({ nodeBoxSpacing });
+  },
+
   setTelemetryNodeSizePx: (value) => {
     const next = Number.isFinite(value) ? value : 40;
     set({ telemetryNodeSizePx: next });
@@ -653,6 +674,12 @@ export const useTelemetryLabelSettings = () =>
     shallow
   );
 
+/** Get the node look (icon only or boxed with the name inside) */
+export const useNodeStyle = () => useTopoViewerStore((state) => state.nodeStyle);
+
+/** Get the room between box outlines and their icon and name in the boxed style */
+export const useNodeBoxSpacing = () => useTopoViewerStore((state) => state.nodeBoxSpacing);
+
 /** Get processing state */
 export const useIsProcessing = () => useTopoViewerStore((state) => state.isProcessing);
 
@@ -681,6 +708,8 @@ export const useTopoViewerActions = () =>
       setShowDummyLinks: state.setShowDummyLinks,
       toggleEndpointLabelOffset: state.toggleEndpointLabelOffset,
       setEndpointLabelOffset: state.setEndpointLabelOffset,
+      setNodeStyle: state.setNodeStyle,
+      setNodeBoxSpacing: state.setNodeBoxSpacing,
       setTelemetryNodeSizePx: state.setTelemetryNodeSizePx,
       setTelemetryInterfaceSizePercent: state.setTelemetryInterfaceSizePercent,
       setShowRateLabels: state.setShowRateLabels,

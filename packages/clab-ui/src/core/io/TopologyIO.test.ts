@@ -239,3 +239,66 @@ test("savePositions preserves dummy group membership and treats declared dummy-r
     ["dummy0"]
   );
 });
+
+test("editNode persists the box appearance to annotations and null clears it", async () => {
+  const { fs, annotationsIO, topologyIO, yamlPath } = createTopologyIoHarness();
+  topologyIO.initialize(
+    YAML.parseDocument("topology:\n  nodes:\n    srl1:\n      kind: nokia_srlinux\n"),
+    yamlPath
+  );
+  const annotationsPath = annotationsIO.getAnnotationsFilePath(yamlPath);
+  await fs.writeFile(
+    annotationsPath,
+    JSON.stringify({ nodeAnnotations: [{ id: "srl1", position: { x: 1, y: 2 } }] })
+  );
+  const findSrl1 = async () =>
+    (await loadSavedAnnotations(fs, annotationsPath)).nodeAnnotations?.find(
+      (entry) => entry.id === "srl1"
+    );
+
+  const edit = async (box: unknown) => {
+    const result = await topologyIO.editNode({
+      id: "srl1",
+      name: "srl1",
+      extraData: { kind: "nokia_srlinux", box }
+    });
+    assert.equal(result.success, true);
+  };
+
+  await edit({ color: "#3b82f6", opacity: 60, blur: 8, cornerRadius: 99 });
+  assert.deepEqual((await findSrl1())?.box, {
+    color: "#3b82f6",
+    opacity: 60,
+    blur: 8,
+    cornerRadius: 40
+  });
+
+  await edit({ borderColor: "#000000", borderWidth: 3 });
+  assert.deepEqual((await findSrl1())?.box, { borderColor: "#000000", borderWidth: 3 });
+
+  await edit(null);
+  const cleared = await findSrl1();
+  assert.equal(cleared !== undefined && "box" in cleared, false);
+  assert.deepEqual(cleared?.position, { x: 1, y: 2 });
+});
+
+test("addNode stores the box appearance carried by a new node", async () => {
+  const { fs, annotationsIO, topologyIO, yamlPath } = createTopologyIoHarness();
+  const annotationsPath = annotationsIO.getAnnotationsFilePath(yamlPath);
+
+  assert.deepEqual(
+    await topologyIO.addNode({
+      id: "leaf1",
+      name: "leaf1",
+      position: { x: 10, y: 20 },
+      extraData: { kind: "linux", box: { color: "#123456", shadow: false } }
+    }),
+    { success: true }
+  );
+
+  const saved = await loadSavedAnnotations(fs, annotationsPath);
+  assert.deepEqual(
+    saved.nodeAnnotations?.find((entry) => entry.id === "leaf1")?.box,
+    { color: "#123456", shadow: false }
+  );
+});

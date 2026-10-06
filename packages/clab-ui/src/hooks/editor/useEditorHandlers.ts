@@ -10,7 +10,7 @@ import type {
   NetworkEditorData,
   NodeEditorData
 } from "../../core/types/editors";
-import type { EdgeAnnotation, NodeAnnotation } from "../../core/types/topology";
+import type { EdgeAnnotation, NodeAnnotation, NodeBoxAppearance } from "../../core/types/topology";
 import {
   convertEditorDataToYaml,
   convertEditorDataToNodeSaveData,
@@ -23,6 +23,7 @@ import {
 } from "../../services";
 import { useTopologySessionClient } from "../../host";
 import { useGraphStore } from "../../stores/graphStore";
+import { useCanvasStore } from "../../stores/canvasStore";
 import {
   findEdgeAnnotation,
   upsertEdgeLabelOffsetAnnotation
@@ -31,6 +32,10 @@ import { convertEditorDataToLinkSaveData } from "../../utils/linkEditorConversio
 import { BRIDGE_NETWORK_TYPES, getNetworkType } from "../../utils/networkNodeTypes";
 import { getViewportCenter } from "../../utils/viewportUtils";
 import { isRecord } from "../../core/utilities/typeHelpers";
+import {
+  isSameNodeBoxAppearance,
+  normalizeNodeBoxAppearance
+} from "../../core/utilities/nodeBoxAppearance";
 
 // ============================================================================
 // Types
@@ -127,19 +132,25 @@ function updateNodeExtraData(data: NodeEditorData): Record<string, unknown> {
   if ("labelBackgroundColor" in data) {
     newExtraData.labelBackgroundColor = data.labelBackgroundColor;
   }
+  if ("box" in data) {
+    newExtraData.box = normalizeNodeBoxAppearance(data.box);
+  }
   return newExtraData;
 }
 
-function updateNodeVisualPreview(
-  nodeId: string,
-  labelPosition: string | undefined,
-  direction: string | undefined,
-  labelBackgroundColor: string | undefined
-): void {
+/** Editor fields that are previewed on the canvas before saving */
+type NodeVisualPreview = Pick<
+  NodeEditorData,
+  "labelPosition" | "direction" | "labelBackgroundColor" | "box"
+>;
+
+function updateNodeVisualPreview(nodeId: string, visuals: NodeVisualPreview): void {
   const graphState = useGraphStore.getState();
   const node = graphState.nodes.find((entry) => entry.id === nodeId);
   if (!node) return;
   const currentData = node.data;
+  previewNodeBox(nodeId, currentData.box, visuals.box);
+  const { labelPosition, direction, labelBackgroundColor } = visuals;
   if (
     currentData.labelPosition === labelPosition &&
     currentData.direction === direction &&
@@ -154,6 +165,34 @@ function updateNodeVisualPreview(
       labelBackgroundColor
     }
   });
+}
+
+/**
+ * Box changes preview outside the graph: every slider step and color change
+ * then repaints only the edited node instead of the whole app.
+ */
+function previewNodeBox(
+  nodeId: string,
+  appliedBox: unknown,
+  editedBox: NodeBoxAppearance | undefined
+): void {
+  const { nodeBoxPreview, setNodeBoxPreview } = useCanvasStore.getState();
+  const box = normalizeNodeBoxAppearance(editedBox);
+  if (isSameNodeBoxAppearance(appliedBox, box)) {
+    clearNodeBoxPreview(nodeId);
+    return;
+  }
+  if (nodeBoxPreview?.nodeId === nodeId && isSameNodeBoxAppearance(nodeBoxPreview.box, box)) {
+    return;
+  }
+  setNodeBoxPreview({ nodeId, box });
+}
+
+/** Drop the box preview (of one node, or any). */
+function clearNodeBoxPreview(nodeId?: string): void {
+  const { nodeBoxPreview, setNodeBoxPreview } = useCanvasStore.getState();
+  if (!nodeBoxPreview || (nodeId !== undefined && nodeBoxPreview.nodeId !== nodeId)) return;
+  setNodeBoxPreview(null);
 }
 
 function applyNodeChanges(
@@ -434,12 +473,9 @@ export function useNodeEditorHandlers(
   React.useEffect(() => {
     const previous = initialDataRef.current;
     if (previous && previous.id !== editingNodeData?.id) {
-      updateNodeVisualPreview(
-        previous.id,
-        previous.labelPosition,
-        previous.direction,
-        previous.labelBackgroundColor
-      );
+      // Also covers a node deleted while edited, which the restore below skips.
+      clearNodeBoxPreview(previous.id);
+      updateNodeVisualPreview(previous.id, previous);
     }
     if (editingNodeData) {
       initialDataRef.current = { ...editingNodeData };
@@ -448,15 +484,14 @@ export function useNodeEditorHandlers(
     }
   }, [editingNodeData?.id]);
 
+  // The preview store outlives this view (e.g. when the lab closes mid-edit).
+  React.useEffect(() => () => clearNodeBoxPreview(), []);
+
   const handleClose = React.useCallback(() => {
+    clearNodeBoxPreview();
     const initialData = initialDataRef.current;
     if (initialData) {
-      updateNodeVisualPreview(
-        initialData.id,
-        initialData.labelPosition,
-        initialData.direction,
-        initialData.labelBackgroundColor
-      );
+      updateNodeVisualPreview(initialData.id, initialData);
     }
     initialDataRef.current = null;
     editNode(null);
@@ -469,6 +504,8 @@ export function useNodeEditorHandlers(
 
   const handleSave = React.useCallback(
     (data: NodeEditorData) => {
+      // Saving writes the box to the graph, so the preview has nothing left to show.
+      clearNodeBoxPreview();
       const beforeData = initialDataRef.current;
       const hasChanges = beforeData ? JSON.stringify(beforeData) !== JSON.stringify(data) : true;
       if (!hasChanges && !needsDefaultCleanup(data)) {
@@ -496,6 +533,7 @@ export function useNodeEditorHandlers(
 
       const oldName = beforeData?.name !== data.name ? beforeData?.name : undefined;
       applyNodeChanges(data, oldName, persistDeps);
+      clearNodeBoxPreview();
 
       const saveData = convertEditorDataToNodeSaveData(data, oldName);
       void executeTopologyCommand({ command: "editNode", payload: saveData }, {}, sessionClient);
@@ -508,12 +546,7 @@ export function useNodeEditorHandlers(
   const previewVisuals = React.useCallback((data: NodeEditorData) => {
     const initialData = initialDataRef.current;
     if (!initialData) return;
-    updateNodeVisualPreview(
-      initialData.id,
-      data.labelPosition,
-      data.direction,
-      data.labelBackgroundColor
-    );
+    updateNodeVisualPreview(initialData.id, data);
   }, []);
 
   return { handleClose, handleSave, handleApply, previewVisuals };

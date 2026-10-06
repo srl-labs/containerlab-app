@@ -3,10 +3,22 @@ import { useStore } from "@xyflow/react";
 import type { ConnectionLineComponentProps, Edge, Node } from "@xyflow/react";
 
 import { useEdges } from "../../stores/graphStore";
+import {
+  useNodeBoxSpacing,
+  useNodeStyle,
+  useTopoViewerStore
+} from "../../stores/topoViewerStore";
 import { allocateEndpointsForLink } from "../../utils/endpointAllocator";
 import { buildEdgeId } from "../../utils/edgeId";
+import { clampTelemetryNodeSizePx } from "../../utils/telemetryInterfaceLabels";
 
-import { calculateControlPoint, getEdgePoints, getLabelPosition } from "./edgeGeometry";
+import {
+  calculateControlPoint,
+  getEdgePoints,
+  getLabelPosition,
+  type NodeRect
+} from "./edgeGeometry";
+import { getNodeConnectionRect, type NodeBoxSpacing, type NodeStyle } from "./nodeBox";
 
 type RafThrottled<Args extends unknown[]> = ((...args: Args) => void) & { cancel: () => void };
 
@@ -39,7 +51,6 @@ function rafThrottle<Args extends unknown[]>(func: (...args: Args) => void): Raf
 const LINK_PREVIEW_COLOR = "#969799";
 const LINK_PREVIEW_WIDTH = 2.5;
 const LINK_PREVIEW_OPACITY = 0.5;
-const LINK_PREVIEW_ICON_SIZE = 40;
 const LINK_PREVIEW_CONTROL_POINT_STEP_SIZE = 40;
 const LINK_PREVIEW_LOOP_EDGE_SIZE = 50;
 const LINK_PREVIEW_LOOP_EDGE_OFFSET = 10;
@@ -84,6 +95,51 @@ function getNodePosition(node: Node): { x: number; y: number } {
   const internal = (node as Node & { internals?: { positionAbsolute: { x: number; y: number } } })
     .internals;
   return internal?.positionAbsolute ?? node.position;
+}
+
+interface PreviewNodeShape {
+  iconSize: number;
+  nodeStyle: NodeStyle;
+  nodeBoxSpacing: NodeBoxSpacing;
+}
+
+type Viewport = { x: number; y: number; zoom: number };
+
+const FLOW_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 };
+
+/** Matches the canvas node look so the preview ends where the created link will. */
+function usePreviewNodeShape(): PreviewNodeShape {
+  const iconSize = useTopoViewerStore((state) =>
+    clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
+  );
+  const nodeStyle = useNodeStyle();
+  const nodeBoxSpacing = useNodeBoxSpacing();
+  return useMemo(
+    () => ({ iconSize, nodeStyle, nodeBoxSpacing }),
+    [iconSize, nodeStyle, nodeBoxSpacing]
+  );
+}
+
+/** Rect links attach to, in flow coordinates or (with a viewport) screen coordinates. */
+function getPreviewNodeRect(
+  node: Node,
+  shape: PreviewNodeShape,
+  viewport: Viewport = FLOW_VIEWPORT
+): NodeRect {
+  const { iconSize, nodeStyle, nodeBoxSpacing } = shape;
+  const position = getNodePosition(node);
+  const nodeWidth = node.measured?.width ?? iconSize;
+  return getNodeConnectionRect(
+    {
+      x: (position.x + (nodeWidth - iconSize) / 2) * viewport.zoom + viewport.x,
+      y: position.y * viewport.zoom + viewport.y,
+      width: iconSize * viewport.zoom,
+      height: iconSize * viewport.zoom
+    },
+    nodeStyle,
+    iconSize,
+    nodeBoxSpacing
+  );
 }
 
 function buildPath(
@@ -151,20 +207,18 @@ interface LoopPreviewGeometry {
 }
 
 function calculateLoopEdgeGeometry(
-  nodeX: number,
-  nodeY: number,
-  nodeSize: number,
+  rect: NodeRect,
   loopIndex: number,
   scale: number
 ): LoopPreviewGeometry {
-  const centerX = nodeX + nodeSize / 2;
-  const centerY = nodeY + nodeSize / 2;
+  const centerX = rect.x + rect.width / 2;
+  const centerY = rect.y + rect.height / 2;
   const size = (LINK_PREVIEW_LOOP_EDGE_SIZE + loopIndex * LINK_PREVIEW_LOOP_EDGE_OFFSET) * scale;
 
-  const startX = centerX + nodeSize / 2;
-  const startY = centerY - nodeSize / 4;
-  const endX = centerX + nodeSize / 2;
-  const endY = centerY + nodeSize / 4;
+  const startX = centerX + rect.width / 2;
+  const startY = centerY - rect.height / 4;
+  const endX = centerX + rect.width / 2;
+  const endY = centerY + rect.height / 4;
 
   const cp1X = startX + size;
   const cp1Y = startY - size * 0.5;
@@ -172,7 +226,7 @@ function calculateLoopEdgeGeometry(
   const cp2Y = endY + size * 0.5;
 
   const path = `M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`;
-  const labelX = centerX + nodeSize / 2 + size * 0.8;
+  const labelX = centerX + rect.width / 2 + size * 0.8;
   const labelY = centerY;
   const labelOffset = 10 * scale;
 
@@ -195,40 +249,21 @@ export const CustomConnectionLine: React.FC<ConnectionLineComponentProps> = ({
   toNode
 }) => {
   const edges = useEdges();
+  const nodeShape = usePreviewNodeShape();
 
   let path = buildPath(fromX, fromY, toX, toY, null);
 
   if (toNode) {
     const sourceId = fromNode.id;
     const targetId = toNode.id;
-    const iconSize = LINK_PREVIEW_ICON_SIZE;
 
     if (sourceId === targetId) {
-      const nodeWidth = fromNode.measured.width ?? iconSize;
-      const nodePos = getNodePosition(fromNode);
-      const nodeX = nodePos.x + (nodeWidth - iconSize) / 2;
-      const nodeY = nodePos.y;
       const loopIndex = countLoopEdges(edges, sourceId);
-      path = calculateLoopEdgeGeometry(nodeX, nodeY, iconSize, loopIndex, 1).path;
+      path = calculateLoopEdgeGeometry(getPreviewNodeRect(fromNode, nodeShape), loopIndex, 1).path;
     } else {
-      const sourceWidth = fromNode.measured.width ?? iconSize;
-      const targetWidth = toNode.measured.width ?? iconSize;
-      const sourcePos = getNodePosition(fromNode);
-      const targetPos = getNodePosition(toNode);
-
       const points = getEdgePoints(
-        {
-          x: sourcePos.x + (sourceWidth - iconSize) / 2,
-          y: sourcePos.y,
-          width: iconSize,
-          height: iconSize
-        },
-        {
-          x: targetPos.x + (targetWidth - iconSize) / 2,
-          y: targetPos.y,
-          width: iconSize,
-          height: iconSize
-        }
+        getPreviewNodeRect(fromNode, nodeShape),
+        getPreviewNodeRect(toNode, nodeShape)
       );
 
       const parallelInfo = getPreviewParallelInfo(edges, sourceId, targetId);
@@ -310,19 +345,18 @@ type PreviewGeometry = {
 
 function buildLoopPreviewGeometry(params: {
   sourceNode: Node;
-  viewport: { x: number; y: number; zoom: number };
-  iconSize: number;
+  viewport: Viewport;
+  nodeShape: PreviewNodeShape;
   loopIndex: number;
   sourceLabel: string;
   targetLabel: string;
 }): PreviewGeometry {
-  const { sourceNode, viewport, iconSize, loopIndex, sourceLabel, targetLabel } = params;
-  const zoom = viewport.zoom;
-  const sourcePos = getNodePosition(sourceNode);
-  const nodeWidth = (sourceNode.measured?.width ?? LINK_PREVIEW_ICON_SIZE) * zoom;
-  const nodeX = sourcePos.x * zoom + viewport.x + (nodeWidth - iconSize) / 2;
-  const nodeY = sourcePos.y * zoom + viewport.y;
-  const loopGeometry = calculateLoopEdgeGeometry(nodeX, nodeY, iconSize, loopIndex, zoom);
+  const { sourceNode, viewport, nodeShape, loopIndex, sourceLabel, targetLabel } = params;
+  const loopGeometry = calculateLoopEdgeGeometry(
+    getPreviewNodeRect(sourceNode, nodeShape, viewport),
+    loopIndex,
+    viewport.zoom
+  );
 
   return {
     path: loopGeometry.path,
@@ -336,8 +370,8 @@ function buildLoopPreviewGeometry(params: {
 function buildEdgePreviewGeometry(params: {
   sourceNode: Node;
   targetNode: Node;
-  viewport: { x: number; y: number; zoom: number };
-  iconSize: number;
+  viewport: Viewport;
+  nodeShape: PreviewNodeShape;
   stepSize: number;
   labelOffset: number;
   edges: Edge[];
@@ -350,7 +384,7 @@ function buildEdgePreviewGeometry(params: {
     sourceNode,
     targetNode,
     viewport,
-    iconSize,
+    nodeShape,
     stepSize,
     labelOffset,
     edges,
@@ -360,25 +394,10 @@ function buildEdgePreviewGeometry(params: {
     targetLabel
   } = params;
 
-  const zoom = viewport.zoom;
-  const sourcePos = getNodePosition(sourceNode);
-  const targetPos = getNodePosition(targetNode);
-  const sourceWidth = (sourceNode.measured?.width ?? LINK_PREVIEW_ICON_SIZE) * zoom;
-  const targetWidth = (targetNode.measured?.width ?? LINK_PREVIEW_ICON_SIZE) * zoom;
-  const sourceRect = {
-    x: sourcePos.x * zoom + viewport.x + (sourceWidth - iconSize) / 2,
-    y: sourcePos.y * zoom + viewport.y,
-    width: iconSize,
-    height: iconSize
-  };
-  const targetRect = {
-    x: targetPos.x * zoom + viewport.x + (targetWidth - iconSize) / 2,
-    y: targetPos.y * zoom + viewport.y,
-    width: iconSize,
-    height: iconSize
-  };
-
-  const points = getEdgePoints(sourceRect, targetRect);
+  const points = getEdgePoints(
+    getPreviewNodeRect(sourceNode, nodeShape, viewport),
+    getPreviewNodeRect(targetNode, nodeShape, viewport)
+  );
   const parallelInfo =
     previewLinkInfo?.parallelInfo ?? getPreviewParallelInfo(edges, linkSourceNodeId, targetNode.id);
   const controlPoint = calculateControlPoint(
@@ -446,7 +465,8 @@ function computePreviewGeometry(params: {
   edges: Edge[];
   linkSourceNodeId: string;
   sourcePosition: { x: number; y: number } | null;
-  viewport: { x: number; y: number; zoom: number };
+  viewport: Viewport;
+  nodeShape: PreviewNodeShape;
 }): PreviewGeometry | null {
   const {
     sourceNode,
@@ -457,12 +477,12 @@ function computePreviewGeometry(params: {
     edges,
     linkSourceNodeId,
     sourcePosition,
-    viewport
+    viewport,
+    nodeShape
   } = params;
   if (!sourceNode || !mousePosition || !bounds) return null;
 
   const zoom = viewport.zoom;
-  const iconSize = LINK_PREVIEW_ICON_SIZE * zoom;
   const stepSize = LINK_PREVIEW_CONTROL_POINT_STEP_SIZE * zoom;
   const labelOffset = LINK_LABEL_OFFSET * zoom;
 
@@ -475,7 +495,7 @@ function computePreviewGeometry(params: {
       return buildLoopPreviewGeometry({
         sourceNode,
         viewport,
-        iconSize,
+        nodeShape,
         loopIndex,
         sourceLabel,
         targetLabel
@@ -486,7 +506,7 @@ function computePreviewGeometry(params: {
       sourceNode,
       targetNode,
       viewport,
-      iconSize,
+      nodeShape,
       stepSize,
       labelOffset,
       edges,
@@ -559,6 +579,7 @@ export const LinkCreationLine = React.memo<LinkCreationLineProps>(
     }, []);
 
     const [viewportX, viewportY, viewportZoom] = useStore((state) => state.transform);
+    const nodeShape = usePreviewNodeShape();
 
     const sourceNode = useMemo(
       () => nodes.find((node) => node.id === linkSourceNodeId) ?? null,
@@ -594,7 +615,8 @@ export const LinkCreationLine = React.memo<LinkCreationLineProps>(
           edges,
           linkSourceNodeId,
           sourcePosition,
-          viewport
+          viewport,
+          nodeShape
         }),
       [
         sourceNode,
@@ -605,7 +627,8 @@ export const LinkCreationLine = React.memo<LinkCreationLineProps>(
         edges,
         linkSourceNodeId,
         sourcePosition,
-        viewport
+        viewport,
+        nodeShape
       ]
     );
 

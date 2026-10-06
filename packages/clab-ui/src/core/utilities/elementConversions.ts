@@ -14,6 +14,7 @@ import type {
 } from "../types/graph";
 import { NETWORK_TYPES } from "../types/editors";
 import { getNumber, getRecordUnknown, getString } from "./typeHelpers";
+import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
 
 // ============================================================================
 // ParsedElement to ReactFlow Conversion
@@ -78,6 +79,7 @@ function parsedElementToTopoNode(element: ParsedElement): TopoNode {
   }
 
   // Regular topology node
+  const box = normalizeNodeBoxAppearance(data.box);
   const nodeData: TopologyNodeData = {
     label: getNodeLabel(data),
     role,
@@ -92,6 +94,7 @@ function parsedElementToTopoNode(element: ParsedElement): TopoNode {
     mgmtIpv4Address: getString(extraData.mgmtIpv4Address),
     mgmtIpv6Address: getString(extraData.mgmtIpv6Address),
     longname: getString(extraData.longname),
+    ...(box ? { box } : {}),
     ...(geoCoordinates ? { geoCoordinates } : {}),
     extraData
   };

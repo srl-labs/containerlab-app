@@ -4,6 +4,7 @@
  */
 
 import type { ClabTopology, NodeAnnotation, TopologyAnnotations } from "../types/topology";
+import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 /**
  * Computes the full prefix for container names.
@@ -61,6 +62,10 @@ export function extractIconVisuals(nodeAnn: NodeAnnotation | undefined): Record<
   }
   if (typeof nodeAnn?.labelBackgroundColor === "string") {
     visuals.labelBackgroundColor = nodeAnn.labelBackgroundColor;
+  }
+  const box = normalizeNodeBoxAppearance(nodeAnn?.box);
+  if (box) {
+    visuals.box = box;
   }
   return visuals;
 }

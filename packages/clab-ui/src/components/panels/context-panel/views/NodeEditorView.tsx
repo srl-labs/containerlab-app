@@ -1,5 +1,5 @@
 // Node editor content for the ContextPanel.
-import React, { useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo } from "react";
 
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
 import type { TabConfig } from "../../../ui/editor/EditorPanel";
@@ -119,6 +119,14 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     onPreview(formData);
   }, [formData, readOnly, onPreview]);
 
+  const previewChange = useCallback(
+    (updates: Partial<NodeEditorData>) => {
+      if (!formData || readOnly || !onPreview) return;
+      onPreview({ ...formData, ...updates });
+    },
+    [formData, readOnly, onPreview]
+  );
+
   useEffect(() => {
     if (tabs.some((tab) => tab.hidden !== true && tab.id === activeTab)) {
       return;
@@ -140,6 +148,7 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   const tabProps = {
     data: formData,
     onChange: handleChange,
+    onPreview: previewChange,
     inheritedProps: effectiveInheritedProps
   };
 

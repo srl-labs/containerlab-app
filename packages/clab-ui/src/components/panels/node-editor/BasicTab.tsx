@@ -1,6 +1,6 @@
 /* eslint-disable import-x/max-dependencies */
 // Basic tab for node editor.
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { memo, useState, useMemo, useCallback, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
@@ -22,12 +22,13 @@ import { IconSelectorModal } from "../../ui/IconSelectorModal";
 import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
 import { useSchema, useDockerImages } from "../../../hooks/editor";
-import { useCustomIcons } from "../../../stores/topoViewerStore";
+import { useCustomIcons, useNodeStyle } from "../../../stores/topoViewerStore";
 import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
+import { BoxAppearanceFields } from "./BoxAppearanceFields";
 
 // Icon options for dropdown (static, defined outside component)
 const ICON_OPTIONS = [
@@ -443,7 +444,26 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
   );
 };
 
-export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
+function isSameList(left: string[] | undefined, right: string[] | undefined): boolean {
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+  return left.every((entry, index) => entry === right[index]);
+}
+
+/** Equal when only the box look changed, which these fields do not show. */
+function areNodeFieldsPropsEqual(prev: TabProps, next: TabProps): boolean {
+  if (prev.onChange !== next.onChange || !isSameList(prev.inheritedProps, next.inheritedProps)) {
+    return false;
+  }
+  const keys = new Set([...Object.keys(prev.data), ...Object.keys(next.data)]);
+  for (const key of keys) {
+    if (key !== "box" && Reflect.get(prev.data, key) !== Reflect.get(next.data, key)) return false;
+  }
+  return true;
+}
+
+/** Template, node parameters and icon: everything above the Box or Label section. */
+const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
   const isCustomTemplate = data.isCustomTemplate === true;
 
   // Get schema data (kinds and types)
@@ -475,7 +495,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
   );
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column" }}>
+    <>
       {isCustomTemplate && (
         <PanelSection title="Template">
           <CustomNodeTemplateFields data={data} onChange={onChange} />
@@ -530,8 +550,25 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
       <PanelSection title="Icon">
         <IconField data={data} onChange={onChange} />
       </PanelSection>
+    </>
+  );
+};
 
-      {!isCustomTemplate && (
+// Box edits come many per second (colors, toggles), so they skip re-rendering these fields.
+const NodeFields = memo(NodeFieldsComponent, areNodeFieldsPropsEqual);
+
+export const BasicTab: React.FC<TabProps> = ({ data, onChange, onPreview, inheritedProps }) => {
+  const isCustomTemplate = data.isCustomTemplate === true;
+  // Boxed nodes ignore label position, direction and background, so they get box options instead.
+  const isBoxed = useNodeStyle() === "boxed";
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column" }}>
+      <NodeFields data={data} onChange={onChange} inheritedProps={inheritedProps} />
+
+      {isBoxed && <BoxAppearanceFields data={data} onChange={onChange} onPreview={onPreview} />}
+
+      {!isBoxed && !isCustomTemplate && (
         <PanelSection title="Label & Direction">
           <LabelAndDirectionFields data={data} onChange={onChange} />
         </PanelSection>
