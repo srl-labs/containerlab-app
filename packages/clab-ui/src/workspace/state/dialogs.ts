@@ -93,7 +93,6 @@ export interface CreateTopologyDialogRequest {
   defaultEndpointId?: string;
   defaultFileName?: string;
   endpointOptions: EndpointSelectionOption[];
-  message?: string;
   title?: string;
 }
 
@@ -102,7 +101,6 @@ export interface ActiveCreateTopologyDialogRequest {
   defaultEndpointId: string;
   defaultFileName: string;
   endpointOptions: EndpointSelectionOption[];
-  message: string;
   title: string;
 }
 
@@ -382,7 +380,6 @@ function normalizeCreateTopologyDialogRequest(
       : endpointOptions[0]?.value ?? "";
   return {
     title: request.title?.trim() || "Create Topology File",
-    message: request.message?.trim() || "Choose endpoint and file name for the new topology file.",
     confirmLabel: request.confirmLabel?.trim() || "Create",
     endpointOptions,
     defaultEndpointId,
