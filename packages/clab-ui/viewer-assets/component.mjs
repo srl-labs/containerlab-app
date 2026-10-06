@@ -88,7 +88,7 @@ export class ClabTopology extends HTMLElement {
     const pre = this.querySelector(".clab-source") ?? this.querySelector("pre");
     this.yaml = source?.textContent ?? pre?.textContent ?? "";
     this.nodes = [];
-    if (this.hasAttribute("height")) this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
+    this.applyHeight();
     // All dynamic author content is assigned through textContent, never innerHTML.
     this.innerHTML = `
       <div class="clab-component-heading"><span class="clab-component-mark">${icon("topology")}</span><strong></strong><span class="clab-live-badge"><i></i> INTERACTIVE</span></div>
@@ -139,6 +139,31 @@ export class ClabTopology extends HTMLElement {
       panel.setAttribute("role", "region");
       panel.setAttribute("aria-label", this.getAttribute("title") || "Network topology");
     }
+  }
+
+  applyHeight() {
+    if (this.hasAttribute("height")) this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
+  }
+
+  renderMessage() {
+    return { type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(this), borderless: this.borderless, options: this.viewerOptions() };
+  }
+
+  /**
+   * Re-render with the element's current attributes and colors without reloading the viewer.
+   * The YAML, presentation preset, and panel layout stay as built.
+   */
+  refresh() {
+    if (!this.built) return;
+    this.applyHeight();
+    const nextTheme = theme(this);
+    this.dataset.theme = nextTheme;
+    if (this.frame) this.frame.style.colorScheme = nextTheme;
+    // Before the first render, the handshake picks up the latest attributes on its own.
+    if (!this.ready) return;
+    delete this.dataset.loaded;
+    this.loadStartedAt = performance.now();
+    this.send(this.renderMessage());
   }
 
   setView(view) {
@@ -213,7 +238,7 @@ export class ClabTopology extends HTMLElement {
 
   receive(message) {
     if (message.type === "clab-viewer:ready") {
-      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(this), borderless: this.borderless, options: this.viewerOptions() });
+      this.send(this.renderMessage());
     } else if (message.type === "clab-viewer:loaded") {
       clearTimeout(this.loadTimeout);
       this.ready = true;

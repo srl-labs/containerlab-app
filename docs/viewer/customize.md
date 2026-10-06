@@ -21,53 +21,67 @@ Give the diagram as much thought as the lab. Explore eight distinct topologies, 
 
 ## Make it yours { #playground }
 
-Pick a lab. Change the atmosphere. Strip it back or bring every detail forward.
-
-Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Ember** for warm copper and coral, or **Porcelain** for a cream canvas with muted jewel tones. Set **Links** to **Elbow** to draw every link with right-angle bends, and keep **Hover highlight** on to trace a link from one device to the other.
+Pick a lab, then change its colors, its links, and how much it shows. The canvas redraws as you go. When you like it, take the look with you as Markdown, YAML, and annotations.
 
 <div class="studio-shell">
 <clab-customizer>
+<div class="studio-workbench">
 <form class="studio-form" hidden aria-label="Customize the topology">
-<div class="studio-selects">
-<label>Topology<select name="lab"><option value="midnight-fabric">01 · Midnight fabric</option><option value="fabric-101">02 · Fabric field notes</option><option value="security-zones">03 · Trust boundaries</option><option value="wan-ring">04 · The scenic route</option><option value="packet-walk">05 · Follow the packet</option><option value="dual-homed">06 · Two of everything</option><option value="branch-office">07 · Every port, labeled</option><option value="frosted-glass">08 · Clear as glass</option></select></label>
-<label>Palette<select name="palette"><option value="original">As designed</option><option value="paper">Paper</option><option value="midnight">Midnight</option><option value="blueprint">Blueprint</option><option value="synthwave">Synthwave</option><option value="aurora">Aurora</option><option value="ember">Ember</option><option value="porcelain">Porcelain</option></select></label>
-<label>Presentation<select name="presentation"><option value="figure">Figure</option><option value="explorer">Explorer</option><option value="split">Diagram + YAML</option></select></label>
-<label>Grid<select name="grid"><option value="none">None</option><option value="dots">Dots</option><option value="lines">Lines</option></select></label>
-<label>Interfaces<select name="link-labels"><option value="hide">Hidden</option><option value="on-select">On selection</option><option value="show-all">Always visible</option></select></label>
-<label>Links<select name="link-style"><option value="">As designed</option><option value="straight">Straight</option><option value="elbow">Elbow</option></select></label>
-</div>
-<div class="studio-toggles">
-<label><input type="checkbox" name="groups" checked> Groups</label>
-<label><input type="checkbox" name="notes" checked> Notes &amp; IPs</label>
-<label><input type="checkbox" name="shapes" checked> Shapes &amp; arrows</label>
-<label><input type="checkbox" name="node-labels" checked> Device names</label>
-<label><input type="checkbox" name="link-hover" checked> Hover highlight</label>
-<label><input type="checkbox" name="controls" checked> Zoom buttons</label>
-<label><input type="checkbox" name="zoom"> Wheel zoom</label>
-<label><input type="checkbox" name="pan" checked> Pan</label>
-<label><input type="checkbox" name="transparent"> Transparent</label>
-</div>
-<div class="studio-ranges">
-<label>Height <output data-for="height">520 px</output><input aria-label="Canvas height" type="range" name="height" min="300" max="760" step="20" value="520"></label>
-<label>Node corners <output data-for="corners">12 px</output><input aria-label="Node corners" type="range" name="corners" min="0" max="24" step="2" value="12"></label>
-<label>Breathing room <output data-for="padding">12 %</output><input aria-label="Fit padding" type="range" name="padding" min="4" max="40" step="2" value="12"></label>
-<button type="reset">Reset style <span aria-hidden="true">↺</span></button>
-</div>
+<fieldset class="studio-group">
+<legend>Lab</legend>
+<label class="studio-field"><span>Topology</span><select name="lab"><option value="midnight-fabric">01 · Midnight fabric</option><option value="fabric-101">02 · Fabric field notes</option><option value="security-zones">03 · Trust boundaries</option><option value="wan-ring">04 · The scenic route</option><option value="packet-walk">05 · Follow the packet</option><option value="dual-homed">06 · Two of everything</option><option value="branch-office">07 · Every port, labeled</option><option value="frosted-glass">08 · Clear as glass</option></select></label>
+</fieldset>
+<fieldset class="studio-group">
+<legend>Colors</legend>
+<div class="studio-swatches" role="radiogroup" aria-label="Palette"><label data-palette="original"><input type="radio" name="palette" value="original" checked><i aria-hidden="true"></i><span>Original</span></label><label data-palette="paper"><input type="radio" name="palette" value="paper"><i aria-hidden="true"></i><span>Paper</span></label><label data-palette="midnight"><input type="radio" name="palette" value="midnight"><i aria-hidden="true"></i><span>Midnight</span></label><label data-palette="blueprint"><input type="radio" name="palette" value="blueprint"><i aria-hidden="true"></i><span>Blueprint</span></label><label data-palette="synthwave"><input type="radio" name="palette" value="synthwave"><i aria-hidden="true"></i><span>Synthwave</span></label><label data-palette="aurora"><input type="radio" name="palette" value="aurora"><i aria-hidden="true"></i><span>Aurora</span></label><label data-palette="ember"><input type="radio" name="palette" value="ember"><i aria-hidden="true"></i><span>Ember</span></label><label data-palette="porcelain"><input type="radio" name="palette" value="porcelain"><i aria-hidden="true"></i><span>Porcelain</span></label></div>
+</fieldset>
+<fieldset class="studio-group">
+<legend>Links</legend>
+<div class="studio-field"><span>Shape</span><div class="studio-segmented" role="radiogroup" aria-label="Link style"><label><input type="radio" name="link-style" value="" checked><span>Original</span></label><label><input type="radio" name="link-style" value="straight"><span>Straight</span></label><label><input type="radio" name="link-style" value="elbow"><span>Elbow</span></label></div></div>
+<div class="studio-field"><span>Interface names</span><div class="studio-segmented" role="radiogroup" aria-label="Interface names"><label><input type="radio" name="link-labels" value="hide" checked><span>Hidden</span></label><label><input type="radio" name="link-labels" value="on-select"><span>On select</span></label><label><input type="radio" name="link-labels" value="show-all"><span>Always</span></label></div></div>
+<label class="studio-switch"><span>Highlight on hover</span><input type="checkbox" role="switch" name="link-hover" checked></label>
+</fieldset>
+<fieldset class="studio-group">
+<legend>Show</legend>
+<label class="studio-switch"><span>Device names</span><input type="checkbox" role="switch" name="node-labels" checked></label>
+<label class="studio-switch"><span>Groups</span><input type="checkbox" role="switch" name="groups" checked></label>
+<label class="studio-switch"><span>Notes and addresses</span><input type="checkbox" role="switch" name="notes" checked></label>
+<label class="studio-switch"><span>Shapes and arrows</span><input type="checkbox" role="switch" name="shapes" checked></label>
+</fieldset>
+<fieldset class="studio-group">
+<legend>Frame</legend>
+<div class="studio-field"><span>Presentation</span><div class="studio-segmented" role="radiogroup" aria-label="Presentation"><label><input type="radio" name="presentation" value="figure" checked><span>Canvas</span></label><label><input type="radio" name="presentation" value="explorer"><span>Explorer</span></label><label><input type="radio" name="presentation" value="split"><span>With YAML</span></label></div></div>
+<div class="studio-field"><span>Grid</span><div class="studio-segmented" role="radiogroup" aria-label="Grid"><label><input type="radio" name="grid" value="none" checked><span>None</span></label><label><input type="radio" name="grid" value="dots"><span>Dots</span></label><label><input type="radio" name="grid" value="lines"><span>Lines</span></label></div></div>
+<label class="studio-range"><span>Height <output data-for="height">520 px</output></span><input aria-label="Canvas height" type="range" name="height" min="300" max="760" step="20" value="520"></label>
+<label class="studio-range"><span>Node corners <output data-for="corners">12 px</output></span><input aria-label="Node corners" type="range" name="corners" min="0" max="24" step="2" value="12"></label>
+<label class="studio-range"><span>Space around <output data-for="padding">12 %</output></span><input aria-label="Space around the diagram" type="range" name="padding" min="4" max="40" step="2" value="12"></label>
+</fieldset>
+<fieldset class="studio-group">
+<legend>Interaction</legend>
+<label class="studio-switch"><span>Zoom buttons</span><input type="checkbox" role="switch" name="controls" checked></label>
+<label class="studio-switch"><span>Zoom with the wheel</span><input type="checkbox" role="switch" name="zoom"></label>
+<label class="studio-switch"><span>Drag to pan</span><input type="checkbox" role="switch" name="pan" checked></label>
+<label class="studio-switch"><span>Transparent background</span><input type="checkbox" role="switch" name="transparent"></label>
+</fieldset>
+<button type="reset">Reset to the lab's design</button>
 </form>
+<div class="studio-stage">
 <div class="studio-preview" data-palette="midnight">
-<div class="studio-preview-label"><span><i></i> LIVE CANVAS</span><span data-lab-caption>01 / MIDNIGHT FABRIC</span></div>
+<div class="studio-preview-label"><span><i></i> <span data-live-status>LIVE CANVAS</span></span><span data-lab-caption>01 / MIDNIGHT FABRIC</span></div>
 <div data-preview>
 
-```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Midnight fabric playground" borderless="true" theme="dark" controls="true" zoom="false" fit-padding="0.12" height="520" loading="eager"
+```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Midnight fabric playground" borderless="true" theme="dark" controls="true" zoom="false" link-hover="true" fit-padding="0.12" height="520" loading="eager"
 ```
 
 </div>
 </div>
 <div class="studio-export" hidden>
-<div class="studio-export-bar"><span>Your next diagram starts here.</span><div><button type="button" data-copy>Copy recipe</button><a data-yaml download>YAML ↓</a><button type="button" data-annotations>Annotations ↓</button></div></div>
+<div class="studio-export-bar"><div><strong>Use this look</strong><span>Two files and a snippet for your docs.</span></div><div><button type="button" data-copy>Copy Markdown</button><a data-yaml download>Download YAML</a><button type="button" data-annotations>Download annotations</button></div></div>
 <p class="studio-status" role="status" aria-live="polite"></p>
-<details><summary>View the Markdown + CSS recipe</summary><pre class="no-copy"><code data-recipe></code></pre></details>
-<p class="studio-export-help">Save both downloads under <code>docs/examples/</code>, then paste the recipe into your page. The annotations download includes your palette, corners, and visible layers.</p>
+<details><summary>Show the Markdown and CSS</summary><pre class="no-copy"><code data-recipe></code></pre></details>
+<p class="studio-export-help">Save both downloads under <code>docs/examples/</code>, then paste the Markdown where the diagram should appear. The annotations file carries your colors, corners, link style, and visible layers.</p>
+</div>
+</div>
 </div>
 <noscript>Use the examples below to explore the source. The live controls need JavaScript.</noscript>
 </clab-customizer>
