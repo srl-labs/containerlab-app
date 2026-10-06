@@ -21,6 +21,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadIcon from "@mui/icons-material/Download";
 import FileCopyOutlinedIcon from "@mui/icons-material/FileCopyOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
+import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import SettingsBrightnessOutlinedIcon from "@mui/icons-material/SettingsBrightnessOutlined";
 import UploadIcon from "@mui/icons-material/Upload";
 
@@ -34,6 +35,7 @@ import {
   themeExportFileName,
   type CustomTheme
 } from "../../theme/customThemes";
+import { floatingRadius } from "../../theme/surfaces";
 import { downloadJsonFile } from "../../utils/jsonFile";
 import {
   appearanceTheme,
@@ -45,38 +47,17 @@ import { ThemeEditor, type ThemeExportAction } from "./ThemeEditor";
 import { ThemeImportDialog } from "./ThemeImportDialog";
 
 
-const TOGGLE_GROUP_SX = {
-  "& .MuiToggleButton-root": {
-    gap: 0.75,
-    px: 1.5,
-    textTransform: "none",
-    color: "text.primary",
-    borderColor: "divider"
-  },
-  "& .MuiToggleButton-root.Mui-selected": {
-    bgcolor: "action.selected",
-    color: "text.primary",
-    borderColor: "text.primary"
-  },
-  "& .MuiToggleButton-root.Mui-selected:hover": {
-    bgcolor: "action.hover"
-  }
-} as const;
-
 type Notice = { severity: "success" | "error"; text: string };
+
+const SECTION_SX = { display: "grid", gap: 1.5, pt: 1 } as const;
 
 function SectionHeading({ title, description }: { title: string; description: string }) {
   return (
-    <Box>
-      <Typography
-        component="h3"
-        sx={{ fontWeight: 650, fontSize: "calc(0.9rem * var(--settings-font-scale, 1))" }}
-      >
+    <Box sx={{ minWidth: 0 }}>
+      <Typography component="h3" variant="subtitle1">
         {title}
       </Typography>
-      <Typography
-        sx={{ mt: 0.25, fontSize: "calc(0.75rem * var(--settings-font-scale, 1))", color: "text.secondary" }}
-      >
+      <Typography variant="body2" sx={{ mt: 0.25, color: "text.secondary" }}>
         {description}
       </Typography>
     </Box>
@@ -159,7 +140,6 @@ export function AppearanceSettingsContent({
       onClose={() => setPendingDelete(null)}
       maxWidth="xs"
       fullWidth
-      sx={{ "& .MuiButton-root": { textTransform: "none" } }}
     >
       <DialogTitleWithClose title={`Delete ${pendingDelete?.name ?? "theme"}?`} onClose={() => setPendingDelete(null)} />
       <DialogContent>
@@ -208,7 +188,7 @@ export function AppearanceSettingsContent({
   }
 
   const gallery = (mode: AppThemeMode) => (
-    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 1 }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))", gap: 1.5 }}>
       {[...APP_THEMES, ...customAppThemes]
         .filter((theme) => theme.mode === mode)
         .map((theme) => (
@@ -239,24 +219,24 @@ export function AppearanceSettingsContent({
           onChange={(_event, mode: StandaloneThemeMode | null) => {
             if (mode) update({ mode });
           }}
-          sx={TOGGLE_GROUP_SX}
+          sx={{ "& .MuiToggleButton-root": { px: 1.25 }, "& .MuiSvgIcon-root": { fontSize: 16 } }}
         >
           <ToggleButton value="light" data-testid="standalone-settings-theme-light">
-            <LightModeOutlinedIcon fontSize="small" />
+            <LightModeOutlinedIcon />
             Light
           </ToggleButton>
           <ToggleButton value="system" data-testid="standalone-settings-theme-system">
-            <SettingsBrightnessOutlinedIcon fontSize="small" />
+            <SettingsBrightnessOutlinedIcon />
             System
           </ToggleButton>
           <ToggleButton value="dark" data-testid="standalone-settings-theme-dark">
-            <DarkModeOutlinedIcon fontSize="small" />
+            <DarkModeOutlinedIcon />
             Dark
           </ToggleButton>
         </ToggleButtonGroup>
       </SettingsField>
 
-      <Box component="section" aria-label="Light theme" sx={{ display: "grid", gap: 1.25 }}>
+      <Box component="section" aria-label="Light theme" sx={SECTION_SX}>
         <SectionHeading
           title="Light theme"
           description="Used while the app is light. Customize any theme to make it your own."
@@ -264,13 +244,13 @@ export function AppearanceSettingsContent({
         {gallery("light")}
       </Box>
 
-      <Box component="section" aria-label="Dark theme" sx={{ display: "grid", gap: 1.25 }}>
+      <Box component="section" aria-label="Dark theme" sx={SECTION_SX}>
         <SectionHeading title="Dark theme" description="Used while the app is dark." />
         {gallery("dark")}
       </Box>
 
-      <Box component="section" aria-label="Custom themes" sx={{ display: "grid", gap: 1.25 }}>
-        <Box sx={{ display: "flex", alignItems: "flex-end", gap: 1, flexWrap: "wrap" }}>
+      <Box component="section" aria-label="Custom themes" sx={SECTION_SX}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Box sx={{ flex: 1, minWidth: 240 }}>
             <SectionHeading
               title="Custom themes"
@@ -279,6 +259,7 @@ export function AppearanceSettingsContent({
           </Box>
           <Button
             variant="outlined"
+            size="small"
             startIcon={<UploadIcon />}
             onClick={() => setImportOpen(true)}
             data-testid="theme-import"
@@ -287,6 +268,7 @@ export function AppearanceSettingsContent({
           </Button>
           <Button
             variant="outlined"
+            size="small"
             startIcon={<DownloadIcon />}
             disabled={customThemes.length === 0}
             onClick={() => exportThemes(customThemes, "download")}
@@ -294,6 +276,7 @@ export function AppearanceSettingsContent({
             Export all
           </Button>
           <Button
+            size="small"
             startIcon={<AddIcon />}
             onClick={() => customize(appearanceTheme(appearance, currentTheme))}
             data-testid="theme-new"
@@ -309,20 +292,25 @@ export function AppearanceSettingsContent({
         {customThemes.length === 0 ? (
           <Box
             sx={{
-              p: 2.5,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 0.75,
+              py: 3,
+              px: 2,
               textAlign: "center",
               border: 1,
               borderStyle: "dashed",
               borderColor: "divider",
-              borderRadius: 1.5,
-              color: "text.secondary",
-              fontSize: "0.8rem"
+              borderRadius: floatingRadius,
+              color: "text.secondary"
             }}
           >
-            No custom themes yet. New theme starts from the one you are using.
+            <PaletteOutlinedIcon sx={{ fontSize: 20, color: "var(--vscode-icon-foreground)", opacity: 0.7 }} />
+            <Typography variant="body2">No custom themes yet. New theme starts from the one you are using.</Typography>
           </Box>
         ) : (
-          <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1.5 }}>
+          <Box sx={{ border: 1, borderColor: "divider", borderRadius: floatingRadius }}>
             {customThemes.map((theme, index) => (
               <CustomThemeRow
                 key={theme.id}

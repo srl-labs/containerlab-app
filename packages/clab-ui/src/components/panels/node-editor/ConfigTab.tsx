@@ -62,7 +62,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Startup Configuration" withTopDivider={false}>
+      <PanelSection title="Startup Configuration">
         <InputField
           id="node-startup-config"
           label="Startup configuration Path"

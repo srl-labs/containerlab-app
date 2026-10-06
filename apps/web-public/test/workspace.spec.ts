@@ -36,8 +36,7 @@ test("toolbar and YAML panel stay usable in a narrow workspace", async ({ page }
   await waitForWorkspace(page);
   await createTopologyFile(page, "narrow");
   await page.getByRole("button", { name: "Close explorer", exact: true }).click();
-  await page.getByRole("button", { name: "More", exact: true }).click();
-  await page.getByText("Lab Settings", { exact: true }).click();
+  await page.getByRole("button", { name: "Lab Settings", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.getByTestId("navbar-split-view").click();

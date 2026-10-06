@@ -29,7 +29,7 @@ export interface EditorTabContentProps
 /** Placeholder shown when no editor is active */
 const EditorPlaceholder: React.FC = () => (
   <PanelEmptyState
-    icon={<EditOutlinedIcon sx={{ fontSize: 48, opacity: 0.5 }} />}
+    icon={<EditOutlinedIcon sx={{ fontSize: 32, opacity: 0.6 }} />}
     message="Select a node, link, or annotation and click edit to modify it here."
   />
 );

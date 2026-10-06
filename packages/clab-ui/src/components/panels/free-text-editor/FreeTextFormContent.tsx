@@ -64,10 +64,10 @@ const IconBtn: React.FC<{
     onClick={onClick}
     size="small"
     sx={{
-      borderRadius: 0.5,
-      color: active ? "primary.contrastText" : "text.primary",
-      bgcolor: active ? "primary.main" : "transparent",
-      "&:hover": { bgcolor: active ? "primary.dark" : "action.hover" }
+      color: active ? "text.primary" : "text.secondary",
+      bgcolor: active ? "action.selected" : "transparent",
+      "&:hover": { bgcolor: active ? "action.selected" : "action.hover", color: "text.primary" },
+      "& .MuiSvgIcon-root": { fontSize: 18 }
     }}
   >
     {children}
@@ -85,15 +85,7 @@ const Toolbar: React.FC<{
   const align = formData.textAlign ?? "left";
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 0.25,
-        pb: 0.75,
-        borderRadius: 0.5
-      }}
-    >
+    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, ml: -0.5 }}>
       <IconBtn
         active={isBold}
         onClick={() => updateField("fontWeight", isBold ? "normal" : "bold")}
@@ -115,7 +107,7 @@ const Toolbar: React.FC<{
       >
         <FormatUnderlinedIcon fontSize="small" />
       </IconBtn>
-      <Divider orientation="vertical" flexItem sx={{ mx: 0.75 }} />
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.75, my: 0.5 }} />
       <IconBtn
         active={align === "left"}
         onClick={() => updateField("textAlign", "left")}
@@ -146,7 +138,7 @@ const FontControls: React.FC<{
   formData: FreeTextAnnotation;
   updateField: Props["updateField"];
 }> = ({ formData, updateField }) => (
-  <Box sx={{ display: "flex", gap: 1 }}>
+  <Box sx={{ display: "flex", gap: 1.5 }}>
     <TextField
       select
       label="Font Family"
@@ -179,8 +171,8 @@ const StyleOptions: React.FC<{
 }> = ({ formData, updateField }) => {
   const isNoFill = isNoFillBackground(formData.backgroundColor);
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
         <Box sx={{ flex: 1 }}>
           <ColorField
             label="Text"
@@ -206,7 +198,7 @@ const StyleOptions: React.FC<{
               />
             }
             label="No fill"
-            slotProps={{ typography: { variant: "caption" } }}
+            sx={{ mt: 0.5 }}
           />
         </Box>
       </Box>
@@ -217,7 +209,7 @@ const StyleOptions: React.FC<{
 // Main component
 export const FreeTextFormContent: React.FC<Props> = ({ formData, updateField }) => (
   <Box sx={{ display: "flex", flexDirection: "column" }}>
-    <PanelSection title="Text" withTopDivider={false} bodySx={{ p: 2 }}>
+    <PanelSection title="Text">
       <Toolbar formData={formData} updateField={updateField} />
       <TextField
         multiline
@@ -239,11 +231,11 @@ export const FreeTextFormContent: React.FC<Props> = ({ formData, updateField }) 
       keepUpright
     />
 
-    <PanelSection title="Font" bodySx={{ p: 2 }}>
+    <PanelSection title="Font">
       <FontControls formData={formData} updateField={updateField} />
     </PanelSection>
 
-    <PanelSection title="Style" bodySx={{ p: 2 }}>
+    <PanelSection title="Style">
       <StyleOptions formData={formData} updateField={updateField} />
     </PanelSection>
   </Box>

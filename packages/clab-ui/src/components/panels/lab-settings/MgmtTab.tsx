@@ -45,7 +45,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         value={mgmt.networkName}
         onChange={(event) => setMgmt.setNetworkName(event.target.value)}
         disabled={isViewMode}
-        sx={{ minWidth: 220 }}
       />
     </SettingsField>
     <SettingsField title="IPv4 Subnet" description="Management IPv4 addressing.">
@@ -57,7 +56,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         value={mgmt.ipv4Type}
         onChange={(event) => setMgmt.setIpv4Type(event.target.value as IpType)}
         disabled={isViewMode}
-        sx={{ minWidth: 220 }}
       >
         <MenuItem value="default">Default (172.20.20.0/24)</MenuItem>
         <MenuItem value="auto">Auto-assign</MenuItem>
@@ -75,7 +73,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
             value={mgmt.ipv4Subnet}
             onChange={(event) => setMgmt.setIpv4Subnet(event.target.value)}
             disabled={isViewMode}
-            sx={{ minWidth: 220 }}
           />
         </SettingsField>
         <SettingsField title="IPv4 Gateway" description="Gateway address for the custom IPv4 subnet.">
@@ -87,7 +84,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
             value={mgmt.ipv4Gateway}
             onChange={(event) => setMgmt.setIpv4Gateway(event.target.value)}
             disabled={isViewMode}
-            sx={{ minWidth: 220 }}
           />
         </SettingsField>
         <SettingsField title="IPv4 Range" description="Optional allocation range within the subnet.">
@@ -99,7 +95,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
             value={mgmt.ipv4Range}
             onChange={(event) => setMgmt.setIpv4Range(event.target.value)}
             disabled={isViewMode}
-            sx={{ minWidth: 220 }}
           />
         </SettingsField>
       </>
@@ -113,7 +108,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         value={mgmt.ipv6Type}
         onChange={(event) => setMgmt.setIpv6Type(event.target.value as IpType)}
         disabled={isViewMode}
-        sx={{ minWidth: 220 }}
       >
         <MenuItem value="default">Default (3fff:172:20:20::/64)</MenuItem>
         <MenuItem value="auto">Auto-assign</MenuItem>
@@ -131,7 +125,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
             value={mgmt.ipv6Subnet}
             onChange={(event) => setMgmt.setIpv6Subnet(event.target.value)}
             disabled={isViewMode}
-            sx={{ minWidth: 220 }}
           />
         </SettingsField>
         <SettingsField title="IPv6 Gateway" description="Gateway address for the custom IPv6 subnet.">
@@ -143,7 +136,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
             value={mgmt.ipv6Gateway}
             onChange={(event) => setMgmt.setIpv6Gateway(event.target.value)}
             disabled={isViewMode}
-            sx={{ minWidth: 220 }}
           />
         </SettingsField>
       </>
@@ -158,7 +150,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         value={mgmt.mtu}
         onChange={(event) => setMgmt.setMtu(event.target.value)}
         disabled={isViewMode}
-        sx={{ minWidth: 160 }}
       />
     </SettingsField>
     <SettingsField title="Bridge Name" description="Linux bridge name (default: br-<network-id>).">
@@ -170,7 +161,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
         value={mgmt.bridge}
         onChange={(event) => setMgmt.setBridge(event.target.value)}
         disabled={isViewMode}
-        sx={{ minWidth: 220 }}
       />
     </SettingsField>
     <SettingsField title="Enable External Access" description="Allow access to the management network from outside the lab.">

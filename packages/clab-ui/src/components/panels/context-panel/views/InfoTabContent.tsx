@@ -17,7 +17,7 @@ export interface InfoTabContentProps {
 /** Placeholder shown when no info view is active */
 const InfoPlaceholder: React.FC = () => (
   <PanelEmptyState
-    icon={<InfoOutlinedIcon sx={{ fontSize: 48, opacity: 0.5 }} />}
+    icon={<InfoOutlinedIcon sx={{ fontSize: 32, opacity: 0.6 }} />}
     message="Select a node or link to view its properties."
   />
 );

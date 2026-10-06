@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createTheme } from "@mui/material/styles";
+import { typographyFor } from "./typography";
 import { vscodeTheme } from "./vscodeTheme";
-import { CLAB_UI_VAR_ALIASES, DARK_VARS, LIGHT_VARS } from "./devTheme";
+import { CLAB_UI_VAR_ALIASES } from "./devTheme";
+import { DARK_MODERN_VARS, LIGHT_MODERN_VARS } from "./modernThemes";
 
 interface Appearance {
   colorScheme: "vscode" | "light" | "dark";
@@ -63,7 +65,8 @@ export function useAppearance() {
     sheet.insertRule(":root, body {}");
     const declaration = (sheet.cssRules[0] as CSSStyleRule).style;
     if (appearance.colorScheme !== "vscode") {
-      const vars = appearance.colorScheme === "light" ? LIGHT_VARS : DARK_VARS;
+      // Overrides use the same Modern palettes the standalone apps default to.
+      const vars = appearance.colorScheme === "light" ? LIGHT_MODERN_VARS : DARK_MODERN_VARS;
       for (const [key, value] of Object.entries(vars)) {
         if (!key.startsWith("--vscode-font-"))
           declaration.setProperty(key, value, "important");
@@ -96,11 +99,7 @@ export function useAppearance() {
   return useMemo(() => {
     if (!appearance) return vscodeTheme;
     const typography = createTheme({
-      typography: {
-        fontFamily: "var(--clab-ui-font-family, var(--vscode-font-family))",
-        fontSize: appearance.fontSize || nativeFontSize,
-        overline: { fontWeight: 500, letterSpacing: "0.5px" },
-      },
+      typography: typographyFor(appearance.fontSize || nativeFontSize),
     }).typography;
     return { ...vscodeTheme, typography };
   }, [appearance, nativeFontSize]);

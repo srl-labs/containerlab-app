@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { SettingsLayout } from "./SettingsLayout";
@@ -17,6 +16,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import SearchIcon from "@mui/icons-material/Search";
+import SearchOffIcon from "@mui/icons-material/SearchOff";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
 import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
@@ -27,6 +27,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import { type SettingsNavigationItem } from "./SettingsNavigation";
+import { floatingRadius } from "../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../theme/typography";
 import { SettingCard } from "./SettingCard";
 import type {
   SettingsChange,
@@ -189,14 +191,11 @@ export function SettingsApp({
           <Button
             variant="text"
             size="small"
-            endIcon={<OpenInNewIcon sx={{ fontSize: 14 }} />}
+            endIcon={<OpenInNewIcon />}
             onClick={() => {
               void action("native");
             }}
-            sx={{
-              color: "text.secondary",
-              fontSize: "calc(0.72rem * var(--settings-font-scale, 1))",
-            }}
+            sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
           >
             VS Code Settings
           </Button>
@@ -253,24 +252,7 @@ export function SettingsApp({
               onChange={(_, next: SettingsFilter | null) => {
                 if (next !== null) setFilter(next);
               }}
-              sx={{
-                alignSelf: "flex-start",
-                maxWidth: "100%",
-                "& .MuiToggleButton-root": {
-                  px: 1.25,
-                  py: 0.4,
-                  gap: 0.75,
-                  fontSize: "calc(0.7rem * var(--settings-font-scale, 1))",
-                  textTransform: "none",
-                  color: "text.secondary",
-                  borderColor: "divider",
-                  lineHeight: 1.5,
-                },
-                "& .MuiToggleButton-root.Mui-selected": {
-                  color: "text.primary",
-                  bgcolor: "action.selected",
-                },
-              }}
+              sx={{ alignSelf: "flex-start", maxWidth: "100%" }}
             >
               <ToggleButton value="all">All in view</ToggleButton>
               <ToggleButton
@@ -280,7 +262,10 @@ export function SettingsApp({
                 Modified in view{" "}
                 <Box
                   component="span"
-                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                  sx={{
+                    color: "text.secondary",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
                 >
                   {currentModified}
                 </Box>
@@ -292,7 +277,10 @@ export function SettingsApp({
                 All modified{" "}
                 <Box
                   component="span"
-                  sx={{ fontVariantNumeric: "tabular-nums" }}
+                  sx={{
+                    color: "text.secondary",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
                 >
                   {allModified}
                 </Box>
@@ -305,6 +293,7 @@ export function SettingsApp({
             <Button
               size="small"
               variant="text"
+              startIcon={<PaletteOutlinedIcon />}
               onClick={() => {
                 void action("colorTheme");
               }}
@@ -317,7 +306,6 @@ export function SettingsApp({
           <Typography
             variant="caption"
             sx={{
-              fontSize: "calc(0.65rem * var(--settings-font-scale, 1))",
               color: "text.secondary",
               display: "block",
               overflowWrap: "anywhere",
@@ -336,7 +324,7 @@ export function SettingsApp({
             <Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}>
               <CheckCircleOutlineIcon
                 sx={{
-                  fontSize: 13,
+                  fontSize: 14,
                   color: dirtyKeys.size ? "text.secondary" : "success.main",
                 }}
               />
@@ -358,14 +346,13 @@ export function SettingsApp({
         }
       >
         {error && (
-          <Alert severity="error" onClose={() => setError("")} sx={{ mb: 1 }}>
+          <Alert severity="error" onClose={() => setError("")}>
             {error}
           </Alert>
         )}
         {snapshot.reloadRequired && (
           <Alert
             severity="info"
-            sx={{ mb: 1 }}
             action={
               <Button
                 variant="text"
@@ -381,7 +368,7 @@ export function SettingsApp({
             Runtime settings changed. Reload VS Code to apply them.
           </Alert>
         )}
-        <Box key={snapshot.target}>
+        <Box key={snapshot.target} hidden={visible.length === 0}>
           {CATEGORIES.filter((item) => item.key !== "about").map((item) => {
             const categoryDefinitions = definitions.filter(
               (definition) => definition.category === item.key,
@@ -393,29 +380,24 @@ export function SettingsApp({
               <Box
                 key={item.key}
                 hidden={!hasVisible}
-                sx={{ mb: showAllCategories ? 2 : 0 }}
+                sx={{ mb: showAllCategories ? 3 : 0 }}
               >
                 {showAllCategories && (
                   <Typography
                     component="h3"
-                    sx={{
-                      px: 0.5,
-                      mb: 0.75,
-                      fontSize: "calc(0.75rem * var(--settings-font-scale, 1))",
-                      fontWeight: 600,
-                      color: "text.secondary",
-                    }}
+                    variant="overline"
+                    sx={{ display: "block", mb: 1, color: "text.secondary" }}
                   >
                     {item.label}
                   </Typography>
                 )}
                 <Box
                   sx={{
-                    border: 1,
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                    overflow: "hidden",
-                    "& > div:last-child > section": { borderBottom: 0 },
+                    display: "grid",
+                    rowGap: 2,
+                    // Visible rows read as one list, split by hairlines.
+                    "& > div:not([hidden]) ~ div:not([hidden]) > [data-settings-row]":
+                      { pt: 2, borderTop: 1, borderColor: "divider" },
                   }}
                 >
                   {categoryDefinitions.map((definition) => (
@@ -440,18 +422,31 @@ export function SettingsApp({
         </Box>
         {!visible.length &&
           (query || category !== "about" || filter !== "all") && (
-            <Box sx={{ textAlign: "center", py: 4 }}>
-              <Typography variant="subtitle2">No matching settings</Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 0.75,
+                textAlign: "center",
+                py: 6,
+              }}
+            >
+              <SearchOffIcon
+                sx={{
+                  fontSize: 22,
+                  color: "var(--vscode-icon-foreground)",
+                  opacity: 0.7,
+                }}
+              />
+              <Typography variant="subtitle1">No matching settings</Typography>
+              <Typography variant="body2" color="text.secondary">
                 Try another search or change the Modified filter.
               </Typography>
               <Button
-                variant="text"
+                variant="outlined"
                 size="small"
+                sx={{ mt: 1 }}
                 onClick={() => {
                   setSearch("");
                   setFilter("all");
@@ -462,16 +457,53 @@ export function SettingsApp({
             </Box>
           )}
         {!query && category === "about" && filter === "all" && (
-          <Box
-            sx={{ p: 2, border: 1, borderColor: "divider", borderRadius: 1.5 }}
-          >
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          <Box sx={{ display: "grid", gap: 1.5 }}>
+            <Typography component="h3" variant="subtitle1">
               Containerlab for VS Code
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ my: 1.5 }}>
-              <Chip size="small" label={`Extension ${snapshot.version}`} />
-              <Chip size="small" label={`VS Code ${snapshot.vscodeVersion}`} />
-            </Stack>
+            <Box
+              component="dl"
+              sx={{
+                m: 0,
+                border: 1,
+                borderColor: "divider",
+                borderRadius: floatingRadius,
+              }}
+            >
+              {[
+                ["Extension", snapshot.version],
+                ["VS Code", snapshot.vscodeVersion],
+              ].map(([label, value]) => (
+                <Box
+                  key={label}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "160px minmax(0, 1fr)",
+                    columnGap: 2,
+                    px: 1.5,
+                    py: 1.25,
+                    "&:not(:last-child)": {
+                      borderBottom: 1,
+                      borderColor: "divider",
+                    },
+                  }}
+                >
+                  <Typography
+                    component="dt"
+                    variant="body2"
+                    color="text.secondary"
+                  >
+                    {label}
+                  </Typography>
+                  <Typography
+                    component="dd"
+                    sx={{ m: 0, fontFamily: MONO_FONT_FAMILY, fontSize: 12 }}
+                  >
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
             <Typography variant="body2" color="text.secondary">
               All {definitions.length} Containerlab settings stay in sync with
               VS Code. User settings apply to this session; Workspace settings

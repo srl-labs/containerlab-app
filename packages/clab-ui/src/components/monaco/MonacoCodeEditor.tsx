@@ -686,7 +686,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
     ensureMonacoConfiguredOnce();
     applyVscodeThemeToMonaco(isDevMock);
 
-    const observer = new MutationObserver(() => {
+    const refresh = () => {
       applyVscodeThemeToMonaco(isDevMock);
       const editor = editorRef.current;
       if (editor) {
@@ -695,13 +695,26 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
           fontSize: getEditorFontSize()
         });
       }
-    });
+    };
+    const observer = new MutationObserver(refresh);
     observer.observe(document.body, { attributes: true, attributeFilter: ["class", "style"] });
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class", "style"]
     });
-    return () => observer.disconnect();
+    // The Containerlab color scheme override arrives as its own stylesheet, not as an attribute.
+    const isAppearanceStyle = (node: Node) =>
+      node instanceof HTMLStyleElement && node.dataset.containerlabAppearance !== undefined;
+    const appearanceObserver = new MutationObserver((records) => {
+      if (records.some((record) => [...record.addedNodes, ...record.removedNodes].some(isAppearanceStyle))) {
+        refresh();
+      }
+    });
+    appearanceObserver.observe(document.head, { childList: true });
+    return () => {
+      observer.disconnect();
+      appearanceObserver.disconnect();
+    };
   }, [isDevMock]);
 
   useEffect(() => {

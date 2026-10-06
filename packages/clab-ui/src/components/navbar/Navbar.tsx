@@ -2,6 +2,7 @@ import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
 // Floating action bar for React TopoViewer.
 import React from "react";
 import Badge from "@mui/material/Badge";
+import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
@@ -11,29 +12,30 @@ import MenuItem from "@mui/material/MenuItem";
 import Paper from "@mui/material/Paper";
 import Toolbar from "@mui/material/Toolbar";
 import Tooltip from "@mui/material/Tooltip";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import Typography from "@mui/material/Typography";
+import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
-import CheckIcon from "@mui/icons-material/Check";
-import CleaningServicesIcon from "@mui/icons-material/CleaningServices";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AddLinkRoundedIcon from "@mui/icons-material/AddLinkRounded";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import CleaningServicesOutlinedIcon from "@mui/icons-material/CleaningServicesOutlined";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import FitScreenIcon from "@mui/icons-material/FitScreen";
-import KeyboardIcon from "@mui/icons-material/Keyboard";
-import LabelIcon from "@mui/icons-material/Label";
-import LinkIcon from "@mui/icons-material/Link";
-import LockIcon from "@mui/icons-material/Lock";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-import PhotoCameraBackIcon from "@mui/icons-material/PhotoCameraBack";
-import PlayArrowIcon from "@mui/icons-material/PlayArrow";
-import RedoIcon from "@mui/icons-material/Redo";
+import KeyboardOutlinedIcon from "@mui/icons-material/KeyboardOutlined";
+import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
+import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
+import RedoRoundedIcon from "@mui/icons-material/RedoRounded";
 import RemoveIcon from "@mui/icons-material/Remove";
-import ReplayIcon from "@mui/icons-material/Replay";
-import SettingsIcon from "@mui/icons-material/Settings";
-import StopIcon from "@mui/icons-material/Stop";
-import UndoIcon from "@mui/icons-material/Undo";
-import ViewColumnIcon from "@mui/icons-material/ViewColumn";
-import VisibilityIcon from "@mui/icons-material/Visibility";
-import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
+import VerticalSplitOutlinedIcon from "@mui/icons-material/VerticalSplitOutlined";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 
 import type { ReactFlowInstance } from "@xyflow/react";
 import type { LinkLabelMode } from "../../stores/topoViewerStore";
@@ -53,8 +55,29 @@ const ERROR_MAIN = "error.main";
 const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
 const NAVBAR_Z_INDEX = 1100;
+/** Size container for the room between the side panels; the toolbar filter collapses when it is tight. */
+const TOOLBAR_CONTAINER = "topoviewer-toolbar";
 /** Inset of the floating bar from the canvas edges (px). */
 const FLOATING_NAVBAR_INSET = 8;
+/** Toolbar glyphs use the 18px icon size. */
+const TOOLBAR_ICON_SX = { fontSize: 18 } as const;
+/** Short vertical rules between button groups. */
+const TOOLBAR_DIVIDER_SX = { mx: 0.5, my: 0.75 } as const;
+/** An engaged toolbar button: the lock while locked, or a button whose menu is open. */
+const PRESSED_SX = {
+  color: "text.primary",
+  bgcolor: "action.selected",
+  "&:hover": { bgcolor: "action.selected" }
+} as const;
+/** Destructive menu rows read red as a whole, icon included. */
+const DANGER_MENU_ITEM_SX = {
+  color: ERROR_MAIN,
+  "& .MuiListItemIcon-root": { color: "inherit" }
+} as const;
+/** The node filter in the bar matches the explorer filter: slim, tinted, focus-colored outline. */
+function pressedSx(pressed: boolean) {
+  return pressed ? PRESSED_SX : undefined;
+}
 
 function isGeneratedLayoutOption(layout: LayoutOption): boolean {
   return layout === "force" || layout === "auto" || layout === "radial";
@@ -405,11 +428,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMoreMenuPosition(null);
   }, []);
 
-  const handleLabSettings = React.useCallback(() => {
-    setMoreMenuPosition(null);
-    onLabSettings?.();
-  }, [onLabSettings]);
-
   const handleShortcuts = React.useCallback(() => {
     setMoreMenuPosition(null);
     onShowShortcuts?.();
@@ -440,24 +458,41 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <>
+    {/* Spans the canvas between the side panels, so the toolbar can adapt to the room it has. */}
+    <Box
+      sx={{
+        position: "absolute",
+        top: 0,
+        left: "var(--clab-ui-panel-left, 0px)",
+        right: "var(--clab-ui-panel-right, 0px)",
+        height: 0,
+        overflow: "visible",
+        pointerEvents: "none",
+        zIndex: NAVBAR_Z_INDEX,
+        containerType: "inline-size",
+        containerName: TOOLBAR_CONTAINER
+      }}
+    >
     <Paper
       ref={appBarRef}
       elevation={0}
       data-testid="topoviewer-navbar"
       sx={{
-        ...floatingDockSx(barSide, "top"),
+        position: "absolute",
+        top: FLOATING_NAVBAR_INSET,
+        [barSide]: FLOATING_NAVBAR_INSET,
         width: "auto",
-        maxWidth: `calc(100% - var(--clab-ui-panel-left, 0px) - var(--clab-ui-panel-right, 0px) - ${FLOATING_NAVBAR_INSET * 2}px)`,
+        maxWidth: `calc(100% - ${FLOATING_NAVBAR_INSET * 2}px)`,
         overflow: "visible",
         borderRadius: floatingRadius,
-        zIndex: NAVBAR_Z_INDEX,
+        pointerEvents: "auto",
         ...floatingSurfaceSx
       }}
     >
       <Toolbar
         variant="dense"
         disableGutters
-        sx={{ minHeight: 40, px: 1, py: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5, "& > *": { flexShrink: 0 } }}
+        sx={{ minHeight: 0, p: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px", "& > *": { flexShrink: 0 } }}
       >
         {lifecycleActionsAvailable && (
           <>
@@ -479,7 +514,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     invisible={!showDirtyBadge}
                     data-testid="navbar-apply-dirty-badge"
                   >
-                    <PlayArrowIcon fontSize="small" />
+                    <PlayArrowRoundedIcon sx={TOOLBAR_ICON_SX} />
                   </Badge>
                 </IconButton>
               </span>
@@ -491,10 +526,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               aria-controls={deployMenuOpen ? "deploy-split-menu" : undefined}
               aria-haspopup="true"
               aria-expanded={deployMenuOpen ? "true" : undefined}
-              sx={{ color: SUCCESS_MAIN, ml: -0.5 }}
+              sx={{ px: 0, width: 18, ...pressedSx(deployMenuOpen) }}
               data-testid="navbar-deploy-menu"
             >
-              <ExpandMoreIcon fontSize="small" />
+              <ExpandMoreRoundedIcon sx={{ fontSize: 16 }} />
             </IconButton>
             <Menu
               id="deploy-split-menu"
@@ -510,7 +545,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 data-testid="navbar-deploy-item-apply"
               >
                 <ListItemIcon>
-                  <PlayArrowIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <PlayArrowRoundedIcon sx={{ color: SUCCESS_MAIN }} />
                 </ListItemIcon>
                 <ListItemText>Apply</ListItemText>
               </MenuItem>
@@ -520,18 +555,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                 data-testid="navbar-deploy-item-deploy-cleanup"
               >
                 <ListItemIcon>
-                  <CleaningServicesIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <CleaningServicesOutlinedIcon />
                 </ListItemIcon>
                 <ListItemText>Deploy (cleanup)</ListItemText>
               </MenuItem>
-              <Divider sx={{ my: 0.5 }} />
+              <Divider />
               <MenuItem
                 onClick={handleRedeploy}
                 disabled={isRunningActionDisabled}
                 data-testid="navbar-deploy-item-redeploy"
               >
                 <ListItemIcon>
-                  <ReplayIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <ReplayRoundedIcon />
                 </ListItemIcon>
                 <ListItemText>Redeploy</ListItemText>
               </MenuItem>
@@ -541,18 +576,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 data-testid="navbar-deploy-item-redeploy-cleanup"
               >
                 <ListItemIcon>
-                  <CleaningServicesIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <CleaningServicesOutlinedIcon />
                 </ListItemIcon>
                 <ListItemText>Redeploy (cleanup)</ListItemText>
               </MenuItem>
-              <Divider sx={{ my: 0.5 }} />
+              <Divider />
               <MenuItem
                 onClick={handleDestroy}
                 disabled={isRunningActionDisabled}
                 data-testid="navbar-deploy-item-destroy"
+                sx={DANGER_MENU_ITEM_SX}
               >
                 <ListItemIcon>
-                  <StopIcon fontSize="small" sx={{ color: ERROR_MAIN }} />
+                  <StopRoundedIcon />
                 </ListItemIcon>
                 <ListItemText>Destroy</ListItemText>
               </MenuItem>
@@ -560,20 +596,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onClick={handleDestroyCleanup}
                 disabled={isRunningActionDisabled}
                 data-testid="navbar-deploy-item-destroy-cleanup"
+                sx={DANGER_MENU_ITEM_SX}
               >
                 <ListItemIcon>
-                  <CleaningServicesIcon fontSize="small" sx={{ color: ERROR_MAIN }} />
+                  <CleaningServicesOutlinedIcon />
                 </ListItemIcon>
                 <ListItemText>Destroy (cleanup)</ListItemText>
               </MenuItem>
-              <Divider sx={{ my: 0.5 }} />
+              <Divider />
               <MenuItem
                 onClick={handleStartLab}
                 disabled={isRunningActionDisabled}
                 data-testid="navbar-deploy-item-start-lab"
               >
                 <ListItemIcon>
-                  <PlayArrowIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <PlayArrowRoundedIcon sx={{ color: SUCCESS_MAIN }} />
                 </ListItemIcon>
                 <ListItemText>Start Nodes</ListItemText>
               </MenuItem>
@@ -583,7 +620,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 data-testid="navbar-deploy-item-stop-lab"
               >
                 <ListItemIcon>
-                  <StopIcon fontSize="small" sx={{ color: ERROR_MAIN }} />
+                  <StopRoundedIcon sx={{ color: ERROR_MAIN }} />
                 </ListItemIcon>
                 <ListItemText>Stop Nodes</ListItemText>
               </MenuItem>
@@ -593,29 +630,29 @@ export const Navbar: React.FC<NavbarProps> = ({
                 data-testid="navbar-deploy-item-restart-lab"
               >
                 <ListItemIcon>
-                  <ReplayIcon fontSize="small" sx={{ color: SUCCESS_MAIN }} />
+                  <ReplayRoundedIcon />
                 </ListItemIcon>
                 <ListItemText>Restart Nodes</ListItemText>
               </MenuItem>
-              {extraDeployMenuItems ? <Divider sx={{ my: 0.5 }} /> : null}
+              {extraDeployMenuItems ? <Divider /> : null}
               {extraDeployMenuItems}
             </Menu>
 
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+            <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
           </>
         )}
         {/* Lock / Unlock */}
         <Tooltip title={isLocked ? "Unlock lab to edit" : "Lock Lab"}>
           <span>
             <IconButton
-                  aria-label={isLocked ? "Unlock lab to edit" : "Lock Lab"}
+              aria-label={isLocked ? "Unlock lab to edit" : "Lock Lab"}
               size="small"
               onClick={toggleLock}
               disabled={isProcessing || !isTopologyActive}
-              sx={{ color: isLocked ? ERROR_MAIN : "inherit" }}
+              sx={pressedSx(isLocked)}
               data-testid="navbar-lock"
             >
-              {isLocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
+              {isLocked ? <LockOutlinedIcon sx={TOOLBAR_ICON_SX} /> : <LockOpenOutlinedIcon sx={TOOLBAR_ICON_SX} />}
             </IconButton>
           </span>
         </Tooltip>
@@ -624,6 +661,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           isActive={isTopologyActive}
           rfInstance={rfInstance}
           variant="toolbar"
+          collapseBelow={`@container ${TOOLBAR_CONTAINER} (max-width: 640px)`}
         />
 
         {/* Undo - only show in edit mode */}
@@ -631,13 +669,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Undo (Ctrl+Z)">
             <span>
               <IconButton
-                  aria-label="Undo (Ctrl+Z)"
+                aria-label="Undo (Ctrl+Z)"
                 size="small"
                 onClick={onUndo}
                 disabled={!isTopologyActive || !canUndo}
                 data-testid="navbar-undo"
               >
-                <UndoIcon fontSize="small" />
+                <UndoRoundedIcon sx={TOOLBAR_ICON_SX} />
               </IconButton>
             </span>
           </Tooltip>
@@ -648,36 +686,32 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Tooltip title="Redo (Ctrl+Y)">
             <span>
               <IconButton
-                  aria-label="Redo (Ctrl+Y)"
+                aria-label="Redo (Ctrl+Y)"
                 size="small"
                 onClick={onRedo}
                 disabled={!isTopologyActive || !canRedo}
                 data-testid="navbar-redo"
               >
-                <RedoIcon fontSize="small" />
+                <RedoRoundedIcon sx={TOOLBAR_ICON_SX} />
               </IconButton>
             </span>
           </Tooltip>
         )}
 
-        <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+        <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
 
         {/* Bulk Link - only show in edit mode */}
         {isEditMode && (
           <Tooltip title="Bulk Link Devices">
             <span>
               <IconButton
-                  aria-label="Bulk Link Devices"
+                aria-label="Bulk Link Devices"
                 size="small"
                 onClick={onShowBulkLink}
                 disabled={!isTopologyActive || isLocked}
                 data-testid="navbar-bulk-link"
               >
-                <LinkIcon
-                  sx={{
-                    fontSize: "small"
-                  }}
-                />
+                <AddLinkRoundedIcon sx={TOOLBAR_ICON_SX} />
               </IconButton>
             </span>
           </Tooltip>
@@ -687,13 +721,13 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Toggle YAML Split View">
           <span>
             <IconButton
-                  aria-label="Toggle YAML Split View"
+              aria-label="Toggle YAML Split View"
               size="small"
               onClick={onToggleSplit}
               disabled={!isTopologyActive}
               data-testid="navbar-split-view"
             >
-              <ViewColumnIcon fontSize="small" />
+              <VerticalSplitOutlinedIcon sx={TOOLBAR_ICON_SX} />
             </IconButton>
           </span>
         </Tooltip>
@@ -702,13 +736,14 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Layout">
           <span>
             <IconButton
-                  aria-label="Layout"
+              aria-label="Layout"
               size="small"
               onClick={handleLayoutClick}
               disabled={!isTopologyActive}
+              sx={pressedSx(layoutMenuOpen)}
               data-testid="navbar-layout"
             >
-              <AccountTreeIcon fontSize="small" />
+              <AccountTreeOutlinedIcon sx={TOOLBAR_ICON_SX} />
             </IconButton>
           </span>
         </Tooltip>
@@ -720,7 +755,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           transformOrigin={{ vertical: "top", horizontal: "center" }}
         >
           <MenuItem onClick={() => handleLayoutSelect("preset")} data-testid="navbar-layout-preset">
-            <ListItemIcon>{layout === "preset" && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{layout === "preset" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Preset</ListItemText>
           </MenuItem>
           <MenuItem
@@ -728,7 +763,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             disabled={isGeneratedLayoutDisabled}
             data-testid="navbar-layout-force"
           >
-            <ListItemIcon>{layout === "force" && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{layout === "force" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Force</ListItemText>
           </MenuItem>
           <MenuItem
@@ -736,7 +771,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             disabled={isGeneratedLayoutDisabled}
             data-testid="navbar-layout-auto"
           >
-            <ListItemIcon>{layout === "auto" && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{layout === "auto" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Auto</ListItemText>
           </MenuItem>
           <MenuItem
@@ -744,11 +779,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             disabled={isGeneratedLayoutDisabled}
             data-testid="navbar-layout-radial"
           >
-            <ListItemIcon>{layout === "radial" && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{layout === "radial" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Radial</ListItemText>
           </MenuItem>
           <MenuItem onClick={() => handleLayoutSelect("geo")} data-testid="navbar-layout-geo">
-            <ListItemIcon>{layout === "geo" && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{layout === "geo" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Geo</ListItemText>
           </MenuItem>
         </Menu>
@@ -764,9 +799,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               aria-haspopup="menu"
               aria-controls={linkLabelMenuOpen ? "navbar-links-menu" : undefined}
               aria-expanded={linkLabelMenuOpen}
+              sx={pressedSx(linkLabelMenuOpen)}
               data-testid="navbar-link-labels"
             >
-              <LabelIcon fontSize="small" />
+              <LabelOutlinedIcon sx={TOOLBAR_ICON_SX} />
             </IconButton>
           </span>
         </Tooltip>
@@ -782,27 +818,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => handleLinkLabelSelect("show-all")}
             data-testid="navbar-link-label-show-all"
           >
-            <ListItemIcon>
-              {linkLabelMode === "show-all" && <CheckIcon fontSize="small" />}
-            </ListItemIcon>
+            <ListItemIcon>{linkLabelMode === "show-all" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Show All Labels</ListItemText>
           </MenuItem>
           <MenuItem
             onClick={() => handleLinkLabelSelect("on-select")}
             data-testid="navbar-link-label-on-select"
           >
-            <ListItemIcon>
-              {linkLabelMode === "on-select" && <CheckIcon fontSize="small" />}
-            </ListItemIcon>
+            <ListItemIcon>{linkLabelMode === "on-select" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Labels on Select</ListItemText>
           </MenuItem>
           <MenuItem
             onClick={() => handleLinkLabelSelect("hide")}
             data-testid="navbar-link-label-hide"
           >
-            <ListItemIcon>
-              {linkLabelMode === "hide" && <CheckIcon fontSize="small" />}
-            </ListItemIcon>
+            <ListItemIcon>{linkLabelMode === "hide" && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Hide Labels</ListItemText>
           </MenuItem>
           <Divider />
@@ -816,7 +846,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             disabled={!onToggleDummyLinks}
             data-testid="navbar-hide-dummy-links"
           >
-            <ListItemIcon>{!showDummyLinks && <CheckIcon fontSize="small" />}</ListItemIcon>
+            <ListItemIcon>{!showDummyLinks && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Hide Dummy Links</ListItemText>
           </MenuItem>
         </Menu>
@@ -825,18 +855,32 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title="Capture Viewport as SVG">
           <span>
             <IconButton
-                  aria-label="Capture Viewport as SVG"
+              aria-label="Capture Viewport as SVG"
               size="small"
               onClick={onCaptureViewport}
               disabled={!isTopologyActive}
               data-testid="navbar-capture"
             >
-              <PhotoCameraBackIcon fontSize="small" />
+              <PhotoCameraOutlinedIcon sx={TOOLBAR_ICON_SX} />
             </IconButton>
           </span>
         </Tooltip>
 
-        <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
+        <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
+
+        <Tooltip title="Lab Settings">
+          <span>
+            <IconButton
+              aria-label="Lab Settings"
+              size="small"
+              onClick={onLabSettings}
+              disabled={!isTopologyActive}
+              data-testid="navbar-lab-settings"
+            >
+              <SettingsOutlinedIcon sx={TOOLBAR_ICON_SX} />
+            </IconButton>
+          </span>
+        </Tooltip>
 
         <Tooltip title="More">
           <IconButton
@@ -844,9 +888,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={handleMoreMenuOpen}
             aria-haspopup="true"
             aria-expanded={moreMenuOpen ? "true" : undefined}
+            sx={pressedSx(moreMenuOpen)}
             data-testid="navbar-more"
           >
-            <MoreVertIcon fontSize="small" />
+            <MoreHorizRoundedIcon sx={TOOLBAR_ICON_SX} />
           </IconButton>
         </Tooltip>
         <Menu
@@ -856,37 +901,32 @@ export const Navbar: React.FC<NavbarProps> = ({
           anchorReference="anchorPosition"
           anchorPosition={moreMenuPosition ?? undefined}
           transformOrigin={{ vertical: "top", horizontal: "center" }}
+          slotProps={{ paper: { sx: { minWidth: 200 } } }}
         >
-          <MenuItem
-            onClick={handleLabSettings}
-            disabled={!isTopologyActive}
-            data-testid="navbar-lab-settings"
-          >
-            <ListItemIcon>
-              <SettingsIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>Lab Settings</ListItemText>
-          </MenuItem>
-          <Divider />
           <MenuItem onClick={handleShortcuts} data-testid="navbar-shortcuts">
             <ListItemIcon>
-              <KeyboardIcon fontSize="small" />
+              <KeyboardOutlinedIcon />
             </ListItemIcon>
             <ListItemText>Keyboard Shortcuts</ListItemText>
           </MenuItem>
           <MenuItem onClick={handleToggleShortcutDisplay} data-testid="navbar-shortcut-display">
             <ListItemIcon>
-              {shortcutDisplayEnabled ? (
-                <VisibilityIcon fontSize="small" />
-              ) : (
-                <VisibilityOffIcon fontSize="small" />
-              )}
+              {shortcutDisplayEnabled ? <VisibilityOutlinedIcon /> : <VisibilityOffOutlinedIcon />}
             </ListItemIcon>
             <ListItemText>Shortcut Display</ListItemText>
+            {/* The state reads at a glance, where a shortcut hint would sit. */}
+            <Typography
+              variant="body2"
+              aria-hidden="true"
+              sx={{ ml: 2, color: shortcutDisplayEnabled ? "text.primary" : "text.secondary" }}
+            >
+              {shortcutDisplayEnabled ? "On" : "Off"}
+            </Typography>
           </MenuItem>
         </Menu>
       </Toolbar>
     </Paper>
+    </Box>
     <CanvasZoomControls
       barSide={barSide}
       zoomDisabled={zoomDisabled}

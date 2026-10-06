@@ -542,7 +542,7 @@ async function confirmCloseLabTab(tabId: string): Promise<boolean> {
     title: "Discard Unsaved Changes",
     message: `Discard unsaved changes to "${tab.title}"?`,
     confirmLabel: "Discard",
-    severity: "warning",
+    severity: "error",
   });
 }
 

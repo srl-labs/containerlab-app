@@ -1,13 +1,13 @@
 /* eslint-disable import-x/max-dependencies */
 // Icon selector modal.
 import React, { useCallback, useState, useEffect, useMemo, useRef } from "react";
+import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import ResetIcon from "@mui/icons-material/Replay";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import DialogContent from "@mui/material/DialogContent";
-import Divider from "@mui/material/Divider";
 import MuiIconButton from "@mui/material/IconButton";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
@@ -22,6 +22,7 @@ import { useClabUiHost } from "../../host";
 import { isBuiltInIcon } from "../../core/types/icons";
 import { DEFAULT_ICON_COLOR } from "../../core/types/graph";
 import { getCustomIconUrl, supportsCustomIconColor } from "../../utils/iconUtils";
+import { controlRadius } from "../../theme/surfaces";
 
 import { DialogCancelSaveActions, DialogTitleWithClose } from "./dialog/DialogChrome";
 import { ColorField, IconPreview, InputField } from "./form";
@@ -77,12 +78,8 @@ const IconsGrid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Box
     sx={{
       display: "grid",
-      gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
-      gap: 0.5,
-      borderRadius: 0.5,
-      border: 1,
-      borderColor: "divider",
-      p: 1
+      gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))",
+      gap: 0.5
     }}
   >
     {children}
@@ -199,21 +196,23 @@ const IconButton = React.memo<IconButtonProps>(function IconButton({
           width: "100%",
           flexDirection: "column",
           alignItems: "center",
-          gap: 0.25,
-          borderRadius: 0.5,
-          p: 0.75,
+          gap: 0.75,
+          borderRadius: controlRadius,
+          px: 0.5,
+          pt: 1,
+          pb: 0.75,
           overflow: "hidden",
-          transition: (theme) => theme.transitions.create("backgroundColor", { duration: 150 }),
-          border: "none",
+          transition: "background-color 120ms ease, border-color 120ms ease",
+          border: 1,
+          borderColor: isSelected ? "var(--vscode-focusBorder)" : "transparent",
           cursor: "pointer",
-          color: "inherit",
+          color: isSelected ? "text.primary" : "text.secondary",
           backgroundColor: isSelected ? "action.selected" : "transparent",
-          outline: isSelected ? "2px solid" : "none",
-          outlineColor: "primary.main",
-          outlineOffset: 1,
           "&:hover": {
-            backgroundColor: isSelected ? "action.selected" : "action.hover"
-          }
+            backgroundColor: isSelected ? "action.selected" : "action.hover",
+            color: "text.primary"
+          },
+          "&:focus-visible": { outline: "1px solid var(--vscode-focusBorder)", outlineOffset: 1 }
         }}
       >
         <IconPreview src={iconSrc} alt={icon} size={36} cornerRadius={cornerRadius} />
@@ -224,7 +223,8 @@ const IconButton = React.memo<IconButtonProps>(function IconButton({
             overflow: "hidden",
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
-            fontSize: "10px"
+            fontSize: 11,
+            lineHeight: 1.3
           }}
         >
           {ICON_LABELS[icon] || icon}
@@ -245,10 +245,17 @@ const IconButton = React.memo<IconButtonProps>(function IconButton({
             right: -4,
             width: 16,
             height: 16,
-            bgcolor: "error.main",
-            color: "white",
+            p: 0,
+            bgcolor: "background.paper",
+            border: 1,
+            borderColor: "divider",
+            color: "text.secondary",
             opacity: 0,
-            "&:hover": { bgcolor: "error.dark" }
+            "&:hover, &:focus-visible": {
+              opacity: 1,
+              bgcolor: "background.paper",
+              color: "error.main"
+            }
           }}
           className="icon-delete-btn"
         >
@@ -367,7 +374,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
   const [iconTab, setIconTab] = useState<"built-in" | "custom">("built-in");
 
   return (
-    <Dialog open={isOpen} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitleWithClose title="Edit Icons" onClose={onClose} />
       <DialogContent dividers sx={{ p: 0 }}>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
@@ -379,16 +386,21 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                 setIconTab(v);
               }
             }}
-            variant="fullWidth"
+            sx={{
+              px: 2.5,
+              borderBottom: 1,
+              borderColor: "divider",
+              "& .MuiTabs-list": { gap: 2.5 },
+              "& .MuiTab-root": { px: 0 }
+            }}
           >
             <Tab value="built-in" label="Built-in" />
             <Tab value="custom" label="Custom" />
           </Tabs>
-          <Divider />
 
           {/* Built-in Icons tab content */}
           {iconTab === "built-in" && (
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ px: 2, pt: 2 }}>
               <IconsGrid>
                 {AVAILABLE_ICONS.map((i) => (
                   <IconButton
@@ -406,7 +418,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
 
           {/* Custom Icons tab content */}
           {iconTab === "custom" && (
-            <Box sx={{ p: 2 }}>
+            <Box sx={{ px: 2, pt: 2 }}>
               {customIcons.length > 0 ? (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
                   <IconsGrid>
@@ -424,8 +436,14 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                       />
                     ))}
                   </IconsGrid>
-                  <Button fullWidth size="small" onClick={handleUploadIcon}>
-                    + Add Icon
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={handleUploadIcon}
+                    sx={{ alignSelf: "flex-start" }}
+                  >
+                    Add Icon
                   </Button>
                 </Box>
               ) : (
@@ -438,68 +456,73 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                     py: 2
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      fontStyle: "italic"
-                    }}
-                  >
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
                     No custom icons uploaded yet.
                   </Typography>
-                  <Button fullWidth size="small" onClick={handleUploadIcon}>
-                    + Add Icon
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={handleUploadIcon}
+                  >
+                    Add Icon
                   </Button>
                 </Box>
               )}
             </Box>
           )}
 
-          {/* Appearance section */}
-          <Divider />
-          <Box sx={{ px: 2, py: 1 }}>
+          {/* Appearance section with a live preview beside the fields */}
+          <Box sx={{ px: 2.5, pt: 2.5 }}>
             <Typography variant="subtitle2">Appearance</Typography>
           </Box>
-          <Divider />
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
-            <Tooltip
-              title={!canEditColor ? "Color can only be modified for built-in and SVG icons" : ""}
-              placement="top"
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Box sx={{ flex: 1 }}>
-                  <ColorField
-                    label="Icon Color"
-                    value={color ?? DEFAULT_COLOR}
-                    onChange={(v) => setColor(v)}
-                    disabled={!canEditColor}
-                  />
+          <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, px: 2.5, pt: 1.5, pb: 2.5 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, flex: 1, minWidth: 0 }}>
+              <Tooltip
+                title={!canEditColor ? "Color can only be modified for built-in and SVG icons" : ""}
+                placement="top"
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <ColorField
+                      label="Icon Color"
+                      value={color ?? DEFAULT_COLOR}
+                      onChange={(v) => setColor(v)}
+                      disabled={!canEditColor}
+                    />
+                  </Box>
+                  <Tooltip title={resetColorLabel} placement="top">
+                    <span>
+                      <MuiIconButton
+                        size="small"
+                        aria-label={resetColorLabel}
+                        onClick={() => setColor(null)}
+                        disabled={!canEditColor || resultColor === null}
+                      >
+                        <ResetIcon fontSize="small" />
+                      </MuiIconButton>
+                    </span>
+                  </Tooltip>
                 </Box>
-                <Tooltip title={resetColorLabel} placement="top">
-                  <span>
-                    <MuiIconButton
-                      size="small"
-                      aria-label={resetColorLabel}
-                      onClick={() => setColor(null)}
-                      disabled={!canEditColor || resultColor === null}
-                    >
-                      <ResetIcon fontSize="small" />
-                    </MuiIconButton>
-                  </span>
-                </Tooltip>
-              </Box>
-            </Tooltip>
-            <RadiusField value={radius} onChange={setRadius} />
-          </Box>
-
-          {/* Preview section */}
-          <Divider />
-          <Box sx={{ px: 2, py: 1 }}>
-            <Typography variant="subtitle2">Preview</Typography>
-          </Box>
-          <Divider />
-          <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
-            <IconPreview src={previewIconSrc} alt="Preview" size={56} cornerRadius={radius} />
+              </Tooltip>
+              <RadiusField value={radius} onChange={setRadius} />
+            </Box>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                width: 96,
+                height: 96,
+                borderRadius: controlRadius,
+                border: 1,
+                borderColor: "divider",
+                bgcolor: "action.hover"
+              }}
+            >
+              <IconPreview src={previewIconSrc} alt="Preview" size={56} cornerRadius={radius} />
+            </Box>
           </Box>
         </Box>
       </DialogContent>

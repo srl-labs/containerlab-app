@@ -32,6 +32,7 @@ test.describe("Navbar Interactions", () => {
         "navbar-find-node",
         "navbar-link-labels",
         "navbar-capture",
+        "navbar-lab-settings",
         "navbar-more"
       ];
 
@@ -131,7 +132,6 @@ test.describe("Navbar Interactions", () => {
       const beforeWidth = beforeBox?.width ?? 0;
       expect(beforeWidth).toBeGreaterThan(0);
 
-      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');
@@ -167,7 +167,6 @@ test.describe("Navbar Interactions", () => {
 
   test.describe("Grid Settings", () => {
     test("grid settings are available in Lab Settings > Grid", async ({ page }) => {
-      await page.locator('[data-testid="navbar-more"]').click();
       await page.locator('[data-testid="navbar-lab-settings"]').click();
       await page.waitForTimeout(200);
       const modal = page.locator('[data-testid="lab-settings-modal"]');

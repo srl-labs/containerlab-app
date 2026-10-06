@@ -241,6 +241,12 @@ function buildChartData(
   };
 }
 
+// The panel chart follows the host theme; the compact canvas chart keeps its own palette.
+const PANEL_MUTED_TEXT = "var(--vscode-descriptionForeground)";
+const PANEL_GRID_STROKE = "var(--vscode-panel-border)";
+const PANEL_TICK_LABEL_STYLE = { fontSize: 10, fill: PANEL_MUTED_TEXT };
+const PANEL_AXIS_LABEL_STYLE = { fontSize: 11, fill: PANEL_MUTED_TEXT };
+
 function buildXAxis(
   compact: boolean,
   xData: Date[],
@@ -260,7 +266,7 @@ function buildXAxis(
   if (compact) {
     return [{ ...baseAxis, position: "none" as const, height: 0 }];
   }
-  return [{ ...baseAxis, tickLabelStyle: { fontSize: 10, fill: "#cccccc" }, height: 20 }];
+  return [{ ...baseAxis, tickLabelStyle: PANEL_TICK_LABEL_STYLE, height: 20 }];
 }
 
 function buildYAxis(compact: boolean, scale: number, unitLabel: string) {
@@ -285,14 +291,14 @@ function buildYAxis(compact: boolean, scale: number, unitLabel: string) {
     {
       id: "bps",
       label: unitLabel,
-      labelStyle: { fontSize: 11 },
-      tickLabelStyle: { fontSize: 10, fill: "#cccccc" }
+      labelStyle: PANEL_AXIS_LABEL_STYLE,
+      tickLabelStyle: PANEL_TICK_LABEL_STYLE
     },
     {
       id: "pps",
       label: "PPS",
-      labelStyle: { fontSize: 11 },
-      tickLabelStyle: { fontSize: 10, fill: "#cccccc" }
+      labelStyle: PANEL_AXIS_LABEL_STYLE,
+      tickLabelStyle: PANEL_TICK_LABEL_STYLE
     }
   ];
 }
@@ -388,20 +394,18 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
         "& .MuiChartsAxis-line": { stroke: "#3e3e42" }
       }
     : {
-        "& .MuiChartsGrid-line": { stroke: "#3e3e42" },
-        "& .MuiChartsAxis-line": { stroke: "#cccccc" },
-        "& .MuiChartsAxis-tick": { stroke: "#3e3e42" },
-        "& .MuiChartsAxisHighlight-root": { stroke: "#cccccc" },
-        "& .MuiChartsAxis-label": { fill: "#cccccc" }
+        "& .MuiChartsGrid-line": { stroke: PANEL_GRID_STROKE },
+        "& .MuiChartsAxis-line": { stroke: PANEL_GRID_STROKE },
+        "& .MuiChartsAxis-tick": { stroke: PANEL_GRID_STROKE },
+        "& .MuiChartsAxisHighlight-root": { stroke: PANEL_MUTED_TEXT },
+        "& .MuiChartsAxis-label": { fill: PANEL_MUTED_TEXT },
+        "& .MuiChartsLegend-label": { fill: PANEL_MUTED_TEXT, color: PANEL_MUTED_TEXT }
       };
 
   if (xData.length === 0) {
     if (emptyMessage === null) return null;
     return (
-      <Typography
-        variant="body2"
-        sx={{ textAlign: "center", color: "text.secondary", fontSize: "0.875rem", mt: 1 }}
-      >
+      <Typography variant="body2" sx={{ textAlign: "center", color: "text.secondary", py: 3 }}>
         {emptyMessage}
       </Typography>
     );

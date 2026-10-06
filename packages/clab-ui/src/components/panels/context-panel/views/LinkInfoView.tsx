@@ -7,7 +7,7 @@ import type { InterfaceStatsPayload } from "../../../../core/types/topology";
 import { getString } from "../../../../core/utilities/typeHelpers";
 import type { TabDefinition } from "../../../ui/editor";
 import { TabNavigation } from "../../../ui/editor/TabNavigation";
-import { PanelSectionHeader, ReadOnlyCopyField } from "../../../ui/form";
+import { PanelSection, PanelSectionHeader, ReadOnlyCopyField } from "../../../ui/form";
 import { LinkRotationControl } from "../../rotation/LinkRotationControl";
 
 const LazyTrafficChart = React.lazy(async () => {
@@ -121,28 +121,27 @@ export const LinkInfoView: React.FC<LinkInfoViewProps> = ({ linkData }) => {
         tabs={endpointTabs}
         activeTab={activeTab}
         onTabChange={(id) => setActiveTab(toEndpointTab(id))}
+        variant="secondary"
       />
 
       <Box sx={{ flex: 1, overflow: "auto" }}>
         <LinkRotationControl edgeId={linkData.id} />
-        <PanelSectionHeader title="Endpoint" withTopDivider={true} />
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+        <PanelSection title="Endpoint">
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
             <ReadOnlyCopyField label="Node" value={currentEndpoint.node ?? ""} />
             <ReadOnlyCopyField label="Interface" value={currentEndpoint.interface ?? ""} />
           </Box>
           <ReadOnlyCopyField label="Type" value={currentEndpoint.type ?? ""} />
-        </Box>
+        </PanelSection>
 
-        <PanelSectionHeader title="Layer 2" withTopDivider={true} />
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: 2 }}>
+        <PanelSection title="Layer 2">
           <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
             <ReadOnlyCopyField label="MAC" value={currentEndpoint.mac ?? ""} mono />
             <ReadOnlyCopyField label="MTU" value={String(currentEndpoint.mtu ?? "")} />
           </Box>
-        </Box>
+        </PanelSection>
 
-        <PanelSectionHeader title="Traffic" withTopDivider={true} />
+        <PanelSectionHeader title="Traffic" />
         <Box sx={{ minHeight: 200 }}>
           <React.Suspense fallback={null}>
             <LazyTrafficChart stats={currentEndpoint.stats} endpointKey={endpointKey} />

@@ -25,6 +25,22 @@ function faceCamera(object: THREE.Object3D) {
   object.rotation.set(0, bestY, 0);
 }
 
+// Front-facing light sums to π, so the face toward the camera renders exactly its material color
+// (Lambert divides by π); turned faces still shade while the logo spins.
+const AMBIENT_INTENSITY = 1.2;
+const KEY_INTENSITY = 1.8;
+const FALLBACK_BODY_COLOR = "#878787";
+const LIQUID_COLOR = 0x3cbeef;
+// Thin strokes at rail size need more samples than the screen has; the canvas downsamples them.
+const SUPERSAMPLE = 2;
+const LOGO_SIZE = 28;
+
+/** The logo button's muted text color, so the logo sits at the same contrast as the idle rail icons. */
+function bodyColor(element: Element): string {
+  const color = getComputedStyle(element).color;
+  return /^(#|rgb)/.test(color) ? color : FALLBACK_BODY_COLOR;
+}
+
 function disposeModel(object: THREE.Object3D) {
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
@@ -56,31 +72,27 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       return;
     }
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.setPixelRatio(Math.min((window.devicePixelRatio || 1) * SUPERSAMPLE, 4));
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.display = "block";
     renderer.domElement.style.pointerEvents = "none";
     host.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const key = new THREE.DirectionalLight(0xffffff, 1.05);
+    scene.add(new THREE.AmbientLight(0xffffff, AMBIENT_INTENSITY));
+    const key = new THREE.DirectionalLight(0xffffff, KEY_INTENSITY);
     key.position.copy(camera.position);
     scene.add(key);
 
     const body = new THREE.MeshStandardMaterial({
-      color: 0x889099,
-      metalness: 0.35,
-      roughness: 0.45,
+      color: new THREE.Color(bodyColor(host)),
+      metalness: 0,
+      roughness: 0.6,
     });
     const liquid = new THREE.MeshStandardMaterial({
-      color: 0x00c9ff,
-      metalness: 0.1,
-      roughness: 0.35,
-      emissive: 0x003344,
-      emissiveIntensity: 0.25,
+      color: LIQUID_COLOR,
+      metalness: 0,
+      roughness: 0.4,
     });
 
     const pivot = new THREE.Group();
@@ -155,10 +167,19 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       host.style.backgroundImage = "none";
     }, undefined, () => { /* The SVG remains visible if WebGL or the model is unavailable. */ });
 
-    renderer.setSize(28, 28, false);
+    renderer.setSize(LOGO_SIZE, LOGO_SIZE, false);
+
+    // Theme switches restyle the root (standalone) or the body class (VS Code).
+    const recolor = new MutationObserver(() => {
+      body.color.setStyle(bodyColor(host));
+      if (!frame) renderer.render(scene, camera);
+    });
+    recolor.observe(document.documentElement, { attributes: true, attributeFilter: ["style", "class"] });
+    recolor.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
     return () => {
       disposed = true;
+      recolor.disconnect();
       cancelAnimationFrame(frame);
       kickRef.current = () => {};
       disposeModel(pivot);
@@ -186,9 +207,9 @@ export function RailLogo(props: { showTooltip?: boolean }) {
         onClick={() => kickRef.current(Math.random() < 0.4)}
         aria-label="TopoViewer"
         data-testid="workspace-logo"
-        sx={{ width: 36, height: 36, borderRadius: 1, overflow: "hidden" }}
+        sx={{ width: 36, height: 36, borderRadius: 1, overflow: "hidden", color: "text.secondary" }}
       >
-        <Box ref={hostRef} sx={{ width: 28, height: 28, backgroundImage: `url("${publicAssetUrl("containerlab.svg")}")`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+        <Box ref={hostRef} sx={{ width: LOGO_SIZE, height: LOGO_SIZE, backgroundImage: `url("${publicAssetUrl("containerlab.svg")}")`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
       </IconButton>
     </Tooltip>
   );

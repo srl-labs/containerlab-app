@@ -5,7 +5,9 @@ import Typography from "@mui/material/Typography";
 import Slider from "@mui/material/Slider";
 import Button from "@mui/material/Button";
 
-import { ReadOnlyBadge, InputField, PanelSection } from "../../ui/form";
+import { InputField, PanelSection } from "../../ui/form";
+import { controlRadius } from "../../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import {
   DEFAULT_ENDPOINT_LABEL_OFFSET,
   ENDPOINT_LABEL_OFFSET_MIN,
@@ -23,6 +25,34 @@ interface EndpointInterfaceFieldProps {
   onChange: (value: string) => void;
 }
 
+const READ_ONLY_ENDPOINT_SX = {
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  height: 32,
+  px: 1.5,
+  border: 1,
+  borderStyle: "dashed",
+  borderColor: "divider",
+  borderRadius: controlRadius,
+  color: "text.secondary"
+} as const;
+
+const READ_ONLY_ENDPOINT_LABEL_SX = {
+  position: "absolute",
+  top: -8,
+  left: 9,
+  px: 0.5,
+  fontSize: 11,
+  lineHeight: "14px",
+  color: "text.secondary",
+  bgcolor: "background.paper",
+  maxWidth: "calc(100% - 18px)",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+} as const;
+
 const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
   isNetwork,
   nodeName,
@@ -31,19 +61,16 @@ const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
   onChange
 }) => {
   if (isNetwork) {
+    // Network endpoints have no editable interface: show the name in a read-only box that
+    // shares the notched field geometry so both endpoint columns line up.
     return (
-      <Box>
-        <Typography
-          variant="caption"
-          sx={{
-            color: "text.secondary",
-            display: "block",
-            mb: 0.5
-          }}
-        >
+      <Box sx={READ_ONLY_ENDPOINT_SX}>
+        <Typography component="span" sx={READ_ONLY_ENDPOINT_LABEL_SX}>
           {nodeName} Interface
         </Typography>
-        <ReadOnlyBadge>{nodeName || "Unknown"}</ReadOnlyBadge>
+        <Typography component="span" noWrap sx={{ fontFamily: MONO_FONT_FAMILY, fontSize: 12 }}>
+          {nodeName || "Unknown"}
+        </Typography>
       </Box>
     );
   }
@@ -60,6 +87,8 @@ const EndpointInterfaceField: React.FC<EndpointInterfaceFieldProps> = ({
   );
 };
 
+const OFFSET_BOUND_SX = { color: "text.secondary", fontVariantNumeric: "tabular-nums" } as const;
+
 interface LabelOffsetSectionProps {
   endpointOffsetValue: number;
   onOffsetChange: (_event: Event, value: number | number[]) => void;
@@ -72,17 +101,9 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
   onOffsetReset
 }) => {
   return (
-    <PanelSection
-      title="Label Offset"
-      bodySx={{ display: "flex", alignItems: "center", gap: 2, px: 2, py: 1 }}
-    >
+    <PanelSection title="Label Offset" bodySx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
       <>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "text.secondary"
-          }}
-        >
+        <Typography variant="caption" sx={OFFSET_BOUND_SX}>
           {ENDPOINT_LABEL_OFFSET_MIN}
         </Typography>
         <Slider
@@ -95,15 +116,11 @@ const LabelOffsetSection: React.FC<LabelOffsetSectionProps> = ({
           valueLabelDisplay="auto"
           sx={{ flex: 1 }}
         />
-        <Typography
-          variant="body2"
-          sx={{
-            color: "text.secondary"
-          }}
-        >
+        <Typography variant="caption" sx={OFFSET_BOUND_SX}>
           {ENDPOINT_LABEL_OFFSET_MAX}
         </Typography>
         <Button
+          variant="outlined"
           size="small"
           onClick={onOffsetReset}
           title={`Reset to ${DEFAULT_ENDPOINT_LABEL_OFFSET}`}
@@ -157,7 +174,7 @@ export const BasicTab: React.FC<LinkTabProps> = ({ data, onChange, onPreviewOffs
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Endpoints" withTopDivider={false}>
+      <PanelSection title="Endpoints">
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <EndpointInterfaceField
             isNetwork={Boolean(data.sourceIsNetwork)}

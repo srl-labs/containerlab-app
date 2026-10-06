@@ -4,7 +4,9 @@ import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ContentCopyIcon from "@mui/icons-material/ContentCopyOutlined";
+
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 
 export interface ReadOnlyCopyFieldProps {
   label: string;
@@ -34,9 +36,9 @@ export const ReadOnlyCopyField: React.FC<ReadOnlyCopyFieldProps> = ({
           readOnly: true,
           endAdornment: value ? (
             <InputAdornment position="end">
-              <Tooltip title="Copy" arrow>
+              <Tooltip title="Copy">
                 <IconButton size="small" onClick={handleCopy} edge="end" tabIndex={-1}>
-                  <ContentCopyIcon fontSize="small" />
+                  <ContentCopyIcon sx={{ fontSize: 16 }} />
                 </IconButton>
               </Tooltip>
             </InputAdornment>
@@ -46,7 +48,7 @@ export const ReadOnlyCopyField: React.FC<ReadOnlyCopyFieldProps> = ({
             WebkitUserSelect: "none",
             caretColor: "transparent",
             cursor: "default",
-            ...(mono ? { fontFamily: "monospace" } : undefined)
+            ...(mono ? { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } : undefined)
           }
         }
       }}

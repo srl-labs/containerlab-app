@@ -11,7 +11,7 @@ html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
 body {
   background-color: var(--vscode-editor-background);
   color: var(--vscode-editor-foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-family: var(--clab-ui-font-family, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif);
 }
 #root { width: 100%; height: 100%; }
 .startup-fallback {

@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useRef } from "react";
 
 
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { confirmRuntimeAction } from "../state/dialogs";
 import { runtimeUiActions, useRuntimeUiStore } from "../state/runtimeUiStore";
 import {
@@ -129,7 +130,7 @@ export function FileEditorDialog() {
         title: "Discard Unsaved Changes",
         message: `Discard unsaved changes to "${state.title}"?`,
         confirmLabel: "Discard",
-        severity: "warning",
+        severity: "error",
       });
       if (!shouldClose) {
         return;
@@ -188,7 +189,7 @@ export function FileEditorDialog() {
             {fileEditor.title}
             {dirty ? " *" : ""}
           </Typography>
-          <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          <Typography variant="caption" sx={{ color: "text.secondary", fontFamily: MONO_FONT_FAMILY }}>
             Lab workspace/{fileEditor.path}
           </Typography>
         </Stack>
@@ -206,6 +207,7 @@ export function FileEditorDialog() {
       </DialogContent>
       <DialogActions>
         <Button
+          variant="text"
           onClick={() => {
             void handleClose();
           }}

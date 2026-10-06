@@ -14,6 +14,7 @@ import React, {
 import { createRoot, type Root } from "react-dom/client";
 
 import { installDesktopChrome } from "./desktopChrome";
+import { publicAssetUrl } from "./publicAssetUrl";
 import { useAuth } from "./hooks/useAuth";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
@@ -123,6 +124,7 @@ function BootstrapApp() {
     <BootstrapLoginPage
       defaultApiUrl={defaultApiUrl}
       error={error}
+      logoUrl={publicAssetUrl("containerlab.svg")}
       onAddEndpoint={handleAddEndpoint}
       onExportEndpoints={exportEndpoints}
       onImportEndpoints={importEndpoints}

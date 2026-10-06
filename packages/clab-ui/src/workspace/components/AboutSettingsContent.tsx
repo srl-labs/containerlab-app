@@ -1,20 +1,10 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
-import {
-  Alert,
-  Avatar,
-  Box,
-  Divider,
-  Paper,
-  Stack,
-  TextField,
-  Typography
-} from "@mui/material";
-import ExtensionIcon from "@mui/icons-material/Extension";
+import { Alert, Avatar, Box, Stack, Typography } from "@mui/material";
 import FavoriteIcon from "@mui/icons-material/Favorite";
-import GroupsIcon from "@mui/icons-material/Groups";
 
 import { floatingRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { useWorkspaceHost } from "../WorkspaceHost";
 
 interface AboutSettingsContentProps {
@@ -26,7 +16,6 @@ interface AboutSettingsContentProps {
 }
 
 interface AboutAuthor {
-  color: string;
   initials: string;
   linkedIn: string;
   name: string;
@@ -41,46 +30,29 @@ const authors: AboutAuthor[] = [
     name: "Florian Schwarz",
     title: "Maintainer",
     linkedIn: "https://linkedin.com/in/florian-schwarz-812a34145",
-    initials: "FS",
-    color: "#2196F3"
+    initials: "FS"
   },
   {
     name: "Kaelem Chandra",
     title: "Maintainer",
     linkedIn: "https://linkedin.com/in/kaelem-chandra",
     initials: "KC",
-    color: "#9C27B0",
     photo: "https://github.com/kaelemc.png"
   },
   {
     name: "Asad Arafat",
     title: "Maintainer",
     linkedIn: "https://www.linkedin.com/in/asadarafat/",
-    initials: "AA",
-    color: "#4CAF50"
+    initials: "AA"
   }
 ];
 
-function AboutSection(props: { children: ReactNode; icon: ReactNode; title: string }) {
+function AboutSection(props: { children: ReactNode; title: string }) {
   return (
-    <Paper
-      variant="outlined"
-      sx={(theme) => ({
-        overflow: "hidden",
-        borderColor: "divider",
-        backgroundColor:
-          theme.palette.mode === "dark" ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.015)"
-      })}
-    >
-      <Box sx={{ px: 2, py: 1.25 }}>
-        <Typography variant="subtitle2" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          {props.icon}
-          {props.title}
-        </Typography>
-      </Box>
-      <Divider />
+    <Box component="section" aria-label={props.title} sx={{ display: "grid", gap: 1 }}>
+      <Typography variant="subtitle1">{props.title}</Typography>
       {props.children}
-    </Paper>
+    </Box>
   );
 }
 
@@ -88,9 +60,9 @@ function AuthorCards() {
   return (
     <Box
       sx={{
-        display: "flex",
-        gap: 0.5,
-        p: 1.5
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 1
       }}
     >
       {authors.map((author) => (
@@ -103,15 +75,19 @@ function AuthorCards() {
           sx={{
             display: "flex",
             alignItems: "center",
-            gap: 1,
-            flex: 1,
+            gap: 1.25,
             minWidth: 0,
-            px: 1,
-            py: 0.75,
+            px: 1.25,
+            py: 1,
+            border: 1,
+            borderColor: "divider",
             borderRadius: floatingRadius,
             color: "inherit",
             textDecoration: "none",
-            "&:hover": { bgcolor: "action.hover" }
+            transition: "background-color 120ms ease",
+            "&:hover": { bgcolor: "action.hover" },
+            "&:focus-visible": { outline: "1px solid var(--vscode-focusBorder)", outlineOffset: -1 },
+            "@media (prefers-reduced-motion: reduce)": { transition: "none" }
           }}
         >
           <Avatar
@@ -119,23 +95,82 @@ function AuthorCards() {
             alt=""
             slotProps={{ img: { referrerPolicy: "no-referrer" } }}
             sx={{
-              bgcolor: author.color,
-              width: 28,
-              height: 28,
-              fontSize: "0.75rem"
+              width: 32,
+              height: 32,
+              fontSize: 12,
+              fontWeight: 600,
+              color: "text.primary",
+              bgcolor: "color-mix(in srgb, var(--vscode-button-background) 22%, transparent)"
             }}
           >
             {author.initials}
           </Avatar>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="body2" noWrap sx={{ fontWeight: 600, lineHeight: 1.2 }}>
+            <Typography variant="body1" noWrap sx={{ fontWeight: 500 }}>
               {author.name}
             </Typography>
-            <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
+            <Typography variant="body2" color={TEXT_SECONDARY} noWrap>
               {author.title}
             </Typography>
           </Box>
         </Box>
+      ))}
+    </Box>
+  );
+}
+
+interface VersionRowProps {
+  label: string;
+  testId?: string;
+  value: string;
+  /** Literal tool output reads in monospace; set false for prose such as status messages. */
+  mono?: boolean;
+}
+
+/** One read-only value as a label and a value, named by its label for assistive tech. */
+function VersionRow(props: VersionRowProps) {
+  const id = useId();
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "160px minmax(0, 1fr)" },
+        columnGap: 2,
+        rowGap: 0.5,
+        px: 1.5,
+        py: 1.25,
+        "&:not(:last-child)": { borderBottom: 1, borderColor: "divider" }
+      }}
+    >
+      <Typography component="dt" id={id} variant="body2" sx={{ color: TEXT_SECONDARY }}>
+        {props.label}
+      </Typography>
+      <Typography
+        component="dd"
+        aria-labelledby={id}
+        data-testid={props.testId}
+        sx={{
+          m: 0,
+          minWidth: 0,
+          ...(props.mono === false
+            ? { fontSize: 13, lineHeight: 1.5 }
+            : { fontFamily: MONO_FONT_FAMILY, fontSize: 12, lineHeight: 1.6 }),
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere"
+        }}
+      >
+        {props.value || "—"}
+      </Typography>
+    </Box>
+  );
+}
+
+/** Read-only version details as a bordered label/value list. */
+export function VersionList(props: { rows: VersionRowProps[] }) {
+  return (
+    <Box component="dl" sx={{ m: 0, border: 1, borderColor: "divider", borderRadius: floatingRadius }}>
+      {props.rows.map((row) => (
+        <VersionRow key={row.label} {...row} />
       ))}
     </Box>
   );
@@ -149,11 +184,11 @@ export function AboutSettingsContent({
   versionLoading
 }: AboutSettingsContentProps) {
   const { assetUrl: publicAssetUrl } = useWorkspaceHost();
-  const versionValue = versionLoading ? "Loading..." : versionInfo;
-  const updateValue = versionLoading ? "Loading..." : versionCheck;
+  const versionValue = versionLoading ? "Loading…" : versionInfo;
+  const updateValue = versionLoading ? "Loading…" : versionCheck;
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={3}>
       {showHeading && (
         <Box>
           <Typography variant="h6">About</Typography>
@@ -163,76 +198,36 @@ export function AboutSettingsContent({
         </Box>
       )}
 
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{
-          alignItems: { xs: "flex-start", sm: "center" }
-        }}
-      >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
         <Box
           component="img"
           src={publicAssetUrl("containerlab.svg")}
           alt=""
-          sx={{ width: 56, height: 56, flexShrink: 0 }}
+          sx={{ width: 48, height: 48, flexShrink: 0 }}
         />
-        <Box>
-          <Typography
-            variant="h5"
-            sx={{
-              fontWeight: 600
-            }}
-          >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h5" component="h3">
             Containerlab App
           </Typography>
-          <Typography variant="body2" color={TEXT_SECONDARY}>
+          <Typography variant="body2" color={TEXT_SECONDARY} sx={{ mt: 0.25 }}>
             Interactive topology visualization and editing for Containerlab network labs in the
             standalone browser UI.
           </Typography>
         </Box>
-      </Stack>
+      </Box>
 
-      <AboutSection title="Team" icon={<GroupsIcon fontSize="small" />}>
-        <AuthorCards />
+      <AboutSection title="Runtime">
+        {versionError ? <Alert severity="error">{versionError}</Alert> : null}
+        <VersionList
+          rows={[
+            { label: "Containerlab version", testId: "standalone-settings-version-info", value: versionValue },
+            { label: "Update check", testId: "standalone-settings-version-check", value: updateValue, mono: false }
+          ]}
+        />
       </AboutSection>
 
-      <AboutSection title="Runtime Version" icon={<ExtensionIcon fontSize="small" />}>
-        <Stack spacing={2} sx={{ p: 2 }}>
-          {versionError ? (
-            <Alert
-              severity="error"
-              variant="outlined"
-              sx={{
-                color: "text.primary",
-                borderColor: "error.main",
-                bgcolor: "background.paper",
-                "& .MuiAlert-icon": {
-                  color: "error.main"
-                }
-              }}
-            >
-              {versionError}
-            </Alert>
-          ) : null}
-          <TextField
-            label="Containerlab Version"
-            value={versionValue}
-            fullWidth
-            multiline
-            minRows={3}
-            slotProps={{ input: { readOnly: true } }}
-            data-testid="standalone-settings-version-info"
-          />
-          <TextField
-            label="Update Check"
-            value={updateValue}
-            fullWidth
-            multiline
-            minRows={3}
-            slotProps={{ input: { readOnly: true } }}
-            data-testid="standalone-settings-version-check"
-          />
-        </Stack>
+      <AboutSection title="Team">
+        <AuthorCards />
       </AboutSection>
 
       <Box
@@ -241,11 +236,12 @@ export function AboutSettingsContent({
           alignItems: "center",
           justifyContent: "center",
           gap: 0.5,
+          pt: 1,
           color: TEXT_SECONDARY
         }}
       >
         <Typography variant="caption">Made with</Typography>
-        <FavoriteIcon sx={{ fontSize: 14, color: "error.main" }} />
+        <FavoriteIcon sx={{ fontSize: 12, color: "error.main" }} />
         <Typography variant="caption">for the network community</Typography>
       </Box>
     </Stack>

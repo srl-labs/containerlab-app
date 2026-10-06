@@ -85,7 +85,12 @@ function renderTabbedMode<TProps extends object>(
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <TabNavigation tabs={tabDefs} activeTab={activeTab} onTabChange={onTabChange} />
+      <TabNavigation
+        tabs={tabDefs}
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+        variant="secondary"
+      />
       <Box sx={{ flex: 1, overflow: "auto" }}>
         <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
           {ActiveComponent && tabProps !== undefined ? <ActiveComponent {...tabProps} /> : null}

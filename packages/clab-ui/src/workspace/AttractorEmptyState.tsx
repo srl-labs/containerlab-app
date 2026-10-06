@@ -1,22 +1,36 @@
+import AddIcon from "@mui/icons-material/Add";
+import NorthEastIcon from "@mui/icons-material/NorthEast";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
 import { useEffect, useId, useRef } from "react";
 
 import { emptyStateArtwork } from "./emptyStateArtwork";
 import { attachEmptyStateWaves } from "./emptyStateWaves";
 
-const OVERLAY_TEXT = {
+const OVERLAY = {
   position: "absolute",
   left: "50%",
   transform: "translateX(-50%)",
   zIndex: 1,
   width: "max-content",
+  maxWidth: "100%",
+  boxSizing: "border-box",
   padding: "5%",
   pointerEvents: "none",
-  color: "var(--vscode-editor-foreground, #ececec)",
-  fontSize: 24,
-  fontWeight: 300,
-  letterSpacing: "0.02em",
-  background: "radial-gradient(closest-side, var(--vscode-editor-background, #000), transparent)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  textAlign: "center",
+  // Lifts the copy off the dotted field without drawing a box.
+  background: "radial-gradient(closest-side, var(--clab-ui-editor-background, var(--vscode-editor-background)), transparent)",
+} as const;
+
+const SECONDARY_LINK = {
+  pointerEvents: "auto",
+  color: "text.secondary",
+  "&:hover": { color: "text.primary" },
+  "& .MuiButton-endIcon > *:nth-of-type(1)": { fontSize: 14 }
 } as const;
 
 export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void }) {
@@ -78,39 +92,27 @@ export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void 
           <path key={index} d={path} style={{ opacity: `calc(${dark} + var(--empty-state-light) * ${lightOpacity - dark})` }} />
         ))}
       </Box>
-      <div style={{ ...OVERLAY_TEXT, top: 104, marginTop: "-5%" }}>
-        Welcome to Containerlab
-      </div>
-      <style>{`
-        [data-testid="standalone-empty-lab-state"] .empty-state-link {
-          color: inherit;
-          background: none;
-          border: 0;
-          padding: 0;
-          font: inherit;
-          cursor: pointer;
-          text-decoration: none;
-          opacity: 0.72;
-          transition: opacity 160ms ease;
-        }
-        [data-testid="standalone-empty-lab-state"] .empty-state-link:hover,
-        [data-testid="standalone-empty-lab-state"] .empty-state-link:focus-visible {
-          opacity: 1;
-        }
-      `}</style>
-      <div style={{ ...OVERLAY_TEXT, bottom: 104, marginBottom: "-5%", display: "flex", gap: "2em" }}>
+      <Box sx={{ ...OVERLAY, top: 104, mt: "-5%", gap: 0.75 }}>
+        <Typography component="h1" sx={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.015em", lineHeight: 1.25, color: "text.primary" }}>
+          Welcome to Containerlab
+        </Typography>
+        <Typography variant="body1" sx={{ color: "text.secondary" }}>
+          Design, deploy and explore network labs.
+        </Typography>
+      </Box>
+      <Box sx={{ ...OVERLAY, bottom: 104, mb: "-5%", flexDirection: "row", gap: 1 }}>
         {onCreateLab ? (
-          <button type="button" className="empty-state-link" style={{ pointerEvents: "auto" }} onClick={onCreateLab}>
+          <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={onCreateLab} sx={{ pointerEvents: "auto", mr: 1 }}>
             Create a lab
-          </button>
+          </Button>
         ) : null}
-        <a className="empty-state-link" href="https://containerlab.app" target="_blank" rel="noopener noreferrer" style={{ pointerEvents: "auto" }}>
+        <Button variant="text" size="large" href="https://containerlab.app" target="_blank" rel="noopener noreferrer" endIcon={<NorthEastIcon />} sx={SECONDARY_LINK}>
           Docs
-        </a>
-        <a className="empty-state-link" href="https://discord.gg/vAyddtaEV9" target="_blank" rel="noopener noreferrer" style={{ pointerEvents: "auto" }}>
+        </Button>
+        <Button variant="text" size="large" href="https://discord.gg/vAyddtaEV9" target="_blank" rel="noopener noreferrer" endIcon={<NorthEastIcon />} sx={SECONDARY_LINK}>
           Discord
-        </a>
-      </div>
+        </Button>
+      </Box>
     </div>
   );
 }

@@ -1,13 +1,11 @@
 // Context menu dropdown at a given position.
 import React, { useCallback } from "react";
-import Box from "@mui/material/Box";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Divider from "@mui/material/Divider";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 
 export interface ContextMenuItem {
   id: string;
@@ -18,6 +16,31 @@ export interface ContextMenuItem {
   danger?: boolean;
   onClick?: () => void;
   children?: ContextMenuItem[];
+}
+
+/** Compact menus cap their width; submenus flip left when this much room is missing on the right. */
+const COMPACT_MAX_WIDTH = 260;
+/** Border plus list padding, so a submenu's first row lines up with its parent row. */
+const SUBMENU_OFFSET = "5px";
+
+function menuPaperSx(compact: boolean) {
+  return compact ? { minWidth: 160, maxWidth: COMPACT_MAX_WIDTH } : { minWidth: 180 };
+}
+
+/** Dividers only ever sit between two groups: never first, last or doubled. */
+function withoutStrayDividers(items: ContextMenuItem[]): ContextMenuItem[] {
+  return items.filter((item, index) => {
+    if (item.divider !== true) return true;
+    const next = items[index + 1] as ContextMenuItem | undefined;
+    return index > 0 && items[index - 1].divider !== true && next !== undefined && next.divider !== true;
+  });
+}
+
+/** Submenus open to the right like native menus, and only flip when the window edge is too close. */
+function submenuOpensLeft(anchor: HTMLElement): boolean {
+  const rect = anchor.getBoundingClientRect();
+  const roomRight = window.innerWidth - rect.right;
+  return roomRight < COMPACT_MAX_WIDTH && rect.left > roomRight;
 }
 
 interface ContextMenuProps {
@@ -81,18 +104,12 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
           onContextMenu: handleBackdropContextMenu
         },
         paper: {
-          sx: compact
-            ? {
-                minWidth: 150,
-                maxWidth: 248,
-                "& .MuiDivider-root": { my: 0.1 }
-              }
-            : { minWidth: 180 },
+          sx: menuPaperSx(compact),
           onContextMenu: suppressNativeMenu
         }
       }}
     >
-      {items.map((item) => {
+      {withoutStrayDividers(items).map((item) => {
         if (item.divider === true) {
           return <Divider key={item.id} />;
         }
@@ -104,19 +121,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({
               onClose={onClose}
               compact={compact}
               openSubmenuOnHover={openSubmenuOnHover}
-              openToLeft={openToLeft}
             />
           );
         }
-        return (
-          <MenuItemButton
-            key={item.id}
-            item={item}
-            onClose={onClose}
-            compact={compact}
-            openToLeft={openToLeft}
-          />
-        );
+        return <MenuItemButton key={item.id} item={item} onClose={onClose} />;
       })}
     </Menu>
   );
@@ -130,18 +138,6 @@ interface MenuItemComponentProps {
   onClose: () => void;
   compact?: boolean;
   openSubmenuOnHover?: boolean;
-  openToLeft?: boolean;
-}
-
-function submenuGutterSx(compact: boolean) {
-  return {
-    width: compact ? 14 : 16,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flex: "0 0 auto",
-    mr: compact ? 0.35 : 0.8
-  };
 }
 
 function useMenuItemClick(item: ContextMenuItem, onClose: () => void) {
@@ -197,9 +193,8 @@ function renderSubmenuChild(params: {
   onClose: () => void;
   compact: boolean;
   openSubmenuOnHover: boolean;
-  openToLeft: boolean;
 }): React.ReactElement {
-  const { child, onClose, compact, openSubmenuOnHover, openToLeft } = params;
+  const { child, onClose, compact, openSubmenuOnHover } = params;
   if (child.divider === true) {
     return <Divider key={child.id} />;
   }
@@ -211,19 +206,10 @@ function renderSubmenuChild(params: {
         onClose={onClose}
         compact={compact}
         openSubmenuOnHover={openSubmenuOnHover}
-        openToLeft={openToLeft}
       />
     );
   }
-  return (
-    <MenuItemButton
-      key={child.id}
-      item={child}
-      onClose={onClose}
-      compact={compact}
-      openToLeft={openToLeft}
-    />
-  );
+  return <MenuItemButton key={child.id} item={child} onClose={onClose} />;
 }
 
 function resolveSubmenuClickHandler(
@@ -237,74 +223,30 @@ function resolveSubmenuClickHandler(
   return handleOpenSubmenuByClick;
 }
 
-function submenuItemSx(compact: boolean, openToLeft: boolean) {
-  return {
-    justifyContent: openToLeft ? "flex-start" : "space-between",
-    ...(compact ? { minHeight: 28, py: 0.2, px: 0.85 } : {})
-  };
-}
-
-function compactPrimarySlotProps(compact: boolean) {
-  if (!compact) {
-    return undefined;
-  }
-  return {
-    primary: {
-      noWrap: true,
-      sx: {
-        fontSize: 12.5,
-        lineHeight: 1.25
-      }
-    }
-  };
-}
-
-function renderMenuItemLabel(params: {
-  item: ContextMenuItem;
-  compact: boolean;
-  isDanger?: boolean;
-}): React.ReactElement {
-  const { item, compact, isDanger = false } = params;
+function renderMenuItemLabel(item: ContextMenuItem): React.ReactElement {
   const hasIcon = item.icon !== undefined && item.icon !== null;
   return (
     <>
-      {hasIcon && (
-        <ListItemIcon
-          sx={{
-            ...(compact ? { minWidth: 22 } : {}),
-            ...(isDanger ? { color: "error.main" } : {})
-          }}
-        >
-          {item.icon}
-        </ListItemIcon>
-      )}
-      <ListItemText slotProps={compactPrimarySlotProps(compact)}>{item.label}</ListItemText>
+      {hasIcon && <ListItemIcon>{item.icon}</ListItemIcon>}
+      <ListItemText slotProps={{ primary: { noWrap: true } }}>{item.label}</ListItemText>
     </>
   );
 }
 
-const MenuItemButton: React.FC<MenuItemComponentProps> = ({
-  item,
-  onClose,
-  compact = false,
-  openToLeft = false
-}) => {
+/** Destructive rows read red as a whole, icon included. */
+const DANGER_ITEM_SX = { color: "error.main", "& .MuiListItemIcon-root": { color: "inherit" } } as const;
+
+const MenuItemButton: React.FC<MenuItemComponentProps> = ({ item, onClose }) => {
   const handleClick = useMenuItemClick(item, onClose);
-  const isDanger = item.danger === true;
 
   return (
     <MenuItem
       onClick={handleClick}
       disabled={item.disabled}
-      dense={compact}
       data-testid={`context-menu-item-${item.id}`}
-      sx={{
-        ...(compact ? { minHeight: 28, py: 0.2, px: 0.85 } : {}),
-        ...(isDanger ? { color: "error.main" } : {})
-      }}
+      sx={item.danger === true ? DANGER_ITEM_SX : undefined}
     >
-      {openToLeft && <Box sx={submenuGutterSx(compact)} />}
-      {renderMenuItemLabel({ item, compact, isDanger })}
+      {renderMenuItemLabel(item)}
     </MenuItem>
   );
 };
@@ -313,8 +255,7 @@ const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
   item,
   onClose,
   compact = false,
-  openSubmenuOnHover = true,
-  openToLeft = false
+  openSubmenuOnHover = true
 }) => {
   const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null);
   const submenuOpen = Boolean(anchorEl);
@@ -373,10 +314,9 @@ const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
         child,
         onClose,
         compact,
-        openSubmenuOnHover,
-        openToLeft
+        openSubmenuOnHover
       }),
-    [compact, onClose, openSubmenuOnHover, openToLeft]
+    [compact, onClose, openSubmenuOnHover]
   );
 
   const clickHandler = resolveSubmenuClickHandler(
@@ -384,8 +324,7 @@ const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
     handleClick,
     handleOpenSubmenuByClick
   );
-  const anchorHorizontal = openToLeft ? "left" : "right";
-  const transformHorizontal = openToLeft ? "right" : "left";
+  const opensLeft = anchorEl !== null && submenuOpensLeft(anchorEl);
 
   return (
     <>
@@ -394,17 +333,15 @@ const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
         onMouseLeave={scheduleClose}
         onClick={clickHandler}
         disabled={item.disabled}
-        dense={compact}
         data-testid={`context-menu-item-${item.id}`}
-        sx={submenuItemSx(compact, openToLeft)}
+        // Keep the parent row lit while its submenu is open.
+        sx={submenuOpen ? { bgcolor: "action.hover" } : undefined}
       >
-        {openToLeft && (
-          <Box sx={submenuGutterSx(compact)}>
-            <ChevronLeftIcon fontSize="small" />
-          </Box>
-        )}
-        {renderMenuItemLabel({ item, compact })}
-        {!openToLeft && <ChevronRightIcon fontSize="small" sx={{ ml: compact ? 0.45 : 1 }} />}
+        {renderMenuItemLabel(item)}
+        <ChevronRightRoundedIcon
+          aria-hidden="true"
+          sx={{ fontSize: 16, ml: 1.5, mr: -0.5, color: "text.secondary" }}
+        />
       </MenuItem>
       <Menu
         anchorEl={anchorEl}
@@ -412,30 +349,28 @@ const MenuItemWithSubmenu: React.FC<MenuItemComponentProps> = ({
         onClose={() => setAnchorEl(null)}
         anchorOrigin={{
           vertical: "top",
-          horizontal: anchorHorizontal
+          horizontal: opensLeft ? "left" : "right"
         }}
         transformOrigin={{
           vertical: "top",
-          horizontal: transformHorizontal
+          horizontal: opensLeft ? "right" : "left"
         }}
         hideBackdrop
         sx={{ pointerEvents: "none" }}
         slotProps={{
           paper: {
-            sx: compact
-              ? {
-                  minWidth: 150,
-                  maxWidth: 240,
-                  pointerEvents: "auto",
-                  "& .MuiDivider-root": { my: 0.1 }
-                }
-              : { minWidth: 150, pointerEvents: "auto" },
+            sx: {
+              ...menuPaperSx(compact),
+              pointerEvents: "auto",
+              mt: `-${SUBMENU_OFFSET}`,
+              ml: opensLeft ? `-${SUBMENU_OFFSET}` : SUBMENU_OFFSET
+            },
             onMouseEnter: cancelClose,
             onMouseLeave: scheduleClose
           }
         }}
       >
-        {item.children?.map(renderChild)}
+        {withoutStrayDividers(item.children ?? []).map(renderChild)}
       </Menu>
     </>
   );

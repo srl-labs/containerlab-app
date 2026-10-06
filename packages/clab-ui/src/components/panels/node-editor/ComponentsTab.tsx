@@ -2,7 +2,7 @@
 // Components tab for node editor (Nokia SROS).
 import React, { useCallback, useState } from "react";
 import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Box from "@mui/material/Box";
@@ -18,7 +18,8 @@ import Tabs from "@mui/material/Tabs";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
-import { InputField, FilterableDropdown } from "../../ui/form";
+import { InputField, FilterableDropdown, PanelAddSection, PanelSection } from "../../ui/form";
+import { controlRadius } from "../../../theme/surfaces";
 import { useSchema, type SrosComponentTypes } from "../../../hooks/editor";
 
 import type { TabProps, SrosComponent, SrosMda, SrosXiom } from "./types";
@@ -42,6 +43,16 @@ const toOptions = (types: string[]): Array<{ value: string; label: string }> =>
   types.map((t) => ({ value: t, label: t }));
 
 const JUSTIFY_SPACE_BETWEEN = "space-between";
+const ROW_ICON_SX = { fontSize: 16 } as const;
+const SUBSECTION_ADD_SX = { minHeight: 24, py: 0, mr: -1 } as const;
+const REMOVE_BUTTON_SX = {
+  flexShrink: 0,
+  "&:hover": {
+    color: "error.main",
+    bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent)"
+  }
+} as const;
+const CARD_SX = { borderRadius: controlRadius, bgcolor: "transparent" } as const;
 
 // ============================================================================
 // MDA Entry Component
@@ -64,18 +75,7 @@ const MdaEntry: React.FC<MdaEntryProps> = ({
   onRemove,
   slotPrefix = ""
 }) => (
-  <Box
-    sx={{
-      display: "flex",
-      alignItems: "center",
-      gap: 1,
-      py: 1,
-      px: 1.5,
-      borderRadius: 1,
-      border: 1,
-      borderColor: "divider"
-    }}
-  >
+  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
     <Box sx={{ flex: 2, minWidth: 0 }}>
       <TextField
         id={`mda-slot-${index}`}
@@ -108,8 +108,13 @@ const MdaEntry: React.FC<MdaEntryProps> = ({
         allowFreeText
       />
     </Box>
-    <IconButton size="small" onClick={() => onRemove(index)} color="error" title="Remove MDA">
-      <DeleteIcon fontSize="small" />
+    <IconButton
+      size="small"
+      onClick={() => onRemove(index)}
+      title="Remove MDA"
+      sx={REMOVE_BUTTON_SX}
+    >
+      <DeleteIcon sx={ROW_ICON_SX} />
     </IconButton>
   </Box>
 );
@@ -133,7 +138,7 @@ const MdaListSection: React.FC<MdaListSectionProps> = ({
   onUpdate,
   onRemove
 }) => (
-  <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+  <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
     {mdas.map((mda, mdaIdx) => (
       <MdaEntry
         key={mdaIdx}
@@ -177,8 +182,8 @@ const MdaSectionWrapper: React.FC<MdaSectionWrapperProps> = ({
         display: "flex",
         alignItems: "center",
         justifyContent: JUSTIFY_SPACE_BETWEEN,
-        px: 2,
-        py: 1
+        px: 1.5,
+        pt: 1
       }}
     >
       <Typography variant="subtitle2">MDA Components</Typography>
@@ -187,13 +192,12 @@ const MdaSectionWrapper: React.FC<MdaSectionWrapperProps> = ({
         size="small"
         startIcon={<AddIcon />}
         onClick={() => onAddMda(parentIndex)}
-        sx={{ py: 0 }}
+        sx={SUBSECTION_ADD_SX}
       >
         Add
       </Button>
     </Box>
-    <Divider />
-    <Box sx={{ p: 2 }}>
+    <Box sx={{ px: 1.5, pt: 1.5, pb: 1.5, "&:has(> :only-child:empty)": { pt: 0 } }}>
       <MdaListSection
         mdas={mdas}
         mdaTypes={mdaTypes}
@@ -224,7 +228,7 @@ const XiomTabContent: React.FC<{
 
   return (
     <>
-      <Box sx={{ p: 1.5 }}>
+      <Box sx={{ px: 1.5, pt: 2, pb: 0.5 }}>
         <FilterableDropdown
           id={`xiom-type-${index}`}
           label="Type"
@@ -234,7 +238,6 @@ const XiomTabContent: React.FC<{
           allowFreeText
         />
       </Box>
-      <Divider />
       <MdaSectionWrapper
         mdas={xiom.mda ?? []}
         mdaTypes={srosTypes.xiomMda}
@@ -301,7 +304,7 @@ const ComponentHeader: React.FC<{
     onClick={onToggle}
   >
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-      {isExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+      {isExpanded ? <ExpandLessIcon sx={ROW_ICON_SX} /> : <ExpandMoreIcon sx={ROW_ICON_SX} />}
       <Chip label={slot} size="small" />
       <Typography variant="body2">{isCpm ? "Control Processing Module" : "Line Card"}</Typography>
       {!isCpm && type !== undefined && type.length > 0 && (
@@ -331,10 +334,10 @@ const ComponentHeader: React.FC<{
         e.stopPropagation();
         onRemove();
       }}
-      color="error"
       title="Remove component"
+      sx={REMOVE_BUTTON_SX}
     >
-      <DeleteIcon fontSize="small" />
+      <DeleteIcon sx={ROW_ICON_SX} />
     </IconButton>
   </Box>
 );
@@ -398,7 +401,7 @@ const ComponentXiomSection: React.FC<
           display: "flex",
           alignItems: "center",
           justifyContent: JUSTIFY_SPACE_BETWEEN,
-          px: 2,
+          px: 1.5,
           py: 1
         }}
       >
@@ -410,21 +413,25 @@ const ComponentXiomSection: React.FC<
           onClick={() => onAddXiom(index)}
           disabled={xioms.length >= 2}
           title={xioms.length >= 2 ? "XIOM slots x1 and x2 are already defined" : undefined}
-          sx={{ py: 0 }}
+          sx={SUBSECTION_ADD_SX}
         >
           Add
         </Button>
       </Box>
-      <Divider />
       {xioms.length > 0 && (
         <>
-          <Box sx={{ display: "flex", alignItems: "center" }}>
+          <Box sx={{ display: "flex", alignItems: "center", px: 1.5, gap: 1 }}>
             <Tabs
               value={clampedTab}
               onChange={(_, v: number) => setActiveXiomTab(v)}
               variant="scrollable"
               scrollButtons="auto"
-              sx={{ flex: 1 }}
+              sx={{
+                flex: 1,
+                minHeight: 28,
+                "& .MuiTabs-list": { gap: 2 },
+                "& .MuiTab-root": { minHeight: 28, px: 0, py: 0.5, fontSize: 12 }
+              }}
             >
               {xioms.map((xiom, xiomIdx) => (
                 <Tab key={xiomIdx} label={`x${xiom.slot ?? xiomIdx + 1}`} />
@@ -436,14 +443,12 @@ const ComponentXiomSection: React.FC<
                 onRemoveXiom(index, clampedTab);
                 setActiveXiomTab(0);
               }}
-              color="error"
               title="Remove XIOM"
-              sx={{ mr: 1 }}
+              sx={REMOVE_BUTTON_SX}
             >
-              <DeleteIcon fontSize="small" />
+              <DeleteIcon sx={ROW_ICON_SX} />
             </IconButton>
           </Box>
-          <Divider />
           <Box>
             <XiomTabContent
               xiom={activeXiom}
@@ -512,58 +517,37 @@ const ComponentSection: React.FC<ComponentSectionProps> = ({
   addDisabled,
   addDisabledTitle
 }) => (
-  <>
-    <Divider />
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: JUSTIFY_SPACE_BETWEEN,
-        px: 2,
-        py: 1
-      }}
-    >
-      <Typography variant="subtitle2">{title}</Typography>
-      <Button
-        variant="text"
-        size="small"
-        startIcon={<AddIcon />}
-        onClick={onAdd}
-        disabled={addDisabled}
-        title={addDisabled === true ? addDisabledTitle : undefined}
-        sx={{ py: 0 }}
-      >
-        Add
-      </Button>
+  <PanelAddSection
+    title={title}
+    onAdd={onAdd}
+    addDisabled={addDisabled}
+    addTitle={addDisabledTitle}
+  >
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      {filteredComponents.map((comp) => {
+        const realIndex = allComponents.indexOf(comp);
+        return (
+          <ComponentEntry
+            key={realIndex}
+            component={comp}
+            index={realIndex}
+            srosTypes={srosTypes}
+            onUpdate={updateComponent}
+            onRemove={removeComponent}
+            onAddMda={addMda}
+            onUpdateMda={updateMda}
+            onRemoveMda={removeMda}
+            onAddXiom={addXiom}
+            onUpdateXiom={updateXiom}
+            onRemoveXiom={removeXiom}
+            onAddXiomMda={addXiomMda}
+            onUpdateXiomMda={updateXiomMda}
+            onRemoveXiomMda={removeXiomMda}
+          />
+        );
+      })}
     </Box>
-    <Divider />
-    <Box sx={{ m: 2 }}>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        {filteredComponents.map((comp) => {
-          const realIndex = allComponents.indexOf(comp);
-          return (
-            <ComponentEntry
-              key={realIndex}
-              component={comp}
-              index={realIndex}
-              srosTypes={srosTypes}
-              onUpdate={updateComponent}
-              onRemove={removeComponent}
-              onAddMda={addMda}
-              onUpdateMda={updateMda}
-              onRemoveMda={removeMda}
-              onAddXiom={addXiom}
-              onUpdateXiom={updateXiom}
-              onRemoveXiom={removeXiom}
-              onAddXiomMda={addXiomMda}
-              onUpdateXiomMda={updateXiomMda}
-              onRemoveXiomMda={removeXiomMda}
-            />
-          );
-        })}
-      </Box>
-    </Box>
-  </>
+  </PanelAddSection>
 );
 
 interface ComponentSlotTypeRowProps {
@@ -593,7 +577,7 @@ const ComponentSlotTypeRow: React.FC<ComponentSlotTypeRowProps> = ({
       gridTemplateColumns: onRemove ? "1fr 4fr auto" : "1fr 4fr",
       gap: 1.5,
       alignItems: "center",
-      ...(padded ? { p: 1.5 } : undefined)
+      ...(padded ? { px: 1.5, pt: 2, pb: 0.5 } : undefined)
     }}
   >
     <InputField
@@ -612,8 +596,8 @@ const ComponentSlotTypeRow: React.FC<ComponentSlotTypeRowProps> = ({
       allowFreeText
     />
     {onRemove && (
-      <IconButton size="small" onClick={onRemove} color="error" title={removeTitle}>
-        <DeleteIcon fontSize="small" />
+      <IconButton size="small" onClick={onRemove} title={removeTitle} sx={REMOVE_BUTTON_SX}>
+        <DeleteIcon sx={ROW_ICON_SX} />
       </IconButton>
     )}
   </Box>
@@ -627,7 +611,7 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
 
   if (isCpm) {
     return (
-      <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Paper variant="outlined" sx={{ ...CARD_SX, px: 1.5, pt: 2, pb: 1.5 }}>
         <ComponentSlotTypeRow
           index={index}
           component={component}
@@ -645,7 +629,7 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
   const xiomCount = component.xiom?.length ?? 0;
 
   return (
-    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+    <Paper variant="outlined" sx={{ ...CARD_SX, overflow: "hidden" }}>
       <ComponentHeader
         slot={component.slot}
         isCpm={false}
@@ -668,7 +652,6 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
             onUpdate={onUpdate}
             padded={true}
           />
-          <Divider />
           <ComponentMdaSection {...props} />
           <Divider />
           <ComponentXiomSection {...props} />
@@ -715,38 +698,20 @@ const IntegratedModeSection: React.FC<IntegratedModeSectionProps> = ({
   };
 
   return (
-    <>
-      <Divider />
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: JUSTIFY_SPACE_BETWEEN,
-          px: 2,
-          py: 1
-        }}
-      >
-        <Typography variant="subtitle2">MDA Configuration</Typography>
-        <Button variant="text" size="small" startIcon={<AddIcon />} onClick={addMda} sx={{ py: 0 }}>
-          Add
-        </Button>
+    <PanelAddSection title="MDA Configuration" onAdd={addMda}>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        {mdas.map((mda, mdaIdx) => (
+          <MdaEntry
+            key={mdaIdx}
+            mda={mda}
+            index={mdaIdx}
+            mdaTypes={srosTypes.mda}
+            onUpdate={updateMda}
+            onRemove={removeMda}
+          />
+        ))}
       </Box>
-      <Divider />
-      <Box sx={{ p: 2 }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          {mdas.map((mda, mdaIdx) => (
-            <MdaEntry
-              key={mdaIdx}
-              mda={mda}
-              index={mdaIdx}
-              mdaTypes={srosTypes.mda}
-              onUpdate={updateMda}
-              onRemove={removeMda}
-            />
-          ))}
-        </Box>
-      </Box>
-    </>
+    </PanelAddSection>
   );
 };
 
@@ -925,12 +890,7 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
       />
 
       {/* SFM Configuration */}
-      <Divider />
-      <Box sx={{ px: 2, py: 1 }}>
-        <Typography variant="subtitle2">Switch Fabric Module (SFM)</Typography>
-      </Box>
-      <Divider />
-      <Box sx={{ p: 2 }}>
+      <PanelSection title="Switch Fabric Module (SFM)">
         <FilterableDropdown
           id="sfm-type"
           label="SFM Type"
@@ -939,7 +899,7 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
           options={toOptions(srosTypes.sfm)}
           allowFreeText
         />
-      </Box>
+      </PanelSection>
     </>
   );
 };

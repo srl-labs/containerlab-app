@@ -10,24 +10,20 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  InputAdornment,
+  IconButton,
   Paper,
   Stack,
   TextField,
   Typography
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
-import DownloadIcon from "@mui/icons-material/Download";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import MemoryIcon from "@mui/icons-material/Memory";
-import PersonOutlineIcon from "@mui/icons-material/PersonOutlined";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
+import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import SettingsEthernetIcon from "@mui/icons-material/SettingsEthernet";
-import SpeedIcon from "@mui/icons-material/Speed";
-import StorageIcon from "@mui/icons-material/Storage";
-import UploadIcon from "@mui/icons-material/Upload";
+import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
+import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 
 import { ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -44,6 +40,7 @@ import {
 import type { EndpointUiAction } from "../state/endpointActions";
 import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../state/endpointStatus";
 import { downloadJsonFile, pickJsonFile } from "../../utils/jsonFile";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 
 interface EndpointManagerProps {
   defaultApiUrl: string;
@@ -105,20 +102,6 @@ function formatEndpointImportResult(result: EndpointImportResult): string {
   }.`;
 }
 
-function endpointStatusColor(status: EndpointConfig["status"]): string {
-  const severity = endpointStatusSeverity(status);
-  if (severity === "success") {
-    return "success.main";
-  }
-  if (severity === "warning") {
-    return "warning.main";
-  }
-  if (severity === "error") {
-    return "error.main";
-  }
-  return "info.main";
-}
-
 function addEndpointButtonLabel(busyKey: string | null, mode: "initial" | "manage"): string {
   if (busyKey === "add") {
     return "Adding...";
@@ -170,12 +153,12 @@ function EndpointHealthMetric(props: {
       direction="row"
       spacing={1}
       sx={{
-        alignItems: "center",
+        alignItems: "flex-start",
         minWidth: 0,
         flex: 1
       }}
     >
-      <Box sx={{ color: "text.secondary", display: "inline-flex", flexShrink: 0 }}>
+      <Box sx={{ color: "text.secondary", display: "inline-flex", flexShrink: 0, mt: "1px" }}>
         {props.icon}
       </Box>
       <Box sx={{ minWidth: 0 }}>
@@ -188,13 +171,7 @@ function EndpointHealthMetric(props: {
         >
           {props.label}
         </Typography>
-        <Typography
-          variant="body2"
-          noWrap
-          sx={{
-            fontWeight: 600
-          }}
-        >
+        <Typography variant="subtitle2" noWrap>
           {props.value}
         </Typography>
         <Typography
@@ -221,19 +198,19 @@ function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
   return (
     <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
       <EndpointHealthMetric
-        icon={<SpeedIcon fontSize="small" />}
+        icon={<SpeedOutlinedIcon sx={{ fontSize: 16 }} />}
         label="CPU"
         value={formatEndpointHealthPercent(cpu?.usagePercent)}
         detail={cpu?.numCPU ? `${cpu.numCPU} cores` : "cores n/a"}
       />
       <EndpointHealthMetric
-        icon={<MemoryIcon fontSize="small" />}
+        icon={<MemoryOutlinedIcon sx={{ fontSize: 16 }} />}
         label="Memory"
         value={formatEndpointHealthPercent(mem?.usagePercent)}
         detail={formatEndpointHealthUsedTotal(mem?.usedMem, mem?.totalMem)}
       />
       <EndpointHealthMetric
-        icon={<StorageIcon fontSize="small" />}
+        icon={<StorageOutlinedIcon sx={{ fontSize: 16 }} />}
         label="Disk"
         value={formatEndpointHealthPercent(disk?.usagePercent)}
         detail={diskDetail}
@@ -300,39 +277,32 @@ function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: Endpoint
 
 function EndpointStatusPill(props: { status: EndpointConfig["status"] }) {
   const { status } = props;
-  const color = endpointStatusColor(status);
+  const severity = endpointStatusSeverity(status);
 
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
         display: "inline-flex",
         alignItems: "center",
         gap: 0.75,
-        px: 1.1,
-        py: 0.45,
+        flexShrink: 0,
+        height: 20,
+        px: 1,
         borderRadius: 999,
-        border: 1,
-        borderColor: color,
-        bgcolor: "background.paper",
-        color
-      }}
+        bgcolor: `color-mix(in srgb, ${theme.palette[severity].main} 14%, transparent)`,
+        color: "text.primary"
+      })}
     >
       <Box
         sx={{
-          width: 8,
-          height: 8,
+          width: 6,
+          height: 6,
           borderRadius: "50%",
-          bgcolor: color,
+          bgcolor: `${severity}.main`,
           flexShrink: 0
         }}
       />
-      <Typography
-        variant="caption"
-        sx={{
-          fontWeight: 700,
-          color: "inherit"
-        }}
-      >
+      <Typography variant="caption" sx={{ fontWeight: 500, color: "inherit", lineHeight: 1 }}>
         {endpointStatusLabel(status)}
       </Typography>
     </Box>
@@ -384,12 +354,12 @@ function ManagedEndpointList(props: {
             key={endpoint.id}
             variant="outlined"
             sx={{
-              p: 1.75,
+              p: 2,
               borderColor: "divider",
               bgcolor: "background.paper"
             }}
           >
-            <Stack spacing={1.25} divider={<Divider flexItem />}>
+            <Stack spacing={1.5} divider={<Divider flexItem />}>
               <Stack
                 direction="row"
                 spacing={1}
@@ -406,25 +376,19 @@ function ManagedEndpointList(props: {
                       alignItems: "center"
                     }}
                   >
-                    <Typography
-                      variant="subtitle2"
-                      noWrap
-                      sx={{
-                        fontWeight: 600
-                      }}
-                    >
+                    <Typography variant="subtitle1" noWrap>
                       {endpoint.label}
                     </Typography>
                     <EndpointStatusPill status={endpoint.status} />
                   </Stack>
                   <Typography
-                    variant="caption"
+                    variant="body2"
                     noWrap
                     sx={{
                       color: "text.secondary",
-                      fontFamily: "monospace",
-                      fontSize: "0.75rem",
-                      display: "block"
+                      fontFamily: MONO_FONT_FAMILY,
+                      display: "block",
+                      mt: 0.25
                     }}
                   >
                     {endpoint.url}
@@ -439,38 +403,32 @@ function ManagedEndpointList(props: {
                     {endpointStatusHint(endpoint.status)}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-                  <Button
+                <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0, mt: -0.5, mr: -0.75 }}>
+                  <IconButton
                     size="small"
-                    variant="outlined"
                     onClick={() => props.onEdit(endpoint)}
                     aria-label={`Edit ${endpoint.label}`}
                     disabled={props.busyKey !== null}
-                    sx={{ minWidth: 0, px: 1 }}
                   >
-                    <EditOutlinedIcon fontSize="small" />
-                  </Button>
-                  <Button
+                    <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                  <IconButton
                     size="small"
-                    variant="outlined"
                     onClick={() => props.onReconnect(endpoint)}
                     aria-label={`Reconnect ${endpoint.label}`}
                     disabled={props.busyKey !== null}
-                    sx={{ minWidth: 0, px: 1 }}
                   >
-                    <RefreshIcon fontSize="small" />
-                  </Button>
-                  <Button
+                    <RefreshIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                  <IconButton
                     size="small"
-                    variant="outlined"
-                    color="error"
                     onClick={() => props.onRemove(endpoint)}
                     aria-label={`Remove ${endpoint.label}`}
                     disabled={props.busyKey !== null}
-                    sx={{ minWidth: 0, px: 1 }}
+                    sx={{ "&:hover": { color: "error.main" } }}
                   >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </Button>
+                    <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
                 </Stack>
               </Stack>
               {props.healthStatsEnabled ? (
@@ -499,7 +457,7 @@ function ManagedEndpointList(props: {
                   }
                   placeholder="24h"
                   disabled={props.busyKey !== null}
-                  sx={{ flex: 1 }}
+                  sx={{ flex: 1, mt: 0.5 }}
                   slotProps={{ inputLabel: { shrink: true } }}
                 />
                 <Button
@@ -509,9 +467,7 @@ function ManagedEndpointList(props: {
                     props.onSetEndpointSessionDuration?.(endpoint.id, durationDraft.trim())
                   }
                   sx={{
-                    textTransform: "none",
-                    height: 40,
-                    px: 2.5,
+                    mt: { sm: 0.5 },
                     alignSelf: { xs: "stretch", sm: "flex-start" }
                   }}
                 >
@@ -1056,45 +1012,47 @@ export function EndpointManager({
     }
   }, [busyKey, onImportEndpoints]);
 
+  const transferActions = onImportEndpoints || onExportEndpoints ? (
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{
+        justifyContent: "flex-end",
+        flexWrap: "wrap"
+      }}
+    >
+      {onImportEndpoints ? (
+        <Button
+          variant={mode === "initial" ? "text" : "outlined"}
+          size="small"
+          startIcon={<FileUploadOutlinedIcon />}
+          onClick={() => {
+            void handleImportEndpoints();
+          }}
+          disabled={busyKey !== null}
+          data-testid="standalone-endpoints-import"
+        >
+          {busyKey === "import" ? "Importing..." : "Import"}
+        </Button>
+      ) : null}
+      {onExportEndpoints ? (
+        <Button
+          variant={mode === "initial" ? "text" : "outlined"}
+          size="small"
+          startIcon={<FileDownloadOutlinedIcon />}
+          onClick={handleExportEndpoints}
+          disabled={busyKey !== null || sortedEndpoints.length === 0}
+          data-testid="standalone-endpoints-export"
+        >
+          Export
+        </Button>
+      ) : null}
+    </Stack>
+  ) : null;
+
   return (
     <Stack spacing={2.5}>
-      {onImportEndpoints || onExportEndpoints ? (
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            justifyContent: "flex-end",
-            flexWrap: "wrap"
-          }}
-        >
-          {onImportEndpoints ? (
-            <Button
-              variant="outlined"
-              startIcon={<UploadIcon />}
-              onClick={() => {
-                void handleImportEndpoints();
-              }}
-              disabled={busyKey !== null}
-              data-testid="standalone-endpoints-import"
-              sx={{ textTransform: "none" }}
-            >
-              {busyKey === "import" ? "Importing..." : "Import"}
-            </Button>
-          ) : null}
-          {onExportEndpoints ? (
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={handleExportEndpoints}
-              disabled={busyKey !== null || sortedEndpoints.length === 0}
-              data-testid="standalone-endpoints-export"
-              sx={{ textTransform: "none" }}
-            >
-              Export
-            </Button>
-          ) : null}
-        </Stack>
-      ) : null}
+      {mode === "manage" ? transferActions : null}
 
       {showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
@@ -1111,28 +1069,32 @@ export function EndpointManager({
         />
       ) : null}
 
+      {/* On the login card the form is the card's content; in settings it is one card among the endpoints. */}
       <Paper
         variant="outlined"
-        sx={{
-          p: { xs: 2.5, md: 3 },
+        sx={mode === "initial" ? {
+          p: 0,
+          border: 0,
+          bgcolor: "transparent"
+        } : {
+          p: 2,
           borderColor: "divider",
           bgcolor: "background.paper"
         }}
       >
-        <Stack spacing={2}>
-          <Box>
+        <Stack spacing={2.5}>
+          <Box sx={mode === "initial" ? { textAlign: "center" } : undefined}>
             <Typography
               variant="subtitle1"
-              sx={{
-                fontWeight: 600
-              }}
+              sx={mode === "initial" ? { fontSize: 18, letterSpacing: "-0.01em" } : undefined}
             >
               Add Endpoint
             </Typography>
             <Typography
               variant="body2"
               sx={{
-                color: "text.secondary"
+                color: "text.secondary",
+                mt: mode === "initial" ? 0.75 : 0.25
               }}
             >
               {endpointAddDescription(mode)}
@@ -1150,7 +1112,7 @@ export function EndpointManager({
             </Alert>
           ) : null}
 
-          <Stack spacing={1.5}>
+          <Stack spacing={2}>
             <TextField
               label="API Endpoint"
               value={addForm.url}
@@ -1164,16 +1126,7 @@ export function EndpointManager({
               }}
               fullWidth
               placeholder="https://localhost:8090"
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SettingsEthernetIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Label"
@@ -1188,16 +1141,7 @@ export function EndpointManager({
               }}
               fullWidth
               placeholder="Optional friendly name"
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LabelOutlinedIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Username"
@@ -1211,16 +1155,7 @@ export function EndpointManager({
                 void addForm.submit();
               }}
               fullWidth
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonOutlineIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Password"
@@ -1235,16 +1170,7 @@ export function EndpointManager({
                 void addForm.submit();
               }}
               fullWidth
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockOutlinedIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }
-              }}
+              slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
               label="Keep me signed in"
@@ -1277,15 +1203,25 @@ export function EndpointManager({
               void addForm.submit();
             }}
             disabled={addForm.submitDisabled}
-            sx={{
-              alignSelf: "flex-start",
-              textTransform: "none"
-            }}
+            sx={{ alignSelf: mode === "initial" ? "stretch" : "flex-start" }}
           >
             {addEndpointButtonLabel(busyKey, mode)}
           </Button>
         </Stack>
       </Paper>
+
+      {mode === "initial" && transferActions ? (
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: "center", pt: 1.5, borderTop: 1, borderColor: "divider" }}
+        >
+          <Typography variant="body2" sx={{ flex: 1, color: "text.secondary" }}>
+            Endpoint profiles
+          </Typography>
+          {transferActions}
+        </Stack>
+      ) : null}
 
       <Dialog
         open={Boolean(editDialog.endpoint)}
@@ -1358,7 +1294,7 @@ export function EndpointManager({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => editDialog.setEndpointId(null)}>Cancel</Button>
+          <Button variant="text" onClick={() => editDialog.setEndpointId(null)}>Cancel</Button>
           <Button
             onClick={() => {
               void editDialog.submit();
@@ -1437,7 +1373,7 @@ export function EndpointManager({
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => reconnectDialog.setEndpointId(null)}>Cancel</Button>
+          <Button variant="text" onClick={() => reconnectDialog.setEndpointId(null)}>Cancel</Button>
           <Button
             onClick={() => {
               void reconnectDialog.submit();
@@ -1459,22 +1395,16 @@ export function EndpointManager({
         <DialogTitle>Remove Endpoint</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "text.secondary"
-              }}
-            >
+            <Typography variant="body2">
               {`Remove "${removeDialog.endpoint?.label ?? "endpoint"}" from this standalone session?`}
             </Typography>
-            <Divider />
-            <Typography variant="body2">
+            <Typography variant="body2" sx={{ color: "text.secondary" }}>
               Labs, topology sessions, and event streams for this endpoint will be closed.
             </Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => removeDialog.setEndpointId(null)}>Cancel</Button>
+          <Button variant="text" onClick={() => removeDialog.setEndpointId(null)}>Cancel</Button>
           <Button
             onClick={() => {
               void removeDialog.submit();

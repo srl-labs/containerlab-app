@@ -108,7 +108,7 @@ test("applies appearance live and stays usable at narrow widths", async ({
   await search(page, "colorScheme");
   const scheme = card(page, "appearance.colorScheme");
   await scheme.getByRole("button", { name: "Light", exact: true }).click();
-  await scheme.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(scheme.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
   await expect
     .poll(() =>
       page.evaluate(() =>

@@ -48,20 +48,14 @@ const NUMBER_INPUT_SX: SxProps<Theme> = {
 
 const STEPPER_BUTTON_SX: SxProps<Theme> = {
   width: 18,
-  height: 14,
+  height: 12,
   p: 0,
   borderRadius: 0.5,
-  border: "1px solid",
-  borderColor: "var(--vscode-input-border)",
   color: "text.secondary",
-  "&:hover": {
-    bgcolor: "action.hover",
-    color: "text.primary",
-    borderColor: "var(--vscode-focusBorder, var(--vscode-input-border))"
-  }
+  "&:hover": { bgcolor: "action.hover", color: "text.primary" }
 };
 
-const STEPPER_ICON_SX: SxProps<Theme> = { fontSize: 12 };
+const STEPPER_ICON_SX: SxProps<Theme> = { fontSize: 14 };
 
 const parseNumericValue = (value: string): number | undefined => {
   const numericValue = Number(value);
@@ -251,7 +245,7 @@ const InputEndAdornment: React.FC<InputEndAdornmentProps> = ({
 }) => (
   <InputAdornment position="end">
     {showStepper ? (
-      <Box sx={{ display: "flex", flexDirection: "column", mr: stepperRightGap, gap: 0.25 }}>
+      <Box sx={{ display: "flex", flexDirection: "column", mr: stepperRightGap }}>
         <StepperButton
           direction={1}
           onStep={onStep}
@@ -270,6 +264,7 @@ const InputEndAdornment: React.FC<InputEndAdornmentProps> = ({
     ) : null}
     {hasSuffix ? (
       <Typography
+        variant="body2"
         sx={{
           color: "text.secondary",
           mr: suffixRightGap

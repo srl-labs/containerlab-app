@@ -25,11 +25,13 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import ResetIcon from "@mui/icons-material/RestartAlt";
 import RestoreIcon from "@mui/icons-material/OpenInFull";
 import SplitIcon from "@mui/icons-material/ViewColumn";
+import TerminalIcon from "@mui/icons-material/Terminal";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 
 import { TERMINAL_ANSI_TOKENS } from "../../theme/devTheme";
+import { controlRadius, floatingRadius, overlayShadow } from "../../theme/surfaces";
 
 
 import {
@@ -308,6 +310,36 @@ function terminalPaneLabel(pane: RuntimeTerminalPane, index: number, count: numb
 
 
 const FONT_SIZE_PERSIST_DELAY_MS = 220;
+
+/** Tab rows: hover fill, and row actions that appear on hover or when the row is active. */
+const TERMINAL_TAB_SX = {
+  alignItems: "center",
+  borderRadius: controlRadius,
+  cursor: "pointer",
+  display: "flex",
+  gap: 0.25,
+  minWidth: 0,
+  pl: 1,
+  pr: 0.25,
+  transition: "background-color 120ms ease, color 120ms ease",
+  "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+  "& .terminal-tab-action": { opacity: 0, transition: "opacity 120ms ease" },
+  "&:hover .terminal-tab-action, &[aria-selected='true'] .terminal-tab-action, &[data-active='true'] .terminal-tab-action, & .terminal-tab-action:focus-visible":
+    {
+    opacity: 1
+  },
+  "@media (hover: none)": { "& .terminal-tab-action": { opacity: 1 } },
+  "@media (prefers-reduced-motion: reduce)": { transition: "none", "& .terminal-tab-action": { transition: "none" } }
+} as const;
+
+/** Popover actions read as menu rows: full width, left aligned, no border. */
+const TERMINAL_ACTION_SX = {
+  justifyContent: "flex-start",
+  px: 0.75,
+  "&:not(.MuiButton-colorError)": { color: "text.primary" },
+  "& .MuiButton-startIcon": { color: "var(--vscode-icon-foreground)" },
+  "&.MuiButton-colorError .MuiButton-startIcon": { color: "inherit" }
+} as const;
 
 export function RuntimeTerminalPaneView({
   active,
@@ -830,9 +862,13 @@ export function RuntimeTerminalPaneView({
       onWheel={handleTerminalWheelZoom}
       data-testid="runtime-terminal-pane"
       sx={{
-        borderLeft: 1,
         borderColor: "divider",
-        boxShadow: active ? "inset 2px 0 0 var(--clab-ui-focus-border, #1976d2)" : "none",
+        "&:not(:first-of-type)": { borderLeft: 1, borderColor: "divider" },
+        // Only split panes need to show which one has the keyboard.
+        "&:not(:only-of-type)": {
+          borderTop: "2px solid",
+          borderTopColor: active ? "var(--clab-ui-focus-border, var(--vscode-focusBorder))" : "transparent"
+        },
         display: hidden ? "none" : "flex",
         flex: 1,
         flexDirection: "column",
@@ -861,7 +897,7 @@ export function RuntimeTerminalPaneView({
       >
         <Stack spacing={1.25} data-testid="runtime-terminal-actions-popover">
           <Box>
-            <Typography variant="overline" sx={{ lineHeight: 1.1 }}>
+            <Typography variant="overline" sx={{ display: "block", color: "text.secondary" }}>
               Font
             </Typography>
             <Stack
@@ -873,8 +909,8 @@ export function RuntimeTerminalPaneView({
               }}
             >
               <Typography
-                variant="caption"
-                sx={{ fontWeight: 600 }}
+                variant="body2"
+                sx={{ fontWeight: 500, fontVariantNumeric: "tabular-nums" }}
                 data-testid="runtime-terminal-font-value"
               >
                 {fontSizePreview} px
@@ -939,56 +975,56 @@ export function RuntimeTerminalPaneView({
           </Box>
           <Divider />
           <Box>
-            <Typography variant="overline" sx={{ lineHeight: 1.1 }}>
+            <Typography variant="overline" sx={{ display: "block", color: "text.secondary" }}>
               Clipboard & Export
             </Typography>
-            <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+            <Stack spacing={0.25} sx={{ mt: 0.5, mx: -0.75 }}>
               <Button
                 fullWidth
                 size="small"
-                variant="outlined"
+                variant="text"
                 startIcon={<CopyIcon fontSize="small" />}
                 onClick={handleCopy}
                 data-testid="runtime-terminal-copy"
                 aria-label="Copy terminal text"
-                sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                sx={TERMINAL_ACTION_SX}
               >
                 Copy Selection / Screen
               </Button>
               <Button
                 fullWidth
                 size="small"
-                variant="outlined"
+                variant="text"
                 startIcon={<DownloadIcon fontSize="small" />}
                 onClick={() => handleExport("screen")}
                 data-testid="runtime-terminal-export-screen"
                 aria-label="Export visible terminal screen"
-                sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                sx={TERMINAL_ACTION_SX}
               >
                 Export Visible Screen
               </Button>
               <Button
                 fullWidth
                 size="small"
-                variant="outlined"
+                variant="text"
                 startIcon={<ExportLogIcon fontSize="small" />}
                 onClick={() => handleExport("log")}
                 data-testid="runtime-terminal-export-log"
                 aria-label="Export full terminal log"
-                sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                sx={TERMINAL_ACTION_SX}
               >
                 Export Full Log
               </Button>
               <Button
                 fullWidth
                 size="small"
-                variant="outlined"
-                color="warning"
+                variant="text"
+                color="error"
                 startIcon={<ClearIcon fontSize="small" />}
                 onClick={handleClear}
                 data-testid="runtime-terminal-clear"
                 aria-label="Clear terminal buffer"
-                sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                sx={TERMINAL_ACTION_SX}
               >
                 Clear Terminal
               </Button>
@@ -1000,6 +1036,9 @@ export function RuntimeTerminalPaneView({
         sx={{
           flex: 1,
           minHeight: 0,
+          pt: 0.75,
+          pl: 1.25,
+          pr: 0.5,
           bgcolor: "background.default"
         }}
       >
@@ -1175,7 +1214,7 @@ function TerminalShell({
   return (
     <Paper
       ref={rootRef}
-      elevation={10}
+      elevation={0}
       onMouseDown={() => runtimeUiActions.focusTerminal(shell.id)}
       data-testid="runtime-terminal-window"
       sx={{
@@ -1191,6 +1230,8 @@ function TerminalShell({
         zIndex: shell.zIndex,
         border: 1,
         borderColor: "divider",
+        borderRadius: floatingRadius,
+        boxShadow: overlayShadow,
         bgcolor: "background.paper",
         backfaceVisibility: "hidden",
         contain: "layout paint",
@@ -1202,36 +1243,32 @@ function TerminalShell({
         onMouseDown={handleHeaderMouseDown}
         sx={{
           cursor: "move",
-          px: 1,
-          py: 0.625,
+          pl: 1.5,
+          pr: 0.75,
+          minHeight: 40,
+          display: "flex",
+          alignItems: "center",
           borderBottom: shell.minimized ? 0 : 1,
           borderColor: "divider",
-          bgcolor: "action.hover",
           userSelect: "none"
         }}
       >
         <Stack
           direction="row"
-          spacing={0.75}
+          spacing={0.5}
           sx={{
-            alignItems: "center"
+            alignItems: "center",
+            flex: 1,
+            minWidth: 0
           }}
         >
-          <Stack sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 700,
-                letterSpacing: 0,
-                lineHeight: 1.2,
-                textTransform: "uppercase"
-              }}
-              noWrap
-            >
+          <Stack direction="row" spacing={1} sx={{ flex: 1, minWidth: 0, alignItems: "center" }}>
+            <TerminalIcon sx={{ fontSize: 16, color: "var(--vscode-icon-foreground)" }} />
+            <Typography variant="subtitle2" noWrap sx={{ flexShrink: 0 }}>
               Terminal
             </Typography>
             {activePane ? (
-              <Typography variant="caption" sx={{ opacity: 0.7, lineHeight: 1.2 }} noWrap>
+              <Typography variant="body2" noWrap sx={{ color: "text.secondary", minWidth: 0 }}>
                 {activePane.title}
               </Typography>
             ) : null}
@@ -1247,7 +1284,7 @@ function TerminalShell({
                 onClick={handleOpenActions}
                 data-testid="runtime-terminal-actions-button"
                 aria-label="Open terminal actions"
-                sx={{ minWidth: 0, px: 0.75, py: 0.25, textTransform: "none" }}
+                sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
               >
                 Actions
               </Button>
@@ -1350,19 +1387,17 @@ function TerminalShell({
             flexDirection: "column",
             minHeight: 0,
             overflowY: "auto",
-            p: 0.5
+            px: 0.75,
+            pb: 0.75
           }}
         >
           <Typography
-            variant="caption"
+            variant="overline"
             sx={{
               color: "text.secondary",
-              fontWeight: 700,
-              letterSpacing: 0,
-              lineHeight: 1.3,
               px: 0.75,
-              py: 0.5,
-              textTransform: "uppercase"
+              pt: 1,
+              pb: 0.5
             }}
           >
             Terminals
@@ -1379,18 +1414,10 @@ function TerminalShell({
                     data-testid={`runtime-terminal-tab-${group.id}`}
                     onClick={() => runtimeUiActions.activateTerminalGroup(group.id)}
                     sx={{
-                      alignItems: "center",
-                      borderLeft: 2,
-                      borderLeftColor: selected ? "primary.main" : "transparent",
-                      borderRadius: 0.75,
+                      ...TERMINAL_TAB_SX,
+                      height: 28,
                       bgcolor: selected ? "action.selected" : "transparent",
-                      color: selected ? "text.primary" : "text.secondary",
-                      cursor: "pointer",
-                      display: "flex",
-                      gap: 0.25,
-                      height: 30,
-                      minWidth: 0,
-                      px: 0.5
+                      color: selected ? "text.primary" : "text.secondary"
                     }}
                   >
                     <Box
@@ -1399,13 +1426,14 @@ function TerminalShell({
                         borderRadius: "50%",
                         flex: "0 0 auto",
                         height: 7,
-                        width: 7
+                        width: 7,
+                        mr: 0.5
                       }}
                     />
                     <Typography
-                      variant="caption"
+                      variant="body2"
                       title={group.title}
-                      sx={{ flex: 1, fontWeight: selected ? 700 : 500, minWidth: 0 }}
+                      sx={{ flex: 1, fontWeight: selected ? 500 : 400, minWidth: 0 }}
                       noWrap
                     >
                       {group.title}
@@ -1425,9 +1453,10 @@ function TerminalShell({
                         }}
                         aria-label={`Split ${group.title}`}
                         data-testid="runtime-terminal-tab-split"
+                        className="terminal-tab-action"
                         sx={{ height: 22, width: 22 }}
                       >
-                        <SplitIcon fontSize="inherit" />
+                        <SplitIcon sx={{ fontSize: 15 }} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Kill Terminal">
@@ -1440,9 +1469,10 @@ function TerminalShell({
                         }}
                         aria-label={`Kill ${group.title}`}
                         data-testid="runtime-terminal-tab-kill"
-                        sx={{ height: 22, width: 22 }}
+                        className="terminal-tab-action"
+                        sx={{ height: 22, width: 22, "&:hover": { color: "error.main" } }}
                       >
-                        <CloseIcon fontSize="inherit" />
+                        <CloseIcon sx={{ fontSize: 15 }} />
                       </IconButton>
                     </Tooltip>
                   </Box>
@@ -1452,8 +1482,8 @@ function TerminalShell({
                       sx={{
                         borderLeft: 1,
                         borderColor: "divider",
-                        ml: 1,
-                        mt: 0.25,
+                        ml: 1.25,
+                        my: 0.25,
                         pl: 0.5
                       }}
                     >
@@ -1464,19 +1494,14 @@ function TerminalShell({
                           <Box
                             key={pane.id}
                             role="button"
+                            data-active={paneSelected}
                             data-testid={`runtime-terminal-split-pane-${pane.id}`}
                             onClick={() => runtimeUiActions.activateTerminalPane(pane.id)}
                             sx={{
-                              alignItems: "center",
-                              borderRadius: 0.75,
+                              ...TERMINAL_TAB_SX,
+                              height: 26,
                               bgcolor: paneSelected ? "action.selected" : "transparent",
-                              color: paneSelected ? "text.primary" : "text.secondary",
-                              cursor: "pointer",
-                              display: "flex",
-                              gap: 0.25,
-                              height: 28,
-                              minWidth: 0,
-                              px: 0.5
+                              color: paneSelected ? "text.primary" : "text.secondary"
                             }}
                           >
                             <Box
@@ -1485,15 +1510,16 @@ function TerminalShell({
                                 borderRadius: "50%",
                                 flex: "0 0 auto",
                                 height: 6,
-                                width: 6
+                                width: 6,
+                                mr: 0.5
                               }}
                             />
                             <Typography
-                              variant="caption"
+                              variant="body2"
                               title={pane.title}
                               sx={{
                                 flex: 1,
-                                fontWeight: paneSelected ? 700 : 500,
+                                fontWeight: paneSelected ? 500 : 400,
                                 minWidth: 0
                               }}
                               noWrap
@@ -1510,9 +1536,10 @@ function TerminalShell({
                                 }}
                                 aria-label={`Close ${paneLabel}`}
                                 data-testid="runtime-terminal-split-pane-kill"
-                                sx={{ height: 20, width: 20 }}
+                                className="terminal-tab-action"
+                                sx={{ height: 20, width: 20, "&:hover": { color: "error.main" } }}
                               >
-                                <CloseIcon fontSize="inherit" />
+                                <CloseIcon sx={{ fontSize: 14 }} />
                               </IconButton>
                             </Tooltip>
                           </Box>

@@ -1,12 +1,13 @@
 // Lab settings dialog.
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import GridOnOutlinedIcon from "@mui/icons-material/GridOnOutlined";
 import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
-import LockIcon from "@mui/icons-material/Lock";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
+import LockIcon from "@mui/icons-material/LockOutlined";
+import LockOpenIcon from "@mui/icons-material/LockOpenOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
+import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
 import IconButton from "@mui/material/IconButton";
@@ -14,7 +15,7 @@ import Tooltip from "@mui/material/Tooltip";
 
 import { SettingsLayout } from "../../../settings/SettingsLayout";
 import { useIsProcessing, useTopoViewerActions } from "../../../stores/topoViewerStore";
-import { floatingRadius, floatingSurfaceSx } from "../../../theme/surfaces";
+import { floatingSurfaceSx, overlayShadow } from "../../../theme/surfaces";
 import { LabSettingsSection } from "../lab-drawer/LabSettingsSection";
 import type { GridSettingsControlsProps } from "../GridSettingsPopover";
 
@@ -98,16 +99,17 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
       open={isOpen}
       onClose={onClose}
       fullWidth
-      maxWidth="lg"
+      maxWidth="md"
       aria-labelledby="containerlab-lab-settings-title"
       data-testid="lab-settings-modal"
       slotProps={{
         paper: {
           sx: {
             ...floatingSurfaceSx,
-            minHeight: { xs: "calc(100vh - 32px)", md: 560 },
-            height: { xs: "calc(100vh - 32px)", md: "76vh" },
-            borderRadius: floatingRadius,
+            boxShadow: overlayShadow,
+            // Four short sections: size for the content, not the screen.
+            minHeight: { xs: "calc(100vh - 32px)", md: 0 },
+            height: { xs: "calc(100vh - 32px)", md: "min(560px, 80vh)" },
             overflow: "hidden"
           }
         }
@@ -132,7 +134,6 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
                   disabled={isProcessing}
                   aria-label={lockLabel}
                   data-testid="lab-settings-lock-btn"
-                  sx={{ color: isLocked ? "error.main" : "inherit" }}
                 >
                   {isLocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
                 </IconButton>
@@ -151,16 +152,16 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
         footer={
           <>
             <span />
-            <span>
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button variant="outlined" onClick={onClose}>
+                Close
+              </Button>
               {canSave ? (
-                <Button size="small" onClick={handleSaveClick} data-testid="lab-settings-save-btn" sx={{ mr: 1 }}>
+                <Button onClick={handleSaveClick} data-testid="lab-settings-save-btn">
                   Apply
                 </Button>
               ) : null}
-              <Button size="small" onClick={onClose}>
-                Close
-              </Button>
-            </span>
+            </Box>
           </>
         }
       >

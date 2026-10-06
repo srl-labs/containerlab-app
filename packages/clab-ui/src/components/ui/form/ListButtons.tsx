@@ -4,7 +4,7 @@
 import React from "react";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
-import DeleteIcon from "@mui/icons-material/Delete";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import AddIcon from "@mui/icons-material/Add";
 
 interface DeleteItemButtonProps {
@@ -18,9 +18,15 @@ export const DeleteItemButton: React.FC<DeleteItemButtonProps> = ({ onRemove, di
     onClick={onRemove}
     aria-label="Remove"
     disabled={disabled}
-    sx={{ "&:hover": { color: "error.main" } }}
+    sx={{
+      flexShrink: 0,
+      "&:hover": {
+        color: "error.main",
+        bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent)"
+      }
+    }}
   >
-    <DeleteIcon fontSize="small" />
+    <DeleteIcon sx={{ fontSize: 16 }} />
   </IconButton>
 );
 
@@ -31,7 +37,14 @@ interface AddItemButtonProps {
 }
 
 export const AddItemButton: React.FC<AddItemButtonProps> = ({ onAdd, label = "Add", disabled }) => (
-  <Button size="small" startIcon={<AddIcon />} onClick={onAdd} disabled={disabled}>
+  <Button
+    variant="text"
+    size="small"
+    startIcon={<AddIcon />}
+    onClick={onAdd}
+    disabled={disabled}
+    sx={{ alignSelf: "flex-start", ml: -1 }}
+  >
     {label}
   </Button>
 );

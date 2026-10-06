@@ -11,6 +11,7 @@ import AddIcon from "@mui/icons-material/Add";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import CodeIcon from "@mui/icons-material/Code";
 import ViewListIcon from "@mui/icons-material/ViewList";
+import { MONO_FONT_FAMILY } from "../theme/typography";
 import { isSettingsRecord, type SettingDefinition } from "./schema";
 
 function parse(text: string): unknown {
@@ -85,10 +86,7 @@ export function StructuredSettingEditor({
           onChange={(event) => onChange(event.target.value)}
           slotProps={{
             input: {
-              sx: {
-                fontFamily: "var(--vscode-editor-font-family, monospace)",
-                fontSize: "calc(0.82rem * var(--settings-font-scale, 1))",
-              },
+              sx: { fontFamily: MONO_FONT_FAMILY, fontSize: 12 },
             },
           }}
         />

@@ -1,12 +1,11 @@
 /* eslint-disable import-x/max-dependencies */
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SearchIcon from "@mui/icons-material/Search";
-import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import InputAdornment from "@mui/material/InputAdornment";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -22,6 +21,8 @@ import { createRoot } from "react-dom/client";
 
 import { ClabUiRuntimeProvider, type ClabUiRuntime } from "../host";
 import { MuiThemeProvider } from "../theme/index";
+import { controlRadius } from "../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../theme/typography";
 import { usePostMessage } from "./shared/hooks";
 
 import type { ContainerPort, InspectContainerData, InspectWebviewInitialData } from "./types";
@@ -300,6 +301,21 @@ function createFilter(query: string): (value: string) => boolean {
   }
 }
 
+/** Literal values (kinds, images, addresses) read best in the editor font. */
+const MONO_CELL_SX = { whiteSpace: "nowrap", fontFamily: MONO_FONT_FAMILY, fontSize: 12 } as const;
+
+function EmptyValue(): React.JSX.Element {
+  return (
+    <Box component="span" sx={{ color: "text.disabled" }}>
+      —
+    </Box>
+  );
+}
+
+function cellText(value: string): React.ReactNode {
+  return value || <EmptyValue />;
+}
+
 function stateToColorToken(state: string): string {
   const normalized = state.trim().toLowerCase();
   switch (normalized) {
@@ -320,7 +336,7 @@ interface PortsCellProps {
 
 function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Element {
   if (row.ports.length === 0) {
-    return <>-</>;
+    return <EmptyValue />;
   }
 
   return (
@@ -329,7 +345,7 @@ function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Ele
       spacing={0.5}
       useFlexGap
       sx={{
-        flexWrap: "wrap"
+        flexWrap: "nowrap"
       }}
     >
       {row.ports.map((port) => {
@@ -341,6 +357,7 @@ function PortsCell({ row, onOpenPort }: Readonly<PortsCellProps>): React.JSX.Ele
             variant="outlined"
             clickable
             label={`${port.port}/${port.protocol}`}
+            sx={{ fontFamily: MONO_FONT_FAMILY, fontWeight: 400, height: 20 }}
             onClick={() => {
               onOpenPort({
                 containerName: row.containerName,
@@ -363,27 +380,31 @@ function InspectGroupPanel({
   onOpenPort
 }: Readonly<InspectGroupPanelProps>): React.JSX.Element {
   return (
-    <Paper variant="outlined" sx={{ overflow: "hidden" }}>
+    <Box component="section">
       <Box
         sx={{
-          px: 1.5,
-          py: 1,
-          borderBottom: "1px solid",
-          borderColor: "divider",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          alignItems: "baseline",
           gap: 1,
-          flexWrap: "wrap"
+          mb: 1
         }}
       >
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          {group.labName}
+        <Typography variant="subtitle2">{group.labName}</Typography>
+        <Typography variant="caption" sx={{ color: "text.secondary" }}>
+          {group.rows.length} containers
         </Typography>
-        <Chip size="small" variant="outlined" label={`${group.rows.length} containers`} />
       </Box>
 
-      <TableContainer sx={{ maxHeight: 420 }}>
+      <TableContainer
+        sx={{
+          maxHeight: 420,
+          border: 1,
+          borderColor: "divider",
+          borderRadius: controlRadius,
+          "& thead th": { bgcolor: "background.paper" },
+          "& tbody tr:last-of-type > td": { borderBottom: 0 }
+        }}
+      >
         <Table stickyHeader size="small" aria-label={`Inspect table for ${group.labName}`}>
           <TableHead>
             <TableRow>
@@ -410,36 +431,48 @@ function InspectGroupPanel({
                   key={`${group.labName}-${row.containerId || row.containerName}-${row.network}`}
                   hover
                 >
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.containerName || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.kind || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.type || "-"}</TableCell>
-                  <TableCell sx={{ minWidth: 180, maxWidth: 240 }} title={row.image || ""}>
-                    <Typography
-                      variant="body2"
-                      sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    >
-                      {row.image || "-"}
-                    </Typography>
+                  <TableCell sx={{ whiteSpace: "nowrap", fontWeight: 500 }}>
+                    {cellText(row.containerName)}
+                  </TableCell>
+                  <TableCell sx={MONO_CELL_SX}>{cellText(row.kind)}</TableCell>
+                  <TableCell sx={MONO_CELL_SX}>{cellText(row.type)}</TableCell>
+                  <TableCell
+                    sx={{
+                      ...MONO_CELL_SX,
+                      minWidth: 180,
+                      maxWidth: 240,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                    title={row.image || ""}
+                  >
+                    {cellText(row.image)}
                   </TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
-                    <Chip
-                      size="small"
-                      variant="outlined"
-                      label={row.state || "-"}
-                      sx={{
-                        color: stateColor,
-                        borderColor: stateColor,
-                        fontWeight: 600
-                      }}
-                    />
+                    {row.state ? (
+                      <Box
+                        component="span"
+                        sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}
+                      >
+                        <Box
+                          component="span"
+                          sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: stateColor }}
+                        />
+                        {row.state}
+                      </Box>
+                    ) : (
+                      <EmptyValue />
+                    )}
                   </TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.status || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.pid || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.ipv4 || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.ipv6 || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.network || "-"}</TableCell>
-                  <TableCell sx={{ whiteSpace: "nowrap" }}>{row.owner || "-"}</TableCell>
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap", color: "text.secondary" }}>
+                    {cellText(row.status)}
+                  </TableCell>
+                  <TableCell sx={MONO_CELL_SX}>{cellText(row.pid)}</TableCell>
+                  <TableCell sx={MONO_CELL_SX}>{cellText(row.ipv4)}</TableCell>
+                  <TableCell sx={MONO_CELL_SX}>{cellText(row.ipv6)}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{cellText(row.network)}</TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>{cellText(row.owner)}</TableCell>
+                  <TableCell sx={{ py: 0 }}>
                     <PortsCell row={row} onOpenPort={onOpenPort} />
                   </TableCell>
                 </TableRow>
@@ -448,7 +481,7 @@ function InspectGroupPanel({
           </TableBody>
         </Table>
       </TableContainer>
-    </Paper>
+    </Box>
   );
 }
 
@@ -535,28 +568,26 @@ export function InspectApp(): React.JSX.Element {
         sx={{
           width: "100%",
           height: "100%",
-          p: 2,
           display: "flex",
           flexDirection: "column",
-          gap: 2,
           overflow: "hidden",
           bgcolor: "background.default"
         }}
       >
-        <Paper
-          variant="outlined"
+        <Box
           sx={{
-            p: 1.5,
+            px: 2,
+            py: 1.5,
             display: "flex",
             gap: 1.5,
             alignItems: "center",
             justifyContent: "space-between",
-            flexWrap: "wrap"
+            flexWrap: "wrap",
+            borderBottom: 1,
+            borderColor: "divider"
           }}
         >
-          <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-            Containerlab Inspect
-          </Typography>
+          <Typography variant="h6">Containerlab Inspect</Typography>
 
           <Stack
             direction="row"
@@ -567,7 +598,7 @@ export function InspectApp(): React.JSX.Element {
             }}
           >
             <TextField
-              fullWidth
+              sx={{ width: 280 }}
               value={searchText}
               onChange={(event) => {
                 setSearchText(event.target.value);
@@ -577,7 +608,7 @@ export function InspectApp(): React.JSX.Element {
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
+                      <SearchIcon sx={{ fontSize: 16 }} />
                     </InputAdornment>
                   )
                 }
@@ -585,7 +616,8 @@ export function InspectApp(): React.JSX.Element {
             />
             <Button
               variant="outlined"
-              startIcon={<RefreshIcon fontSize="small" />}
+              startIcon={<RefreshIcon sx={{ fontSize: 16 }} />}
+              sx={{ flexShrink: 0 }}
               onClick={() => {
                 postMessage({ command: "refresh" });
               }}
@@ -593,16 +625,21 @@ export function InspectApp(): React.JSX.Element {
               Refresh
             </Button>
           </Stack>
-        </Paper>
+        </Box>
 
-        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", pr: 0.5 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", p: 2 }}>
           {!hasData ? (
-            <Alert severity="info" variant="outlined">
-              No containers found.
-            </Alert>
+            <Stack spacing={1.5} sx={{ alignItems: "center", py: 8, color: "text.secondary" }}>
+              <DnsOutlinedIcon sx={{ fontSize: 28, opacity: 0.8 }} />
+              <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                {containers.length > 0
+                  ? "No containers match your search."
+                  : "No containers found."}
+              </Typography>
+            </Stack>
           ) : null}
 
-          <Stack spacing={2}>
+          <Stack spacing={3}>
             {filteredGroups.map((group) => (
               <InspectGroupPanel
                 key={group.labName}

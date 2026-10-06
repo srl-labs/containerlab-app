@@ -8,7 +8,9 @@ import Snackbar from "@mui/material/Snackbar";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useClabUiHost } from "../host";
+import { controlRadius } from "../theme/surfaces";
 import { useMessageListener, useReadySignal } from "./shared/hooks";
 import {
   EXPLORER_SECTION_ORDER,
@@ -48,7 +50,19 @@ import { SectionToolbarActions } from "./view/SectionTree";
 import { ResizeDivider, normalizeHeightRatios, usePaneResize } from "./view/paneLayout";
 import { ExplorerSectionCard } from "./view/ExplorerSectionCard";
 
-export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSectionIds?: readonly ExplorerSectionId[] } = {}) {
+interface ContainerlabExplorerViewProps {
+  visibleSectionIds?: readonly ExplorerSectionId[];
+  /**
+   * A host header slot for the toolbar actions, like VS Code's view title bar, so the filter
+   * keeps the full width. Undefined keeps them beside the filter; null waits for the slot.
+   */
+  toolbarActionsContainer?: HTMLElement | null;
+}
+
+export function ContainerlabExplorerView({
+  visibleSectionIds,
+  toolbarActionsContainer
+}: ContainerlabExplorerViewProps = {}) {
   const host = useClabUiHost();
   const [sections, setSections] = useState<ExplorerSectionSnapshot[]>([]);
   const [sectionOrder, setSectionOrder] = useState<ExplorerSectionId[]>(EXPLORER_SECTION_ORDER);
@@ -303,6 +317,10 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
     const primaryBareTreeSection = orderedSections.find((section) => isBareTreeSection(section));
     return primaryBareTreeSection?.toolbarActions ?? [];
   }, [orderedSections]);
+  const toolbarActions =
+    floatingToolbarActions.length > 0 ? (
+      <SectionToolbarActions actions={floatingToolbarActions} onInvokeAction={invokeAction} />
+    ) : null;
 
   const toggleSectionCollapsed = useCallback(
     (sectionId: ExplorerSectionId) => {
@@ -505,18 +523,14 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
           onChange={(event) => handleFilterChange(event.target.value)}
           sx={(theme) => ({
             "& .MuiOutlinedInput-root": {
-              height: 30,
-              borderRadius: "8px",
-              fontSize: "0.8125rem",
+              height: 28,
+              borderRadius: controlRadius,
               bgcolor: theme.alpha(theme.palette.text.primary, 0.06),
-              transition: "background-color 90ms ease",
+              transition: "background-color 120ms ease",
               "& fieldset": { borderColor: "transparent", borderWidth: 1 },
               "&:hover fieldset": { borderColor: theme.alpha(theme.palette.text.primary, 0.18) },
               "&.Mui-focused": { bgcolor: theme.alpha(theme.palette.text.primary, 0.04) },
-              "&.Mui-focused fieldset": {
-                borderColor: theme.alpha(theme.palette.text.primary, 0.45),
-                borderWidth: 1
-              }
+              "&.Mui-focused fieldset": { borderColor: theme.palette.action.focus, borderWidth: 1 }
             },
             "& .MuiOutlinedInput-input": { py: 0, px: 0.5 }
           })}
@@ -524,7 +538,7 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
             input: {
               startAdornment: (
                 <InputAdornment position="start" sx={{ mr: 0 }}>
-                  <SearchRoundedIcon sx={{ fontSize: 16, color: "text.disabled" }} />
+                  <SearchRoundedIcon sx={{ fontSize: 16, color: "text.secondary" }} />
                 </InputAdornment>
               ),
               endAdornment:
@@ -534,19 +548,18 @@ export function ContainerlabExplorerView({ visibleSectionIds }: { visibleSection
                       size="small"
                       aria-label="Clear filter"
                       onClick={() => handleFilterChange("")}
-                      sx={{ p: 0.25, color: "text.secondary" }}
+                      sx={{ p: "2px", mr: "-4px", color: "text.secondary" }}
                     >
-                      <CloseRoundedIcon sx={{ fontSize: 14 }} />
+                      <CloseRoundedIcon sx={{ fontSize: 16 }} />
                     </IconButton>
                   </InputAdornment>
                 ) : undefined
             }
           }}
         />
-        {floatingToolbarActions.length > 0 && (
-          <SectionToolbarActions actions={floatingToolbarActions} onInvokeAction={invokeAction} />
-        )}
+        {toolbarActionsContainer === undefined && toolbarActions}
       </Stack>
+      {toolbarActionsContainer && toolbarActions ? createPortal(toolbarActions, toolbarActionsContainer) : null}
 
       <Box
         ref={paneContainerRef}

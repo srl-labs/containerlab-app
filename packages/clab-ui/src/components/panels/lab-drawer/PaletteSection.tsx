@@ -1,32 +1,30 @@
 // Node and annotation palette for the context panel.
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
-import CableIcon from "@mui/icons-material/Cable";
+import CableIcon from "@mui/icons-material/CableOutlined";
 import CircleOutlinedIcon from "@mui/icons-material/CircleOutlined";
-import ClearIcon from "@mui/icons-material/Clear";
-import CropSquareIcon from "@mui/icons-material/CropSquare";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DeviceHubIcon from "@mui/icons-material/DeviceHub";
-import DnsIcon from "@mui/icons-material/Dns";
-import EditIcon from "@mui/icons-material/Edit";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import FileUploadIcon from "@mui/icons-material/FileUpload";
-import HubIcon from "@mui/icons-material/Hub";
-import LanIcon from "@mui/icons-material/Lan";
-import PowerIcon from "@mui/icons-material/Power";
-import RemoveIcon from "@mui/icons-material/Remove";
-import SaveIcon from "@mui/icons-material/Save";
-import SearchIcon from "@mui/icons-material/Search";
-import SelectAllIcon from "@mui/icons-material/SelectAll";
-import SpeedIcon from "@mui/icons-material/Speed";
+import ClearIcon from "@mui/icons-material/ClearOutlined";
+import CropSquareIcon from "@mui/icons-material/CropSquareOutlined";
+import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
+import DeviceHubIcon from "@mui/icons-material/DeviceHubOutlined";
+import DnsIcon from "@mui/icons-material/DnsOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FileDownloadIcon from "@mui/icons-material/FileDownloadOutlined";
+import FileUploadIcon from "@mui/icons-material/FileUploadOutlined";
+import HubIcon from "@mui/icons-material/HubOutlined";
+import LanIcon from "@mui/icons-material/LanOutlined";
+import PowerIcon from "@mui/icons-material/PowerOutlined";
+import RemoveIcon from "@mui/icons-material/RemoveOutlined";
+import SaveIcon from "@mui/icons-material/SaveOutlined";
+import SearchIcon from "@mui/icons-material/SearchOutlined";
+import SelectAllIcon from "@mui/icons-material/SelectAllOutlined";
+import SpeedIcon from "@mui/icons-material/SpeedOutlined";
 import StarIcon from "@mui/icons-material/Star";
-import StarOutlineIcon from "@mui/icons-material/StarOutlined";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
+import StarOutlineIcon from "@mui/icons-material/StarBorder";
+import TextFieldsIcon from "@mui/icons-material/TextFieldsOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Card from "@mui/material/Card";
-import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
 import InputAdornment from "@mui/material/InputAdornment";
 import TextField from "@mui/material/TextField";
@@ -53,7 +51,9 @@ import { getNetworkNodeTypeColor } from "../../canvas/nodes/networkNodeShared";
 import { applyPaletteDragPreview } from "./paletteDragPreview";
 import type { TabDefinition } from "../../ui/editor";
 import { TabNavigation } from "../../ui/editor/TabNavigation";
-import { IconPreview } from "../../ui/form";
+import { IconPreview, PanelSectionHeader } from "../../ui/form";
+import { controlRadius } from "../../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import { executeTopologyCommand } from "../../../services/topologyHostCommands";
 import { containerlabSchema } from "../../../core/schema/bundledSchema";
 import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
@@ -156,6 +156,42 @@ const REACTFLOW_NODE_MIME_TYPE = "application/reactflow-node";
 const ACTION_HOVER_BG = "action.hover";
 const TEXT_SECONDARY = "text.secondary";
 const MONACO_PRELOAD_DELAY_MS = 750;
+const PALETTE_ICON_SIZE = 28;
+const PALETTE_LIST_SX = { display: "flex", flexDirection: "column", gap: 0.75 } as const;
+const PALETTE_GRID_SX = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0.75 } as const;
+const PALETTE_SECTION_BODY_SX = { px: 2, pt: 1, pb: 0.5 } as const;
+// Row actions stay out of the way until the row is hovered or focused.
+const CARD_ACTIONS_CLASS = "palette-card-actions";
+
+const PALETTE_CARD_SX = {
+  display: "flex",
+  alignItems: "center",
+  gap: 1.25,
+  minWidth: 0,
+  minHeight: 44,
+  px: 1,
+  py: 0.75,
+  border: 1,
+  borderColor: "divider",
+  borderRadius: controlRadius,
+  cursor: "grab",
+  transition: "background-color 120ms ease",
+  "&:hover": { bgcolor: ACTION_HOVER_BG },
+  "&:active": { cursor: "grabbing" },
+  [`& .${CARD_ACTIONS_CLASS} .MuiIconButton-root`]: { transition: "opacity 120ms ease" },
+  [`& .${CARD_ACTIONS_CLASS} [data-reveal]`]: { opacity: 0 },
+  [`&:hover .${CARD_ACTIONS_CLASS} [data-reveal], & .${CARD_ACTIONS_CLASS} [data-reveal]:focus-visible`]:
+    { opacity: 1 },
+  "@media (hover: none)": { [`& .${CARD_ACTIONS_CLASS} [data-reveal]`]: { opacity: 1 } }
+} as const;
+
+const ROW_ICON_SX = { fontSize: 16 } as const;
+const DESTRUCTIVE_HOVER_SX = {
+  "&:hover": {
+    color: "error.main",
+    bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent)"
+  }
+} as const;
 const CANVAS_DRAG_FALLBACK_KEY = "__CLAB_UI_CANVAS_DRAG_DATA__";
 
 type CanvasDragPayload = Record<string, unknown>;
@@ -225,40 +261,60 @@ const PaletteDraggableCard: React.FC<{
     enterDelay={500}
     slotProps={{ popper: { modifiers: [{ name: "offset", options: { offset: [-20, -20] } }] } }}
   >
-    <Card
-      variant="outlined"
+    <Box
       draggable
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      sx={{
-        p: 1,
-        cursor: "grab",
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        "&:hover": { bgcolor: ACTION_HOVER_BG },
-        "&:active": { cursor: "grabbing" }
-      }}
+      sx={PALETTE_CARD_SX}
     >
       {children}
-    </Card>
+    </Box>
   </Tooltip>
 );
 
-const SectionHeader: React.FC<{ title: string; action?: React.ReactNode }> = ({
+/** Square tile behind palette glyphs, sized like a node icon so every row lines up. */
+const PaletteGlyphTile: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Box
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+      width: PALETTE_ICON_SIZE,
+      height: PALETTE_ICON_SIZE,
+      borderRadius: controlRadius,
+      bgcolor: ACTION_HOVER_BG,
+      color: TEXT_SECONDARY,
+      "& .MuiSvgIcon-root": { fontSize: 16 }
+    }}
+  >
+    {children}
+  </Box>
+);
+
+const PaletteCardText: React.FC<{ title: string; subtitle: string; mono?: boolean }> = ({
   title,
-  action
+  subtitle,
+  mono = false
 }) => (
-  <>
-    <Divider />
-    <Box
-      sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 2, py: 1 }}
+  <Box sx={{ flex: 1, minWidth: 0 }}>
+    <Typography
+      variant="body2"
+      noWrap
+      sx={{ fontWeight: (theme) => theme.typography.fontWeightMedium, lineHeight: 1.35 }}
     >
-      <Typography variant="subtitle2">{title}</Typography>
-      {action}
-    </Box>
-    <Divider />
-  </>
+      {title}
+    </Typography>
+    <Typography
+      variant="caption"
+      color={TEXT_SECONDARY}
+      noWrap
+      component="div"
+      sx={{ lineHeight: 1.35, ...(mono ? { fontFamily: MONO_FONT_FAMILY } : undefined) }}
+    >
+      {subtitle}
+    </Typography>
+  </Box>
 );
 
 type AnnotationPayload = {
@@ -320,55 +376,51 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
 
   return (
     <PaletteDraggableCard onDragStart={onDragStart} onDragEnd={clearCanvasDragPayload}>
-      <Box sx={{ flexShrink: 0 }}>
-        <IconPreview src={iconUrl} size={28} cornerRadius={template.iconCornerRadius} />
+      <Box sx={{ display: "flex", flexShrink: 0 }}>
+        <IconPreview
+          src={iconUrl}
+          size={PALETTE_ICON_SIZE}
+          cornerRadius={template.iconCornerRadius}
+        />
       </Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          noWrap
-          sx={{ fontWeight: (theme) => theme.typography.fontWeightMedium }}
-        >
-          {template.name}
-        </Typography>
-        <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
-          {template.kind}
-        </Typography>
-      </Box>
-      <Box sx={{ display: "flex", gap: 0.25 }}>
-        <Tooltip title={isDefaultNode ? "Default node" : "Set as default"}>
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isDefaultNode) onSetDefault?.(template.name);
-            }}
-            sx={{ color: isDefaultNode ? "warning.main" : TEXT_SECONDARY }}
-          >
-            {isDefaultNode ? <StarIcon fontSize="small" /> : <StarOutlineIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
+      <PaletteCardText title={template.name} subtitle={template.kind} mono />
+      <Box className={CARD_ACTIONS_CLASS} sx={{ display: "flex", gap: 0.25 }}>
         <Tooltip title="Edit">
           <IconButton
             size="small"
+            data-reveal
             onClick={(e) => {
               e.stopPropagation();
               onEdit?.(template.name);
             }}
           >
-            <EditIcon fontSize="small" />
+            <EditOutlinedIcon sx={ROW_ICON_SX} />
           </IconButton>
         </Tooltip>
         <Tooltip title="Delete">
           <IconButton
             size="small"
+            data-reveal
             onClick={(e) => {
               e.stopPropagation();
               onDelete?.(template.name);
             }}
-            sx={{ "&:hover": { color: "error.main" } }}
+            sx={DESTRUCTIVE_HOVER_SX}
           >
-            <DeleteIcon fontSize="small" />
+            <DeleteOutlinedIcon sx={ROW_ICON_SX} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={isDefaultNode ? "Default node" : "Set as default"}>
+          <IconButton
+            size="small"
+            data-reveal={isDefaultNode ? undefined : true}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isDefaultNode) onSetDefault?.(template.name);
+            }}
+            sx={isDefaultNode ? { color: "warning.main" } : undefined}
+          >
+            {isDefaultNode ? <StarIcon sx={ROW_ICON_SX} /> : <StarOutlineIcon sx={ROW_ICON_SX} />}
           </IconButton>
         </Tooltip>
       </Box>
@@ -388,6 +440,7 @@ interface PaletteSimpleDraggableProps {
   icon: React.ReactNode;
   label: string;
   subtitle: string;
+  monoSubtitle?: boolean;
   previewIconUrl?: string;
 }
 
@@ -396,6 +449,7 @@ const PaletteSimpleDraggable: React.FC<PaletteSimpleDraggableProps> = ({
   icon,
   label,
   subtitle,
+  monoSubtitle,
   previewIconUrl
 }) => {
   const onDragStart = useCallback(
@@ -412,19 +466,8 @@ const PaletteSimpleDraggable: React.FC<PaletteSimpleDraggableProps> = ({
 
   return (
     <PaletteDraggableCard onDragStart={onDragStart} onDragEnd={clearCanvasDragPayload}>
-      <Box sx={{ color: TEXT_SECONDARY }}>{icon}</Box>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography
-          variant="body2"
-          noWrap
-          sx={{ fontWeight: (theme) => theme.typography.fontWeightMedium }}
-        >
-          {label}
-        </Typography>
-        <Typography variant="caption" color={TEXT_SECONDARY} noWrap>
-          {subtitle}
-        </Typography>
-      </Box>
+      <PaletteGlyphTile>{icon}</PaletteGlyphTile>
+      <PaletteCardText title={label} subtitle={subtitle} mono={monoSubtitle} />
     </PaletteDraggableCard>
   );
 };
@@ -435,6 +478,7 @@ const DraggableNetwork: React.FC<{ network: NetworkTypeDefinition }> = ({ networ
     icon={network.icon}
     label={network.label}
     subtitle={network.type}
+    monoSubtitle
     previewIconUrl={generateEncodedSVG("cloud", getNetworkNodeTypeColor(network.type))}
   />
 );
@@ -697,20 +741,19 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          px: 2,
+          gap: 1,
+          pl: 2,
+          pr: 1.5,
           height: 40,
           flexShrink: 0
         }}
       >
-        <Typography
-          variant="subtitle1"
-          sx={{ fontWeight: (theme) => theme.typography.fontWeightBold }}
-        >
+        <Typography variant="subtitle1" noWrap>
           {drawerTitle}
         </Typography>
         {activeTab === "edit" && onEditDelete && (
-          <IconButton size="small" onClick={onEditDelete} color="error" title="Delete">
-            <DeleteIcon fontSize="small" />
+          <IconButton size="small" onClick={onEditDelete} title="Delete" sx={DESTRUCTIVE_HOVER_SX}>
+            <DeleteOutlinedIcon fontSize="small" />
           </IconButton>
         )}
         {activeTab === "yaml" && (
@@ -742,7 +785,6 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           </IconButton>
         )}
       </Box>
-      <Divider />
       <Box onPointerOver={handleSourceTabIntent} onFocusCapture={handleSourceTabIntent}>
         <TabNavigation
           tabs={visibleTabs}
@@ -769,7 +811,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 ...(isLocked || isViewMode ? { pointerEvents: "none", opacity: 0.6 } : undefined)
               }}
             >
-              <Box sx={{ p: 2 }}>
+              <Box sx={{ px: 2, pt: 2 }}>
                 <TextField
                   fullWidth
                   size="small"
@@ -780,13 +822,13 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">
-                          <SearchIcon fontSize="small" />
+                          <SearchIcon sx={ROW_ICON_SX} />
                         </InputAdornment>
                       ),
                       endAdornment: filter ? (
                         <InputAdornment position="end">
                           <IconButton size="small" onClick={() => setFilter("")}>
-                            <ClearIcon fontSize="small" />
+                            <ClearIcon sx={ROW_ICON_SX} />
                           </IconButton>
                         </InputAdornment>
                       ) : undefined
@@ -795,18 +837,18 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 />
               </Box>
 
-              <SectionHeader
+              <PanelSectionHeader
                 title="Node Templates"
                 action={
                   !filter ? (
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, mr: -0.5 }}>
                       <Tooltip title="Import templates">
                         <IconButton
                           size="small"
                           onClick={handleImportTemplates}
                           data-testid="palette-import-templates"
                         >
-                          <FileUploadIcon fontSize="small" />
+                          <FileUploadIcon sx={ROW_ICON_SX} />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Export templates">
@@ -817,7 +859,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                             disabled={customNodes.length === 0}
                             data-testid="palette-export-templates"
                           >
-                            <FileDownloadIcon fontSize="small" />
+                            <FileDownloadIcon sx={ROW_ICON_SX} />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -826,7 +868,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                         size="small"
                         startIcon={<AddIcon />}
                         onClick={handleAddNewNode}
-                        sx={{ py: 0 }}
+                        sx={{ minHeight: 24, py: 0 }}
                       >
                         Add
                       </Button>
@@ -834,9 +876,9 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                   ) : undefined
                 }
               />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
+              <Box sx={[PALETTE_LIST_SX, PALETTE_SECTION_BODY_SX]}>
                 {filteredNodes.length === 0 && (
-                  <Typography variant="body2" color={TEXT_SECONDARY}>
+                  <Typography variant="body2" color={TEXT_SECONDARY} sx={{ py: 0.5 }}>
                     {filter ? "No matching templates" : "No node templates defined"}
                   </Typography>
                 )}
@@ -853,10 +895,14 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 ))}
               </Box>
 
-              <SectionHeader title="Networks" />
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, p: 2 }}>
+              <PanelSectionHeader title="Networks" />
+              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 {filteredNetworks.length === 0 ? (
-                  <Typography variant="body2" color={TEXT_SECONDARY}>
+                  <Typography
+                    variant="body2"
+                    color={TEXT_SECONDARY}
+                    sx={{ gridColumn: "1 / -1", py: 0.5 }}
+                  >
                     No matching networks
                   </Typography>
                 ) : (
@@ -870,8 +916,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
           {activeTab === "annotations" && (
             <Box sx={{ ...(isLocked ? { pointerEvents: "none" } : undefined) }}>
-              <SectionHeader title="Text" />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
+              <PanelSectionHeader title="Text" />
+              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Text"
                   kind="annotation"
@@ -880,8 +926,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 />
               </Box>
 
-              <SectionHeader title="Shapes" />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
+              <PanelSectionHeader title="Shapes" />
+              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Rectangle"
                   kind="shape"
@@ -902,8 +948,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 />
               </Box>
 
-              <SectionHeader title="Groups" />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
+              <PanelSectionHeader title="Groups" />
+              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Group"
                   kind="annotation"
@@ -912,8 +958,8 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 />
               </Box>
 
-              <SectionHeader title="Monitoring" />
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 1, p: 2 }}>
+              <PanelSectionHeader title="Monitoring" />
+              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Traffic Rate"
                   kind="monitor"

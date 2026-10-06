@@ -2,6 +2,9 @@ import React from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
+/** Width every inline field shares, so selects and text fields line up down the page. */
+const CONTROL_WIDTH = 240;
+
 /** Shared field geometry and surfaces; each host supplies its own controls. */
 export function SettingsField({
   title,
@@ -26,22 +29,51 @@ export function SettingsField({
   dirty?: boolean;
   settingKey?: string;
 }) {
+  const inline = !wide;
+  const fixedWidth = inline && !compactControl;
   return (
     <Box
       component="section"
+      data-settings-row=""
       data-setting-key={settingKey}
       aria-label={title}
       sx={{
         display: "grid",
-        gridTemplateColumns: wide ? "minmax(0, 1fr)" : "minmax(0, 1fr) auto",
-        columnGap: 2,
-        rowGap: wide ? 1.25 : 0,
+        gridTemplateColumns: inline ? "minmax(0, 1fr) auto" : "minmax(0, 1fr)",
+        columnGap: 4,
+        rowGap: inline ? 0 : 1.5,
         alignItems: "center",
         minWidth: 0,
-        bgcolor: dirty ? "action.hover" : "transparent",
+        // Narrow rows stack wide controls under their text; a switch stays beside it.
+        ...(compactControl
+          ? {}
+          : {
+              "@container settings-content (max-width: 560px)": {
+                gridTemplateColumns: "minmax(0, 1fr)",
+                rowGap: 1.25,
+              },
+            }),
       }}
     >
-      <Box sx={{ minWidth: 0 }}>
+      <Box
+        sx={{
+          position: "relative",
+          minWidth: 0,
+          // Unsaved drafts get a bar in the gutter, like modified settings in VS Code.
+          "&::before": dirty
+            ? {
+                content: '""',
+                position: "absolute",
+                left: -12,
+                top: 2,
+                bottom: 2,
+                width: 2,
+                borderRadius: 1,
+                bgcolor: "primary.main",
+              }
+            : undefined,
+        }}
+      >
         <Box
           sx={{
             display: "flex",
@@ -52,12 +84,9 @@ export function SettingsField({
         >
           <Typography
             component="h3"
+            variant="body1"
             title={settingKey}
-            sx={{
-              fontWeight: 600,
-              fontSize: "calc(0.825rem * var(--settings-font-scale, 1))",
-              lineHeight: 1.5,
-            }}
+            sx={{ fontWeight: 500 }}
           >
             {title}
           </Typography>
@@ -66,13 +95,11 @@ export function SettingsField({
         <Typography
           variant="body2"
           sx={{
-            mt: 0.375,
-            fontSize: "calc(0.75rem * var(--settings-font-scale, 1))",
-            lineHeight: 1.5,
+            mt: 0.25,
             color: "text.secondary",
             whiteSpace: "pre-line",
             overflowWrap: "anywhere",
-            maxWidth: 740,
+            maxWidth: 680,
           }}
         >
           {description}
@@ -83,14 +110,29 @@ export function SettingsField({
           minWidth: 0,
           display: "flex",
           flexDirection: "column",
-          alignItems: compactControl || !wide ? "flex-end" : "stretch",
-          gap: 0.75,
+          alignItems: inline ? "flex-end" : "stretch",
+          // Stacked fields need room for the next field's notched label.
+          gap: inline ? 0.75 : 1.5,
+          ...(fixedWidth
+            ? {
+                width: CONTROL_WIDTH,
+                "& > .MuiFormControl-root": { width: "100%" },
+              }
+            : {}),
+          ...(compactControl
+            ? {}
+            : {
+                "@container settings-content (max-width: 560px)": {
+                  width: "100%",
+                  alignItems: fixedWidth ? "stretch" : "flex-start",
+                },
+              }),
         }}
       >
         {children}
         {actions}
       </Box>
-      {feedback ? <Box sx={{ gridColumn: "1 / -1" }}>{feedback}</Box> : null}
+      {feedback ? <Box sx={{ gridColumn: "1 / -1", mt: 1 }}>{feedback}</Box> : null}
     </Box>
   );
 }

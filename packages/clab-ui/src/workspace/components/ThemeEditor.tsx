@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   IconButton,
+  ListItemIcon,
   Menu,
   MenuItem,
   TextField,
@@ -33,18 +34,21 @@ import {
   type CustomTheme,
   type ThemeRole
 } from "../../theme/customThemes";
+import { floatingRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { ThemeColorInput } from "./ThemeColorInput";
 import { ThemePreview } from "./ThemePreview";
 
 export type ThemeExportAction = "download" | "copy";
 
-const LABEL_SX = { fontWeight: 600, fontSize: "calc(0.8rem * var(--settings-font-scale, 1))" } as const;
-const HINT_SX = {
-  fontSize: "calc(0.72rem * var(--settings-font-scale, 1))",
-  color: "text.secondary",
-  lineHeight: 1.45
+const LABEL_SX = { fontWeight: 500 } as const;
+const HINT_SX = { color: "text.secondary" } as const;
+const ROW_SX = {
+  px: 1.5,
+  py: 1,
+  "&:not(:last-child)": { borderBottom: 1, borderColor: "divider" }
 } as const;
-const ROW_DIVIDER_SX = { "&:not(:last-child)": { borderBottom: 1, borderColor: "divider" } } as const;
+const ACCENT_RING = "var(--clab-ui-button-background, var(--vscode-button-background))";
 
 function CustomizedMark() {
   return (
@@ -78,26 +82,23 @@ function EditorGroup({
   children?: React.ReactNode;
 }) {
   return (
-    <Box component="section" aria-label={title} sx={{ border: 1, borderColor: "divider", borderRadius: 1.5 }}>
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          px: 1.5,
-          py: 1,
-          ...(children === undefined ? {} : { borderBottom: 1, borderColor: "divider" })
-        }}
-      >
+    <Box component="section" aria-label={title} sx={{ display: "grid", gap: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 28 }}>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography component="h3" sx={{ ...LABEL_SX, fontSize: "calc(0.85rem * var(--settings-font-scale, 1))" }}>
+          <Typography component="h3" variant="subtitle1">
             {title}
           </Typography>
-          {description === undefined ? null : <Typography sx={HINT_SX}>{description}</Typography>}
+          {description === undefined ? null : (
+            <Typography variant="body2" sx={HINT_SX}>
+              {description}
+            </Typography>
+          )}
         </Box>
         {action}
       </Box>
-      {children === undefined ? null : <Box sx={{ px: 1.5, py: 0.5 }}>{children}</Box>}
+      {children === undefined ? null : (
+        <Box sx={{ border: 1, borderColor: "divider", borderRadius: floatingRadius, minWidth: 0 }}>{children}</Box>
+      )}
     </Box>
   );
 }
@@ -121,20 +122,22 @@ function RoleRow({
         display: "grid",
         gridTemplateColumns: "minmax(0, 1fr) auto",
         alignItems: "center",
-        columnGap: 1.5,
-        py: 1,
-        mx: -1,
-        px: 1,
-        borderRadius: 1,
-        ...ROW_DIVIDER_SX
+        columnGap: 2,
+        ...ROW_SX
       }}
     >
       <Box sx={{ minWidth: 0 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-          <Typography sx={LABEL_SX}>{role.label}</Typography>
+          <Typography variant="body1" sx={LABEL_SX}>
+            {role.label}
+          </Typography>
           {customized ? <CustomizedMark /> : null}
         </Box>
-        {role.description === undefined ? null : <Typography sx={HINT_SX}>{role.description}</Typography>}
+        {role.description === undefined ? null : (
+          <Typography variant="body2" sx={HINT_SX}>
+            {role.description}
+          </Typography>
+        )}
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
         {customized ? (
@@ -162,11 +165,15 @@ function TerminalColors({
 }) {
   const customized = ANSI_ROLES.filter((role) => theme.colors[role.key] !== undefined);
   return (
-    <Box sx={{ py: 1 }}>
+    <Box sx={{ ...ROW_SX, pb: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
         <Box sx={{ flex: 1 }}>
-          <Typography sx={LABEL_SX}>Terminal colors</Typography>
-          <Typography sx={HINT_SX}>The 16 ANSI colors. Click a swatch to change it.</Typography>
+          <Typography variant="body1" sx={LABEL_SX}>
+            Terminal colors
+          </Typography>
+          <Typography variant="body2" sx={HINT_SX}>
+            The 16 ANSI colors. Click a swatch to change it.
+          </Typography>
         </Box>
         {customized.length > 0 ? (
           <Button
@@ -182,8 +189,10 @@ function TerminalColors({
         ) : null}
       </Box>
       {(["Normal", "Bright"] as const).map((row, rowIndex) => (
-        <Box key={row} sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: 1 }}>
-          <Typography sx={{ ...HINT_SX, width: 48, flexShrink: 0 }}>{row}</Typography>
+        <Box key={row} sx={{ display: "flex", alignItems: "center", gap: 0.75, mt: rowIndex === 0 ? 1.25 : 0.75 }}>
+          <Typography variant="body2" sx={{ ...HINT_SX, width: 52, flexShrink: 0 }}>
+            {row}
+          </Typography>
           {ANSI_ROLES.slice(rowIndex * 8, rowIndex * 8 + 8).map((role) => {
             const color = roleColor(vars, role);
             const custom = theme.colors[role.key] !== undefined;
@@ -194,14 +203,15 @@ function TerminalColors({
                   data-role-row={role.key}
                   sx={{
                     position: "relative",
-                    width: 28,
-                    height: 28,
+                    width: 24,
+                    height: 24,
                     flexShrink: 0,
-                    borderRadius: 1,
+                    borderRadius: "4px",
                     cursor: "pointer",
-                    border: 2,
-                    borderColor: custom ? "primary.main" : "divider",
-                    "&:focus-within": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 1 }
+                    // Mid-grey edges keep dark swatches visible on dark surfaces and light ones on light.
+                    border: "1px solid rgba(128, 128, 128, 0.5)",
+                    boxShadow: custom ? `0 0 0 1px var(--clab-ui-editor-background, var(--vscode-editor-background)), 0 0 0 2px ${ACCENT_RING}` : "none",
+                    "&:focus-within": { outline: "1px solid var(--vscode-focusBorder)", outlineOffset: 3 }
                   }}
                   style={{ background: color }}
                 >
@@ -258,15 +268,15 @@ function TokenOverrides({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             slotProps={{ htmlInput: { "aria-label": "Filter tokens" } }}
-            sx={{ my: 1 }}
+            sx={{ p: 1.5, pb: 1, borderBottom: 1, borderColor: "divider" }}
           />
-          <Box sx={{ maxHeight: 420, overflow: "auto", mx: -1.5, px: 1.5 }}>
+          <Box sx={{ maxHeight: 420, overflow: "auto" }}>
             {rows.map((id) => {
               const overridden = Object.hasOwn(theme.tokens, id);
               return (
                 <Box
                   key={id}
-                  sx={{ display: "flex", alignItems: "center", gap: 1, py: 0.5, ...ROW_DIVIDER_SX }}
+                  sx={{ display: "flex", alignItems: "center", gap: 1, ...ROW_SX, py: 0.5 }}
                 >
                   <Typography
                     title={id}
@@ -274,9 +284,10 @@ function TokenOverrides({
                     sx={{
                       flex: 1,
                       minWidth: 0,
-                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                      fontSize: "0.75rem",
-                      fontWeight: overridden ? 600 : 400
+                      fontFamily: MONO_FONT_FAMILY,
+                      fontSize: 12,
+                      fontWeight: overridden ? 600 : 400,
+                      color: overridden ? "text.primary" : "text.secondary"
                     }}
                   >
                     {id}
@@ -291,10 +302,14 @@ function TokenOverrides({
                 </Box>
               );
             })}
-            {rows.length === 0 ? <Typography sx={{ ...HINT_SX, py: 1 }}>No token matches.</Typography> : null}
+            {rows.length === 0 ? (
+              <Typography variant="body2" sx={{ ...HINT_SX, px: 1.5, py: 1.5 }}>
+                No token matches.
+              </Typography>
+            ) : null}
           </Box>
         </>
-      ) : null}
+      ) : undefined}
     </EditorGroup>
   );
 }
@@ -352,23 +367,35 @@ export function ThemeEditor({
 
   return (
     <Box sx={{ display: "grid", gap: 2, minWidth: 0 }} data-testid="theme-editor">
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-        <Button variant="text" startIcon={<ArrowBackIcon />} onClick={onBack} data-testid="theme-editor-back">
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", minHeight: 32 }}>
+        <Button
+          variant="text"
+          size="small"
+          startIcon={<ArrowBackIcon />}
+          onClick={onBack}
+          data-testid="theme-editor-back"
+          sx={{ ml: -1.25 }}
+        >
           All themes
         </Button>
         <Box sx={{ flex: 1 }} />
         {inUse ? (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, color: "text.secondary", fontSize: "0.8rem" }}>
+          <Typography
+            variant="body2"
+            component="span"
+            sx={{ display: "flex", alignItems: "center", gap: 0.75, mr: 0.5, color: "text.secondary" }}
+          >
             <CheckCircleIcon sx={{ fontSize: 16, color: "primary.main" }} />
             In use for {theme.mode} mode
-          </Box>
+          </Typography>
         ) : (
-          <Button variant="outlined" onClick={onUse} data-testid="theme-editor-use">
+          <Button variant="outlined" size="small" onClick={onUse} data-testid="theme-editor-use">
             Use for {theme.mode} mode
           </Button>
         )}
         <Button
           variant="outlined"
+          size="small"
           startIcon={<DownloadIcon />}
           endIcon={<ArrowDropDownIcon />}
           onClick={(event) => setExportAnchor(event.currentTarget)}
@@ -383,7 +410,9 @@ export function ThemeEditor({
               onExport("download");
             }}
           >
-            <DownloadIcon fontSize="small" sx={{ mr: 1 }} />
+            <ListItemIcon>
+              <DownloadIcon fontSize="small" />
+            </ListItemIcon>
             Download JSON file
           </MenuItem>
           <MenuItem
@@ -392,13 +421,20 @@ export function ThemeEditor({
               onExport("copy");
             }}
           >
-            <ContentCopyIcon fontSize="small" sx={{ mr: 1 }} />
+            <ListItemIcon>
+              <ContentCopyIcon fontSize="small" />
+            </ListItemIcon>
             Copy JSON
           </MenuItem>
         </Menu>
         <Tooltip title="Delete theme">
-          <IconButton aria-label="Delete theme" onClick={onDelete} data-testid="theme-editor-delete">
-            <DeleteOutlineIcon fontSize="small" />
+          <IconButton
+            aria-label="Delete theme"
+            onClick={onDelete}
+            data-testid="theme-editor-delete"
+            sx={{ "&:hover": { color: "error.main" } }}
+          >
+            <DeleteOutlineIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
       </Box>
@@ -413,8 +449,8 @@ export function ThemeEditor({
           }
         }}
       >
-        <Box ref={controlsRef} sx={{ display: "grid", gap: 2, alignContent: "start", minWidth: 0 }}>
-          <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+        <Box ref={controlsRef} sx={{ display: "grid", gap: 3, alignContent: "start", minWidth: 0 }}>
+          <Box sx={{ display: "grid", gap: 1.5, pt: 1, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
             <TextField
               size="small"
               label="Name"
@@ -460,6 +496,7 @@ export function ThemeEditor({
           sx={{
             order: -1,
             alignSelf: "start",
+            pt: 1,
             display: "grid",
             gap: 1,
             minWidth: 0,
@@ -467,7 +504,7 @@ export function ThemeEditor({
           }}
         >
           <ThemePreview vars={vars} height={360} onPick={revealRole} onHover={setHoveredRole} />
-          <Typography sx={HINT_SX} aria-live="polite">
+          <Typography variant="body2" sx={{ ...HINT_SX, minHeight: 36 }} aria-live="polite">
             {hoveredLabel === undefined ? (
               <>
                 {caption} Click any part of the preview to edit its color.

@@ -2,6 +2,8 @@ import React from "react";
 import Box from "@mui/material/Box";
 
 import { TERMINAL_ANSI_TOKENS, type VarMap } from "../../theme/devTheme";
+import { floatingRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 
 // Every painted part carries `data-theme-role`: the color role that paints it, so a
 // click can open that role in the editor.
@@ -33,8 +35,6 @@ const STATUS_LINES = [
   { label: "Failed", token: "editorError-foreground", role: "error" },
   { label: "Starting", token: "editorInfo-foreground", role: "info" }
 ] as const;
-
-const MONOSPACE = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 function Dot({ token, role }: { token: string; role: string }) {
   return (
@@ -245,7 +245,7 @@ function Terminal() {
         flexDirection: "column",
         gap: 0.5,
         borderTop: `1px solid ${v("panel-border")}`,
-        fontFamily: MONOSPACE,
+        fontFamily: MONO_FONT_FAMILY,
         fontSize: 11,
         whiteSpace: "nowrap",
         overflow: "hidden"
@@ -406,7 +406,7 @@ export function ThemePreview({
         color: v("foreground"),
         bgcolor: v("editor-background"),
         border: `1px solid ${v("panel-border")}`,
-        borderRadius: "8px",
+        borderRadius: floatingRadius,
         // Outline only the innermost part under the pointer, in the preview's own text
         // color so it stands out on any of its backgrounds.
         "& [data-theme-role]:hover:not(:has([data-theme-role]:hover))": {

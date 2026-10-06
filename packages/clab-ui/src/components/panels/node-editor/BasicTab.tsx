@@ -4,7 +4,6 @@ import React, { useState, useMemo, useCallback, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
-import type { SxProps, Theme } from "@mui/material/styles";
 import RotateLeftIcon from "@mui/icons-material/RotateLeft";
 import RotateRightIcon from "@mui/icons-material/RotateRight";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
@@ -29,19 +28,6 @@ import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
-
-const DIRECTION_SELECT_SX: SxProps<Theme> = {
-  height: 40,
-  boxSizing: "border-box",
-  "& .MuiSelect-select": {
-    display: "flex",
-    alignItems: "center",
-    boxSizing: "border-box",
-    height: "100%",
-    py: 0,
-    "& .MuiSvgIcon-root": { fontSize: 18 }
-  }
-};
 
 // Icon options for dropdown (static, defined outside component)
 const ICON_OPTIONS = [
@@ -368,7 +354,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
   return (
     <>
       <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-        <Box sx={{ flexShrink: 0 }}>
+        <Box sx={{ display: "flex", flexShrink: 0 }}>
           <IconPreview
             src={getIconSource(previewIcon, color)}
             alt="Icon preview"
@@ -376,7 +362,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
             cornerRadius={data.iconCornerRadius}
           />
         </Box>
-        <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <FilterableDropdown
             id="node-icon"
             label="Icon"
@@ -388,11 +374,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
             renderOption={renderOption}
           />
         </Box>
-        <Button
-          size="small"
-          onClick={() => setIsModalOpen(true)}
-          sx={{ whiteSpace: "nowrap", alignSelf: "stretch" }}
-        >
+        <Button variant="outlined" onClick={() => setIsModalOpen(true)}>
           Edit
         </Button>
       </Box>
@@ -439,7 +421,6 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
         value={data.direction ?? "right"}
         onChange={(value) => onChange({ direction: value })}
         options={NODE_DIRECTION_OPTIONS}
-        sx={DIRECTION_SELECT_SX}
       />
       <Box sx={{ gridColumn: "1 / -1" }}>
         <ColorField
@@ -496,7 +477,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       {isCustomTemplate && (
-        <PanelSection title="Template" withTopDivider={false}>
+        <PanelSection title="Template">
           <CustomNodeTemplateFields data={data} onChange={onChange} />
         </PanelSection>
       )}
@@ -546,7 +527,7 @@ export const BasicTab: React.FC<TabProps> = ({ data, onChange, inheritedProps = 
         )}
       </PanelSection>
 
-      <PanelSection title="Icon" bodySx={{ p: 2 }}>
+      <PanelSection title="Icon">
         <IconField data={data} onChange={onChange} />
       </PanelSection>
 

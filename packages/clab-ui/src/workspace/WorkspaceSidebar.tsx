@@ -1,14 +1,14 @@
 /* eslint-disable import-x/max-dependencies -- Keep individual icon imports tree-shakeable. */
 import React, { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import CloseIcon from "@mui/icons-material/Close";
-import DarkModeIcon from "@mui/icons-material/DarkMode";
-import FolderIcon from "@mui/icons-material/Folder";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
-import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
+import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import HelpOutlineIcon from "@mui/icons-material/HelpOutlineOutlined";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import PushPinIcon from "@mui/icons-material/PushPin";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
-import ScienceIcon from "@mui/icons-material/Science";
-import TuneIcon from "@mui/icons-material/Tune";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
+import TuneIcon from "@mui/icons-material/TuneOutlined";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
@@ -25,8 +25,8 @@ const SECTIONS: Record<SidebarView, readonly ExplorerSectionId[]> = {
   files: ["fileExplorer"]
 };
 const VIEWS = [
-  { id: "labs", label: "Labs", icon: <ScienceIcon fontSize="small" /> },
-  { id: "files", label: "Files", icon: <FolderIcon fontSize="small" /> }
+  { id: "labs", label: "Labs", icon: <ScienceOutlinedIcon fontSize="small" /> },
+  { id: "files", label: "Files", icon: <FolderOutlinedIcon fontSize="small" /> }
 ] as const;
 const RAIL_WIDTH = 48;
 const EXPANDED_RAIL_WIDTH = 196;
@@ -74,6 +74,8 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
     try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next)); } catch { /* Storage can be disabled. */ }
   };
   const navRef = useRef<HTMLElement>(null);
+  // The explorer renders its toolbar actions here, in the title row, as VS Code does in its view title bar.
+  const [headerActions, setHeaderActions] = useState<HTMLElement | null>(null);
   const { ref, width: panelWidth, separatorProps, availableWidth, isDragging } = useHorizontalResize({
     initialWidth: preferences.width,
     minimumWidth: 280,
@@ -159,7 +161,7 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
             <HelpOutlineIcon fontSize="small" />
           </WorkspaceRailItem>
           <WorkspaceRailItem pinned={pinned} label={themeLabel} onClick={() => onColorSchemeChange(colorScheme === "dark" ? "light" : "dark")}>
-            {colorScheme === "dark" ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
+            {colorScheme === "dark" ? <DarkModeOutlinedIcon fontSize="small" /> : <LightModeOutlinedIcon fontSize="small" />}
           </WorkspaceRailItem>
           <WorkspaceRailItem pinned={pinned} label="Settings" testId="standalone-settings-button" onClick={onOpenSettings}>
             <TuneIcon fontSize="small" />
@@ -198,11 +200,12 @@ export function WorkspaceSidebar({ colorScheme, hideLogo = false, onColorSchemeC
         }}>
           <Box sx={{ display: "flex", alignItems: "center", px: 1, height: headerBarHeight, flexShrink: 0, borderBottom: `1px solid ${RAIL_BORDER}` }}>
             <Typography noWrap variant="subtitle2" sx={{ flex: 1, minWidth: 0 }}>{VIEWS.find((entry) => entry.id === view)?.label}</Typography>
+            <Box ref={setHeaderActions} sx={{ display: "flex", alignItems: "center", flexShrink: 0, mr: 0.25 }} />
             <IconButton size="small" aria-label="Close explorer" onClick={closeExplorer}><CloseIcon fontSize="small" /></IconButton>
           </Box>
           <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             <Suspense fallback={<Typography sx={{ p: 2 }} variant="body2" color="text.secondary">Loading explorer…</Typography>}>
-              <Explorer key={view} visibleSectionIds={SECTIONS[view]} />
+              <Explorer key={view} visibleSectionIds={SECTIONS[view]} toolbarActionsContainer={headerActions} />
             </Suspense>
           </Box>
         </Box>

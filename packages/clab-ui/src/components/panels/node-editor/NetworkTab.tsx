@@ -29,7 +29,7 @@ export const NetworkTab: React.FC<TabProps> = ({ data, onChange }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Management Network" withTopDivider={false}>
+      <PanelSection title="Management Network">
         <InputField
           id="node-mgmt-ipv4"
           label="Management IPv4"

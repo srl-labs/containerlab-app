@@ -12,6 +12,8 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
+import { controlRadius } from "../../theme/surfaces";
+import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { useTopologySessionClient } from "../../host";
 import { useGraphActions, useGraphStore } from "../../stores/graphStore";
 import { isTopoEdgeLike, isTopoNodeLike } from "../../utils/graphQueryUtils";
@@ -29,6 +31,9 @@ interface BulkLinkModalProps {
 }
 
 const FLEX_START = "flex-start";
+const PATTERN_FIELD_SX = {
+  "& .MuiInputBase-input": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 }
+} as const;
 
 type ExampleDefinition = {
   title: string;
@@ -82,22 +87,23 @@ const ExampleRow: React.FC<{ index: number; def: ExampleDefinition }> = ({ index
 );
 
 const ExamplesSection: React.FC = () => (
-  <Alert severity="info" variant="outlined" icon={false}>
-    <Typography
-      variant="subtitle2"
-      sx={{
-        fontWeight: 600,
-        mb: 1
-      }}
-    >
+  <Box
+    sx={{
+      p: 1.5,
+      border: 1,
+      borderColor: "divider",
+      borderRadius: controlRadius
+    }}
+  >
+    <Typography variant="subtitle2" sx={{ mb: 1 }}>
       Examples
     </Typography>
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, fontSize: "0.875rem" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       {EXAMPLES.map((def, idx) => (
         <ExampleRow key={idx} index={idx + 1} def={def} />
       ))}
     </Box>
-    <Divider sx={{ my: 1 }} />
+    <Divider sx={{ my: 1.25 }} />
     <Typography
       variant="body2"
       component="div"
@@ -120,7 +126,7 @@ const ExamplesSection: React.FC = () => (
         </Box>
       </Box>
     </Typography>
-  </Alert>
+  </Box>
 );
 
 export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
@@ -223,7 +229,7 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
             >
               Create multiple links by matching node names with patterns.
             </Typography>
-            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 0.5 }}>
               <TextField
                 inputRef={sourceInputRef}
                 label="Source Pattern"
@@ -235,6 +241,7 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
                 placeholder="e.g. leaf*, srl(\d+)"
                 disabled={mode !== "edit"}
                 data-testid="bulk-link-source"
+                sx={PATTERN_FIELD_SX}
               />
               <TextField
                 label="Target Pattern"
@@ -246,6 +253,7 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
                 placeholder="e.g. spine*, client$1"
                 disabled={mode !== "edit"}
                 data-testid="bulk-link-target"
+                sx={PATTERN_FIELD_SX}
               />
             </Box>
             <ExamplesSection />
