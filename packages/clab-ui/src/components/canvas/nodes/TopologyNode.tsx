@@ -12,7 +12,8 @@ import {
   useLinkCreationContext,
   useNodeRenderConfig,
   useNodeBoxAppearance,
-  useEasterEggGlow
+  useEasterEggGlow,
+  useIsHoveredLinkEnd
 } from "../../../stores/canvasStore";
 import {
   useCustomIcons,
@@ -102,6 +103,8 @@ const ICON_STYLE_BASE: React.CSSProperties = {
 
 // Selection styles - use outline to avoid layout shift
 const SELECTED_OUTLINE = `2px solid ${SELECTION_COLOR}`;
+// Both ends of the hovered link glow so the link reads from node to node
+const LINK_END_GLOW = `0 0 12px 4px ${SELECTION_COLOR}88`;
 // Hover highlight for link creation uses CSS :hover (see topology-node-icon.link-target:hover in CSS)
 
 /**
@@ -125,6 +128,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const customIcons = useCustomIcons();
   const deploymentState = useDeploymentState();
   const isBoxed = useNodeStyle() === "boxed";
+  const isLinkEnd = useIsHoveredLinkEnd(id);
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
@@ -170,13 +174,15 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       opacity: runtimeIconOpacity,
       transition: "opacity 120ms ease-in-out",
       // Use outline for selection - doesn't affect layout. The box shows it in the boxed style.
-      outline: selected && !isBoxed ? SELECTED_OUTLINE : "none",
+      outline: (selected || isLinkEnd) && !isBoxed ? SELECTED_OUTLINE : "none",
       outlineOffset: 1
     };
 
     // Apply easter egg glow effect if active
     if (glowShadow !== undefined && !isBoxed) {
       style.boxShadow = glowShadow;
+    } else if (isLinkEnd && !isBoxed) {
+      style.boxShadow = LINK_END_GLOW;
     }
 
     return style;
@@ -186,6 +192,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     directionRotation,
     runtimeIconOpacity,
     selected,
+    isLinkEnd,
     glowShadow,
     isBoxed,
     iconSize
@@ -250,6 +257,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
           labelRef={boxLabel.labelRef}
           appearance={box}
           selected={selected}
+          highlighted={isLinkEnd}
           glow={glowShadow}
         />
       )}

@@ -40,6 +40,15 @@ interface NodeBoxPreview {
   box: NodeBoxAppearance | undefined;
 }
 
+/** Link under the pointer, with the two nodes it joins */
+interface HoveredLink {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export type LinkHoverState = "none" | "hovered" | "dimmed";
+
 interface ParallelEdgeInfo {
   /** Index of this edge within its parallel group */
   index: number;
@@ -76,6 +85,7 @@ interface CanvasState {
   nodeBoxPreview: NodeBoxPreview | null;
   fitViewRequestId: number;
   nodeFilter: string;
+  hoveredLink: HoveredLink | null;
 }
 
 interface CanvasActions {
@@ -87,6 +97,7 @@ interface CanvasActions {
   setNodeBoxPreview: (preview: NodeBoxPreview | null) => void;
   requestFitView: () => void;
   setNodeFilter: (nodeFilter: string) => void;
+  setHoveredLink: (link: HoveredLink | null) => void;
 }
 
 export type CanvasStore = CanvasState & CanvasActions;
@@ -192,7 +203,8 @@ const initialState: CanvasState = {
   easterEggGlow: null,
   nodeBoxPreview: null,
   fitViewRequestId: 0,
-  nodeFilter: ""
+  nodeFilter: "",
+  hoveredLink: null
 };
 
 // ============================================================================
@@ -241,6 +253,9 @@ export const useCanvasStore = createWithEqualityFn<CanvasStore>((set) => ({
   },
   setNodeFilter: (nodeFilter) => {
     set({ nodeFilter });
+  },
+  setHoveredLink: (hoveredLink) => {
+    set((state) => (state.hoveredLink?.id === hoveredLink?.id ? state : { hoveredLink }));
   }
 }));
 
@@ -275,6 +290,21 @@ export const useNodeRenderConfig = () => useCanvasStore((state) => state.nodeRen
 
 /** Get annotation handlers */
 export const useAnnotationHandlers = () => useCanvasStore((state) => state.annotationHandlers);
+
+/** Whether this link is the hovered one, fades behind another hovered link, or neither */
+export const useLinkHoverState = (edgeId: string): LinkHoverState =>
+  useCanvasStore((state) => {
+    if (state.hoveredLink === null) return "none";
+    return state.hoveredLink.id === edgeId ? "hovered" : "dimmed";
+  });
+
+/** Whether this node is an end of the hovered link */
+export const useIsHoveredLinkEnd = (nodeId: string): boolean =>
+  useCanvasStore(
+    (state) =>
+      state.hoveredLink !== null &&
+      (state.hoveredLink.source === nodeId || state.hoveredLink.target === nodeId)
+  );
 
 /** Get easter egg glow state */
 export const useEasterEggGlow = () => useCanvasStore((state) => state.easterEggGlow);

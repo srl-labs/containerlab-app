@@ -9,6 +9,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { parseNodeBoxSpacing, parseNodeStyle } from "../../canvas/nodeBox";
+import { parseLinkStyle } from "../../canvas/elbowRouting";
 import { SettingsField } from "../../../settings/SettingsField";
 import { useEdges } from "../../../stores/graphStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
@@ -82,6 +83,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
 
   const nodeStyle = useTopoViewerStore((state) => state.nodeStyle);
   const nodeBoxSpacing = useTopoViewerStore((state) => state.nodeBoxSpacing);
+  const linkStyle = useTopoViewerStore((state) => state.linkStyle);
   const telemetryNodeSizePx = useTopoViewerStore((state) => state.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.telemetryInterfaceSizePercent
@@ -96,6 +98,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const setLinkLabelMode = useTopoViewerStore((state) => state.setLinkLabelMode);
   const setNodeStyle = useTopoViewerStore((state) => state.setNodeStyle);
   const setNodeBoxSpacing = useTopoViewerStore((state) => state.setNodeBoxSpacing);
+  const setLinkStyle = useTopoViewerStore((state) => state.setLinkStyle);
   const setTelemetryNodeSizePx = useTopoViewerStore((state) => state.setTelemetryNodeSizePx);
   const setTelemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.setTelemetryInterfaceSizePercent
@@ -205,6 +208,26 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           </TextField>
         </SettingsField>
       ) : null}
+      <SettingsField
+        title="Link style"
+        description="Draw links as straight lines, or as elbows with right-angle bends."
+      >
+        <TextField
+          slotProps={{ select: { inputProps: { "aria-label": "Link style" } } }}
+          select
+          size="small"
+          value={linkStyle}
+          disabled={isReadOnly}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setLinkStyle(parseLinkStyle(e.target.value) ?? "straight");
+          }}
+          data-testid="lab-settings-link-style"
+        >
+          <MenuItem value="straight">Straight</MenuItem>
+          <MenuItem value="elbow">Elbow</MenuItem>
+        </TextField>
+      </SettingsField>
       <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
         <TextField
           id="telemetry-node-size"

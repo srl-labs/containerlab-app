@@ -2,17 +2,31 @@
  * TopologyEdge - Custom React Flow edge with endpoint labels
  * Uses floating/straight edge style for network topology visualization
  */
-import React, { memo, useMemo, useCallback } from "react";
-import { EdgeLabelRenderer, useStore, type EdgeProps, type Edge, type Node } from "@xyflow/react";
+import React, { memo, useMemo, useCallback, useEffect } from "react";
+import {
+  EdgeLabelRenderer,
+  useStore,
+  type EdgeProps,
+  type Edge,
+  type Node
+} from "@xyflow/react";
 
 import { SELECTION_COLOR, type EdgeLabelMode } from "../types";
-import { useEdgeInfo, useEdgeRenderConfig } from "../../../stores/canvasStore";
+import {
+  useCanvasStore,
+  useEdgeInfo,
+  useEdgeRenderConfig,
+  useLinkHoverState,
+  type LinkHoverState
+} from "../../../stores/canvasStore";
 import { useEdges, useGraphStore } from "../../../stores/graphStore";
 import {
   useTelemetryLabelSettings,
   useDeploymentState,
+  useLinkStyle,
   useNodeBoxSpacing,
-  useNodeStyle
+  useNodeStyle,
+  useTopoViewerStore
 } from "../../../stores/topoViewerStore";
 import {
   calculateControlPoint,
@@ -22,6 +36,18 @@ import {
   isVisuallyCanonicalDirection
 } from "../edgeGeometry";
 import { getNodeConnectionRect, type NodeBoxSpacing, type NodeStyle } from "../nodeBox";
+import type { ElbowRoute, LinkStyle } from "../elbowRouting";
+import {
+  buildElbowLoop,
+  buildElbowPath,
+  estimateLabelLength,
+  getBubbleLength,
+  getCachedElbowRoutes,
+  getNodeNameClearance,
+  placeElbowBubble,
+  placeElbowLabel,
+  type ElbowLabelPlacement
+} from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
 import {
   clampTelemetryInterfaceSizePercent,
@@ -66,6 +92,22 @@ const CONTROL_POINT_STEP_SIZE = 40; // Spacing between parallel edges (more curv
 // Loop edge constants
 const LOOP_EDGE_SIZE = 50; // Size of the loop curve
 const LOOP_EDGE_OFFSET = 10; // Offset between multiple loop edges
+
+// Elbow links are thinner, solid, and outlined in the canvas color: where two
+// cross, the one on top cuts a small gap in the other, so a crossing never
+// reads as a turn, and dense bundles do not glow where they overlap.
+const ELBOW_EDGE_WIDTH = 2.5;
+const ELBOW_EDGE_WIDTH_ACTIVE = 4;
+const ELBOW_CASING_WIDTH = 1.5;
+const ELBOW_EDGE_COLOR_MIX = 70;
+const CANVAS_BACKGROUND = "var(--topoviewer-edge-label-background)";
+
+// Hovering a link fades the others back so it can be followed
+const EDGE_OPACITY_DIMMED = 0.15;
+const LABEL_OPACITY_DIMMED = 0.3;
+const LABEL_LINE_HEIGHT = 1.2;
+// Room between elbow links on one side: a label's height plus a little air
+const ELBOW_LABEL_PORT_AIR = 2;
 
 // Node icon dimensions (edges connect to icon center, not the label)
 const NODE_ICON_SIZE = 40;
@@ -114,6 +156,13 @@ interface EndpointAssignment {
 }
 
 type NodeInterfaceAnchorMap = Map<string, Map<string, InterfaceAnchor>>;
+
+interface NodeRectLike {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 interface NodeShape {
   nodeIconSize: number;
@@ -261,6 +310,17 @@ function getTelemetryLabelMetrics(
     radius,
     fontSize,
     textStrokeWidth: TELEMETRY_LABEL_TEXT_STROKE_WIDTH_PX * interfaceScale
+  };
+}
+
+/** Font size and side padding of a plain endpoint label at the given scale */
+function getDefaultLabelMetrics(interfaceScale: number): {
+  fontSize: number;
+  horizontalPadding: number;
+} {
+  return {
+    fontSize: Math.max(8, TELEMETRY_LABEL_FONT_SIZE_PX * interfaceScale),
+    horizontalPadding: Math.max(2, TELEMETRY_LABEL_HORIZONTAL_PADDING_PX * interfaceScale)
   };
 }
 
@@ -531,6 +591,12 @@ function getCachedInterfaceAnchorMap(
   return anchorsByNode;
 }
 
+function getRoutingRect(node: Node, shape: NodeShape): NodeRectLike {
+  const width =
+    node.measured?.width ?? (typeof node.width === "number" ? node.width : shape.nodeIconSize);
+  return getConnectionRectAt(node.position, width, shape);
+}
+
 function resolveEdgeLabelOffsets(
   edgeData: EdgeDataLike | undefined,
   labelMode: EdgeLabelMode,
@@ -687,7 +753,7 @@ const LABEL_STYLE_BASE: React.CSSProperties = {
   pointerEvents: "none",
   whiteSpace: "nowrap",
   textShadow: `0 0 2px ${LABEL_OUTLINE_COLOR}, 0 0 2px ${LABEL_OUTLINE_COLOR}, 0 0 3px ${LABEL_OUTLINE_COLOR}`,
-  lineHeight: 1.2,
+  lineHeight: LABEL_LINE_HEIGHT,
   zIndex: 1
 };
 
@@ -709,6 +775,12 @@ const TELEMETRY_LABEL_STYLE_BASE: React.CSSProperties = {
   zIndex: 1
 };
 
+function getLabelHoverStyle(hoverState: LinkHoverState): React.CSSProperties {
+  if (hoverState === "dimmed") return { opacity: LABEL_OPACITY_DIMMED };
+  if (hoverState === "hovered") return { boxShadow: `0 0 0 1px ${SELECTION_COLOR}`, zIndex: 2 };
+  return {};
+}
+
 /**
  * Label component for endpoint text
  * Uses CSS transform for positioning (only dynamic part)
@@ -720,7 +792,9 @@ const EndpointLabel = memo(function EndpointLabel({
   variant,
   interfaceState,
   colorByInterfaceState,
-  telemetryInterfaceScale
+  telemetryInterfaceScale,
+  rotation = 0,
+  hoverState = "none"
 }: Readonly<{
   text: string;
   x: number;
@@ -729,6 +803,9 @@ const EndpointLabel = memo(function EndpointLabel({
   interfaceState?: "up" | "down" | "unknown";
   colorByInterfaceState: boolean;
   telemetryInterfaceScale: number;
+  /** Degrees; elbow labels turn to read along their link */
+  rotation?: number;
+  hoverState?: LinkHoverState;
 }>) {
   const telemetryMetrics = useMemo(
     () =>
@@ -744,6 +821,10 @@ const EndpointLabel = memo(function EndpointLabel({
 
   const renderedText = telemetryMetrics?.text ?? text;
   const style = useMemo((): React.CSSProperties => {
+    const placement = `translate(-50%, -50%) translate(${x}px, ${y}px)${
+      rotation !== 0 ? ` rotate(${rotation}deg)` : ""
+    }`;
+    const hoverStyle = getLabelHoverStyle(hoverState);
     if (variant === "telemetry-style" && telemetryMetrics) {
       const diameter = telemetryMetrics.radius * 2;
       return {
@@ -754,21 +835,28 @@ const EndpointLabel = memo(function EndpointLabel({
         height: `${diameter}px`,
         fontSize: `${telemetryMetrics.fontSize}px`,
         textShadow: `0 0 ${telemetryMetrics.textStrokeWidth}px ${TELEMETRY_LABEL_STROKE_COLOR}, 0 0 ${telemetryMetrics.textStrokeWidth}px ${TELEMETRY_LABEL_STROKE_COLOR}`,
-        transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`
+        transform: placement,
+        ...hoverStyle
       };
     }
-    const scaledFontSize = Math.max(8, TELEMETRY_LABEL_FONT_SIZE_PX * telemetryInterfaceScale);
-    const scaledHorizontalPadding = Math.max(
-      2,
-      TELEMETRY_LABEL_HORIZONTAL_PADDING_PX * telemetryInterfaceScale
-    );
+    const { fontSize, horizontalPadding } = getDefaultLabelMetrics(telemetryInterfaceScale);
     return {
       ...LABEL_STYLE_BASE,
-      fontSize: `${scaledFontSize}px`,
-      padding: `0px ${scaledHorizontalPadding}px`,
-      transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`
+      fontSize: `${fontSize}px`,
+      padding: `0px ${horizontalPadding}px`,
+      transform: placement,
+      ...hoverStyle
     };
-  }, [variant, telemetryMetrics, telemetryBackgroundColor, telemetryInterfaceScale, x, y]);
+  }, [
+    variant,
+    telemetryMetrics,
+    telemetryBackgroundColor,
+    telemetryInterfaceScale,
+    x,
+    y,
+    rotation,
+    hoverState
+  ]);
 
   if (renderedText.length === 0) {
     return null;
@@ -788,6 +876,8 @@ interface EdgeGeometry {
   controlPoint: { x: number; y: number } | null;
   sourceLabelPos: { x: number; y: number };
   targetLabelPos: { x: number; y: number };
+  /** Set for elbow links, whose labels follow the route */
+  elbow?: ElbowRoute;
 }
 
 /** Calculate loop edge geometry */
@@ -955,6 +1045,71 @@ function computeRegularGeometry(
   };
 }
 
+/** Calculate a loop drawn as a rounded rectangle, to match elbow links */
+function computeElbowLoopGeometry(
+  sourcePos: { x: number; y: number },
+  sourceNodeWidth: number,
+  loopIndex: number,
+  labelOffset: number,
+  nodeShape: NodeShape
+): EdgeGeometry {
+  const rect = getConnectionRectAt(sourcePos, sourceNodeWidth, nodeShape);
+  const { path, labelX } = buildElbowLoop(rect, loopIndex, LOOP_EDGE_SIZE);
+  const labelY = rect.y + rect.height / 2;
+  return {
+    points: { sx: 0, sy: 0, tx: 0, ty: 0 },
+    path,
+    controlPoint: null,
+    sourceLabelPos: { x: labelX, y: labelY - labelOffset },
+    targetLabelPos: { x: labelX, y: labelY + labelOffset }
+  };
+}
+
+/**
+ * How far each endpoint label reaches along its link, so elbow routes keep a
+ * straight run for it before bending.
+ */
+function createLabelLengthMeasure(
+  labelMode: EdgeLabelMode,
+  telemetryConfig: TelemetryLabelRenderConfig | null
+): (edge: Edge) => { source: number; target: number } {
+  const interfaceScale = telemetryConfig?.interfaceScale ?? 1;
+  const metrics = getDefaultLabelMetrics(interfaceScale);
+  const measure = (endpoint: string | null): number => {
+    if (endpoint === null || labelMode === "hide") return 0;
+    if (labelMode === "telemetry-style" && telemetryConfig) {
+      const text = resolveTelemetryInterfaceLabel(
+        endpoint,
+        telemetryConfig.globalInterfaceOverrideSelection,
+        telemetryConfig.interfaceLabelOverrides
+      );
+      return getBubbleLength(getTelemetryLabelMetrics(text, interfaceScale).radius);
+    }
+    return estimateLabelLength({ text: endpoint, ...metrics });
+  };
+  return (edge) => {
+    const data = toEdgeData(edge.data);
+    return {
+      source: measure(normalizeEndpoint(data.sourceEndpoint)),
+      target: measure(normalizeEndpoint(data.targetEndpoint))
+    };
+  };
+}
+
+/** Elbow geometry; its labels are placed once the label text is known. */
+function computeElbowGeometry(route: ElbowRoute): EdgeGeometry {
+  const start = route.points[0];
+  const end = route.points[route.points.length - 1];
+  return {
+    points: { sx: start.x, sy: start.y, tx: end.x, ty: end.y },
+    path: buildElbowPath(route.points, route.cornerRadius),
+    controlPoint: null,
+    sourceLabelPos: start,
+    targetLabelPos: end,
+    elbow: route
+  };
+}
+
 /** Hook for calculating edge geometry with bezier curves for parallel edges */
 function useEdgeGeometry(
   edgeId: string,
@@ -963,8 +1118,10 @@ function useEdgeGeometry(
   labelOffsets: EdgeLabelOffsets,
   edgeData: EdgeDataLike | undefined,
   labelMode: EdgeLabelMode,
-  telemetryConfig: TelemetryLabelRenderConfig | null
+  telemetryConfig: TelemetryLabelRenderConfig | null,
+  linkStyle: LinkStyle
 ) {
+  const isElbow = linkStyle === "elbow";
   const nodeIconSize = telemetryConfig?.nodeIconSize ?? NODE_ICON_SIZE;
   const nodeStyle = telemetryConfig?.nodeStyle ?? "icon";
   const nodeBoxSpacing = telemetryConfig?.nodeBoxSpacing ?? "default";
@@ -975,23 +1132,76 @@ function useEdgeGeometry(
   const sourceNode = useNodeGeometry(source, nodeIconSize);
   const targetNode = useNodeGeometry(target, nodeIconSize);
   const edges = useEdges();
-  const nodeListForAnchors = useGraphStore(
+  const graphNodes = useGraphStore(
     useCallback(
-      (state) => (labelMode === "telemetry-style" ? state.nodes : EMPTY_GRAPH_NODES),
-      [labelMode]
+      (state) => (labelMode === "telemetry-style" || isElbow ? state.nodes : EMPTY_GRAPH_NODES),
+      [labelMode, isElbow]
     )
   );
   const { getParallelInfo, getLoopInfo } = useEdgeInfo(edges);
+  // Elbow links place telemetry bubbles on their own ports instead.
   const interfaceAnchorMap = useMemo(
     () =>
-      labelMode === "telemetry-style" && telemetryConfig
-        ? getCachedInterfaceAnchorMap(edges, nodeListForAnchors, telemetryConfig)
+      labelMode === "telemetry-style" && telemetryConfig && !isElbow
+        ? getCachedInterfaceAnchorMap(edges, graphNodes, telemetryConfig)
         : undefined,
-    [labelMode, edges, nodeListForAnchors, telemetryConfig]
+    [labelMode, edges, graphNodes, telemetryConfig, isElbow]
+  );
+  // Links on one side sit far enough apart for a label or bubble each.
+  const interfaceScale = telemetryConfig?.interfaceScale ?? 1;
+  const elbowPortGap =
+    labelMode === "telemetry-style"
+      ? TELEMETRY_LABEL_MIN_RADIUS_PX * 2 * interfaceScale + ELBOW_LABEL_PORT_AIR
+      : getDefaultLabelMetrics(interfaceScale).fontSize * LABEL_LINE_HEIGHT + ELBOW_LABEL_PORT_AIR;
+  const bottomClearance = getNodeNameClearance(nodeStyle === "boxed");
+  const getRoutingRectForShape = useCallback(
+    (node: Node) => getRoutingRect(node, nodeShape),
+    [nodeShape]
+  );
+  const getLabelLengths = useMemo(
+    () => createLabelLengthMeasure(labelMode, telemetryConfig),
+    [labelMode, telemetryConfig]
+  );
+  const labelKey = useMemo(
+    () =>
+      [
+        labelMode,
+        interfaceScale,
+        telemetryConfig?.globalInterfaceOverrideSelection ?? "",
+        JSON.stringify(telemetryConfig?.interfaceLabelOverrides ?? {})
+      ].join("|"),
+    [labelMode, interfaceScale, telemetryConfig]
+  );
+  const elbowRoutes = useMemo(
+    () =>
+      isElbow
+        ? getCachedElbowRoutes(
+            edges,
+            graphNodes,
+            getRoutingRectForShape,
+            getLabelLengths,
+            `${nodeIconSize}|${nodeStyle}|${nodeBoxSpacing}|${elbowPortGap}|${labelKey}`,
+            { portGap: elbowPortGap, bottomClearance }
+          )
+        : undefined,
+    [
+      isElbow,
+      edges,
+      graphNodes,
+      getRoutingRectForShape,
+      getLabelLengths,
+      nodeIconSize,
+      nodeStyle,
+      nodeBoxSpacing,
+      elbowPortGap,
+      labelKey,
+      bottomClearance
+    ]
   );
 
   const parallelInfo = getParallelInfo(edgeId);
   const loopInfo = getLoopInfo(edgeId);
+  const computeLoop = isElbow ? computeElbowLoopGeometry : computeLoopGeometry;
 
   return useMemo((): EdgeGeometry | null => {
     if (!sourceNode) return null;
@@ -1001,7 +1211,7 @@ function useEdgeGeometry(
 
     // Handle loop edges (source === target)
     if (source === target && loopInfo) {
-      return computeLoopGeometry(
+      return computeLoop(
         sourcePos,
         sourceNodeWidth,
         loopInfo.loopIndex,
@@ -1009,6 +1219,9 @@ function useEdgeGeometry(
         nodeShape
       );
     }
+
+    const elbowRoute = elbowRoutes?.get(edgeId);
+    if (elbowRoute) return computeElbowGeometry(elbowRoute);
 
     if (!targetNode) return null;
 
@@ -1047,7 +1260,10 @@ function useEdgeGeometry(
     edgeData?.targetEndpoint,
     interfaceAnchorMap,
     labelMode,
-    nodeShape
+    nodeShape,
+    computeLoop,
+    elbowRoutes,
+    edgeId
   ]);
 }
 
@@ -1055,14 +1271,108 @@ function useEdgeGeometry(
 function getStrokeStyle(
   linkStatus: string | undefined,
   selected: boolean,
-  useLinkStatusColor = true
+  useLinkStatusColor = true,
+  hoverState: LinkHoverState = "none"
 ) {
   const resolvedLinkStatus = useLinkStatusColor ? linkStatus : undefined;
+  const active = selected || hoverState === "hovered";
+  const dimmed = hoverState === "dimmed" && !selected;
+  let opacity = active ? EDGE_OPACITY_SELECTED : EDGE_OPACITY_NORMAL;
+  if (dimmed) opacity = EDGE_OPACITY_DIMMED;
   return {
-    color: getStrokeColor(resolvedLinkStatus, selected),
-    width: selected ? EDGE_WIDTH_SELECTED : EDGE_WIDTH_NORMAL,
-    opacity: selected ? EDGE_OPACITY_SELECTED : EDGE_OPACITY_NORMAL
+    color: getStrokeColor(resolvedLinkStatus, active),
+    width: active ? EDGE_WIDTH_SELECTED : EDGE_WIDTH_NORMAL,
+    opacity,
+    active,
+    dimmed
   };
+}
+
+type StrokeStyle = ReturnType<typeof getStrokeStyle>;
+
+/** Solid elbow stroke: the link color blended into the canvas instead of see-through. */
+function toElbowStroke(stroke: StrokeStyle, background: string): StrokeStyle {
+  return {
+    ...stroke,
+    color: stroke.active
+      ? stroke.color
+      : `color-mix(in srgb, ${stroke.color} ${ELBOW_EDGE_COLOR_MIX}%, ${background})`,
+    width: stroke.active ? ELBOW_EDGE_WIDTH_ACTIVE : ELBOW_EDGE_WIDTH,
+    opacity: stroke.dimmed ? EDGE_OPACITY_DIMMED : EDGE_OPACITY_SELECTED
+  };
+}
+
+/** Hover a link to light it up together with the two nodes it joins. */
+function useLinkHover(id: string, source: string, target: string) {
+  const hoverState = useLinkHoverState(id);
+  const setHoveredLink = useCanvasStore((state) => state.setHoveredLink);
+  const onMouseEnter = useCallback(
+    () => setHoveredLink({ id, source, target }),
+    [setHoveredLink, id, source, target]
+  );
+  const onMouseLeave = useCallback(() => {
+    if (useCanvasStore.getState().hoveredLink?.id === id) setHoveredLink(null);
+  }, [setHoveredLink, id]);
+  // A link removed while hovered must not keep the others faded.
+  useEffect(() => onMouseLeave, [onMouseLeave]);
+  return { hoverState, onMouseEnter, onMouseLeave };
+}
+
+/**
+ * Where the endpoint labels go. Elbow links place them once the label text is
+ * known; other links use the positions computed with their path.
+ */
+function useEndpointLabelPlacements(
+  geometry: EdgeGeometry | null,
+  labelMode: EdgeLabelMode,
+  labelOffsets: EdgeLabelOffsets,
+  sourceLabel: string | null,
+  targetLabel: string | null,
+  interfaceScale: number,
+  isBoxed: boolean
+): { source: ElbowLabelPlacement; target: ElbowLabelPlacement } | null {
+  return useMemo(() => {
+    if (!geometry) return null;
+    const route = geometry.elbow;
+    if (!route) {
+      return {
+        source: { ...geometry.sourceLabelPos, rotation: 0 },
+        target: { ...geometry.targetLabelPos, rotation: 0 }
+      };
+    }
+    const reversed = [...route.points].reverse();
+    if (labelMode === "telemetry-style") {
+      return {
+        source: placeElbowBubble(route.points, labelOffsets.source),
+        target: placeElbowBubble(reversed, labelOffsets.target)
+      };
+    }
+    const metrics = getDefaultLabelMetrics(interfaceScale);
+    const nameClearance = getNodeNameClearance(isBoxed);
+    return {
+      source: placeElbowLabel(
+        route.points,
+        route.sourceSide,
+        { text: sourceLabel ?? "", ...metrics },
+        nameClearance
+      ),
+      target: placeElbowLabel(
+        reversed,
+        route.targetSide,
+        { text: targetLabel ?? "", ...metrics },
+        nameClearance
+      )
+    };
+  }, [
+    geometry,
+    labelMode,
+    labelOffsets.source,
+    labelOffsets.target,
+    sourceLabel,
+    targetLabel,
+    interfaceScale,
+    isBoxed
+  ]);
 }
 
 function shouldRenderEdgeLabels(
@@ -1087,6 +1397,10 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
   const { labelMode, suppressLabels, suppressHitArea } = useEdgeRenderConfig();
   const nodeStyle = useNodeStyle();
   const nodeBoxSpacing = useNodeBoxSpacing();
+  const linkStyle = useLinkStyle();
+  const gridBgColor = useTopoViewerStore((state) =>
+    state.gridBgColor !== null && state.gridBgColor.length > 0 ? state.gridBgColor : null
+  );
   const telemetryConfig = useMemo<TelemetryLabelRenderConfig>(
     () => ({
       nodeIconSize: clampTelemetryNodeSizePx(telemetryLabelSettings.nodeSizePx),
@@ -1154,17 +1468,37 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
     labelOffsets,
     edgeData,
     labelMode,
-    telemetryConfig
+    telemetryConfig,
+    linkStyle
+  );
+  const { hoverState, onMouseEnter, onMouseLeave } = useLinkHover(id, source, target);
+  const labelPlacements = useEndpointLabelPlacements(
+    geometry,
+    labelMode,
+    labelOffsets,
+    sourceRenderedLabel,
+    targetRenderedLabel,
+    telemetryConfig.interfaceScale,
+    nodeStyle === "boxed"
   );
 
-  if (!geometry) return null;
+  if (!geometry || !labelPlacements) return null;
   const shouldRenderLabels = shouldRenderEdgeLabels(labelMode, suppressLabels, selected === true);
   const labelVariant: EdgeLabelVariant =
     labelMode === "telemetry-style" ? "telemetry-style" : "default";
   // Interface state coloring needs runtime data, which exists once deployed.
   const colorInterfacesByState = labelMode === "telemetry-style" && deploymentState === "deployed";
 
-  const stroke = getStrokeStyle(edgeData.linkStatus, selected === true, !colorInterfacesByState);
+  const baseStroke = getStrokeStyle(
+    edgeData.linkStatus,
+    selected === true,
+    !colorInterfacesByState,
+    hoverState
+  );
+  const isElbow = linkStyle === "elbow";
+  const canvasBackground = gridBgColor ?? CANVAS_BACKGROUND;
+  const stroke = isElbow ? toElbowStroke(baseStroke, canvasBackground) : baseStroke;
+  const { source: sourceLabel, target: targetLabel } = labelPlacements;
   const sourceInterfaceState = normalizeInterfaceState(edgeData.sourceInterfaceState);
   const targetInterfaceState = normalizeInterfaceState(edgeData.targetInterfaceState);
 
@@ -1178,12 +1512,28 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
           stroke="transparent"
           strokeWidth={20}
           style={{ cursor: "pointer" }}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      )}
+      {isElbow && (
+        <path
+          d={geometry.path}
+          fill="none"
+          pointerEvents="none"
+          style={{
+            opacity: stroke.opacity,
+            strokeWidth: stroke.width + ELBOW_CASING_WIDTH * 2,
+            stroke: canvasBackground
+          }}
         />
       )}
       <path
         id={id}
         d={geometry.path}
         fill="none"
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
         style={{
           cursor: "pointer",
           opacity: stroke.opacity,
@@ -1197,8 +1547,10 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
           {sourceRenderedLabel !== null && sourceRenderedLabel.length > 0 && (
             <EndpointLabel
               text={sourceRenderedLabel}
-              x={geometry.sourceLabelPos.x}
-              y={geometry.sourceLabelPos.y}
+              x={sourceLabel.x}
+              y={sourceLabel.y}
+              rotation={sourceLabel.rotation}
+              hoverState={hoverState}
               variant={labelVariant}
               interfaceState={sourceInterfaceState}
               colorByInterfaceState={colorInterfacesByState}
@@ -1208,8 +1560,10 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
           {targetRenderedLabel !== null && targetRenderedLabel.length > 0 && (
             <EndpointLabel
               text={targetRenderedLabel}
-              x={geometry.targetLabelPos.x}
-              y={geometry.targetLabelPos.y}
+              x={targetLabel.x}
+              y={targetLabel.y}
+              rotation={targetLabel.rotation}
+              hoverState={hoverState}
               variant={labelVariant}
               interfaceState={targetInterfaceState}
               colorByInterfaceState={colorInterfacesByState}
