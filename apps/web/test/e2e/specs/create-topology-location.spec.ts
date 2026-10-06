@@ -16,9 +16,9 @@ const endpoints = [
 // Submissions are answered with 409 so the dialog stays open instead of opening an editor.
 test.use({ allowedBrowserErrors: [/status of 409 \(Conflict\)/] });
 
-async function setup(page: Page) {
-  await seedEndpoints(page, endpoints);
-  await mockStandaloneApi(page, { endpoints });
+async function setup(page: Page, seeded = endpoints) {
+  await seedEndpoints(page, seeded);
+  await mockStandaloneApi(page, { endpoints: seeded });
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({
     json: route.request().headers()["x-endpoint-id"] === "team"
       ? [{ endpointId: "team", name: "@shared", path: "@shared", kind: "directory", hasChildren: false }]
@@ -78,7 +78,7 @@ test("switching endpoints checks availability and resets sharing while retaining
   await page.getByRole("option", { name: /Personal server/ }).click();
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("keep-me.clab.yml");
   await dialog.getByRole("combobox", { name: "Endpoint", exact: true }).click();
   await page.getByRole("option", { name: /Team server/ }).click();
@@ -130,8 +130,18 @@ test("reopening the dialog checks whether the shared workspace is still availabl
   await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({ json: [] }));
   dialog = await openCreate(page);
-  await expect(dialog).toContainText("Saved in your personal workspace.");
-  await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveCount(0);
+});
+
+test("a single personal workspace only asks for the file name", async ({ page }) => {
+  await setup(page, [endpoints[1]]);
+  const dialog = await openCreate(page);
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+  await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
+  await expect(dialog.getByRole("combobox", { name: "Endpoint", exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveCount(0);
+  await expect(dialog).not.toContainText("Endpoint");
+  await expect(dialog).not.toContainText("Location");
 });

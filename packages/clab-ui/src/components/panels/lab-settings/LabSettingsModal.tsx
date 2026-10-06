@@ -15,7 +15,7 @@ import Tooltip from "@mui/material/Tooltip";
 
 import { SettingsLayout } from "../../../settings/SettingsLayout";
 import { useIsProcessing, useTopoViewerActions } from "../../../stores/topoViewerStore";
-import { floatingSurfaceSx, overlayShadow } from "../../../theme/surfaces";
+import { floatingSurfaceSx, lockedButtonSx, overlayShadow } from "../../../theme/surfaces";
 import { LabSettingsSection } from "../lab-drawer/LabSettingsSection";
 import type { GridSettingsControlsProps } from "../GridSettingsPopover";
 
@@ -24,7 +24,7 @@ import type { LabSettings } from "./types";
 const LAB_SETTINGS_SECTIONS = [
   {
     key: "basic",
-    label: "Basic",
+    label: "General",
     description: "Lab name and container prefix",
     icon: <AccountTreeIcon fontSize="small" />
   },
@@ -134,6 +134,7 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
                   disabled={isProcessing}
                   aria-label={lockLabel}
                   data-testid="lab-settings-lock-btn"
+                  sx={isLocked ? lockedButtonSx : undefined}
                 >
                   {isLocked ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
                 </IconButton>

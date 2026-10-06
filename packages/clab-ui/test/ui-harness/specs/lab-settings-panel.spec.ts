@@ -17,7 +17,7 @@ const LABEL_CONTAINER_NAME_PREFIX = "Container Name Prefix";
  * Lab Settings Modal E2E Tests (MUI Dialog version)
  *
  * In the new MUI design, lab settings are shown in a Dialog (modal)
- * with sections for Basic, Management, Appearance, and Grid settings.
+ * with sections for General, Management, Appearance, and Grid settings.
  */
 test.describe("Lab Settings Modal", () => {
   test.beforeEach(async ({ topoViewerPage }) => {
@@ -68,7 +68,7 @@ test.describe("Lab Settings Modal", () => {
     await expect(modal.getByRole("heading", { name: "Lab Settings", exact: true })).toHaveText("Lab Settings");
   });
 
-  test("lab settings modal has Basic, Management, Appearance, and Grid sections", async ({ page }) => {
+  test("lab settings modal has General, Management, Appearance, and Grid sections", async ({ page }) => {
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -81,7 +81,7 @@ test.describe("Lab Settings Modal", () => {
     await expect(page.getByTestId("lab-settings-tab-grid")).toBeVisible();
   });
 
-  test("Basic tab is selected by default", async ({ page }) => {
+  test("General tab is selected by default", async ({ page }) => {
     await page.locator(SEL_LAB_SETTINGS_BTN).click();
     await page.waitForTimeout(300);
 
@@ -384,7 +384,7 @@ test.describe("Lab Settings Modal", () => {
       .toEqual(expect.not.arrayContaining([expect.objectContaining({ label: "autocreated" })]));
   });
 
-  test("shows current lab name in Basic tab", async ({ page }) => {
+  test("shows current lab name in General tab", async ({ page }) => {
     const modal = await openModal(page);
 
     const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
@@ -394,7 +394,7 @@ test.describe("Lab Settings Modal", () => {
     expect(value).toBe("simple");
   });
 
-  test("can change lab name in Basic tab", async ({ page }) => {
+  test("can change lab name in General tab", async ({ page }) => {
     const modal = await openModal(page);
     const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
 

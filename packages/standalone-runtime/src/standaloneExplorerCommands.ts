@@ -722,7 +722,6 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
       const createTopologyInput = await promptForCreateTopology({
         title: "Create Topology File",
-        message: "Choose where to save your new topology file.",
         confirmLabel: "Create",
         endpointOptions: connectedEndpoints.map((endpoint) => ({
           value: endpoint.id,

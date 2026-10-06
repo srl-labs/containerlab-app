@@ -67,6 +67,8 @@ export interface TopoViewerState {
   editingNode: string | null;
   editingEdge: string | null;
   editingNetwork: string | null;
+  /** Bumped on every request to open a node, link, network or impairment editor. */
+  editorRequest: number;
   isLocked: boolean;
   linkLabelMode: LinkLabelMode;
   lastNonTelemetryLinkLabelMode: NonTelemetryLinkLabelMode;
@@ -190,6 +192,7 @@ const initialState: TopoViewerState = {
   editingNode: null,
   editingEdge: null,
   editingNetwork: null,
+  editorRequest: 0,
   isLocked: true,
   linkLabelMode: "show-all",
   lastNonTelemetryLinkLabelMode: "show-all",
@@ -312,6 +315,12 @@ export function parseInitialData(data: unknown): Partial<TopoViewerState> {
   };
 }
 
+// Opening an editor is a request to show it, even when it is already open
+// behind another panel tab; closing one is not.
+function nextEditorRequest(state: TopoViewerState, id: string | null): number {
+  return id === null ? state.editorRequest : state.editorRequest + 1;
+}
+
 // ============================================================================
 // Store Creation
 // ============================================================================
@@ -330,47 +339,51 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 
   // Editing (mutually exclusive, clears selection)
   editNode: (nodeId) => {
-    set({
+    set((state) => ({
       editingNode: nodeId,
       editingEdge: null,
       editingImpairment: null,
       editingNetwork: null,
       selectedNode: null,
-      selectedEdge: null
-    });
+      selectedEdge: null,
+      editorRequest: nextEditorRequest(state, nodeId)
+    }));
   },
 
   editEdge: (edgeId) => {
-    set({
+    set((state) => ({
       editingEdge: edgeId,
       editingNode: null,
       editingImpairment: null,
       editingNetwork: null,
       selectedNode: null,
-      selectedEdge: null
-    });
+      selectedEdge: null,
+      editorRequest: nextEditorRequest(state, edgeId)
+    }));
   },
 
   editImpairment: (edgeId) => {
-    set({
+    set((state) => ({
       editingImpairment: edgeId,
       editingNode: null,
       editingEdge: null,
       editingNetwork: null,
       selectedNode: null,
-      selectedEdge: null
-    });
+      selectedEdge: null,
+      editorRequest: nextEditorRequest(state, edgeId)
+    }));
   },
 
   editNetwork: (nodeId) => {
-    set({
+    set((state) => ({
       editingNetwork: nodeId,
       editingNode: null,
       editingEdge: null,
       editingImpairment: null,
       selectedNode: null,
-      selectedEdge: null
-    });
+      selectedEdge: null,
+      editorRequest: nextEditorRequest(state, nodeId)
+    }));
   },
 
   // Mode and state — clear selection & editing so stale tabs disappear

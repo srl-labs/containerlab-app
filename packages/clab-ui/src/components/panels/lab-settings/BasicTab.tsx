@@ -1,4 +1,4 @@
-// Basic settings tab for lab settings.
+// General settings tab for lab settings.
 import React from "react";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";

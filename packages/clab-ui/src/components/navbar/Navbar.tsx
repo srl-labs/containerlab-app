@@ -1,4 +1,4 @@
-import { floatingRadius, floatingSurfaceSx } from "../../theme/surfaces";
+import { floatingRadius, floatingSurfaceSx, lockedButtonSx } from "../../theme/surfaces";
 // Floating action bar for React TopoViewer.
 import React from "react";
 import Badge from "@mui/material/Badge";
@@ -63,7 +63,7 @@ const FLOATING_NAVBAR_INSET = 8;
 const TOOLBAR_ICON_SX = { fontSize: 18 } as const;
 /** Short vertical rules between button groups. */
 const TOOLBAR_DIVIDER_SX = { mx: 0.5, my: 0.75 } as const;
-/** An engaged toolbar button: the lock while locked, or a button whose menu is open. */
+/** An engaged toolbar button: one whose menu is open. */
 const PRESSED_SX = {
   color: "text.primary",
   bgcolor: "action.selected",
@@ -649,7 +649,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               size="small"
               onClick={toggleLock}
               disabled={isProcessing || !isTopologyActive}
-              sx={pressedSx(isLocked)}
+              sx={isLocked ? lockedButtonSx : undefined}
               data-testid="navbar-lock"
             >
               {isLocked ? <LockOutlinedIcon sx={TOOLBAR_ICON_SX} /> : <LockOpenOutlinedIcon sx={TOOLBAR_ICON_SX} />}

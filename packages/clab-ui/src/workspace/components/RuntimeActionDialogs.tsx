@@ -913,6 +913,42 @@ function createTopologyFileNameError(fileName: string): string {
   return "";
 }
 
+function CreateTopologyLocationField(props: {
+  location: "personal" | "shared";
+  setLocation: (value: "personal" | "shared") => void;
+  sharedAvailable: boolean;
+}) {
+  let description = props.location === "shared"
+    ? "Everyone signed in to this API server can edit, deploy, and destroy this lab."
+    : "Saved in your personal workspace.";
+  if (props.location === "shared" && !props.sharedAvailable) {
+    description = "Shared is no longer available on this server. Choose Personal to save in your workspace.";
+  }
+  return (
+    <Stack spacing={0.75}>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
+        <Typography id="create-topology-location-label" variant="body2" sx={{ fontWeight: 500 }}>
+          Location
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          aria-labelledby="create-topology-location-label"
+          value={props.location}
+          onChange={(_event, value: "personal" | "shared" | null) => {
+            if (value) props.setLocation(value);
+          }}
+        >
+          <ToggleButton value="personal">Personal</ToggleButton>
+          {props.sharedAvailable ? <ToggleButton value="shared">Shared</ToggleButton> : null}
+        </ToggleButtonGroup>
+      </Stack>
+      <Typography variant="caption" color="text.secondary" aria-live="polite">
+        {description}
+      </Typography>
+    </Stack>
+  );
+}
+
 function CreateTopologyDialogView(props: {
   closeCreateTopologyDialog: (value: CreateTopologyDialogResult | undefined) => void;
   createTopologyDialog: CreateTopologyDialogState;
@@ -932,17 +968,12 @@ function CreateTopologyDialogView(props: {
   const currentWorkspace = workspace?.endpointId === endpointId ? workspace : null;
   const sharedAvailable = currentWorkspace?.shared === true;
   const sharedUnavailable = currentWorkspace !== null && location === "shared" && !sharedAvailable;
+  // Endpoint and location only show when there is something to pick, so a
+  // single personal workspace (like the sandbox) asks for the file name alone.
+  const showEndpoint = request.endpointOptions.length > 1;
+  const showLocation = !currentWorkspace?.error && (sharedAvailable || sharedUnavailable);
   const trimmedFileName = fileName.trim().replace(/\\/g, "/");
   const fileNameError = trimmedFileName ? createTopologyFileNameError(trimmedFileName) : "";
-  let locationDescription = "Checking available locations…";
-  if (currentWorkspace) {
-    locationDescription = location === "shared"
-      ? "Everyone signed in to this API server can edit, deploy, and destroy this lab."
-      : "Saved in your personal workspace.";
-  }
-  if (sharedUnavailable) {
-    locationDescription = "Shared is no longer available on this server. Choose Personal to save in your workspace.";
-  }
   const canSubmit = Boolean(
     currentWorkspace && !currentWorkspace.error && !sharedUnavailable && trimmedFileName && !fileNameError &&
     request.endpointOptions.some((option) => option.value === endpointId)
@@ -992,50 +1023,28 @@ function CreateTopologyDialogView(props: {
       <DialogTitle>{request.title}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary"
-            }}
-          >
-            {request.message}
-          </Typography>
-          <CloneRepoEndpointField
-            endpointOptions={request.endpointOptions}
-            value={endpointId}
-            setValue={(value) => {
-              if (value === endpointId) return;
-              setEndpointId(value);
-              setLocation("personal");
-              setWorkspace(null);
-            }}
-          />
-          <Stack spacing={0.75}>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: "center" }}>
-              <Typography id="create-topology-location-label" variant="body2" sx={{ fontWeight: 500 }}>
-                Location
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                aria-labelledby="create-topology-location-label"
-                value={location}
-                disabled={!currentWorkspace || Boolean(currentWorkspace.error)}
-                onChange={(_event, value: "personal" | "shared" | null) => {
-                  if (value) setLocation(value);
-                }}
-              >
-                <ToggleButton value="personal">Personal</ToggleButton>
-                {sharedAvailable ? <ToggleButton value="shared">Shared</ToggleButton> : null}
-              </ToggleButtonGroup>
-            </Stack>
-            {currentWorkspace?.error ? (
-              <Alert severity="error">{currentWorkspace.error}</Alert>
-            ) : (
-              <Typography variant="caption" color="text.secondary" aria-live="polite">
-                {locationDescription}
-              </Typography>
-            )}
-          </Stack>
+          {showEndpoint ? (
+            <EndpointOptionSelect
+              labelId="create-topology-endpoint-label"
+              label="Endpoint"
+              options={request.endpointOptions}
+              value={endpointId}
+              onChange={(value) => {
+                if (value === endpointId) return;
+                setEndpointId(value);
+                setLocation("personal");
+                setWorkspace(null);
+              }}
+            />
+          ) : null}
+          {currentWorkspace?.error ? <Alert severity="error">{currentWorkspace.error}</Alert> : null}
+          {showLocation ? (
+            <CreateTopologyLocationField
+              location={location}
+              setLocation={setLocation}
+              sharedAvailable={sharedAvailable}
+            />
+          ) : null}
           <TextField
             autoFocus
             fullWidth
@@ -1049,7 +1058,7 @@ function CreateTopologyDialogView(props: {
               }
             }}
             error={Boolean(fileNameError)}
-            helperText={fileNameError || `Example: ${DEFAULT_TOPOLOGY_FILE_NAME}. You can include a subfolder.`}
+            helperText={fileNameError || `Add a folder to save it in a subfolder, e.g. labs/${DEFAULT_TOPOLOGY_FILE_NAME}.`}
           />
         </Stack>
       </DialogContent>

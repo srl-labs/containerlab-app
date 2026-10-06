@@ -1,5 +1,5 @@
 // Node and annotation palette for the context panel.
-import React, { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
 import CableIcon from "@mui/icons-material/CableOutlined";
@@ -67,6 +67,8 @@ interface PaletteSectionProps {
   onSetDefaultCustomNode?: (nodeName: string) => void;
   editTabContent?: React.ReactNode;
   showEditTab?: boolean;
+  /** Changes whenever an editor is explicitly opened; brings the Edit tab forward. */
+  editorRequest?: number;
   editTabTitle?: string;
   onEditDelete?: () => void;
   onEditTabOpen?: () => void;
@@ -516,6 +518,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   onSetDefaultCustomNode,
   editTabContent,
   showEditTab = false,
+  editorRequest = 0,
   editTabTitle,
   onEditDelete,
   onEditTabOpen,
@@ -576,6 +579,15 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   useEffect(() => {
     if (showInfoTab) setUserTab("info");
   }, [showInfoTab]);
+
+  // Opening an editor (context menu, double-click) also brings its tab forward
+  // when the Edit tab was already open behind another tab.
+  const handledEditorRequest = useRef(editorRequest);
+  useEffect(() => {
+    if (editorRequest === handledEditorRequest.current) return;
+    handledEditorRequest.current = editorRequest;
+    if (showEditTab) setUserTab("edit");
+  }, [editorRequest, showEditTab]);
 
   // Fall back to the first visible tab when current tab is no longer visible.
   useEffect(() => {

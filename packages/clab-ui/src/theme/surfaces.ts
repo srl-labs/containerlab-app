@@ -15,6 +15,13 @@ export const shadowColor = "var(--vscode-widget-shadow, rgba(0, 0, 0, 0.36))";
 export const floatingShadow = `0 1px 2px ${shadowColor}, 0 6px 20px -4px ${shadowColor}`;
 export const overlayShadow = `0 2px 6px ${shadowColor}, 0 24px 56px -12px ${shadowColor}`;
 
+/** A lock toggle while the lab is locked: red, so a read-only lab is obvious at a glance. */
+export const lockedButtonSx = {
+  color: "error.main",
+  bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 14%, transparent)",
+  "&:hover": { bgcolor: "color-mix(in srgb, var(--vscode-errorForeground) 20%, transparent)" }
+} as const;
+
 /** Shared floating chrome. Host themes provide colors; components own geometry. */
 export const floatingSurfaceSx = {
   bgcolor: "var(--clab-ui-editor-background, var(--vscode-editor-background, #000))",
