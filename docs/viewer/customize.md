@@ -10,12 +10,12 @@ hide:
 
 # Your network.<br>A different point of view.
 
-Give the diagram as much thought as the lab. Explore five distinct topologies, from a quiet addressing guide to a fabric after dark. Every device, callout, and boundary is rendered by the real viewer.
+Give the diagram as much thought as the lab. Explore eight distinct topologies, from a quiet addressing guide to devices in frosted glass. Every device, callout, and boundary is rendered by the real viewer.
 
 <div class="studio-jumps">
 <a href="#playground">Open the playground <span aria-hidden="true">↗</span></a>
 <a href="#collection">Explore the collection <span aria-hidden="true">↓</span></a>
-<span>05 LABS &nbsp; / &nbsp; ALL SOURCE INCLUDED</span>
+<span>08 LABS &nbsp; / &nbsp; ALL SOURCE INCLUDED</span>
 </div>
 </div>
 
@@ -23,17 +23,18 @@ Give the diagram as much thought as the lab. Explore five distinct topologies, f
 
 Pick a lab. Change the atmosphere. Strip it back or bring every detail forward.
 
-Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Ember** for warm copper and coral, or **Porcelain** for a cream canvas with muted jewel tones.
+Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Ember** for warm copper and coral, or **Porcelain** for a cream canvas with muted jewel tones. Set **Links** to **Elbow** to draw every link with right-angle bends, then hover a link to trace it from one device to the other.
 
 <div class="studio-shell">
 <clab-customizer>
 <form class="studio-form" hidden aria-label="Customize the topology">
 <div class="studio-selects">
-<label>Topology<select name="lab"><option value="midnight-fabric">01 · Midnight fabric</option><option value="fabric-101">02 · Fabric field notes</option><option value="security-zones">03 · Trust boundaries</option><option value="wan-ring">04 · The scenic route</option><option value="packet-walk">05 · Follow the packet</option></select></label>
+<label>Topology<select name="lab"><option value="midnight-fabric">01 · Midnight fabric</option><option value="fabric-101">02 · Fabric field notes</option><option value="security-zones">03 · Trust boundaries</option><option value="wan-ring">04 · The scenic route</option><option value="packet-walk">05 · Follow the packet</option><option value="dual-homed">06 · Two of everything</option><option value="branch-office">07 · Every port, labeled</option><option value="frosted-glass">08 · Clear as glass</option></select></label>
 <label>Palette<select name="palette"><option value="original">As designed</option><option value="paper">Paper</option><option value="midnight">Midnight</option><option value="blueprint">Blueprint</option><option value="synthwave">Synthwave</option><option value="aurora">Aurora</option><option value="ember">Ember</option><option value="porcelain">Porcelain</option></select></label>
 <label>Presentation<select name="presentation"><option value="figure">Figure</option><option value="explorer">Explorer</option><option value="split">Diagram + YAML</option></select></label>
 <label>Grid<select name="grid"><option value="none">None</option><option value="dots">Dots</option><option value="lines">Lines</option></select></label>
 <label>Interfaces<select name="link-labels"><option value="hide">Hidden</option><option value="on-select">On selection</option><option value="show-all">Always visible</option></select></label>
+<label>Links<select name="link-style"><option value="">As designed</option><option value="straight">Straight</option><option value="elbow">Elbow</option></select></label>
 </div>
 <div class="studio-toggles">
 <label><input type="checkbox" name="groups" checked> Groups</label>
@@ -71,9 +72,9 @@ Try **Synthwave** for neon pink and cyan, **Aurora** for mint and ice blue, **Em
 </clab-customizer>
 </div>
 
-## Five labs. Five personalities. { #collection }
+## Eight labs. Eight personalities. { #collection }
 
-These are starting points you can take apart. Each pairs a containerlab YAML file with an editable annotations file. The first four supply wiring for an exercise; the Linux walkthrough also configures addresses and routes.
+These are starting points you can take apart. Each pairs a containerlab YAML file with an editable annotations file. Most supply wiring for an exercise; the Linux walkthrough also configures addresses and routes.
 
 <div class="studio-collection" markdown>
 
@@ -166,6 +167,60 @@ A runnable Linux lab with two subnets and IP forwarding. Address labels explain 
 [Topology YAML ↓](../examples/packet-walk.clab.yml){ download="packet-walk.clab.yml" } · [Annotations ↓](../examples/packet-walk.clab.yml.annotations.json){ download="packet-walk.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="packet-walk" }
 </div>
 </div>
+
+<div class="studio-example" id="dual-homed" markdown>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / BLUEPRINT</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
+
+Two spines, three leaves, and two hosts, each wired to a pair of leaves. Elbow links drop through the gaps between layers with right-angle bends, links between devices that face each other run straight, and a crossing shows a small gap so it never reads as a turn. Hover any link to light it up with both of its devices.
+
+<div class="studio-art" data-palette="blueprint">
+
+```clab file="examples/dual-homed.clab.yml" annotations="examples/dual-homed.clab.yml.annotations.json" title="Dual-homed hosts" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.10" height="520"
+```
+
+</div>
+<div class="studio-example-footer" markdown>
+<span class="studio-tags">ELBOW LINKS · HOVER TO TRACE · LAYER GROUPS</span>
+
+[Topology YAML ↓](../examples/dual-homed.clab.yml){ download="dual-homed.clab.yml" } · [Annotations ↓](../examples/dual-homed.clab.yml.annotations.json){ download="dual-homed.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="dual-homed" }
+</div>
+</div>
+
+<div class="studio-example" id="branch-office" markdown>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">07</span><div><span class="studio-eyebrow">ENTERPRISE / PORCELAIN</span><h3>Every port, labeled.</h3></div><span class="studio-count">8 nodes · 9 links</span></div>
+
+A branch office as a clean schematic: two internet uplinks, an edge router, a redundant core, and three floors. With elbow links, every interface name sits on its own link just past the device and reads along it, so the cabling plan stays legible with all labels on.
+
+<div class="studio-art" data-palette="porcelain">
+
+```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.10" height="560"
+```
+
+</div>
+<div class="studio-example-footer" markdown>
+<span class="studio-tags">ELBOW LINKS · LABELS ALONG LINKS · SCHEMATIC</span>
+
+[Topology YAML ↓](../examples/branch-office.clab.yml){ download="branch-office.clab.yml" } · [Annotations ↓](../examples/branch-office.clab.yml.annotations.json){ download="branch-office.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="branch-office" }
+</div>
+</div>
+
+<div class="studio-example" id="frosted-glass" markdown>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">08</span><div><span class="studio-eyebrow">SHOWCASE / FROSTED GLASS</span><h3>Clear as glass.</h3></div><span class="studio-count">6 nodes · 7 links</span></div>
+
+Every device sits in a frosted glass box: a faint white fill, a hairline border, and a blur of whatever glows behind it. Four soft glows give the glass something to bend, and elbow links keep the wiring calm. Hover a link to light it up with both of its devices.
+
+<div class="studio-art" data-palette="synthwave">
+
+```clab file="examples/frosted-glass.clab.yml" annotations="examples/frosted-glass.clab.yml.annotations.json" title="Frosted glass showcase" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.10" height="560"
+```
+
+</div>
+<div class="studio-example-footer" markdown>
+<span class="studio-tags">BOXED NODES · FROSTED GLASS · ELBOW LINKS</span>
+
+[Topology YAML ↓](../examples/frosted-glass.clab.yml){ download="frosted-glass.clab.yml" } · [Annotations ↓](../examples/frosted-glass.clab.yml.annotations.json){ download="frosted-glass.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="frosted-glass" }
+</div>
+</div>
 </div>
 
 ## Build your own visual language
@@ -176,6 +231,9 @@ A runnable Linux lab with two subnets and IP forwarding. Address labels explain 
 | Rack, subnet, or security boundaries | `groupStyleAnnotations` with fills, borders, labels, and corners | Trust boundaries |
 | Interface and addressing detail | Markdown `freeTextAnnotations` with monospace text and a background | Fabric field notes |
 | Direction and emphasis | `freeShapeAnnotations` lines, arrowheads, circles, and dashed borders | Follow the packet |
+| Link routing | `viewerSettings.linkStyle: "elbow"` in the annotations, or `link-style="elbow"` on the fence | Two of everything |
+| Readable cabling plans | Elbow links with `link-labels="show-all"`: each interface name reads along its own link | Every port, labeled |
+| Frosted glass devices | `viewerSettings.nodeStyle: "boxed"` and a per-node `box` with `blur`, a low `opacity`, and a light `borderColor`, over colored shapes | Clear as glass |
 | Mood of the canvas | CSS color tokens, a pinned theme, and a grid | Any lab → Blueprint palette |
 | Amount of interface | Borderless figure, full explorer, or split source view | Presentation selector |
 | Reading experience | Disable wheel zoom, choose pan, set height and fit padding | Playground controls |

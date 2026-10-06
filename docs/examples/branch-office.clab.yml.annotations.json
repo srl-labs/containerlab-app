@@ -1,0 +1,208 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "isp-a",
+      "position": {
+        "x": 180,
+        "y": 110
+      },
+      "icon": "cloud",
+      "iconColor": "#a68996",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "internet"
+    },
+    {
+      "id": "isp-b",
+      "position": {
+        "x": 460,
+        "y": 110
+      },
+      "icon": "cloud",
+      "iconColor": "#a68996",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "internet"
+    },
+    {
+      "id": "edge",
+      "position": {
+        "x": 320,
+        "y": 290
+      },
+      "icon": "pe",
+      "iconColor": "#bc5e59",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent"
+    },
+    {
+      "id": "core1",
+      "position": {
+        "x": 180,
+        "y": 470
+      },
+      "icon": "switch",
+      "iconColor": "#327f83",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "core"
+    },
+    {
+      "id": "core2",
+      "position": {
+        "x": 460,
+        "y": 470
+      },
+      "icon": "switch",
+      "iconColor": "#327f83",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "core"
+    },
+    {
+      "id": "floor1",
+      "position": {
+        "x": 40,
+        "y": 670
+      },
+      "icon": "leaf",
+      "iconColor": "#7774a6",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "floors"
+    },
+    {
+      "id": "floor2",
+      "position": {
+        "x": 320,
+        "y": 670
+      },
+      "icon": "leaf",
+      "iconColor": "#7774a6",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "floors"
+    },
+    {
+      "id": "floor3",
+      "position": {
+        "x": 600,
+        "y": 670
+      },
+      "icon": "leaf",
+      "iconColor": "#7774a6",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "floors"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "internet",
+      "name": "INTERNET",
+      "level": "L1",
+      "position": {
+        "x": 140,
+        "y": 85
+      },
+      "width": 400,
+      "height": 95,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#dccbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#796570",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "core",
+      "name": "CORE",
+      "level": "L1",
+      "position": {
+        "x": 140,
+        "y": 445
+      },
+      "width": 400,
+      "height": 95,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#dccbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#796570",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "floors",
+      "name": "FLOORS",
+      "level": "L1",
+      "position": {
+        "x": 5,
+        "y": 645
+      },
+      "width": 670,
+      "height": 95,
+      "backgroundColor": "#ffffff",
+      "backgroundOpacity": 85,
+      "borderColor": "#dccbd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#796570",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "branch-heading",
+      "text": "**EVERY PORT, LABELED.**",
+      "position": {
+        "x": 5,
+        "y": -60
+      },
+      "width": 680,
+      "height": 60,
+      "fontSize": 30,
+      "fontColor": "#443b43",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "branch-subtitle",
+      "text": "Branch office \u00b7 interface names read along each link",
+      "position": {
+        "x": 7,
+        "y": -2
+      },
+      "width": 680,
+      "height": 40,
+      "fontSize": 15,
+      "fontColor": "#796570",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "viewerSettings": {
+    "linkStyle": "elbow",
+    "linkLabelMode": "show-all",
+    "gridColor": "#dccbd1",
+    "gridLineWidth": 0.5
+  }
+}

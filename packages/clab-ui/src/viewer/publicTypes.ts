@@ -5,6 +5,8 @@ export interface ViewerOptions {
   transparent?: boolean;
   nodeLabels?: boolean;
   linkLabels?: "show-all" | "on-select" | "hide";
+  /** Straight lines or right-angle elbows; defaults to the style saved in the annotations. */
+  linkStyle?: "straight" | "elbow";
   zoomOnScroll?: boolean;
   panOnDrag?: boolean;
   fitPadding?: number;

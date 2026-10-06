@@ -202,6 +202,7 @@ export class ClabTopology extends HTMLElement {
     }
     if (["dots", "lines", "none"].includes(this.getAttribute("grid"))) options.background = this.getAttribute("grid");
     if (["show-all", "on-select", "hide"].includes(this.getAttribute("link-labels"))) options.linkLabels = this.getAttribute("link-labels");
+    if (["straight", "elbow"].includes(this.getAttribute("link-style"))) options.linkStyle = this.getAttribute("link-style");
     if (this.hasAttribute("fit-padding") && Number.isFinite(Number(this.getAttribute("fit-padding")))) options.fitPadding = Math.min(2, Math.max(0, Number(this.getAttribute("fit-padding"))));
     for (const [key, variable] of Object.entries({ background: "--clab-surface", foreground: "--clab-text", surface: "--clab-raised", border: "--clab-border", accent: "--clab-accent", edge: "--clab-edge", font: "--clab-font" })) {
       const value = styles.getPropertyValue(variable).trim();

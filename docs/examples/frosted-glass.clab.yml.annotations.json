@@ -1,0 +1,242 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "internet",
+      "position": {
+        "x": 300,
+        "y": 110
+      },
+      "icon": "cloud",
+      "iconColor": "#e879f9",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    },
+    {
+      "id": "edge1",
+      "position": {
+        "x": 160,
+        "y": 300
+      },
+      "icon": "pe",
+      "iconColor": "#a78bfa",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    },
+    {
+      "id": "edge2",
+      "position": {
+        "x": 440,
+        "y": 300
+      },
+      "icon": "pe",
+      "iconColor": "#a78bfa",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    },
+    {
+      "id": "app1",
+      "position": {
+        "x": 40,
+        "y": 500
+      },
+      "icon": "server",
+      "iconColor": "#67e8f9",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    },
+    {
+      "id": "app2",
+      "position": {
+        "x": 300,
+        "y": 500
+      },
+      "icon": "server",
+      "iconColor": "#67e8f9",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    },
+    {
+      "id": "app3",
+      "position": {
+        "x": 560,
+        "y": 500
+      },
+      "icon": "server",
+      "iconColor": "#67e8f9",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 10,
+        "blur": 18,
+        "borderColor": "#ffffff73",
+        "borderWidth": 1,
+        "cornerRadius": 18,
+        "textColor": "#fdf4ff",
+        "shadow": true
+      }
+    }
+  ],
+  "groupStyleAnnotations": [],
+  "freeTextAnnotations": [
+    {
+      "id": "glass-heading",
+      "text": "**CLEAR AS GLASS.**",
+      "position": {
+        "x": 20,
+        "y": -60
+      },
+      "width": 620,
+      "height": 60,
+      "fontSize": 30,
+      "fontColor": "#fff1ff",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "glass-subtitle",
+      "text": "Devices in frosted glass over a soft glow \u00b7 elbow links",
+      "position": {
+        "x": 22,
+        "y": -2
+      },
+      "width": 620,
+      "height": 40,
+      "fontSize": 15,
+      "fontColor": "#c5a4df",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "glow-violet",
+      "shapeType": "circle",
+      "position": {
+        "x": -50,
+        "y": 260
+      },
+      "width": 340,
+      "height": 340,
+      "fillColor": "#8b5cf6",
+      "fillOpacity": 0.55,
+      "borderColor": "#8b5cf6",
+      "borderWidth": 0,
+      "borderStyle": "solid",
+      "zIndex": -20
+    },
+    {
+      "id": "glow-pink",
+      "shapeType": "circle",
+      "position": {
+        "x": 230,
+        "y": 20
+      },
+      "width": 340,
+      "height": 340,
+      "fillColor": "#ec4899",
+      "fillOpacity": 0.45,
+      "borderColor": "#ec4899",
+      "borderWidth": 0,
+      "borderStyle": "solid",
+      "zIndex": -20
+    },
+    {
+      "id": "glow-cyan",
+      "shapeType": "circle",
+      "position": {
+        "x": 170,
+        "y": 360
+      },
+      "width": 320,
+      "height": 320,
+      "fillColor": "#06b6d4",
+      "fillOpacity": 0.45,
+      "borderColor": "#06b6d4",
+      "borderWidth": 0,
+      "borderStyle": "solid",
+      "zIndex": -20
+    },
+    {
+      "id": "glow-amber",
+      "shapeType": "circle",
+      "position": {
+        "x": 480,
+        "y": 400
+      },
+      "width": 240,
+      "height": 240,
+      "fillColor": "#f59e0b",
+      "fillOpacity": 0.4,
+      "borderColor": "#f59e0b",
+      "borderWidth": 0,
+      "borderStyle": "solid",
+      "zIndex": -20
+    }
+  ],
+  "viewerSettings": {
+    "nodeStyle": "boxed",
+    "linkStyle": "elbow",
+    "linkLabelMode": "on-select",
+    "gridColor": "#3a2152",
+    "gridLineWidth": 0.5
+  }
+}

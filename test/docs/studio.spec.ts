@@ -6,10 +6,13 @@ const labs = [
   { id: "fabric-101", nodes: 3, groups: 3, shapes: 0, text: "Small fabric. Every detail." },
   { id: "security-zones", nodes: 6, groups: 3, shapes: 1, text: "Draw the trust boundary." },
   { id: "wan-ring", nodes: 6, groups: 0, shapes: 1, text: "The long way is still a way." },
-  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." }
+  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." },
+  { id: "dual-homed", nodes: 7, groups: 3, shapes: 0, text: "TWO OF EVERYTHING." },
+  { id: "branch-office", nodes: 8, groups: 3, shapes: 0, text: "EVERY PORT, LABELED." },
+  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 4, text: "CLEAR AS GLASS." }
 ];
 
-test("all five gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {
+test("all gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("viewer/customize/");
@@ -41,11 +44,13 @@ test("the studio composes options and exports the customized annotations and rec
   await studio.getByRole("combobox", { name: "Presentation", exact: true }).selectOption("split");
   await studio.getByRole("combobox", { name: "Grid", exact: true }).selectOption("lines");
   await studio.getByRole("combobox", { name: "Interfaces", exact: true }).selectOption("on-select");
+  await studio.getByRole("combobox", { name: "Links", exact: true }).selectOption("elbow");
   await studio.getByLabel("Groups", { exact: true }).uncheck();
   await studio.getByLabel("Notes & IPs", { exact: true }).uncheck();
   await studio.getByLabel("Node corners", { exact: true }).fill("22");
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(component).toHaveAttribute("view", "split");
+  await expect(component).toHaveAttribute("link-style", "elbow");
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator("html")).toHaveAttribute("data-clab-theme", "dark");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(3);
@@ -59,6 +64,7 @@ test("the studio composes options and exports the customized annotations and rec
   expect(recipe).toContain('file="examples/packet-walk.clab.yml"');
   expect(recipe).toContain('view="split"');
   expect(recipe).toContain('grid="lines"');
+  expect(recipe).toContain('link-style="elbow"');
   expect(recipe).toContain("--clab-surface: #102d50");
   const pending = page.waitForEvent("download");
   await studio.getByRole("button", { name: "Annotations ↓" }).click();
@@ -71,6 +77,7 @@ test("the studio composes options and exports the customized annotations and rec
   expect(annotations.nodeAnnotations[0].iconColor).toBe("#a3e7ff");
   expect(annotations.nodeAnnotations[0].position).toEqual({ x: 65, y: 165 });
   expect(annotations.freeShapeAnnotations).toHaveLength(2);
+  expect(annotations.viewerSettings.linkStyle).toBe("elbow");
   expect(annotations).toEqual(JSON.parse((await component.getAttribute("annotations"))!));
   const yamlPending = page.waitForEvent("download");
   await studio.getByRole("link", { name: "YAML ↓", exact: true }).click();
@@ -79,6 +86,7 @@ test("the studio composes options and exports the customized annotations and rec
   await studio.getByRole("button", { name: "Reset style" }).click();
   await expect(studio.getByRole("combobox", { name: "Topology", exact: true })).toHaveValue("packet-walk");
   await expect(studio.getByRole("combobox", { name: "Palette", exact: true })).toHaveValue("original");
+  await expect(studio.getByRole("combobox", { name: "Links", exact: true })).toHaveValue("");
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(viewer.locator(".react-flow__node-free-text-node")).toHaveCount(8);
 });

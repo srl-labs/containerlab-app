@@ -35,6 +35,7 @@ class TopologyPreprocessor(Preprocessor):
             "theme": {"auto", "light", "dark"},
             "grid": {"dots", "lines", "none"},
             "link-labels": {"show-all", "on-select", "hide"},
+            "link-style": {"straight", "elbow"},
             "loading": {"eager", "lazy"},
         }
         allowed = {"title", "file", "annotations", "view", "height", "filename", "fit-padding"} | toggles | choices.keys()

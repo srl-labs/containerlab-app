@@ -1,0 +1,196 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "spine1",
+      "position": {
+        "x": 200,
+        "y": 110
+      },
+      "icon": "spine",
+      "iconColor": "#a3e7ff",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "spines"
+    },
+    {
+      "id": "spine2",
+      "position": {
+        "x": 440,
+        "y": 110
+      },
+      "icon": "spine",
+      "iconColor": "#a3e7ff",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "spines"
+    },
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 80,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#78b6f4",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 320,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#78b6f4",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves"
+    },
+    {
+      "id": "leaf3",
+      "position": {
+        "x": 560,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#78b6f4",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves"
+    },
+    {
+      "id": "host1",
+      "position": {
+        "x": 200,
+        "y": 560
+      },
+      "icon": "server",
+      "iconColor": "#e2efff",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "hosts"
+    },
+    {
+      "id": "host2",
+      "position": {
+        "x": 440,
+        "y": 560
+      },
+      "icon": "server",
+      "iconColor": "#e2efff",
+      "iconCornerRadius": 12,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "hosts"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "spines",
+      "name": "SPINES",
+      "level": "L1",
+      "position": {
+        "x": 160,
+        "y": 85
+      },
+      "width": 360,
+      "height": 95,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 85,
+      "borderColor": "#386187",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#a2c5e5",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "leaves",
+      "name": "LEAVES",
+      "level": "L1",
+      "position": {
+        "x": 40,
+        "y": 305
+      },
+      "width": 600,
+      "height": 95,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 85,
+      "borderColor": "#386187",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#a2c5e5",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "hosts",
+      "name": "HOSTS",
+      "level": "L1",
+      "position": {
+        "x": 160,
+        "y": 535
+      },
+      "width": 360,
+      "height": 95,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 85,
+      "borderColor": "#386187",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 18,
+      "labelColor": "#a2c5e5",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "pairs-heading",
+      "text": "**TWO OF EVERYTHING.**",
+      "position": {
+        "x": 40,
+        "y": -60
+      },
+      "width": 600,
+      "height": 60,
+      "fontSize": 30,
+      "fontColor": "#ecf6ff",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "pairs-subtitle",
+      "text": "Dual-homed hosts on a small fabric \u00b7 hover a link to trace it",
+      "position": {
+        "x": 42,
+        "y": -2
+      },
+      "width": 600,
+      "height": 40,
+      "fontSize": 15,
+      "fontColor": "#a2c5e5",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "viewerSettings": {
+    "linkStyle": "elbow",
+    "linkLabelMode": "on-select",
+    "gridColor": "#386187",
+    "gridLineWidth": 0.5
+  }
+}

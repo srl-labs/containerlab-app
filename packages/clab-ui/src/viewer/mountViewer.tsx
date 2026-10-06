@@ -27,7 +27,12 @@ export function mountViewer(container: Element, options: MountViewerOptions): Ro
   // Per-node annotation flags otherwise override React Flow's read-only canvas props.
   useGraphStore.getState().setNodes(nodes => nodes.map(node => ({ ...node, draggable: false, connectable: false, deletable: false })));
   const resolved = resolveViewerOptions(options.viewerOptions, options.borderless);
-  useTopoViewerStore.setState({ isLocked: true, selectedNode: null, selectedEdge: null });
+  useTopoViewerStore.setState({
+    isLocked: true,
+    selectedNode: null,
+    selectedEdge: null,
+    ...(resolved.linkStyle !== undefined ? { linkStyle: resolved.linkStyle } : {})
+  });
   useCanvasStore.setState({
     linkSourceNode: null,
     annotationHandlers: null,

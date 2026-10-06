@@ -18,6 +18,7 @@ Use a `clab` code fence at the top level of a Markdown page. Option values conta
 | `theme` | `auto` | `auto`, `light`, or `dark`; auto follows the docs theme or the system preference on other sites |
 | `node-labels` | `true` | Show device names |
 | `link-labels` | Saved annotations, otherwise `show-all` | Interface labels: `show-all`, `on-select`, or `hide` |
+| `link-style` | Saved annotations, otherwise `straight` | `straight` lines, or `elbow` links with right-angle bends and labels that read along each link |
 | `zoom`, `pan` | `true` | Enable wheel/pinch zoom and dragging the canvas independently. Use `zoom="false"` to let the page scroll over the diagram. |
 | `fit-padding` | `0.25` | Space around the fitted graph, from `0` to `2` |
 | `loading` | `lazy` | Start near the viewport; use `eager` for the main diagram at the top of a page |
@@ -28,7 +29,7 @@ A file reference and inline YAML cannot be combined. Missing files, malformed YA
 
 Boolean options accept `true` or `false` in Markdown. In HTML, an empty attribute means true, and `controls="false"` means false. See [customization recipes](customize.md) for combinations.
 
-Try these options in the [customization studio](customize.md#playground). Switch among five labs, recolor their annotations, toggle groups and callouts, and export a matching Markdown + CSS recipe with the customized JSON.
+Try these options in the [customization studio](customize.md#playground). Switch among eight labs, recolor their annotations, toggle groups and callouts, and export a matching Markdown + CSS recipe with the customized JSON.
 
 ## Add it to another Zensical site
 
@@ -142,6 +143,7 @@ frame.contentWindow.postMessage({
     transparent: true,
     nodeLabels: true,
     linkLabels: "on-select",
+    linkStyle: "elbow", // or "straight"
     zoomOnScroll: false,
     panOnDrag: true,
     fitPadding: 0.15,

@@ -34,6 +34,10 @@ class TopologyTests(unittest.TestCase):
             self.assertIn('filename="lab.yml"', html)
             self.assertIn('annotations="{&quot;nodeAnnotations&quot;: []}"', html)
 
+    def test_link_style_passes_through(self):
+        html = self.render('```clab link-style="elbow"\n' + SOURCE + '```')
+        self.assertIn('link-style="elbow"', html)
+
     def test_documented_fences_are_not_executed(self):
         html = self.render('````markdown\n```clab\n' + SOURCE + '```\n````')
         self.assertNotIn('<clab-topology ', html)
@@ -48,6 +52,7 @@ class TopologyTests(unittest.TestCase):
             '```clab controls="sometimes"\n' + SOURCE + '```',
             '```clab grid="squares"\n' + SOURCE + '```',
             '```clab theme="blue"\n' + SOURCE + '```',
+            '```clab link-style="curvy"\n' + SOURCE + '```',
             '```clab fit-padding="NaN"\n' + SOURCE + '```',
             '```clab fit-padding="3"\n' + SOURCE + '```',
             '```clab\nname: no-topology\n```',

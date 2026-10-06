@@ -38,5 +38,6 @@ export function isViewerOptions(value: unknown): value is ViewerOptions | undefi
   }
   if (options.background !== undefined && !["dots", "lines", "none"].includes(String(options.background))) return false;
   if (options.linkLabels !== undefined && !["show-all", "on-select", "hide"].includes(String(options.linkLabels))) return false;
+  if (options.linkStyle !== undefined && !["straight", "elbow"].includes(String(options.linkStyle))) return false;
   return isFitPadding(options.fitPadding) && isAppearance(options.appearance);
 }
