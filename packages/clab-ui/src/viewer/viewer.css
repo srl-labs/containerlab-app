@@ -8,9 +8,11 @@
   --topoviewer-node-label-background: var(--viewer-background, var(--vscode-editor-background));
   --topoviewer-node-label-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
   --topoviewer-node-label-outline: var(--viewer-background, var(--vscode-editor-background));
-  --topoviewer-edge-label-background: var(--viewer-background, var(--vscode-editor-background));
+  /* Link labels and line outlines stay solid even on a transparent canvas. */
+  --topoviewer-canvas-background: var(--viewer-paper, var(--vscode-editor-background));
+  --topoviewer-edge-label-background: var(--topoviewer-canvas-background);
   --topoviewer-edge-label-foreground: var(--viewer-foreground, var(--vscode-editor-foreground));
-  --topoviewer-edge-label-outline: var(--viewer-background, var(--vscode-editor-background));
+  --topoviewer-edge-label-outline: var(--topoviewer-canvas-background);
   --topoviewer-network-node-background: var(--vscode-sideBar-background);
   --topoviewer-node-box-background: var(--viewer-surface, color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-editor-foreground)));
   --topoviewer-node-box-border: var(--viewer-border, color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-editor-foreground)));

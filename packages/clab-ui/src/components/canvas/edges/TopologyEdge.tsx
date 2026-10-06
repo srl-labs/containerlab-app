@@ -100,7 +100,8 @@ const ELBOW_EDGE_WIDTH = 2.5;
 const ELBOW_EDGE_WIDTH_ACTIVE = 4;
 const ELBOW_CASING_WIDTH = 1.5;
 const ELBOW_EDGE_COLOR_MIX = 70;
-const CANVAS_BACKGROUND = "var(--topoviewer-edge-label-background)";
+const CANVAS_BACKGROUND =
+  "var(--topoviewer-canvas-background, var(--topoviewer-edge-label-background))";
 
 // Hovering a link fades the others back so it can be followed
 const EDGE_OPACITY_DIMMED = 0.15;

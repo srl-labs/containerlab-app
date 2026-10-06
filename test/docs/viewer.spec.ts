@@ -207,6 +207,33 @@ for (const route of ["examples/linux/", "guides/topologies/"]) {
   });
 }
 
+test("with wheel zoom off, the wheel scrolls the page over the canvas", async ({ page }) => {
+  await page.goto("viewer/customize/");
+  const component = page.locator("#dual-homed clab-topology");
+  await component.scrollIntoViewIfNeeded();
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const viewport = component.frameLocator("iframe").locator(".react-flow__viewport");
+  const transform = () => viewport.evaluate((element) => getComputedStyle(element).transform);
+  await page.waitForTimeout(300);
+  const before = await transform();
+  const scroll = await page.evaluate(() => window.scrollY);
+  const box = (await component.locator("iframe").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scroll);
+  expect(await transform()).toBe(before);
+});
+
+test("link labels keep a solid background on a transparent canvas", async ({ page }) => {
+  await page.goto("viewer/customize/");
+  const component = page.locator("#branch-office clab-topology");
+  await component.scrollIntoViewIfNeeded();
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const label = component.frameLocator("iframe").locator(".topology-edge-label").first();
+  await expect(label).toBeVisible();
+  expect(await label.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
+});
+
 test("borderless diagrams show only a transparent canvas in both themes", async ({ page }) => {
   await page.goto("guides/topologies/");
   const component = page.locator("clab-topology[borderless]");
