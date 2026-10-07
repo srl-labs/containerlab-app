@@ -4,8 +4,7 @@ import type { TopologyRef } from "../session";
 export const WORKSPACE_ASSETS = [
   "containerlab.svg",
   "containerlab-animated.svg",
-  "clab-animated-no-logo.svg",
-  "model.gltf"
+  "clab-animated-no-logo.svg"
 ] as const;
 
 export type WorkspaceAsset = (typeof WORKSPACE_ASSETS)[number];
