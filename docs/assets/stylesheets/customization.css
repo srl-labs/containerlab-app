@@ -19,7 +19,6 @@ clab-customizer [hidden] { display: none !important; }
 .studio-swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; }
 .studio-swatches label { position: relative; display: grid; gap: 6px; color: var(--site-muted); font-size: 10px; line-height: 1.2; text-align: center; cursor: pointer; }
 .studio-swatches i { display: block; aspect-ratio: 4 / 3; border-radius: 8px; border: 1px solid var(--studio-border); background: radial-gradient(circle at 72% 32%, var(--studio-accent) 0 17%, transparent 18%), linear-gradient(135deg, var(--studio-bg) 0 56%, var(--studio-edge) 56% 70%, var(--studio-raised) 70%); transition: transform .15s; }
-.studio-swatches label[data-palette="original"] i { border-color: var(--site-border); background: conic-gradient(from 200deg, #d4f58a, #63d7cb, #8ae2ff, #c5b3f4, #ff6ad5, #ffb36b, #d4f58a); }
 .studio-swatches label:hover i { transform: translateY(-1px); }
 .studio-swatches label:has(:checked) { color: var(--site-heading); font-weight: 600; }
 .studio-swatches label:is(:has(:checked), :has(:focus-visible)) i { outline: 2px solid var(--site-accent); outline-offset: 2px; }

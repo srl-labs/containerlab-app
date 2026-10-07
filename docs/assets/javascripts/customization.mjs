@@ -15,6 +15,9 @@ const themes = {
 };
 const nodeColors = {
   paper: ["#287761", "#63854d", "#668fa4"],
+  sandstone: ["#d78b50", "#a18bd5", "#c17a54"],
+  mint: ["#32917d", "#518371", "#4f8fa3"],
+  violet: ["#88cbd0", "#b9a5ef", "#cbb9ff"],
   midnight: ["#d4f58a", "#63d7cb", "#a3b9dc"],
   blueprint: ["#e8a33d", "#2f7fd1", "#3a9cc4"],
   synthwave: ["#ff6ad5", "#46f0e0", "#ffd36d"],
@@ -32,7 +35,8 @@ const SLIDER_DELAY_MS = 140;
 
 function customizeAnnotations(source, settings, colors) {
   const annotations = structuredClone(source);
-  const recolor = settings.palette !== "original";
+  // A lab keeps its own colors in the palette it was designed with.
+  const recolor = settings.palette !== labs[settings.lab].palette;
   const roles = [...new Set(annotations.nodeAnnotations.map(node => node.iconColor))];
   for (const node of annotations.nodeAnnotations) {
     if (recolor) node.iconColor = nodeColors[settings.palette][roles.indexOf(node.iconColor) % nodeColors[settings.palette].length];
@@ -63,7 +67,6 @@ function customizeAnnotations(source, settings, colors) {
     delete viewerSettings.style;
     viewerSettings.linkLabelMode = settings["link-labels"];
   }
-  // An empty choice keeps the style the lab was designed with.
   if (settings["node-style"]) viewerSettings.nodeStyle = settings["node-style"];
   if (settings["link-style"]) viewerSettings.linkStyle = settings["link-style"];
   return annotations;
@@ -121,8 +124,26 @@ class ClabCustomizer extends HTMLElement {
       else if (control.type === "checkbox" || control.type === "radio") control.checked = control.defaultChecked;
       else control.value = control.defaultValue;
     }
+    // The palette, node style, and link style follow the lab again.
+    this.syncedLab = null;
     this.updateOutputs();
     this.render();
+  }
+
+  /** Select the palette, node style, and link style the lab was saved with, once per chosen lab. */
+  syncLabStyles(settings, source) {
+    if (this.syncedLab === settings.lab) return;
+    this.syncedLab = settings.lab;
+    const saved = source.annotations.viewerSettings ?? {};
+    const styles = {
+      palette: labs[settings.lab].palette,
+      "node-style": saved.nodeStyle === "boxed" ? "boxed" : "icon",
+      "link-style": saved.linkStyle === "elbow" ? "elbow" : "straight"
+    };
+    for (const [name, value] of Object.entries(styles)) {
+      this.form.querySelector(`[name='${name}'][value='${value}']`).checked = true;
+      settings[name] = value;
+    }
   }
 
   updateOutputs() {
@@ -177,7 +198,8 @@ class ClabCustomizer extends HTMLElement {
     try {
       const source = await this.loadLab(settings.lab, signal);
       if (signal.aborted || !this.isConnected) return;
-      const palette = settings.palette === "original" ? lab.palette : settings.palette;
+      this.syncLabStyles(settings, source);
+      const palette = settings.palette;
       const stage = this.querySelector(".studio-preview");
       stage.dataset.palette = palette;
       stage.dataset.transparent = String(settings.transparent);

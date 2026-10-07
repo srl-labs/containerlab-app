@@ -92,12 +92,18 @@ test("the studio composes options and exports the customized annotations and rec
   expect(await readFile((await yamlDownload.path())!, "utf8")).toBe(await readFile("docs/examples/packet-walk.clab.yml", "utf8"));
   await studio.getByRole("button", { name: "Reset settings" }).click();
   await expect(studio.getByRole("combobox", { name: "Topology", exact: true })).toHaveValue("packet-walk");
-  await expect(studio.getByRole("radiogroup", { name: "Palette", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
-  await expect(studio.getByRole("radiogroup", { name: "Link style", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
-  await expect(studio.getByRole("radiogroup", { name: "Node style", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
+  await expect(studio.getByRole("radiogroup", { name: "Palette", exact: true }).getByRole("radio", { name: "Mint", exact: true })).toBeChecked();
+  const linkStyle = studio.getByRole("radiogroup", { name: "Link style", exact: true });
+  const nodeStyle = studio.getByRole("radiogroup", { name: "Node style", exact: true });
+  // The node and link styles follow the saved styles of the selected lab.
+  await expect(linkStyle.getByRole("radio", { name: "Straight", exact: true })).toBeChecked();
+  await expect(nodeStyle.getByRole("radio", { name: "Icons", exact: true })).toBeChecked();
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(viewer.locator(".topology-node-boxed")).toHaveCount(0);
   await expect(viewer.locator(".react-flow__node-free-text-node")).toHaveCount(8);
+  await studio.getByRole("combobox", { name: "Topology", exact: true }).selectOption("frosted-glass");
+  await expect(nodeStyle.getByRole("radio", { name: "Boxed", exact: true })).toBeChecked();
+  await expect(linkStyle.getByRole("radio", { name: "Elbow", exact: true })).toBeChecked();
 });
 
 test("telemetry style replaces the interface names until it is switched off", async ({ page }) => {
