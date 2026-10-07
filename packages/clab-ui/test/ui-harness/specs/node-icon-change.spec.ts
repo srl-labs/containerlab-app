@@ -234,8 +234,8 @@ test.describe("Node Icon Change", () => {
     await openNodeEditor(page, nodeId);
     await openIconEditor(page);
     await expect(color).toHaveValue("ff6600");
-    // Built-in default blue must also be selectable as an explicit custom SVG tint.
-    await color.fill("005aff");
+    // The built-in default cyan must also be selectable as an explicit custom SVG tint.
+    await color.fill("00c9ff");
     await color.blur();
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await page.getByTestId("panel-apply-btn").click();
@@ -245,7 +245,7 @@ test.describe("Node Icon Change", () => {
         return annotations.nodeAnnotations?.find((node: { id: string }) => node.id === nodeId)
           ?.iconColor;
       })
-      .toBe("#005aff");
+      .toBe("#00c9ff");
 
     await openIconEditor(page);
     await dialog.getByRole("button", { name: "Restore original icon colors" }).click();

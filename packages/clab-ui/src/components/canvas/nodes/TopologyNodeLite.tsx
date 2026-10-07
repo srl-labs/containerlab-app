@@ -14,6 +14,8 @@ import {
   useTopoViewerStore
 } from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
+import { generateLiteSVG } from "../../../icons/SvgGenerator";
+import { useCanvasIconInk } from "../../../icons/iconInk";
 
 import { LiteNodeShell } from "./NodeLiteBase";
 import {
@@ -34,6 +36,7 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ id, data, selected }) 
   const nodeData = toTopologyNodeData(data);
   const deploymentState = useDeploymentState();
   const isBoxed = useNodeStyle() === "boxed";
+  const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const boxSpacing = useNodeBoxSpacing();
   const boxAppearance = useNodeBoxAppearance(id, nodeData.box);
   const iconSize = useTopoViewerStore((state) =>
@@ -48,7 +51,8 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ id, data, selected }) 
   const iconStyle: React.CSSProperties = {
     width: iconSize,
     height: iconSize,
-    backgroundColor: color,
+    backgroundImage: `url(${generateLiteSVG(color, iconInk)})`,
+    backgroundSize: "cover",
     borderRadius: corner,
     transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
     opacity: runtimeIconOpacity,

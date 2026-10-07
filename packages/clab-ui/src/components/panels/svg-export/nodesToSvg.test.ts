@@ -74,7 +74,22 @@ describe("node SVG export", () => {
       height: box.height - 1
     });
     assert.equal(readNumberAttr(svg, 'rect class="export-node-box"', "rx"), box.borderRadius - 0.5);
-    assert.ok(svg.indexOf("export-node-box") < svg.indexOf(`<rect x="${iconX}"`));
+    assert.ok(svg.indexOf("export-node-box") < svg.indexOf('class="export-node-icon"'));
+    assert.equal(readNumberAttr(svg, 'svg class="export-node-icon"', "x"), iconX);
+    assert.equal(readNumberAttr(svg, 'svg class="export-node-icon"', "width"), ICON_SIZE);
+  });
+
+  it("draws built-in icons as a hex in the ink around a symbol in the icon color", () => {
+    const svg = renderNodesToSvg(
+      [topologyNode("leaf1", 0, 0, { role: "leaf", iconColor: "#ff6600" })],
+      undefined,
+      undefined,
+      { iconInk: "#001135" }
+    );
+    assert.ok(svg.includes('stroke="#001135"'));
+    assert.ok(svg.includes('color="#ff6600"'));
+    // The hex has no tile behind it.
+    assert.ok(!svg.includes('<rect x="0" y="0"'));
   });
 
   it("puts the name on one row at the bottom of the box", () => {

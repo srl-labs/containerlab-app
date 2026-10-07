@@ -151,7 +151,9 @@ async function exportSvg(page: Page): Promise<string> {
 
 /** Every canvas endpoint label has an exported circle at the same spot with the same diameter. */
 function expectBubblesMatch(svg: string, canvas: CanvasGeometry): void {
-  const circles = findAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/g, svg).map(
+  // Icon artwork may draw circles of its own.
+  const withoutIcons = svg.replace(/<svg class="export-node-icon"[\s\S]*?<\/svg>/g, "");
+  const circles = findAll(/<circle cx="([-\d.]+)" cy="([-\d.]+)" r="([-\d.]+)"/g, withoutIcons).map(
     (m) => ({ cx: Number(m[1]), cy: Number(m[2]), r: Number(m[3]) })
   );
   expect(circles.length).toBe(canvas.labels.length);
@@ -185,7 +187,7 @@ test.describe("SVG export canvas parity", () => {
 
     // Node icons: same position and size (flow coordinates) as the canvas
     const nodeRects = findAll(
-      /<g class="export-node[^"]*" data-id="([^"]+)">.*?<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/gs,
+      /<g class="export-node[^"]*" data-id="([^"]+)">.*?<(?:svg|image) class="export-node-icon" x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)"/gs,
       svg
     );
     const exportNodes = new Map(

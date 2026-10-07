@@ -2,12 +2,13 @@
  * Hook to track used custom icons and trigger reconciliation when usage changes.
  * This ensures custom icons used by nodes are copied to the workspace .clab-icons/ folder.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { extractUsedCustomIcons } from "../../core/types/icons";
 import { getRecordUnknown } from "../../core/utilities/typeHelpers";
 import { useClabUiHost } from "../../host";
 import { useGraphStore } from "../../stores/graphStore";
+import { useCustomIcons } from "../../stores/topoViewerStore";
 
 interface IconUsageEntry {
   id: string;
@@ -54,13 +55,19 @@ function areIconUsageEntriesEqual(left: IconUsageEntry[], right: IconUsageEntry[
 export function useIconReconciliation(): void {
   const { topoViewer } = useClabUiHost();
   const iconUsageEntries = useGraphStore(selectIconUsageEntries, areIconUsageEntriesEqual);
+  const customIcons = useCustomIcons();
+  const customIconNames = useMemo(
+    () => new Set(customIcons.map((icon) => icon.name)),
+    [customIcons]
+  );
   const prevUsedIconsRef = useRef<string[]>([]);
 
   useEffect(() => {
     const usedIcons = extractUsedCustomIcons(
       iconUsageEntries.map((entry) => ({
         data: { topoViewerRole: entry.topoViewerRole ?? undefined }
-      }))
+      })),
+      customIconNames
     );
     const prevUsedIcons = prevUsedIconsRef.current;
 
@@ -77,5 +84,5 @@ export function useIconReconciliation(): void {
       // Trigger icon reconciliation on extension side
       topoViewer.reconcileIcons(usedIcons);
     }
-  }, [iconUsageEntries, topoViewer]);
+  }, [iconUsageEntries, customIconNames, topoViewer]);
 }

@@ -50,6 +50,7 @@ import {
   clampTelemetryNodeSizePx
 } from "../../utils/telemetryInterfaceLabels";
 import { log } from "../../utils/logger";
+import { getIconInk, useCanvasIconInk } from "../../icons/iconInk";
 import { ColorField, PREVIEW_GRID_BG_SX } from "../ui/form";
 import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
 
@@ -440,6 +441,10 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   );
   const [backgroundOption, setBackgroundOption] = useState<BackgroundOption>("transparent");
   const [customBackgroundColor, setCustomBackgroundColor] = useState("#1e1e1e");
+  // Icon frames follow the export background, or the canvas when it stays transparent
+  const canvasIconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
+  const iconInk =
+    backgroundOption === "custom" ? getIconInk(customBackgroundColor) : canvasIconInk;
   const defaultBaseName = useMemo(() => resolveDefaultExportBaseName(labName), [labName]);
   const [filename, setFilename] = useState(defaultBaseName);
 
@@ -538,7 +543,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           nodeIconSize: grafanaNodeSizePx,
           interfaceScale: grafanaInterfaceSizePercent / 100,
           interfaceLabelOverrides: effectiveInterfaceLabelOverrides,
-          telemetryStyleLabels: true
+          telemetryStyleLabels: true,
+          iconInk
         }
       : {
           // Mirror the live canvas settings so the export matches the screen 1:1
@@ -549,7 +555,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           globalInterfaceOverrideSelection: telemetryLabelSettings.globalInterfaceOverrideSelection,
           telemetryStyleLabels: linkLabelMode === "telemetry-style",
           nodeStyle,
-          nodeBoxSpacing
+          nodeBoxSpacing,
+          iconInk
         };
     const graphSvg = buildGraphSvg(
       rfInstance,
@@ -587,6 +594,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
     telemetryLabelSettings,
     nodeStyle,
     nodeBoxSpacing,
+    iconInk,
     rfInstance,
     borderZoom,
     customIcons,

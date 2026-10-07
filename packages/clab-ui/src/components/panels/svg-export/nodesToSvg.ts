@@ -1,8 +1,9 @@
 // Node-to-SVG conversion for export.
 import type { Node } from "@xyflow/react";
 
-import type { NodeType } from "../../../icons/SvgGenerator";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { getIconInk } from "../../../icons/iconInk";
+import { DEFAULT_ICON_COLOR, getRoleIcon } from "../../../core/types/graph";
 import { getCustomIconUrl } from "../../../utils/iconUtils";
 import type { NodeBoxAppearance } from "../../../core/types/topology";
 import {
@@ -19,12 +20,10 @@ import {
 } from "../../canvas/nodeBox";
 
 import {
+  EXPORT_NODE_ICON_CLASS,
   NODE_ICON_SIZE,
-  NODE_ICON_RADIUS,
   NODE_LABEL,
-  DEFAULT_ICON_COLOR,
   getNetworkTypeColor,
-  getRoleSvgType,
   escapeXml,
   resolveCssColor
 } from "./constants";
@@ -47,6 +46,8 @@ export interface NodeSvgRenderOptions {
   /** Boxed nodes draw a card around the icon with the name inside. */
   nodeStyle?: NodeStyle;
   nodeBoxSpacing?: NodeBoxSpacing;
+  /** Frame color of built-in icons; defaults to the ink for the current theme. */
+  iconInk?: string;
 }
 
 /** Resolved boxed-style geometry, font and theme colors, shared by all nodes. */
@@ -85,27 +86,6 @@ interface NetworkNodeData {
   labelBackgroundColor?: string;
   box?: NodeBoxAppearance;
   [key: string]: unknown;
-}
-
-const NODE_TYPE_SET: ReadonlySet<string> = new Set([
-  "pe",
-  "dcgw",
-  "leaf",
-  "switch",
-  "spine",
-  "super-spine",
-  "server",
-  "pon",
-  "controller",
-  "rgw",
-  "ue",
-  "cloud",
-  "client",
-  "bridge"
-]);
-
-function isNodeType(value: string): value is NodeType {
-  return NODE_TYPE_SET.has(value);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -151,42 +131,13 @@ function decodeSvgDataUri(dataUri: string): string {
 }
 
 /**
- * Extract SVG inner content (everything inside the <svg> tags)
- * and transform it for embedding at a target size
+ * Embed a built-in icon as a nested <svg> at the icon bounds, keeping its viewBox
  */
-function extractSvgContent(svgString: string, targetSize: number): string {
-  // Parse the SVG to get viewBox or size
-  const viewBoxMatch = /viewBox="([^"]+)"/.exec(svgString);
-  const viewBox = viewBoxMatch ? viewBoxMatch[1] : "0 0 120 120";
-  const [, , vbWidth, vbHeight] = viewBox.split(/\s+/).map(parseFloat);
-
-  // Calculate scale to fit targetSize
-  const scaleX = targetSize / (vbWidth || 120);
-  const scaleY = targetSize / (vbHeight || 120);
-  const scale = Math.min(scaleX, scaleY);
-
-  // Extract inner content (between <svg> and </svg>)
-  const innerMatch = /<svg[^>]*>([\s\S]*)<\/svg>/i.exec(svgString);
-  if (!innerMatch) return "";
-
-  let inner = innerMatch[1];
-
-  // Remove <style> tags and apply inline styles
-  inner = inner.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "");
-
-  // Replace class="st0" with fill attribute (background rect)
-  inner = inner.replace(/class="st0"/g, 'fill="currentColor"');
-
-  // Replace class="st1" with white stroke styling
-  inner = inner.replace(
-    /class="st1"/g,
-    'fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"'
-  );
-
-  // Replace class="st2" for filled elements
-  inner = inner.replace(/class="st2"/g, 'fill="#FFFFFF" stroke="#FFFFFF" stroke-width="4"');
-
-  return `<g transform="scale(${scale.toFixed(4)})">${inner}</g>`;
+function embedBuiltInIcon(svgString: string, x: number, y: number, size: number): string {
+  const viewBox = /viewBox="([^"]+)"/.exec(svgString)?.[1];
+  const inner = /<svg[^>]*>([\s\S]*)<\/svg>/i.exec(svgString)?.[1];
+  if (viewBox === undefined || inner === undefined) return "";
+  return `<svg class="${EXPORT_NODE_ICON_CLASS}" x="${x}" y="${y}" width="${size}" height="${size}" viewBox="${viewBox}">${inner}</svg>`;
 }
 
 function normalizeNodeLabelPosition(value: unknown): "top" | "right" | "bottom" | "left" {
@@ -458,6 +409,7 @@ function buildNodeNameSvg(
 function topologyNodeToSvg(
   node: Node,
   labelStyle: NodeLabelStyle,
+  iconInk: string,
   customIconMap?: CustomIconMap,
   nodeIconSize: number = NODE_ICON_SIZE
 ): string {
@@ -467,26 +419,19 @@ function topologyNodeToSvg(
   const label = data.label ?? node.id;
   const role = data.role ?? "pe";
   const iconColor = data.iconColor ?? DEFAULT_ICON_COLOR;
-  const cornerRadius = data.iconCornerRadius ?? NODE_ICON_RADIUS;
   // Boxed nodes keep the icon upright, like the canvas.
   const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
   // Check for custom icon first
-  let iconSvgContent = "";
+  let iconSvg = "";
   const customDataUri = customIconMap?.get(role);
-  const isCustomIcon = customDataUri !== undefined && customDataUri.length > 0;
-
-  if (isCustomIcon) {
+  if (customDataUri !== undefined && customDataUri.length > 0) {
     // Preserve custom styles, transparency and viewBox, including base64 SVGs and PNGs.
     const iconUrl = getCustomIconUrl(customDataUri, data.iconColor);
-    iconSvgContent = `<image width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(iconUrl)}"/>`;
+    iconSvg = `<image class="${EXPORT_NODE_ICON_CLASS}" x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid slice" href="${escapeXml(iconUrl)}"/>`;
   } else {
-    // Built-in icon
-    const roleSvgType = getRoleSvgType(role);
-    const svgType = isNodeType(roleSvgType) ? roleSvgType : "pe";
-    const dataUri = generateEncodedSVG(svgType, iconColor);
-    const svgString = decodeSvgDataUri(dataUri);
-    iconSvgContent = extractSvgContent(svgString, iconSize);
+    const dataUri = generateEncodedSVG(getRoleIcon(role), iconColor, iconInk);
+    iconSvg = embedBuiltInIcon(decodeSvgDataUri(dataUri), x, y, iconSize);
   }
 
   let svg = `<g class="export-node topology-node" data-id="${escapeXml(node.id)}">`;
@@ -494,17 +439,7 @@ function topologyNodeToSvg(
   const centerX = x + iconSize / 2;
   const centerY = y + iconSize / 2;
   svg += `<g transform="rotate(${directionRotation} ${centerX} ${centerY})">`;
-
-  // Background rect with fill color (rendered by the icon's st0 class)
-  if (!isCustomIcon) {
-    svg += `<rect x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" `;
-    svg += `rx="${cornerRadius}" ry="${cornerRadius}" fill="${iconColor}"/>`;
-  }
-
-  // Icon content (transformed to fit)
-  svg += `<g transform="translate(${x}, ${y})" style="color: ${iconColor}">`;
-  svg += iconSvgContent;
-  svg += `</g>`;
+  svg += iconSvg;
   svg += `</g>`;
 
   // Label
@@ -525,6 +460,7 @@ function topologyNodeToSvg(
 function networkNodeToSvg(
   node: Node,
   labelStyle: NodeLabelStyle,
+  iconInk: string,
   nodeIconSize: number = NODE_ICON_SIZE
 ): string {
   const data = node.data as NetworkNodeData;
@@ -537,24 +473,15 @@ function networkNodeToSvg(
   const directionRotation = labelStyle.box ? 0 : getNodeDirectionRotation(data.direction);
 
   // Generate cloud icon
-  const dataUri = generateEncodedSVG("cloud", iconColor);
-  const svgString = decodeSvgDataUri(dataUri);
-  const iconSvgContent = extractSvgContent(svgString, iconSize);
+  const dataUri = generateEncodedSVG("cloud", iconColor, iconInk);
+  const iconSvg = embedBuiltInIcon(decodeSvgDataUri(dataUri), x, y, iconSize);
 
   let svg = `<g class="export-node network-node" data-id="${escapeXml(node.id)}">`;
   if (labelStyle.box) svg += buildNodeBoxSvg(x, y, labelStyle.box, data.box);
   const centerX = x + iconSize / 2;
   const centerY = y + iconSize / 2;
   svg += `<g transform="rotate(${directionRotation} ${centerX} ${centerY})">`;
-
-  // Background rect
-  svg += `<rect x="${x}" y="${y}" width="${iconSize}" height="${iconSize}" `;
-  svg += `rx="${NODE_ICON_RADIUS}" ry="${NODE_ICON_RADIUS}" fill="${iconColor}"/>`;
-
-  // Icon content
-  svg += `<g transform="translate(${x}, ${y})" style="color: ${iconColor}">`;
-  svg += iconSvgContent;
-  svg += `</g>`;
+  svg += iconSvg;
   svg += `</g>`;
 
   // Label (network nodes use slightly smaller font)
@@ -588,6 +515,7 @@ export function renderNodesToSvg(
         ? resolveNodeBoxStyle(nodeIconSize, renderOptions?.nodeBoxSpacing, labelFont)
         : undefined
   };
+  const iconInk = renderOptions?.iconInk ?? getIconInk();
   const skipTypes =
     annotationNodeTypes ??
     new Set(["free-text-annotation", "free-shape-annotation", "group-annotation"]);
@@ -602,9 +530,9 @@ export function renderNodesToSvg(
 
     // Render based on node type
     if (nodeType === "network-node") {
-      svg += networkNodeToSvg(node, labelStyle, nodeIconSize);
+      svg += networkNodeToSvg(node, labelStyle, iconInk, nodeIconSize);
     } else {
-      svg += topologyNodeToSvg(node, labelStyle, customIconMap, nodeIconSize);
+      svg += topologyNodeToSvg(node, labelStyle, iconInk, customIconMap, nodeIconSize);
     }
   }
 
