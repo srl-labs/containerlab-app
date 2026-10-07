@@ -6,8 +6,8 @@ catalog:
   "@emotion/styled": 11.14.1
   "@fastify/cookie": 11.1.2
   "@fastify/cors": 11.3.0
-  "@fastify/static": 10.1.4
-  "@fastify/websocket": 11.3.0
+  "@fastify/static": 10.1.5
+  "@fastify/websocket": 11.3.3
   "@fontsource/roboto": 5.3.0
   "@mui/icons-material": 9.4.0
   "@mui/material": 9.4.0
@@ -19,63 +19,63 @@ catalog:
   "@types/geojson": 7946.0.16
   "@types/dockerode": 4.0.1
   "@types/mocha": 10.0.10
-  "@types/node": 24.13.5
+  "@types/node": 26.6.4
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
   "@types/sinon": 22.0.0
   "@types/three": 0.186.0
   # Match the extension's minimum VS Code API to retain compatibility with forks.
-  "@types/vscode": 1.105.0
-  "@types/ws": 8.18.1
+  "@types/vscode": 1.140.0
+  "@types/ws": 8.18.2
   "@vitejs/plugin-react": 6.1.1
   "@vscode/test-electron": 3.1.0
   "@vscode/vsce": 4.0.0
   "@xterm/addon-fit": 0.11.0
   "@xterm/xterm": 6.0.0
-  "@xyflow/react": 12.11.6
+  "@xyflow/react": 12.12.0
   ajv: 8.20.0
   autoprefixer: 10.6.1
-  chai: 6.2.2
+  chai: 6.3.0
   chokidar: 5.0.0
   concurrently: 10.0.5
   d3-force: 3.0.0
   dockerode: 5.0.1
-  dompurify: 3.4.15
-  electron: 44.4.1
+  dompurify: 3.4.16
+  electron: 44.5.1
   electron-builder: 26.15.3
   elkjs: 0.12.0
   esbuild: 0.28.2
   fastify: 5.12.5
   highlight.js: 11.12.0
-  jscpd: 5.2.1
-  knip: 6.36.0
-  maplibre-gl: 6.10.0
+  jscpd: 5.4.0
+  knip: 6.39.0
+  maplibre-gl: 6.12.0
   markdown-it: 15.0.2
   markdown-it-emoji: 3.1.0
-  mocha: 12.0.1
+  mocha: 12.0.3
   mochawesome: 8.1.1
   # monaco-yaml/monaco-worker-manager still import paths removed in Monaco 0.56.
-  monaco-editor: 0.55.1
+  monaco-editor: 0.57.0
   monaco-yaml: 5.5.1
   ovsx: 1.2.0
-  oxlint: 1.83.0
-  oxlint-tsgolint: 7.0.2001
+  oxlint: 1.86.0
+  oxlint-tsgolint: 7.0.2003
   postcss: 8.5.28
   postcss-cli: 12.0.0
   postcss-import: 17.0.0
-  prettier: 3.9.7
+  prettier: 3.9.9
   react: 19.3.0
   react-dom: 19.3.0
   sinon: 22.1.0
-  three: 0.186.0
-  tsx: 4.23.13
+  three: 0.186.1
+  tsx: 4.23.15
   typescript: 7.0.2
-  vite: 8.3.0
-  ws: 8.21.3
+  vite: 8.3.2
+  ws: 8.22.0
   yaml: 2.9.1
   zustand: 5.0.15
   use-sync-external-store: 1.7.0
-  undici: 8.10.2
+  undici: 8.11.2
 catalogs:
   peers:
     react: ^19.2.5
@@ -88,7 +88,7 @@ strictPeerDependencies: true
 nodeOptions: --max-old-space-size=4096
 overrides:
   diff: 9.0.0
-  dompurify: 3.4.15
+  dompurify: 3.4.16
   serialize-javascript: 7.1.1
   uuid: 14.0.2
 allowBuilds:
