@@ -170,7 +170,7 @@
   "freeTextAnnotations": [
     {
       "id": "branch-heading",
-      "text": "**EVERY PORT, LABELED.**",
+      "text": "**BRANCH OFFICE**",
       "position": {
         "x": 5,
         "y": -60
@@ -185,7 +185,7 @@
     },
     {
       "id": "branch-subtitle",
-      "text": "Branch office \u00b7 interface names read along each link",
+      "text": "Interface names are shown along each link",
       "position": {
         "x": 7,
         "y": -2

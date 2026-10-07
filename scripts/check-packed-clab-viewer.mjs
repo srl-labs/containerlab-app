@@ -147,7 +147,7 @@ try {
   await expect(page.locator(".react-flow__node-group-node")).toHaveCount(2);
   await expect(page.locator(".react-flow__node-free-shape-node")).toHaveCount(2);
   await expect(page.locator(".react-flow__node-free-text-node")).toHaveCount(8);
-  await expect(page.getByText("Follow one packet.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Packet walk", { exact: true })).toBeVisible();
 
   await page.goto(`${url}/nested/`);
   for (const id of ["first", "second"]) {

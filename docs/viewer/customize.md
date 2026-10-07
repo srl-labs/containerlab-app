@@ -4,24 +4,16 @@ hide:
   - toc
 ---
 
-<div class="studio-intro" markdown>
+# Customization studio
 
-<span class="studio-eyebrow">THE CUSTOMIZATION STUDIO</span>
+Annotations control how a topology looks in the viewer: node positions, icons and colors, groups, notes, shapes, and display settings such as the node style and link style. This page has two parts:
 
-# Your network.<br>A different point of view.
+- The [studio](#playground) applies viewer settings to an example lab and exports the result for your own documentation.
+- The [example labs](#collection) show what annotations can express. Each example links to its topology and annotations files.
 
-Give the diagram as much thought as the lab. Explore eight distinct topologies, from a quiet addressing guide to devices in frosted glass. Every device, callout, and boundary is rendered by the real viewer.
+## Studio { #playground }
 
-<div class="studio-jumps">
-<a href="#playground">Open the playground <span aria-hidden="true">↗</span></a>
-<a href="#collection">Explore the collection <span aria-hidden="true">↓</span></a>
-<span>08 LABS &nbsp; / &nbsp; ALL SOURCE INCLUDED</span>
-</div>
-</div>
-
-## Make it yours { #playground }
-
-Pick a lab, then change its colors, its links, and how much it shows. The canvas redraws as you go. When you like it, take the look with you as Markdown, YAML, and annotations.
+Choose a lab and change its settings. The preview updates as you go. To reuse the result, copy the Markdown snippet and download the topology and annotations files.
 
 <div class="studio-shell">
 <clab-customizer>
@@ -29,16 +21,21 @@ Pick a lab, then change its colors, its links, and how much it shows. The canvas
 <form class="studio-form" hidden aria-label="Customize the topology">
 <fieldset class="studio-group">
 <legend>Lab</legend>
-<label class="studio-field"><span>Topology</span><select name="lab"><option value="midnight-fabric">01 · Midnight fabric</option><option value="fabric-101">02 · Fabric field notes</option><option value="security-zones">03 · Trust boundaries</option><option value="wan-ring">04 · The scenic route</option><option value="packet-walk">05 · Follow the packet</option><option value="dual-homed">06 · Two of everything</option><option value="branch-office">07 · Every port, labeled</option><option value="frosted-glass">08 · Clear as glass</option></select></label>
+<label class="studio-field"><span>Topology</span><select name="lab"><option value="midnight-fabric">01 · Leaf-spine fabric</option><option value="fabric-101">02 · Fabric 101 addressing</option><option value="security-zones">03 · Security zones</option><option value="wan-ring">04 · WAN ring</option><option value="packet-walk">05 · Packet walk</option><option value="dual-homed">06 · Dual-homed hosts</option><option value="branch-office">07 · Branch office</option><option value="frosted-glass">08 · Frosted glass</option></select></label>
 </fieldset>
 <fieldset class="studio-group">
 <legend>Colors</legend>
 <div class="studio-swatches" role="radiogroup" aria-label="Palette"><label data-palette="original"><input type="radio" name="palette" value="original" checked><i aria-hidden="true"></i><span>Original</span></label><label data-palette="paper"><input type="radio" name="palette" value="paper"><i aria-hidden="true"></i><span>Paper</span></label><label data-palette="midnight"><input type="radio" name="palette" value="midnight"><i aria-hidden="true"></i><span>Midnight</span></label><label data-palette="blueprint"><input type="radio" name="palette" value="blueprint"><i aria-hidden="true"></i><span>Blueprint</span></label><label data-palette="synthwave"><input type="radio" name="palette" value="synthwave"><i aria-hidden="true"></i><span>Synthwave</span></label><label data-palette="aurora"><input type="radio" name="palette" value="aurora"><i aria-hidden="true"></i><span>Aurora</span></label><label data-palette="ember"><input type="radio" name="palette" value="ember"><i aria-hidden="true"></i><span>Ember</span></label><label data-palette="porcelain"><input type="radio" name="palette" value="porcelain"><i aria-hidden="true"></i><span>Porcelain</span></label></div>
 </fieldset>
 <fieldset class="studio-group">
+<legend>Nodes</legend>
+<div class="studio-field"><span>Style</span><div class="studio-segmented" role="radiogroup" aria-label="Node style"><label><input type="radio" name="node-style" value="" checked><span>Original</span></label><label><input type="radio" name="node-style" value="icon"><span>Icons</span></label><label><input type="radio" name="node-style" value="boxed"><span>Boxed</span></label></div></div>
+</fieldset>
+<fieldset class="studio-group">
 <legend>Links</legend>
 <div class="studio-field"><span>Shape</span><div class="studio-segmented" role="radiogroup" aria-label="Link style"><label><input type="radio" name="link-style" value="" checked><span>Original</span></label><label><input type="radio" name="link-style" value="straight"><span>Straight</span></label><label><input type="radio" name="link-style" value="elbow"><span>Elbow</span></label></div></div>
 <div class="studio-field"><span>Interface names</span><div class="studio-segmented" role="radiogroup" aria-label="Interface names"><label><input type="radio" name="link-labels" value="hide" checked><span>Hidden</span></label><label><input type="radio" name="link-labels" value="on-select"><span>On select</span></label><label><input type="radio" name="link-labels" value="show-all"><span>Always</span></label></div></div>
+<label class="studio-switch"><span>Telemetry style</span><input type="checkbox" role="switch" name="telemetry"></label>
 <label class="studio-switch"><span>Highlight on hover</span><input type="checkbox" role="switch" name="link-hover" checked></label>
 </fieldset>
 <fieldset class="studio-group">
@@ -63,130 +60,120 @@ Pick a lab, then change its colors, its links, and how much it shows. The canvas
 <label class="studio-switch"><span>Drag to pan</span><input type="checkbox" role="switch" name="pan" checked></label>
 <label class="studio-switch"><span>Transparent background</span><input type="checkbox" role="switch" name="transparent"></label>
 </fieldset>
-<button type="reset">Reset to the lab's design</button>
+<button type="reset">Reset settings</button>
 </form>
 <div class="studio-stage">
 <div class="studio-preview" data-palette="midnight">
-<div class="studio-preview-label"><span><i></i> <span data-live-status>LIVE CANVAS</span></span><span data-lab-caption>01 / MIDNIGHT FABRIC</span></div>
+<div class="studio-preview-label"><span><i></i> <span data-live-status>PREVIEW</span></span><span data-lab-caption>01 / LEAF-SPINE FABRIC</span></div>
 <div data-preview>
 
-```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Midnight fabric playground" borderless="true" theme="dark" controls="true" zoom="false" link-hover="true" fit-padding="0.12" height="520" loading="eager"
+```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Leaf-spine fabric" borderless="true" theme="dark" controls="true" zoom="false" link-hover="true" fit-padding="0.12" height="520" loading="eager"
 ```
 
 </div>
 </div>
 <div class="studio-export" hidden>
-<div class="studio-export-bar"><div><strong>Use this look</strong><span>Two files and a snippet for your docs.</span></div><div><button type="button" data-copy>Copy Markdown</button><a data-yaml download>Download YAML</a><button type="button" data-annotations>Download annotations</button></div></div>
+<div class="studio-export-bar"><div><strong>Export</strong><span>A Markdown snippet, the topology, and the annotations.</span></div><div><button type="button" data-copy>Copy Markdown</button><a data-yaml download>Download YAML</a><button type="button" data-annotations>Download annotations</button></div></div>
 <p class="studio-status" role="status" aria-live="polite"></p>
 <details><summary>Show the Markdown and CSS</summary><pre class="no-copy"><code data-recipe></code></pre></details>
-<p class="studio-export-help">Save both downloads under <code>docs/examples/</code>, then paste the Markdown where the diagram should appear. The annotations file carries your colors, corners, link style, and visible layers.</p>
+<p class="studio-export-help">Save both downloads under <code>docs/examples/</code> and paste the Markdown where the diagram should appear. The annotations file stores the colors, corners, node style, link style, and visible layers.</p>
 </div>
 </div>
 </div>
-<noscript>Use the examples below to explore the source. The live controls need JavaScript.</noscript>
+<noscript>The studio needs JavaScript. The example labs below link to their source files.</noscript>
 </clab-customizer>
 </div>
 
-## Eight labs. Eight personalities. { #collection }
+## Example labs { #collection }
 
-These are starting points you can take apart. Each pairs a containerlab YAML file with an editable annotations file. Most supply wiring for an exercise; the Linux walkthrough also configures addresses and routes.
+Each example pairs a containerlab topology file with an annotations file. Use them as a starting point for your own diagrams. The packet walk lab also configures addresses and routes; the others only define nodes and links.
 
 <div class="studio-collection" markdown>
 
 <div class="studio-example" id="midnight-fabric" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">01</span><div><span class="studio-eyebrow">INFRASTRUCTURE / MIDNIGHT</span><h3>Every rack. Two paths.</h3></div><span class="studio-count">10 nodes · 12 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">01</span><h3>Leaf-spine fabric</h3><span class="studio-count">10 nodes · 12 links</span></div>
 
-Two spines, four racks, and a clear visual hierarchy. Lime marks shared transit, teal marks the leaves, and slate marks the compute layer. Rounded rack groups give a dense fabric room to breathe.
+Two spines and four racks with a leaf and a server each. Group annotations draw the racks, and icon colors separate spines, leaves, and servers.
 
 <div class="studio-art" data-palette="midnight">
 
-```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Midnight rack fabric" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.12" height="540"
+```clab file="examples/midnight-fabric.clab.yml" annotations="examples/midnight-fabric.clab.yml.annotations.json" title="Leaf-spine fabric" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.12" height="540"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">RACK GROUPS · ROLE COLORS · SAVED POSITIONS</span>
-
-[Topology YAML ↓](../examples/midnight-fabric.clab.yml){ download="midnight-fabric.clab.yml" } · [Annotations ↓](../examples/midnight-fabric.clab.yml.annotations.json){ download="midnight-fabric.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="midnight-fabric" }
+[Topology](../examples/midnight-fabric.clab.yml){ download="midnight-fabric.clab.yml" } · [Annotations](../examples/midnight-fabric.clab.yml.annotations.json){ download="midnight-fabric.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="midnight-fabric" }
 </div>
 </div>
 
 <div class="studio-example" id="fabric-101" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">02</span><div><span class="studio-eyebrow">FIELD NOTES / PAPER</span><h3>Small fabric. Every detail.</h3></div><span class="studio-count">3 nodes · 2 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">02</span><h3>Fabric 101 addressing</h3><span class="studio-count">3 nodes · 2 links</span></div>
 
-An illustration that belongs in an article. Inspired by the Fabric 101 documentation example: sage device cards, paired interface/IP callouts, and a quiet design note. The /31 addresses are a proposed plan, not device configuration.
+A spine and two leaves based on the Fabric 101 example. Text annotations label each interface with a /31 address. The addresses are a proposed plan and are not configured on the nodes.
 
 <div class="studio-art" data-palette="paper">
 
-```clab file="examples/fabric-101.clab.yml" annotations="examples/fabric-101.clab.yml.annotations.json" title="Fabric field notes" borderless="true" theme="light" zoom="false" pan="false" fit-padding="0.10" height="390"
+```clab file="examples/fabric-101.clab.yml" annotations="examples/fabric-101.clab.yml.annotations.json" title="Fabric 101 addressing" borderless="true" theme="light" zoom="false" pan="false" fit-padding="0.10" height="390"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">ENDPOINT CALLOUTS · MARKDOWN NOTES · QUIET CANVAS</span>
-
-[Topology YAML ↓](../examples/fabric-101.clab.yml){ download="fabric-101.clab.yml" } · [Annotations ↓](../examples/fabric-101.clab.yml.annotations.json){ download="fabric-101.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="fabric-101" }
+[Topology](../examples/fabric-101.clab.yml){ download="fabric-101.clab.yml" } · [Annotations](../examples/fabric-101.clab.yml.annotations.json){ download="fabric-101.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="fabric-101" }
 </div>
 </div>
 
 <div class="studio-example" id="security-zones" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">03</span><div><span class="studio-eyebrow">SECURITY DESIGN / SANDSTONE</span><h3>Draw the trust boundary.</h3></div><span class="studio-count">6 nodes · 5 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">03</span><h3>Security zones</h3><span class="studio-count">6 nodes · 5 links</span></div>
 
-An outside client, public services, and a private application tier. Peach, amber, and lavender groups separate the zones; a dashed boundary makes the policy discussion visible. Configure forwarding and firewall rules as the next exercise.
+An outside client, public services, and a private application tier. Groups mark the three zones and a dashed shape marks the trust boundary. Forwarding and filtering are left for you to configure.
 
 <div class="studio-art" data-palette="sandstone">
 
-```clab file="examples/security-zones.clab.yml" annotations="examples/security-zones.clab.yml.annotations.json" title="Security trust boundaries" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.12" height="480"
+```clab file="examples/security-zones.clab.yml" annotations="examples/security-zones.clab.yml.annotations.json" title="Security zones" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.12" height="480"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">TRUST ZONES · SHAPE ANNOTATIONS · NUMBERED CALLOUTS</span>
-
-[Topology YAML ↓](../examples/security-zones.clab.yml){ download="security-zones.clab.yml" } · [Annotations ↓](../examples/security-zones.clab.yml.annotations.json){ download="security-zones.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="security-zones" }
+[Topology](../examples/security-zones.clab.yml){ download="security-zones.clab.yml" } · [Annotations](../examples/security-zones.clab.yml.annotations.json){ download="security-zones.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="security-zones" }
 </div>
 </div>
 
 <div class="studio-example" id="wan-ring" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">04</span><div><span class="studio-eyebrow">WIDE AREA / AFTER HOURS</span><h3>The long way is still a way.</h3></div><span class="studio-count">6 nodes · 6 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">04</span><h3>WAN ring</h3><span class="studio-count">6 nodes · 6 links</span></div>
 
-Six cities form a physical ring around a central annotation. A violet canvas, two node colors, and a dashed halo turn the topology into a routing exercise: configure the network, break a link, then follow the alternate path.
+Six sites connected in a ring, laid out around a circle shape. Configure routing, disable a link, and check that traffic takes the other direction around the ring.
 
 <div class="studio-art" data-palette="violet">
 
-```clab file="examples/wan-ring.clab.yml" annotations="examples/wan-ring.clab.yml.annotations.json" title="Six-city WAN ring" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.12" height="480"
+```clab file="examples/wan-ring.clab.yml" annotations="examples/wan-ring.clab.yml.annotations.json" title="WAN ring" borderless="true" theme="dark" zoom="false" controls="true" fit-padding="0.12" height="480"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">RADIAL LAYOUT · CIRCLE OVERLAY · EXERCISE PROMPT</span>
-
-[Topology YAML ↓](../examples/wan-ring.clab.yml){ download="wan-ring.clab.yml" } · [Annotations ↓](../examples/wan-ring.clab.yml.annotations.json){ download="wan-ring.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="wan-ring" }
+[Topology](../examples/wan-ring.clab.yml){ download="wan-ring.clab.yml" } · [Annotations](../examples/wan-ring.clab.yml.annotations.json){ download="wan-ring.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="wan-ring" }
 </div>
 </div>
 
 <div class="studio-example" id="packet-walk" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">05</span><div><span class="studio-eyebrow">LEARN BY DOING / MINT</span><h3>Follow one packet.</h3></div><span class="studio-count">3 nodes · 2 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">05</span><h3>Packet walk</h3><span class="studio-count">3 nodes · 2 links</span></div>
 
-A runnable Linux lab with two subnets and IP forwarding. Address labels explain each hop; solid and dashed arrows show the request and return directions. Deploy the YAML, then run `docker exec clab-packet-walk-client ping -c 3 10.10.2.2` on your lab host.
+A Linux lab with two subnets and a router with IP forwarding. Address labels mark each hop, and solid and dashed arrows show the request and reply paths. After deploying, run `docker exec clab-packet-walk-client ping -c 3 10.10.2.2` on the lab host.
 
 <div class="studio-art" data-palette="mint">
 
-```clab file="examples/packet-walk.clab.yml" annotations="examples/packet-walk.clab.yml.annotations.json" title="Linux packet walkthrough" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.10" height="400"
+```clab file="examples/packet-walk.clab.yml" annotations="examples/packet-walk.clab.yml.annotations.json" title="Packet walk" borderless="true" theme="light" zoom="false" controls="true" fit-padding="0.10" height="400"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">DIRECTIONAL ARROWS · SUBNET GROUPS · READY TO PING</span>
-
-[Topology YAML ↓](../examples/packet-walk.clab.yml){ download="packet-walk.clab.yml" } · [Annotations ↓](../examples/packet-walk.clab.yml.annotations.json){ download="packet-walk.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="packet-walk" }
+[Topology](../examples/packet-walk.clab.yml){ download="packet-walk.clab.yml" } · [Annotations](../examples/packet-walk.clab.yml.annotations.json){ download="packet-walk.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="packet-walk" }
 </div>
 </div>
 
 <div class="studio-example" id="dual-homed" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><div><span class="studio-eyebrow">DATA CENTER / BLUEPRINT</span><h3>Two of everything.</h3></div><span class="studio-count">7 nodes · 10 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">06</span><h3>Dual-homed hosts</h3><span class="studio-count">7 nodes · 10 links</span></div>
 
-Two spines, three leaves, and two hosts, each wired to a pair of leaves. Elbow links drop through the gaps between layers with right-angle bends, links between devices that face each other run straight, and a crossing shows a small gap so it never reads as a turn. Hover any link to light it up with both of its devices.
+Two spines, three leaves, and two hosts, each host connected to two leaves. Links use the elbow style: they bend at right angles between the layers, and crossing links show a small gap. Hover over a link to highlight it and both of its nodes.
 
 <div class="studio-art" data-palette="blueprint">
 
@@ -195,65 +182,60 @@ Two spines, three leaves, and two hosts, each wired to a pair of leaves. Elbow l
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">ELBOW LINKS · HOVER TO TRACE · LAYER GROUPS</span>
-
-[Topology YAML ↓](../examples/dual-homed.clab.yml){ download="dual-homed.clab.yml" } · [Annotations ↓](../examples/dual-homed.clab.yml.annotations.json){ download="dual-homed.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="dual-homed" }
+[Topology](../examples/dual-homed.clab.yml){ download="dual-homed.clab.yml" } · [Annotations](../examples/dual-homed.clab.yml.annotations.json){ download="dual-homed.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="dual-homed" }
 </div>
 </div>
 
 <div class="studio-example" id="branch-office" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">07</span><div><span class="studio-eyebrow">ENTERPRISE / PORCELAIN</span><h3>Every port, labeled.</h3></div><span class="studio-count">8 nodes · 9 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">07</span><h3>Branch office</h3><span class="studio-count">8 nodes · 9 links</span></div>
 
-A branch office as a clean schematic: two internet uplinks, an edge router, a redundant core, and three floors. With elbow links, every interface name sits on its own link just past the device and reads along it, so the cabling plan stays legible with all labels on.
+Two internet uplinks, an edge router, a redundant core, and three floor switches. With elbow links and all interface names shown, each name is placed along its own link next to the node.
 
 <div class="studio-art" data-palette="porcelain">
 
-```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office schematic" borderless="true" theme="light" zoom="false" controls="true" link-hover="true" fit-padding="0.06" height="640"
+```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office" borderless="true" theme="light" zoom="false" controls="true" link-hover="true" fit-padding="0.06" height="640"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">ELBOW LINKS · LABELS ALONG LINKS · SCHEMATIC</span>
-
-[Topology YAML ↓](../examples/branch-office.clab.yml){ download="branch-office.clab.yml" } · [Annotations ↓](../examples/branch-office.clab.yml.annotations.json){ download="branch-office.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="branch-office" }
+[Topology](../examples/branch-office.clab.yml){ download="branch-office.clab.yml" } · [Annotations](../examples/branch-office.clab.yml.annotations.json){ download="branch-office.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="branch-office" }
 </div>
 </div>
 
 <div class="studio-example" id="frosted-glass" markdown>
-<div class="studio-example-heading" markdown="0"><span class="studio-number">08</span><div><span class="studio-eyebrow">SHOWCASE / FROSTED GLASS</span><h3>Clear as glass.</h3></div><span class="studio-count">6 nodes · 7 links</span></div>
+<div class="studio-example-heading" markdown="0"><span class="studio-number">08</span><h3>Frosted glass</h3><span class="studio-count">6 nodes · 7 links</span></div>
 
-Every device sits in a frosted glass box: a faint white fill, a bright rim, and a strong blur of whatever glows behind it. Each card half covers a vivid glow, so the same edge stays crisp outside the glass and turns soft inside it, and small points of light melt into bokeh behind the cards. Elbow links keep the wiring calm. Hover a link to light it up with both of its devices.
+Boxed nodes with a low-opacity fill, a light border, and a background blur, placed over colored shape annotations. Links use the elbow style. Hover over a link to highlight it and both of its nodes.
 
 <div class="studio-art" data-palette="synthwave">
 
-```clab file="examples/frosted-glass.clab.yml" annotations="examples/frosted-glass.clab.yml.annotations.json" title="Frosted glass showcase" borderless="true" theme="dark" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="560"
+```clab file="examples/frosted-glass.clab.yml" annotations="examples/frosted-glass.clab.yml.annotations.json" title="Frosted glass" borderless="true" theme="dark" zoom="false" controls="true" link-hover="true" fit-padding="0.10" height="560"
 ```
 
 </div>
 <div class="studio-example-footer" markdown>
-<span class="studio-tags">BOXED NODES · FROSTED GLASS · ELBOW LINKS</span>
-
-[Topology YAML ↓](../examples/frosted-glass.clab.yml){ download="frosted-glass.clab.yml" } · [Annotations ↓](../examples/frosted-glass.clab.yml.annotations.json){ download="frosted-glass.clab.yml.annotations.json" } · [Remix in playground ↑](#playground){ data-remix="frosted-glass" }
+[Topology](../examples/frosted-glass.clab.yml){ download="frosted-glass.clab.yml" } · [Annotations](../examples/frosted-glass.clab.yml.annotations.json){ download="frosted-glass.clab.yml.annotations.json" } · [Open in the studio](#playground){ data-remix="frosted-glass" }
 </div>
 </div>
 </div>
 
-## Build your own visual language
+## Annotations used in the examples
 
-| Change the… | Use… | Try it in… |
+| Feature | Annotation or option | Example |
 | --- | --- | --- |
-| Shape of the story | Saved `nodeAnnotations` positions and role-specific icons | Midnight fabric |
-| Rack, subnet, or security boundaries | `groupStyleAnnotations` with fills, borders, labels, and corners | Trust boundaries |
-| Interface and addressing detail | Markdown `freeTextAnnotations` with monospace text and a background | Fabric field notes |
-| Direction and emphasis | `freeShapeAnnotations` lines, arrowheads, circles, and dashed borders | Follow the packet |
-| Link routing | `viewerSettings.linkStyle: "elbow"` in the annotations, or `link-style="elbow"` on the fence | Two of everything |
-| Tracing one link | `link-hover="true"` highlights a hovered link and both of its devices | Two of everything |
-| Readable cabling plans | Elbow links with `link-labels="show-all"`: each interface name reads along its own link | Every port, labeled |
-| Frosted glass devices | `viewerSettings.nodeStyle: "boxed"` and a per-node `box` with `blur`, a low `opacity`, and a light `borderColor`, over colored shapes | Clear as glass |
-| Mood of the canvas | CSS color tokens, a pinned theme, and a grid | Any lab → Blueprint palette |
-| Amount of interface | Borderless figure, full explorer, or split source view | Presentation selector |
-| Reading experience | Disable wheel zoom, choose pan, set height and fit padding | Playground controls |
+| Node positions and icons | `nodeAnnotations` with `position`, `icon`, and `iconColor` | Leaf-spine fabric |
+| Racks, subnets, and zones | `groupStyleAnnotations` with fill, border, label, and corner radius | Security zones |
+| Interface and address labels | `freeTextAnnotations` with Markdown, monospace text, and a background | Fabric 101 addressing |
+| Arrows, circles, and boundaries | `freeShapeAnnotations` with lines, arrowheads, circles, and dashed borders | Packet walk |
+| Boxed nodes | `viewerSettings.nodeStyle: "boxed"`, with an optional per-node `box` for fill, opacity, blur, and border | Frosted glass |
+| Telemetry style | `viewerSettings.style: "telemetry-style"` | Studio, **Telemetry style** |
+| Elbow links | `viewerSettings.linkStyle: "elbow"`, or `link-style="elbow"` on the code block | Dual-homed hosts |
+| Link highlighting | `link-hover="true"` highlights a hovered link and both of its nodes | Dual-homed hosts |
+| Interface names along links | Elbow links with `link-labels="show-all"` | Branch office |
+| Canvas colors | CSS color tokens, a fixed theme, and a grid | Studio, **Colors** |
+| Presentation | Borderless figure, explorer, or split view with the YAML source | Studio, **Frame** |
+| Interaction | Wheel zoom, panning, height, and fit padding | Studio, **Interaction** |
 
-Annotations travel with the lab as a separate JSON file. You can edit them in the [topology editor](../guides/topologies.md), or use these files as a starting point. Diagrams and annotations are read-only in the documentation viewer.
+Annotations are stored in a separate JSON file next to the topology. You can edit them in the [topology editor](../guides/topologies.md) or start from the files above. The documentation viewer is read-only.
 
 For all Markdown attributes, CSS tokens, and the HTML and React APIs, see the [component reference](reference.md).

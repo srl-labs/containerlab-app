@@ -30,7 +30,7 @@ A file reference and inline YAML cannot be combined. Missing files, malformed YA
 
 Boolean options accept `true` or `false` in Markdown. In HTML, an empty attribute means true, and `controls="false"` means false. See [customization recipes](customize.md) for combinations.
 
-Try these options in the [customization studio](customize.md#playground). Switch among eight labs, recolor their annotations, toggle groups and callouts, and export a matching Markdown + CSS recipe with the customized JSON.
+The [customization studio](customize.md#playground) applies these options to example labs and exports the matching Markdown, CSS, and annotations.
 
 ## Add it to another Zensical site
 

@@ -1,12 +1,4 @@
 /* The studio is scoped to the examples; it does not restyle the documentation UI. */
-.studio-intro { padding: 24px 0 30px; border-bottom: 1px solid var(--site-border); margin-bottom: 34px; }
-.studio-eyebrow { color: var(--site-accent); font: 500 10px/1.5 "JetBrains Mono", monospace; letter-spacing: .13em; }
-.md-typeset .studio-intro h1 { margin: 20px 0; color: var(--site-heading); font-size: clamp(36px, 4.3vw, 62px); font-weight: 550; line-height: 1.08; letter-spacing: -.06em; }
-.studio-intro > p { max-width: 640px; color: var(--site-muted); font-size: 15px; line-height: 1.85; }
-.studio-jumps { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; padding-top: 18px; font-size: 12px; }
-.studio-jumps a:first-child { background: #d4f58a; color: #23381a; border-radius: 7px; padding: 11px 16px; font-weight: 600; }
-.studio-jumps a span { margin-left: 12px; }
-.studio-jumps > span { color: var(--site-muted); font: 10px/1.6 "JetBrains Mono", monospace; margin-left: auto; }
 clab-customizer { display: block; container-type: inline-size; border: 1px solid var(--site-border); border-radius: 16px; overflow: hidden; margin: 24px 0 62px; box-shadow: 0 20px 70px #00000015; }
 clab-customizer [hidden] { display: none !important; }
 /* Playground: a control rail beside the live canvas; it stacks below the canvas when narrow. */
@@ -22,6 +14,8 @@ clab-customizer [hidden] { display: none !important; }
 .studio-segmented label:has(:checked) { background: var(--site-surface); color: var(--site-heading); font-weight: 600; box-shadow: 0 1px 3px #0000002a, inset 0 0 0 1px var(--site-border); }
 .studio-segmented input, .studio-swatches input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .studio-segmented label:has(:focus-visible) { outline: 2px solid var(--site-accent); outline-offset: 1px; }
+.studio-segmented label:has(:disabled) { opacity: .45; cursor: default; }
+.studio-segmented label:has(:disabled) input { cursor: default; }
 .studio-swatches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; }
 .studio-swatches label { position: relative; display: grid; gap: 6px; color: var(--site-muted); font-size: 10px; line-height: 1.2; text-align: center; cursor: pointer; }
 .studio-swatches i { display: block; aspect-ratio: 4 / 3; border-radius: 8px; border: 1px solid var(--studio-border); background: radial-gradient(circle at 72% 32%, var(--studio-accent) 0 17%, transparent 18%), linear-gradient(135deg, var(--studio-bg) 0 56%, var(--studio-edge) 56% 70%, var(--studio-raised) 70%); transition: transform .15s; }
@@ -82,25 +76,18 @@ clab-customizer [hidden] { display: none !important; }
 .studio-example { margin: 0 0 52px; padding-top: 24px; border-top: 1px solid var(--site-border); scroll-margin-top: 90px; }
 .studio-example-heading { display: flex; gap: 18px; align-items: center; }
 .studio-number { color: var(--site-muted); font: 300 36px/1 "JetBrains Mono", monospace; letter-spacing: -.08em; opacity: .65; }
-.md-typeset .studio-example-heading h3 { margin: 5px 0 0; font-size: 24px; font-weight: 550; letter-spacing: -.04em; }
-.studio-example-heading .studio-eyebrow { font-size: 9px; }
+.md-typeset .studio-example-heading h3 { margin: 0; font-size: 24px; font-weight: 550; letter-spacing: -.04em; }
 .studio-count { margin-left: auto; white-space: nowrap; font: 10px/1.6 "JetBrains Mono", monospace; color: var(--site-muted); }
 .studio-example > p { max-width: 760px; color: var(--site-muted); font-size: 13px; margin: 20px 0; }
 .studio-art { border: 1px solid color-mix(in srgb, var(--studio-edge) 35%, transparent); border-radius: 14px; overflow: hidden; }
 .studio-example-footer { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding-top: 14px; }
-.studio-tags { color: var(--site-muted); font: 8px/1.8 "JetBrains Mono", monospace; letter-spacing: .04em; }
 .studio-example-footer p { margin: 0; font-size: 10px; }
 @container (max-width: 720px) {
   .studio-workbench { grid-template-columns: minmax(0, 1fr); }
   .studio-stage { order: -1; }
   .studio-form { contain: none; overflow: visible; border-right: 0; border-top: 1px solid var(--site-border); }
 }
-@media (max-width: 1000px) {
-  .studio-jumps > span { margin-left: 0; width: 100%; }
-}
 @media (max-width: 600px) {
-  .studio-intro { padding-top: 10px; }
-  .studio-intro > p { font-size: 13px; }
   .studio-form, .studio-export { padding: 16px; }
   .studio-example-heading { flex-wrap: wrap; gap: 10px 14px; }
   .studio-count { width: 100%; margin-left: 46px; }
@@ -109,6 +96,6 @@ clab-customizer [hidden] { display: none !important; }
   .studio-preview-label { padding: 16px 12px 0; font-size: 8px; }
 }
 @media print {
-  .studio-form, .studio-export, .studio-preview-label, .studio-jumps { display: none; }
+  .studio-form, .studio-export, .studio-preview-label { display: none; }
   .studio-example { break-inside: avoid; }
 }
