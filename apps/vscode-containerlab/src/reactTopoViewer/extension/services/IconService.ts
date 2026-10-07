@@ -431,16 +431,25 @@ class IconService {
    */
   async reconcileWorkspaceIcons(yamlFilePath: string, usedIconNames: string[]): Promise<void> {
     try {
-      // Filter to only custom icons (not built-in)
-      const usedCustomIcons = usedIconNames.filter((name) => !isBuiltInIcon(name));
+      const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
+      const globalDir = this.getGlobalIconDir();
+
+      // Filter to only custom icons. A custom icon may share a built-in name and replaces it.
+      const usedCustomIcons: string[] = [];
+      for (const name of usedIconNames) {
+        if (
+          !isBuiltInIcon(name) ||
+          (await this.iconExistsInDir(workspaceDir, name)) ||
+          (await this.iconExistsInDir(globalDir, name))
+        ) {
+          usedCustomIcons.push(name);
+        }
+      }
 
       if (usedCustomIcons.length === 0) {
         await this.cleanWorkspaceIconsFolder(yamlFilePath);
         return;
       }
-
-      const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
-      const globalDir = this.getGlobalIconDir();
 
       // 1. Copy missing icons from global to workspace
       for (const iconName of usedCustomIcons) {

@@ -3,34 +3,21 @@ import Box from "@mui/material/Box";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import * as THREE from "three";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { SVGLoader, type SVGResult } from "three/addons/loaders/SVGLoader.js";
 
 import { useWorkspaceHost } from "./WorkspaceHost";
-
-function faceCamera(object: THREE.Object3D) {
-  let bestY = 0;
-  let bestArea = 0;
-  const size = new THREE.Vector3();
-  for (let i = 0; i < 36; i += 1) {
-    const yaw = (i / 36) * Math.PI * 2;
-    object.rotation.set(0, yaw, 0);
-    object.updateMatrixWorld(true);
-    new THREE.Box3().setFromObject(object).getSize(size);
-    const area = size.x * size.y;
-    if (area > bestArea) {
-      bestArea = area;
-      bestY = yaw;
-    }
-  }
-  object.rotation.set(0, bestY, 0);
-}
 
 // Front-facing light sums to π, so the face toward the camera renders exactly its material color
 // (Lambert divides by π); turned faces still shade while the logo spins.
 const AMBIENT_INTENSITY = 1.2;
 const KEY_INTENSITY = 1.8;
 const FALLBACK_BODY_COLOR = "#878787";
-const LIQUID_COLOR = 0x3cbeef;
+const LIQUID_COLOR = 0x00c9ff;
+// The flask's gray fill in the logo; every other fill is liquid.
+const LOGO_BODY_FILL = "#828282";
+// Extrusion depths as a share of the logo width. The liquid and bubbles sit inside the glass.
+const BODY_DEPTH = 0.1;
+const LIQUID_DEPTH = 0.07;
 // Thin strokes at rail size need more samples than the screen has; the canvas downsamples them.
 const SUPERSAMPLE = 2;
 const LOGO_SIZE = 28;
@@ -39,6 +26,39 @@ const LOGO_SIZE = 28;
 function bodyColor(element: Element): string {
   const color = getComputedStyle(element).color;
   return /^(#|rgb)/.test(color) ? color : FALLBACK_BODY_COLOR;
+}
+
+function pathFill(path: THREE.ShapePath): string {
+  const style = path.userData.style;
+  const fill: unknown = typeof style === "object" && style !== null ? Reflect.get(style, "fill") : undefined;
+  return typeof fill === "string" ? fill.toLowerCase() : "";
+}
+
+/** The logo SVG extruded into a mark that faces the camera, centered and fit to the view. */
+function buildMark(svg: SVGResult, body: THREE.Material, liquid: THREE.Material): THREE.Group {
+  const parts = svg.paths.map((path) => ({
+    shapes: SVGLoader.createShapes(path),
+    isBody: pathFill(path) === LOGO_BODY_FILL
+  }));
+  const flat = new THREE.Box3();
+  for (const part of parts) {
+    for (const shape of part.shapes) {
+      for (const point of shape.getPoints()) flat.expandByPoint(new THREE.Vector3(point.x, point.y, 0));
+    }
+  }
+  const size = flat.getSize(new THREE.Vector3());
+  const center = flat.getCenter(new THREE.Vector3());
+  const mark = new THREE.Group();
+  for (const part of parts) {
+    const depth = size.x * (part.isBody ? BODY_DEPTH : LIQUID_DEPTH);
+    const geometry = new THREE.ExtrudeGeometry(part.shapes, { depth, bevelEnabled: false, curveSegments: 12 });
+    geometry.translate(-center.x, -center.y, -depth / 2);
+    mark.add(new THREE.Mesh(geometry, part.isBody ? body : liquid));
+  }
+  // SVG y points down; the renderer keeps the mirrored faces front facing.
+  const scale = 2.05 / Math.max(size.x, size.y);
+  mark.scale.set(scale, -scale, scale);
+  return mark;
 }
 
 function disposeModel(object: THREE.Object3D) {
@@ -84,16 +104,9 @@ export function RailLogo(props: { showTooltip?: boolean }) {
     key.position.copy(camera.position);
     scene.add(key);
 
-    const body = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(bodyColor(host)),
-      metalness: 0,
-      roughness: 0.6,
-    });
-    const liquid = new THREE.MeshStandardMaterial({
-      color: LIQUID_COLOR,
-      metalness: 0,
-      roughness: 0.4,
-    });
+    // Diffuse only: a highlight would wash out the logo's flat front faces.
+    const body = new THREE.MeshLambertMaterial({ color: new THREE.Color(bodyColor(host)) });
+    const liquid = new THREE.MeshLambertMaterial({ color: LIQUID_COLOR });
 
     const pivot = new THREE.Group();
     scene.add(pivot);
@@ -145,27 +158,12 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       }
     };
 
-    const loader = new GLTFLoader();
-    loader.load(publicAssetUrl("model.gltf"), (gltf) => {
-      if (disposed) { disposeModel(gltf.scene); return; }
-      const model = gltf.scene;
-      let index = 0;
-      model.traverse((child) => {
-        if (!(child instanceof THREE.Mesh)) return;
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        for (const material of materials) material.dispose();
-        child.material = index === 0 ? liquid : body;
-        index += 1;
-      });
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      model.position.sub(box.getCenter(new THREE.Vector3()));
-      model.scale.setScalar(2.05 / Math.max(size.x, size.y, size.z));
-      faceCamera(model);
-      pivot.add(model);
+    new SVGLoader().load(publicAssetUrl("containerlab.svg"), (svg) => {
+      if (disposed) return;
+      pivot.add(buildMark(svg, body, liquid));
       renderer.render(scene, camera);
       host.style.backgroundImage = "none";
-    }, undefined, () => { /* The SVG remains visible if WebGL or the model is unavailable. */ });
+    }, undefined, () => { /* The SVG remains visible if WebGL or the logo is unavailable. */ });
 
     renderer.setSize(LOGO_SIZE, LOGO_SIZE, false);
 

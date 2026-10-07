@@ -10,13 +10,12 @@ async function generateArtwork(svg) {
     const sharp = new OffscreenCanvas(SAMPLE_SIZE, SAMPLE_SIZE);
     const sctx = sharp.getContext("2d");
     if (!sctx) return null;
-    sctx.drawImage(
-      image,
-      SAMPLE_INSET,
-      SAMPLE_INSET,
-      SAMPLE_SIZE - SAMPLE_INSET * 2,
-      SAMPLE_SIZE - SAMPLE_INSET * 2,
-    );
+    // Fit the logo in the sample at its own aspect ratio.
+    const room = SAMPLE_SIZE - SAMPLE_INSET * 2;
+    const scale = Math.min(room / image.naturalWidth, room / image.naturalHeight);
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    sctx.drawImage(image, (SAMPLE_SIZE - width) / 2, (SAMPLE_SIZE - height) / 2, width, height);
 
     const offscreen = new OffscreenCanvas(SAMPLE_SIZE, SAMPLE_SIZE);
     const ctx = offscreen.getContext("2d");
@@ -76,8 +75,14 @@ async function generateArtwork(svg) {
   }
 
 
+  // A logo with only a viewBox has no natural size; give it the viewBox size.
+  const root = /<svg\b[^>]*>/.exec(svg)?.[0] ?? "";
+  const viewBox = /viewBox="([^"]+)"/.exec(root)?.[1].trim().split(/[\s,]+/).map(Number);
+  const sized = viewBox && !/\swidth=/.test(root)
+    ? svg.replace(/<svg\b/, `<svg width="${viewBox[2]}" height="${viewBox[3]}"`)
+    : svg;
   const image = new Image();
-  image.src = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  image.src = `data:image/svg+xml,${encodeURIComponent(sized)}`;
   await image.decode();
   const sample = rasterizeLogo(image);
   if (!sample) throw new Error("Logo sampling failed");

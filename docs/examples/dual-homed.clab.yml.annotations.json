@@ -227,7 +227,7 @@
   "freeTextAnnotations": [
     {
       "id": "pairs-heading",
-      "text": "**TWO OF EVERYTHING.**",
+      "text": "**DUAL-HOMED HOSTS**",
       "position": {
         "x": 40,
         "y": -60
@@ -242,7 +242,7 @@
     },
     {
       "id": "pairs-subtitle",
-      "text": "Dual-homed hosts on a small fabric \u00b7 hover a link to trace it",
+      "text": "Two spines, three leaves, two hosts \u00b7 hover a link to trace it",
       "position": {
         "x": 42,
         "y": -2

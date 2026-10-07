@@ -8,6 +8,8 @@ import { SELECTION_COLOR } from "../types";
 import { useNodeBoxSpacing,
   useNodeStyle, useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
+import { generateLiteSVG } from "../../../icons/SvgGenerator";
+import { useCanvasIconInk } from "../../../icons/iconInk";
 
 import { LiteNodeShell } from "./NodeLiteBase";
 import { getNodeDirectionRotation } from "./nodeStyles";
@@ -16,6 +18,7 @@ import { getNetworkNodeTypeColor, toNetworkNodeData } from "./networkNodeShared"
 const NetworkNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const nodeData = toNetworkNodeData(data);
   const isBoxed = useNodeStyle() === "boxed";
+  const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const boxSpacing = useNodeBoxSpacing();
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
@@ -26,7 +29,8 @@ const NetworkNodeLiteComponent: React.FC<NodeProps> = ({ data, selected }) => {
   const iconStyle: React.CSSProperties = {
     width: iconSize,
     height: iconSize,
-    backgroundColor: color,
+    backgroundImage: `url(${generateLiteSVG(color, iconInk)})`,
+    backgroundSize: "cover",
     borderRadius: 4,
     transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
     outline: selected && !isBoxed ? `2px solid ${SELECTION_COLOR}` : "none",

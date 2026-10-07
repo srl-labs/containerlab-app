@@ -12,7 +12,7 @@ import type {
   TopoNode,
   TopologyNodeData
 } from "../../core/types/graph";
-import { DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../../core/types/graph";
+import { DEFAULT_ICON_COLOR } from "../../core/types/graph";
 import type { FreeTextAnnotation } from "../../core/types/topology";
 import { vscodePalette } from "../../theme/vscodePalette";
 type GridStyle = "dotted" | "quadratic";
@@ -242,4 +242,4 @@ export interface ReactFlowCanvasProps {
 // Selection highlight color.
 export const SELECTION_COLOR = vscodePalette.action.focus;
 
-export { DEFAULT_ICON_COLOR, ROLE_SVG_MAP };
+export { DEFAULT_ICON_COLOR };

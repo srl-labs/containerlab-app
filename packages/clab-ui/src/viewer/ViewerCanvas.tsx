@@ -7,6 +7,7 @@ import {
 import { TopologyNode } from "../components/canvas/nodes/TopologyNode";
 import { NetworkNode } from "../components/canvas/nodes/NetworkNode";
 import { TopologyEdge } from "../components/canvas/edges/TopologyEdge";
+import { IconBackgroundContext } from "../icons/iconInk";
 import { useGraphStore } from "../stores/graphStore";
 import { useTopoViewerStore } from "../stores/topoViewerStore";
 import type { resolveViewerOptions } from "./options";
@@ -66,28 +67,30 @@ function Canvas({ options, onReady }: { options: Options; onReady: () => void })
     "--viewer-font": appearance?.font
   };
   return (
-    <div className="clab-viewer-canvas" style={style}>
-      <ReactFlow
-        nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-        nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
-        deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null}
-        zoomOnScroll={options.zoomOnScroll} zoomOnPinch={options.zoomOnScroll}
-        preventScrolling={options.zoomOnScroll}
-        zoomActivationKeyCode={null} panOnDrag={options.panOnDrag}
-        minZoom={0.05} maxZoom={4}
-        onNodeClick={(_, node) => options.onNodeSelect?.(node.id)}
-        onPaneClick={() => options.onNodeSelect?.(null)}
-        onSelectionChange={({ nodes: selectedNodes, edges: selectedEdges }) => {
-          useTopoViewerStore.setState({ selectedNode: selectedNodes[0]?.id ?? null, selectedEdge: selectedEdges[0]?.id ?? null });
-        }}
-        proOptions={{ hideAttribution: true }}
-      >
-        {options.background !== "none" && <Background variant={options.background === "lines" ? BackgroundVariant.Lines : BackgroundVariant.Dots} gap={20} color="var(--viewer-border, var(--vscode-panel-border))" />}
-        {options.controls && <Controls showInteractive={false} fitViewOptions={{ padding: options.fitPadding }} />}
-        <ViewportReady options={options} onReady={onReady} />
-      </ReactFlow>
-    </div>
+    <IconBackgroundContext.Provider value={appearance?.background ?? null}>
+      <div className="clab-viewer-canvas" style={style}>
+        <ReactFlow
+          nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+          nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
+          deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null}
+          zoomOnScroll={options.zoomOnScroll} zoomOnPinch={options.zoomOnScroll}
+          preventScrolling={options.zoomOnScroll}
+          zoomActivationKeyCode={null} panOnDrag={options.panOnDrag}
+          minZoom={0.05} maxZoom={4}
+          onNodeClick={(_, node) => options.onNodeSelect?.(node.id)}
+          onPaneClick={() => options.onNodeSelect?.(null)}
+          onSelectionChange={({ nodes: selectedNodes, edges: selectedEdges }) => {
+            useTopoViewerStore.setState({ selectedNode: selectedNodes[0]?.id ?? null, selectedEdge: selectedEdges[0]?.id ?? null });
+          }}
+          proOptions={{ hideAttribution: true }}
+        >
+          {options.background !== "none" && <Background variant={options.background === "lines" ? BackgroundVariant.Lines : BackgroundVariant.Dots} gap={20} color="var(--viewer-border, var(--vscode-panel-border))" />}
+          {options.controls && <Controls showInteractive={false} fitViewOptions={{ padding: options.fitPadding }} />}
+          <ViewportReady options={options} onReady={onReady} />
+        </ReactFlow>
+      </div>
+    </IconBackgroundContext.Provider>
   );
 }
 

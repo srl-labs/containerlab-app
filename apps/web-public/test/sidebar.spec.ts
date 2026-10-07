@@ -15,6 +15,11 @@ test("only the hovered rail item animates, without resizing the rail or editor",
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(rail).toHaveCSS("width", "48px");
   const editor = page.getByTestId("topoviewer-editor");
+  // The editor slides over once the explorer closes; measure it after it settles next to the rail.
+  await expect.poll(async () => {
+    const [railBox, editorBox] = await Promise.all([rail.boundingBox(), editor.boundingBox()]);
+    return railBox && editorBox ? editorBox.x - (railBox.x + railBox.width) : null;
+  }).toBe(0);
   const bounds = await editor.boundingBox();
   await rail.getByRole("button", { name: "Files", exact: true }).focus();
   await page.keyboard.press("Escape");

@@ -214,7 +214,7 @@
   "freeTextAnnotations": [
     {
       "id": "fabric-heading",
-      "text": "**EVERY RACK. TWO PATHS.**",
+      "text": "**LEAF-SPINE FABRIC**",
       "position": {
         "x": 35,
         "y": -30
@@ -229,7 +229,7 @@
     },
     {
       "id": "fabric-subtitle",
-      "text": "A redundant Clos fabric \u00b7 physical wiring study",
+      "text": "Two spines and four racks \u00b7 every leaf connects to both spines",
       "position": {
         "x": 37,
         "y": 28
@@ -244,7 +244,7 @@
     },
     {
       "id": "underlay",
-      "text": "SPINE LAYER / SHARED TRANSIT",
+      "text": "SPINE LAYER",
       "position": {
         "x": 300,
         "y": 62

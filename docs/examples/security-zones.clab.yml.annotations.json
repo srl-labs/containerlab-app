@@ -144,7 +144,7 @@
   "freeTextAnnotations": [
     {
       "id": "security-heading",
-      "text": "**Draw the trust boundary.**",
+      "text": "**Security zones**",
       "position": {
         "x": 0,
         "y": 0
@@ -159,7 +159,7 @@
     },
     {
       "id": "security-subtitle",
-      "text": "Three zones. One deliberate path into the application.",
+      "text": "Outside, public, and private zones with one path to the application.",
       "position": {
         "x": 2,
         "y": 62
@@ -204,7 +204,7 @@
     },
     {
       "id": "policy-note",
-      "text": "POLICY EXERCISE \u00b7 Configure forwarding and filtering after deployment.",
+      "text": "EXERCISE \u00b7 Configure forwarding and filtering after deployment.",
       "position": {
         "x": 5,
         "y": 576

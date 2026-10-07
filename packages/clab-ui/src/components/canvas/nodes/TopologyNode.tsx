@@ -6,8 +6,10 @@ import React, { useMemo, memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import type { TopologyNodeData } from "../types";
-import { SELECTION_COLOR, DEFAULT_ICON_COLOR, ROLE_SVG_MAP } from "../types";
-import { generateEncodedSVG, type NodeType } from "../../../icons/SvgGenerator";
+import { SELECTION_COLOR, DEFAULT_ICON_COLOR } from "../types";
+import { getRoleIcon } from "../../../core/types/graph";
+import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { useCanvasIconInk } from "../../../icons/iconInk";
 import {
   useLinkCreationContext,
   useNodeRenderConfig,
@@ -37,30 +39,6 @@ import { NodeBox, useNodeBoxLabel } from "./NodeBox";
 
 const RuntimeBadge = React.lazy(() => import("./NodeRuntimeBadge"));
 
-/**
- * Map role to SVG node type (for built-in icons only)
- */
-const NODE_TYPE_SET: ReadonlySet<string> = new Set([
-  "pe",
-  "dcgw",
-  "leaf",
-  "switch",
-  "spine",
-  "super-spine",
-  "server",
-  "pon",
-  "controller",
-  "rgw",
-  "ue",
-  "cloud",
-  "client",
-  "bridge"
-]);
-
-function isNodeType(value: string): value is NodeType {
-  return NODE_TYPE_SET.has(value);
-}
-
 const FALLBACK_NODE_DATA: TopologyNodeData = {
   label: "",
   role: "default"
@@ -71,12 +49,6 @@ function isTopologyNodeData(value: unknown): value is TopologyNodeData {
   const label: unknown = Reflect.get(value, "label");
   const role: unknown = Reflect.get(value, "role");
   return typeof label === "string" && typeof role === "string";
-}
-
-function getRoleSvgType(role: string): NodeType {
-  const mapped = ROLE_SVG_MAP[role];
-  if (isNodeType(mapped)) return mapped;
-  return "pe"; // Default to PE router icon
 }
 
 // Constant styles extracted outside component to avoid recreation on every render
@@ -126,6 +98,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { suppressLabels, suppressRuntimeBadges } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
   const customIcons = useCustomIcons();
+  const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const deploymentState = useDeploymentState();
   const isBoxed = useNodeStyle() === "boxed";
   const isLinkEnd = useIsHoveredLinkEnd(id);
@@ -152,10 +125,9 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       return getCustomIconUrl(customDataUri, iconColor);
     }
     // Fall back to built-in SVG icons
-    const svgType = getRoleSvgType(role);
     const color = iconColor ?? DEFAULT_ICON_COLOR;
-    return generateEncodedSVG(svgType, color);
-  }, [role, iconColor, customIconMap]);
+    return generateEncodedSVG(getRoleIcon(role), color, iconInk);
+  }, [role, iconColor, customIconMap, iconInk]);
 
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
