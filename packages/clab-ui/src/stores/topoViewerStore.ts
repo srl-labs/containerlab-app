@@ -18,6 +18,7 @@ import {
   type NodeBoxSpacing,
   type NodeStyle
 } from "../components/canvas/nodeBox";
+import { DEFAULT_LINK_STYLE, type LinkStyle } from "../components/canvas/elbowRouting";
 
 import { useAnnotationUIStore } from "./annotationUIStore";
 import { isRecord } from "../core/utilities/typeHelpers";
@@ -77,6 +78,7 @@ export interface TopoViewerState {
   endpointLabelOffset: number;
   nodeStyle: NodeStyle;
   nodeBoxSpacing: NodeBoxSpacing;
+  linkStyle: LinkStyle;
   telemetryNodeSizePx: number;
   telemetryInterfaceSizePercent: number;
   showRateLabels: boolean;
@@ -128,6 +130,7 @@ export interface TopoViewerActions {
   setEndpointLabelOffset: (value: number) => void;
   setNodeStyle: (style: NodeStyle) => void;
   setNodeBoxSpacing: (spacing: NodeBoxSpacing) => void;
+  setLinkStyle: (style: LinkStyle) => void;
   setTelemetryNodeSizePx: (value: number) => void;
   setTelemetryInterfaceSizePercent: (value: number) => void;
   setShowRateLabels: (enabled: boolean) => void;
@@ -201,6 +204,7 @@ const initialState: TopoViewerState = {
   endpointLabelOffset: DEFAULT_ENDPOINT_LABEL_OFFSET,
   nodeStyle: DEFAULT_NODE_STYLE,
   nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
+  linkStyle: DEFAULT_LINK_STYLE,
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,
@@ -454,6 +458,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set({ nodeBoxSpacing });
   },
 
+  setLinkStyle: (linkStyle) => {
+    set({ linkStyle });
+  },
+
   setTelemetryNodeSizePx: (value) => {
     const next = Number.isFinite(value) ? value : 40;
     set({ telemetryNodeSizePx: next });
@@ -693,6 +701,9 @@ export const useNodeStyle = () => useTopoViewerStore((state) => state.nodeStyle)
 /** Get the room between box outlines and their icon and name in the boxed style */
 export const useNodeBoxSpacing = () => useTopoViewerStore((state) => state.nodeBoxSpacing);
 
+/** Get how links are drawn: straight lines or right-angle elbows */
+export const useLinkStyle = () => useTopoViewerStore((state) => state.linkStyle);
+
 /** Get processing state */
 export const useIsProcessing = () => useTopoViewerStore((state) => state.isProcessing);
 
@@ -723,6 +734,7 @@ export const useTopoViewerActions = () =>
       setEndpointLabelOffset: state.setEndpointLabelOffset,
       setNodeStyle: state.setNodeStyle,
       setNodeBoxSpacing: state.setNodeBoxSpacing,
+      setLinkStyle: state.setLinkStyle,
       setTelemetryNodeSizePx: state.setTelemetryNodeSizePx,
       setTelemetryInterfaceSizePercent: state.setTelemetryInterfaceSizePercent,
       setShowRateLabels: state.setShowRateLabels,

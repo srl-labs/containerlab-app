@@ -1,0 +1,30 @@
+# Wiring only. Configure addressing, NAT, and policy as a separate exercise.
+name: branch-office
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    isp-a:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    isp-b:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    edge: {type: ixrd2}
+    core1: {type: ixrd2}
+    core2: {type: ixrd2}
+    floor1: {type: ixrd2}
+    floor2: {type: ixrd2}
+    floor3: {type: ixrd2}
+  links:
+    - endpoints: [isp-a:eth1, edge:e1-1]
+    - endpoints: [isp-b:eth1, edge:e1-2]
+    - endpoints: [edge:e1-3, core1:e1-1]
+    - endpoints: [edge:e1-4, core2:e1-1]
+    - endpoints: [core1:e1-2, core2:e1-2]
+    - endpoints: [core1:e1-3, floor1:e1-49]
+    - endpoints: [core1:e1-4, floor2:e1-49]
+    - endpoints: [core2:e1-3, floor2:e1-50]
+    - endpoints: [core2:e1-4, floor3:e1-49]

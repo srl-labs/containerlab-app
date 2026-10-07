@@ -88,7 +88,7 @@ export class ClabTopology extends HTMLElement {
     const pre = this.querySelector(".clab-source") ?? this.querySelector("pre");
     this.yaml = source?.textContent ?? pre?.textContent ?? "";
     this.nodes = [];
-    if (this.hasAttribute("height")) this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
+    this.applyHeight();
     // All dynamic author content is assigned through textContent, never innerHTML.
     this.innerHTML = `
       <div class="clab-component-heading"><span class="clab-component-mark">${icon("topology")}</span><strong></strong><span class="clab-live-badge"><i></i> INTERACTIVE</span></div>
@@ -139,6 +139,31 @@ export class ClabTopology extends HTMLElement {
       panel.setAttribute("role", "region");
       panel.setAttribute("aria-label", this.getAttribute("title") || "Network topology");
     }
+  }
+
+  applyHeight() {
+    if (this.hasAttribute("height")) this.style.setProperty("--clab-height", `${Math.min(1000, Math.max(240, Number(this.getAttribute("height")) || 460))}px`);
+  }
+
+  renderMessage() {
+    return { type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(this), borderless: this.borderless, options: this.viewerOptions() };
+  }
+
+  /**
+   * Re-render with the element's current attributes and colors without reloading the viewer.
+   * The YAML, presentation preset, and panel layout stay as built.
+   */
+  refresh() {
+    if (!this.built) return;
+    this.applyHeight();
+    const nextTheme = theme(this);
+    this.dataset.theme = nextTheme;
+    if (this.frame) this.frame.style.colorScheme = nextTheme;
+    // Before the first render, the handshake picks up the latest attributes on its own.
+    if (!this.ready) return;
+    delete this.dataset.loaded;
+    this.loadStartedAt = performance.now();
+    this.send(this.renderMessage());
   }
 
   setView(view) {
@@ -197,11 +222,12 @@ export class ClabTopology extends HTMLElement {
   viewerOptions() {
     const styles = getComputedStyle(this);
     const options = { appearance: {} };
-    for (const [attribute, key] of Object.entries({ controls: "controls", transparent: "transparent", "node-labels": "nodeLabels", zoom: "zoomOnScroll", pan: "panOnDrag" })) {
+    for (const [attribute, key] of Object.entries({ controls: "controls", transparent: "transparent", "node-labels": "nodeLabels", "link-hover": "linkHover", zoom: "zoomOnScroll", pan: "panOnDrag" })) {
       if (this.hasAttribute(attribute)) options[key] = booleanOption(this, attribute, true);
     }
     if (["dots", "lines", "none"].includes(this.getAttribute("grid"))) options.background = this.getAttribute("grid");
     if (["show-all", "on-select", "hide"].includes(this.getAttribute("link-labels"))) options.linkLabels = this.getAttribute("link-labels");
+    if (["straight", "elbow"].includes(this.getAttribute("link-style"))) options.linkStyle = this.getAttribute("link-style");
     if (this.hasAttribute("fit-padding") && Number.isFinite(Number(this.getAttribute("fit-padding")))) options.fitPadding = Math.min(2, Math.max(0, Number(this.getAttribute("fit-padding"))));
     for (const [key, variable] of Object.entries({ background: "--clab-surface", foreground: "--clab-text", surface: "--clab-raised", border: "--clab-border", accent: "--clab-accent", edge: "--clab-edge", font: "--clab-font" })) {
       const value = styles.getPropertyValue(variable).trim();
@@ -212,7 +238,7 @@ export class ClabTopology extends HTMLElement {
 
   receive(message) {
     if (message.type === "clab-viewer:ready") {
-      this.send({ type: "clab-viewer:render", yaml: this.yaml, annotations: this.getAttribute("annotations") ?? undefined, theme: theme(this), borderless: this.borderless, options: this.viewerOptions() });
+      this.send(this.renderMessage());
     } else if (message.type === "clab-viewer:loaded") {
       clearTimeout(this.loadTimeout);
       this.ready = true;

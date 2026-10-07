@@ -9,7 +9,8 @@ import { generateEncodedSVG } from "../../../icons/SvgGenerator";
 import {
   useLinkCreationContext,
   useNodeRenderConfig,
-  useEasterEggGlow
+  useEasterEggGlow,
+  useIsHoveredLinkEnd
 } from "../../../stores/canvasStore";
 import {
   useNodeBoxSpacing,
@@ -44,6 +45,7 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { suppressLabels } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
   const isBoxed = useNodeStyle() === "boxed";
+  const isLinkEnd = useIsHoveredLinkEnd(id);
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
   );
@@ -62,7 +64,8 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   // Check if this node is a valid link target (in link creation mode and not the source node)
   // Network nodes do not support loop/self-referencing links
   const isLinkTarget = linkSourceNode !== null && linkSourceNode !== id;
-  const showLinkTargetHighlight = isLinkTarget && isHovered;
+  // Also glow as an end of the hovered link
+  const showLinkTargetHighlight = (isLinkTarget && isHovered) || isLinkEnd;
 
   // Generate the SVG icon URL (cloud icon for all network nodes)
   const svgUrl = useMemo(() => {

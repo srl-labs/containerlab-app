@@ -1,0 +1,267 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "spine1",
+      "position": {
+        "x": 200,
+        "y": 110
+      },
+      "icon": "spine",
+      "iconColor": "#e8a33d",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "spines",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "spine2",
+      "position": {
+        "x": 440,
+        "y": 110
+      },
+      "icon": "spine",
+      "iconColor": "#e8a33d",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "spines",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 80,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#2f7fd1",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 320,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#2f7fd1",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "leaf3",
+      "position": {
+        "x": 560,
+        "y": 330
+      },
+      "icon": "leaf",
+      "iconColor": "#2f7fd1",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "leaves",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "host1",
+      "position": {
+        "x": 200,
+        "y": 560
+      },
+      "icon": "server",
+      "iconColor": "#3a9cc4",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "hosts",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    },
+    {
+      "id": "host2",
+      "position": {
+        "x": 440,
+        "y": 560
+      },
+      "icon": "server",
+      "iconColor": "#3a9cc4",
+      "iconCornerRadius": 4,
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "groupId": "hosts",
+      "box": {
+        "color": "#ffffff",
+        "opacity": 0,
+        "blur": 0,
+        "borderColor": "#cfe6fb",
+        "borderWidth": 1,
+        "cornerRadius": 3,
+        "textColor": "#ecf6ff",
+        "shadow": false
+      }
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "spines",
+      "name": "SPINES",
+      "level": "L1",
+      "position": {
+        "x": 145,
+        "y": 70
+      },
+      "width": 390,
+      "height": 125,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 35,
+      "borderColor": "#7fb0dc",
+      "borderWidth": 1,
+      "borderStyle": "dashed",
+      "borderRadius": 4,
+      "labelColor": "#cfe6fb",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "leaves",
+      "name": "LEAVES",
+      "level": "L1",
+      "position": {
+        "x": 25,
+        "y": 290
+      },
+      "width": 630,
+      "height": 125,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 35,
+      "borderColor": "#7fb0dc",
+      "borderWidth": 1,
+      "borderStyle": "dashed",
+      "borderRadius": 4,
+      "labelColor": "#cfe6fb",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "hosts",
+      "name": "HOSTS",
+      "level": "L1",
+      "position": {
+        "x": 145,
+        "y": 520
+      },
+      "width": 390,
+      "height": 125,
+      "backgroundColor": "#153b63",
+      "backgroundOpacity": 35,
+      "borderColor": "#7fb0dc",
+      "borderWidth": 1,
+      "borderStyle": "dashed",
+      "borderRadius": 4,
+      "labelColor": "#cfe6fb",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "pairs-heading",
+      "text": "**TWO OF EVERYTHING.**",
+      "position": {
+        "x": 40,
+        "y": -60
+      },
+      "width": 600,
+      "height": 60,
+      "fontSize": 30,
+      "fontColor": "#ecf6ff",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    },
+    {
+      "id": "pairs-subtitle",
+      "text": "Dual-homed hosts on a small fabric \u00b7 hover a link to trace it",
+      "position": {
+        "x": 42,
+        "y": -2
+      },
+      "width": 600,
+      "height": 40,
+      "fontSize": 15,
+      "fontColor": "#a2c5e5",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "roundedBackground": true
+    }
+  ],
+  "freeShapeAnnotations": [],
+  "viewerSettings": {
+    "linkStyle": "elbow",
+    "linkLabelMode": "on-select",
+    "gridColor": "#1d4877",
+    "gridLineWidth": 0.5,
+    "nodeStyle": "boxed"
+  }
+}

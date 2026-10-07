@@ -66,6 +66,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       lastNonTelemetryLinkLabelMode,
       nodeStyle,
       nodeBoxSpacing,
+      linkStyle,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent
     } = useTopoViewerStore.getState();
@@ -85,6 +86,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       lastNonTelemetryLinkLabelMode: nextLastNonTelemetryLinkLabelMode,
       nodeStyle,
       nodeBoxSpacing,
+      linkStyle,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,

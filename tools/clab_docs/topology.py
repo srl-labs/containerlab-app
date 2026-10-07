@@ -30,11 +30,12 @@ class TopologyPreprocessor(Preprocessor):
         return path.read_text(encoding="utf-8")
 
     def component(self, options, body):
-        toggles = {"borderless", "heading", "toolbar", "inspector", "footer", "controls", "transparent", "node-labels", "zoom", "pan"}
+        toggles = {"borderless", "heading", "toolbar", "inspector", "footer", "controls", "transparent", "node-labels", "link-hover", "zoom", "pan"}
         choices = {
             "theme": {"auto", "light", "dark"},
             "grid": {"dots", "lines", "none"},
             "link-labels": {"show-all", "on-select", "hide"},
+            "link-style": {"straight", "elbow"},
             "loading": {"eager", "lazy"},
         }
         allowed = {"title", "file", "annotations", "view", "height", "filename", "fit-padding"} | toggles | choices.keys()

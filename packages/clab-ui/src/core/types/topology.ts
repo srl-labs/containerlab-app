@@ -284,6 +284,7 @@ export interface TopologyAnnotations {
     lastNonTelemetryLinkLabelMode?: "show-all" | "on-select" | "hide";
     nodeStyle?: "icon" | "boxed";
     nodeBoxSpacing?: "default" | "narrow";
+    linkStyle?: "straight" | "elbow";
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;

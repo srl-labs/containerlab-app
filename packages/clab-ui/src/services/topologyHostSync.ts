@@ -42,6 +42,7 @@ import {
   parseNodeBoxSpacing,
   parseNodeStyle
 } from "../components/canvas/nodeBox";
+import { DEFAULT_LINK_STYLE, parseLinkStyle } from "../components/canvas/elbowRouting";
 import { hasPresetPositions, normalizeLayoutableNodePositions } from "../components/canvas/layout/types";
 import { snapToGrid } from "../utils/grid";
 import {
@@ -642,6 +643,7 @@ function buildInitialTopoViewerData(
   const gridStyle = parseGridStyle(viewerSettings.gridStyle);
   const nodeStyle = parseNodeStyle(viewerSettings.nodeStyle);
   const nodeBoxSpacing = parseNodeBoxSpacing(viewerSettings.nodeBoxSpacing);
+  const linkStyle = parseLinkStyle(viewerSettings.linkStyle);
   const telemetryNodeSizePx = parseTelemetryNodeSizePx(viewerSettings.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = parseTelemetryInterfaceSizePercent(
     viewerSettings.telemetryInterfaceSizePercent
@@ -672,6 +674,7 @@ function buildInitialTopoViewerData(
     // Per lab: a lab that does not set them shows the defaults, not the previous lab's look.
     nodeStyle: nodeStyle ?? DEFAULT_NODE_STYLE,
     nodeBoxSpacing: nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
+    linkStyle: linkStyle ?? DEFAULT_LINK_STYLE,
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,

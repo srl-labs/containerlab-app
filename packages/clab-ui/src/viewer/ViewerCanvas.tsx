@@ -56,6 +56,8 @@ function Canvas({ options, onReady }: { options: Options; onReady: () => void })
   const appearance = options.appearance;
   const style: React.CSSProperties & Record<`--viewer-${string}`, string | undefined> = {
     "--viewer-background": options.transparent ? "transparent" : appearance?.background,
+    // Link labels and line outlines need a solid color even on a transparent canvas.
+    "--viewer-paper": appearance?.background,
     "--viewer-foreground": appearance?.foreground,
     "--viewer-surface": appearance?.surface,
     "--viewer-border": appearance?.border,
@@ -71,6 +73,7 @@ function Canvas({ options, onReady }: { options: Options; onReady: () => void })
         nodesDraggable={false} nodesConnectable={false} edgesReconnectable={false}
         deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null}
         zoomOnScroll={options.zoomOnScroll} zoomOnPinch={options.zoomOnScroll}
+        preventScrolling={options.zoomOnScroll}
         zoomActivationKeyCode={null} panOnDrag={options.panOnDrag}
         minZoom={0.05} maxZoom={4}
         onNodeClick={(_, node) => options.onNodeSelect?.(node.id)}

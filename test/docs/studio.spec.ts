@@ -6,10 +6,13 @@ const labs = [
   { id: "fabric-101", nodes: 3, groups: 3, shapes: 0, text: "Small fabric. Every detail." },
   { id: "security-zones", nodes: 6, groups: 3, shapes: 1, text: "Draw the trust boundary." },
   { id: "wan-ring", nodes: 6, groups: 0, shapes: 1, text: "The long way is still a way." },
-  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." }
+  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." },
+  { id: "dual-homed", nodes: 7, groups: 3, shapes: 0, text: "TWO OF EVERYTHING." },
+  { id: "branch-office", nodes: 8, groups: 3, shapes: 0, text: "EVERY PORT, LABELED." },
+  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 21, text: "CLEAR AS GLASS." }
 ];
 
-test("all five gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {
+test("all gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("viewer/customize/");
@@ -36,16 +39,21 @@ test("the studio composes options and exports the customized annotations and rec
   const studio = page.locator("clab-customizer");
   const component = studio.locator("clab-topology");
   await expect(component).toHaveAttribute("data-loaded", "true");
+  const choose = (group: string, option: string) =>
+    studio.getByRole("radiogroup", { name: group, exact: true }).getByRole("radio", { name: option, exact: true }).check();
   await studio.getByRole("combobox", { name: "Topology", exact: true }).selectOption("packet-walk");
-  await studio.getByRole("combobox", { name: "Palette", exact: true }).selectOption("blueprint");
-  await studio.getByRole("combobox", { name: "Presentation", exact: true }).selectOption("split");
-  await studio.getByRole("combobox", { name: "Grid", exact: true }).selectOption("lines");
-  await studio.getByRole("combobox", { name: "Interfaces", exact: true }).selectOption("on-select");
-  await studio.getByLabel("Groups", { exact: true }).uncheck();
-  await studio.getByLabel("Notes & IPs", { exact: true }).uncheck();
+  await choose("Palette", "Blueprint");
+  await choose("Presentation", "With YAML");
+  await choose("Grid", "Lines");
+  await choose("Interface names", "On select");
+  await choose("Link style", "Elbow");
+  await studio.getByRole("switch", { name: "Groups", exact: true }).uncheck();
+  await studio.getByRole("switch", { name: "Notes and addresses", exact: true }).uncheck();
   await studio.getByLabel("Node corners", { exact: true }).fill("22");
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(component).toHaveAttribute("view", "split");
+  await expect(component).toHaveAttribute("link-style", "elbow");
+  await expect(component).toHaveAttribute("link-hover", "true");
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator("html")).toHaveAttribute("data-clab-theme", "dark");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(3);
@@ -54,31 +62,35 @@ test("the studio composes options and exports the customized annotations and rec
   await expect(viewer.locator(".react-flow__node-free-shape-node")).toHaveCount(2);
   await expect(viewer.locator(".react-flow")).toHaveCSS("background-color", "rgb(16, 45, 80)");
   await expect(component.locator(".clab-source")).toContainText("net.ipv4.ip_forward");
-  await studio.getByRole("button", { name: "Copy recipe" }).click();
+  await studio.getByRole("button", { name: "Copy Markdown" }).click();
   const recipe = await page.evaluate(() => navigator.clipboard.readText());
   expect(recipe).toContain('file="examples/packet-walk.clab.yml"');
   expect(recipe).toContain('view="split"');
   expect(recipe).toContain('grid="lines"');
+  expect(recipe).toContain('link-style="elbow"');
+  expect(recipe).toContain('link-hover="true"');
   expect(recipe).toContain("--clab-surface: #102d50");
   const pending = page.waitForEvent("download");
-  await studio.getByRole("button", { name: "Annotations ↓" }).click();
+  await studio.getByRole("button", { name: "Download annotations" }).click();
   const download = await pending;
   expect(download.suggestedFilename()).toBe("packet-walk.clab.yml.annotations.json");
   const annotations = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(annotations.groupStyleAnnotations).toEqual([]);
   expect(annotations.freeTextAnnotations).toEqual([]);
   expect(annotations.nodeAnnotations[0].iconCornerRadius).toBe(22);
-  expect(annotations.nodeAnnotations[0].iconColor).toBe("#a3e7ff");
+  expect(annotations.nodeAnnotations[0].iconColor).toBe("#e8a33d");
   expect(annotations.nodeAnnotations[0].position).toEqual({ x: 65, y: 165 });
   expect(annotations.freeShapeAnnotations).toHaveLength(2);
+  expect(annotations.viewerSettings.linkStyle).toBe("elbow");
   expect(annotations).toEqual(JSON.parse((await component.getAttribute("annotations"))!));
   const yamlPending = page.waitForEvent("download");
-  await studio.getByRole("link", { name: "YAML ↓", exact: true }).click();
+  await studio.getByRole("link", { name: "Download YAML", exact: true }).click();
   const yamlDownload = await yamlPending;
   expect(await readFile((await yamlDownload.path())!, "utf8")).toBe(await readFile("docs/examples/packet-walk.clab.yml", "utf8"));
-  await studio.getByRole("button", { name: "Reset style" }).click();
+  await studio.getByRole("button", { name: "Reset to the lab's design" }).click();
   await expect(studio.getByRole("combobox", { name: "Topology", exact: true })).toHaveValue("packet-walk");
-  await expect(studio.getByRole("combobox", { name: "Palette", exact: true })).toHaveValue("original");
+  await expect(studio.getByRole("radiogroup", { name: "Palette", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
+  await expect(studio.getByRole("radiogroup", { name: "Link style", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
   await expect(component).toHaveAttribute("data-loaded", "true");
   await expect(viewer.locator(".react-flow__node-free-text-node")).toHaveCount(8);
 });
@@ -109,9 +121,9 @@ test("a failed lab fetch leaves the gallery usable and a different selection rec
   await page.goto("viewer/customize/");
   const studio = page.locator("clab-customizer");
   await expect(studio.locator(".studio-status")).toContainText("Could not load this lab");
-  await expect(studio.getByRole("button", { name: "Copy recipe" })).toBeDisabled();
+  await expect(studio.getByRole("button", { name: "Copy Markdown" })).toBeDisabled();
   await studio.getByRole("combobox", { name: "Topology", exact: true }).selectOption("fabric-101");
   await expect(studio.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
-  await expect(studio.getByRole("button", { name: "Copy recipe" })).toBeEnabled();
+  await expect(studio.getByRole("button", { name: "Copy Markdown" })).toBeEnabled();
   await expect(studio.locator(".studio-status")).toBeEmpty();
 });

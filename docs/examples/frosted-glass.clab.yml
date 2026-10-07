@@ -1,0 +1,30 @@
+# Wiring only. Configure routing and services as a separate exercise.
+name: frosted-glass
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    internet:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    edge1: {type: ixrd2}
+    edge2: {type: ixrd2}
+    app1:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    app2:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+    app3:
+      kind: linux
+      image: ghcr.io/srl-labs/network-multitool:latest
+  links:
+    - endpoints: [internet:eth1, edge1:e1-1]
+    - endpoints: [internet:eth2, edge2:e1-1]
+    - endpoints: [edge1:e1-2, edge2:e1-2]
+    - endpoints: [edge1:e1-3, app1:eth1]
+    - endpoints: [edge1:e1-4, app2:eth1]
+    - endpoints: [edge2:e1-3, app2:eth2]
+    - endpoints: [edge2:e1-4, app3:eth1]
