@@ -6,6 +6,7 @@ export {
   captureInterface,
   captureInterfaceWithPacketflix,
   captureEdgesharkVNC,
+  captureNodeInterfaces,
   killAllWiresharkVNCCtrs,
   setSessionHostname
 } from "../capture";

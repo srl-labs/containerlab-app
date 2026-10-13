@@ -78,6 +78,8 @@ export type NetemShowResponse = Record<string, NetemInterfaceInfo[]>;
 export interface CaptureTarget {
   containerName: string;
   interfaceName: string;
+  /** The name is the port inside the node: capture it there, not on the host-side link end. */
+  nodeNamespace?: boolean;
 }
 
 export interface CapturePacketflixURI {

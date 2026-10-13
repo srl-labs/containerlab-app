@@ -4,6 +4,7 @@ import type { Edge, Node } from "@xyflow/react";
 import type { useCanvasHandlers } from "../../hooks/canvas";
 import { useClabUiHost, type TopoViewerNodeAction } from "../../host";
 import { useDeploymentState, type DeploymentState } from "../../stores/topoViewerStore";
+import { useCaptureDialogStore } from "../../stores/captureDialogStore";
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 
 import {
@@ -48,6 +49,7 @@ interface ContextMenuItemsParams {
 interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   onInterfaceCapture: (nodeName: string, interfaceName: string) => void;
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
+  onCaptureNode: (nodeId: string) => void;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
   menuPosition: { x: number; y: number };
@@ -99,6 +101,7 @@ function buildNodeItems(
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
     onNodeAction: params.onNodeAction,
+    onCaptureNode: params.onCaptureNode,
     closeContextMenu: params.handlers.closeContextMenu,
     editNode: params.editNode,
     editNetwork: params.editNetwork,
@@ -187,6 +190,7 @@ function resolveContextMenuItems(params: ResolveContextMenuItemsParams): Context
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
+  const openCaptureDialog = useCaptureDialogStore((store) => store.openCaptureDialog);
   const {
     handlers,
     state,
@@ -221,6 +225,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
       onInterfaceCapture: (nodeName, interfaceName) =>
         topoViewer.captureInterface(nodeName, interfaceName),
       onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
+      onCaptureNode: openCaptureDialog,
       type,
       targetId,
       menuPosition,
@@ -253,6 +258,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     startLinkCreation,
     cancelLinkCreation,
     topoViewer,
+    openCaptureDialog,
     annotationHandlers,
     onOpenNodePalette,
     onAddDefaultNode,

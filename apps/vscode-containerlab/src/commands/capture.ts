@@ -1,9 +1,20 @@
 import * as vscode from "vscode";
 
-import { outputChannel, dockerClient, username } from "../globals";
+import { isInternalInterfaceName, nodeNamespaceInterfaceName } from "@containerlab/clab-ui/session";
+
+import { outputChannel, dockerClient, extensionContext, username } from "../globals";
 import * as utils from "../utils";
-import type { ClabInterfaceTreeNode } from "../treeView/common";
-import { genPacketflixURI, getHostname, setSessionHostname } from "../utils/packetflix";
+import type {
+  ClabContainerGroupTreeNode,
+  ClabContainerTreeNode,
+  ClabInterfaceTreeNode
+} from "../treeView/common";
+import {
+  genPacketflixURI,
+  getHostname,
+  isHostNetnsInterface,
+  setSessionHostname
+} from "../utils/packetflix";
 import type { ImagePullPolicy } from "../utils/consts";
 import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import {
@@ -47,6 +58,211 @@ export async function captureInterface(
   return captureEdgesharkVNC(node, allSelectedNodes);
 }
 
+const MANAGEMENT_INTERFACE_NAMES = new Set(["eth0", "mgmt0"]);
+const INTERFACE_NAME_COLLATOR = new Intl.Collator(undefined, { numeric: true });
+
+/** Last interface selection per container, for this VS Code session. */
+const rememberedCaptureSelections = new Map<string, string[]>();
+
+interface InterfaceQuickPickItem extends vscode.QuickPickItem {
+  /** Interface as listed in the explorer. */
+  source: ClabInterfaceTreeNode;
+  /** Interface as captured. */
+  iface: ClabInterfaceTreeNode;
+}
+
+/** Name the user knows: host-side link interfaces (clab-s-*) carry the node's port name as alias. */
+function interfaceDisplayName(iface: ClabInterfaceTreeNode): string {
+  return isHostNetnsInterface(iface.name) && iface.alias ? iface.alias : iface.name;
+}
+
+type CaptureNode = ClabContainerTreeNode | ClabContainerGroupTreeNode;
+
+function isContainerGroup(node: CaptureNode): node is ClabContainerGroupTreeNode {
+  return Array.isArray((node as Partial<ClabContainerGroupTreeNode>).children);
+}
+
+/**
+ * Interfaces of a node. A distributed node (e.g. SR-SIM with line cards) is a
+ * group whose sub-containers share one network namespace and list the same
+ * ports, so each interface name is kept once, primary container first.
+ */
+function nodeInterfaces(node: CaptureNode): ClabInterfaceTreeNode[] {
+  if (!isContainerGroup(node)) return node.interfaces;
+  const children = [...node.children].sort(
+    (left, right) => Number(right.name === node.name) - Number(left.name === node.name)
+  );
+  const byName = new Map<string, ClabInterfaceTreeNode>();
+  for (const iface of children.flatMap((child) => child.interfaces)) {
+    if (!byName.has(iface.name)) byName.set(iface.name, iface);
+  }
+  return [...byName.values()];
+}
+
+function capturableInterfaces(node: CaptureNode): ClabInterfaceTreeNode[] {
+  return nodeInterfaces(node)
+    .filter(
+      (iface) =>
+        iface.name.length > 0 &&
+        iface.name !== "lo" &&
+        iface.state !== "unknown" &&
+        !isInternalInterfaceName(node.kind, iface.name)
+    )
+    .sort((left, right) => {
+      const leftMgmt = MANAGEMENT_INTERFACE_NAMES.has(left.name);
+      const rightMgmt = MANAGEMENT_INTERFACE_NAMES.has(right.name);
+      if (leftMgmt !== rightMgmt) return leftMgmt ? -1 : 1;
+      return INTERFACE_NAME_COLLATOR.compare(
+        interfaceDisplayName(left),
+        interfaceDisplayName(right)
+      );
+    });
+}
+
+/**
+ * The interface as captured: link ports reported by their host-side end
+ * (clab-s-*) are captured under their name inside the node when the kind's
+ * naming is known, so they share one stream with eth0 and the other ports.
+ */
+function toCaptureInterface(kind: string, iface: ClabInterfaceTreeNode): ClabInterfaceTreeNode {
+  const nodeName = nodeNamespaceInterfaceName(kind, iface);
+  return nodeName === undefined || nodeName === iface.name
+    ? iface
+    : ({ ...iface, name: nodeName } as ClabInterfaceTreeNode);
+}
+
+function toInterfaceQuickPickItem(
+  kind: string,
+  iface: ClabInterfaceTreeNode,
+  picked: ReadonlySet<string>
+): InterfaceQuickPickItem {
+  const isUp = iface.state.toLowerCase() === "up";
+  const label = interfaceDisplayName(iface);
+  const captured = toCaptureInterface(kind, iface);
+  const details = [
+    captured.name !== label && !isHostNetnsInterface(captured.name) ? captured.name : undefined,
+    !isHostNetnsInterface(iface.name) && iface.alias && iface.alias !== label
+      ? iface.alias
+      : undefined,
+    MANAGEMENT_INTERFACE_NAMES.has(iface.name) ? "management" : undefined,
+    iface.state || undefined
+  ].filter((part): part is string => part !== undefined);
+  return {
+    label: `$(${isUp ? "circle-filled" : "circle-outline"}) ${label}`,
+    description: details.join(" · "),
+    picked: picked.has(iface.name),
+    source: iface,
+    iface: captured
+  };
+}
+
+const SEPARATE_SESSIONS_KEY = "containerlab.capture.separateSessions";
+
+interface OpenModeItem extends vscode.QuickPickItem {
+  separate: boolean;
+}
+
+/** Captures a combined pick opens: one per container and network namespace. */
+function combinedSessionCount(selected: ClabInterfaceTreeNode[]): number {
+  return new Set(selected.map((iface) => `${iface.parentName}|${isHostNetnsInterface(iface.name)}`))
+    .size;
+}
+
+/**
+ * Second step for several interfaces: one Wireshark for all, or one each.
+ * The last choice comes first, so Enter repeats it.
+ */
+async function pickOpenMode(
+  nodeLabel: string,
+  selected: ClabInterfaceTreeNode[]
+): Promise<boolean | undefined> {
+  const count = selected.length;
+  const sessions = combinedSessionCount(selected);
+  const combined: OpenModeItem = {
+    label: "$(layers) One Wireshark",
+    description:
+      sessions > 1
+        ? `${count} interfaces in ${sessions} Wiresharks: some ports can only be captured on the host side`
+        : `all ${count} interfaces together`,
+    separate: false
+  };
+  const perInterface: OpenModeItem = {
+    label: "$(multiple-windows) One Wireshark per interface",
+    description: `${count} separate windows`,
+    separate: true
+  };
+  const lastSeparate =
+    extensionContext?.globalState.get<boolean>(SEPARATE_SESSIONS_KEY, false) ?? false;
+  const choice = await vscode.window.showQuickPick(
+    lastSeparate ? [perInterface, combined] : [combined, perInterface],
+    {
+      title: `Capture packets on ${nodeLabel} · ${count} interfaces`,
+      placeHolder: "Open the captures as"
+    }
+  );
+  if (!choice) return undefined;
+  void extensionContext?.globalState.update(SEPARATE_SESSIONS_KEY, choice.separate);
+  return choice.separate;
+}
+
+/**
+ * Pick one, several or all interfaces of a node, then capture them in one
+ * Wireshark or in one Wireshark per interface.
+ */
+export async function captureNodeInterfaces(node: CaptureNode) {
+  const interfaces = capturableInterfaces(node);
+  const nodeLabel = isContainerGroup(node) ? node.rootNodeName : node.name_short || node.name;
+  if (interfaces.length === 0) {
+    vscode.window.showWarningMessage(
+      `No interfaces to capture on ${nodeLabel}. Is the node running?`
+    );
+    return;
+  }
+
+  const available = new Set(interfaces.map((iface) => iface.name));
+  const remembered = (rememberedCaptureSelections.get(node.name) ?? []).filter((name) =>
+    available.has(name)
+  );
+  // Without a previous pick, start from the data interfaces: containerlab creates them for links.
+  const initial = new Set(
+    remembered.length > 0
+      ? remembered
+      : interfaces
+          .filter((iface) => !MANAGEMENT_INTERFACE_NAMES.has(iface.name))
+          .map((iface) => iface.name)
+  );
+
+  const picked = await vscode.window.showQuickPick(
+    interfaces.map((iface) => toInterfaceQuickPickItem(node.kind, iface, initial)),
+    {
+      canPickMany: true,
+      matchOnDescription: true,
+      title: `Capture packets on ${nodeLabel}`,
+      placeHolder: "Select the interfaces to capture"
+    }
+  );
+  if (!picked || picked.length === 0) {
+    return;
+  }
+
+  const selected = picked.map((item) => item.iface);
+  const separate = selected.length > 1 ? await pickOpenMode(nodeLabel, selected) : false;
+  if (separate === undefined) {
+    return;
+  }
+  rememberedCaptureSelections.set(
+    node.name,
+    picked.map((item) => item.source.name)
+  );
+  if (separate) {
+    for (const iface of selected) {
+      await captureInterface(iface);
+    }
+    return;
+  }
+  return captureInterface(selected[0], selected);
+}
+
 async function buildPacketflixUri(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[],
@@ -54,21 +270,25 @@ async function buildPacketflixUri(
 ): Promise<[string, string] | undefined> {
   const selected = allSelectedNodes && allSelectedNodes.length > 0 ? allSelectedNodes : [node];
 
-  if (selected.length > 1) {
-    const uniqueContainers = new Set(selected.map((i) => i.parentName));
-    if (uniqueContainers.size > 1) {
-      outputChannel.debug(
-        "Edgeshark multi selection => multiple containers => launching individually"
-      );
-      for (const nd of selected) {
-        if (forVNC === true) {
-          await captureEdgesharkVNC(nd);
-        } else {
-          await captureInterfaceWithPacketflix(nd);
-        }
+  // One Edgeshark stream covers one network namespace: split the selection per
+  // container, and keep host-side link interfaces apart from the node's own.
+  const groups = new Map<string, ClabInterfaceTreeNode[]>();
+  for (const iface of selected) {
+    const key = `${iface.parentName}|${isHostNetnsInterface(iface.name) ? "host" : "node"}`;
+    groups.set(key, [...(groups.get(key) ?? []), iface]);
+  }
+  if (groups.size > 1) {
+    outputChannel.debug(
+      `Edgeshark multi selection => ${groups.size} containers or namespaces => one capture each`
+    );
+    for (const group of groups.values()) {
+      if (forVNC === true) {
+        await captureEdgesharkVNC(group[0], group);
+      } else {
+        await captureInterfaceWithPacketflix(group[0], group);
       }
-      return undefined;
     }
+    return undefined;
   }
 
   return await genPacketflixURI(selected, forVNC);
@@ -245,6 +465,12 @@ async function startWiresharkContainer(
   }
 }
 
+/** Short interface list for a panel title, e.g. "e1-1, e1-2 +3". */
+function formatPanelInterfaces(names: string[]): string {
+  const shown = names.slice(0, 2).join(", ");
+  return names.length > 2 ? `${shown} +${names.length - 2}` : shown;
+}
+
 // Capture using Edgeshark + Wireshark via VNC in a webview
 export async function captureEdgesharkVNC(
   node: ClabInterfaceTreeNode,
@@ -266,6 +492,9 @@ export async function captureEdgesharkVNC(
   if (!packetflixUri) {
     return;
   }
+  const capturedNames = (
+    allSelectedNodes && allSelectedNodes.length > 1 ? allSelectedNodes : [node]
+  ).map(interfaceDisplayName);
   const edgesharkNetwork = await getEdgesharkNetwork();
   const volumeMount = await getVolumeMount(node.parentName);
   const modifiedPacketflixUri = adjustPacketflixHost(packetflixUri[0], edgesharkNetwork);
@@ -301,7 +530,7 @@ export async function captureEdgesharkVNC(
 
   const panel = vscode.window.createWebviewPanel(
     "clabWiresharkVNC",
-    `Wireshark (${node.parentName}:${node.name})`,
+    `Wireshark (${node.parentName}:${formatPanelInterfaces(capturedNames)})`,
     vscode.ViewColumn.One,
     {
       enableScripts: true,

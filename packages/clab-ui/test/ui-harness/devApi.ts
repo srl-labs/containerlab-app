@@ -1,4 +1,5 @@
 import type { CustomIconInfo } from "../../src/core/types/icons";
+import type { HostRuntimeContainer } from "../../src/host";
 import type { TopologyAnnotations } from "../../src/core/types/topology";
 import type { TopologySnapshot } from "../../src/session";
 import type { DevModeInterface } from "../../src/types/devMode";
@@ -16,6 +17,10 @@ export interface HarnessDevApi {
   emitCurrentSnapshot: () => Promise<void>;
   writeYamlFile: (filename: string, content: string) => Promise<void>;
   writeAnnotationsFile: (filename: string, content: unknown) => Promise<void>;
+  /** Deliver a host-to-webview message, e.g. a runtime node update. */
+  emitHostMessage: (message: unknown) => void;
+  /** Mark the lab deployed with these containers, as a host refresh would. */
+  applyRuntimeContainers: (containers: HostRuntimeContainer[]) => Promise<void>;
 }
 
 /** Shape of window.__DEV__ in the harness page. */

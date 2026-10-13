@@ -11,7 +11,8 @@ let sessionHostname = "";
 const HOST_NETNS_INTERFACE_PREFIX = "clab-s-";
 const HOST_NETNS_CONTAINER_NAME = "systemd(1)";
 
-function isHostNetnsInterface(interfaceName: string): boolean {
+/** Host-side end of a link (clab-s-*), captured in the host network namespace. */
+export function isHostNetnsInterface(interfaceName: string): boolean {
   return interfaceName.startsWith(HOST_NETNS_INTERFACE_PREFIX);
 }
 
@@ -34,7 +35,7 @@ export async function genPacketflixURI(
   }
 
   if (selectedNodes.length > 1) {
-    return await captureMultipleEdgeshark(selectedNodes);
+    return await captureMultipleEdgeshark(selectedNodes, forVNC);
   }
 
   const node = selectedNodes[0];
@@ -111,19 +112,17 @@ async function ensureEdgesharkAvailable(): Promise<boolean> {
   return false;
 }
 
-// Capture multiple interfaces with Edgeshark
+// Capture multiple interfaces of one container with Edgeshark, in a single stream
 async function captureMultipleEdgeshark(
-  nodes: c.ClabInterfaceTreeNode[]
-): Promise<[string, string]> {
+  nodes: c.ClabInterfaceTreeNode[],
+  forVNC?: boolean
+): Promise<[string, string] | undefined> {
   const base = nodes[0];
-  const ifNames = nodes.map((n) => n.name);
+  const ifNames = [...new Set(nodes.map((n) => n.name))];
   outputChannel.debug(
     `multi-interface edgeshark for container=${base.parentName} ifaces=[${ifNames.join(", ")}]`
   );
 
-  // Type guard: netns property may exist on runtime objects but isn't in the type definition
-  const baseWithNetns = base as c.ClabInterfaceTreeNode & { netns?: number };
-  const netnsVal = baseWithNetns.netns ?? 4026532270;
   const containerObj = isHostNetnsInterface(base.name)
     ? {
         "network-interfaces": ifNames,
@@ -131,17 +130,21 @@ async function captureMultipleEdgeshark(
         prefix: ""
       }
     : {
-        netns: netnsVal,
         "network-interfaces": ifNames,
         name: base.parentName,
-        type: "docker",
-        prefix: ""
+        type: "docker"
       };
 
   const containerStr = encodeURIComponent(JSON.stringify(containerObj));
   const nifParam = encodeURIComponent(ifNames.join("/"));
 
-  const hostname = await getHostname();
+  const hostname = forVNC === true ? "127.0.0.1" : await getHostname();
+  if (!hostname) {
+    vscode.window.showErrorMessage(
+      "No known hostname/IP address to connect to for packet capture."
+    );
+    return undefined;
+  }
   const bracketed = hostname.includes(":") ? `[${hostname}]` : hostname;
   const config = vscode.workspace.getConfiguration("containerlab");
   const packetflixPort = config.get<number>("capture.packetflixPort", 5001);
@@ -149,7 +152,7 @@ async function captureMultipleEdgeshark(
   const packetflixUri = `packetflix:ws://${bracketed}:${packetflixPort}/capture?container=${containerStr}&nif=${nifParam}`;
 
   vscode.window.showInformationMessage(
-    `Starting multi-interface edgeshark on ${base.parentName} for: ${ifNames.join(", ")}`
+    `Starting edgeshark capture on ${base.parentName}: ${ifNames.join(", ")}...`
   );
   outputChannel.debug(`multi-edgeShark => ${packetflixUri}`);
 

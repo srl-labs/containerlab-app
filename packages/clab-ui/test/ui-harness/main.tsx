@@ -61,7 +61,9 @@ harnessWindow.__DEV__ = {
   emitCurrentSnapshot: () => host.harness.emitCurrentSnapshot(),
   writeYamlFile: (filename: string, content: string) => host.harness.writeYamlFile(filename, content),
   writeAnnotationsFile: (filename: string, content: unknown) =>
-    host.harness.writeAnnotationsFile(filename, content)
+    host.harness.writeAnnotationsFile(filename, content),
+  emitHostMessage: (message: unknown) => host.harness.emitHostMessage(message),
+  applyRuntimeContainers: (containers) => host.harness.applyRuntimeContainers(containers)
 };
 harnessWindow.__INITIAL_DATA__ = initialData;
 

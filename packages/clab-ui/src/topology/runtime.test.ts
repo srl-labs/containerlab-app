@@ -4,7 +4,11 @@ import test from "node:test";
 import type { HostRuntimeContainer } from "../host";
 import type { TopoEdge } from "../core/types/graph";
 
-import { buildRuntimeEdgeStatsUpdates, createRuntimeContainerDataProvider } from "./runtime";
+import {
+  buildRuntimeEdgeStatsUpdates,
+  buildRuntimeNodeUpdates,
+  createRuntimeContainerDataProvider
+} from "./runtime";
 
 const runtimeContainers: HostRuntimeContainer[] = [
   {
@@ -169,4 +173,27 @@ test("runtime edge updates ignore stale interface state on stopped containers", 
   });
 
   assert.equal(update?.extraData.clabSourceInterfaceState, "");
+});
+
+test("runtime node updates list the capturable interfaces of each container", () => {
+  const [update] = buildRuntimeNodeUpdates(
+    [
+      {
+        ...runtimeContainers[0],
+        interfaces: [
+          { name: "lo", alias: "", mac: "", mtu: 65536, state: "unknown", type: "loopback" },
+          { name: "e1-10", alias: "", label: "ethernet-1/10", mac: "", mtu: 9232, state: "down", type: "veth" },
+          { name: "e1-2", alias: "ethernet-1/2", mac: "", mtu: 9232, state: "up", type: "veth" },
+          { name: "eth0", alias: "", mac: "", mtu: 1500, state: "up", type: "veth" }
+        ]
+      }
+    ],
+    "demo"
+  );
+
+  assert.deepEqual(update.interfaces, [
+    { name: "e1-2", alias: "ethernet-1/2", state: "up" },
+    { name: "e1-10", alias: "ethernet-1/10", state: "down" },
+    { name: "eth0", state: "up" }
+  ]);
 });

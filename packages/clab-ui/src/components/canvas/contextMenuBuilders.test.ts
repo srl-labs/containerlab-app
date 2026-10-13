@@ -252,3 +252,46 @@ test("free text context menu hides Duplicate Text when locked", () => {
     undefined
   );
 });
+
+function buildCaptureMenu(runtimeState?: "running" | "stopped") {
+  const captured: string[] = [];
+  const items = buildNodeContextMenu({
+    targetId: "srl1",
+    targetNodeType: "topology-node",
+    targetRuntimeState: runtimeState,
+    isEditMode: false,
+    isDeployed: true,
+    isLocked: false,
+    onNodeAction: () => {},
+    onCaptureNode: (nodeId) => captured.push(nodeId),
+    closeContextMenu: () => {},
+    editNode: () => {},
+    handleDeleteNode: () => {}
+  });
+  return { captured, items };
+}
+
+test("deployed node context menu opens the interface picker for capture", () => {
+  const { captured, items } = buildCaptureMenu("running");
+  const capture = itemById(items, "capture-node");
+
+  assert.equal(capture.label, "Capture…");
+  assert.equal(capture.disabled, false);
+  capture.onClick?.();
+  assert.deepEqual(captured, ["srl1"]);
+});
+
+test("node capture needs a running container", () => {
+  const { items } = buildCaptureMenu("stopped");
+
+  assert.equal(itemById(items, "capture-node").disabled, true);
+});
+
+test("node context menu leaves capture out when the host offers no picker", () => {
+  const { items } = buildDeployedNodeMenu("running");
+
+  assert.equal(
+    items.some((item) => item.id === "capture-node"),
+    false
+  );
+});

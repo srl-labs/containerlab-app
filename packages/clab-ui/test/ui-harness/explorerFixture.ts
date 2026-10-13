@@ -21,7 +21,9 @@ const LAB_ACTIONS = [
 ];
 const CONTAINER_ACTIONS = [
   action("containerlab.node.attachShell", "Attach Shell"),
-  action("containerlab.node.ssh", "SSH")
+  action("containerlab.node.ssh", "SSH"),
+  action("containerlab.node.manageImpairments", "Manage Impairments"),
+  action("containerlab.node.captureInterfaces", "Capture Interfaces…")
 ];
 const FILE_ACTIONS = [action("containerlab.file.openTopology", "Open Topology")];
 

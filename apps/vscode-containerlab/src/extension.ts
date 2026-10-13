@@ -417,6 +417,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.interface.capture", cmd.captureInterface],
     ["containerlab.interface.captureWithEdgeshark", cmd.captureInterfaceWithPacketflix],
     ["containerlab.interface.captureWithEdgesharkVNC", cmd.captureEdgesharkVNC],
+    ["containerlab.node.captureInterfaces", cmd.captureNodeInterfaces],
     ["containerlab.interface.setDelay", cmd.setLinkDelay],
     ["containerlab.interface.setJitter", cmd.setLinkJitter],
     ["containerlab.interface.setLoss", cmd.setLinkLoss],

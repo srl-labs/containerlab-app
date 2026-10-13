@@ -18,6 +18,7 @@ import type {
   ClabUiImageHost,
   ClabUiTopoViewerEvent,
   ClabUiTopoViewerHost,
+  CaptureInterfacesOptions,
   TopologyUiContext,
   TopologyUiRequestOptions,
   TopoViewerLifecycleAction,
@@ -434,6 +435,20 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       },
       captureInterface(nodeName: string, interfaceName: string): void {
         postMessage({ command: "clab-interface-capture", nodeName, interfaceName });
+      },
+      captureInterfaces(
+        nodeName: string,
+        interfaceNames: string[],
+        options: CaptureInterfacesOptions = {}
+      ): void {
+        if (interfaceNames.length === 0) return;
+        postMessage({
+          command: "clab-interface-capture",
+          nodeName,
+          interfaceName: interfaceNames[0],
+          interfaceNames,
+          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {})
+        });
       },
       setLinkImpairment(nodeName: string, interfaceName: string, data: unknown): void {
         postMessage({ command: "clab-link-impairment", nodeName, interfaceName, data });

@@ -11,6 +11,21 @@ import {
   extractEdgeInterfaceStats
 } from "../core/parsing/EdgeElementBuilder";
 import type { HostRuntimeContainer, HostRuntimeInterface } from "../host";
+import {
+  toRuntimeCaptureInterfaces,
+  type TopologyRuntimeInterface
+} from "../core/utilities/runtimeInterfaces";
+
+export {
+  RUNTIME_INTERFACES_KEY,
+  isHostNetnsInterfaceName,
+  isInternalInterfaceName,
+  nodeNamespaceInterfaceName,
+  readRuntimeInterfaces,
+  runtimeInterfaceListsEqual,
+  toRuntimeCaptureInterfaces,
+  type TopologyRuntimeInterface
+} from "../core/utilities/runtimeInterfaces";
 
 export interface TopologyRuntimeEdgeUpdate {
   id: string;
@@ -25,6 +40,7 @@ export interface TopologyRuntimeNodeUpdate {
   status?: string;
   mgmtIpv4Address?: string;
   mgmtIpv6Address?: string;
+  interfaces?: TopologyRuntimeInterface[];
 }
 
 export interface TopologyRuntimeUpdateContext {
@@ -609,6 +625,7 @@ export function buildRuntimeNodeUpdates(
       containerShortName: shortContainerName(container),
       state: container.state,
       mgmtIpv4Address: stripCidr(container.ipv4Address),
-      mgmtIpv6Address: stripCidr(container.ipv6Address)
+      mgmtIpv6Address: stripCidr(container.ipv6Address),
+      interfaces: toRuntimeCaptureInterfaces(container.interfaces, container.kind)
     }));
 }

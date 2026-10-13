@@ -675,6 +675,8 @@ type VscodeMessage = {
   fileLine?: string;
   iconName?: string;
   interfaceName?: string;
+  interfaceNames?: unknown;
+  nodeNamespace?: unknown;
   level?: string;
   message?: string;
   name?: string;
@@ -794,18 +796,25 @@ function openWiresharkVncSessions(
   }
 }
 
-function openCaptureForInterface(
+function openCaptureForInterfaces(
   nodeName: string,
-  interfaceName: string,
+  interfaceNames: string[],
+  nodeNamespace = false,
 ): void {
   const target = getActiveTopologyTarget();
   if (!target) {
     return;
   }
-  if (!nodeName || !interfaceName) {
+  if (!nodeName || interfaceNames.length === 0) {
     runtimeUiActions.notify("Missing capture target.", "error");
     return;
   }
+  // The API groups targets per container and namespace: one request, one session.
+  const targets = interfaceNames.map((interfaceName) => ({
+    containerName: nodeName,
+    interfaceName,
+    ...(nodeNamespace ? { nodeNamespace } : {}),
+  }));
 
   void (async () => {
     try {
@@ -813,7 +822,7 @@ function openCaptureForInterface(
       if (capturePreferences.preferredAction === "edgeshark") {
         const response = await buildPacketflixCapture({
           ...target,
-          targets: [{ containerName: nodeName, interfaceName }],
+          targets,
           remoteHostname: getSessionHostnameOverride(target.endpointId),
         });
         openPacketflixCaptures(response.captures ?? []);
@@ -823,7 +832,7 @@ function openCaptureForInterface(
       const theme = resolveStandaloneTheme(currentTheme);
       const response = await createWiresharkVncSessions({
         ...target,
-        targets: [{ containerName: nodeName, interfaceName }],
+        targets,
         theme,
       });
       openWiresharkVncSessions(
@@ -1198,7 +1207,17 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
       typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
     const interfaceName =
       typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
-    openCaptureForInterface(nodeName, interfaceName);
+    const interfaceNames = Array.isArray(msg.interfaceNames)
+      ? msg.interfaceNames
+          .filter((name: unknown): name is string => typeof name === "string")
+          .map((name) => name.trim())
+          .filter((name) => name.length > 0)
+      : [];
+    openCaptureForInterfaces(
+      nodeName,
+      interfaceNames.length > 0 ? interfaceNames : [interfaceName].filter(Boolean),
+      msg.nodeNamespace === true,
+    );
   },
   "clab-link-impairment": handleLinkImpairmentCommand,
   "topo-toggle-split-view": () =>

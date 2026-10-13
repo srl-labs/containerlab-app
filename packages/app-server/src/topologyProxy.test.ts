@@ -324,4 +324,8 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
   assert.equal(edge?.data?.linkStatus, "up");
   assert.equal(edge?.data?.extraData?.clabSourceInterfaceState, "up");
   assert.equal(edge?.data?.extraData?.clabTargetInterfaceState, "up");
+
+  // Nodes carry their live interfaces so the capture dialog can offer all of them.
+  const nodes = (response.json() as { snapshot: { nodes: Array<{ data?: { extraData?: Record<string, unknown> } }> } }).snapshot.nodes;
+  assert.deepEqual(nodes[0]?.data?.extraData?.runtimeInterfaces, [{ name: "e1-1", state: "up" }]);
 });

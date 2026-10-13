@@ -157,12 +157,26 @@ export interface ClabUiExplorerHost {
   subscribe(handler: (message: ExplorerIncomingMessage) => void): () => void;
 }
 
+export interface CaptureInterfacesOptions {
+  /**
+   * The names are ports inside the node's network namespace: capture them
+   * there as-is, instead of resolving aliases to host-side link ends.
+   */
+  nodeNamespace?: boolean;
+}
+
 export interface ClabUiTopoViewerHost {
   runLifecycle(action: TopoViewerLifecycleAction): void;
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
   captureInterface(nodeName: string, interfaceName: string): void;
+  /** Capture several interfaces of one node together in a single session. */
+  captureInterfaces(
+    nodeName: string,
+    interfaceNames: string[],
+    options?: CaptureInterfacesOptions
+  ): void;
   setLinkImpairment(nodeName: string, interfaceName: string, data: unknown): void;
   saveCustomNode(data: Record<string, unknown>): void;
   deleteCustomNode(nodeName: string): void;

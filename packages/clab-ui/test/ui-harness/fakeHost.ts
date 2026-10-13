@@ -5,11 +5,15 @@ import type { CustomIconInfo } from "../../src/core/types/icons";
 import type { TopologyAnnotations } from "../../src/core/types/topology";
 import {
   TopologySessionCore,
+  buildRuntimeEdgeStatsUpdates,
+  buildRuntimeNodeUpdates,
+  createRuntimeContainerDataProvider,
   type FileSystemAdapter,
   type TopologyHostCommand,
   type TopologyHostResponseMessage,
   type TopologySnapshot
 } from "../../src/session";
+import type { HostRuntimeContainer } from "../../src/host";
 
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
 import {
@@ -123,6 +127,8 @@ export interface FakeClabUiHost extends ClabUiHost {
     writeAnnotationsFile(filename: string, content: unknown): Promise<void>;
     writeYamlFile(filename: string, content: string): Promise<void>;
     setCustomIcons(icons: CustomIconInfo[]): void;
+    emitHostMessage(message: unknown): void;
+    applyRuntimeContainers(containers: HostRuntimeContainer[]): Promise<void>;
   };
 }
 
@@ -199,6 +205,31 @@ export function createFakeClabUiHost(
     },
 
     harness: {
+      // Same steps as the VS Code host on a lab refresh: rebuild the snapshot
+      // with runtime data, then push edge and node updates.
+      async applyRuntimeContainers(containers) {
+        core.updateContext({
+          deploymentState: "deployed",
+          containerDataProvider: createRuntimeContainerDataProvider(containers)
+        });
+        const snapshot = await core.getSnapshot();
+        emitSnapshot(snapshot);
+        const edgeUpdates = buildRuntimeEdgeStatsUpdates(snapshot.edges, containers, {
+          currentLabName: snapshot.labName,
+          topology: undefined
+        });
+        const nodeUpdates = buildRuntimeNodeUpdates(containers, snapshot.labName);
+        this.emitHostMessage({ type: "edge-stats-update", data: { edgeUpdates } });
+        this.emitHostMessage({ type: "node-data-updated", data: { nodeUpdates } });
+      },
+
+      emitHostMessage(message) {
+        const event = { data: message } as MessageEvent<unknown>;
+        for (const subscriber of Array.from(messageSubscribers)) {
+          subscriber(event);
+        }
+      },
+
       setCustomIcons(icons) {
         for (const subscriber of topoViewerSubscribers) {
           subscriber({ type: "iconList", icons });
@@ -331,7 +362,18 @@ export function createFakeClabUiHost(
       cancelLifecycle() {},
       toggleSplitView() {},
       runNodeAction() {},
-      captureInterface() {},
+      captureInterface(nodeName, interfaceName) {
+        recordHarnessMessage({ command: "clab-interface-capture", nodeName, interfaceName });
+      },
+      captureInterfaces(nodeName, interfaceNames, options = {}) {
+        recordHarnessMessage({
+          command: "clab-interface-capture",
+          nodeName,
+          interfaceName: interfaceNames[0],
+          interfaceNames,
+          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {})
+        });
+      },
       setLinkImpairment() {},
       saveCustomNode() {},
       deleteCustomNode() {},
