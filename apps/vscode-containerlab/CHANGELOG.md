@@ -5,6 +5,7 @@
 - Build from the shared monorepo UI workspace, now named `@containerlab/clab-ui`.
 - Restore the extension-specific Marketplace documentation.
 - Release VSIX, Marketplace, and Open VSX artifacts independently through GitHub Releases.
+- Fix Edgeshark capture on Podman by installing Edgeshark with the `gostwire` discovery hostname, which Podman can resolve.
 
 ## [0.26.0] - 2026-07-07
 
