@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertNoLocalPaths } from "./check-local-paths.mjs";
 import { workspaceConfig, readJson } from "./workspace-config.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -42,6 +43,7 @@ try {
   run(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--registry=https://registry.npmjs.org"]);
   const packageRoot = path.join(temporary, "node_modules/@containerlab/clab-ui");
   assert.ok(!fs.realpathSync(packageRoot).startsWith(root + path.sep), "consumer must not resolve to workspace source");
+  assertNoLocalPaths(packageRoot, root);
   const manifest = JSON.parse(
     fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"),
   );

@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { chromium, expect } from "@playwright/test";
 import { build } from "esbuild";
+import { assertNoLocalPaths } from "./check-local-paths.mjs";
 import { workspaceConfig, readJson } from "./workspace-config.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -35,6 +36,7 @@ try {
   run(process.platform === "win32" ? "npm.cmd" : "npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--registry=https://registry.npmjs.org"]);
   const packageRoot = path.join(temporary, "node_modules/@containerlab/clab-viewer");
   assert.ok(!fs.realpathSync(packageRoot).startsWith(root + path.sep), "consumer must use the tarball, not workspace source");
+  assertNoLocalPaths(packageRoot, root);
   const manifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
   assert.equal(manifest.name, "@containerlab/clab-viewer");
   assert.equal(manifest.version, readJson("packages/clab-viewer/package.json").version);
