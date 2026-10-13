@@ -21,19 +21,6 @@ interface NodeRenderConfig {
   suppressRuntimeBadges?: boolean;
 }
 
-/** RGB color for easter egg glow effects */
-interface RGBColor {
-  r: number;
-  g: number;
-  b: number;
-}
-
-/** Easter egg glow state for node visual effects */
-interface EasterEggGlow {
-  color: RGBColor;
-  intensity: number;
-}
-
 /** Box look the node editor shows on one node before it is applied */
 interface NodeBoxPreview {
   nodeId: string;
@@ -80,7 +67,6 @@ interface CanvasState {
         endGeoCoordinates?: { lat: number; lng: number };
       } | null)
     | null;
-  easterEggGlow: EasterEggGlow | null;
   /** Kept out of the graph so each slider step or color change repaints only that node */
   nodeBoxPreview: NodeBoxPreview | null;
   fitViewRequestId: number;
@@ -95,7 +81,6 @@ interface CanvasActions {
   setEdgeRenderConfig: (config: EdgeRenderConfig) => void;
   setNodeRenderConfig: (config: NodeRenderConfig) => void;
   setAnnotationHandlers: (handlers: AnnotationHandlers | null) => void;
-  setEasterEggGlow: (glow: EasterEggGlow | null) => void;
   setNodeBoxPreview: (preview: NodeBoxPreview | null) => void;
   requestFitView: () => void;
   setNodeFilter: (nodeFilter: string) => void;
@@ -202,7 +187,6 @@ const initialState: CanvasState = {
   nodeRenderConfig: defaultNodeRenderConfig,
   annotationHandlers: null,
   getAnnotationGeoUpdate: null,
-  easterEggGlow: null,
   nodeBoxPreview: null,
   fitViewRequestId: 0,
   nodeFilter: "",
@@ -245,9 +229,6 @@ export const useCanvasStore = createWithEqualityFn<CanvasStore>((set) => ({
     set({ annotationHandlers });
   },
 
-  setEasterEggGlow: (easterEggGlow) => {
-    set({ easterEggGlow });
-  },
   setNodeBoxPreview: (nodeBoxPreview) => {
     set({ nodeBoxPreview });
   },
@@ -308,9 +289,6 @@ export const useIsHoveredLinkEnd = (nodeId: string): boolean =>
       state.hoveredLink !== null &&
       (state.hoveredLink.source === nodeId || state.hoveredLink.target === nodeId)
   );
-
-/** Get easter egg glow state */
-export const useEasterEggGlow = () => useCanvasStore((state) => state.easterEggGlow);
 
 /** Get a node's box look, with the node editor's unapplied preview on top */
 export function useNodeBoxAppearance(

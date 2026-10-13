@@ -29,7 +29,6 @@ import { ContextPanel } from "./components/panels/context-panel";
 import { NodeTemplateModal } from "./components/panels/node-editor/NodeTemplateModal";
 import type { SvgExportModalProps } from "./components/panels/SvgExportModal";
 import { ShortcutDisplay, ToastContainer } from "./components/ui";
-import { EasterEggRenderer, useEasterEgg } from "./easter-eggs";
 import {
   useAppEditorBindings,
   useAppE2EExposure,
@@ -1247,8 +1246,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     handleDeselectAll
   });
 
-  const easterEgg = useEasterEgg({});
-
   // Auto-open context panel when selection/editing state changes
   React.useEffect(() => {
     if (
@@ -1659,7 +1656,6 @@ export const AppContent: React.FC<AppContentProps> = ({
                     renderDeployMenuItems={renderDeployMenuItems}
                   />
                 )}
-                <EasterEggRenderer easterEgg={easterEgg} />
                 {!viewerOnly && hasActiveTopology && <NodeTemplateModal />}
                 <ToastContainer toasts={toasts} onDismiss={dismissToast} />
               </Box>

@@ -10,7 +10,6 @@ import { useCanvasIconInk } from "../../../icons/iconInk";
 import {
   useLinkCreationContext,
   useNodeRenderConfig,
-  useEasterEggGlow,
   useIsHoveredLinkEnd
 } from "../../../stores/canvasStore";
 import {
@@ -20,12 +19,7 @@ import {
 } from "../../../stores/topoViewerStore";
 import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabels";
 
-import {
-  buildNodeLabelStyle,
-  HIDDEN_HANDLE_STYLE,
-  getEasterEggGlowShadow,
-  getNodeDirectionRotation
-} from "./nodeStyles";
+import { buildNodeLabelStyle, HIDDEN_HANDLE_STYLE, getNodeDirectionRotation } from "./nodeStyles";
 import { getNetworkNodeTypeColor, toNetworkNodeData } from "./networkNodeShared";
 import { NodeBox, useNodeBoxLabel } from "./NodeBox";
 
@@ -44,7 +38,6 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { label, nodeType, labelPosition, direction, labelBackgroundColor } = nodeData;
   const { linkSourceNode } = useLinkCreationContext();
   const { suppressLabels } = useNodeRenderConfig();
-  const easterEggGlow = useEasterEggGlow();
   const isBoxed = useNodeStyle() === "boxed";
   const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const isLinkEnd = useIsHoveredLinkEnd(id);
@@ -87,21 +80,11 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     cursor: isLinkTarget ? "crosshair" : undefined
   };
 
-  const glowShadow = getEasterEggGlowShadow(easterEggGlow);
-
   // Determine outline based on state - use outline to avoid layout shift
   const getOutlineStyle = (): React.CSSProperties => {
-    // The box shows selection, link target and glow in the boxed style
+    // The box shows selection and link target in the boxed style
     if (isBoxed) {
       return { outline: "none" };
-    }
-    // Easter egg glow takes priority
-    if (glowShadow !== undefined) {
-      return {
-        outline: selected ? `2px solid ${SELECTION_COLOR}` : "none",
-        outlineOffset: 1,
-        boxShadow: glowShadow
-      };
     }
     if (showLinkTargetHighlight) {
       return {
@@ -186,7 +169,6 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
           labelRef={boxLabel.labelRef}
           selected={selected}
           highlighted={showLinkTargetHighlight}
-          glow={glowShadow}
         />
       )}
 

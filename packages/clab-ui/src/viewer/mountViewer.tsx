@@ -36,7 +36,6 @@ export function mountViewer(container: Element, options: MountViewerOptions): Ro
   useCanvasStore.setState({
     linkSourceNode: null,
     annotationHandlers: null,
-    easterEggGlow: null,
     hoveredLink: null,
     linkHoverHighlight: resolved.linkHover,
     nodeRenderConfig: { suppressLabels: !resolved.nodeLabels, suppressRuntimeBadges: true },

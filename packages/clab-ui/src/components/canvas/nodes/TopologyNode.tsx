@@ -14,7 +14,6 @@ import {
   useLinkCreationContext,
   useNodeRenderConfig,
   useNodeBoxAppearance,
-  useEasterEggGlow,
   useIsHoveredLinkEnd
 } from "../../../stores/canvasStore";
 import {
@@ -30,7 +29,6 @@ import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabel
 import {
   buildNodeLabelStyle,
   HIDDEN_HANDLE_STYLE,
-  getEasterEggGlowShadow,
   getNodeDirectionRotation,
   getNodeRuntimeIconOpacity,
   getNodeRuntimeBadgeState
@@ -96,7 +94,6 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   } = nodeData;
   const { linkSourceNode } = useLinkCreationContext();
   const { suppressLabels, suppressRuntimeBadges } = useNodeRenderConfig();
-  const easterEggGlow = useEasterEggGlow();
   const customIcons = useCustomIcons();
   const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const deploymentState = useDeploymentState();
@@ -132,8 +129,6 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
 
-  const glowShadow = getEasterEggGlowShadow(easterEggGlow);
-
   // Build icon style with dynamic properties
   const iconStyle = useMemo((): React.CSSProperties => {
     const style: React.CSSProperties = {
@@ -150,10 +145,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       outlineOffset: 1
     };
 
-    // Apply easter egg glow effect if active
-    if (glowShadow !== undefined && !isBoxed) {
-      style.boxShadow = glowShadow;
-    } else if (isLinkEnd && !isBoxed) {
+    if (isLinkEnd && !isBoxed) {
       style.boxShadow = LINK_END_GLOW;
     }
 
@@ -165,7 +157,6 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     runtimeIconOpacity,
     selected,
     isLinkEnd,
-    glowShadow,
     isBoxed,
     iconSize
   ]);
@@ -230,7 +221,6 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
           appearance={box}
           selected={selected}
           highlighted={isLinkEnd}
-          glow={glowShadow}
         />
       )}
 
