@@ -3,6 +3,163 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "title": "Containerlab topology definition file",
     "definitions": {
+        "mgmt-network": {
+            "description": "configuration container for management network",
+            "markdownDescription": "configuration container for [management network](https://containerlab.dev/manual/network/#management-network)",
+            "type": "object",
+            "properties": {
+                "network": {
+                    "description": "management network name",
+                    "markdownDescription": "[management network name](https://containerlab.dev/manual/network/#network-name)",
+                    "type": "string"
+                },
+                "bridge": {
+                    "description": "Set bridge to use for the management network (instead of the default generated bridge).",
+                    "markdownDescription": "Set [bridge](https://containerlab.dev/manual/network/#bridge-name) to use for the management network (instead of the default generated bridge).",
+                    "type": "string"
+                },
+                "ipv4-subnet": {
+                    "description": "IPv4 subnet to use for the custom management network. e.g. 172.100.100.0/24",
+                    "markdownDescription": "[IPv4 subnet](https://containerlab.dev/manual/network/#user-defined-addresses) to use for the custom management network. e.g. 172.100.100.0/24",
+                    "type": "string",
+                    "pattern": "(^.+/[0-9]{1,2}$)|(auto)"
+                },
+                "ipv6-subnet": {
+                    "description": "IPv6 subnet to use for the custom management network. e.g. 3fff:172:100:100::/64",
+                    "markdownDescription": "[IPv6 subnet](https://containerlab.dev/manual/network/#user-defined-addresses) to be used for the custom management network. e.g. 3fff:172:100:100::/64",
+                    "type": "string",
+                    "pattern": "(^.+/[0-9]{1,3}$)|(auto)"
+                },
+                "ipv4-gw": {
+                    "description": "IPv4 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
+                    "markdownDescription": "IPv4 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
+                    "$ref": "#/definitions/ipv4-addr"
+                },
+                "ipv6-gw": {
+                    "description": "IPv6 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
+                    "markdownDescription": "IPv6 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
+                    "type": "string",
+                    "$ref": "#/definitions/ipv6-addr"
+                },
+                "ipv4-range": {
+                    "description": "IPv4 range out of the ipv4-subnet to use for the custom management network. e.g. 172.100.100.128/25",
+                    "markdownDescription": "[IPv4 range](https://containerlab.dev/manual/network/#ip-range) out of the ipv4-subnet to use for the custom management network. e.g. 172.100.100.128/25",
+                    "type": "string",
+                    "pattern": "^.+/[0-9]{1,2}$"
+                },
+                "ipv6-range": {
+                    "description": "IPv6 range out of the ipv6-subnet to use for the custom management network. e.g. 3fff:172:100:100:8000::/65",
+                    "markdownDescription": "[IPv6 range](https://containerlab.dev/manual/network/#ip-range) out of the ipv6-subnet to use for the custom management network. e.g. 3fff:172:100:100:8000::/65",
+                    "type": "string",
+                    "pattern": "^.+/[0-9]{1,3}$"
+                },
+                "mtu": {
+                    "description": "MTU for the custom network",
+                    "markdownDescription": "[MTU](https://containerlab.dev/manual/network/#mtu) in Bytes for the custom management network",
+                    "$ref": "#/definitions/mtu"
+                },
+                "driver": {
+                    "type": "string",
+                    "enum": [
+                        "bridge",
+                        "macvlan"
+                    ],
+                    "description": "Network driver type (bridge or macvlan)"
+                },
+                "ipam": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "provider": {
+                            "type": "string",
+                            "enum": ["containerlab", "runtime"],
+                            "default": "containerlab",
+                            "description": "Management IP allocation provider; runtime delegates to Docker or Podman"
+                        },
+                        "dad": {
+                            "type": "boolean",
+                            "default": true,
+                            "description": "Duplicate Address Detection for allocated addresses. For Containerlab provider only. Checks using ARP/v6-ND DAD on the parent interface for macvlan mgmt net driver."
+                        }
+                    }
+                },
+                "macvlan-parent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 15,
+                    "description": "Parent interface name for MACVLAN network (required when using driver: macvlan)"
+                },
+                "macvlan-mode": {
+                    "type": "string",
+                    "enum": [
+                        "bridge",
+                        "vepa",
+                        "private",
+                        "passthru"
+                    ],
+                    "default": "bridge",
+                    "description": "Macvlan mode; macvlan-aux requires bridge mode"
+                },
+                "macvlan-aux": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Enable/disable automatic auxiliary host interface (for MACVLAN bridge mode only)"
+                },
+                "external-access": {
+                    "type": "boolean",
+                    "description": "controls whether the management network has external access or not",
+                    "markdownDescription": "controls whether the [management network has external access](https://containerlab.dev/manual/network/#external-access) or not"
+                },
+                "skip-when-unused": {
+                    "type": "boolean",
+                    "description": "skip creation of this management network when every node attached to it has network-mode: none",
+                    "markdownDescription": "skip creating this [management network](https://containerlab.dev/manual/network/#skipping-the-management-network) when every node attached to it resolves to `network-mode: none` (per-node, group, kind, or defaults)"
+                },
+                "tailscale": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Configuration for tailscale attachment of the management network.",
+                    "markdownDescription": "[Tailscale](https://containerlab.dev/manual/network/#tailscale) sidecars for lab nodes",
+                    "not": {
+                        "required": ["auth-key", "auth-mode"]
+                    },
+                    "properties": {
+                        "auth-key": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Tailscale auth key used to join nodes to the tailnet."
+                        },
+                        "auth-mode": {
+                            "type": "string",
+                            "enum": ["sso"],
+                            "description": "Set the authentication mode for tailscale."
+                        }
+                    }
+                },
+                "driver-opts": {
+                    "type": "object",
+                    "description": "overrides for container runtime network driver options",
+                    "markdownDescription": "[driver-opts](https://containerlab.dev/manual/network/#bridge-network-driver-options) lets you set overrides for the network driver of the container runtime",
+                    "patternProperties": {
+                        ".+": {
+                            "anyOf": [
+                                {
+                                    "type": "string"
+                                },
+                                {
+                                    "type": "number"
+                                },
+                                {
+                                    "type": "boolean"
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "minProperties": 1,
+            "additionalProperties": false
+        },
         "env": {
             "type": "object",
             "description": "environment variables",
@@ -95,7 +252,6 @@
                         "linux",
                         "bridge",
                         "ovs-bridge",
-                        "border0",
                         "host",
                         "keysight_ixia-c-one",
                         "ipinfusion_ocnos",
@@ -302,6 +458,11 @@
                     "markdownDescription": "[IPv6 management address](https://containerlab.dev/manual/nodes/#mgmt-ipv6) of the node (e.g. 172.10.10.11)",
                     "$ref": "#/definitions/ipv6-addr"
                 },
+                "mgmt-net": {
+                    "type": "string",
+                    "description": "network name of the mgmt list entry the node attaches to",
+                    "markdownDescription": "network name of the [management network](https://containerlab.dev/manual/network/#multiple-management-networks) list entry the node attaches to"
+                },
                 "network-mode": {
                     "type": "string",
                     "description": "node network mode (can only be set host, defaults to bridge)",
@@ -333,10 +494,6 @@
                     "type": "string",
                     "description": "CPU cores to use by this node/container",
                     "markdownDescription": "[CPU cores](https://containerlab.dev/manual/nodes/#cpu-set) to be used by the node/container"
-                },
-                "extras": {
-                    "type": "object",
-                    "$ref": "#/definitions/extras-config"
                 },
                 "config": {
                     "$ref": "#/definitions/config-config"
@@ -422,6 +579,106 @@
                     "type": "boolean",
                     "description": "Use the default mgmt gRPC server for EDA instead of a dedicated eda-mgmt server (nokia_srlinux kind).",
                     "markdownDescription": "Use the default `mgmt` gRPC server for EDA instead of a dedicated `eda-mgmt` server. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `nokia_srlinux` kind"
+                },
+                "port-count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 999,
+                    "description": "Base port count; breakout lanes are allocated after this range (nvidia_cumulusvx kind).",
+                    "markdownDescription": "Base port count; breakout lanes are allocated after this range. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `nvidia_cumulusvx` kind"
+                },
+                "breakouts": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "Breakout channels for individual parent ports or inclusive port ranges; entries must not overlap (nvidia_cumulusvx kind).",
+                    "markdownDescription": "[Breakout ports](https://containerlab.dev/manual/kinds/nvidia_cumulusvx/#breakout-ports) for individual parent ports or inclusive port ranges. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `nvidia_cumulusvx` kind",
+                    "items": {
+                        "type": "object",
+                        "required": [
+                            "port",
+                            "channels"
+                        ],
+                        "properties": {
+                            "port": {
+                                "description": "Parent port number or inclusive range, for example 10 or 1..20, within the base port count",
+                                "anyOf": [
+                                    {
+                                        "type": "integer",
+                                        "minimum": 1,
+                                        "maximum": 999
+                                    },
+                                    {
+                                        "type": "string",
+                                        "pattern": "^[1-9][0-9]{0,2}(\\.\\.[1-9][0-9]{0,2})?$"
+                                    }
+                                ]
+                            },
+                            "channels": {
+                                "type": "integer",
+                                "enum": [
+                                    2,
+                                    4,
+                                    8
+                                ],
+                                "description": "Number of breakout lanes for each selected port"
+                            }
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "copy-to-flash": {
+                    "type": "array",
+                    "description": "list of cEOS-specific configuration or override files to be copied to the flash directory and evaluated on startup (arista_ceos kind).",
+                    "markdownDescription": "list of [cEOS-specific configuration or override files](https://containerlab.dev/manual/kinds/ceos/#copy-to-flash) to be copied to the flash directory and evaluated on startup. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `arista_ceos` kind",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    },
+                    "uniqueItems": true
+                },
+                "daemons": {
+                    "type": "array",
+                    "description": "list of FRR routing daemons to enable; when omitted, all daemons are enabled (frr and frrouting kinds).",
+                    "markdownDescription": "list of [FRR routing daemons](https://containerlab.dev/manual/kinds/frr/#daemons) to enable; when omitted, all daemons are enabled. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `frr` and `frrouting` kinds",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "bgpd",
+                            "ospfd",
+                            "ospf6d",
+                            "ripd",
+                            "ripngd",
+                            "isisd",
+                            "pimd",
+                            "pim6d",
+                            "ldpd",
+                            "nhrpd",
+                            "eigrpd",
+                            "babeld",
+                            "sharpd",
+                            "pbrd",
+                            "bfdd",
+                            "fabricd",
+                            "vrrpd",
+                            "pathd",
+                            "zebra",
+                            "staticd",
+                            "mgmtd",
+                            "watchfrr"
+                        ]
+                    },
+                    "uniqueItems": true
+                },
+                "kubeconfig": {
+                    "type": "string",
+                    "description": "path where kind writes the cluster's kubeconfig file, absolute or relative to the topology file (k8s-kind kind).",
+                    "markdownDescription": "path where kind writes the [cluster's kubeconfig file](https://containerlab.dev/manual/kinds/k8s-kind/#kind-specific-config), absolute or relative to the topology file. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `k8s-kind` kind"
+                },
+                "wait": {
+                    "type": "string",
+                    "description": "duration to wait for the kind cluster to become ready, e.g. 0s or 2m (k8s-kind kind).",
+                    "markdownDescription": "duration to wait for the [kind cluster to become ready](https://containerlab.dev/manual/kinds/k8s-kind/#kind-specific-config), e.g. `0s` or `2m`. A [kind-specific config](https://containerlab.dev/manual/nodes/#kind-specific-config) key of the `k8s-kind` kind"
                 },
                 "aliases": {
                     "type": "array",
@@ -820,8 +1077,68 @@
                     "if": {
                         "properties": {
                             "kind": {
+                                "pattern": "^nvidia_cumulusvx$"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "$ref": "#/definitions/kind-specific-config-nvidia_cumulusvx"
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
+                                "pattern": "^arista_ceos$"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "$ref": "#/definitions/kind-specific-config-arista_ceos"
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
+                                "pattern": "^(frr|frrouting)$"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "$ref": "#/definitions/kind-specific-config-frr"
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
+                                "pattern": "^k8s-kind$"
+                            }
+                        },
+                        "required": [
+                            "kind"
+                        ]
+                    },
+                    "then": {
+                        "$ref": "#/definitions/kind-specific-config-k8s-kind"
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "kind": {
                                 "not": {
-                                    "pattern": "^(nokia_srsim|nokia_sros|nokia_srlinux|cisco_iol)$"
+                                    "pattern": "^(nokia_srsim|nokia_sros|nokia_srlinux|cisco_iol|nvidia_cumulusvx|arista_ceos|frr|frrouting|k8s-kind)$"
                                 }
                             }
                         },
@@ -1299,64 +1616,6 @@
                 "passthru",
                 "source"
             ]
-        },
-        "extras-config": {
-            "type": "object",
-            "description": "node's extra configurations",
-            "properties": {
-                "ceos-copy-to-flash": {
-                    "type": "array",
-                    "description": "list of cEOS-specific configuration or override files to be copied to the flash directory and evaluated on startup",
-                    "markdownDescription": "list of [cEOS-specific configuration or override files](https://containerlab.dev/manual/kinds/ceos/#copy-to-flash) to be copied to the flash directory and evaluated on startup",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "uniqueItems": true
-                },
-                "frr": {
-                    "type": "object",
-                    "description": "FRRouting-specific extra options",
-                    "markdownDescription": "[FRRouting-specific extra options](https://containerlab.dev/manual/kinds/frr/#daemons)",
-                    "properties": {
-                        "daemons": {
-                            "type": "array",
-                            "description": "list of FRR routing daemons to enable; when omitted, all daemons are enabled",
-                            "markdownDescription": "list of [FRR routing daemons](https://containerlab.dev/manual/kinds/frr/#daemons) to enable; when omitted, all daemons are enabled",
-                            "items": {
-                                "type": "string",
-                                "enum": [
-                                    "bgpd",
-                                    "ospfd",
-                                    "ospf6d",
-                                    "ripd",
-                                    "ripngd",
-                                    "isisd",
-                                    "pimd",
-                                    "pim6d",
-                                    "ldpd",
-                                    "nhrpd",
-                                    "eigrpd",
-                                    "babeld",
-                                    "sharpd",
-                                    "pbrd",
-                                    "bfdd",
-                                    "fabricd",
-                                    "vrrpd",
-                                    "pathd",
-                                    "zebra",
-                                    "staticd",
-                                    "mgmtd",
-                                    "watchfrr"
-                                ]
-                            },
-                            "uniqueItems": true
-                        }
-                    },
-                    "additionalProperties": false
-                }
-            },
-            "additionalProperties": false
         },
         "config-config": {
             "type": "object",
@@ -2220,6 +2479,36 @@
                         "required": [
                             "bootstrap-config"
                         ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
                     }
                 ]
             },
@@ -2289,6 +2578,36 @@
                         "required": [
                             "bootstrap-config"
                         ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
                     }
                 ]
             },
@@ -2349,6 +2668,36 @@
                         "required": [
                             "bootstrap-config"
                         ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
                     }
                 ]
             },
@@ -2364,6 +2713,11 @@
         "kind-specific-config-cisco_iol": {
             "not": {
                 "anyOf": [
+                    {
+                        "required": [
+                            "components"
+                        ]
+                    },
                     {
                         "required": [
                             "config-mode"
@@ -2396,16 +2750,46 @@
                     },
                     {
                         "required": [
-                            "components"
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
                         ]
                     }
                 ]
             },
             "description": "kind-specific config keys of the cisco_iol kind"
         },
-        "kind-specific-config-other": {
+        "kind-specific-config-nvidia_cumulusvx": {
             "not": {
                 "anyOf": [
+                    {
+                        "required": [
+                            "components"
+                        ]
+                    },
                     {
                         "required": [
                             "config-mode"
@@ -2453,7 +2837,350 @@
                     },
                     {
                         "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
+                    }
+                ]
+            },
+            "description": "kind-specific config keys of the nvidia_cumulusvx kind"
+        },
+        "kind-specific-config-arista_ceos": {
+            "not": {
+                "anyOf": [
+                    {
+                        "required": [
                             "components"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "config-mode"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "gen-component-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sfm"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "inject-ssh-keys"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "custom-prompt"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "eda-default-grpc-server"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "pid-offset"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "mgmt-intf"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "bootstrap-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
+                    }
+                ]
+            },
+            "description": "kind-specific config keys of the arista_ceos kind"
+        },
+        "kind-specific-config-frr": {
+            "not": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "components"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "config-mode"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "gen-component-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sfm"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "inject-ssh-keys"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "custom-prompt"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "eda-default-grpc-server"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "pid-offset"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "mgmt-intf"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "bootstrap-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
+                        ]
+                    }
+                ]
+            },
+            "description": "kind-specific config keys of the frr and frrouting kinds"
+        },
+        "kind-specific-config-k8s-kind": {
+            "not": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "components"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "config-mode"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "gen-component-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sfm"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "inject-ssh-keys"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "custom-prompt"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "eda-default-grpc-server"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "pid-offset"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "mgmt-intf"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "bootstrap-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    }
+                ]
+            },
+            "description": "kind-specific config keys of the k8s-kind kind"
+        },
+        "kind-specific-config-other": {
+            "not": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "components"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "config-mode"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "gen-component-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sfm"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "inject-ssh-keys"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "custom-prompt"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "eda-default-grpc-server"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "pid-offset"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "mgmt-intf"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "bootstrap-config"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "port-count"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "breakouts"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "copy-to-flash"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "daemons"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "kubeconfig"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "wait"
                         ]
                     }
                 ]
@@ -2475,161 +3202,29 @@
             "markdownDescription": "[lab prefix](https://containerlab.dev/manual/topo-def-file/#prefix)"
         },
         "mgmt": {
-            "description": "configuration container for management network",
+            "description": "management network configuration; a single network or a list of networks where the first entry is the default",
             "markdownDescription": "configuration container for [management network](https://containerlab.dev/manual/network/#management-network)",
-            "type": "object",
-            "properties": {
-                "network": {
-                    "description": "management network name",
-                    "markdownDescription": "[management network name](https://containerlab.dev/manual/network/#network-name)",
-                    "type": "string"
+            "oneOf": [
+                {
+                    "$ref": "#/definitions/mgmt-network"
                 },
-                "bridge": {
-                    "description": "Set bridge to use for the management network (instead of the default generated bridge).",
-                    "markdownDescription": "Set [bridge](https://containerlab.dev/manual/network/#bridge-name) to use for the management network (instead of the default generated bridge).",
-                    "type": "string"
-                },
-                "ipv4-subnet": {
-                    "description": "IPv4 subnet to use for the custom management network. e.g. 172.100.100.0/24",
-                    "markdownDescription": "[IPv4 subnet](https://containerlab.dev/manual/network/#user-defined-addresses) to use for the custom management network. e.g. 172.100.100.0/24",
-                    "type": "string",
-                    "pattern": "(^.+/[0-9]{1,2}$)|(auto)"
-                },
-                "ipv6-subnet": {
-                    "description": "IPv6 subnet to use for the custom management network. e.g. 3fff:172:100:100::/64",
-                    "markdownDescription": "[IPv6 subnet](https://containerlab.dev/manual/network/#user-defined-addresses) to be used for the custom management network. e.g. 3fff:172:100:100::/64",
-                    "type": "string",
-                    "pattern": "(^.+/[0-9]{1,3}$)|(auto)"
-                },
-                "ipv4-gw": {
-                    "description": "IPv4 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
-                    "markdownDescription": "IPv4 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
-                    "$ref": "#/definitions/ipv4-addr"
-                },
-                "ipv6-gw": {
-                    "description": "IPv6 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
-                    "markdownDescription": "IPv6 gateway address that will be set on a bridge used for the management network. Will be set to the first available IP address by default",
-                    "type": "string",
-                    "$ref": "#/definitions/ipv6-addr"
-                },
-                "ipv4-range": {
-                    "description": "IPv4 range out of the ipv4-subnet to use for the custom management network. e.g. 172.100.100.128/25",
-                    "markdownDescription": "[IPv4 range](https://containerlab.dev/manual/network/#ip-range) out of the ipv4-subnet to use for the custom management network. e.g. 172.100.100.128/25",
-                    "type": "string",
-                    "pattern": "^.+/[0-9]{1,2}$"
-                },
-                "ipv6-range": {
-                    "description": "IPv6 range out of the ipv6-subnet to use for the custom management network. e.g. 3fff:172:100:100:8000::/65",
-                    "markdownDescription": "[IPv6 range](https://containerlab.dev/manual/network/#ip-range) out of the ipv6-subnet to use for the custom management network. e.g. 3fff:172:100:100:8000::/65",
-                    "type": "string",
-                    "pattern": "^((:|[0-9a-fA-F]{0,4}):)([0-9a-fA-F]{0,4}:){0,5}((([0-9a-fA-F]{0,4}:)?(:|[0-9a-fA-F]{0,4}))|(((25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9]?[0-9])))(%[\\p{N}\\p{L}]+)?$"
-                },
-                "mtu": {
-                    "description": "MTU for the custom network",
-                    "markdownDescription": "[MTU](https://containerlab.dev/manual/network/#mtu) in Bytes for the custom management network",
-                    "$ref": "#/definitions/mtu"
-                },
-                "driver": {
-                    "type": "string",
-                    "enum": [
-                        "bridge",
-                        "macvlan"
-                    ],
-                    "description": "Network driver type (bridge or macvlan)"
-                },
-                "ipam": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                        "provider": {
-                            "type": "string",
-                            "enum": ["containerlab", "runtime"],
-                            "default": "containerlab",
-                            "description": "Management IP allocation provider; runtime delegates to Docker or Podman"
-                        },
-                        "dad": {
-                            "type": "boolean",
-                            "default": true,
-                            "description": "Duplicate Address Detection for allocated addresses. For Containerlab provider only. Checks using ARP/v6-ND DAD on the parent interface for macvlan mgmt net driver."
-                        }
-                    }
-                },
-                "macvlan-parent": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 15,
-                    "description": "Parent interface name for MACVLAN network (required when using driver: macvlan)"
-                },
-                "macvlan-mode": {
-                    "type": "string",
-                    "enum": [
-                        "bridge",
-                        "vepa",
-                        "private",
-                        "passthru"
-                    ],
-                    "default": "bridge",
-                    "description": "Macvlan mode; macvlan-aux requires bridge mode"
-                },
-                "macvlan-aux": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Enable/disable automatic auxiliary host interface (for MACVLAN bridge mode only)"
-                },
-                "external-access": {
-                    "type": "boolean",
-                    "description": "controls whether the management network has external access or not",
-                    "markdownDescription": "controls whether the [management network has external access](https://containerlab.dev/manual/network/#external-access) or not"
-                },
-                "skip-when-unused": {
-                    "type": "boolean",
-                    "description": "skip management network creation when every node has network-mode: none",
-                    "markdownDescription": "skip creating the [management network](https://containerlab.dev/manual/network/#skipping-the-management-network) when every node resolves to `network-mode: none` (per-node, group, kind, or defaults)"
-                },
-                "tailscale": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "description": "Configuration for tailscale attachment of the management network.",
-                    "markdownDescription": "[Tailscale](https://containerlab.dev/manual/network/#tailscale) sidecars for lab nodes",
-                    "not": {
-                        "required": ["auth-key", "auth-mode"]
-                    },
-                    "properties": {
-                        "auth-key": {
-                            "type": "string",
-                            "minLength": 1,
-                            "description": "Tailscale auth key used to join nodes to the tailnet."
-                        },
-                        "auth-mode": {
-                            "type": "string",
-                            "enum": ["sso"],
-                            "description": "Set the authentication mode for tailscale."
-                        }
-                    }
-                },
-                "driver-opts": {
-                    "type": "object",
-                    "description": "overrides for container runtime network driver options",
-                    "markdownDescription": "[driver-opts](https://containerlab.dev/manual/network/#bridge-network-driver-options) lets you set overrides for the network driver of the container runtime",
-                    "patternProperties": {
-                        ".+": {
-                            "anyOf": [
-                                {
-                                    "type": "string"
-                                },
-                                {
-                                    "type": "number"
-                                },
-                                {
-                                    "type": "boolean"
-                                }
-                            ]
-                        }
+                {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "allOf": [
+                            {
+                                "$ref": "#/definitions/mgmt-network"
+                            },
+                            {
+                                "required": [
+                                    "network"
+                                ]
+                            }
+                        ]
                     }
                 }
-            },
-            "minProperties": 1,
-            "additionalProperties": false
+            ]
         },
         "topology": {
             "description": "topology configuration container",
@@ -2705,7 +3300,7 @@
                                     "$ref": "#/definitions/node-config"
                                 },
                                 {
-                                    "$ref": "#/definitions/kind-specific-config-other"
+                                    "$ref": "#/definitions/kind-specific-config-arista_ceos"
                                 }
                             ]
                         },
@@ -3125,7 +3720,7 @@
                                     "$ref": "#/definitions/node-config"
                                 },
                                 {
-                                    "$ref": "#/definitions/kind-specific-config-other"
+                                    "$ref": "#/definitions/kind-specific-config-frr"
                                 }
                             ]
                         },
@@ -3135,7 +3730,17 @@
                                     "$ref": "#/definitions/node-config"
                                 },
                                 {
-                                    "$ref": "#/definitions/kind-specific-config-other"
+                                    "$ref": "#/definitions/kind-specific-config-frr"
+                                }
+                            ]
+                        },
+                        "k8s-kind": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/node-config"
+                                },
+                                {
+                                    "$ref": "#/definitions/kind-specific-config-k8s-kind"
                                 }
                             ]
                         },
@@ -3145,7 +3750,7 @@
                                     "$ref": "#/definitions/node-config"
                                 },
                                 {
-                                    "$ref": "#/definitions/kind-specific-config-other"
+                                    "$ref": "#/definitions/kind-specific-config-nvidia_cumulusvx"
                                 }
                             ]
                         },
