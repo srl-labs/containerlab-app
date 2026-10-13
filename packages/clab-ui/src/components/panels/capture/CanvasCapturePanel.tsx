@@ -1,58 +1,59 @@
-// Capture dialog for a canvas node, fed by the graph and sent to the topology host.
+// Capture checklist for a canvas node, fed by the graph and sent to the topology host.
 import React from "react";
 
 import { useClabUiHost } from "../../../host";
 import { useGraphStore } from "../../../stores/graphStore";
-import { useCaptureDialogStore } from "../../../stores/captureDialogStore";
 
-import { CaptureInterfacesDialog } from "./CaptureInterfacesDialog";
+import { CaptureMenuPanel } from "./CaptureMenuPanel";
 import { buildCaptureNodeTarget, type CaptureRequestGroup } from "./captureInterfaceOptions";
 import { initialCaptureSelection, rememberCaptureSelection } from "./captureSelectionMemory";
+import { captureGroupLabel } from "./captureSummary";
 
-export const CanvasCaptureDialog: React.FC<{ nodeId: string }> = ({ nodeId }) => {
+export const CanvasCapturePanel: React.FC<{ nodeId: string; onDone: () => void }> = ({
+  nodeId,
+  onDone
+}) => {
   const { topoViewer } = useClabUiHost();
-  const closeCaptureDialog = useCaptureDialogStore((state) => state.closeCaptureDialog);
   const nodes = useGraphStore((state) => state.nodes);
   const edges = useGraphStore((state) => state.edges);
   const target = React.useMemo(
     () => buildCaptureNodeTarget(nodeId, nodes, edges),
     [nodeId, nodes, edges]
   );
+  const containerName = target?.containerName;
   const [initialSelection] = React.useState(() =>
     target ? initialCaptureSelection(target.containerName, target.options) : []
   );
 
-  React.useEffect(() => {
-    if (!target) closeCaptureDialog();
-  }, [target, closeCaptureDialog]);
+  const handleSelectionChange = React.useCallback(
+    (interfaceNames: string[]) => {
+      if (containerName !== undefined) rememberCaptureSelection(containerName, interfaceNames);
+    },
+    [containerName]
+  );
 
   const handleCapture = React.useCallback(
     (groups: CaptureRequestGroup[]) => {
       if (!target) return;
-      rememberCaptureSelection(
-        target.containerName,
-        groups.flatMap((group) => group.interfaceNames)
-      );
       for (const group of groups) {
         topoViewer.captureInterfaces(group.containerName, group.interfaceNames, {
-          nodeNamespace: group.nodeNamespace
+          nodeNamespace: group.nodeNamespace,
+          label: captureGroupLabel(target.options, group)
         });
       }
-      closeCaptureDialog();
+      onDone();
     },
-    [closeCaptureDialog, target, topoViewer]
+    [onDone, target, topoViewer]
   );
 
   if (!target) return null;
 
   return (
-    <CaptureInterfacesDialog
-      open
-      nodeLabel={target.label}
-      containerName={target.containerName}
+    <CaptureMenuPanel
+      heading={{ name: target.label, suffix: "interfaces" }}
       options={target.options}
       initialSelection={initialSelection}
-      onClose={closeCaptureDialog}
+      onSelectionChange={handleSelectionChange}
       onCapture={handleCapture}
     />
   );

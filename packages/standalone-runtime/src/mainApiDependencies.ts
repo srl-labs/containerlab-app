@@ -16,7 +16,6 @@ export { createStandaloneExplorerBridge } from "./standaloneExplorer";
 export {
   buildPacketflixCapture,
   controlNodeLifecycle,
-  createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
   fetchRuntimeImages,

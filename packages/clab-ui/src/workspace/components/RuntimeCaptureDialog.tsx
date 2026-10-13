@@ -47,11 +47,16 @@ const RuntimeCaptureDialogContent: React.FC<{ request: RuntimeCaptureRequest }> 
         groups.flatMap((group) => group.interfaceNames)
       );
       closeCapture();
-      for (const group of groups) {
-        request.onCapture({ interfaceNames: group.interfaceNames, nodeNamespace: group.nodeNamespace });
-      }
+      const labels = new Map(options.map((option) => [option.name, option.label]));
+      request.onCapture(
+        groups.map((group) => ({
+          interfaceNames: group.interfaceNames,
+          nodeNamespace: group.nodeNamespace,
+          label: group.interfaceNames.map((name) => labels.get(name) ?? name).join(", ")
+        }))
+      );
     },
-    [closeCapture, containerName, request]
+    [closeCapture, containerName, options, request]
   );
 
   return (

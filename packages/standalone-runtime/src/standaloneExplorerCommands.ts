@@ -24,7 +24,6 @@ import {
   readFileExplorerFile,
   renameFileExplorerPath,
   runFcliCommand,
-  createWiresharkVncSessions,
   uninstallEdgeShark,
   uploadFileExplorerFile,
   writeFileExplorerFile,
@@ -41,7 +40,8 @@ import {
   saveConfigsFlow,
   type CloneRepoDialogTarget
 } from "./runtimeActionFlows";
-import { publicAssetUrl } from "./publicAssetUrl";
+import type { WiresharkCaptureRequest } from "./wiresharkCaptureLauncher";
+import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import type { LifecycleCommandEndpoint } from "./standaloneHostShared";
 import {
   findLabStateForTopology,
@@ -228,69 +228,42 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
     };
 
+    /** Every request opens in the same Wireshark window, one tab per session. */
     const runWiresharkVncCapture = async (
-      targets: CaptureTargets = resolveCaptureTargets()
+      requests: WiresharkCaptureRequest[] = [{ targets: resolveCaptureTargets() }]
     ): Promise<void> => {
       if (!actionTopologyRef) {
         postExplorerError("No canonical topology reference is available for this item.");
         return;
       }
-      if (targets.length === 0) {
+      const captures = requests.filter((request) => request.targets.length > 0);
+      if (captures.length === 0) {
         postExplorerError("Capture requires a running interface item.");
         return;
       }
 
-      try {
-        const theme = resolveStandaloneTheme();
-
-        const sessionsResponse = await createWiresharkVncSessions({
-          endpointId: actionEndpointId,
-          topologyRef: actionTopologyRef,
-          targets,
-          theme
-        });
-
-        const sessions = sessionsResponse.sessions ?? [];
-        if (sessions.length === 0) {
-          runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
-          return;
-        }
-
-        for (const session of sessions) {
-          const params = new URLSearchParams({
-            sessionId: session.sessionId,
-            theme
-          });
-          if (actionEndpointId) {
-            params.set("endpointId", actionEndpointId);
-          }
-          if (session.showVolumeTip) {
-            params.set("showVolumeTip", "1");
-          }
-          const capturePageUrl = `${publicAssetUrl("wireshark.html")}?${params.toString()}`;
-          window.open(capturePageUrl, "_blank", "noopener,noreferrer");
-        }
-
+      const opened = await openWiresharkCaptureWindow(
+        captures,
+        { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
+        resolveStandaloneTheme()
+      );
+      if (opened > 0) {
         runtimeUiActions.notify(
-          sessions.length > 1
-            ? `Opened ${sessions.length} Wireshark VNC sessions.`
-            : "Opened Wireshark VNC session.",
+          opened > 1 ? `Opened ${opened} Wireshark VNC sessions.` : "Opened Wireshark VNC session.",
           "success"
         );
-      } catch (error) {
-        runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
       }
     };
 
     const runPreferredCapture = async (
-      targets: CaptureTargets = resolveCaptureTargets()
+      requests: WiresharkCaptureRequest[] = [{ targets: resolveCaptureTargets() }]
     ): Promise<void> => {
       const preferredAction = loadCapturePreferences(actionEndpointId).preferredAction;
       if (preferredAction === "edgeshark") {
-        await runPacketflixCapture(targets);
+        await Promise.all(requests.map((request) => runPacketflixCapture(request.targets)));
         return;
       }
-      await runWiresharkVncCapture(targets);
+      await runWiresharkVncCapture(requests);
     };
 
     const openNodeCaptureDialog = (): void => {
@@ -304,12 +277,15 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         topologyRef: actionTopologyRef,
         nodeName: containerName,
         title: `Capture: ${item.label || containerName}`,
-        onCapture: ({ interfaceNames, nodeNamespace }) => {
+        onCapture: (sessions) => {
           void runPreferredCapture(
-            interfaceNames.map((interfaceName) => ({
-              containerName,
-              interfaceName,
-              ...(nodeNamespace ? { nodeNamespace } : {})
+            sessions.map(({ interfaceNames, nodeNamespace, label }) => ({
+              targets: interfaceNames.map((interfaceName) => ({
+                containerName,
+                interfaceName,
+                ...(nodeNamespace ? { nodeNamespace } : {})
+              })),
+              ...(label !== undefined ? { label } : {})
             }))
           );
         }

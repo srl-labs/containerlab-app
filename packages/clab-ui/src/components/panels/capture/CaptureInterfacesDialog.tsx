@@ -35,6 +35,7 @@ import {
   readSeparateCaptureSessions,
   writeSeparateCaptureSessions
 } from "./captureSessionPreference";
+import { summarizeCapture, type CaptureSummary } from "./captureSummary";
 
 /** Mount it per request: the selection starts from `initialSelection` on mount. */
 export interface CaptureInterfacesDialogProps {
@@ -67,18 +68,12 @@ function selectAllState(
   return count === visible.length ? "all" : "some";
 }
 
-function footerHint(selectedCount: number, sessionCount: number, separate: boolean): string {
+function footerHint(selectedCount: number, summary: CaptureSummary, separate: boolean): string {
+  if (summary.hint !== undefined) return summary.hint;
   if (selectedCount === 0) return "Pick the interfaces to capture.";
   if (selectedCount === 1) return "Tick more interfaces to capture them together.";
   if (separate) return "Each interface in its own Wireshark.";
-  if (sessionCount > 1) {
-    return `${selectedCount} interfaces in ${sessionCount} Wiresharks: some ports can only be captured on the host side.`;
-  }
   return `All ${selectedCount} interfaces in one Wireshark.`;
-}
-
-function submitLabel(sessionCount: number): string {
-  return sessionCount > 1 ? `Open ${sessionCount} Wiresharks` : "Open Wireshark";
 }
 
 const CaptureDialogTitle: React.FC<{ nodeLabel: string; containerName?: string }> = ({
@@ -268,19 +263,19 @@ const OpenAsToggle: React.FC<{
 
 const CaptureFooter: React.FC<{
   selectedCount: number;
-  sessionCount: number;
+  summary: CaptureSummary;
   separate: boolean;
   onSeparateChange: (separate: boolean) => void;
   onClose: () => void;
   onSubmit: () => void;
-}> = ({ selectedCount, sessionCount, separate, onSeparateChange, onClose, onSubmit }) => (
+}> = ({ selectedCount, summary, separate, onSeparateChange, onClose, onSubmit }) => (
   <DialogActions sx={{ flexDirection: "column", alignItems: "stretch", gap: 1.25 }}>
     <OpenAsToggle separate={separate} disabled={selectedCount < 2} onChange={onSeparateChange} />
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, color: "text.secondary" }}>
         <InfoOutlinedIcon sx={{ fontSize: 14, flexShrink: 0 }} />
         <Typography sx={{ fontSize: 12 }} data-testid="capture-interfaces-hint">
-          {footerHint(selectedCount, sessionCount, separate)}
+          {footerHint(selectedCount, summary, separate)}
         </Typography>
       </Box>
       <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
@@ -295,7 +290,7 @@ const CaptureFooter: React.FC<{
           onClick={onSubmit}
           data-testid="capture-interfaces-submit"
         >
-          {submitLabel(sessionCount)}
+          {summary.submitLabel}
         </Button>
       </Box>
     </Box>
@@ -461,7 +456,7 @@ export const CaptureInterfacesDialog: React.FC<CaptureInterfacesDialogProps> = (
       </DialogContent>
       <CaptureFooter
         selectedCount={selectedNames.length}
-        sessionCount={groups.length}
+        summary={summarizeCapture(options, selected, groups, separate)}
         separate={separate}
         onSeparateChange={changeSeparate}
         onClose={onClose}

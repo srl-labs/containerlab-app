@@ -19,6 +19,7 @@ import type {
   ClabUiTopoViewerEvent,
   ClabUiTopoViewerHost,
   CaptureInterfacesOptions,
+  CaptureTargetRef,
   TopologyUiContext,
   TopologyUiRequestOptions,
   TopoViewerLifecycleAction,
@@ -433,8 +434,17 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         }
         postMessage({ command, nodeName });
       },
-      captureInterface(nodeName: string, interfaceName: string): void {
-        postMessage({ command: "clab-interface-capture", nodeName, interfaceName });
+      captureInterface(
+        nodeName: string,
+        interfaceName: string,
+        options: Pick<CaptureInterfacesOptions, "label"> = {}
+      ): void {
+        postMessage({
+          command: "clab-interface-capture",
+          nodeName,
+          interfaceName,
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
+        });
       },
       captureInterfaces(
         nodeName: string,
@@ -447,7 +457,23 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
           nodeName,
           interfaceName: interfaceNames[0],
           interfaceNames,
-          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {})
+          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {}),
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
+        });
+      },
+      captureTargets(
+        targets: CaptureTargetRef[],
+        options: Pick<CaptureInterfacesOptions, "label"> = {}
+      ): void {
+        const first = targets.at(0);
+        if (!first) return;
+        postMessage({
+          command: "clab-interface-capture",
+          // Hosts that predate targets capture the first one.
+          nodeName: first.nodeName,
+          interfaceName: first.interfaceName,
+          targets,
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
         });
       },
       setLinkImpairment(nodeName: string, interfaceName: string, data: unknown): void {

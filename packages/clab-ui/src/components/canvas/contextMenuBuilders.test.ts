@@ -7,6 +7,10 @@ import { buildEdgeContextMenu, buildNodeContextMenu } from "./contextMenuBuilder
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 import { FREE_TEXT_NODE_TYPE } from "../../annotations/annotationNodeConverters";
 
+type LinkCapture = Parameters<
+  NonNullable<Parameters<typeof buildEdgeContextMenu>[0]["renderLinkCapturePanel"]>
+>[0];
+
 function buildDeployedNodeMenu(
   runtimeState?: "running" | "stopped" | "paused" | "undeployed",
   isEditMode = false
@@ -96,7 +100,6 @@ test("read-only view menus keep runtime actions when deployment state is unknown
     isEditMode: false,
     isDeployed: false,
     isLocked: true,
-    onInterfaceCapture: () => {},
     closeContextMenu: () => {},
     editEdge: () => {},
     handleDeleteEdge: () => {}
@@ -128,12 +131,12 @@ test("undeployed editable node context menu has no runtime actions", () => {
   assert.equal(itemById(items, "delete-node").disabled, false);
 });
 
-test("edge capture menu displays topology names but invokes runtime container names", () => {
-  const captures: Array<{ nodeName: string; interfaceName: string }> = [];
+test("edge capture checklist shows topology names and captures in the runtime containers", () => {
+  let link: LinkCapture | undefined;
   const items = buildEdgeContextMenu({
     targetId: "edge-1",
-    sourceNode: '${LAB_PREFIX:-""}-srl-mirroring-lab-leaf1',
-    targetNode: '${LAB_PREFIX:-""}-srl-mirroring-lab-leaf2',
+    sourceNode: "leaf1",
+    targetNode: "leaf2",
     sourceEndpoint: "e1-1",
     targetEndpoint: "e1-50",
     extraData: {
@@ -145,25 +148,37 @@ test("edge capture menu displays topology names but invokes runtime container na
     isEditMode: false,
     isDeployed: true,
     isLocked: false,
-    onInterfaceCapture: (nodeName, interfaceName) => captures.push({ nodeName, interfaceName }),
+    renderLinkCapturePanel: (params) => {
+      link = params;
+      return null;
+    },
     closeContextMenu: () => {},
     editEdge: () => {},
     handleDeleteEdge: () => {}
   });
 
-  const sourceCapture = itemById(items, "capture-source");
-  const targetCapture = itemById(items, "capture-target");
-
-  assert.equal(sourceCapture.label, "leaf1 - e1-1");
-  assert.equal(targetCapture.label, "leaf2 - e1-50");
-
-  targetCapture.onClick?.();
-  assert.deepEqual(captures, [
-    {
-      nodeName: '${LAB_PREFIX:-""}-srl-mirroring-lab-leaf2',
-      interfaceName: "e1-50"
-    }
-  ]);
+  const capture = itemById(items, "capture-link");
+  assert.equal(capture.label, "Capture");
+  assert.equal(capture.panel?.(() => {}), null);
+  assert.deepEqual(link, {
+    linkId: "edge-1",
+    ends: [
+      {
+        id: "source",
+        nodeId: "leaf1",
+        captureName: '${LAB_PREFIX:-""}-srl-mirroring-lab-leaf1',
+        displayName: "leaf1",
+        endpoint: "e1-1"
+      },
+      {
+        id: "target",
+        nodeId: "leaf2",
+        captureName: '${LAB_PREFIX:-""}-srl-mirroring-lab-leaf2',
+        displayName: "leaf2",
+        endpoint: "e1-50"
+      }
+    ]
+  });
 });
 
 test("free text Edit Text prefers the drawer+inline handler and falls back to drawer-only", () => {
@@ -263,7 +278,11 @@ function buildCaptureMenu(runtimeState?: "running" | "stopped") {
     isDeployed: true,
     isLocked: false,
     onNodeAction: () => {},
-    onCaptureNode: (nodeId) => captured.push(nodeId),
+    renderCapturePanel: (nodeId, close) => {
+      captured.push(nodeId);
+      close();
+      return null;
+    },
     closeContextMenu: () => {},
     editNode: () => {},
     handleDeleteNode: () => {}
@@ -271,14 +290,20 @@ function buildCaptureMenu(runtimeState?: "running" | "stopped") {
   return { captured, items };
 }
 
-test("deployed node context menu opens the interface picker for capture", () => {
+test("deployed node context menu offers the interface checklist as a submenu", () => {
   const { captured, items } = buildCaptureMenu("running");
   const capture = itemById(items, "capture-node");
+  let menuClosed = false;
 
-  assert.equal(capture.label, "Capture…");
+  assert.equal(capture.label, "Capture");
   assert.equal(capture.disabled, false);
-  capture.onClick?.();
+  assert.equal(capture.onClick, undefined);
+  const panel = capture.panel?.(() => {
+    menuClosed = true;
+  });
+  assert.equal(panel, null);
   assert.deepEqual(captured, ["srl1"]);
+  assert.equal(menuClosed, true);
 });
 
 test("node capture needs a running container", () => {

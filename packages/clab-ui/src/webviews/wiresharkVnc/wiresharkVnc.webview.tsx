@@ -51,7 +51,7 @@ export function WiresharkVncApp(): React.JSX.Element {
   const [isLoading, setIsLoading] = React.useState(true);
   const [isFrameVisible, setIsFrameVisible] = React.useState(false);
   const [iframeSrc, setIframeSrc] = React.useState("");
-  const [retryInfo, setRetryInfo] = React.useState("");
+  const [retryInfo, setRetryInfo] = React.useState(initialData.initialStatus ?? "");
 
   const loadVnc = React.useCallback(
     (url?: string, forceReload = false) => {

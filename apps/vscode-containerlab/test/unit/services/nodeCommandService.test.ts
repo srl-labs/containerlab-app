@@ -122,6 +122,32 @@ describe("link capture from the topology canvas", () => {
     ]);
   });
 
+  it("captures both ends of a link in one command, each resolved in its own node", async () => {
+    vscodeStub.commands.executed.length = 0;
+    const result = await nodeCommandService.handleInterfaceEndpoint(
+      "clab-interface-capture",
+      {
+        nodeName: "clab-capdist-sr1-a",
+        interfaceName: "1/1/c1/1",
+        targets: [
+          { nodeName: "clab-capdist-sr1-a", interfaceName: "1/1/c1/1" },
+          { nodeName: "clab-capdist-client1", interfaceName: "eth1" }
+        ]
+      },
+      YAML_PATH
+    );
+
+    expect(result.error).to.equal(null);
+    const [call] = vscodeStub.commands.executed;
+    expect(call.command).to.equal("containerlab.interface.capture");
+    expect(
+      call.args[1].map((iface: { parentName: string; name: string }) => [iface.parentName, iface.name])
+    ).to.deep.equal([
+      ["clab-capdist-sr1-a", "clab-s-6b26d4e7"],
+      ["clab-capdist-client1", "clab-s-d2115f7f"]
+    ]);
+  });
+
   it("keeps the requested name when the lab is not running", async () => {
     setRunningLabsProvider({ discoverInspectLabs: async () => ({}) } as any);
 

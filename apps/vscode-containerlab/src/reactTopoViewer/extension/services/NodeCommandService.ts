@@ -331,6 +331,31 @@ class NodeCommandService {
   }
 
   /**
+   * Captures ports of several nodes. Each is resolved in its own node; the
+   * capture command then streams ports that share a namespace together.
+   */
+  private async captureTargets(
+    targets: Array<{ nodeName: string; interfaceName: string }>,
+    yamlFilePath: string
+  ): Promise<EndpointResult> {
+    const ifaces: ClabInterfaceTreeNode[] = [];
+    for (const target of targets) {
+      const [intf] = await this.resolveInterfaces(
+        target.nodeName,
+        [target.interfaceName],
+        yamlFilePath
+      );
+      const alias = intf.alias || (target.interfaceName !== intf.name ? target.interfaceName : "");
+      ifaces.push(createInterfaceObject(target.nodeName, intf.name, alias));
+    }
+    await vscode.commands.executeCommand("containerlab.interface.capture", ifaces[0], ifaces);
+    return {
+      result: `Capture executed for ${ifaces.map((intf) => `${intf.parentName}/${intf.name}`).join(", ")}`,
+      error: null
+    };
+  }
+
+  /**
    * Handles interface-related endpoint commands (capture).
    */
   async handleInterfaceEndpoint(
@@ -342,6 +367,8 @@ class NodeCommandService {
       interfaceNames?: string[];
       /** The names are ports inside the node: capture them there, unresolved. */
       nodeNamespace?: boolean;
+      /** Ports of several nodes, e.g. both ends of a link, in as few sessions as possible. */
+      targets?: Array<{ nodeName: string; interfaceName: string }>;
       data?: Record<string, unknown>;
     },
     yamlFilePath: string
@@ -349,6 +376,9 @@ class NodeCommandService {
     switch (endpointName) {
       case "clab-interface-capture": {
         try {
+          if (payloadObj.targets && payloadObj.targets.length > 0) {
+            return await this.captureTargets(payloadObj.targets, yamlFilePath);
+          }
           const { nodeName, interfaceName } = payloadObj;
           const requested =
             payloadObj.interfaceNames && payloadObj.interfaceNames.length > 0

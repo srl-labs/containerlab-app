@@ -120,6 +120,7 @@ export function createViewerHost({ yaml, annotations }: ViewerHostInput): ClabUi
       runNodeAction: noop,
       captureInterface: noop,
       captureInterfaces: noop,
+      captureTargets: noop,
       setLinkImpairment: noop,
       saveCustomNode: noop,
       deleteCustomNode: noop,

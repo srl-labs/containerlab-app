@@ -31,11 +31,13 @@ export interface RuntimeCaptureSession {
   interfaceNames: string[];
   /** The names are ports inside the node: capture them there. */
   nodeNamespace: boolean;
+  /** The interfaces as the user knows them, e.g. 1/1/c1/1, for the capture window or tab. */
+  label?: string;
 }
 
 export interface RuntimeCaptureRequest extends RuntimeNodeRequest {
-  /** Opens one capture session; called once per session the dialog asks for. */
-  onCapture: (session: RuntimeCaptureSession) => void;
+  /** Opens the capture sessions the dialog asks for, in list order, in one call. */
+  onCapture: (sessions: RuntimeCaptureSession[]) => void;
 }
 
 export interface RuntimeTerminalRequest extends RuntimeNodeRequest {

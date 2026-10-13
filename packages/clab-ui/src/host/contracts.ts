@@ -163,6 +163,14 @@ export interface CaptureInterfacesOptions {
    * there as-is, instead of resolving aliases to host-side link ends.
    */
   nodeNamespace?: boolean;
+  /** Name for the capture window or tab, e.g. the ports as the user knows them (1/1/c1/1). */
+  label?: string;
+}
+
+/** A port of a node, named as the topology shows it. */
+export interface CaptureTargetRef {
+  nodeName: string;
+  interfaceName: string;
 }
 
 export interface ClabUiTopoViewerHost {
@@ -170,13 +178,23 @@ export interface ClabUiTopoViewerHost {
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
-  captureInterface(nodeName: string, interfaceName: string): void;
+  captureInterface(
+    nodeName: string,
+    interfaceName: string,
+    options?: Pick<CaptureInterfacesOptions, "label">
+  ): void;
   /** Capture several interfaces of one node together in a single session. */
   captureInterfaces(
     nodeName: string,
     interfaceNames: string[],
     options?: CaptureInterfacesOptions
   ): void;
+  /**
+   * Capture ports of several nodes, such as both ends of a link, in as few
+   * sessions as possible: ports that share a network namespace (host-side link
+   * ends) share one session.
+   */
+  captureTargets(targets: CaptureTargetRef[], options?: Pick<CaptureInterfacesOptions, "label">): void;
   setLinkImpairment(nodeName: string, interfaceName: string, data: unknown): void;
   saveCustomNode(data: Record<string, unknown>): void;
   deleteCustomNode(nodeName: string): void;

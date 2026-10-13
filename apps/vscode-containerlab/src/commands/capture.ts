@@ -272,9 +272,10 @@ async function buildPacketflixUri(
 
   // One Edgeshark stream covers one network namespace: split the selection per
   // container, and keep host-side link interfaces apart from the node's own.
+  // Host-side ends of several nodes, e.g. both ends of a link, share one stream.
   const groups = new Map<string, ClabInterfaceTreeNode[]>();
   for (const iface of selected) {
-    const key = `${iface.parentName}|${isHostNetnsInterface(iface.name) ? "host" : "node"}`;
+    const key = isHostNetnsInterface(iface.name) ? "host" : `${iface.parentName}|node`;
     groups.set(key, [...(groups.get(key) ?? []), iface]);
   }
   if (groups.size > 1) {
