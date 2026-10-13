@@ -77,22 +77,14 @@ interface NodeBoxProps {
   selected: boolean;
   /** Hovered as a link target while creating a link. */
   highlighted?: boolean;
-  /** Extra box-shadow (e.g. the easter egg glow). */
-  glow?: string;
 }
 
-function getBoxShadow(
-  paint: NodeBoxPaint,
-  active: boolean,
-  highlighted: boolean,
-  glow: string | undefined
-): string {
+function getBoxShadow(paint: NodeBoxPaint, active: boolean, highlighted: boolean): string {
   const layers: string[] = [];
   // Selection reads as a 2px outline: the border plus a ring, or a wider ring without a border.
   if (active) layers.push(`0 0 0 ${paint.borderWidth > 0 ? 1 : 2}px ${SELECTION_COLOR}`);
   if (highlighted) layers.push(LINK_TARGET_GLOW);
   if (paint.shadow) layers.push(DROP_SHADOW);
-  if (glow !== undefined) layers.push(glow);
   return layers.length > 0 ? layers.join(", ") : "none";
 }
 
@@ -104,8 +96,7 @@ const NodeBoxComponent: React.FC<NodeBoxProps> = ({
   labelRef,
   appearance,
   selected,
-  highlighted = false,
-  glow
+  highlighted = false
 }) => {
   const box = useMemo(() => getNodeBoxMetrics(iconSize, spacing), [iconSize, spacing]);
   const paint = useMemo(() => resolveNodeBoxPaint(appearance, box), [appearance, box]);
@@ -130,10 +121,10 @@ const NodeBoxComponent: React.FC<NodeBoxProps> = ({
       background: getNodeBoxFillCss(paint),
       backdropFilter: backdrop,
       WebkitBackdropFilter: backdrop,
-      boxShadow: getBoxShadow(paint, isActive, highlighted, glow),
+      boxShadow: getBoxShadow(paint, isActive, highlighted),
       transition: "border-color 120ms ease-in-out, box-shadow 120ms ease-in-out"
     };
-  }, [box, paint, isActive, highlighted, glow]);
+  }, [box, paint, isActive, highlighted]);
 
   // Offsets are measured from inside the border, so subtract it to keep the insets from the outer edge.
   const labelStyle = useMemo((): React.CSSProperties => {
