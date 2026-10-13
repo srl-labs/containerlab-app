@@ -23,7 +23,7 @@ Use this page for first-pass triage before diving into the deeper route and cont
 
 ## Quick checks for the browser host
 
-From the monorepo root, run `pnpm web:local`. Then verify:
+From the monorepo root, run `pnpm web:dev`. Then verify:
 
 - `GET /api/config` returns a sane default API URL and current endpoint list
 - `GET /auth/me` reflects the expected browser session state
@@ -32,7 +32,7 @@ From the monorepo root, run `pnpm web:local`. Then verify:
 
 ## Quick checks for local shared UI changes
 
-The UI lives at `packages/clab-ui/src`. `pnpm web:local`, `pnpm desktop:local`, and `pnpm vsix:local` rebuild it before using it. Rerun the appropriate command after edits. For an already running host, rebuild with `pnpm ui` and reload; use `pnpm ui:local` for source hot reload in the standalone UI harness.
+The UI lives at `packages/clab-ui/src`. `pnpm web:dev`, `pnpm desktop:dev`, and `pnpm vsix` rebuild it before using it. Rerun the appropriate command after edits. For an already running host, rebuild with `pnpm ui` and reload; use `pnpm ui:dev` for source hot reload in the standalone UI harness.
 
 If the public API fails outside the monorepo, run `pnpm test:package` to validate the built tarball without workspace dependency resolution.
 

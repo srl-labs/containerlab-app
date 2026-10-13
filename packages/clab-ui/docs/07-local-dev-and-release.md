@@ -9,13 +9,13 @@ From the monorepo root, using Node.js 24.21.0:
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-pnpm web:local
-# or: pnpm pages:local
-# or: pnpm desktop:local
-# or: pnpm vsix:local
+pnpm web:dev
+# or: pnpm pages:dev
+# or: pnpm desktop:dev
+# or: pnpm vsix
 ```
 
-The applications consume `@containerlab/clab-ui` through `workspace:*`. Their root commands build the UI before starting. Rebuild with `pnpm ui` after UI edits; the app commands do not watch UI source. Use `pnpm ui:local` for source hot reload in the UI harness; no sibling checkout is needed.
+The applications consume `@containerlab/clab-ui` through `workspace:*`. Their root commands build the UI before starting. Rebuild with `pnpm ui` after UI edits; the app commands do not watch UI source. Use `pnpm ui:dev` for source hot reload in the UI harness.
 
 ## Validation
 

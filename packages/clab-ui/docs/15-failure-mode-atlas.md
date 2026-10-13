@@ -33,9 +33,8 @@ This is the cross-repo failure map for the breakages that show up most often dur
 
 | Failure mode | Trigger | Symptom | First check | Remediation |
 |---|---|---|---|---|
-| missing `clab-ui/dist` | consumer started in local mode before a build | consumer startup fails fast or cannot resolve package aliases | local-ui guard scripts and `dist/` contents | build `clab-ui` first |
-| stale `dist/` | shared package changed without rebuild | runtime drift or missing exported symbol | rebuild output timestamp and consumer restart state | rebuild `clab-ui` and restart the consumer |
-| local mode leaked into normal packaging | local env still set during packaging | wrong artifact is bundled or tested | build scripts and environment | use the normal scripts for published-package validation |
+| missing `clab-ui/dist` | host started directly instead of through its root command | host cannot resolve `@containerlab/clab-ui` exports | `packages/clab-ui/dist/` contents | run `pnpm ui`, or use the root app command |
+| stale `dist/` | shared package changed without rebuild | runtime drift or missing exported symbol | rebuild output timestamp and consumer restart state | run `pnpm ui` and reload the host |
 
 ## Version and contract drift
 
@@ -88,6 +87,6 @@ flowchart LR
 
 1. Treat the public `@containerlab/clab-ui` exports as the only supported integration surface.
 2. Keep browser endpoint-session and topology-session logging explicit enough to diagnose selection drift.
-3. Keep local-ui workflows strict so stale `dist/` is obvious.
+3. Keep root build and development commands building `clab-ui` first (or reading its source) so hosts do not start from stale `dist/`.
 4. Revalidate web route mappings whenever the API server route surface changes.
 5. Revalidate VS Code message and command mappings whenever semantic command names change.

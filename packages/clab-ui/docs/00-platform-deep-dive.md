@@ -141,15 +141,15 @@ Status codes you will see often:
 
 ## Local development contract
 
-All TypeScript products live in the monorepo. Both normal and `:local` app commands rebuild `packages/clab-ui` and resolve its workspace exports. Uncommitted UI changes are included; npm publication is not part of local testing.
+All TypeScript products live in the monorepo. Build and `:dev` app commands rebuild `packages/clab-ui` and resolve its workspace exports. Uncommitted UI changes are included; npm publication is not part of local testing.
 
 ```mermaid
 flowchart LR
-    Source["packages/clab-ui/src"] --> UI["pnpm ui:local (hot reload)"]
+    Source["packages/clab-ui/src"] --> UI["pnpm ui:dev (hot reload)"]
     Source --> Build["Build workspace UI dist"]
-    Build --> Web["pnpm web / web:local"]
-    Build --> VSIX["pnpm vsix / vsix:local"]
-    Build --> Desktop["pnpm desktop / desktop:local"]
+    Build --> Web["pnpm web / web:dev"]
+    Build --> VSIX["pnpm vsix"]
+    Build --> Desktop["pnpm desktop / desktop:dev"]
 ```
 
 Rerun the app command after further UI edits, or run `pnpm ui` and reload the host. The UI harness watches source directly; other hosts consume built exports.
@@ -170,10 +170,10 @@ Each product has its own release version. GitHub Latest is reserved for stable d
 From the monorepo root:
 
 ```sh
-pnpm ui:local
-pnpm web:local
-pnpm vsix:local
-pnpm desktop:local
+pnpm ui:dev
+pnpm web:dev
+pnpm vsix
+pnpm desktop:dev
 pnpm test:package
 ```
 

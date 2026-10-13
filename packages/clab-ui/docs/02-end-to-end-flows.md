@@ -55,10 +55,10 @@ What matters here:
 
 ```mermaid
 flowchart LR
-    Source["Edit packages/clab-ui/src"] --> Web["pnpm web:local"]
-    Source --> VSIX["pnpm vsix:local"]
-    Source --> Desktop["pnpm desktop:local"]
-    Source --> UI["pnpm ui:local (source hot reload)"]
+    Source["Edit packages/clab-ui/src"] --> Web["pnpm web:dev"]
+    Source --> VSIX["pnpm vsix"]
+    Source --> Desktop["pnpm desktop:dev"]
+    Source --> UI["pnpm ui:dev (source hot reload)"]
     Web --> Dist["Build local UI dist, then build/run host"]
     VSIX --> Dist
     Desktop --> Dist
