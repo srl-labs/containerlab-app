@@ -1,563 +1,137 @@
 // SvgGenerator.ts
+//
+// Built-in node icons: the containerlab rounded hex around a line symbol. The
+// frame is drawn in an ink that reads on the background (navy on light, pale on
+// dark) and the symbol in the icon color, so every icon can be recolored.
 
-// Import logger for webview
-import { log } from "../utils/logger";
+import type { BuiltInIcon } from "../core/types/icons";
 
 /**
  * Supported node types for SVG generation
  */
-export type NodeType =
-  | "pe" // Provider Edge Router
-  | "dcgw" // Data Center Gateway
-  | "leaf" // Leaf Node
-  | "switch" // Switch
-  | "spine" // Spine Node
-  | "super-spine" // Super Spine Router
-  | "server" // Server
-  | "pon" // PON
-  | "controller" // Controller
-  | "rgw" // Residential Gateway
-  | "ue" // User Equipment
-  | "cloud" // Cloud
-  | "client" // Client
-  | "bridge"; // Bridge
+export type NodeType = BuiltInIcon;
+
+/** Frame ink for light and dark backgrounds. */
+export const ICON_INK = { light: "#001135", dark: "#ddf8ff" } as const;
+
+/** Display names for the icon pickers. */
+export const BUILT_IN_ICON_LABELS: Readonly<Record<NodeType, string>> = {
+  router: "Router",
+  switch: "Switch",
+  leaf: "Leaf",
+  spine: "Spine",
+  "super-spine": "Super Spine",
+  dcgw: "DC Gateway",
+  firewall: "Firewall",
+  container: "Container",
+  vm: "VM",
+  server: "Server",
+  client: "Client",
+  controller: "Controller",
+  cloud: "Cloud",
+  pon: "PON",
+  rgw: "RGW",
+  ue: "User Equipment"
+};
+
+const FRAME =
+  "M29 6.6Q32 4.9 35 6.6L53 17Q56 18.7 56 22.2V41.8Q56 45.3 53 47L35 57.4Q32 59.1 29 57.4L11 47Q8 45.3 8 41.8V22.2Q8 18.7 11 17Z";
+// The hex and its stroke fill the icon, without the artwork's outer margin.
+const VIEW_BOX = "4 4 56 56";
+
+function dot(cx: number, cy: number, r: number): string {
+  return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="currentColor" stroke="none"/>`;
+}
+
+// Symbols are drawn on the 64 unit artwork grid in currentColor.
+const SYMBOLS: Readonly<Record<NodeType, string>> = {
+  router:
+    '<path d="M28 28L21 21M21 27V21H27M36 28L43 21M37 21H43V27M28 36L21 43M21 37V43H27M36 36L43 43M37 43H43V37"/>',
+  switch: '<path d="M20 26H44M38 20L44 26L38 32M44 38H20M26 32L20 38L26 44"/>',
+  // Uplinks over the forwarding plane
+  leaf: '<path d="M28 29L21 22M21 28V22H27M36 29L43 22M37 22H43V28M21 36H43M21 42H43"/>',
+  spine:
+    '<path d="M20 26H44M24 22L20 26L24 30M40 22L44 26L40 30M20 38H44M24 34L20 38L24 42M40 34L44 38L40 42"/>',
+  "super-spine":
+    '<path d="M20 22H44M20 32H44M24 28L20 32L24 36M40 28L44 32L40 36M20 42H44"/>',
+  // Traffic both ways through the gateway
+  dcgw: '<path d="M24 20V44M40 20V44M19 32H45M23 28L19 32L23 36M41 28L45 32L41 36"/>',
+  // Brick wall
+  firewall:
+    '<rect x="20" y="21" width="24" height="22" rx="2.5"/>' +
+    '<path d="M20 28.3H44M20 35.7H44M32 21V28.3M26 28.3V35.7M38 28.3V35.7M32 35.7V43"/>',
+  container:
+    '<path d="M24 21H21V43H24M40 21H43V43H40"/><g fill="currentColor" stroke="none">' +
+    '<rect x="27" y="25" width="4" height="5" rx="0.8"/><rect x="34" y="25" width="4" height="5" rx="0.8"/>' +
+    '<rect x="27" y="34" width="4" height="5" rx="0.8"/><rect x="34" y="34" width="4" height="5" rx="0.8"/></g>',
+  vm: '<path d="M26 21H42Q45 21 45 24V37"/><rect x="19" y="27" width="20" height="16" rx="2.5"/><path d="M25 32L28 35L25 38M32 38H34"/>',
+  server:
+    '<rect x="21" y="20" width="22" height="10" rx="2"/><rect x="21" y="34" width="22" height="10" rx="2"/>' +
+    `<path d="M25 25H30M25 39H30"/>${dot(38, 25, 1.6)}${dot(38, 39, 1.6)}`,
+  client: '<rect x="19" y="21" width="26" height="17" rx="2.5"/><path d="M32 38V43M26 43H38"/>',
+  // Mixer sliders
+  controller: `<path d="M24 20V44M32 20V44M40 20V44"/>${dot(24, 36, 3)}${dot(32, 26, 3)}${dot(40, 33, 3)}`,
+  cloud: '<path d="M25 41H40A5.5 5.5 0 0 0 40 30A8 8 0 0 0 24.3 31.05A5 5 0 0 0 25 41Z"/>',
+  // Optical splitter
+  pon: `<path d="M19 32H27M27 32L40 23M27 32H40M27 32L40 41"/>${dot(42.5, 22, 2.2)}${dot(42.5, 32, 2.2)}${dot(42.5, 42, 2.2)}`,
+  rgw:
+    '<path d="M20 31L32 21L44 31M24 28V43H40V28M29.2 36.7A4 4 0 0 1 34.8 36.7M26.7 34.2A7.5 7.5 0 0 1 37.3 34.2"/>' +
+    dot(32, 39.5, 1.5),
+  ue: '<rect x="25" y="19" width="14" height="26" rx="3"/><path d="M30 40H34"/>'
+};
+
+// At low detail the symbol shrinks to a solid hex, keeping the icon color.
+const LITE_SYMBOL = `<path d="${FRAME}" transform="translate(32 32) scale(0.42) translate(-32 -32)" fill="currentColor" stroke="none"/>`;
 
 const svgCache = new Map<string, string>();
 
-function buildSvgString(nodeType: NodeType, fillColor: string): string {
-  let svgString = "";
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
 
-  function renderLeafOrDcgw(fill: string): string {
-    return `
-                <svg
-                    xmlns:xlink="http://www.w3.org/1999/xlink"
-                    xmlns="http://www.w3.org/2000/svg"
-                    xml:space="preserve"
-                    style="enable-background:new 0 0 120 120;"
-                    viewBox="0 0 120 120"
-                    y="0px"
-                    x="0px"
-                    id="Layer_1"
-                    version="1.1"
-                    width="120px"
-                    height="120px"
-                    fill="none"
-                >
-                    <style type="text/css">
-                        .st0 { fill: ${fill}; }
-                        .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                    </style>
-                    <rect height="120" width="120" class="st0" />
-                    <g>
-                        <g>
-                            <path d="M93.8,39.8h-10.7c-1.8,0-3-1.3-3.1-3.1V25.9" class="st1" />
-                            <path d="M99,21.2L83,37.3" class="st1" />
-                        </g>
-                        <g>
-                            <path d="M19.9,33.9V23.2c0-1.8,1.3-3,3.1-3.1h10.8" class="st1" />
-                            <path d="M38.9,39L22.8,22.9" class="st1" />
-                        </g>
-                        <g>
-                            <path d="M24.9,80.9h10.7c1.8,0,3,1.3,3.1,3.1v10.8" class="st1" />
-                            <path d="M19.9,99.8L36,83.8" class="st1" />
-                        </g>
-                        <g>
-                            <path d="M100,86v10.7c0,1.8-1.3,3-3.1,3.1h-10.8" class="st1" />
-                            <path d="M81.1,81L97.1,97" class="st1" />
-                        </g>
-                        <g>
-                            <line x1="100.1" y1="50" x2="20.1" y2="50" class="st1" />
-                            <line x1="100.1" y1="60" x2="20.1" y2="60" class="st1" />
-                            <line x1="100.1" y1="70" x2="20.1" y2="70" class="st1" />
-                        </g>
-                    </g>
-                </svg>
-            `;
-  }
+function buildSvgString(symbol: string, color: string, ink: string): string {
+  // Paint is set on each layer so the markup also works embedded in another SVG.
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="${VIEW_BOX}">` +
+    `<path d="${FRAME}" fill="none" stroke="${escapeAttribute(ink)}" stroke-width="2.4" stroke-linejoin="round"/>` +
+    `<g color="${escapeAttribute(color)}" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">` +
+    symbol +
+    "</g></svg>"
+  );
+}
 
-  switch (nodeType) {
-    case "pe": // Provider Edge Router
-      svgString = `
-                <svg
-                        xmlns:xlink="http://www.w3.org/1999/xlink"
-                        xmlns="http://www.w3.org/2000/svg"
-                        xml:space="preserve"
-                        style="enable-background:new 0 0 120 120;"
-                        viewBox="0 0 120 120"
-                        y="0px"
-                        x="0px"
-                        id="Layer_1"
-                        version="1.1"
-                        width="120px"
-                        height="120px"
-                        fill="none"
-                    >
-                        <style type="text/css">
-                            .st0 { fill: ${fillColor}; }
-                            .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                        </style>
-                        <rect height="120" width="120" class="st0" />
-                        <g>
-                            <g>
-                                <path d="M71.7,19.7V48h28" class="st1" />
-                                <path d="M91.2,38.5l7.5,7.6c1.3,1.3,1.3,3.1,0,4.3L91.1,58" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M20,47.8h28.4v-28" class="st1" />
-                                <path d="M38.8,28.3l7.6-7.5c1.3-1.3,3.1-1.3,4.3,0l7.7,7.6" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M48,100.3V72H20" class="st1" />
-                                <path d="M28.5,81.5L21,73.9c-1.3-1.3-1.3-3.1,0-4.3l7.6-7.7" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M100,71.9H71.6v28" class="st1" />
-                                <path d="M81.2,91.4l-7.6,7.5c-1.3,1.3-3.1,1.3-4.3,0l-7.7-7.6" class="st1" />
-                            </g>
-                        </g>
-                    </svg>`;
-      break;
-
-    case "dcgw": // Data Center Gateway
-      svgString = renderLeafOrDcgw(fillColor);
-      break;
-
-    case "leaf": // Leaf Node
-      svgString = renderLeafOrDcgw(fillColor);
-      break;
-
-    case "bridge": // Bridge uses switch icon
-    case "switch": // Switch
-      svgString = `
-                    <svg
-                        xmlns:xlink="http://www.w3.org/1999/xlink"
-                        xmlns="http://www.w3.org/2000/svg"
-                        xml:space="preserve"
-                        style="enable-background:new 0 0 120 120;"
-                        viewBox="0 0 120 120"
-                        y="0px"
-                        x="0px"
-                        id="Layer_1"
-                        version="1.1"
-                        width="120px"
-                        height="120px"
-                        fill="none"
-                    >
-                        <style type="text/css">
-                            .st0 { fill: ${fillColor}; }
-                            .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                        </style>
-                        <rect height="120" width="120" class="st0" />
-                        <g>
-                            <g>
-                                <path d="M91.5,27.3l7.6,7.6c1.3,1.3,1.3,3.1,0,4.3l-7.6,7.7" class="st1" />
-                                <path d="M28.5,46.9l-7.6-7.6c-1.3-1.3-1.3-3.1,0-4.3l7.6-7.7" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M91.5,73.1l7.6,7.6c1.3,1.3,1.3,3.1,0,4.3l-7.6,7.7" class="st1" />
-                                <path d="M28.5,92.7l-7.6-7.6c-1.3-1.3-1.3-3.1,0-4.3l7.6-7.7" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M96.6,36.8H67.9l-16,45.9H23.2" class="st1" />
-                                <path d="M96.6,82.7H67.9l-16-45.9H23.2" class="st1" />
-                            </g>
-                        </g>
-                    </svg>
-
-                `;
-      break;
-
-    case "spine": // Spine Node
-      svgString = `
-                    <svg
-                        xmlns:xlink="http://www.w3.org/1999/xlink"
-                        xmlns="http://www.w3.org/2000/svg"
-                        xml:space="preserve"
-                        style="enable-background:new 0 0 120 120;"
-                        viewBox="0 0 120 120"
-                        y="0px"
-                        x="0px"
-                        id="Layer_1"
-                        version="1.1"
-                        width="120px"
-                        height="120px"
-                        fill="none"
-                    >
-                        <style type="text/css">
-                            .st0 { fill: ${fillColor}; }
-                            .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                        </style>
-                        <rect height="120" width="120" class="st0" />
-                        <g>
-                            <g>
-                                <path d="M98,30.1H68L52,89.9H22" class="st1" />
-                                <path d="M28,100l-7-8.1c-1.3-1.3-1.3-3.1,0-4.3l7-7.6" class="st1" />
-                                <path d="M92,20l7,8.1c1.3,1.3,1.3,3.1,0,4.3L92,40" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M98,89.9H64" class="st1" />
-                                <path d="M92,80l7,7.6c1.3,1.3,1.3,3.1,0,4.3l-7,8.1" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M56,30.1H22" class="st1" />
-                                <path d="M28,40l-7-7.6c-1.3-1.3-1.3-3.1,0-4.3l7-8.1" class="st1" />
-                            </g>
-                            <g>
-                                <line x1="100" y1="60" x2="72" y2="60" class="st1" />
-                                <line x1="20" y1="60" x2="48" y2="60" class="st1" />
-                            </g>
-                        </g>
-                    </svg>
-                `;
-      break;
-
-    case "super-spine": // Super Spine Router
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill: ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <g>
-                                <g>
-                                    <path d="M98,30.1H68L52,89.9H22" class="st1" />
-                                    <path d="M28,100l-7-8.1c-1.3-1.3-1.3-3.1,0-4.3l7-7.6" class="st1" />
-                                    <path d="M92,20l7,8.1c1.3,1.3,1.3,3.1,0,4.3L92,40" class="st1" />
-                                </g>
-                                <g>
-                                    <path d="M98,89.9H64" class="st1" />
-                                    <path d="M92,80l7,7.6c1.3,1.3,1.3,3.1,0,4.3l-7,8.1" class="st1" />
-                                </g>
-                                <g>
-                                    <path d="M56,30.1H22" class="st1" />
-                                    <path d="M28,40l-7-7.6c-1.3-1.3-1.3-3.1,0-4.3l7-8.1" class="st1" />
-                                </g>
-                                <g>
-                                    <line x1="100" y1="60" x2="72" y2="60" class="st1" />
-                                    <line x1="20" y1="60" x2="48" y2="60" class="st1" />
-                                </g>
-                            </g>
-                        </svg>
-                    `;
-      break;
-
-    case "server": // Server
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill: ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <g>
-                                <path d="M84.9,95H35.1c-1.1,0-2-0.9-2-2V27c0-1.1,0.9-2,2-2h49.7c1.1,0,2,0.9,2,2V93C86.9,94.1,86,95,84.9,95z" class="st1" />
-                                <line x1="35.1" y1="41.3" x2="78.7" y2="41.3" class="st1" />
-                                <line x1="35.1" y1="78.7" x2="78.7" y2="78.7" class="st1" />
-                                <line x1="35.1" y1="66.2" x2="78.7" y2="66.2" class="st1" />
-                                <line x1="35.1" y1="53.8" x2="78.7" y2="53.8" class="st1" />
-                            </g>
-                        </svg>
-
-                    `;
-      break;
-
-    case "pon": // PON
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill: ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                                .st2 { fill: #FFFFFF; stroke: #FFFFFF; stroke-width: 4; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <g>
-                                <polyline points="20.9,20 97,60 20.9,100" class="st1" />
-                                <line x1="20.9" y1="60" x2="73.8" y2="60" class="st1" />
-                                <circle cx="95.1" cy="60" r="3" class="st2" />
-                            </g>
-                        </svg>
-
-
-                    `;
-      break;
-
-    case "controller": // Controller
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill: ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <g>
-                                <g>
-                                    <path
-                                        d="M82.8,60c0,12.6-10.2,22.8-22.8,22.8S37.2,72.6,37.2,60S47.4,37.2,60,37.2c6.3,0,12,2.6,16.2,6.7
-                                        C80.2,48.1,82.8,53.8,82.8,60z"
-                                        class="st1"
-                                    />
-                                    <g>
-                                        <path d="M92.4,27.8l6.7,7.2c1.2,1.2,1.2,2.9,0,4.1l-6.7,7.7" class="st1" />
-                                        <line x1="59.8" y1="37.2" x2="97.9" y2="37.2" class="st1" />
-                                    </g>
-                                </g>
-                                <g>
-                                    <path d="M27.6,92.2L20.9,85c-1.2-1.2-1.2-2.9,0-4.1l6.7-7.7" class="st1" />
-                                    <line x1="60.2" y1="82.8" x2="22.1" y2="82.8" class="st1" />
-                                </g>
-                            </g>
-                        </svg>
-
-                    `;
-      break;
-
-    case "rgw": // Residential Gateway
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill:  ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                                .st2 { fill: #FFFFFF; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <path d="M60,74.9c0.8,0,1.5-0.7,1.5-1.5c0-0.8-0.7-1.5-1.5-1.5c-0.8,0-1.5,0.7-1.5,1.5C58.5,74.2,59.2,74.9,60,74.9z" class="st2" />
-                            <path d="M46.8,54.6c7.5-7.5,20-7.5,27.5,0" class="st1" />
-                            <path d="M53.7,63.9c3.8-3.8,10-3.8,13.8,0" class="st1" />
-                            <g>
-                                <path d="M17,55.6l37.7-36.5c3.1-3,8.1-3,11.2,0L103,55.7" class="st1" />
-                                <path d="M29.9,63.8v31.2c0,4.4,3.6,8,8,8h17.9c2.4,0,4.3-1.9,4.3-4.3v-8.5" class="st1" />
-                                <path d="M90.3,63.8v31.2c0,4.4-3.6,8-8,8h-8.5" class="st1" />
-                            </g>
-                        </svg>
-                    `;
-      break;
-
-    case "ue": // User Equipment
-      svgString = `
-                  <svg
-                          xmlns:xlink="http://www.w3.org/1999/xlink"
-                          xmlns="http://www.w3.org/2000/svg"
-                          xml:space="preserve"
-                          style="enable-background:new 0 0 120 120;"
-                          viewBox="0 0 120 120"
-                          y="0px"
-                          x="0px"
-                          id="Layer_1"
-                          version="1.1"
-                          width="120px"
-                          height="120px"
-                          fill="none"
-                      >
-                          <style type="text/css">
-                              .st0 { fill: ${fillColor}; }
-                              .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                          </style>
-                          <rect height="120" width="120" class="st0" />
-                          <g>
-                              <path
-                                  class="st1"
-                                  d="M54,83.8h11.9 M36.2,28.3c0-3.6,2.4-6.9,6.4-7.8c0.4-0.1,0.9-0.1,1.3-0.1h32.1c0.4,0,0.9,0,1.3,0.1
-                                    c3.9,0.9,6.4,4.2,6.4,7.8l0,63.6c0,0.4,0,0.9-0.1,1.3c-0.9,3.9-4.2,6.4-7.8,6.4l-31.9,0c-0.4,0-0.9,0-1.3-0.1
-                                    c-3.9-0.9-6.4-4.2-6.4-7.8V28.3z"
-                              />
-                          </g>
-                      </svg>
-                    `;
-      break;
-
-    case "cloud": // Cloud
-      svgString = `
-                    <svg
-                        xmlns:xlink="http://www.w3.org/1999/xlink"
-                        xmlns="http://www.w3.org/2000/svg"
-                        xml:space="preserve"
-                        style="enable-background:new 0 0 120 120;"
-                        viewBox="0 0 120 120"
-                        y="0px"
-                        x="0px"
-                        id="Layer_1"
-                        version="1.1"
-                        width="120px"
-                        height="120px"
-                        fill="none"
-                    >
-                        <style type="text/css">
-                            .st0 { fill: ${fillColor}; }
-                            .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                        </style>
-                        <rect height="120" width="120" class="st0" />
-                        <g>
-                            <path
-                                class="st1"
-                                d="M20,70.9c0.6,8,7.8,14.6,16.2,14.6h42.9c7.1,0,13.9-3.6,17.8-9.5c7.8-11.6,0-28.6-13.9-30.8
-                                c-1.9-0.2-3.5-0.2-5.4,0l-2,0.2c-1.5,0.2-3-0.5-3.7-2c-3.2-5.8-9.8-9.6-17.3-8.7c-7.8,0.9-15.1,7.2-15.1,14.9v1.3
-                                c0,2-1.7,3.6-3.7,3.6h-0.2C26.7,54.5,19.4,62,20,70.9z"
-                            />
-                        </g>
-                    </svg>
-                    `;
-      break;
-
-    case "client": // Client
-      svgString = `
-                        <svg
-                            xmlns:xlink="http://www.w3.org/1999/xlink"
-                            xmlns="http://www.w3.org/2000/svg"
-                            xml:space="preserve"
-                            style="enable-background:new 0 0 120 120;"
-                            viewBox="0 0 120 120"
-                            y="0px"
-                            x="0px"
-                            id="Layer_1"
-                            version="1.1"
-                            width="120px"
-                            height="120px"
-                            fill="none"
-                        >
-                            <style type="text/css">
-                                .st0 { fill: ${fillColor}; }
-                                .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                            </style>
-                            <rect height="120" width="120" class="st0" />
-                            <g>
-                                <path
-                                    class="st1"
-                                    d="M100,91.1H20H100z M89.1,32.5c0-0.5,0-1-0.2-1.4c-0.2-0.5-0.4-0.9-0.8-1.2
-                                    c-0.3-0.3-0.8-0.6-1.2-0.8c-0.5-0.2-0.9-0.2-1.4-0.2H34.6c-0.5,0-1,0-1.4,0.2
-                                    c-0.5,0.2-0.9,0.4-1.2,0.8c-0.3,0.3-0.6,0.8-0.8,1.2c-0.2,0.5-0.2,0.9-0.2,1.4V76h58.2V32.5z"
-                                />
-                            </g>
-                        </svg>
-
-                    `;
-      break;
-
-    default:
-      // For unknown node types, fall back to PE (Provider Edge Router) SVG
-      log.warn(`Unknown nodeType: ${nodeType}, using default PE SVG`);
-      svgString = `
-                <svg
-                        xmlns:xlink="http://www.w3.org/1999/xlink"
-                        xmlns="http://www.w3.org/2000/svg"
-                        xml:space="preserve"
-                        style="enable-background:new 0 0 120 120;"
-                        viewBox="0 0 120 120"
-                        y="0px"
-                        x="0px"
-                        id="Layer_1"
-                        version="1.1"
-                        width="120px"
-                        height="120px"
-                        fill="none"
-                    >
-                        <style type="text/css">
-                            .st0 { fill: ${fillColor}; }
-                            .st1 { fill: none; stroke: #FFFFFF; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; stroke-miterlimit: 10; }
-                        </style>
-                        <rect height="120" width="120" class="st0" />
-                        <g>
-                            <g>
-                                <path d="M71.7,19.7V48h28" class="st1" />
-                                <path d="M91.2,38.5l7.5,7.6c1.3,1.3,1.3,3.1,0,4.3L91.1,58" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M20,47.8h28.4v-28" class="st1" />
-                                <path d="M38.8,28.3l7.6-7.5c1.3-1.3,3.1-1.3,4.3,0l7.7,7.6" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M48,100.3V72H20" class="st1" />
-                                <path d="M28.5,81.5L21,73.9c-1.3-1.3-1.3-3.1,0-4.3l7.6-7.7" class="st1" />
-                            </g>
-                            <g>
-                                <path d="M100,71.9H71.6v28" class="st1" />
-                                <path d="M81.2,91.4l-7.6,7.5c-1.3,1.3-3.1,1.3-4.3,0l-7.7-7.6" class="st1" />
-                            </g>
-                        </g>
-                    </svg>`;
-  }
-  return svgString;
+function encode(cacheKey: string, svgString: () => string): string {
+  const cached = svgCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  // Also escape characters that would break an unquoted CSS background-image URL.
+  const encoded =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(svgString()).replace(
+      /['()]/g,
+      (character) => `%${character.charCodeAt(0).toString(16)}`
+    );
+  svgCache.set(cacheKey, encoded);
+  return encoded;
 }
 
 /**
- * Generates an encoded SVG data URI for a given node type and fill color.
+ * Generates an encoded SVG data URI for a built-in icon.
  *
- * @param nodeType - The type of network node to generate SVG for
- * @param fillColor - The fill color for the SVG background (e.g., "#FF0000", "blue")
+ * @param nodeType - The built-in icon to draw
+ * @param color - Color of the symbol (e.g., "#FF0000", "blue")
+ * @param ink - Color of the hex frame, see ICON_INK
  * @returns Encoded SVG data URI suitable for use as CSS background-image
  */
-export function generateEncodedSVG(nodeType: NodeType, fillColor: string): string {
-  const cacheKey = `${nodeType}:${fillColor}`;
-  const cached = svgCache.get(cacheKey);
-  if (cached !== undefined) return cached;
+export function generateEncodedSVG(nodeType: NodeType, color: string, ink: string): string {
+  const symbol = Object.prototype.hasOwnProperty.call(SYMBOLS, nodeType)
+    ? SYMBOLS[nodeType]
+    : SYMBOLS.router;
+  return encode(`${nodeType}:${color}:${ink}`, () => buildSvgString(symbol, color, ink));
+}
 
-  const svgString = buildSvgString(nodeType, fillColor);
-  const encoded = "data:image/svg+xml;utf8," + encodeURIComponent(svgString);
-  svgCache.set(cacheKey, encoded);
-  return encoded;
+/**
+ * Generates the low-detail icon: the hex frame around a solid hex in the icon color.
+ */
+export function generateLiteSVG(color: string, ink: string): string {
+  return encode(`lite:${color}:${ink}`, () => buildSvgString(LITE_SYMBOL, color, ink));
 }

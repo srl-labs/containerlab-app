@@ -2,7 +2,7 @@
   "freeTextAnnotations": [
     {
       "id": "paper-heading",
-      "text": "**Small fabric. Every detail.**",
+      "text": "**Fabric 101 addressing**",
       "position": {
         "x": 20,
         "y": 0
@@ -17,7 +17,7 @@
     },
     {
       "id": "paper-subtitle",
-      "text": "A /31 addressing plan, right where you need it.",
+      "text": "A proposed /31 address for each fabric link.",
       "position": {
         "x": 22,
         "y": 58

@@ -2,14 +2,14 @@ import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 const labs = [
-  { id: "midnight-fabric", nodes: 10, groups: 4, shapes: 0, text: "EVERY RACK. TWO PATHS." },
-  { id: "fabric-101", nodes: 3, groups: 3, shapes: 0, text: "Small fabric. Every detail." },
-  { id: "security-zones", nodes: 6, groups: 3, shapes: 1, text: "Draw the trust boundary." },
-  { id: "wan-ring", nodes: 6, groups: 0, shapes: 1, text: "The long way is still a way." },
-  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Follow one packet." },
-  { id: "dual-homed", nodes: 7, groups: 3, shapes: 0, text: "TWO OF EVERYTHING." },
-  { id: "branch-office", nodes: 8, groups: 3, shapes: 0, text: "EVERY PORT, LABELED." },
-  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 21, text: "CLEAR AS GLASS." }
+  { id: "midnight-fabric", nodes: 10, groups: 4, shapes: 0, text: "LEAF-SPINE FABRIC" },
+  { id: "fabric-101", nodes: 3, groups: 3, shapes: 0, text: "Fabric 101 addressing" },
+  { id: "security-zones", nodes: 6, groups: 3, shapes: 1, text: "Security zones" },
+  { id: "wan-ring", nodes: 6, groups: 0, shapes: 1, text: "WAN ring" },
+  { id: "packet-walk", nodes: 3, groups: 2, shapes: 2, text: "Packet walk" },
+  { id: "dual-homed", nodes: 7, groups: 3, shapes: 0, text: "DUAL-HOMED HOSTS" },
+  { id: "branch-office", nodes: 8, groups: 3, shapes: 0, text: "BRANCH OFFICE" },
+  { id: "frosted-glass", nodes: 6, groups: 0, shapes: 21, text: "FROSTED GLASS" }
 ];
 
 test("all gallery labs render their saved nodes, groups, notes, and shapes", async ({ page }) => {
@@ -47,6 +47,7 @@ test("the studio composes options and exports the customized annotations and rec
   await choose("Grid", "Lines");
   await choose("Interface names", "On select");
   await choose("Link style", "Elbow");
+  await choose("Node style", "Boxed");
   await studio.getByRole("switch", { name: "Groups", exact: true }).uncheck();
   await studio.getByRole("switch", { name: "Notes and addresses", exact: true }).uncheck();
   await studio.getByLabel("Node corners", { exact: true }).fill("22");
@@ -57,6 +58,7 @@ test("the studio composes options and exports the customized annotations and rec
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator("html")).toHaveAttribute("data-clab-theme", "dark");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(3);
+  await expect(viewer.locator(".topology-node-boxed")).toHaveCount(3);
   await expect(viewer.locator(".react-flow__node-group-node")).toHaveCount(0);
   await expect(viewer.locator(".react-flow__node-free-text-node")).toHaveCount(0);
   await expect(viewer.locator(".react-flow__node-free-shape-node")).toHaveCount(2);
@@ -82,17 +84,53 @@ test("the studio composes options and exports the customized annotations and rec
   expect(annotations.nodeAnnotations[0].position).toEqual({ x: 65, y: 165 });
   expect(annotations.freeShapeAnnotations).toHaveLength(2);
   expect(annotations.viewerSettings.linkStyle).toBe("elbow");
+  expect(annotations.viewerSettings.nodeStyle).toBe("boxed");
   expect(annotations).toEqual(JSON.parse((await component.getAttribute("annotations"))!));
   const yamlPending = page.waitForEvent("download");
   await studio.getByRole("link", { name: "Download YAML", exact: true }).click();
   const yamlDownload = await yamlPending;
   expect(await readFile((await yamlDownload.path())!, "utf8")).toBe(await readFile("docs/examples/packet-walk.clab.yml", "utf8"));
-  await studio.getByRole("button", { name: "Reset to the lab's design" }).click();
+  await studio.getByRole("button", { name: "Reset settings" }).click();
   await expect(studio.getByRole("combobox", { name: "Topology", exact: true })).toHaveValue("packet-walk");
-  await expect(studio.getByRole("radiogroup", { name: "Palette", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
-  await expect(studio.getByRole("radiogroup", { name: "Link style", exact: true }).getByRole("radio", { name: "Original", exact: true })).toBeChecked();
+  await expect(studio.getByRole("radiogroup", { name: "Palette", exact: true }).getByRole("radio", { name: "Mint", exact: true })).toBeChecked();
+  const linkStyle = studio.getByRole("radiogroup", { name: "Link style", exact: true });
+  const nodeStyle = studio.getByRole("radiogroup", { name: "Node style", exact: true });
+  // The node and link styles follow the saved styles of the selected lab.
+  await expect(linkStyle.getByRole("radio", { name: "Straight", exact: true })).toBeChecked();
+  await expect(nodeStyle.getByRole("radio", { name: "Icons", exact: true })).toBeChecked();
   await expect(component).toHaveAttribute("data-loaded", "true");
+  await expect(viewer.locator(".topology-node-boxed")).toHaveCount(0);
   await expect(viewer.locator(".react-flow__node-free-text-node")).toHaveCount(8);
+  await studio.getByRole("combobox", { name: "Topology", exact: true }).selectOption("frosted-glass");
+  await expect(nodeStyle.getByRole("radio", { name: "Boxed", exact: true })).toBeChecked();
+  await expect(linkStyle.getByRole("radio", { name: "Elbow", exact: true })).toBeChecked();
+});
+
+test("telemetry style replaces the interface names until it is switched off", async ({ page }) => {
+  await page.goto("viewer/customize/");
+  const studio = page.locator("clab-customizer");
+  const component = studio.locator("clab-topology");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  await studio.getByRole("combobox", { name: "Topology", exact: true }).selectOption("packet-walk");
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const viewer = component.frameLocator("iframe");
+  const interfaceNames = studio.getByRole("radiogroup", { name: "Interface names", exact: true }).getByRole("radio");
+  const telemetry = studio.getByRole("switch", { name: "Telemetry style", exact: true });
+  await expect(viewer.locator(".topology-edge-label")).toHaveCount(0);
+
+  await telemetry.check();
+  await expect(component).not.toHaveAttribute("link-labels");
+  for (const radio of await interfaceNames.all()) await expect(radio).toBeDisabled();
+  // Both ends of both links show a telemetry label.
+  await expect(viewer.locator(".topology-edge-label")).toHaveCount(4);
+  const annotations = JSON.parse((await component.getAttribute("annotations"))!);
+  expect(annotations.viewerSettings.style).toBe("telemetry-style");
+
+  await telemetry.uncheck();
+  await expect(component).toHaveAttribute("link-labels", "hide");
+  for (const radio of await interfaceNames.all()) await expect(radio).toBeEnabled();
+  await expect(viewer.locator(".topology-edge-label")).toHaveCount(0);
+  expect(JSON.parse((await component.getAttribute("annotations"))!).viewerSettings.style).toBeUndefined();
 });
 
 test("remix links and instant navigation initialize the studio on mobile without overflow", async ({ page }) => {

@@ -6,6 +6,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 
 import { SELECTION_COLOR } from "../types";
 import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { useCanvasIconInk } from "../../../icons/iconInk";
 import {
   useLinkCreationContext,
   useNodeRenderConfig,
@@ -45,6 +46,7 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const { suppressLabels } = useNodeRenderConfig();
   const easterEggGlow = useEasterEggGlow();
   const isBoxed = useNodeStyle() === "boxed";
+  const iconInk = useCanvasIconInk(useTopoViewerStore((state) => state.gridBgColor));
   const isLinkEnd = useIsHoveredLinkEnd(id);
   const iconSize = useTopoViewerStore((state) =>
     clampTelemetryNodeSizePx(state.telemetryNodeSizePx)
@@ -70,8 +72,8 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   // Generate the SVG icon URL (cloud icon for all network nodes)
   const svgUrl = useMemo(() => {
     const color = getNetworkNodeTypeColor(nodeType);
-    return generateEncodedSVG("cloud", color);
-  }, [nodeType]);
+    return generateEncodedSVG("cloud", color, iconInk);
+  }, [nodeType, iconInk]);
 
   // Node container styles
   const containerStyle: React.CSSProperties = {
@@ -129,7 +131,6 @@ const NetworkNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",
-    backgroundColor: "var(--topoviewer-network-node-background)",
     borderRadius: 4,
     transform: directionRotation !== 0 ? `rotate(${directionRotation}deg)` : undefined,
     ...getOutlineStyle()

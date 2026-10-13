@@ -82,7 +82,7 @@
   "freeTextAnnotations": [
     {
       "id": "packet-heading",
-      "text": "**Follow one packet.**",
+      "text": "**Packet walk**",
       "position": {
         "x": 15,
         "y": -10
@@ -97,7 +97,7 @@
     },
     {
       "id": "packet-subtitle",
-      "text": "Two subnets. A Linux router. A working return path.",
+      "text": "Two subnets joined by a Linux router.",
       "position": {
         "x": 17,
         "y": 48

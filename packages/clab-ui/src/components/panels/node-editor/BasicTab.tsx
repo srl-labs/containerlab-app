@@ -19,8 +19,10 @@ import {
   CheckboxField
 } from "../../ui/form";
 import { IconSelectorModal } from "../../ui/IconSelectorModal";
-import type { NodeType } from "../../../icons/SvgGenerator";
-import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { BUILT_IN_ICON_LABELS, generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { useIconInk } from "../../../icons/iconInk";
+import { BUILTIN_ICONS, resolveBuiltInIcon } from "../../../core/types/icons";
+import { getRoleIcon } from "../../../core/types/graph";
 import { useSchema, useDockerImages } from "../../../hooks/editor";
 import { useCustomIcons, useNodeStyle } from "../../../stores/topoViewerStore";
 import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
@@ -31,22 +33,10 @@ import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
 import { BoxAppearanceFields } from "./BoxAppearanceFields";
 
 // Icon options for dropdown (static, defined outside component)
-const ICON_OPTIONS = [
-  { value: "pe", label: "PE Router" },
-  { value: "dcgw", label: "DC Gateway" },
-  { value: "leaf", label: "Leaf" },
-  { value: "switch", label: "Switch" },
-  { value: "bridge", label: "Bridge" },
-  { value: "spine", label: "Spine" },
-  { value: "super-spine", label: "Super Spine" },
-  { value: "server", label: "Server" },
-  { value: "pon", label: "PON" },
-  { value: "controller", label: "Controller" },
-  { value: "rgw", label: "RGW" },
-  { value: "ue", label: "User Equipment" },
-  { value: "cloud", label: "Cloud" },
-  { value: "client", label: "Client" }
-];
+const ICON_OPTIONS = BUILTIN_ICONS.map((icon) => ({
+  value: icon,
+  label: BUILT_IN_ICON_LABELS[icon]
+}));
 
 const NODE_LABEL_POSITION_OPTIONS = [
   { value: "bottom", label: "Bottom" },
@@ -61,39 +51,6 @@ const NODE_DIRECTION_OPTIONS = [
   { value: "left", label: "Rotate text 180deg", icon: <SyncAltIcon fontSize="small" /> },
   { value: "up", label: "Rotate text 270deg", icon: <RotateLeftIcon fontSize="small" /> }
 ];
-
-const BUILTIN_NODE_TYPES: readonly NodeType[] = [
-  "pe",
-  "dcgw",
-  "leaf",
-  "switch",
-  "spine",
-  "super-spine",
-  "server",
-  "pon",
-  "controller",
-  "rgw",
-  "ue",
-  "cloud",
-  "client",
-  "bridge"
-];
-
-function isNodeType(icon: string): icon is NodeType {
-  return BUILTIN_NODE_TYPES.some((type) => type === icon);
-}
-
-/**
- * Get icon SVG source with fallback
- */
-function getIconSrc(icon: string, color: string): string {
-  const nodeType: NodeType = isNodeType(icon) ? icon : "pe";
-  try {
-    return generateEncodedSVG(nodeType, color);
-  } catch {
-    return generateEncodedSVG("pe", color);
-  }
-}
 
 /**
  * Node Name field - shown only for regular nodes
@@ -300,6 +257,9 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
   // Only use fallback for preview image rendering
   const icon = data.icon ?? "";
   const previewIcon = icon || "pe";
+  // Older names (e.g. "pe") show as the icon they draw
+  const dropdownValue = resolveBuiltInIcon(icon) ?? icon;
+  const iconInk = useIconInk();
 
   // Build custom icon map for efficient lookup
   const customIconMap = useMemo(() => buildCustomIconMap(customIcons), [customIcons]);
@@ -320,9 +280,9 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
       if (customDataUri !== undefined) {
         return getCustomIconUrl(customDataUri, iconColor);
       }
-      return getIconSrc(iconName, iconColor ?? DEFAULT_ICON_COLOR);
+      return generateEncodedSVG(getRoleIcon(iconName), iconColor ?? DEFAULT_ICON_COLOR, iconInk);
     },
-    [customIconMap]
+    [customIconMap, iconInk]
   );
 
   const handleIconSave = useCallback(
@@ -368,7 +328,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
             id="node-icon"
             label="Icon"
             options={allIconOptions}
-            value={icon}
+            value={dropdownValue}
             onChange={(value) => onChange({ icon: value })}
             placeholder="Select icon..."
             allowFreeText={false}

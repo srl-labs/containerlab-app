@@ -38,8 +38,9 @@ import {
   serializeCustomNodeTemplates
 } from "../../../core/utilities/customNodeImportExport";
 import type { CustomIconInfo } from "../../../core/types/icons";
-import { ROLE_SVG_MAP, DEFAULT_ICON_COLOR } from "../../../core/types/graph";
-import { generateEncodedSVG, type NodeType } from "../../../icons/SvgGenerator";
+import { DEFAULT_ICON_COLOR, getRoleIcon } from "../../../core/types/graph";
+import { generateEncodedSVG } from "../../../icons/SvgGenerator";
+import { useIconInk } from "../../../icons/iconInk";
 import {
   useCustomIcons,
   useCustomNodes,
@@ -95,38 +96,10 @@ const NETWORK_TYPE_DEFINITIONS: readonly NetworkTypeDefinition[] = [
   { type: "ovs-bridge", label: "OVS Bridge", icon: <HubIcon fontSize="small" /> }
 ];
 
-const VALID_NODE_TYPES: Record<NodeType, true> = {
-  pe: true,
-  dcgw: true,
-  leaf: true,
-  switch: true,
-  spine: true,
-  "super-spine": true,
-  server: true,
-  pon: true,
-  controller: true,
-  rgw: true,
-  ue: true,
-  cloud: true,
-  client: true,
-  bridge: true
-};
-
-function isNodeType(value: string): value is NodeType {
-  return Object.prototype.hasOwnProperty.call(VALID_NODE_TYPES, value);
-}
-
-function getRoleSvgType(role: string): NodeType {
-  if (Object.prototype.hasOwnProperty.call(ROLE_SVG_MAP, role)) {
-    const mapped = ROLE_SVG_MAP[role];
-    if (isNodeType(mapped)) return mapped;
-  }
-  return "pe";
-}
-
 function getTemplateIconUrl(
   template: CustomNodeTemplate,
-  customIconMap: Map<string, string>
+  customIconMap: Map<string, string>,
+  iconInk: string
 ): string {
   const role = template.icon ?? "pe";
   const customDataUri = customIconMap.get(role);
@@ -134,8 +107,7 @@ function getTemplateIconUrl(
     return getCustomIconUrl(customDataUri, template.iconColor);
   }
   const color = template.iconColor ?? DEFAULT_ICON_COLOR;
-  const svgType = getRoleSvgType(role);
-  return generateEncodedSVG(svgType, color);
+  return generateEncodedSVG(getRoleIcon(role), color, iconInk);
 }
 
 function downloadNodeTemplates(
@@ -356,9 +328,10 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
   onSetDefault
 }) => {
   const isDefaultNode = isDefault === true;
+  const iconInk = useIconInk();
   const iconUrl = useMemo(
-    () => getTemplateIconUrl(template, customIconMap),
-    [template, customIconMap]
+    () => getTemplateIconUrl(template, customIconMap, iconInk),
+    [template, customIconMap, iconInk]
   );
 
   const onDragStart = useCallback(
@@ -474,16 +447,19 @@ const PaletteSimpleDraggable: React.FC<PaletteSimpleDraggableProps> = ({
   );
 };
 
-const DraggableNetwork: React.FC<{ network: NetworkTypeDefinition }> = ({ network }) => (
-  <PaletteSimpleDraggable
-    dragPayload={{ type: "network", networkType: network.type }}
-    icon={network.icon}
-    label={network.label}
-    subtitle={network.type}
-    monoSubtitle
-    previewIconUrl={generateEncodedSVG("cloud", getNetworkNodeTypeColor(network.type))}
-  />
-);
+const DraggableNetwork: React.FC<{ network: NetworkTypeDefinition }> = ({ network }) => {
+  const iconInk = useIconInk();
+  return (
+    <PaletteSimpleDraggable
+      dragPayload={{ type: "network", networkType: network.type }}
+      icon={network.icon}
+      label={network.label}
+      subtitle={network.type}
+      monoSubtitle
+      previewIconUrl={generateEncodedSVG("cloud", getNetworkNodeTypeColor(network.type), iconInk)}
+    />
+  );
+};
 
 const DraggableAnnotation: React.FC<DraggableAnnotationProps> = ({
   label,

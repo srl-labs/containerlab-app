@@ -76,7 +76,7 @@ async function inspectSvgNodeViewportFit(page: Page, svgString: string): Promise
 
     const graphTransform = parseTransform(graphLayer.getAttribute("transform") ?? "");
     const nodeRects = Array.from(
-      doc.querySelectorAll("g.export-node > g > rect[x][y][width][height]")
+      doc.querySelectorAll("g.export-node .export-node-icon[x][y][width][height]")
     );
     const tolerance = 1;
     const violations = nodeRects

@@ -18,23 +18,49 @@ export interface CustomIconInfo {
 }
 
 /**
- * Built-in icon names that ship with the extension
+ * Built-in icons, in the order the icon picker shows them.
  */
-export const BUILTIN_ICON_NAMES = new Set([
-  "pe",
-  "dcgw",
-  "leaf",
+export const BUILTIN_ICONS = [
+  "router",
   "switch",
-  "bridge",
+  "leaf",
   "spine",
   "super-spine",
+  "dcgw",
+  "firewall",
+  "container",
+  "vm",
   "server",
-  "pon",
+  "client",
   "controller",
-  "rgw",
-  "ue",
   "cloud",
-  "client"
+  "pon",
+  "rgw",
+  "ue"
+] as const;
+
+export type BuiltInIcon = (typeof BUILTIN_ICONS)[number];
+
+const BUILTIN_ICON_SET: ReadonlySet<string> = new Set(BUILTIN_ICONS);
+
+function isBuiltInIconId(name: string): name is BuiltInIcon {
+  return BUILTIN_ICON_SET.has(name);
+}
+
+/**
+ * Older icon names that still draw a built-in icon.
+ */
+export const BUILTIN_ICON_ALIASES: Readonly<Record<string, BuiltInIcon>> = {
+  pe: "router",
+  bridge: "switch"
+};
+
+/**
+ * Built-in icon names that ship with the extension, aliases included
+ */
+export const BUILTIN_ICON_NAMES: ReadonlySet<string> = new Set<string>([
+  ...BUILTIN_ICONS,
+  ...Object.keys(BUILTIN_ICON_ALIASES)
 ]);
 
 /**
@@ -42,6 +68,16 @@ export const BUILTIN_ICON_NAMES = new Set([
  */
 export function isBuiltInIcon(name: string): boolean {
   return BUILTIN_ICON_NAMES.has(name);
+}
+
+/**
+ * The built-in icon an icon name draws, or undefined for custom icon names
+ */
+export function resolveBuiltInIcon(name: string): BuiltInIcon | undefined {
+  if (Object.prototype.hasOwnProperty.call(BUILTIN_ICON_ALIASES, name)) {
+    return BUILTIN_ICON_ALIASES[name];
+  }
+  return isBuiltInIconId(name) ? name : undefined;
 }
 
 /**
@@ -75,18 +111,21 @@ export function getIconFormat(ext: string): "svg" | "png" {
 
 /**
  * Extract unique custom icon names used by nodes in an element list.
- * Filters out built-in icons, returning only custom icon names.
+ * Filters out built-in icons, returning only custom icon names. A custom icon
+ * may share a built-in name, in which case it replaces the built-in icon.
  *
  * @param elements - Array of graph elements (nodes and edges)
+ * @param customIconNames - Names of the available custom icons
  * @returns Array of unique custom icon names
  */
 export function extractUsedCustomIcons<T extends { data?: { topoViewerRole?: string } }>(
-  elements: T[]
+  elements: T[],
+  customIconNames: ReadonlySet<string> = new Set()
 ): string[] {
   const usedIcons = new Set<string>();
   for (const el of elements) {
     const role = el.data?.topoViewerRole;
-    if (role !== undefined && role.length > 0 && !isBuiltInIcon(role)) {
+    if (role !== undefined && role.length > 0 && (!isBuiltInIcon(role) || customIconNames.has(role))) {
       usedIcons.add(role);
     }
   }

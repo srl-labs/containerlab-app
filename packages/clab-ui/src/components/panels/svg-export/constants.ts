@@ -6,24 +6,15 @@
 /** Root graph layer class used to distinguish topology content from annotation layers. */
 export const GRAPH_LAYER_CLASS = "export-graph-layer";
 
+/** Class of the element that draws a node's icon; its x, y, width and height are the icon bounds. */
+export const EXPORT_NODE_ICON_CLASS = "export-node-icon";
+
 // ============================================================================
 // Node Constants
 // ============================================================================
 
 /** Node icon size (matches TopologyNode.tsx ICON_SIZE) */
 export const NODE_ICON_SIZE = 40;
-
-/** Node icon corner radius */
-export const NODE_ICON_RADIUS = 4;
-
-/** Default icon color (matches graph.ts DEFAULT_ICON_COLOR). Host apps may
- *  override it via window.__CLAB_UI_DEFAULT_ICON_COLOR__ set before load. */
-const iconColorOverride =
-  typeof window !== "undefined"
-    ? (window as Window & { __CLAB_UI_DEFAULT_ICON_COLOR__?: string })
-        .__CLAB_UI_DEFAULT_ICON_COLOR__
-    : undefined;
-export const DEFAULT_ICON_COLOR = iconColorOverride || "#005aff";
 
 // ============================================================================
 // Node Label Constants (matches nodeStyles.ts LABEL_STYLE_BASE)
@@ -118,36 +109,6 @@ const NETWORK_TYPE_COLOR: Record<string, string> = {
 /** Get network node icon color by type */
 export function getNetworkTypeColor(nodeType: string): string {
   return NETWORK_TYPE_COLOR[nodeType] ?? NETWORK_TYPE_COLOR.default;
-}
-
-// ============================================================================
-// Role to SVG Type Mapping (matches graph.ts ROLE_SVG_MAP)
-// ============================================================================
-
-/** Map node role names to icon types */
-const ROLE_SVG_MAP: Record<string, string> = {
-  router: "pe",
-  "Provider Edge Router": "pe",
-  "provider edge router": "pe",
-  dcgw: "dcgw",
-  "dcgw-evpn": "dcgw",
-  leaf: "leaf",
-  switch: "switch",
-  bridge: "bridge",
-  spine: "spine",
-  "super-spine": "super-spine",
-  server: "server",
-  pon: "pon",
-  controller: "controller",
-  rgw: "rgw",
-  ue: "ue",
-  cloud: "cloud",
-  client: "client"
-} as const;
-
-/** Get SVG node type from role string */
-export function getRoleSvgType(role: string): string {
-  return ROLE_SVG_MAP[role] ?? "pe";
 }
 
 // ============================================================================

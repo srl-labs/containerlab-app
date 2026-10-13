@@ -14,62 +14,24 @@ import Tabs from "@mui/material/Tabs";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
-import type { NodeType } from "../../icons/SvgGenerator";
-import { generateEncodedSVG } from "../../icons/SvgGenerator";
+import { BUILT_IN_ICON_LABELS, generateEncodedSVG } from "../../icons/SvgGenerator";
+import { useIconInk } from "../../icons/iconInk";
 import { useEscapeKey } from "../../hooks/ui/useDomInteractions";
 import { useCustomIcons } from "../../stores/topoViewerStore";
 import { useClabUiHost } from "../../host";
-import { isBuiltInIcon } from "../../core/types/icons";
-import { DEFAULT_ICON_COLOR } from "../../core/types/graph";
+import { BUILTIN_ICONS, isBuiltInIcon, resolveBuiltInIcon } from "../../core/types/icons";
+import { DEFAULT_ICON_COLOR, getRoleIcon } from "../../core/types/graph";
 import { getCustomIconUrl, supportsCustomIconColor } from "../../utils/iconUtils";
 import { controlRadius } from "../../theme/surfaces";
 
 import { DialogCancelSaveActions, DialogTitleWithClose } from "./dialog/DialogChrome";
 import { ColorField, IconPreview, InputField } from "./form";
 
-const AVAILABLE_ICONS: NodeType[] = [
-  "pe",
-  "dcgw",
-  "leaf",
-  "switch",
-  "bridge",
-  "spine",
-  "super-spine",
-  "server",
-  "pon",
-  "controller",
-  "rgw",
-  "ue",
-  "cloud",
-  "client"
-];
-
-const ICON_LABELS: Record<string, string> = {
-  pe: "PE Router",
-  dcgw: "DC Gateway",
-  leaf: "Leaf",
-  switch: "Switch",
-  bridge: "Bridge",
-  spine: "Spine",
-  "super-spine": "Super Spine",
-  server: "Server",
-  pon: "PON",
-  controller: "Controller",
-  rgw: "RGW",
-  ue: "User Equipment",
-  cloud: "Cloud",
-  client: "Client"
-};
+const ICON_LABELS: Readonly<Record<string, string>> = BUILT_IN_ICON_LABELS;
 
 const DEFAULT_COLOR = DEFAULT_ICON_COLOR;
 const MAX_RADIUS = 40;
 const COLOR_DEBOUNCE_MS = 50;
-const NODE_TYPE_SET: ReadonlySet<string> = new Set(AVAILABLE_ICONS);
-
-function isNodeType(value: string): value is NodeType {
-  return NODE_TYPE_SET.has(value);
-}
-
 function isIconTab(value: unknown): value is "built-in" | "custom" {
   return value === "built-in" || value === "custom";
 }
@@ -87,14 +49,10 @@ const IconsGrid: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 /**
- * Get built-in icon source with a fallback.
+ * Get built-in icon source.
  */
-function getIconSrc(icon: string, color: string | null): string {
-  try {
-    return generateEncodedSVG(isNodeType(icon) ? icon : "pe", color ?? DEFAULT_COLOR);
-  } catch {
-    return generateEncodedSVG("pe", color ?? DEFAULT_COLOR);
-  }
+function getIconSrc(icon: string, color: string | null, ink: string): string {
+  return generateEncodedSVG(getRoleIcon(icon), color ?? DEFAULT_COLOR, ink);
 }
 
 /**
@@ -324,14 +282,17 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
     ? "Restore original icon colors"
     : "Reset to default color";
 
+  const iconInk = useIconInk();
   // Memoize icon sources for built-in icons - only regenerate when debounced color changes
   const iconSources = useMemo(() => {
     const sources: Record<string, string> = {};
-    for (const i of AVAILABLE_ICONS) {
-      sources[i] = getIconSrc(i, debouncedGridColor);
+    for (const i of BUILTIN_ICONS) {
+      sources[i] = getIconSrc(i, debouncedGridColor, iconInk);
     }
     return sources;
-  }, [debouncedGridColor]);
+  }, [debouncedGridColor, iconInk]);
+  // Older names (e.g. "pe") select the icon they draw
+  const selectedBuiltInIcon = resolveBuiltInIcon(icon);
   const customIconSources = useMemo(() => {
     const sources: Record<string, string> = {};
     for (const customIcon of customIcons) {
@@ -344,7 +305,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
   const iconClickHandlers = useRef<Record<string, () => void>>({});
   const iconDeleteHandlers = useRef<Record<string, () => void>>({});
   useMemo(() => {
-    for (const i of AVAILABLE_ICONS) {
+    for (const i of BUILTIN_ICONS) {
       iconClickHandlers.current[i] = () => setIcon(i);
     }
     // Add handlers for custom icons
@@ -368,8 +329,8 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
     if (currentCustomIcon) {
       return getCustomIconUrl(currentCustomIcon.dataUri, color);
     }
-    return getIconSrc(icon, color);
-  }, [icon, color, currentCustomIcon]);
+    return getIconSrc(icon, color, iconInk);
+  }, [icon, color, currentCustomIcon, iconInk]);
 
   const [iconTab, setIconTab] = useState<"built-in" | "custom">("built-in");
 
@@ -402,11 +363,11 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
           {iconTab === "built-in" && (
             <Box sx={{ px: 2, pt: 2 }}>
               <IconsGrid>
-                {AVAILABLE_ICONS.map((i) => (
+                {BUILTIN_ICONS.map((i) => (
                   <IconButton
                     key={i}
                     icon={i}
-                    isSelected={icon === i}
+                    isSelected={currentCustomIcon === undefined && selectedBuiltInIcon === i}
                     iconSrc={iconSources[i]}
                     cornerRadius={radius}
                     onClick={iconClickHandlers.current[i]}

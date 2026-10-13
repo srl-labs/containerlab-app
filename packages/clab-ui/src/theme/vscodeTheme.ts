@@ -77,7 +77,6 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         "--topoviewer-edge-label-background": vscodePalette.background.default,
         "--topoviewer-edge-label-foreground": vscodePalette.text.primary,
         "--topoviewer-edge-label-outline": vscodePalette.background.default,
-        "--topoviewer-network-node-background": vscodePalette.background.paper,
         // Lifted slightly off the canvas so boxes read in every theme, even when panels match it.
         "--topoviewer-node-box-background": `color-mix(in srgb, ${vscodePalette.background.default} 94%, ${vscodePalette.text.primary})`,
         "--topoviewer-node-box-border": `color-mix(in srgb, ${vscodePalette.background.default} 78%, ${vscodePalette.text.primary})`,

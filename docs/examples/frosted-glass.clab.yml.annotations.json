@@ -137,7 +137,7 @@
   "freeTextAnnotations": [
     {
       "id": "glass-heading",
-      "text": "**CLEAR AS GLASS.**",
+      "text": "**FROSTED GLASS**",
       "position": {
         "x": 10,
         "y": -70
@@ -152,7 +152,7 @@
     },
     {
       "id": "glass-subtitle",
-      "text": "Every device in frosted glass over vivid light \u00b7 elbow links",
+      "text": "Boxed nodes with a blurred fill over colored shapes \u00b7 elbow links",
       "position": {
         "x": 12,
         "y": -12

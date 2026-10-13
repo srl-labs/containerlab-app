@@ -3,6 +3,7 @@ import type { Node, Edge } from "@xyflow/react";
 
 import type { TextStyle, BoxStyle, TrafficRateStyle } from "./annotationStyles";
 import type { NodeBoxAppearance } from "./topology";
+import { BUILTIN_ICON_ALIASES, BUILTIN_ICONS, type BuiltInIcon } from "./icons";
 
 // ============================================================================
 // Node Data Types
@@ -250,27 +251,20 @@ const iconColorOverride =
   typeof window !== "undefined"
     ? (window as Window & { __CLAB_UI_DEFAULT_ICON_COLOR__?: string }).__CLAB_UI_DEFAULT_ICON_COLOR__
     : undefined;
-export const DEFAULT_ICON_COLOR = iconColorOverride || "#005aff";
+/** Default color of a built-in icon's symbol (the containerlab cyan). */
+export const DEFAULT_ICON_COLOR = iconColorOverride || "#00c9ff";
 
 /**
- * Role to SVG node type mapping
+ * Role to built-in icon mapping. Roles without an entry draw the router icon.
  */
-export const ROLE_SVG_MAP: Record<string, string> = {
-  router: "pe",
-  default: "pe",
-  pe: "pe",
-  p: "pe",
-  controller: "controller",
-  pon: "pon",
-  dcgw: "dcgw",
-  leaf: "leaf",
-  switch: "switch",
-  rgw: "rgw",
-  "super-spine": "super-spine",
-  spine: "spine",
-  server: "server",
-  bridge: "bridge",
-  ue: "ue",
-  cloud: "cloud",
-  client: "client"
+export const ROLE_SVG_MAP: Readonly<Record<string, BuiltInIcon>> = {
+  default: "router",
+  p: "router",
+  ...BUILTIN_ICON_ALIASES,
+  ...Object.fromEntries(BUILTIN_ICONS.map((icon): [string, BuiltInIcon] => [icon, icon]))
 };
+
+/** The built-in icon drawn for a role (icon name). */
+export function getRoleIcon(role: string): BuiltInIcon {
+  return Object.prototype.hasOwnProperty.call(ROLE_SVG_MAP, role) ? ROLE_SVG_MAP[role] : "router";
+}

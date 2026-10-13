@@ -1,13 +1,13 @@
 /** Docs-only playground. Uses the public custom element and downloadable lab files. */
 const labs = {
-  "midnight-fabric": { title: "Midnight fabric", palette: "midnight", number: "01" },
-  "fabric-101": { title: "Fabric field notes", palette: "paper", number: "02" },
-  "security-zones": { title: "Trust boundaries", palette: "sandstone", number: "03" },
-  "wan-ring": { title: "The scenic route", palette: "violet", number: "04" },
-  "packet-walk": { title: "Follow the packet", palette: "mint", number: "05" },
-  "dual-homed": { title: "Two of everything", palette: "blueprint", number: "06" },
-  "branch-office": { title: "Every port, labeled", palette: "porcelain", number: "07" },
-  "frosted-glass": { title: "Clear as glass", palette: "synthwave", number: "08" }
+  "midnight-fabric": { title: "Leaf-spine fabric", palette: "midnight", number: "01" },
+  "fabric-101": { title: "Fabric 101 addressing", palette: "paper", number: "02" },
+  "security-zones": { title: "Security zones", palette: "sandstone", number: "03" },
+  "wan-ring": { title: "WAN ring", palette: "violet", number: "04" },
+  "packet-walk": { title: "Packet walk", palette: "mint", number: "05" },
+  "dual-homed": { title: "Dual-homed hosts", palette: "blueprint", number: "06" },
+  "branch-office": { title: "Branch office", palette: "porcelain", number: "07" },
+  "frosted-glass": { title: "Frosted glass", palette: "synthwave", number: "08" }
 };
 const themes = {
   midnight: "dark", paper: "light", sandstone: "light", violet: "dark", mint: "light", blueprint: "dark",
@@ -15,6 +15,9 @@ const themes = {
 };
 const nodeColors = {
   paper: ["#287761", "#63854d", "#668fa4"],
+  sandstone: ["#d78b50", "#a18bd5", "#c17a54"],
+  mint: ["#32917d", "#518371", "#4f8fa3"],
+  violet: ["#88cbd0", "#b9a5ef", "#cbb9ff"],
   midnight: ["#d4f58a", "#63d7cb", "#a3b9dc"],
   blueprint: ["#e8a33d", "#2f7fd1", "#3a9cc4"],
   synthwave: ["#ff6ad5", "#46f0e0", "#ffd36d"],
@@ -32,7 +35,8 @@ const SLIDER_DELAY_MS = 140;
 
 function customizeAnnotations(source, settings, colors) {
   const annotations = structuredClone(source);
-  const recolor = settings.palette !== "original";
+  // A lab keeps its own colors in the palette it was designed with.
+  const recolor = settings.palette !== labs[settings.lab].palette;
   const roles = [...new Set(annotations.nodeAnnotations.map(node => node.iconColor))];
   for (const node of annotations.nodeAnnotations) {
     if (recolor) node.iconColor = nodeColors[settings.palette][roles.indexOf(node.iconColor) % nodeColors[settings.palette].length];
@@ -56,9 +60,15 @@ function customizeAnnotations(source, settings, colors) {
     }
     annotations.viewerSettings.gridColor = colors.border;
   }
-  annotations.viewerSettings.linkLabelMode = settings["link-labels"];
-  // An empty choice keeps the link style the lab was designed with.
-  if (settings["link-style"]) annotations.viewerSettings.linkStyle = settings["link-style"];
+  const viewerSettings = annotations.viewerSettings;
+  if (settings.telemetry) {
+    Object.assign(viewerSettings, { style: "telemetry-style", linkLabelMode: "telemetry-style", lastNonTelemetryLinkLabelMode: settings["link-labels"] });
+  } else {
+    delete viewerSettings.style;
+    viewerSettings.linkLabelMode = settings["link-labels"];
+  }
+  if (settings["node-style"]) viewerSettings.nodeStyle = settings["node-style"];
+  if (settings["link-style"]) viewerSettings.linkStyle = settings["link-style"];
   return annotations;
 }
 
@@ -106,7 +116,7 @@ class ClabCustomizer extends HTMLElement {
     this.clearDownload();
   }
 
-  /** Reset only the look; the chosen lab stays selected. */
+  /** Reset the settings; the chosen lab stays selected. */
   resetStyle() {
     for (const control of this.form.elements) {
       if (!control.name || control.name === "lab") continue;
@@ -114,8 +124,26 @@ class ClabCustomizer extends HTMLElement {
       else if (control.type === "checkbox" || control.type === "radio") control.checked = control.defaultChecked;
       else control.value = control.defaultValue;
     }
+    // The palette, node style, and link style follow the lab again.
+    this.syncedLab = null;
     this.updateOutputs();
     this.render();
+  }
+
+  /** Select the palette, node style, and link style the lab was saved with, once per chosen lab. */
+  syncLabStyles(settings, source) {
+    if (this.syncedLab === settings.lab) return;
+    this.syncedLab = settings.lab;
+    const saved = source.annotations.viewerSettings ?? {};
+    const styles = {
+      palette: labs[settings.lab].palette,
+      "node-style": saved.nodeStyle === "boxed" ? "boxed" : "icon",
+      "link-style": saved.linkStyle === "elbow" ? "elbow" : "straight"
+    };
+    for (const [name, value] of Object.entries(styles)) {
+      this.form.querySelector(`[name='${name}'][value='${value}']`).checked = true;
+      settings[name] = value;
+    }
   }
 
   updateOutputs() {
@@ -157,7 +185,7 @@ class ClabCustomizer extends HTMLElement {
   setLive(updating) {
     const stage = this.querySelector(".studio-preview");
     stage.toggleAttribute("data-updating", updating);
-    this.querySelector("[data-live-status]").textContent = updating ? "UPDATING…" : "LIVE CANVAS";
+    this.querySelector("[data-live-status]").textContent = updating ? "UPDATING…" : "PREVIEW";
   }
 
   async render() {
@@ -170,20 +198,23 @@ class ClabCustomizer extends HTMLElement {
     try {
       const source = await this.loadLab(settings.lab, signal);
       if (signal.aborted || !this.isConnected) return;
-      const palette = settings.palette === "original" ? lab.palette : settings.palette;
+      this.syncLabStyles(settings, source);
+      const palette = settings.palette;
       const stage = this.querySelector(".studio-preview");
       stage.dataset.palette = palette;
       stage.dataset.transparent = String(settings.transparent);
       const style = getComputedStyle(stage);
       const colors = Object.fromEntries(colorKeys.map(key => [key, style.getPropertyValue(`--studio-${key === "surface" ? "bg" : key}`).trim()]));
       const annotations = customizeAnnotations(source.annotations, settings, colors);
+      // Telemetry style replaces the interface names, so the viewer takes the label mode from the annotations.
+      for (const radio of this.form.querySelectorAll("[name='link-labels']")) radio.disabled = settings.telemetry;
       const attributes = {
         title: lab.title,
         theme: themes[palette],
         borderless: String(settings.presentation === "figure"),
         view: settings.presentation === "split" ? "split" : "topology",
         grid: settings.grid,
-        "link-labels": settings["link-labels"],
+        ...(settings.telemetry ? {} : { "link-labels": settings["link-labels"] }),
         ...(settings["link-style"] ? { "link-style": settings["link-style"] } : {}),
         height: settings.height,
         "fit-padding": String(Number(settings.padding) / 100)
@@ -208,7 +239,7 @@ class ClabCustomizer extends HTMLElement {
       for (const button of exports) button.disabled = true;
       this.querySelector("[data-yaml]").removeAttribute("href");
       this.setLive(false);
-      this.status(`Could not load this lab (${error.message}). Choose another lab or reset the look to try again.`, true);
+      this.status(`Could not load this lab (${error.message}). Choose another lab or reset the settings to try again.`, true);
     }
   }
 
@@ -227,7 +258,7 @@ class ClabCustomizer extends HTMLElement {
     this.setLive(false);
   }
 
-  /** Redraw the current viewer with new colors and options, keeping the page steady. */
+  /** Redraw the current viewer with new colors and options. */
   update(attributes, annotations) {
     const component = this.component;
     for (const name of Object.keys(this.appliedAttributes ?? {})) {
@@ -249,7 +280,7 @@ class ClabCustomizer extends HTMLElement {
   async copyRecipe() {
     try {
       await navigator.clipboard.writeText(this.recipe);
-      if (this.isConnected) this.status("Markdown copied. Save the YAML and your annotations next to it.");
+      if (this.isConnected) this.status("Markdown copied. Save the topology and annotations files next to the page.");
     } catch {
       this.querySelector("details").open = true;
       this.status("The clipboard is unavailable. Select and copy the Markdown below.");
@@ -270,7 +301,7 @@ class ClabCustomizer extends HTMLElement {
     link.download = `${this.current.id}.clab.yml.annotations.json`;
     link.click();
     this.downloadTimer = setTimeout(() => this.clearDownload(), 1000);
-    this.status("Annotations downloaded with your look.");
+    this.status("Annotations downloaded.");
   }
 }
 

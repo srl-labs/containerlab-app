@@ -2,7 +2,7 @@
 import type { Edge, Node } from "@xyflow/react";
 
 import { TRAFFIC_RATE_NODE_TYPE } from "../../../annotations/annotationNodeConverters";
-import { GRAPH_LAYER_CLASS } from "./constants";
+import { EXPORT_NODE_ICON_CLASS, GRAPH_LAYER_CLASS } from "./constants";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const SVG_MIME_TYPE = "image/svg+xml";
@@ -492,8 +492,18 @@ function includePathBounds(bounds: Bounds, transform: GraphTransform, pathData: 
   }
 }
 
+/** Node icons, boxes and name pills: every rect-like element of the exported nodes. */
+function getNodeRects(doc: XMLDocument): Element[] {
+  const iconSelector = `.${EXPORT_NODE_ICON_CLASS}`;
+  return Array.from(
+    doc.querySelectorAll(
+      `g.export-node ${iconSelector}[x][y][width][height], g.export-node rect[x][y][width][height]`
+    )
+  ).filter((element) => element.matches(iconSelector) || element.closest(iconSelector) === null);
+}
+
 function includeNodeRectBounds(doc: XMLDocument, bounds: Bounds, transform: GraphTransform): void {
-  for (const rect of Array.from(doc.querySelectorAll("g.export-node rect[x][y][width][height]"))) {
+  for (const rect of getNodeRects(doc)) {
     const x = parseNumericAttr(rect, "x");
     const y = parseNumericAttr(rect, "y");
     const width = parseNumericAttr(rect, "width");
@@ -816,7 +826,7 @@ function rectsIntersect(a: LegendBox, b: LegendBox): boolean {
 function collectLegendObstacles(doc: XMLDocument, transform: GraphTransform): LegendBox[] {
   const obstacles: LegendBox[] = [];
 
-  for (const rect of Array.from(doc.querySelectorAll("g.export-node rect[x][y][width][height]"))) {
+  for (const rect of getNodeRects(doc)) {
     const x = parseNumericAttr(rect, "x");
     const y = parseNumericAttr(rect, "y");
     const width = parseNumericAttr(rect, "width");
