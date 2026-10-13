@@ -1,5 +1,6 @@
 import type { ClabUiHost, ClabUiTopoViewerEvent } from "../../src/host/contracts";
 import { defaultSchemaData } from "../../src/core/schema";
+import type { ExplorerIncomingMessage, ExplorerUiState } from "../../src/explorer/shared/explorer/types";
 import type { CustomIconInfo } from "../../src/core/types/icons";
 import type { TopologyAnnotations } from "../../src/core/types/topology";
 import {
@@ -11,6 +12,12 @@ import {
 } from "../../src/session";
 
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
+import {
+  buildHarnessExplorerSnapshot,
+  HARNESS_EXPLORER_UI_STATE,
+  parseHarnessExplorerAction,
+  type HarnessHostLayout
+} from "./harnessExplorer";
 
 type SnapshotFixtureName = "basic" | "empty";
 
@@ -119,13 +126,29 @@ export interface FakeClabUiHost extends ClabUiHost {
   };
 }
 
-export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiHost {
+export function createFakeClabUiHost(
+  initialFixture: string | null,
+  explorerLayout: HarnessHostLayout
+): FakeClabUiHost {
   let files = cloneFiles();
   let fs = new MemoryFsAdapter(files);
   let currentYamlPath = toYamlPath(initialFixture);
   let core = createCore(currentYamlPath, fs);
   const messageSubscribers = new Set<(event: MessageEvent<unknown>) => void>();
   const topoViewerSubscribers = new Set<(event: ClabUiTopoViewerEvent) => void>();
+  const explorerSubscribers = new Set<(message: ExplorerIncomingMessage) => void>();
+  let explorerFilter = "";
+  let explorerUiState: ExplorerUiState = HARNESS_EXPLORER_UI_STATE;
+
+  function emitExplorerMessage(message: ExplorerIncomingMessage): void {
+    for (const subscriber of Array.from(explorerSubscribers)) {
+      subscriber(message);
+    }
+  }
+
+  function emitExplorerSnapshot(): void {
+    emitExplorerMessage(buildHarnessExplorerSnapshot(explorerLayout, Array.from(files.keys()), explorerFilter));
+  }
 
   function createCore(yamlFilePath: string, adapter: FileSystemAdapter): TopologySessionCore {
     return new TopologySessionCore({
@@ -156,6 +179,7 @@ export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiH
     files = cloneFiles();
     fs = new MemoryFsAdapter(files);
     await loadTopologyFile(currentYamlPath);
+    emitExplorerSnapshot();
   }
 
   function readFileByName(filename: string): string | undefined {
@@ -244,6 +268,7 @@ export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiH
         if (yamlPath === currentYamlPath) {
           await loadTopologyFile(currentYamlPath);
         }
+        emitExplorerSnapshot();
       }
     },
 
@@ -270,12 +295,34 @@ export function createFakeClabUiHost(initialFixture: string | null): FakeClabUiH
     },
 
     explorer: {
-      connect() {},
-      setFilter() {},
-      invokeAction() {},
-      persistUiState() {},
-      subscribe() {
-        return () => {};
+      connect() {
+        emitExplorerMessage({ command: "uiState", state: explorerUiState });
+        emitExplorerSnapshot();
+      },
+      setFilter(filterText) {
+        explorerFilter = filterText.trim();
+        emitExplorerSnapshot();
+      },
+      async invokeAction(actionRef) {
+        const action = parseHarnessExplorerAction(actionRef);
+        if (action?.kind === "openLink") {
+          window.open(action.url, "_blank", "noopener,noreferrer");
+          return;
+        }
+        if (action?.kind !== "openFile") return;
+        await loadTopologyFile(action.path);
+        for (const subscriber of Array.from(topoViewerSubscribers)) {
+          subscriber({ type: "fitViewport" });
+        }
+      },
+      persistUiState(state) {
+        explorerUiState = state;
+      },
+      subscribe(handler) {
+        explorerSubscribers.add(handler);
+        return () => {
+          explorerSubscribers.delete(handler);
+        };
       }
     },
 
