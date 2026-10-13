@@ -119,6 +119,7 @@ export function createViewerHost({ yaml, annotations }: ViewerHostInput): ClabUi
       toggleSplitView: noop,
       runNodeAction: noop,
       captureInterface: noop,
+      captureInterfaces: noop,
       setLinkImpairment: noop,
       saveCustomNode: noop,
       deleteCustomNode: noop,

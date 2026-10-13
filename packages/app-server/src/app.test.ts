@@ -1825,6 +1825,46 @@ test("/api/runtime/capture resolves unresolved topology prefix to runtime contai
   );
 });
 
+test("/api/runtime/capture forwards node-namespace targets so one capture can hold them", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([{ name: "demo-srl1", state: "running" }]),
+  );
+  context.fetchMock.on(
+    "POST",
+    "http://api.example.test/api/v1/labs/demo/capture/packetflix",
+    (call) => {
+      assert.deepEqual(JSON.parse(call.body ?? "{}").targets, [
+        { containerName: "demo-srl1", interfaceName: "mgmt0", nodeNamespace: true },
+        { containerName: "demo-srl1", interfaceName: "e1-1", nodeNamespace: true },
+        { containerName: "demo-srl1", interfaceName: "clab-s-1234" },
+      ]);
+      return jsonResponse({ captures: [] });
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/packetflix",
+    headers: { cookie },
+    payload: {
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [
+        { containerName: "srl1", interfaceName: "mgmt0", nodeNamespace: true },
+        { containerName: "srl1", interfaceName: "e1-1", nodeNamespace: true },
+        { containerName: "srl1", interfaceName: "clab-s-1234", nodeNamespace: "yes" },
+      ],
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+});
+
 test("terminal session creation resolves topology ref and short node name before proxying", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "http://api.example.test/login", () => {

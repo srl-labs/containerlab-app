@@ -139,6 +139,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
     const resolveCaptureTargets = (): Array<{
       containerName: string;
       interfaceName: string;
+      nodeNamespace?: boolean;
     }> => {
       const byKey = new Map<string, { containerName: string; interfaceName: string }>();
 
@@ -180,12 +181,15 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       return [...byKey.values()];
     };
 
-    const runPacketflixCapture = async (): Promise<void> => {
+    type CaptureTargets = ReturnType<typeof resolveCaptureTargets>;
+
+    const runPacketflixCapture = async (
+      targets: CaptureTargets = resolveCaptureTargets()
+    ): Promise<void> => {
       if (!actionTopologyRef) {
         postExplorerError("No canonical topology reference is available for this item.");
         return;
       }
-      const targets = resolveCaptureTargets();
       if (targets.length === 0) {
         postExplorerError("Capture requires a running interface item.");
         return;
@@ -224,12 +228,13 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
     };
 
-    const runWiresharkVncCapture = async (): Promise<void> => {
+    const runWiresharkVncCapture = async (
+      targets: CaptureTargets = resolveCaptureTargets()
+    ): Promise<void> => {
       if (!actionTopologyRef) {
         postExplorerError("No canonical topology reference is available for this item.");
         return;
       }
-      const targets = resolveCaptureTargets();
       if (targets.length === 0) {
         postExplorerError("Capture requires a running interface item.");
         return;
@@ -277,13 +282,38 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
     };
 
-    const runPreferredCapture = async (): Promise<void> => {
+    const runPreferredCapture = async (
+      targets: CaptureTargets = resolveCaptureTargets()
+    ): Promise<void> => {
       const preferredAction = loadCapturePreferences(actionEndpointId).preferredAction;
       if (preferredAction === "edgeshark") {
-        await runPacketflixCapture();
+        await runPacketflixCapture(targets);
         return;
       }
-      await runWiresharkVncCapture();
+      await runWiresharkVncCapture(targets);
+    };
+
+    const openNodeCaptureDialog = (): void => {
+      const containerName = item?.name;
+      if (!actionTopologyRef || !containerName) {
+        postExplorerError("Capture requires a running node item.");
+        return;
+      }
+      runtimeUiActions.openCapture({
+        endpointId: actionEndpointId,
+        topologyRef: actionTopologyRef,
+        nodeName: containerName,
+        title: `Capture: ${item.label || containerName}`,
+        onCapture: ({ interfaceNames, nodeNamespace }) => {
+          void runPreferredCapture(
+            interfaceNames.map((interfaceName) => ({
+              containerName,
+              interfaceName,
+              ...(nodeNamespace ? { nodeNamespace } : {})
+            }))
+          );
+        }
+      });
     };
 
     const cloneFromUrlFlow = async (
@@ -1400,9 +1430,10 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.interface.setLoss": openInterfaceImpairments,
       "containerlab.interface.setRate": openInterfaceImpairments,
       "containerlab.interface.setCorruption": openInterfaceImpairments,
-      "containerlab.interface.capture": runPreferredCapture,
-      "containerlab.interface.captureWithEdgeshark": runPacketflixCapture,
-      "containerlab.interface.captureWithEdgesharkVNC": runWiresharkVncCapture,
+      "containerlab.interface.capture": () => runPreferredCapture(),
+      "containerlab.interface.captureWithEdgeshark": () => runPacketflixCapture(),
+      "containerlab.interface.captureWithEdgesharkVNC": () => runWiresharkVncCapture(),
+      "containerlab.node.captureInterfaces": openNodeCaptureDialog,
       "containerlab.set.sessionHostname": setSessionHostnameFlow,
       "containerlab.node.copyName": () => copyText(item?.name || item?.label),
       "containerlab.node.copyID": () => copyText(item?.cID),

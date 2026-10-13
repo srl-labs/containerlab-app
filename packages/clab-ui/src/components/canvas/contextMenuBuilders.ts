@@ -49,6 +49,8 @@ interface MenuBuilderContext {
   isDeployed: boolean;
   isLocked: boolean;
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
+  /** Open the interface picker to capture packets on this node */
+  onCaptureNode?: (nodeId: string) => void;
   closeContextMenu: () => void;
   editNode: (id: string) => void;
   editNetwork?: (id: string) => void;
@@ -325,7 +327,7 @@ function buildTrafficRateContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
 }
 
 function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
-  const { targetId, targetRuntimeState, closeContextMenu, onNodeAction } = ctx;
+  const { targetId, targetRuntimeState, closeContextMenu, onNodeAction, onCaptureNode } = ctx;
   return [
     {
       id: "start-node",
@@ -386,7 +388,23 @@ function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
         onNodeAction("logs", targetId);
         closeContextMenu();
       }
-    }
+    },
+    ...(onCaptureNode
+      ? [
+          { id: "divider-node-capture", label: "", divider: true },
+          {
+            id: "capture-node",
+            label: "Capture…",
+            icon: React.createElement(WiresharkIcon, { fontSize: "small" }),
+            // Capture follows SSH: it needs a running container.
+            disabled: isNodeActionDisabled("ssh", targetRuntimeState),
+            onClick: () => {
+              onCaptureNode(targetId);
+              closeContextMenu();
+            }
+          }
+        ]
+      : [])
   ];
 }
 

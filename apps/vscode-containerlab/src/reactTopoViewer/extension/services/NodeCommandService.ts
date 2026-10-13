@@ -291,8 +291,22 @@ class NodeCommandService {
     interfaceName: string,
     yamlFilePath: string
   ): Promise<string> {
+    const [resolved] = await this.resolveInterfaces(nodeName, [interfaceName], yamlFilePath);
+    return resolved.name;
+  }
+
+  /**
+   * Resolves logical names (e.g. aliases) to the node's live interfaces in one inspect pass.
+   * Each result keeps the alias, the port name users know for host-side link interfaces.
+   */
+  async resolveInterfaces(
+    nodeName: string,
+    interfaceNames: string[],
+    yamlFilePath: string
+  ): Promise<Array<{ name: string; alias: string }>> {
+    const unresolved = interfaceNames.map((name) => ({ name, alias: "" }));
     const treeData = await runningLabsProvider.discoverInspectLabs();
-    if (!treeData) return interfaceName;
+    if (!treeData) return unresolved;
 
     const currentLab = Object.values(treeData).find((lab) => {
       if (!isClabLabTreeNode(lab)) {
@@ -302,18 +316,18 @@ class NodeCommandService {
     });
 
     if (currentLab === undefined || !isClabLabTreeNode(currentLab)) {
-      return interfaceName;
+      return unresolved;
     }
 
     const container = flattenContainers(currentLab.containers).find(
       (c) => c.name === nodeName || c.name_short === nodeName || labelToString(c.label) === nodeName
     );
-    const intf = container?.interfaces.find(
-      (i: ClabInterfaceTreeNode) => i.name === interfaceName || i.alias === interfaceName
-    );
-    if (intf) return intf.name;
-
-    return interfaceName;
+    return interfaceNames.map((interfaceName) => {
+      const intf = container?.interfaces.find(
+        (i: ClabInterfaceTreeNode) => i.name === interfaceName || i.alias === interfaceName
+      );
+      return intf ? { name: intf.name, alias: intf.alias } : { name: interfaceName, alias: "" };
+    });
   }
 
   /**
@@ -321,25 +335,49 @@ class NodeCommandService {
    */
   async handleInterfaceEndpoint(
     endpointName: string,
-    payloadObj: { nodeName: string; interfaceName: string; data?: Record<string, unknown> },
+    payloadObj: {
+      nodeName: string;
+      interfaceName: string;
+      /** Several interfaces of the node, captured together in one session. */
+      interfaceNames?: string[];
+      /** The names are ports inside the node: capture them there, unresolved. */
+      nodeNamespace?: boolean;
+      data?: Record<string, unknown>;
+    },
     yamlFilePath: string
   ): Promise<EndpointResult> {
     switch (endpointName) {
       case "clab-interface-capture": {
         try {
           const { nodeName, interfaceName } = payloadObj;
-          const actualInterfaceName = await this.resolveInterfaceName(
-            nodeName,
-            interfaceName,
-            yamlFilePath
+          const requested =
+            payloadObj.interfaceNames && payloadObj.interfaceNames.length > 0
+              ? payloadObj.interfaceNames
+              : [interfaceName];
+          const resolved = payloadObj.nodeNamespace
+            ? requested.map((name) => ({ name, alias: "" }))
+            : await this.resolveInterfaces(nodeName, requested, yamlFilePath);
+          const actualNames = resolved.map((intf) => intf.name);
+          const ifaces = resolved.map((intf, index) =>
+            createInterfaceObject(
+              nodeName,
+              intf.name,
+              intf.alias || (requested[index] !== intf.name ? requested[index] : "")
+            )
           );
-          const iface = createInterfaceObject(
-            nodeName,
-            actualInterfaceName,
-            interfaceName !== actualInterfaceName ? interfaceName : ""
-          );
-          await vscode.commands.executeCommand("containerlab.interface.capture", iface);
-          return { result: `Capture executed for ${nodeName}/${actualInterfaceName}`, error: null };
+          if (ifaces.length > 1) {
+            await vscode.commands.executeCommand(
+              "containerlab.interface.capture",
+              ifaces[0],
+              ifaces
+            );
+          } else {
+            await vscode.commands.executeCommand("containerlab.interface.capture", ifaces[0]);
+          }
+          return {
+            result: `Capture executed for ${nodeName}/${actualNames.join(", ")}`,
+            error: null
+          };
         } catch (innerError) {
           const errorMsg = `Error executing capture: ${formatErrorMessage(innerError)}`;
           log.error(`Error executing capture: ${JSON.stringify(innerError, null, 2)}`);

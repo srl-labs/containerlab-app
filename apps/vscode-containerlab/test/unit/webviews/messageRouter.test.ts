@@ -267,6 +267,29 @@ describe("MessageRouter with the clab-ui webview host", () => {
     ).to.equal(true);
   });
 
+  it("forwards a multi-interface capture to the capture endpoint", async () => {
+    const interfaceEndpoint = sinon
+      .stub(nodeCommandService, "handleInterfaceEndpoint")
+      .resolves({ result: null, error: null });
+    const webview = connectWebview();
+
+    webview.host.topoViewer.captureInterfaces("clab-demo-r1", ["e1-1", "e1-2", "eth0"]);
+    await webview.settle();
+
+    expect(
+      interfaceEndpoint.calledOnceWithExactly(
+        INTERFACE_COMMANDS.INTERFACE_CAPTURE,
+        {
+          nodeName: "clab-demo-r1",
+          interfaceName: "e1-1",
+          data: undefined,
+          interfaceNames: ["e1-1", "e1-2", "eth0"]
+        },
+        YAML_PATH
+      )
+    ).to.equal(true);
+  });
+
   it("toggles the split view for the panel's topology file", async () => {
     const webview = connectWebview();
 

@@ -27,6 +27,17 @@ export interface RuntimeNetemRequest extends RuntimeNodeRequest {
   preferredInterfaceName?: string;
 }
 
+export interface RuntimeCaptureSession {
+  interfaceNames: string[];
+  /** The names are ports inside the node: capture them there. */
+  nodeNamespace: boolean;
+}
+
+export interface RuntimeCaptureRequest extends RuntimeNodeRequest {
+  /** Opens one capture session; called once per session the dialog asks for. */
+  onCapture: (session: RuntimeCaptureSession) => void;
+}
+
 export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
   protocol: RuntimeTerminalProtocol;
   sshUsername?: string;
@@ -78,6 +89,7 @@ interface RuntimeUiState {
   inspectRequest: RuntimeInspectRequest | null;
   logsRequest: RuntimeNodeRequest | null;
   netemRequest: RuntimeNetemRequest | null;
+  captureRequest: RuntimeCaptureRequest | null;
   imageManagerOpen: boolean;
   fileEditor: RuntimeFileEditor | null;
   activeTerminalGroupId?: string;
@@ -93,6 +105,7 @@ interface RuntimeUiState {
   closeLogs: () => void;
   closeImageManager: () => void;
   closeNetem: () => void;
+  closeCapture: () => void;
   closeSnackbar: () => void;
   closeTerminal: (id: string) => void;
   focusTerminal: (id: string) => void;
@@ -102,6 +115,7 @@ interface RuntimeUiState {
   openImageManager: () => void;
   openLogs: (request: RuntimeNodeRequest) => void;
   openNetem: (request: RuntimeNetemRequest) => void;
+  openCapture: (request: RuntimeCaptureRequest) => void;
   openTerminal: (request: RuntimeTerminalRequest) => string;
   openVersion: () => void;
   splitTerminal: (paneId: string) => string | null;
@@ -248,6 +262,7 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   inspectRequest: null,
   logsRequest: null,
   netemRequest: null,
+  captureRequest: null,
   imageManagerOpen: false,
   fileEditor: null,
   activeTerminalGroupId: undefined,
@@ -290,6 +305,8 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   closeLogs: () => set({ logsRequest: null }),
   openNetem: (request) => set({ netemRequest: request }),
   closeNetem: () => set({ netemRequest: null }),
+  openCapture: (request) => set({ captureRequest: request }),
+  closeCapture: () => set({ captureRequest: null }),
   openTerminal: (request) => {
     const terminals = get().terminals;
     const requestedKey = terminalMatchKey(request);
@@ -527,6 +544,7 @@ export const runtimeUiActions = {
   closeImageManager: () => useRuntimeUiStore.getState().closeImageManager(),
   closeLogs: () => useRuntimeUiStore.getState().closeLogs(),
   closeNetem: () => useRuntimeUiStore.getState().closeNetem(),
+  closeCapture: () => useRuntimeUiStore.getState().closeCapture(),
   closeTerminal: (id: string) => useRuntimeUiStore.getState().closeTerminal(id),
   closeVersion: () => useRuntimeUiStore.setState({ versionOpen: false }),
   focusTerminal: (id: string) => useRuntimeUiStore.getState().focusTerminal(id),
@@ -549,6 +567,7 @@ export const runtimeUiActions = {
     useRuntimeUiStore.getState().openFileEditor(document),
   openLogs: (request: RuntimeNodeRequest) => useRuntimeUiStore.getState().openLogs(request),
   openNetem: (request: RuntimeNetemRequest) => useRuntimeUiStore.getState().openNetem(request),
+  openCapture: (request: RuntimeCaptureRequest) => useRuntimeUiStore.getState().openCapture(request),
   openTerminal: (request: RuntimeTerminalRequest) => useRuntimeUiStore.getState().openTerminal(request),
   openVersion: () => useRuntimeUiStore.getState().openVersion(),
   splitTerminal: (paneId: string) => useRuntimeUiStore.getState().splitTerminal(paneId),

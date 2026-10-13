@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient.ts";
 import type {
+  CaptureTarget,
   InspectContainerInfo,
   RuntimeImageActionResponse,
   RuntimeImagesResponse,
@@ -93,6 +94,7 @@ const POPULAR_REPOS_SEARCH_URL =
 interface CaptureTargetBody {
   containerName: string;
   interfaceName: string;
+  nodeNamespace?: boolean;
 }
 
 interface CapturePacketflixBody extends RuntimeTargetBody {
@@ -449,12 +451,12 @@ function rewriteShareLinkForEndpoint(link: string | undefined, endpointUrl: stri
   }
 }
 
-function normalizeCaptureTargets(rawTargets: unknown): Array<{ containerName: string; interfaceName: string }> {
+function normalizeCaptureTargets(rawTargets: unknown): CaptureTarget[] {
   if (!Array.isArray(rawTargets)) {
     return [];
   }
 
-  const targets: Array<{ containerName: string; interfaceName: string }> = [];
+  const targets: CaptureTarget[] = [];
   for (const target of rawTargets) {
     if (typeof target !== "object" || target === null) {
       continue;
@@ -470,7 +472,8 @@ function normalizeCaptureTargets(rawTargets: unknown): Array<{ containerName: st
     if (!containerName || !interfaceName) {
       continue;
     }
-    targets.push({ containerName, interfaceName });
+    const nodeNamespace = (target as { nodeNamespace?: unknown }).nodeNamespace === true;
+    targets.push({ containerName, interfaceName, ...(nodeNamespace ? { nodeNamespace } : {}) });
   }
   return targets;
 }
@@ -480,7 +483,7 @@ async function resolveCaptureTargets(
   token: string,
   labName: string,
   rawTargets: unknown
-): Promise<Array<{ containerName: string; interfaceName: string }>> {
+): Promise<CaptureTarget[]> {
   const targets = normalizeCaptureTargets(rawTargets);
   if (targets.length === 0) {
     return targets;
@@ -505,10 +508,7 @@ async function resolveCaptureTargets(
     if (!bestMatch || bestScore === 0) {
       return target;
     }
-    return {
-      containerName: bestMatch.name,
-      interfaceName: target.interfaceName
-    };
+    return { ...target, containerName: bestMatch.name };
   });
 }
 

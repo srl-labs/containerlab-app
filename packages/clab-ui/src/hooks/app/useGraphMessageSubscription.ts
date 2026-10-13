@@ -22,6 +22,12 @@ import {
   toPendingNetemOverride
 } from "../../utils/netemOverrides";
 import { isRecord } from "../../core/utilities/typeHelpers";
+import {
+  RUNTIME_INTERFACES_KEY,
+  readRuntimeInterfaces,
+  runtimeInterfaceListsEqual,
+  type TopologyRuntimeInterface
+} from "../../core/utilities/runtimeInterfaces";
 
 // ============================================================================
 // Message Types
@@ -48,6 +54,7 @@ interface NodeDataUpdateMessage {
       status?: string;
       mgmtIpv4Address?: string;
       mgmtIpv6Address?: string;
+      interfaces?: TopologyRuntimeInterface[];
     }>;
   };
 }
@@ -228,7 +235,9 @@ function hasNodeRuntimeDataChanged(
     toStringValue(extraData.state) !== nextState ||
     toStringValue(extraData.status) !== nextStatus ||
     toStringValue(nodeData.mgmtIpv4Address) !== nextIpv4 ||
-    toStringValue(nodeData.mgmtIpv6Address) !== nextIpv6
+    toStringValue(nodeData.mgmtIpv6Address) !== nextIpv6 ||
+    (update.interfaces !== undefined &&
+      !runtimeInterfaceListsEqual(readRuntimeInterfaces(extraData), update.interfaces))
   );
 }
 
@@ -275,7 +284,10 @@ function applyNodeRuntimeUpdate(
         state: nextState,
         status: nextStatus,
         mgmtIpv4Address: nextIpv4,
-        mgmtIpv6Address: nextIpv6
+        mgmtIpv6Address: nextIpv6,
+        ...(matchedUpdate.interfaces !== undefined
+          ? { [RUNTIME_INTERFACES_KEY]: matchedUpdate.interfaces }
+          : {})
       }
     }
   };

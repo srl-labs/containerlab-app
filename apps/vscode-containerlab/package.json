@@ -290,6 +290,11 @@
         "category": "Containerlab"
       },
       {
+        "command": "containerlab.node.captureInterfaces",
+        "title": "Capture Interfaces…",
+        "category": "Containerlab"
+      },
+      {
         "command": "containerlab.node.copyIPv4Address",
         "title": "IPv4 Address"
       },

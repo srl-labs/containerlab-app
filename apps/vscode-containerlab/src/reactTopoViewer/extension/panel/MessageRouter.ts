@@ -461,13 +461,24 @@ export class MessageRouter {
     const nodeName = typeof message.nodeName === "string" ? message.nodeName : "";
     const interfaceName = typeof message.interfaceName === "string" ? message.interfaceName : "";
     const data = isRecord(message.data) ? message.data : undefined;
+    const interfaceNames = Array.isArray(message.interfaceNames)
+      ? message.interfaceNames.filter(
+          (name): name is string => typeof name === "string" && name.length > 0
+        )
+      : [];
     if (!nodeName || !interfaceName) {
       log.warn(`[MessageRouter] Invalid interface command payload: ${JSON.stringify(message)}`);
       return;
     }
     const res = await nodeCommandService.handleInterfaceEndpoint(
       command,
-      { nodeName, interfaceName, data },
+      {
+        nodeName,
+        interfaceName,
+        data,
+        ...(interfaceNames.length > 0 ? { interfaceNames } : {}),
+        ...(message.nodeNamespace === true ? { nodeNamespace: true } : {})
+      },
       yamlFilePath
     );
     if (res.error != null && res.error.length > 0) log.error(`[MessageRouter] ${res.error}`);

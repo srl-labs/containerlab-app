@@ -133,6 +133,8 @@ test("buildExplorerSnapshot disables running-only actions for stopped containers
   assert.equal(actionByCommand("containerlab.node.unpause")?.disabled, true);
   assert.equal(actionByCommand("containerlab.node.save")?.disabled, true);
   assert.equal(actionByCommand("containerlab.node.manageImpairments")?.disabled, true);
+  assert.equal(actionByCommand("containerlab.node.captureInterfaces")?.disabled, true);
+  assert.equal(actionByCommand("containerlab.node.captureInterfaces")?.label, "Capture Interfaces…");
 
   const logsAction = actionByCommand("containerlab.node.showLogs");
   assert.ok(logsAction);

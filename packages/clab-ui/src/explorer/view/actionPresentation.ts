@@ -30,6 +30,7 @@ import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import type { SvgIconComponent } from "@mui/icons-material";
 import type { ContextMenuItem } from "../../components/context-menu/ContextMenu";
+import { WiresharkIcon } from "../../components/context-menu/WiresharkIcon";
 import type { ExplorerAction } from "../shared/explorer/types";
 
 export type ActionGroupId =
@@ -40,6 +41,7 @@ export type ActionGroupId =
   | "access"
   | "sharing"
   | "network"
+  | "capture"
   | "inspect"
   | "copy"
   | "tools"
@@ -77,6 +79,7 @@ const ACTION_GROUP_ORDER_DEFAULT: ActionGroupId[] = [
   "access",
   "sharing",
   "network",
+  "capture",
   "inspect",
   "copy",
   "tools",
@@ -98,6 +101,7 @@ const ACTION_GROUP_ORDER_BY_NODE_KIND: Record<ExplorerNodeKind, ActionGroupId[]>
     "copy",
     "view",
     "network",
+    "capture",
     "other",
     "danger"
   ],
@@ -107,6 +111,7 @@ const ACTION_GROUP_ORDER_BY_NODE_KIND: Record<ExplorerNodeKind, ActionGroupId[]>
     "access",
     "inspect",
     "network",
+    "capture",
     "copy",
     "sharing",
     "tools",
@@ -125,6 +130,7 @@ const ACTION_GROUP_ORDER_BY_NODE_KIND: Record<ExplorerNodeKind, ActionGroupId[]>
     "lifecycle",
     "save",
     "network",
+    "capture",
     "inspect",
     "tools",
     "other",
@@ -225,10 +231,8 @@ const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [
     icon: OpenInNewRoundedIcon
   },
   { match: (command) => command.includes("folder"), icon: FolderOpenOutlinedIcon },
-  {
-    match: (command) => command.includes("capture") || command.includes("impairment"),
-    icon: SettingsEthernetRoundedIcon
-  },
+  { match: (command) => command.includes("capture"), icon: WiresharkIcon },
+  { match: (command) => command.includes("impairment"), icon: SettingsEthernetRoundedIcon },
   {
     match: (command) =>
       command.includes("delay") ||
@@ -250,6 +254,7 @@ const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
   { match: (command) => command.startsWith("containerlab.lab.graph."), group: "graph" },
   { match: (command) => command.includes(".save"), group: "save" },
   { match: (command) => command.startsWith("containerlab.lab.fcli."), group: "tools" },
+  { match: (command) => command.startsWith("containerlab.node.capture"), group: "capture" },
   {
     match: (command) =>
       command.startsWith("containerlab.interface.") || command.includes("impairment"),
@@ -337,7 +342,8 @@ const ACTION_GROUP_SECTION_BY_NODE_KIND: Partial<
     save: 1,
     access: 2,
     inspect: 2,
-    network: 2
+    network: 2,
+    capture: 2
   },
   link: {
     sharing: 1,
@@ -387,6 +393,7 @@ const ACTION_GROUP_LABELS: Record<ActionGroupId, string> = {
   access: "Access",
   sharing: "Sharing",
   network: "Network",
+  capture: "Capture",
   inspect: "Inspect",
   copy: "Copy",
   tools: "Tools",
@@ -403,6 +410,7 @@ const ACTION_GROUP_ICONS: Record<ActionGroupId, SvgIconComponent> = {
   access: TerminalRoundedIcon,
   sharing: LinkRoundedIcon,
   network: SettingsEthernetRoundedIcon,
+  capture: WiresharkIcon,
   inspect: ManageSearchRoundedIcon,
   copy: ContentCopyOutlinedIcon,
   tools: BuildOutlinedIcon,

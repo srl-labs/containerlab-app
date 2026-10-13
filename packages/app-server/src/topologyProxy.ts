@@ -17,9 +17,12 @@ import type {
   TopologySnapshot
 } from "@containerlab/clab-ui/session";
 import {
+  RUNTIME_INTERFACES_KEY,
   buildRuntimeEdgeStatsUpdates,
   buildRuntimeNodeUpdates,
-  createRuntimeContainerDataProvider
+  createRuntimeContainerDataProvider,
+  readRuntimeInterfaces,
+  runtimeInterfaceListsEqual
 } from "@containerlab/clab-ui/session";
 import {
   normalizeRuntimeContainer,
@@ -193,8 +196,12 @@ function applyRuntimeOverlay(
     const ipChanged =
       toStringValue(nodeData.mgmtIpv4Address) !== nextIpv4 ||
       toStringValue(nodeData.mgmtIpv6Address) !== nextIpv6;
+    const nextInterfaces = matchedUpdate.interfaces;
+    const interfacesChanged =
+      nextInterfaces !== undefined &&
+      !runtimeInterfaceListsEqual(readRuntimeInterfaces(extraData), nextInterfaces);
 
-    if (!stateChanged && !ipChanged) {
+    if (!stateChanged && !ipChanged && !interfacesChanged) {
       return node;
     }
 
@@ -209,7 +216,8 @@ function applyRuntimeOverlay(
         state: nextState,
         status: nextStatus,
         mgmtIpv4Address: nextIpv4,
-        mgmtIpv6Address: nextIpv6
+        mgmtIpv6Address: nextIpv6,
+        ...(nextInterfaces !== undefined ? { [RUNTIME_INTERFACES_KEY]: nextInterfaces } : {})
       }
     };
     return {

@@ -21,6 +21,11 @@ import type {
   ParserLogger
 } from "./types";
 import { isRecord } from "../utilities/typeHelpers";
+import {
+  RUNTIME_INTERFACES_KEY,
+  toRuntimeCaptureInterfaces,
+  type TopologyRuntimeInterface
+} from "../utilities/runtimeInterfaces";
 
 // ============================================================================
 // Build Options
@@ -128,14 +133,20 @@ function getContainerData(
 function buildContainerFields(
   includeContainerData: boolean,
   containerData: ContainerInfo | undefined
-): { mgmtIpv4Address: string; mgmtIpv6Address: string; state: string } {
+): {
+  mgmtIpv4Address: string;
+  mgmtIpv6Address: string;
+  state: string;
+  runtimeInterfaces?: TopologyRuntimeInterface[];
+} {
   if (!includeContainerData || !containerData) {
     return { mgmtIpv4Address: "", mgmtIpv6Address: "", state: "" };
   }
   return {
     mgmtIpv4Address: containerData.IPv4Address,
     mgmtIpv6Address: containerData.IPv6Address,
-    state: containerData.state
+    state: containerData.state,
+    runtimeInterfaces: toRuntimeCaptureInterfaces(containerData.interfaces, containerData.kind)
   };
 }
 
@@ -212,6 +223,9 @@ function createNodeExtraData(params: {
   };
   if (interfacePattern !== undefined && interfacePattern.length > 0) {
     extraData.interfacePattern = interfacePattern;
+  }
+  if (containerFields.runtimeInterfaces !== undefined) {
+    extraData[RUNTIME_INTERFACES_KEY] = containerFields.runtimeInterfaces;
   }
 
   return {
