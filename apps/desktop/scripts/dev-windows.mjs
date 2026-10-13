@@ -51,7 +51,7 @@ function powershell(script, stdio = "pipe") {
 function main() {
   if (process.platform !== "linux" || !/microsoft/i.test(os.release())) {
     throw new Error(
-      "Run pnpm desktop:windows from WSL. On Windows, use pnpm desktop:local.",
+      "Run pnpm desktop:windows from WSL. On Windows, use pnpm desktop:dev.",
     );
   }
 

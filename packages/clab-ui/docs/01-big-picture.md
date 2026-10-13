@@ -62,4 +62,4 @@ The contracts that need careful versioning are:
 | Consumers rely on specific `clab-ui` subpaths | import failures when exports change | keep the export map explicit and versioned |
 | Web gateway routes must match API server behavior | runtime actions fail even if UI code is fine | keep proxy modules small and route-specific |
 | API auth and ownership behavior shape browser UX | same user action may surface as `401`, `403`, or `404` | document and test edge cases |
-| Hosts consume built workspace UI exports | stale `dist/` hides recent UI edits | use root app commands to rebuild, or use `pnpm ui:local` for source hot reload |
+| Hosts consume built workspace UI exports | stale `dist/` hides recent UI edits | use root app commands to rebuild, or use `pnpm ui:dev` for source hot reload |

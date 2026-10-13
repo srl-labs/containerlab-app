@@ -139,7 +139,7 @@ For the web container, pass variables with `docker run -e NAME=value` before the
 
 </details>
 
-For example, `WEB_BASE_PATH=/web` serves the app at `https://your-host/web/` using the same container image. Forward `/web/` requests, including WebSocket upgrades, to the web server without stripping the prefix. This setting also applies to `pnpm web:local`.
+For example, `WEB_BASE_PATH=/web` serves the app at `https://your-host/web/` using the same container image. Forward `/web/` requests, including WebSocket upgrades, to the web server without stripping the prefix. This setting also applies to `pnpm web:dev`.
 
 ## Help and feedback
 
@@ -158,7 +158,7 @@ corepack enable
 corepack pnpm install --frozen-lockfile
 ```
 
-Run `pnpm web:local` or `pnpm desktop:local` to launch an app, `pnpm vsix` to package the VS Code extension, or `pnpm pages:local` to work on the browser sandbox.
+Run `pnpm web:dev` or `pnpm desktop:dev` to launch an app, `pnpm vsix` to package the VS Code extension, or `pnpm pages:dev` to work on the browser sandbox.
 
 From WSL, use `pnpm desktop:windows` to build and launch the native Windows app with Windows window borders and controls. It uses Windows PowerShell interop; Node and pnpm only need to be installed in WSL. Close the app and rerun the command after edits.
 

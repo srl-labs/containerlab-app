@@ -226,7 +226,7 @@ createRoot(container).render(
 
 Reference consumer:
 
-- [vscode-containerlab/src/webviews/reactTopoViewer/entry.tsx](/home/flschwar/projects/clab/vscode-containerlab/src/webviews/reactTopoViewer/entry.tsx)
+- [apps/vscode-containerlab/src/webviews/reactTopoViewer/entry.tsx](https://github.com/srl-labs/containerlab-app/blob/main/apps/vscode-containerlab/src/webviews/reactTopoViewer/entry.tsx)
 
 ### Pattern B: `createApiClabUiHost`
 
@@ -238,7 +238,7 @@ Use this for:
 
 Reference consumer:
 
-- [containerlab-app/packages/standalone-runtime/src/standaloneApp.tsx](/home/flschwar/projects/clab/containerlab-app/packages/standalone-runtime/src/standaloneApp.tsx)
+- [packages/standalone-runtime/src/standaloneApp.tsx](https://github.com/srl-labs/containerlab-app/blob/main/packages/standalone-runtime/src/standaloneApp.tsx)
 
 Important: `createApiClabUiHost` only handles the topology request/command
 transport. Your app still has to create and destroy topology sessions.
@@ -704,11 +704,11 @@ pnpm ui
 pnpm test:package
 ```
 
-Monorepo hosts resolve `@containerlab/clab-ui` through `workspace:*` and consume its public `dist/` exports. Rebuild after UI changes. For a separate consumer, use `pnpm ui:pack`, then install that tarball with npm in the consumer project. No sibling checkout or `CLAB_UI_SOURCE` override is required.
+Monorepo hosts resolve `@containerlab/clab-ui` through `workspace:*` and consume its public `dist/` exports. Rebuild after UI changes. For a separate consumer, use `pnpm ui:pack`, then install that tarball with npm in the consumer project.
 
 ## Stability Rules
 
-For read-only documentation embeds, use the standalone viewer and `<clab-topology>` component described in the [component reference](../../docs/viewer/reference.md). New integrations can install [`@containerlab/clab-viewer`](../clab-viewer/README.md) for a dependency-free distribution of the same renderer. Its static assets ship under `@containerlab/clab-viewer/static/*`; an iframe per topology isolates its stores from the host application and other diagrams. The original `@containerlab/clab-ui/viewer` and `/viewer/static/*` exports remain available.
+For read-only documentation embeds, use the standalone viewer and `<clab-topology>` component described in the [component reference](https://github.com/srl-labs/containerlab-app/blob/main/docs/viewer/reference.md). New integrations can install [`@containerlab/clab-viewer`](https://github.com/srl-labs/containerlab-app/blob/main/packages/clab-viewer/README.md) for a dependency-free distribution of the same renderer. Its static assets ship under `@containerlab/clab-viewer/static/*`; an iframe per topology isolates its stores from the host application and other diagrams. The original `@containerlab/clab-ui/viewer` and `/viewer/static/*` exports remain available.
 
 Add the boolean `borderless` attribute to show only the canvas on a transparent background, with no grid or surrounding controls. In Zensical Markdown, use `borderless="true"` on the `clab` fence. Both presentations support mouse-wheel and pinch zoom.
 

@@ -32,7 +32,8 @@ test("bundled schema exposes FRRouting kinds and daemon options", () => {
     assert.equal(validate(topology({
       kind,
       image: "quay.io/frrouting/frr",
-      extras: { frr: { daemons: ["bgpd", "ospfd"] } }
+      daemons: ["bgpd", "ospfd"]
     })), true, JSON.stringify(validate.errors));
   }
+  assert.equal(validate(topology({ kind: "linux", image: "alpine", daemons: ["bgpd"] })), false);
 });

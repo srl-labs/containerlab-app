@@ -6,16 +6,16 @@ This page is the short lookup table set: commands, env vars, and file anchors.
 
 Run pnpm commands from the `containerlab-app` monorepo root.
 
-| Component | Path | Build/package | Local development |
+| Component | Path | Build/package | Development |
 | --- | --- | --- | --- |
-| Shared UI | `packages/clab-ui` | `pnpm ui`, `pnpm ui:pack` | `pnpm ui:local` |
-| Web | `apps/web` | `pnpm web` | `pnpm web:local` |
-| Desktop | `apps/desktop` | `pnpm desktop` | `pnpm desktop:local` |
-| VS Code | `apps/vscode-containerlab` | `pnpm vsix` | `pnpm vsix:local`, VS Code F5 |
-| Browser sandbox | `apps/web` | `pnpm pages` | `pnpm pages:local` |
+| Shared UI | `packages/clab-ui` | `pnpm ui`, `pnpm ui:pack` | `pnpm ui:dev` |
+| Web | `apps/web` | `pnpm web` | `pnpm web:dev` |
+| Desktop | `apps/desktop` | `pnpm desktop` | `pnpm desktop:dev` |
+| VS Code | `apps/vscode-containerlab` | `pnpm vsix` | VS Code F5 |
+| Browser sandbox | `apps/web-public` | `pnpm pages` | `pnpm pages:dev` |
 | Go API server | separate `clab-api-server` repository | `task` | `task test` |
 
-Both normal and local app commands use workspace UI, rebuilding it first. `pnpm test` runs unit tests; `pnpm test:ui`, `pnpm test:web`, and `pnpm test:vscode` select browser/host suites. `pnpm test:package` validates npm consumers.
+Build and development commands use the workspace UI, rebuilding it first. `pnpm test` runs unit tests; `pnpm test:ui`, `pnpm test:web`, and `pnpm test:vscode` select browser/host suites. `pnpm test:package` validates npm consumers.
 
 ## File anchors
 
@@ -30,7 +30,6 @@ Both normal and local app commands use workspace UI, rebuilding it first. `pnpm 
 | API auth and ownership helpers | `clab-api-server/internal/api/middleware.go`, `helpers.go` |
 | VS Code activation | `vscode-containerlab/src/extension.ts` |
 | VS Code topology bridge | `vscode-containerlab/src/reactTopoViewer/extension/*` |
-| VS Code local-ui aliasing | `vscode-containerlab/esbuild.config.js` |
 
 ## Environment variables worth remembering
 

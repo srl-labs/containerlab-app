@@ -48,7 +48,7 @@ From the monorepo root:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm web:local
+pnpm web:dev
 pnpm web
 pnpm --filter containerlab-app-web run start
 ```

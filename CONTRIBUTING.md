@@ -14,28 +14,28 @@ Monaco remains on 0.55.1 until the YAML worker supports the export paths introdu
 ```sh
 corepack enable
 corepack pnpm install --frozen-lockfile
-pnpm web:local
+pnpm web:dev
 ```
 
 Run these commands from the monorepo root:
 
-| Product | Build/package | Local development |
+| Product | Build/package | Development |
 | --- | --- | --- |
-| Shared UI library | `pnpm ui` | `pnpm ui:local` — UI harness with source hot reload |
-| VS Code | `pnpm vsix` | `pnpm vsix:local` — same VSIX built from the working tree |
-| Web | `pnpm web` | `pnpm web:local` — API-backed Vite development server |
-| Desktop | `pnpm desktop` | `pnpm desktop:local` (or `pnpm electron:local`) — build and launch Electron |
-| Browser sandbox | `pnpm pages` | `pnpm pages:local` — local sandbox without an API server |
+| Shared UI library | `pnpm ui` | `pnpm ui:dev` — UI harness with source hot reload |
+| VS Code | `pnpm vsix` | VS Code **F5** — Extension Development Host |
+| Web | `pnpm web` | `pnpm web:dev` — API-backed Vite development server |
+| Desktop | `pnpm desktop` | `pnpm desktop:dev` — build and launch Electron |
+| Browser sandbox | `pnpm pages` | `pnpm pages:dev` — local sandbox without an API server |
 
-**Every app uses the checked-out `packages/clab-ui` workspace, including uncommitted edits.** Build/package and app development commands rebuild its public `dist/` exports first. Nothing downloads a published UI package, and no sibling checkout is needed. `vsix:local` is an explicit alias for `vsix`.
+**Every app uses the checked-out `packages/clab-ui` workspace, including uncommitted edits.** Build/package and app development commands rebuild its public `dist/` exports first. Nothing downloads a published UI package.
 
-For rapid UI-only edits, use `pnpm ui:local`; its harness reads source directly and hot reloads changes. Running web/desktop/extension hosts consume built UI exports. After another UI edit, rerun their command to rebuild, or run `pnpm ui` in a second terminal and reload the host. The app commands do not watch UI source themselves.
+For rapid UI-only edits, use `pnpm ui:dev`; its harness reads source directly and hot reloads changes. Running web/desktop/extension hosts consume built UI exports. After another UI edit, rerun their command to rebuild, or run `pnpm ui` in a second terminal and reload the host. The app commands do not watch UI source themselves.
 
 The web development frontend is at `https://localhost:5173`; the app server also serves it through `https://localhost:3001`. Log in against your running `clab-api-server`. The standalone UI harness uses `http://127.0.0.1:5184`.
 
 ### Windows desktop from WSL
 
-Run `pnpm desktop:windows` from WSL to rebuild the shared UI and desktop app, package an unpacked Windows build, and launch it on Windows. This uses native Windows window borders and controls. `pnpm desktop:local` in WSL launches Linux Electron through WSLg.
+Run `pnpm desktop:windows` from WSL to rebuild the shared UI and desktop app, package an unpacked Windows build, and launch it on Windows. This uses native Windows window borders and controls. `pnpm desktop:dev` in WSL launches Linux Electron through WSLg.
 
 The command requires Windows PowerShell interop, detects Windows x64 or ARM64, and does not need Node or pnpm installed on Windows. The first run downloads the pinned Windows Electron runtime. It copies the app to `%LOCALAPPDATA%\containerlab-desktop-dev\<checkout-id>` and waits for the app to close. Close the window and rerun after edits; there is no hot reload. Each checkout has its own build copy, while the app uses its normal Windows user profile for saved sessions.
 
