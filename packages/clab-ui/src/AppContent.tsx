@@ -78,7 +78,6 @@ import {
 import type { TopoViewerState } from "./stores";
 import { executeTopologyCommand, getCustomIconMap, saveViewerSettings } from "./services";
 import { useClabUiHost, useTopologySessionClient, useClabUiRuntime } from "./host";
-import { useCaptureDialogStore } from "./stores/captureDialogStore";
 import {
   PENDING_NETEM_KEY,
   areNetemEquivalent,
@@ -119,11 +118,6 @@ const LazySvgExportModal = React.lazy(async () => {
 const LazyBulkLinkModal = React.lazy(async () => {
   const module = await import("./components/panels/BulkLinkModal");
   return { default: module.BulkLinkModal };
-});
-
-const LazyCanvasCaptureDialog = React.lazy(async () => {
-  const module = await import("./components/panels/capture/CanvasCaptureDialog");
-  return { default: module.CanvasCaptureDialog };
 });
 
 const TOPO_NODE_TYPES = new Set<string>([
@@ -1393,7 +1387,6 @@ export const AppContent: React.FC<AppContentProps> = ({
     panelVisibility.handleOpenContextPanel("manual");
     setPaletteTabRequest({ tabId: "yaml" });
   }, [hasActiveTopology, panelVisibility]);
-  const captureDialogNodeId = useCaptureDialogStore((store) => store.nodeId);
   const isBulkLinkModalOpen = shouldShowBulkLinkModal(
     hasActiveTopology,
     panelVisibility.showBulkLinkModal,
@@ -1708,11 +1701,6 @@ export const AppContent: React.FC<AppContentProps> = ({
             customIcons={getCustomIconMap(state.customIcons)}
           />
         )}
-        {captureDialogNodeId !== null ? (
-          <React.Suspense fallback={null}>
-            <LazyCanvasCaptureDialog key={captureDialogNodeId} nodeId={captureDialogNodeId} />
-          </React.Suspense>
-        ) : null}
         {isBulkLinkModalOpen ? (
           <React.Suspense fallback={null}>
             <LazyBulkLinkModal

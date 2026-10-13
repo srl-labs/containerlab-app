@@ -199,7 +199,7 @@ test("a linux peer shows its own port names for links into the SR-SIM node", asy
   );
 });
 
-test("a link's capture items send the SR-SIM container and the SR OS port name", async () => {
+test("a link's capture checklist sends the SR-SIM container and the SR OS port name", async () => {
   const { edges } = await deployedSnapshot();
   const sent: Array<[string, string]> = [];
 
@@ -215,13 +215,16 @@ test("a link's capture items send the SR-SIM container and the SR OS port name",
       isEditMode: false,
       isDeployed: true,
       isLocked: false,
-      onInterfaceCapture: (nodeName, interfaceName) => sent.push([nodeName, interfaceName]),
+      renderLinkCapturePanel: ({ ends }) => {
+        for (const end of ends) sent.push([end.captureName, end.endpoint]);
+        return null;
+      },
       closeContextMenu: () => {},
       editEdge: () => {},
       handleDeleteEdge: () => {}
     });
     for (const item of items.filter((candidate) => candidate.id.startsWith("capture-"))) {
-      item.onClick?.();
+      assert.equal(item.panel?.(() => {}), null);
     }
   }
 

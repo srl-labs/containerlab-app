@@ -1,10 +1,20 @@
 import { runtimeFetch } from "./backend";
 import { installDesktopChrome } from "./desktopChrome";
-import { bootstrapWiresharkVncWebview } from "@containerlab/clab-ui/wireshark-vnc";
+import {
+  bootstrapWiresharkVncTabs,
+  bootstrapWiresharkVncWebview
+} from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 
 import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
+import {
+  buildEmbeddedWiresharkPageSearch,
+  parseWiresharkPageSearch,
+  sessionTabLabels,
+  wiresharkPageTitle,
+  type WiresharkPageQuery
+} from "./wiresharkCaptureLauncher";
 import {
   applyStandaloneAppearance,
   parseStandaloneTheme,
@@ -14,6 +24,7 @@ import {
 interface WiresharkVncInitialData {
   iframeUrl: string;
   showVolumeTip: boolean;
+  initialStatus?: string;
 }
 
 interface RetryCheckMessage {
@@ -66,25 +77,6 @@ function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): 
   }).catch(() => {});
 }
 
-function parseQuery(): {
-  endpointId?: string;
-  sessionId?: string;
-  showVolumeTip: boolean;
-  theme?: "light" | "dark";
-} {
-  const params = new URLSearchParams(window.location.search);
-  const sessionId = params.get("sessionId")?.trim();
-  const endpointId = params.get("endpointId")?.trim();
-  const showVolumeTip = params.get("showVolumeTip") !== "0";
-  const theme = parseStandaloneTheme(params.get("theme")?.trim());
-  return {
-    sessionId: sessionId && sessionId.length > 0 ? sessionId : undefined,
-    endpointId: endpointId && endpointId.length > 0 ? endpointId : undefined,
-    showVolumeTip,
-    theme
-  };
-}
-
 function renderFatalError(message: string): void {
   const root = document.getElementById("root");
   if (!root) {
@@ -97,24 +89,66 @@ function renderFatalError(message: string): void {
   root.style.fontFamily = "monospace";
 }
 
+function setInitialData(initialData: WiresharkVncInitialData): void {
+  (window as unknown as { __INITIAL_DATA__?: WiresharkVncInitialData }).__INITIAL_DATA__ = initialData;
+}
+
+/** Opened before its sessions exist: the loading look until the final page replaces it. */
+function renderPending(showVolumeTip: boolean): void {
+  setInitialData({ iframeUrl: "", showVolumeTip, initialStatus: "Starting capture session…" });
+  const runtime = createClabUiRuntime({
+    host: createWindowClabUiHost({ targetWindow: window, postMessage() {} })
+  });
+  bootstrapWiresharkVncWebview(runtime);
+}
+
+/**
+ * Several sessions: one tab each. Every tab embeds this page for its own
+ * session, which then checks readiness and closes the session on unload.
+ */
+function renderSessionTabs(query: WiresharkPageQuery): void {
+  const labels = sessionTabLabels(query.sessions);
+  bootstrapWiresharkVncTabs(
+    query.sessions.map((session, index) => ({
+      id: session.sessionId,
+      label: labels[index] ?? session.sessionId,
+      src: `${window.location.pathname}?${buildEmbeddedWiresharkPageSearch(session.sessionId, query)}`
+    }))
+  );
+}
+
 async function main(): Promise<void> {
-  const { sessionId, endpointId, showVolumeTip, theme } = parseQuery();
+  const query = parseWiresharkPageSearch(window.location.search);
+  const { endpointId, showVolumeTip } = query;
+  const theme = parseStandaloneTheme(query.theme);
   // A theme in the URL pins light or dark to match the capture session.
   applyStandaloneAppearance(undefined, theme);
   watchStandaloneAppearance(() => applyStandaloneAppearance(undefined, theme));
-  installDesktopChrome();
+  if (!query.embedded) {
+    // The multi-session page draws the window chrome for the pages it embeds.
+    document.title = wiresharkPageTitle(query.sessions);
+    installDesktopChrome();
+  }
 
+  if (query.pending) {
+    renderPending(showVolumeTip);
+    return;
+  }
+  if (query.sessions.length > 1) {
+    renderSessionTabs(query);
+    return;
+  }
+  const sessionId = query.sessions[0]?.sessionId;
   if (!sessionId) {
     renderFatalError("Missing capture session id.");
     return;
   }
 
   const fallbackVncPath = standaloneServerUrl(`/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/vnc/`);
-  const initialData: WiresharkVncInitialData = {
+  setInitialData({
     iframeUrl: withEndpointParam(fallbackVncPath, endpointId),
     showVolumeTip
-  };
-  (window as unknown as { __INITIAL_DATA__?: WiresharkVncInitialData }).__INITIAL_DATA__ = initialData;
+  });
 
   let activeCheckToken = 0;
 

@@ -466,6 +466,17 @@ export class MessageRouter {
           (name): name is string => typeof name === "string" && name.length > 0
         )
       : [];
+    const targets = Array.isArray(message.targets)
+      ? message.targets.flatMap((entry): Array<{ nodeName: string; interfaceName: string }> =>
+          isRecord(entry) &&
+          typeof entry.nodeName === "string" &&
+          entry.nodeName.length > 0 &&
+          typeof entry.interfaceName === "string" &&
+          entry.interfaceName.length > 0
+            ? [{ nodeName: entry.nodeName, interfaceName: entry.interfaceName }]
+            : []
+        )
+      : [];
     if (!nodeName || !interfaceName) {
       log.warn(`[MessageRouter] Invalid interface command payload: ${JSON.stringify(message)}`);
       return;
@@ -477,6 +488,7 @@ export class MessageRouter {
         interfaceName,
         data,
         ...(interfaceNames.length > 0 ? { interfaceNames } : {}),
+        ...(targets.length > 0 ? { targets } : {}),
         ...(message.nodeNamespace === true ? { nodeNamespace: true } : {})
       },
       yamlFilePath

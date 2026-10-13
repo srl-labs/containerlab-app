@@ -362,8 +362,22 @@ export function createFakeClabUiHost(
       cancelLifecycle() {},
       toggleSplitView() {},
       runNodeAction() {},
-      captureInterface(nodeName, interfaceName) {
-        recordHarnessMessage({ command: "clab-interface-capture", nodeName, interfaceName });
+      captureInterface(nodeName, interfaceName, options = {}) {
+        recordHarnessMessage({
+          command: "clab-interface-capture",
+          nodeName,
+          interfaceName,
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
+        });
+      },
+      captureTargets(targets, options = {}) {
+        recordHarnessMessage({
+          command: "clab-interface-capture",
+          nodeName: targets[0]?.nodeName,
+          interfaceName: targets[0]?.interfaceName,
+          targets,
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
+        });
       },
       captureInterfaces(nodeName, interfaceNames, options = {}) {
         recordHarnessMessage({
@@ -371,7 +385,8 @@ export function createFakeClabUiHost(
           nodeName,
           interfaceName: interfaceNames[0],
           interfaceNames,
-          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {})
+          ...(options.nodeNamespace === true ? { nodeNamespace: true } : {}),
+          ...(options.label !== undefined ? { captureLabel: options.label } : {})
         });
       },
       setLinkImpairment() {},

@@ -30,6 +30,8 @@ export interface CaptureInterfaceOption {
   label: string;
   /** Secondary name shown next to the label, if any. */
   detail?: string;
+  /** Node shown before the label when options span nodes, e.g. the ends of a link. */
+  nodeLabel?: string;
   /** The name is valid inside the node's network namespace. */
   nodeNamespace: boolean;
   /** Host-side end of a link (clab-s-*), captured in the host network namespace. */

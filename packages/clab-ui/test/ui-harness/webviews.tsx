@@ -17,6 +17,7 @@ import { APP_THEMES, applyAppTheme, resolveAppTheme } from "../../src/theme/appT
 import { NodeImpairmentsApp } from "../../src/webviews/nodeImpairments/nodeImpairments.webview";
 import { WelcomePageApp } from "../../src/webviews/welcome/welcomePage.webview";
 import { WiresharkVncApp } from "../../src/webviews/wiresharkVnc/wiresharkVnc.webview";
+import { WiresharkVncTabsApp } from "../../src/webviews/wiresharkVnc/wiresharkVncTabs";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") ?? "image-manager";
@@ -87,6 +88,20 @@ const images: ClabUiImageHost = {
     return { success: true, message: `Removed ${request.reference}.` };
   }
 };
+// Each capture tab embeds the single-session page; here its loading state.
+const CAPTURE_LABELS = ["1/1/c1/1", "1/1/c2/1", "1/1/c3/1, 1/1/c4/1", "ethernet-1/1", "e1-5", "eth1"];
+const captureTabs = CAPTURE_LABELS.slice(0, Math.max(2, Number(params.get("sessions") ?? 3))).map(
+  (label, index) => ({
+    id: `session-${index + 1}`,
+    label,
+    src: `webviews.html?view=wireshark&theme=${themeId}&state=${index === 0 ? "ready" : "no-tip"}`
+  })
+);
+const captureLayout = params.get("layout");
+if (captureLayout === "tabs" || captureLayout === "side-by-side") {
+  localStorage.setItem("clab.wireshark.layout", captureLayout);
+}
+
 const runtime = createClabUiRuntime({
   host: createWindowClabUiHost({ images, postMessage: () => undefined })
 });
@@ -254,6 +269,8 @@ function HarnessView(): React.JSX.Element {
       return <WelcomePageApp />;
     case "wireshark":
       return <WiresharkVncApp />;
+    case "wireshark-tabs":
+      return <WiresharkVncTabsApp tabs={captureTabs} />;
     default:
       return <ImageManagerApp runtime={runtime} initialData={window.__INITIAL_DATA__} />;
   }

@@ -1,10 +1,14 @@
-import { useMemo, type RefObject } from "react";
+import React, { useMemo, type RefObject } from "react";
 import type { Edge, Node } from "@xyflow/react";
 
 import type { useCanvasHandlers } from "../../hooks/canvas";
 import { useClabUiHost, type TopoViewerNodeAction } from "../../host";
 import { useDeploymentState, type DeploymentState } from "../../stores/topoViewerStore";
-import { useCaptureDialogStore } from "../../stores/captureDialogStore";
+import { CanvasCapturePanel } from "../panels/capture/CanvasCapturePanel";
+import {
+  CanvasLinkCapturePanel,
+  type CanvasLinkCapturePanelProps
+} from "../panels/capture/CanvasLinkCapturePanel";
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 
 import {
@@ -19,6 +23,18 @@ import {
 import type { AnnotationHandlers } from "./types";
 
 /** Parameters for useContextMenuItems hook */
+
+function renderCapturePanel(nodeId: string, close: () => void): React.ReactNode {
+  return React.createElement(CanvasCapturePanel, { nodeId, onDone: close });
+}
+
+function renderLinkCapturePanel(
+  link: Omit<CanvasLinkCapturePanelProps, "onDone">,
+  close: () => void
+): React.ReactNode {
+  return React.createElement(CanvasLinkCapturePanel, { ...link, onDone: close });
+}
+
 interface ContextMenuItemsParams {
   handlers: ReturnType<typeof useCanvasHandlers>;
   state: { mode: "view" | "edit"; isLocked: boolean };
@@ -47,9 +63,8 @@ interface ContextMenuItemsParams {
 }
 
 interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
-  onInterfaceCapture: (nodeName: string, interfaceName: string) => void;
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
-  onCaptureNode: (nodeId: string) => void;
+  renderCapturePanel: typeof renderCapturePanel;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
   menuPosition: { x: number; y: number };
@@ -101,7 +116,7 @@ function buildNodeItems(
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
     onNodeAction: params.onNodeAction,
-    onCaptureNode: params.onCaptureNode,
+    renderCapturePanel: params.renderCapturePanel,
     closeContextMenu: params.handlers.closeContextMenu,
     editNode: params.editNode,
     editNetwork: params.editNetwork,
@@ -141,7 +156,7 @@ function buildEdgeItems(
     isEditMode: params.isEditMode,
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
-    onInterfaceCapture: params.onInterfaceCapture,
+    renderLinkCapturePanel,
     closeContextMenu: params.handlers.closeContextMenu,
     editEdge: params.editEdge,
     handleDeleteEdge: params.handleDeleteEdge,
@@ -190,7 +205,6 @@ function resolveContextMenuItems(params: ResolveContextMenuItemsParams): Context
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
-  const openCaptureDialog = useCaptureDialogStore((store) => store.openCaptureDialog);
   const {
     handlers,
     state,
@@ -222,10 +236,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
   return useMemo(() => {
     return resolveContextMenuItems({
       ...params,
-      onInterfaceCapture: (nodeName, interfaceName) =>
-        topoViewer.captureInterface(nodeName, interfaceName),
       onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
-      onCaptureNode: openCaptureDialog,
+      renderCapturePanel,
       type,
       targetId,
       menuPosition,
@@ -258,7 +270,6 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     startLinkCreation,
     cancelLinkCreation,
     topoViewer,
-    openCaptureDialog,
     annotationHandlers,
     onOpenNodePalette,
     onAddDefaultNode,

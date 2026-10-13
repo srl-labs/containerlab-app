@@ -26,6 +26,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 import { WiresharkIcon } from "../context-menu/WiresharkIcon";
+import type { LinkCaptureEnd } from "../panels/capture/linkCaptureOptions";
 import type { TopoViewerNodeAction } from "../../host";
 import { getViewportCenter } from "../../utils/viewportUtils";
 import {
@@ -49,8 +50,8 @@ interface MenuBuilderContext {
   isDeployed: boolean;
   isLocked: boolean;
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
-  /** Open the interface picker to capture packets on this node */
-  onCaptureNode?: (nodeId: string) => void;
+  /** Interface checklist to capture packets on this node; `close` closes the menu. */
+  renderCapturePanel?: (nodeId: string, close: () => void) => React.ReactNode;
   closeContextMenu: () => void;
   editNode: (id: string) => void;
   editNetwork?: (id: string) => void;
@@ -95,7 +96,8 @@ interface EdgeMenuBuilderContext {
   /** Whether the lab is deployed, i.e. capture/impairment actions apply. */
   isDeployed: boolean;
   isLocked: boolean;
-  onInterfaceCapture: (nodeName: string, interfaceName: string) => void;
+  /** Checklist of the link's ends to capture; `close` closes the menu. */
+  renderLinkCapturePanel?: (link: { linkId: string; ends: LinkCaptureEnd[] }, close: () => void) => React.ReactNode;
   closeContextMenu: () => void;
   editEdge: (id: string) => void;
   handleDeleteEdge: (id: string) => void;
@@ -327,7 +329,7 @@ function buildTrafficRateContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
 }
 
 function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
-  const { targetId, targetRuntimeState, closeContextMenu, onNodeAction, onCaptureNode } = ctx;
+  const { targetId, targetRuntimeState, closeContextMenu, onNodeAction, renderCapturePanel } = ctx;
   return [
     {
       id: "start-node",
@@ -389,19 +391,17 @@ function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
         closeContextMenu();
       }
     },
-    ...(onCaptureNode
+    ...(renderCapturePanel
       ? [
           { id: "divider-node-capture", label: "", divider: true },
           {
             id: "capture-node",
-            label: "Capture…",
+            label: "Capture",
             icon: React.createElement(WiresharkIcon, { fontSize: "small" }),
             // Capture follows SSH: it needs a running container.
             disabled: isNodeActionDisabled("ssh", targetRuntimeState),
-            onClick: () => {
-              onCaptureNode(targetId);
-              closeContextMenu();
-            }
+            panelLabel: "Capture packets",
+            panel: (close: () => void) => renderCapturePanel(targetId, close)
           }
         ]
       : [])
@@ -543,55 +543,44 @@ export function buildNodeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
   return items;
 }
 
-/** Build interface capture items for each edge endpoint. */
+/** The link's ends that can be captured: running container, topology names for display. */
+function linkCaptureEnds(ctx: EdgeMenuBuilderContext): LinkCaptureEnd[] {
+  const { sourceNode, targetNode, sourceEndpoint, targetEndpoint, extraData } = ctx;
+  const sides = [
+    { id: "source", node: sourceNode, endpoint: sourceEndpoint, prefix: "Source" },
+    { id: "target", node: targetNode, endpoint: targetEndpoint, prefix: "Target" }
+  ] as const;
+  const ends: LinkCaptureEnd[] = [];
+  for (const side of sides) {
+    const captureName = getExtraDataString(extraData, `clab${side.prefix}LongName`) ?? side.node;
+    const displayName =
+      getExtraDataString(extraData, `yaml${side.prefix}NodeId`) ?? side.node ?? captureName;
+    if (
+      isNonEmptyString(side.node) &&
+      isNonEmptyString(captureName) &&
+      isNonEmptyString(displayName) &&
+      isNonEmptyString(side.endpoint)
+    ) {
+      ends.push({ id: side.id, nodeId: side.node, captureName, displayName, endpoint: side.endpoint });
+    }
+  }
+  return ends;
+}
+
+/** Capture submenu: a checklist of the link's ends. */
 function buildEdgeCaptureItems(ctx: EdgeMenuBuilderContext): ContextMenuItem[] {
-  const {
-    sourceNode,
-    targetNode,
-    sourceEndpoint,
-    targetEndpoint,
-    extraData,
-    onInterfaceCapture,
-    closeContextMenu
-  } = ctx;
-
-  const captureItems: ContextMenuItem[] = [];
-  const srcCaptureName = getExtraDataString(extraData, "clabSourceLongName") ?? sourceNode;
-  const dstCaptureName = getExtraDataString(extraData, "clabTargetLongName") ?? targetNode;
-  const srcDisplayName = getExtraDataString(extraData, "yamlSourceNodeId") ?? sourceNode ?? srcCaptureName;
-  const dstDisplayName = getExtraDataString(extraData, "yamlTargetNodeId") ?? targetNode ?? dstCaptureName;
-  if (
-    isNonEmptyString(srcCaptureName) &&
-    isNonEmptyString(srcDisplayName) &&
-    isNonEmptyString(sourceEndpoint)
-  ) {
-    captureItems.push({
-      id: "capture-source",
-      label: `${srcDisplayName} - ${sourceEndpoint}`,
+  const { targetId, renderLinkCapturePanel } = ctx;
+  const ends = linkCaptureEnds(ctx);
+  if (!renderLinkCapturePanel || ends.length === 0) return [];
+  return [
+    {
+      id: "capture-link",
+      label: "Capture",
       icon: React.createElement(WiresharkIcon, { fontSize: "small" }),
-      onClick: () => {
-        onInterfaceCapture(srcCaptureName, sourceEndpoint);
-        closeContextMenu();
-      }
-    });
-  }
-  if (
-    isNonEmptyString(dstCaptureName) &&
-    isNonEmptyString(dstDisplayName) &&
-    isNonEmptyString(targetEndpoint)
-  ) {
-    captureItems.push({
-      id: "capture-target",
-      label: `${dstDisplayName} - ${targetEndpoint}`,
-      icon: React.createElement(WiresharkIcon, { fontSize: "small" }),
-      onClick: () => {
-        onInterfaceCapture(dstCaptureName, targetEndpoint);
-        closeContextMenu();
-      }
-    });
-  }
-
-  return captureItems;
+      panelLabel: "Capture packets on this link",
+      panel: (close: () => void) => renderLinkCapturePanel({ linkId: targetId, ends }, close)
+    }
+  ];
 }
 
 /**

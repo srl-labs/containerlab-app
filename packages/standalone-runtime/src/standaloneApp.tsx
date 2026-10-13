@@ -72,7 +72,6 @@ import {
   buildPacketflixCapture,
   controlNodeLifecycle,
   createStandaloneExplorerBridge,
-  createWiresharkVncSessions,
   deleteUiCustomNode,
   deleteUiIcon,
   fetchRuntimeImages,
@@ -113,6 +112,12 @@ import {
 } from "@containerlab/clab-ui/session";
 import { confirmRuntimeAction } from "./runtimeActionFlows";
 import { publicAssetUrl } from "./publicAssetUrl";
+import {
+  createCaptureBatcher,
+  type WiresharkCaptureRequest,
+} from "./wiresharkCaptureLauncher";
+import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import type { CaptureTarget } from "./runtimeApi";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -676,7 +681,9 @@ type VscodeMessage = {
   iconName?: string;
   interfaceName?: string;
   interfaceNames?: unknown;
+  targets?: unknown;
   nodeNamespace?: unknown;
+  captureLabel?: unknown;
   level?: string;
   message?: string;
   name?: string;
@@ -771,83 +778,90 @@ function openPacketflixCaptures(
   }
 }
 
-function openWiresharkVncSessions(
-  sessions: Array<{ sessionId: string; showVolumeTip?: boolean }>,
-  targetEndpointId: string | undefined,
-  theme: "light" | "dark",
-): void {
-  if (sessions.length === 0) {
-    runtimeUiActions.notify("No Wireshark sessions were created.", "warning");
-    return;
-  }
-  for (const session of sessions) {
-    const params = new URLSearchParams({ sessionId: session.sessionId, theme });
-    if (targetEndpointId) {
-      params.set("endpointId", targetEndpointId);
-    }
-    if (session.showVolumeTip) {
-      params.set("showVolumeTip", "1");
-    }
-    window.open(
-      `${publicAssetUrl("wireshark.html")}?${params.toString()}`,
-      "_blank",
-      "noopener,noreferrer",
+async function openPacketflixCapture(
+  target: NonNullable<ReturnType<typeof getActiveTopologyTarget>>,
+  targets: CaptureTarget[],
+): Promise<void> {
+  try {
+    const response = await buildPacketflixCapture({
+      ...target,
+      targets,
+      remoteHostname: getSessionHostnameOverride(target.endpointId),
+    });
+    openPacketflixCaptures(response.captures ?? []);
+  } catch (error: unknown) {
+    runtimeUiActions.notify(
+      error instanceof Error ? error.message : String(error),
+      "error",
     );
   }
 }
 
-function openCaptureForInterfaces(
-  nodeName: string,
-  interfaceNames: string[],
-  nodeNamespace = false,
-): void {
+/** All captures of one click: one Wireshark window, one tab per session. */
+function openCanvasCaptures(requests: WiresharkCaptureRequest[]): void {
   const target = getActiveTopologyTarget();
   if (!target) {
     return;
   }
-  if (!nodeName || interfaceNames.length === 0) {
+  const captures = requests.filter((request) => request.targets.length > 0);
+  if (captures.length < requests.length) {
     runtimeUiActions.notify("Missing capture target.", "error");
+  }
+  if (captures.length === 0) {
     return;
   }
-  // The API groups targets per container and namespace: one request, one session.
-  const targets = interfaceNames.map((interfaceName) => ({
-    containerName: nodeName,
-    interfaceName,
-    ...(nodeNamespace ? { nodeNamespace } : {}),
-  }));
 
-  void (async () => {
-    try {
-      const capturePreferences = loadCapturePreferences(target.endpointId);
-      if (capturePreferences.preferredAction === "edgeshark") {
-        const response = await buildPacketflixCapture({
-          ...target,
-          targets,
-          remoteHostname: getSessionHostnameOverride(target.endpointId),
-        });
-        openPacketflixCaptures(response.captures ?? []);
-        return;
-      }
-
-      const theme = resolveStandaloneTheme(currentTheme);
-      const response = await createWiresharkVncSessions({
-        ...target,
-        targets,
-        theme,
-      });
-      openWiresharkVncSessions(
-        response.sessions ?? [],
-        target.endpointId,
-        theme,
-      );
-    } catch (error: unknown) {
-      runtimeUiActions.notify(
-        error instanceof Error ? error.message : String(error),
-        "error",
-      );
+  if (loadCapturePreferences(target.endpointId).preferredAction === "edgeshark") {
+    for (const capture of captures) {
+      void openPacketflixCapture(target, capture.targets);
     }
-  })();
+    return;
+  }
+  void openWiresharkCaptureWindow(
+    captures,
+    target,
+    resolveStandaloneTheme(currentTheme),
+  );
 }
+
+function trimmedStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((name: unknown): name is string => typeof name === "string")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0)
+    : [];
+}
+
+/**
+ * Targets of one capture message: ports of several nodes (`targets`, e.g. both
+ * ends of a link), or interfaces of one node, possibly inside its namespace.
+ */
+function canvasCaptureTargets(msg: VscodeMessage): CaptureTarget[] {
+  if (Array.isArray(msg.targets)) {
+    return msg.targets.flatMap((entry: unknown): CaptureTarget[] => {
+      if (typeof entry !== "object" || entry === null) return [];
+      const { nodeName, interfaceName } = entry as Record<string, unknown>;
+      if (typeof nodeName !== "string" || typeof interfaceName !== "string") return [];
+      const containerName = nodeName.trim();
+      const name = interfaceName.trim();
+      return containerName && name ? [{ containerName, interfaceName: name }] : [];
+    });
+  }
+  const containerName = typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
+  const interfaceName = typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
+  const interfaceNames = trimmedStrings(msg.interfaceNames);
+  const names = interfaceNames.length > 0 ? interfaceNames : [interfaceName].filter(Boolean);
+  if (!containerName) return [];
+  return names.map((name) => ({
+    containerName,
+    interfaceName: name,
+    ...(msg.nodeNamespace === true ? { nodeNamespace: true } : {}),
+  }));
+}
+
+// The canvas sends one message per session, all within the same click.
+const queueCanvasCapture = createCaptureBatcher(openCanvasCaptures);
 
 function triggerDownload(
   filename: string,
@@ -1203,21 +1217,12 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
   "clab-node-stop": handleNodeLifecycleCommand,
   "clab-node-restart": handleNodeLifecycleCommand,
   "clab-interface-capture": (msg) => {
-    const nodeName =
-      typeof msg.nodeName === "string" ? msg.nodeName.trim() : "";
-    const interfaceName =
-      typeof msg.interfaceName === "string" ? msg.interfaceName.trim() : "";
-    const interfaceNames = Array.isArray(msg.interfaceNames)
-      ? msg.interfaceNames
-          .filter((name: unknown): name is string => typeof name === "string")
-          .map((name) => name.trim())
-          .filter((name) => name.length > 0)
-      : [];
-    openCaptureForInterfaces(
-      nodeName,
-      interfaceNames.length > 0 ? interfaceNames : [interfaceName].filter(Boolean),
-      msg.nodeNamespace === true,
-    );
+    const label =
+      typeof msg.captureLabel === "string" ? msg.captureLabel.trim() : "";
+    queueCanvasCapture({
+      targets: canvasCaptureTargets(msg),
+      ...(label.length > 0 ? { label } : {}),
+    });
   },
   "clab-link-impairment": handleLinkImpairmentCommand,
   "topo-toggle-split-view": () =>

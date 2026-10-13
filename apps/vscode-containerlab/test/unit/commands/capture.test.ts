@@ -124,6 +124,33 @@ describe("multi-interface Edgeshark capture", () => {
     });
   });
 
+  it("streams both host-side ends of a link together, though they belong to two nodes", async () => {
+    const ends = [
+      iface("clab-capui-sr1-a", "clab-s-f8b759fc", "1/1/c1/1"),
+      iface("clab-capui-srl1", "clab-s-ee384f82", "e1-1")
+    ];
+
+    await captureInterfaceWithPacketflix(ends[0], ends);
+
+    expect(opened).to.have.length(1);
+    expect(parsePacketflixUri(opened[0]).container).to.deep.equal({
+      "network-interfaces": ["clab-s-f8b759fc", "clab-s-ee384f82"],
+      name: "systemd(1)",
+      prefix: ""
+    });
+  });
+
+  it("opens one capture per node for link ends inside the nodes", async () => {
+    const ends = [iface("clab-capui-srl1", "e1-3"), iface("clab-capui-client2", "eth1")];
+
+    await captureInterfaceWithPacketflix(ends[0], ends);
+
+    expect(opened.map((uri) => parsePacketflixUri(uri).container.name)).to.deep.equal([
+      "clab-capui-srl1",
+      "clab-capui-client2"
+    ]);
+  });
+
   it("opens one capture per namespace when eth0 and link ports are mixed", async () => {
     const ports = [
       iface("clab-capdist-sr1-a", "eth0"),
