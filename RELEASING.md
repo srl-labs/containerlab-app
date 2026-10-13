@@ -5,7 +5,7 @@ Publish one GitHub Release for the product you want to ship. The tag selects the
 | Product | Manifest | Prepared version/tag | Result |
 | --- | --- | --- | --- |
 | Shared UI | `packages/clab-ui/package.json` | `clab-ui-v0.4.0` | `@containerlab/clab-ui` on npmjs.org |
-| Standalone viewer | `packages/clab-viewer/package.json` | First manual publish `0.1.0`; later `clab-viewer-v<version>` | `@containerlab/clab-viewer` on npmjs.org |
+| Standalone viewer | `packages/clab-viewer/package.json` | `0.1.0` is published; next `clab-viewer-v<version>` | `@containerlab/clab-viewer` on npmjs.org |
 | VS Code extension | `apps/vscode-containerlab/package.json` | `vscode-v0.27.0` | VSIX, Marketplace, Open VSX |
 | Web app | `apps/web/package.json` | `web-v0.3.0` | `ghcr.io/srl-labs/containerlab-web:0.3.0` |
 | Desktop app | `apps/desktop/package.json` | `desktop-v0.3.0` | Linux, macOS, Windows installers |
@@ -28,21 +28,11 @@ Configure a **GitHub Actions** trusted publisher separately for each npm package
 
 The GitHub workflow already grants `id-token: write` and runs on a GitHub-hosted runner. It requires npm >=11.5.1; the pinned Node 24 release supplies a compatible npm CLI. No account token is passed to the job.
 
-### First-ever publication
+### Before the first workflow release
 
-The standalone viewer is a new npm package. Bootstrap it once with your interactive npm login and 2FA, then configure its trusted publisher. From a reviewed checkout, when ready to publish:
+Both packages already exist on npm: `@containerlab/clab-ui@0.3.2` and `@containerlab/clab-viewer@0.1.0` were published manually. Configure each package's trusted publisher before its first `clab-ui-v<version>` or `clab-viewer-v<version>` release; otherwise the publish step fails authentication.
 
-```sh
-pnpm viewer:pack
-pnpm exec playwright install --only-shell chromium
-node scripts/check-packed-clab-viewer.mjs artifacts/clab-viewer.tgz
-npm login --registry=https://registry.npmjs.org
-npm publish ./artifacts/clab-viewer.tgz --access public
-```
-
-This publishes the tested viewer package at `0.1.0`. Subsequent releases must use a new manifest version and a matching tag, such as `clab-viewer-v0.1.1`. The viewer has its own version and npm dist-tags; releasing it does not publish the editor UI or applications.
-
-The existing UI package can continue with `clab-ui-v<version>` releases after its trusted publisher is configured. To validate a UI artifact, use `pnpm ui:pack` and `node scripts/check-packed-clab-ui.mjs artifacts/clab-ui.tgz`. npm versions are immutable, so never reuse a published version.
+To validate an artifact locally, run `pnpm test:package` for the UI, or `pnpm test:viewer-package` for the viewer (after a one-time `pnpm exec playwright install --only-shell chromium`). Each package has its own version and npm dist-tags; releasing one does not publish the other or the applications. npm versions are immutable, so never reuse a published version.
 
 ### GitHub secrets for other products
 
@@ -78,7 +68,7 @@ These are independent. UI, viewer, VS Code, and web GitHub Releases should have 
 3. In GitHub, choose **Releases → Draft a new release**, create the product tag at the reviewed commit, and enter product-specific release notes. Alternatively, use `gh release create <tag> --target <commit> --title '<product> <version>' --notes-file <notes.md> --latest=false`.
 4. Publish the release. The matching workflow builds and publishes only that product. Use **Set as the latest release** only for stable desktop releases; other product releases should leave it unchecked. GitHub's Latest designation is shared by the whole repository.
 
-Examples: publishing `clab-ui-v0.4.0` ships only the UI to npm; after the viewer bootstrap, `clab-viewer-v0.1.1` ships only the viewer; publishing `vscode-v0.27.0` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
+Examples: publishing `clab-ui-v0.4.0` ships only the UI to npm; `clab-viewer-v0.1.1` ships only the viewer; publishing `vscode-v0.27.0` ships only the extension. The former generic `v<version>` application tags are historical and no longer release new builds.
 
 | Product | Useful checks |
 | --- | --- |
@@ -88,7 +78,7 @@ Examples: publishing `clab-ui-v0.4.0` ships only the UI to npm; after the viewer
 | Web | `pnpm web` and `pnpm test:web` |
 | Desktop | `pnpm desktop --linux`, `pnpm desktop --mac dmg --universal`, or `pnpm desktop --win nsis --x64` on the appropriate platform |
 
-Each npm workflow checks the target/version and registry, verifies the version is unpublished, checks the shared renderer, packs once, installs and validates that exact tarball outside the workspace, and publishes it through OIDC with automatic provenance. **Run workflow** on “Publish clab-ui to npm” or “Publish clab-viewer to npm” validates and uploads an artifact without publishing; it is suitable for testing this setup before the first release. To retry a failed publication, rerun the original workflow. If npm already accepted the version, a new publish is refused; it cannot be overwritten.
+Each npm workflow checks the target/version and registry, verifies the version is unpublished, checks the shared renderer, packs once, installs and validates that exact tarball outside the workspace, rejects it if any file contains a local absolute path from the build machine, and publishes it through OIDC with automatic provenance. **Run workflow** on “Publish clab-ui to npm” or “Publish clab-viewer to npm” validates and uploads an artifact without publishing; it is suitable for testing this setup before the first release. To retry a failed publication, rerun the original workflow. If npm already accepted the version, a new publish is refused; it cannot be overwritten.
 
 Product release workflows start from `release: published`. Main branch development builds are separate. Automation that creates releases using `GITHUB_TOKEN` does not automatically trigger these workflows; use a deliberate workflow invocation or an appropriately authorized GitHub App if automating release creation later.
 
@@ -103,5 +93,5 @@ Main/manual desktop runs build downloadable Actions artifacts without attaching 
 ## Repository cutover
 
 - This package is named `@containerlab/clab-ui`, matching the npm account. `@srl-labs/clab-ui` on GitHub Packages is a different package. External consumers must update their dependency and imports; public npm installation requires no GitHub token or custom registry mapping.
-- Existing published GitHub Packages versions should remain available. After the new workflows are active, disable the old repositories' publishing/schema workflows and link their READMEs to this monorepo. Keep their Git history accessible.
+- Nothing in this repository uses GitHub Packages. The only remaining consumer of `@srl-labs/clab-ui` there is the old `srl-labs/vscode-containerlab` repository, which pins `0.3.1`. Archive `srl-labs/clab-ui` and `srl-labs/vscode-containerlab` first (this also stops the old schema-sync schedule), then delete `@srl-labs/clab-ui` from the organization's GitHub Packages. Archived repositories keep their Git history accessible.
 - Marketplace/Open VSX secrets must be available in this repository, even if they were configured in the old extension repository.
