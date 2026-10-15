@@ -3,7 +3,7 @@
  */
 import type { LinkEditorData } from "../core/types/editors";
 import type { LinkSaveData } from "../core/io/LinkPersistenceIO";
-import { isSpecialEndpointId } from "../core/utilities/LinkTypes";
+import { isSpecialEndpointId, toEditableStringMap } from "../core/utilities/LinkTypes";
 import { isRecord } from "../core/utilities/typeHelpers";
 
 type LinkExtraData = NonNullable<LinkSaveData["extraData"]>;
@@ -66,25 +66,19 @@ function getMap(
   rawKey: string
 ): Record<string, string> {
   const parse = (value: unknown): Record<string, string> | undefined => {
-    if (!isRecord(value)) return undefined;
-    const output: Record<string, string> = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (typeof v === "string") {
-        output[k] = v;
-      }
-    }
-    return Object.keys(output).length > 0 ? output : undefined;
+    const output = toEditableStringMap(value);
+    return output && Object.keys(output).length > 0 ? output : undefined;
   };
   return parse(extraData[extKey]) ?? parse(rawData[rawKey]) ?? {};
 }
 
+/** Cleared fields are sent as "" so the save removes them from the link. */
 function assignExtraString(
   extraData: LinkExtraData,
   key: keyof LinkExtraData,
   value: string | undefined
 ): void {
-  if (value === undefined || value.length === 0) return;
-  extraData[key] = value;
+  extraData[key] = value ?? "";
 }
 
 function assignExtraMap(
@@ -92,8 +86,7 @@ function assignExtraMap(
   key: "extVars" | "extLabels",
   value: Record<string, string> | undefined
 ): void {
-  if (!value || Object.keys(value).length === 0) return;
-  extraData[key] = value;
+  extraData[key] = Object.fromEntries(Object.entries(value ?? {}).filter(([k]) => k !== ""));
 }
 
 /**
@@ -157,9 +150,10 @@ export function convertEditorDataToLinkSaveData(data: LinkEditorData): LinkSaveD
   if (data.type !== undefined && data.type.length > 0 && data.type !== "veth") {
     extraData.extType = data.type;
   }
-  if (data.mtu !== undefined && data.mtu !== "") {
-    extraData.extMtu = data.mtu;
-  }
+  extraData.extMtu =
+    data.mtu === undefined || (typeof data.mtu === "number" && Number.isNaN(data.mtu))
+      ? ""
+      : data.mtu;
   assignExtraString(extraData, "extSourceMac", data.sourceMac);
   assignExtraString(extraData, "extTargetMac", data.targetMac);
   assignExtraString(extraData, "extSourceIpv4", data.sourceIpv4);
@@ -175,7 +169,7 @@ export function convertEditorDataToLinkSaveData(data: LinkEditorData): LinkSaveD
     target: data.target,
     sourceEndpoint: data.sourceEndpoint,
     targetEndpoint: data.targetEndpoint,
-    extraData: Object.keys(extraData).length > 0 ? extraData : undefined,
+    extraData,
     // Include original values if endpoints changed
     originalSource: data.originalSource,
     originalTarget: data.originalTarget,

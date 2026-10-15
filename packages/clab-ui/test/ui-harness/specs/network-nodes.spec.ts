@@ -754,6 +754,47 @@ test.describe("Network Node Modification", () => {
 
   });
 
+  for (const networkType of ["host", "vxlan"] as const) {
+    test(`${networkType} MAC is saved as the endpoint mac and kept on later edits`, async ({
+      page,
+      topoViewerPage
+    }) => {
+      await topoViewerPage.createNode("router1", { x: 300, y: 200 }, KIND_NOKIA_SRLINUX);
+      await page.waitForTimeout(300);
+
+      const networkId = await topoViewerPage.createNetwork({ x: 100, y: 200 }, networkType);
+      expect(networkId).not.toBeNull();
+      await page.waitForTimeout(300);
+
+      await topoViewerPage.createLink("router1", networkId!, "e1-1", "eth0");
+      await page.waitForTimeout(500);
+
+      await openNetworkEditor(page, networkId!);
+      await expectNetworkEditorOpen(page);
+
+      const mac = "02:aa:bb:cc:dd:01";
+      await page.locator("#network-mac").fill(mac);
+      await page.locator(SEL_APPLY_BTN).click();
+
+      const readLink = async () => {
+        const parsed = YAML.parse(await topoViewerPage.getYamlFromFile(EMPTY_FILE));
+        const link = findLinkByType(parsed, networkType);
+        const endpoint = link?.endpoint as Record<string, unknown> | undefined;
+        return { mac: endpoint?.mac, mtu: link?.mtu };
+      };
+
+      await expect.poll(readLink, { timeout: 15000 }).toEqual({ mac, mtu: undefined });
+
+      // A later edit of another field keeps the MAC
+      await page.locator("#network-mtu").fill("9000");
+      await page.locator(SEL_APPLY_BTN).click();
+      await expect.poll(readLink, { timeout: 15000 }).toEqual({ mac, mtu: 9000 });
+
+      const validation = validateYamlAgainstSchema(await topoViewerPage.getYamlFromFile(EMPTY_FILE));
+      expect(validation.valid).toBe(true);
+    });
+  }
+
   test("editing bridge label persists to annotations", async ({ page, topoViewerPage }) => {
     await topoViewerPage.createNode("router1", { x: 300, y: 200 }, KIND_NOKIA_SRLINUX);
     await page.waitForTimeout(300);

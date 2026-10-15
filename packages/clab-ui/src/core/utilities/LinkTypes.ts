@@ -53,3 +53,18 @@ export function splitEndpointLike(endpoint: string | { node: string; interface?:
   }
   return { node: endpoint.node, iface: endpoint.interface ?? "" };
 }
+
+/**
+ * Converts link `vars` / `labels` to the text entries an editor can show.
+ * Nested maps, lists and null values are left out; saving keeps them in the YAML.
+ */
+export function toEditableStringMap(value: unknown): Record<string, string> | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const output: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean") {
+      output[key] = String(entry);
+    }
+  }
+  return output;
+}

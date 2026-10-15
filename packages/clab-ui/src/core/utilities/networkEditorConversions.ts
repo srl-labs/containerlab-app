@@ -6,7 +6,8 @@
 import type { NetworkEditorData, NetworkType } from "../types/editors";
 import { BRIDGE_TYPES, HOST_TYPES, NETWORK_TYPES } from "../types/editors";
 
-import { getStringOrEmpty, getRecord } from "./typeHelpers";
+import { toEditableStringMap } from "./LinkTypes";
+import { getStringOrEmpty, isRecord } from "./typeHelpers";
 
 /**
  * Parse network type from node data
@@ -100,7 +101,8 @@ export function convertToNetworkEditorData(
   if (!rawData) return null;
 
   const nodeId = getStringOrEmpty(rawData.id);
-  const extra = getRecord(rawData.extraData) ?? {};
+  // Keep non-string values: extVars/extLabels are maps
+  const extra = isRecord(rawData.extraData) ? rawData.extraData : {};
   const networkType = parseNetworkType(nodeId, rawData, extra);
 
   return {
@@ -120,8 +122,8 @@ export function convertToNetworkEditorData(
     // MTU
     mtu: getStringOrEmpty(extra.extMtu),
     // Optional metadata (check extVars/extLabels first, fall back to vars/labels)
-    vars: getRecord(extra.extVars) ?? getRecord(extra.vars),
-    labels: getRecord(extra.extLabels) ?? getRecord(extra.labels)
+    vars: toEditableStringMap(extra.extVars) ?? toEditableStringMap(extra.vars),
+    labels: toEditableStringMap(extra.extLabels) ?? toEditableStringMap(extra.labels)
   };
 }
 
@@ -156,4 +158,69 @@ export function convertNetworkEditorDataToYaml(data: NetworkEditorData): Record<
   if (data.labels !== undefined && Object.keys(data.labels).length > 0) result.labels = data.labels;
 
   return result;
+}
+
+/** VXLAN types that need link property updates */
+const VXLAN_NETWORK_TYPES = new Set<NetworkType>(["vxlan", "vxlan-stitch"]);
+
+function toOptionalNumber(value: string | undefined): number | undefined {
+  if (value == null || value.length === 0) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function nonEmptyMap(
+  value: Record<string, string> | undefined
+): Record<string, string> | undefined {
+  return value && Object.keys(value).length > 0 ? value : undefined;
+}
+
+/**
+ * Convert NetworkEditorData of a link-based network (host, mgmt-net, macvlan,
+ * vxlan, dummy) to the extraData of its links
+ */
+export function convertNetworkEditorDataToLinkExtraData(
+  data: NetworkEditorData
+): Record<string, unknown> {
+  const extraData: Record<string, unknown> = { extType: data.networkType };
+  if (VXLAN_NETWORK_TYPES.has(data.networkType)) {
+    Object.assign(extraData, {
+      extRemote: data.vxlanRemote ?? undefined,
+      extVni: toOptionalNumber(data.vxlanVni),
+      extDstPort: toOptionalNumber(data.vxlanDstPort),
+      extSrcPort: toOptionalNumber(data.vxlanSrcPort)
+    });
+  }
+  if (HOST_INTERFACE_TYPES.has(data.networkType)) {
+    extraData.extHostInterface = data.interfaceName || undefined;
+    extraData.extMode =
+      data.networkType === "macvlan" ? (data.macvlanMode ?? undefined) : undefined;
+  }
+  Object.assign(extraData, {
+    extMtu: toOptionalNumber(data.mtu),
+    extMac: data.mac ?? undefined,
+    extVars: nonEmptyMap(data.vars),
+    extLabels: nonEmptyMap(data.labels)
+  });
+  return extraData;
+}
+
+/**
+ * Builds the editLink extraData for the links of an edited network node.
+ * Only fields that differ from `before` are sent (an empty string clears a
+ * field), so the links keep everything the user did not touch and a network
+ * with several links does not copy one link's values onto the others.
+ */
+export function buildNetworkLinkEditExtraData(
+  data: NetworkEditorData,
+  before: NetworkEditorData | null
+): Record<string, unknown> {
+  const next = convertNetworkEditorDataToLinkExtraData(data);
+  const previous = before ? convertNetworkEditorDataToLinkExtraData(before) : undefined;
+  const extraData: Record<string, unknown> = { extType: next.extType };
+  for (const [key, value] of Object.entries(next)) {
+    if (previous && JSON.stringify(previous[key]) === JSON.stringify(value)) continue;
+    extraData[key] = value ?? "";
+  }
+  return extraData;
 }

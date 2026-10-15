@@ -124,13 +124,16 @@ const NetworkEditorContent: React.FC<{
           />
         )}
 
-        <InputField
-          id="network-mac"
-          label="MAC Address"
-          value={formData.mac ?? ""}
-          onChange={(v) => onChange({ mac: v })}
-          placeholder="e.g., 00:11:22:33:44:55 (optional)"
-        />
+        {/* Saved as the link's endpoint.mac; bridges are nodes and have no such link field */}
+        {!BRIDGE_TYPES.includes(formData.networkType) && (
+          <InputField
+            id="network-mac"
+            label="MAC Address"
+            value={formData.mac ?? ""}
+            onChange={(v) => onChange({ mac: v })}
+            placeholder="e.g., 00:11:22:33:44:55 (optional)"
+          />
+        )}
       </PanelSection>
 
       {/* VXLAN Settings */}

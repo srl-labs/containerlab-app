@@ -180,7 +180,9 @@ function assignVxlanProps(
   if (linkType !== TYPES.VXLAN && linkType !== TYPES.VXLAN_STITCH) return;
   if (linkObj.remote !== undefined) baseProps.extRemote = toStr(linkObj.remote);
   if (linkObj.vni !== undefined) baseProps.extVni = toStr(linkObj.vni);
-  if (linkObj["dst-port"] !== undefined) baseProps.extDstPort = toStr(linkObj["dst-port"]);
+  // udp-port is the deprecated name of dst-port
+  const dstPort = linkObj["dst-port"] ?? linkObj["udp-port"];
+  if (dstPort !== undefined) baseProps.extDstPort = toStr(dstPort);
   if (linkObj["src-port"] !== undefined) baseProps.extSrcPort = toStr(linkObj["src-port"]);
 }
 
