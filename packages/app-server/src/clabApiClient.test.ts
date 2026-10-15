@@ -43,3 +43,65 @@ test("file existence checks distinguish missing files from existing ones", async
   mock.mock.mockImplementation(() => Promise.resolve(new Response(null, { status: 200 })));
   assert.equal(await client.headFile("token", "demo", "demo.clab.yml"), true);
 });
+
+function captureFetchUrls(t: test.TestContext): URL[] {
+  const urls: URL[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    urls.push(new URL(String(input)));
+    return Promise.resolve(
+      new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
+    );
+  });
+  return urls;
+}
+
+test("deploy with cleanup asks the API to reconfigure the lab", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.deployLab("token", "demo", { path: "demo.clab.yml", cleanup: true });
+
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].pathname, "/api/v1/labs/demo/deploy");
+  assert.equal(urls[0].searchParams.get("reconfigure"), "true");
+  assert.equal(urls[0].searchParams.has("cleanup"), false);
+});
+
+test("deploy without cleanup does not reconfigure a running lab", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.deployLab("token", "demo", { path: "demo.clab.yml" });
+
+  assert.equal(urls[0].searchParams.has("reconfigure"), false);
+  assert.equal(urls[0].searchParams.has("cleanup"), false);
+});
+
+test("streamed deploy with cleanup sends reconfigure; destroy and redeploy keep cleanup", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.openLifecycleStream("token", "deploy", "demo", { cleanup: true });
+  await client.openLifecycleStream("token", "destroy", "demo", { cleanup: true });
+  await client.openLifecycleStream("token", "redeploy", "demo", { cleanup: true });
+
+  const [deploy, destroy, redeploy] = urls;
+  assert.equal(deploy.pathname, "/api/v1/labs/demo/deploy");
+  assert.equal(deploy.searchParams.get("reconfigure"), "true");
+  assert.equal(deploy.searchParams.has("cleanup"), false);
+  assert.equal(destroy.searchParams.get("cleanup"), "true");
+  assert.equal(destroy.searchParams.has("reconfigure"), false);
+  assert.equal(redeploy.searchParams.get("cleanup"), "true");
+  assert.equal(redeploy.searchParams.has("reconfigure"), false);
+});
+
+test("redeploy and destroy with cleanup forward the cleanup flag", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.redeployLab("token", "demo", { cleanup: true });
+  await client.destroyLab("token", "demo", { cleanup: true });
+
+  assert.equal(urls[0].searchParams.get("cleanup"), "true");
+  assert.equal(urls[1].searchParams.get("cleanup"), "true");
+});

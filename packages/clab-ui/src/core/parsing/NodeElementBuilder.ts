@@ -206,7 +206,8 @@ function createNodeExtraData(params: {
     index: nodeIndex.toString(),
     kind,
     type: mergedNode.type ?? "",
-    labdir: fullPrefix ? `${fullPrefix}/` : "",
+    // containerlab names the lab directory clab-<lab> whatever the container prefix is.
+    labdir: `clab-${labName}/`,
     labels: cleanedLabels,
     longname: computeLongname(containerData?.name, fullPrefix, nodeName),
     macAddress: "",

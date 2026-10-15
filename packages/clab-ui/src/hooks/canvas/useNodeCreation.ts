@@ -10,6 +10,7 @@ import type { ReactFlowInstance } from "@xyflow/react";
 import { log } from "../../utils/logger";
 import type { TopoNode, TopologyNodeData } from "../../core/types/graph";
 import type { CustomNodeTemplate } from "../../core/types/editors";
+import { getDefaultNodeType } from "../../core/constants/nodeTypes";
 import type { NodeBoxAppearance } from "../../core/types/topology";
 import { getUniqueId } from "../../core/utilities/idUtils";
 import { convertEditorDataToYaml } from "../../core/utilities/nodeEditorConversions";
@@ -112,14 +113,9 @@ function getResolvedKind(template: CustomNodeTemplate): string {
 /**
  * Determine the type for a node
  */
-function determineType(kind: string, template?: CustomNodeTemplate): string | undefined {
+export function determineType(kind: string, template?: CustomNodeTemplate): string | undefined {
   if (template?.type !== undefined && template.type.length > 0) {
     return template.type;
-  }
-
-  const nokiaKinds = ["nokia_srlinux", "nokia_srsim", "nokia_sros"];
-  if (!nokiaKinds.includes(kind)) {
-    return undefined;
   }
 
   // If this template represents a custom node (has a name) but no explicit type,
@@ -128,7 +124,7 @@ function determineType(kind: string, template?: CustomNodeTemplate): string | un
     return undefined;
   }
 
-  return "ixr-d2l";
+  return getDefaultNodeType(kind);
 }
 
 /**

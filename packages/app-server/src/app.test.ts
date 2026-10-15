@@ -1277,6 +1277,35 @@ test("/api/lab/deploy/stream forwards lifecycle NDJSON and topology path", async
   assert.equal(response.body, upstreamBody);
 });
 
+test("/api/lab/deploy/stream with cleanup asks the API to reconfigure", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "deployed" })}\n`;
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/,
+    (call) => {
+      assert.equal(call.url.searchParams.get("reconfigure"), "true");
+      assert.equal(call.url.searchParams.has("cleanup"), false);
+      return ndjsonResponse(upstreamBody);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/deploy/stream",
+    headers: { cookie },
+    payload: { cleanup: true, topologyRef: demoTopologyRef(endpointId) },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
 test("/api/lab/deploy reconciles upstream network errors", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
