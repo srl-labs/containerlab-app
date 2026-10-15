@@ -5,7 +5,7 @@ import Box from "@mui/material/Box";
 import type { GroupStyleAnnotation } from "../../../../core/types/topology";
 import type { GroupEditorData } from "../../../../hooks/canvas";
 import { useGenericFormState } from "../../../../hooks/editor";
-import { FIELDSET_RESET_STYLE } from "../ContextPanelScrollArea";
+import { ReadOnlyFieldset } from "../../../ui/editor/ReadOnlyFieldset";
 import { GroupFormContent } from "../../group-editor/GroupFormContent";
 
 import { useAnnotationLiveApply } from "./useAnnotationLiveApply";
@@ -56,13 +56,13 @@ export const GroupEditorView: React.FC<GroupEditorViewProps> = ({
 
   return (
     <Box sx={{ flex: 1, overflow: "auto" }}>
-      <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
+      <ReadOnlyFieldset readOnly={readOnly}>
         <GroupFormContent
           formData={formData}
           updateField={effectiveUpdateField}
           updateStyle={updateStyle}
         />
-      </fieldset>
+      </ReadOnlyFieldset>
     </Box>
   );
 };

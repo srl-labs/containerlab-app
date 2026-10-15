@@ -51,6 +51,8 @@ import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
 import { FindNodeSearchWidget } from "../panels/find-node/FindNodeSearchWidget";
 
+import { useLockShake } from "./useLockShake";
+
 const ERROR_MAIN = "error.main";
 const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
@@ -242,6 +244,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isDirty = useIsDirty();
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
+  const lockButtonRef = React.useRef<HTMLButtonElement>(null);
+  useLockShake(lockButtonRef);
 
   const isEditMode = mode === "edit" && !isProcessing;
   const isViewerMode = mode === "view";
@@ -645,6 +649,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Tooltip title={isLocked ? "Unlock lab to edit" : "Lock Lab"}>
           <span>
             <IconButton
+              ref={lockButtonRef}
               aria-label={isLocked ? "Unlock lab to edit" : "Lock Lab"}
               size="small"
               onClick={toggleLock}

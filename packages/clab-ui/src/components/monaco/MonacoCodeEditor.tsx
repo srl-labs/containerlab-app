@@ -613,6 +613,11 @@ function createModelUri(language: "yaml" | "json"): monaco.Uri {
   return monaco.Uri.parse(`file:///containerlab-editor/model-${id}.${suffix}`);
 }
 
+/** Read-only editors drop the caret and current-line highlight so they don't look editable. */
+function readOnlyLook(readOnly: boolean): monaco.editor.IEditorOptions {
+  return { renderLineHighlight: readOnly ? "none" : "line", hideCursorInOverviewRuler: readOnly };
+}
+
 export interface MonacoCodeEditorProps {
   value: string;
   language: "yaml" | "json";
@@ -620,6 +625,8 @@ export interface MonacoCodeEditorProps {
   suggestionsEnabled?: boolean;
   jsonSchema?: object;
   onChange?: (value: string) => void;
+  /** Called when the user types into the editor while it is read-only. */
+  onReadOnlyEditAttempt?: () => void;
 }
 
 export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
@@ -628,7 +635,8 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   readOnly = false,
   suggestionsEnabled = true,
   jsonSchema,
-  onChange
+  onChange,
+  onReadOnlyEditAttempt
 }) => {
   const host = useClabUiHost();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -640,6 +648,8 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const jsonSchemaRef = useRef(jsonSchema);
   const suggestionsEnabledRef = useRef(suggestionsEnabled);
+  const onReadOnlyEditAttemptRef = useRef(onReadOnlyEditAttempt);
+  onReadOnlyEditAttemptRef.current = onReadOnlyEditAttempt;
   const isDevMock = host.meta?.isDevMock === true;
 
   const getEditorFontFamily = () => {
@@ -737,6 +747,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
     editorRef.current = monaco.editor.create(container, {
       model: modelRef.current,
       readOnly,
+      ...readOnlyLook(readOnly),
       automaticLayout: true,
       contextmenu: true,
       minimap: { enabled: false },
@@ -807,6 +818,9 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       if (onChange !== undefined) onChange(next);
       scheduleValidation();
     });
+    const readOnlyAttemptDisposable = editor.onDidAttemptReadOnlyEdit(() => {
+      onReadOnlyEditAttemptRef.current?.();
+    });
 
     // -----------------------------------------------------------------------
     // Paste workaround for VS Code webview sandbox.
@@ -870,6 +884,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       plainSpaceKeyDisposable.dispose();
       disabledSuggestSuppressor.dispose();
       disposable.dispose();
+      readOnlyAttemptDisposable.dispose();
       editorRef.current?.dispose();
       editorRef.current = null;
       if (modelRef.current) {
@@ -913,7 +928,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-    editor.updateOptions({ readOnly });
+    editor.updateOptions({ readOnly, ...readOnlyLook(readOnly) });
   }, [readOnly]);
 
   useEffect(() => {

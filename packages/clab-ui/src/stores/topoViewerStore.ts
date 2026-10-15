@@ -75,6 +75,8 @@ export interface TopoViewerState {
   /** Bumped on every request to open a node, link, network or impairment editor. */
   editorRequest: number;
   isLocked: boolean;
+  /** Bumped whenever an edit is attempted while the lab is locked. */
+  lockNudge: number;
   linkLabelMode: LinkLabelMode;
   lastNonTelemetryLinkLabelMode: NonTelemetryLinkLabelMode;
   showDummyLinks: boolean;
@@ -126,6 +128,7 @@ export interface TopoViewerActions {
   setDeploymentState: (state: DeploymentState) => void;
   setDirty: (dirty: boolean | undefined) => void;
   toggleLock: () => void;
+  nudgeLock: () => void;
 
   // Rendering settings
   setLinkLabelMode: (mode: LinkLabelMode) => void;
@@ -203,6 +206,7 @@ const initialState: TopoViewerState = {
   editingNetwork: null,
   editorRequest: 0,
   isLocked: true,
+  lockNudge: 0,
   linkLabelMode: "show-all",
   lastNonTelemetryLinkLabelMode: "show-all",
   showDummyLinks: true,
@@ -427,6 +431,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 
   toggleLock: () => {
     set((state) => ({ isLocked: !state.isLocked }));
+  },
+
+  nudgeLock: () => {
+    set((state) => ({ lockNudge: state.lockNudge + 1 }));
   },
 
   // Rendering settings
@@ -724,6 +732,9 @@ export const useCustomNodes = () => useTopoViewerStore((state) => state.customNo
 /** Get custom icons */
 export const useCustomIcons = () => useTopoViewerStore((state) => state.customIcons);
 
+/** Get the locked-edit counter; changes each time an edit is blocked by the lock */
+export const useLockNudge = () => useTopoViewerStore((state) => state.lockNudge);
+
 /** Get TopoViewer actions (stable reference) */
 export const useTopoViewerActions = () =>
   useTopoViewerStore(
@@ -738,6 +749,7 @@ export const useTopoViewerActions = () =>
       setDeploymentState: state.setDeploymentState,
       setDirty: state.setDirty,
       toggleLock: state.toggleLock,
+      nudgeLock: state.nudgeLock,
       setLinkLabelMode: state.setLinkLabelMode,
       toggleDummyLinks: state.toggleDummyLinks,
       setShowDummyLinks: state.setShowDummyLinks,

@@ -206,7 +206,8 @@ test.describe("Annotation rotation", () => {
     await page.getByRole("button", { name: "Match rotation", exact: true }).click();
     await topoViewerPage.lock();
     await expect(page.getByTestId("rotation-match-hint")).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Match rotation", exact: true })).toBeDisabled();
+    // Locked editors hide their action buttons and disable the rest.
+    await expect(page.getByRole("button", { name: "Match rotation", exact: true })).toBeHidden();
     await expect(dial).toBeDisabled();
   });
 

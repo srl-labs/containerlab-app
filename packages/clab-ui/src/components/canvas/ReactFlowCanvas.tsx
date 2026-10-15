@@ -58,6 +58,7 @@ import { getCombinedMatches } from "../panels/find-node/findNodeSearchUtils";
 import { ContextMenu } from "../context-menu/ContextMenu";
 
 import { AnnotationModeIndicator, HelperLines, LinkCreationIndicator } from "./CanvasOverlays";
+import { useLockedDragNudge } from "./useLockedDragNudge";
 import { useContextMenuItems } from "./useContextMenuItems";
 import { edgeTypes, edgeTypesLite } from "./edges";
 import { CustomConnectionLine, LinkCreationLine } from "./LinkPreview";
@@ -105,22 +106,23 @@ function handleAltDelete(
   mode: "view" | "edit",
   isLocked: boolean,
   handleDeleteNode: (nodeId: string) => void,
-  annotationHandlers?: AnnotationHandlers
+  annotationHandlers?: AnnotationHandlers,
+  onLockedAction?: () => void
 ): boolean {
-  if (!event.altKey || isLocked) return false;
+  if (!event.altKey) return false;
 
   // Annotation overlays are editable in unlocked view mode (running labs).
   const annotationDelete = resolveAltDeleteHandler(node.type, annotationHandlers);
-  if (annotationDelete) {
-    event.stopPropagation();
-    annotationDelete(node.id);
-    return true;
-  }
-
-  if (mode !== "edit") return false;
+  if (!annotationDelete && mode !== "edit") return false;
 
   event.stopPropagation();
-  handleDeleteNode(node.id);
+  if (isLocked) {
+    onLockedAction?.();
+  } else if (annotationDelete) {
+    annotationDelete(node.id);
+  } else {
+    handleDeleteNode(node.id);
+  }
   return true;
 }
 
@@ -250,7 +252,17 @@ function useWrappedNodeClick(config: WrappedNodeClickConfig) {
 
   return useCallback(
     (event: React.MouseEvent, node: Node) => {
-      if (handleAltDelete(event, node, mode, isLocked, handleDeleteNode, annotationHandlers))
+      if (
+        handleAltDelete(
+          event,
+          node,
+          mode,
+          isLocked,
+          handleDeleteNode,
+          annotationHandlers,
+          onLockedAction
+        )
+      )
         return;
       if (handleLinkCreationClick(event, node, linkSourceNode, completeLinkCreation)) return;
       const hasOtherSelectedNodes = hasOtherSelectedTopologyNodes(reactFlowInstanceRef, node.id);
@@ -296,18 +308,20 @@ function useWrappedEdgeClick(
   onEdgeClick: ReturnType<typeof useCanvasHandlers>["onEdgeClick"],
   mode: "view" | "edit",
   isLocked: boolean,
-  handleDeleteEdge: (edgeId: string) => void
+  handleDeleteEdge: (edgeId: string) => void,
+  onLockedAction?: () => void
 ) {
   return useCallback(
     (event: React.MouseEvent, edge: Edge) => {
-      if (event.altKey && mode === "edit" && !isLocked) {
+      if (event.altKey && mode === "edit") {
         event.stopPropagation();
-        handleDeleteEdge(edge.id);
+        if (isLocked) onLockedAction?.();
+        else handleDeleteEdge(edge.id);
         return;
       }
       onEdgeClick(event, edge);
     },
-    [onEdgeClick, mode, isLocked, handleDeleteEdge]
+    [onEdgeClick, mode, isLocked, handleDeleteEdge, onLockedAction]
   );
 }
 
@@ -630,18 +644,18 @@ function handleCanvasDropEvent(params: {
   isLocked: boolean;
   reactFlowInstanceRef: React.RefObject<ReactFlowInstance | null>;
   handlers: CanvasDropHandlers;
+  onLockedAction?: () => void;
 }) {
-  const { event, mode, isLocked, reactFlowInstanceRef, handlers } = params;
+  const { event, mode, isLocked, reactFlowInstanceRef, handlers, onLockedAction } = params;
   event.preventDefault();
-
-  if (isLocked) {
-    clearCanvasDragFallback();
-    return;
-  }
 
   const data = parseCanvasDropData(event);
   clearCanvasDragFallback();
   if (!data) return;
+  if (isLocked) {
+    onLockedAction?.();
+    return;
+  }
   // Deployed labs run in view mode, but unlocked users can still place annotation overlays.
   if (mode !== "edit" && data.type !== "annotation") return;
 
@@ -1316,6 +1330,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       return () => useCanvasStore.setState({ getAnnotationGeoUpdate: null });
     }, [isGeoLayout, getAnnotationGeoUpdate]);
     useGeoWheelZoom(geoLayout, isGeoLayout, isGeoEdit, canvasContainerRef);
+    useLockedDragNudge(canvasContainerRef, isLocked && !readOnlyViewer, onLockedAction);
 
     const fitCanvasToVisibleViewport = useCallback(
       async (options: { padding: number; duration: number }) => {
@@ -1641,7 +1656,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       handlers.onEdgeClick,
       mode,
       isLocked,
-      handleDeleteEdge
+      handleDeleteEdge,
+      onLockedAction
     );
     const contextMenuItems = useContextMenuItems({
       handlers,
@@ -1773,12 +1789,14 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
             onAddShapeAtPosition,
             onAddGroupAtPosition,
             onAddTrafficRateAtPosition
-          }
+          },
+          onLockedAction
         });
       },
       [
         mode,
         isLocked,
+        onLockedAction,
         handlersReactFlowInstance,
         onDropCreateNode,
         onDropCreateNetwork,

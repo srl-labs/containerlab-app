@@ -4,7 +4,7 @@ import React from "react";
 import Box from "@mui/material/Box";
 
 import { useGenericFormState } from "../../../../hooks/editor";
-import { FIELDSET_RESET_STYLE } from "../ContextPanelScrollArea";
+import { ReadOnlyFieldset } from "../../../ui/editor/ReadOnlyFieldset";
 
 import { useAnnotationLiveApply } from "./useAnnotationLiveApply";
 
@@ -61,9 +61,9 @@ export function AnnotationFormEditorView<T extends { id: string }>({
 
   return (
     <Box sx={{ flex: 1, overflow: "auto" }}>
-      <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
+      <ReadOnlyFieldset readOnly={readOnly}>
         <FormContent formData={formData} updateField={effectiveUpdateField} />
-      </fieldset>
+      </ReadOnlyFieldset>
     </Box>
   );
 }
