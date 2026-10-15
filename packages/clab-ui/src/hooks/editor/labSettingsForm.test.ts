@@ -172,11 +172,13 @@ test("editing one field only touches that key", async () => {
 });
 
 test("a new field is appended without disturbing existing keys", async () => {
-  const result = await roundTrip(FULL_MGMT, { mgmt: { mtu: "9000" } });
-  assert.deepEqual(result.update, { mgmt: [{ source: 0, changes: { mtu: 9000 } }] });
+  const result = await roundTrip(FULL_MGMT, { mgmt: { ipv4Range: "172.31.20.128/25" } });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 0, changes: { "ipv4-range": "172.31.20.128/25" } }]
+  });
   assert.equal(
     result.yaml,
-    FULL_MGMT.replace("    foo: bar\n", "    foo: bar\n  mtu: 9000\n")
+    FULL_MGMT.replace("    foo: bar\n", "    foo: bar\n  ipv4-range: 172.31.20.128/25\n")
   );
 });
 
@@ -207,6 +209,104 @@ test("switching IPv4 back to default removes the form-owned IPv4 keys only", asy
   ]) {
     assert.ok(result.yaml.includes(key), `expected ${key} to survive`);
   }
+});
+
+const BRIDGE_MGMT = `name: lab
+mgmt:
+  network: lab-mgmt
+  ipv4-subnet: auto
+  mtu: 9000
+  bridge: br-lab # custom bridge
+  external-access: false
+  tailscale:
+    auth-mode: sso
+${TOPOLOGY}`;
+
+test("switching a bridge network to macvlan drops the bridge-only keys", async () => {
+  const result = await roundTrip(BRIDGE_MGMT, {
+    mgmt: { driver: "macvlan", macvlanParent: "eth1", ipv4Type: "default" }
+  });
+  assert.equal(
+    result.yaml,
+    `name: lab
+mgmt:
+  network: lab-mgmt
+  tailscale:
+    auth-mode: sso
+  driver: macvlan
+  macvlan-parent: eth1
+${TOPOLOGY}`
+  );
+});
+
+test("switching a macvlan network to bridge drops every macvlan key", async () => {
+  const result = await roundTrip(FULL_MGMT, { mgmt: { driver: "bridge" } });
+  for (const key of ["driver:", "macvlan-parent", "macvlan-mode", "macvlan-aux"]) {
+    assert.ok(!result.yaml.includes(key), `expected ${key} to be removed`);
+  }
+  assert.equal(
+    result.yaml,
+    FULL_MGMT.replace(
+      "  driver: macvlan\n  macvlan-parent: eth1\n  macvlan-mode: bridge\n  macvlan-aux: false\n",
+      ""
+    )
+  );
+});
+
+test("macvlan and allocation settings write only what differs from the defaults", async () => {
+  const yaml = `name: lab\n${TOPOLOGY}`;
+  const defaults = await roundTrip(yaml, {
+    mgmt: { driver: "macvlan", macvlanParent: "eth1" }
+  });
+  assert.equal(
+    defaults.yaml,
+    `name: lab\nmgmt:\n  driver: macvlan\n  macvlan-parent: eth1\n${TOPOLOGY}`
+  );
+
+  const custom = await roundTrip(yaml, {
+    mgmt: {
+      driver: "macvlan",
+      macvlanParent: "eth1",
+      macvlanMode: "private",
+      macvlanAux: false,
+      ipv6Type: "custom",
+      ipv6Subnet: "3fff:192:0:2::/64",
+      ipv6Range: "3fff:192:0:2::8000/65",
+      ipamProvider: "runtime",
+      ipamDad: false,
+      skipWhenUnused: true
+    }
+  });
+  assert.equal(
+    custom.yaml,
+    `name: lab
+mgmt:
+  driver: macvlan
+  macvlan-parent: eth1
+  macvlan-mode: private
+  macvlan-aux: false
+  ipv6-subnet: 3fff:192:0:2::/64
+  ipv6-range: 3fff:192:0:2::8000/65
+  ipam:
+    provider: runtime
+    dad: false
+  skip-when-unused: true
+${TOPOLOGY}`
+  );
+});
+
+test("ipam keys change one by one", async () => {
+  const result = await roundTrip(FULL_MGMT, { mgmt: { ipamProvider: "containerlab" } });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 0, changes: { ipam: { provider: null } } }]
+  });
+  assert.equal(result.yaml, FULL_MGMT.replace("    provider: runtime\n", ""));
+
+  const off = await roundTrip(FULL_MGMT, {
+    mgmt: { ipamProvider: "containerlab", skipWhenUnused: false }
+  });
+  assert.ok(off.yaml.includes("  ipam:\n    dad: true\n"));
+  assert.ok(!off.yaml.includes("skip-when-unused"));
 });
 
 test("driver options are merged per key", async () => {
@@ -462,4 +562,53 @@ test("several networks need unique names and bridges", () => {
     validateMgmtNetworks({ defaultMgmtNet: "", networks: [createMgmtNetworkForm("")] }),
     [{}]
   );
+});
+
+test("macvlan networks need a valid, unshared parent and no auto subnet", () => {
+  const macvlan = (name: string, parent: string) => ({
+    ...createMgmtNetworkForm(name),
+    driver: "macvlan" as const,
+    macvlanParent: parent
+  });
+  const form: MgmtFormState = {
+    defaultMgmtNet: "",
+    networks: [
+      { ...macvlan("a", ""), ipv4Type: "auto" },
+      macvlan("b", "eth1/2"),
+      macvlan("c", "eth1"),
+      macvlan("d", "eth1"),
+      {
+        ...macvlan("e", "eth2"),
+        macvlanMode: "vepa",
+        driverOptions: [
+          { key: "parent", value: "eth2" },
+          { key: "macvlan_mode", value: "bridge" }
+        ]
+      },
+      // A bridge network keeps its bridge name; it is not compared with macvlan parents.
+      { ...createMgmtNetworkForm("f"), bridge: "eth1" }
+    ]
+  };
+  assert.deepEqual(validateMgmtNetworks(form), [
+    {
+      macvlanParent: "Required for macvlan networks",
+      ipv4Type: "Macvlan networks cannot auto-assign a subnet"
+    },
+    { macvlanParent: "Not a valid interface name" },
+    { macvlanParent: "Another management network uses this parent interface" },
+    { macvlanParent: "Another management network uses this parent interface" },
+    { driverOptions: "macvlan_mode conflicts with the macvlan settings above" },
+    {}
+  ]);
+});
+
+test("a hidden bridge name on a macvlan network does not clash", () => {
+  const form: MgmtFormState = {
+    defaultMgmtNet: "",
+    networks: [
+      { ...createMgmtNetworkForm("a"), bridge: "br0" },
+      { ...createMgmtNetworkForm("b"), driver: "macvlan", macvlanParent: "eth1", bridge: "br0" }
+    ]
+  };
+  assert.deepEqual(validateMgmtNetworks(form), [{}, {}]);
 });
