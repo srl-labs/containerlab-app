@@ -34,6 +34,23 @@ export interface MgmtSettingsState {
   driverOptions: DriverOption[];
 }
 
+/** One management network in the form. */
+export interface MgmtNetworkFormState extends MgmtSettingsState {
+  /** Stable key while networks are added, removed and reordered */
+  id: string;
+  /** Index of the network in the file it was loaded from; absent for a new network */
+  source?: number;
+  /** Driver from the file (not editable here yet) */
+  driver?: string;
+}
+
+/** The Management tab: networks in order (first = default) and the node default. */
+export interface MgmtFormState {
+  networks: MgmtNetworkFormState[];
+  /** `topology.defaults.mgmt-net`; empty when nodes pick their own */
+  defaultMgmtNet: string;
+}
+
 /** Grouped setters for the Basic tab (matches useLabSettingsState().setBasic) */
 export interface BasicSettingsSetters {
   setLabName: (v: string) => void;

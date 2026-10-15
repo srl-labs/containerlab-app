@@ -19,6 +19,10 @@ import {
   type NodeStyle
 } from "../components/canvas/nodeBox";
 import { DEFAULT_LINK_STYLE, type LinkStyle } from "../components/canvas/elbowRouting";
+import {
+  DEFAULT_MGMT_NETWORK_BADGE,
+  type MgmtNetworkBadgeMode
+} from "../core/utilities/mgmtNetworks";
 
 import { useAnnotationUIStore } from "./annotationUIStore";
 import { isRecord } from "../core/utilities/typeHelpers";
@@ -79,6 +83,7 @@ export interface TopoViewerState {
   nodeStyle: NodeStyle;
   nodeBoxSpacing: NodeBoxSpacing;
   linkStyle: LinkStyle;
+  mgmtNetworkBadge: MgmtNetworkBadgeMode;
   telemetryNodeSizePx: number;
   telemetryInterfaceSizePercent: number;
   showRateLabels: boolean;
@@ -131,6 +136,7 @@ export interface TopoViewerActions {
   setNodeStyle: (style: NodeStyle) => void;
   setNodeBoxSpacing: (spacing: NodeBoxSpacing) => void;
   setLinkStyle: (style: LinkStyle) => void;
+  setMgmtNetworkBadge: (mode: MgmtNetworkBadgeMode) => void;
   setTelemetryNodeSizePx: (value: number) => void;
   setTelemetryInterfaceSizePercent: (value: number) => void;
   setShowRateLabels: (enabled: boolean) => void;
@@ -205,6 +211,7 @@ const initialState: TopoViewerState = {
   nodeStyle: DEFAULT_NODE_STYLE,
   nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
   linkStyle: DEFAULT_LINK_STYLE,
+  mgmtNetworkBadge: DEFAULT_MGMT_NETWORK_BADGE,
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,
@@ -460,6 +467,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 
   setLinkStyle: (linkStyle) => {
     set({ linkStyle });
+  },
+
+  setMgmtNetworkBadge: (mgmtNetworkBadge) => {
+    set({ mgmtNetworkBadge });
   },
 
   setTelemetryNodeSizePx: (value) => {

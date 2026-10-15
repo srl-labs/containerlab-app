@@ -7,10 +7,17 @@ import type { FileSystemAdapter } from "../../core/io/types";
 import type { LabSettings, LabSettingsUpdate } from "../../core/types/labSettings";
 import type {
   BasicSettingsState,
+  MgmtFormState,
   MgmtSettingsState
 } from "../../components/panels/lab-settings/types";
 
-import { buildInitialBasic, buildInitialMgmt, buildLabSettingsUpdate } from "./labSettingsForm";
+import {
+  buildInitialBasic,
+  buildInitialMgmt,
+  buildLabSettingsUpdate,
+  createMgmtNetworkForm,
+  validateMgmtNetworks
+} from "./labSettingsForm";
 
 class MemoryFs implements FileSystemAdapter {
   readonly files = new Map<string, string>();
@@ -58,7 +65,10 @@ const TOPOLOGY = `topology:
 
 interface FormEdits {
   basic?: Partial<BasicSettingsState>;
+  /** Edits of the first management network */
   mgmt?: Partial<MgmtSettingsState>;
+  /** Structural edits of the network list, applied after `mgmt` */
+  networks?: (form: MgmtFormState) => MgmtFormState;
 }
 
 interface RoundTrip {
@@ -80,7 +90,14 @@ async function roundTrip(yaml: string, edits: FormEdits = {}): Promise<RoundTrip
   const snapshot = await host.getSnapshot();
   const labSettings = snapshot.labSettings;
   const basic = { ...buildInitialBasic(labSettings), ...edits.basic };
-  const mgmt = { ...buildInitialMgmt(labSettings), ...edits.mgmt };
+  const initialMgmt = buildInitialMgmt(labSettings);
+  const edited: MgmtFormState = {
+    ...initialMgmt,
+    networks: initialMgmt.networks.map((network, index) =>
+      index === 0 ? { ...network, ...edits.mgmt } : network
+    )
+  };
+  const mgmt = edits.networks ? edits.networks(edited) : edited;
   const update = buildLabSettingsUpdate(labSettings, basic, mgmt);
   if (update) {
     const response = await host.applyCommand(
@@ -126,17 +143,6 @@ mgmt:
     foo: bar
 ${TOPOLOGY}`;
 
-const MULTI_MGMT = `name: multi
-mgmt:
-  - network: net1
-    ipv4-subnet: 172.31.10.0/24
-  # second network
-  - network: net2
-    driver: macvlan
-    macvlan-parent: eth1
-    ipv4-subnet: 172.31.20.0/24
-${TOPOLOGY}`;
-
 test("apply without changes leaves the file byte-identical", async () => {
   const result = await roundTrip(FULL_MGMT);
   assert.equal(result.update, null);
@@ -156,40 +162,9 @@ test("changing only the lab name keeps an explicit default prefix", async () => 
   assert.equal(result.yaml, `name: renamed\nprefix: clab\n${TOPOLOGY}`);
 });
 
-test("a list of management networks is preserved and never sent by the form", async () => {
-  const result = await roundTrip(MULTI_MGMT, {
-    basic: { labName: "renamed" },
-    mgmt: { networkName: "other", mtu: "9000" }
-  });
-  assert.equal(result.labSettings?.mgmt, undefined);
-  assert.deepEqual(
-    result.labSettings?.mgmtNetworks?.map((network) => network.network),
-    ["net1", "net2"]
-  );
-  assert.deepEqual(result.update, { name: "renamed" });
-  assert.equal(result.yaml, MULTI_MGMT.replace("name: multi", "name: renamed"));
-});
-
-test("the host refuses to rewrite a list of management networks", async () => {
-  const fs = new MemoryFs();
-  await fs.writeFile(YAML_PATH, MULTI_MGMT);
-  const host = new TopologyHostCore({
-    fs,
-    yamlFilePath: YAML_PATH,
-    mode: "edit",
-    deploymentState: "undeployed"
-  });
-  const { revision } = await host.getSnapshot();
-  await host.applyCommand(
-    { command: "setLabSettings", payload: { mgmt: { network: "x", mtu: null } } },
-    revision
-  );
-  assert.equal(mgmtBlock(await fs.readFile(YAML_PATH)), mgmtBlock(MULTI_MGMT));
-});
-
 test("editing one field only touches that key", async () => {
   const result = await roundTrip(FULL_MGMT, { mgmt: { ipv4Gateway: "172.31.20.254" } });
-  assert.deepEqual(result.update, { mgmt: { "ipv4-gw": "172.31.20.254" } });
+  assert.deepEqual(result.update, { mgmt: [{ source: 0, changes: { "ipv4-gw": "172.31.20.254" } }] });
   assert.equal(
     result.yaml,
     FULL_MGMT.replace("ipv4-gw: 172.31.20.1", "ipv4-gw: 172.31.20.254")
@@ -198,7 +173,7 @@ test("editing one field only touches that key", async () => {
 
 test("a new field is appended without disturbing existing keys", async () => {
   const result = await roundTrip(FULL_MGMT, { mgmt: { mtu: "9000" } });
-  assert.deepEqual(result.update, { mgmt: { mtu: 9000 } });
+  assert.deepEqual(result.update, { mgmt: [{ source: 0, changes: { mtu: 9000 } }] });
   assert.equal(
     result.yaml,
     FULL_MGMT.replace("    foo: bar\n", "    foo: bar\n  mtu: 9000\n")
@@ -207,13 +182,15 @@ test("a new field is appended without disturbing existing keys", async () => {
 
 test("clearing a field removes only that key", async () => {
   const result = await roundTrip(FULL_MGMT, { mgmt: { networkName: "" } });
-  assert.deepEqual(result.update, { mgmt: { network: null } });
+  assert.deepEqual(result.update, { mgmt: [{ source: 0, changes: { network: null } }] });
   assert.equal(result.yaml, FULL_MGMT.replace("  network: lab-mgmt\n", ""));
 });
 
 test("switching IPv4 back to default removes the form-owned IPv4 keys only", async () => {
   const result = await roundTrip(FULL_MGMT, { mgmt: { ipv4Type: "default" } });
-  assert.deepEqual(result.update, { mgmt: { "ipv4-subnet": null, "ipv4-gw": null } });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 0, changes: { "ipv4-subnet": null, "ipv4-gw": null } }]
+  });
   assert.equal(
     result.yaml,
     FULL_MGMT.replace("  ipv4-subnet: 172.31.20.0/24 # routed\n  ipv4-gw: 172.31.20.1\n", "")
@@ -241,7 +218,9 @@ test("driver options are merged per key", async () => {
       ]
     }
   });
-  assert.deepEqual(result.update, { mgmt: { "driver-opts": { extra: "1", foo: null } } });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 0, changes: { "driver-opts": { extra: "1", foo: null } } }]
+  });
   assert.equal(result.yaml, FULL_MGMT.replace("    foo: bar\n", "    extra: \"1\"\n"));
 });
 
@@ -277,4 +256,210 @@ test("prefix changes only touch the prefix key", async () => {
   const reset = await roundTrip(FULL_MGMT, { basic: { prefixType: "default" } });
   assert.deepEqual(reset.update, { prefix: null });
   assert.equal(reset.yaml, FULL_MGMT.replace("prefix: acme\n", ""));
+});
+
+const MULTI_TOPOLOGY = `topology:
+  defaults:
+    mgmt-net: net1
+  kinds:
+    nokia_srlinux:
+      mgmt-net: net2 # srl on net2
+  groups:
+    edge:
+      mgmt-net: net1
+  nodes:
+    r1:
+      kind: linux
+    r2:
+      kind: nokia_srlinux
+    r3:
+      kind: linux
+      mgmt-net: net2
+  links: []
+`;
+
+const MULTI = `name: multi
+mgmt:
+  - network: net1
+    ipv4-subnet: 172.31.10.0/24
+  # second network
+  - network: net2
+    driver: macvlan
+    macvlan-parent: eth1 # host uplink
+    ipv4-subnet: 172.31.20.0/24
+${MULTI_TOPOLOGY}`;
+
+test("a list of management networks is read in order", async () => {
+  const result = await roundTrip(MULTI);
+  assert.equal(result.update, null);
+  assert.equal(result.yaml, MULTI);
+  assert.equal(result.labSettings?.mgmt, undefined);
+  assert.deepEqual(
+    result.labSettings?.mgmtNetworks?.map((network) => network.network),
+    ["net1", "net2"]
+  );
+  assert.equal(result.labSettings?.defaultMgmtNet, "net1");
+});
+
+test("editing the second network only touches its keys", async () => {
+  const result = await roundTrip(MULTI, {
+    networks: (form) => ({
+      ...form,
+      networks: form.networks.map((network, index) =>
+        index === 1 ? { ...network, ipv4Subnet: "172.31.30.0/24" } : network
+      )
+    })
+  });
+  assert.deepEqual(result.update, {
+    mgmt: [
+      { source: 0, changes: {} },
+      { source: 1, changes: { "ipv4-subnet": "172.31.30.0/24" } }
+    ]
+  });
+  assert.equal(result.yaml, MULTI.replace("172.31.20.0/24", "172.31.30.0/24"));
+});
+
+test("adding a network turns a single mgmt map into a list and keeps its keys", async () => {
+  const result = await roundTrip(FULL_MGMT, {
+    networks: (form) => ({
+      ...form,
+      networks: [...form.networks, createMgmtNetworkForm("net2")]
+    })
+  });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 0, changes: {} }, { changes: { network: "net2" } }]
+  });
+  const [header, comment, first, ...rest] = mgmtBlock(FULL_MGMT).split("\n");
+  // The comment stays on top and the first key gets the list marker.
+  const expected = [
+    header,
+    comment,
+    first.replace("  network:", "  - network:"),
+    ...rest.map((line) => `  ${line}`),
+    "  - network: net2"
+  ].join("\n");
+  assert.equal(mgmtBlock(result.yaml), expected);
+});
+
+test("two new networks in a lab without mgmt are written as a list", async () => {
+  const result = await roundTrip(`name: lab\n${TOPOLOGY}`, {
+    networks: (form) => ({
+      ...form,
+      networks: [{ ...form.networks[0], networkName: "a" }, createMgmtNetworkForm("b")]
+    })
+  });
+  assert.equal(result.yaml, `name: lab\nmgmt:\n  - network: a\n  - network: b\n${TOPOLOGY}`);
+});
+
+test("reordering networks moves each entry with its keys and comments", async () => {
+  const result = await roundTrip(MULTI, {
+    networks: (form) => ({ ...form, networks: [form.networks[1], form.networks[0]] })
+  });
+  assert.equal(
+    mgmtBlock(result.yaml),
+    `mgmt:
+  # second network
+  - network: net2
+    driver: macvlan
+    macvlan-parent: eth1 # host uplink
+    ipv4-subnet: 172.31.20.0/24
+  - network: net1
+    ipv4-subnet: 172.31.10.0/24`
+  );
+});
+
+test("removing a network keeps the list form and drops a default that pointed at it", async () => {
+  const result = await roundTrip(MULTI, {
+    networks: (form) => ({ defaultMgmtNet: "", networks: [form.networks[1]] })
+  });
+  assert.deepEqual(result.update, {
+    mgmt: [{ source: 1, changes: {} }],
+    defaultMgmtNet: null
+  });
+  assert.ok(mgmtBlock(result.yaml).startsWith("mgmt:\n  # second network\n  - network: net2\n"));
+  assert.ok(!result.yaml.includes("defaults:"));
+});
+
+test("renaming a network renames the mgmt-net references to it", async () => {
+  const result = await roundTrip(MULTI, {
+    networks: (form) => ({
+      defaultMgmtNet: "core",
+      networks: [{ ...form.networks[0], networkName: "core" }, form.networks[1]]
+    })
+  });
+  assert.deepEqual(result.update, {
+    mgmt: [
+      { source: 0, changes: { network: "core" } },
+      { source: 1, changes: {} }
+    ],
+    mgmtNetRenames: { net1: "core" }
+  });
+  assert.equal(result.yaml, MULTI.replaceAll("net1", "core"));
+});
+
+test("swapping two network names swaps the references", async () => {
+  const result = await roundTrip(MULTI, {
+    networks: (form) => ({
+      defaultMgmtNet: "net2",
+      networks: [
+        { ...form.networks[0], networkName: "net2" },
+        { ...form.networks[1], networkName: "net1" }
+      ]
+    })
+  });
+  assert.deepEqual(result.update?.mgmtNetRenames, { net1: "net2", net2: "net1" });
+  assert.equal(result.update?.defaultMgmtNet, undefined);
+  assert.equal(
+    result.yaml,
+    MULTI.replaceAll("net1", "@")
+      .replaceAll("net2", "net1")
+      .replaceAll("@", "net2")
+      .replace("# srl on net1", "# srl on net2")
+  );
+});
+
+test("the default for nodes is written to topology.defaults", async () => {
+  const yaml = `name: lab
+mgmt:
+  - network: a
+  - network: b
+${TOPOLOGY}`;
+  const set = await roundTrip(yaml, {
+    networks: (form) => ({ ...form, defaultMgmtNet: "b" })
+  });
+  assert.deepEqual(set.update, { defaultMgmtNet: "b" });
+  assert.ok(set.yaml.includes("topology:\n  defaults:\n    mgmt-net: b\n  nodes:\n"));
+
+  const cleared = await roundTrip(MULTI, {
+    networks: (form) => ({ ...form, defaultMgmtNet: "" })
+  });
+  assert.deepEqual(cleared.update, { defaultMgmtNet: null });
+  assert.ok(!cleared.yaml.includes("defaults:"));
+  assert.ok(cleared.yaml.includes("nokia_srlinux:\n      mgmt-net: net2 # srl on net2"));
+});
+
+test("several networks need unique names and bridges", () => {
+  const form: MgmtFormState = {
+    defaultMgmtNet: "",
+    networks: [
+      { ...createMgmtNetworkForm("a"), bridge: "br0" },
+      { ...createMgmtNetworkForm(""), bridge: "br0" },
+      createMgmtNetworkForm("a")
+    ]
+  };
+  assert.deepEqual(validateMgmtNetworks(form), [
+    {
+      networkName: "Another management network uses this name",
+      bridge: "Another management network uses this bridge"
+    },
+    {
+      networkName: "Required when the lab has several management networks",
+      bridge: "Another management network uses this bridge"
+    },
+    { networkName: "Another management network uses this name" }
+  ]);
+  assert.deepEqual(
+    validateMgmtNetworks({ defaultMgmtNet: "", networks: [createMgmtNetworkForm("")] }),
+    [{}]
+  );
 });

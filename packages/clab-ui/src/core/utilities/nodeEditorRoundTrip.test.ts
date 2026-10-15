@@ -493,3 +493,37 @@ test("new nodes from templates still leave out false and 0 defaults", () => {
   assert.equal(yaml["startup-delay"], null);
   assert.deepEqual(yaml.healthcheck, { test: ["CMD", "true"] });
 });
+
+const MULTI_MGMT_TOPOLOGY = fixture(`name: multi
+mgmt:
+  - network: oob
+  - network: lab
+topology:
+  kinds:
+    linux:
+      mgmt-net: lab
+  nodes:
+    r1:
+      kind: linux
+    r2:
+      kind: linux
+      mgmt-net: oob # pinned
+  links: []
+`);
+
+test("mgmt-net loads the inherited value and its level", () => {
+  const r1 = openEditor(MULTI_MGMT_TOPOLOGY, "r1");
+  assert.equal(r1.mgmtNet, "lab");
+  assert.equal(r1.inheritedFrom?.["mgmt-net"], "kind");
+  assert.equal(openEditor(MULTI_MGMT_TOPOLOGY, "r2").mgmtNet, "oob");
+});
+
+test("mgmt-net is written on the node only when it differs from the inherited value", () => {
+  const picked = saveEdit(MULTI_MGMT_TOPOLOGY, "r1", (data) => ({ ...data, mgmtNet: "oob" }));
+  assert.equal(nodeOf(picked, "r1")["mgmt-net"], "oob");
+
+  const back = saveEdit(MULTI_MGMT_TOPOLOGY, "r2", (data) => ({ ...data, mgmtNet: "lab" }));
+  assert.equal(nodeOf(back, "r2")["mgmt-net"], undefined);
+
+  assert.equal(saveEdit(MULTI_MGMT_TOPOLOGY, "r2"), MULTI_MGMT_TOPOLOGY);
+});

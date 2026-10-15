@@ -11,7 +11,18 @@ import {
   PanelSection
 } from "../../ui/form";
 import { useGraphStore } from "../../../stores/graphStore";
+import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { CONTAINER_NETWORK_MODE_PREFIX } from "../../../core/utilities/nodeEditorConversions";
+import { getMgmtNetworkName, getMgmtNetworks } from "../../../core/types/labSettings";
+import type { MgmtSettings } from "../../../core/types/labSettings";
+import {
+  MGMT_NET_KEY,
+  getMgmtNetworkColor,
+  getMgmtNetworkSubnet,
+  isAddressInSubnet,
+  isMgmtNetExempt,
+  resolveNodeMgmtNetwork
+} from "../../../core/utilities/mgmtNetworks";
 
 import type { TabProps } from "./types";
 import { withCurrentOption } from "./selectOptions";
@@ -100,8 +111,114 @@ const NetworkModeFields: React.FC<TabProps> = ({ data, onChange }) => {
   );
 };
 
+const INHERITANCE_LABELS: Record<string, string> = {
+  defaults: "topology defaults",
+  kind: "kind settings",
+  group: "group settings"
+};
+
+function describeInheritance(data: TabProps["data"], inheritedProps: string[]): string | undefined {
+  if (!inheritedProps.includes(MGMT_NET_KEY)) return undefined;
+  const level = data.inheritedFrom?.[MGMT_NET_KEY];
+  return `Inherited from ${level !== undefined ? (INHERITANCE_LABELS[level] ?? level) : "defaults"}`;
+}
+
+function useMgmtNetworks(): MgmtSettings[] {
+  const labSettings = useTopoViewerStore((state) => state.labSettings);
+  return useMemo(() => getMgmtNetworks(labSettings), [labSettings]);
+}
+
+function DotIcon({ color }: { color: string }) {
+  return (
+    <Box
+      component="span"
+      sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: color, display: "inline-block" }}
+    />
+  );
+}
+
+/** Problem or note shown under the management network select */
+function describeMgmtNet(
+  data: TabProps["data"],
+  networks: MgmtSettings[],
+  inheritedProps: string[]
+): { text?: string; error: boolean } {
+  if (isMgmtNetExempt(undefined, data.networkMode)) {
+    return { text: "Ignored: the node uses a network mode", error: false };
+  }
+  const resolved = resolveNodeMgmtNetwork(data.mgmtNet, networks, { kind: data.kind });
+  if (resolved.status === "exempt") {
+    return { text: `Not used by ${data.kind ?? ""} nodes`, error: false };
+  }
+  if (resolved.status === "missing") {
+    return { text: "Required: this lab has several management networks", error: true };
+  }
+  if (resolved.status === "unknown") {
+    return { text: `${resolved.name} is not a management network of this lab`, error: true };
+  }
+  if (networks.length > 1 && data.runtime === "podman") {
+    return { text: "Several management networks need the Docker runtime", error: true };
+  }
+  return { text: describeInheritance(data, inheritedProps), error: false };
+}
+
+/** `mgmt-net` picker; shown when the lab has several networks or the node sets one */
+const MgmtNetworkField: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
+  const networks = useMgmtNetworks();
+  const value = data.mgmtNet ?? "";
+  const options = useMemo(() => {
+    const names = networks.length > 0 ? networks.map(getMgmtNetworkName) : [getMgmtNetworkName({})];
+    return withCurrentOption(
+      [
+        { value: "", label: "Not set" },
+        ...names.map((name, index) => ({
+          value: name,
+          label: index === 0 ? `${name} (default)` : name,
+          icon: <DotIcon color={getMgmtNetworkColor(index)} />
+        }))
+      ],
+      value
+    );
+  }, [networks, value]);
+  if (data.isCustomTemplate === true || (networks.length < 2 && value === "")) return null;
+  const note = describeMgmtNet(data, networks, inheritedProps);
+
+  return (
+    <SelectField
+      id="node-mgmt-net"
+      label="Management Network"
+      value={value}
+      onChange={(next) => onChange({ mgmtNet: next })}
+      options={options}
+      disabled={isMgmtNetExempt(undefined, data.networkMode)}
+      error={note.error}
+      helperText={note.text}
+    />
+  );
+};
+
+/** Warning when a static address lies outside the subnet of the node's network */
+function useAddressWarning(
+  data: TabProps["data"],
+  address: string | undefined,
+  family: "ipv4" | "ipv6"
+): string | undefined {
+  const networks = useMgmtNetworks();
+  if (address === undefined || address.trim() === "") return undefined;
+  const resolved = resolveNodeMgmtNetwork(data.mgmtNet, networks, {
+    kind: data.kind,
+    networkMode: data.networkMode
+  });
+  if (resolved.status !== "ok") return undefined;
+  const subnet = getMgmtNetworkSubnet(networks[resolved.index], resolved.index === 0, family);
+  if (subnet === undefined || isAddressInSubnet(address, subnet) !== false) return undefined;
+  return `Outside ${resolved.name} (${subnet})`;
+}
+
 export const NetworkTab: React.FC<TabProps> = (props) => {
   const { data, onChange } = props;
+  const ipv4Warning = useAddressWarning(data, data.mgmtIpv4, "ipv4");
+  const ipv6Warning = useAddressWarning(data, data.mgmtIpv6, "ipv6");
 
   const handleAddPort = () => {
     onChange({ ports: [...(data.ports ?? []), ""] });
@@ -126,12 +243,15 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Management Network">
+        <MgmtNetworkField {...props} />
         <InputField
           id="node-mgmt-ipv4"
           label="Management IPv4"
           value={data.mgmtIpv4 ?? ""}
           onChange={(value) => onChange({ mgmtIpv4: value })}
           placeholder="e.g., 172.20.20.100"
+          error={ipv4Warning !== undefined}
+          helperText={ipv4Warning}
         />
         <InputField
           id="node-mgmt-ipv6"
@@ -139,6 +259,8 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
           value={data.mgmtIpv6 ?? ""}
           onChange={(value) => onChange({ mgmtIpv6: value })}
           placeholder="e.g., 2001:db8::100"
+          error={ipv6Warning !== undefined}
+          helperText={ipv6Warning}
         />
         <NetworkModeFields {...props} />
       </PanelSection>

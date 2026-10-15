@@ -156,6 +156,10 @@ export interface NodeEditorData extends SharedTemplateFields {
   labelBackgroundColor?: string;
   /** Box look in the boxed node style. */
   box?: NodeBoxAppearance;
+  /** Management network (`mgmt-net`); the effective value, which may be inherited */
+  mgmtNet?: string;
+  /** Level each inherited key comes from (defaults, kind or group) */
+  inheritedFrom?: Record<string, string>;
   // Custom node settings
   customName?: string;
   baseName?: string;

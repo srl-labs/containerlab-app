@@ -6,6 +6,11 @@
 import type { ClabTopology, ClabNode } from "../types/topology";
 import { isRecord } from "../utilities/typeHelpers";
 
+/** Node data key with the level each inherited value comes from. */
+export const INHERITED_FROM_KEY = "inheritedFrom";
+
+export type InheritanceLevel = "defaults" | "kind" | "group";
+
 /**
  * Gets a section from the topology configuration.
  */
@@ -60,4 +65,29 @@ export function resolveNodeConfig(parsed: ClabTopology, node: ClabNode): ClabNod
     kind: kindName,
     labels: mergeNodeLabels(defaults.labels, kindCfg.labels, groupCfg.labels, node.labels)
   };
+}
+
+/**
+ * For every key the node inherits, the level it comes from. Follows the same
+ * precedence as resolveNodeConfig: group, then kind, then defaults.
+ */
+export function resolveInheritedFrom(
+  parsed: ClabTopology,
+  node: ClabNode
+): Record<string, InheritanceLevel> {
+  const { defaults = {}, groups, kinds } = parsed.topology ?? {};
+  const groupCfg = getSection(groups, node.group);
+  const kindCfg = getSection(kinds, resolveKindName(node, groupCfg, defaults));
+  const levels: Array<[InheritanceLevel, ClabNode]> = [
+    ["group", groupCfg],
+    ["kind", kindCfg],
+    ["defaults", defaults]
+  ];
+  const result: Record<string, InheritanceLevel> = {};
+  for (const [level, section] of levels) {
+    for (const key of Object.keys(section)) {
+      if (!(key in node) && !(key in result)) result[key] = level;
+    }
+  }
+  return result;
 }

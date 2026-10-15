@@ -10,7 +10,7 @@ import type {
 } from "../types/topology";
 import { DEFAULT_INTERFACE_PATTERNS } from "../constants/interfacePatterns";
 
-import { resolveNodeConfig } from "./NodeConfigResolver";
+import { INHERITED_FROM_KEY, resolveInheritedFrom, resolveNodeConfig } from "./NodeConfigResolver";
 import { NODE_KIND_BRIDGE, NODE_KIND_OVS_BRIDGE } from "./LinkNormalizer";
 import { isDistributedSrosNode, findDistributedSrosContainer } from "./DistributedSrosMapper";
 import { extractIconVisuals, sanitizeLabels, getNodeLatLng, computeLongname } from "./utils";
@@ -163,6 +163,7 @@ interface NodeExtraDataResult {
 function createNodeExtraData(params: {
   mergedNode: ClabNode;
   inheritedProps: string[];
+  inheritedFrom: Record<string, string>;
   nodeName: string;
   labName: string;
   nodeIndex: number;
@@ -176,6 +177,7 @@ function createNodeExtraData(params: {
   const {
     mergedNode,
     inheritedProps,
+    inheritedFrom,
     nodeName,
     labName,
     nodeIndex,
@@ -198,6 +200,7 @@ function createNodeExtraData(params: {
   const extraData: Record<string, unknown> = {
     ...mergedNode,
     inherited: inheritedProps,
+    [INHERITED_FROM_KEY]: inheritedFrom,
     clabServerUsername: "asad",
     fqdn: `${nodeName}.${labName}.io`,
     group: mergedNode.group ?? "",
@@ -360,6 +363,7 @@ function buildNodeElement(params: {
   const { extraData, migrationPattern } = createNodeExtraData({
     mergedNode,
     inheritedProps,
+    inheritedFrom: resolveInheritedFrom(parsed, nodeObj),
     nodeName,
     labName,
     nodeIndex,

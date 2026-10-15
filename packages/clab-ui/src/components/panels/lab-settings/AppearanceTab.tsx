@@ -10,6 +10,8 @@ import Typography from "@mui/material/Typography";
 
 import { parseNodeBoxSpacing, parseNodeStyle } from "../../canvas/nodeBox";
 import { parseLinkStyle } from "../../canvas/elbowRouting";
+import { getMgmtNetworks } from "../../../core/types/labSettings";
+import { parseMgmtNetworkBadgeMode } from "../../../core/utilities/mgmtNetworks";
 import { SettingsField } from "../../../settings/SettingsField";
 import { useEdges } from "../../../stores/graphStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
@@ -84,6 +86,10 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const nodeStyle = useTopoViewerStore((state) => state.nodeStyle);
   const nodeBoxSpacing = useTopoViewerStore((state) => state.nodeBoxSpacing);
   const linkStyle = useTopoViewerStore((state) => state.linkStyle);
+  const mgmtNetworkBadge = useTopoViewerStore((state) => state.mgmtNetworkBadge);
+  const hasSeveralMgmtNetworks = useTopoViewerStore(
+    (state) => getMgmtNetworks(state.labSettings).length > 1
+  );
   const telemetryNodeSizePx = useTopoViewerStore((state) => state.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.telemetryInterfaceSizePercent
@@ -99,6 +105,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const setNodeStyle = useTopoViewerStore((state) => state.setNodeStyle);
   const setNodeBoxSpacing = useTopoViewerStore((state) => state.setNodeBoxSpacing);
   const setLinkStyle = useTopoViewerStore((state) => state.setLinkStyle);
+  const setMgmtNetworkBadge = useTopoViewerStore((state) => state.setMgmtNetworkBadge);
   const setTelemetryNodeSizePx = useTopoViewerStore((state) => state.setTelemetryNodeSizePx);
   const setTelemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.setTelemetryInterfaceSizePercent
@@ -228,6 +235,28 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           <MenuItem value="elbow">Elbow</MenuItem>
         </TextField>
       </SettingsField>
+      {hasSeveralMgmtNetworks ? (
+        <SettingsField
+          title="Management network badge"
+          description="Colored dot on each node for its management network. Nodes without a valid network are always marked."
+        >
+          <TextField
+            slotProps={{ select: { inputProps: { "aria-label": "Management network badge" } } }}
+            select
+            size="small"
+            value={mgmtNetworkBadge}
+            disabled={isReadOnly}
+            onChange={(e) => {
+              if (isReadOnly) return;
+              setMgmtNetworkBadge(parseMgmtNetworkBadgeMode(e.target.value) ?? "hover");
+            }}
+            data-testid="lab-settings-mgmt-network-badge"
+          >
+            <MenuItem value="hover">On hover</MenuItem>
+            <MenuItem value="always">Always</MenuItem>
+          </TextField>
+        </SettingsField>
+      ) : null}
       <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
         <TextField
           id="telemetry-node-size"

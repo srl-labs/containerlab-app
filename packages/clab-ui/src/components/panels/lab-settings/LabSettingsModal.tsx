@@ -173,6 +173,7 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
           onClose={onClose}
           saveRef={saveRef}
           activeTab={activeSection}
+          onInvalid={setActiveSection}
           gridLineWidth={gridLineWidth}
           onGridLineWidthChange={onGridLineWidthChange}
           gridStyle={gridStyle}

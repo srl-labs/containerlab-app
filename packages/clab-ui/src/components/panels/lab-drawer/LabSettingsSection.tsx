@@ -20,6 +20,8 @@ export interface LabSettingsSectionProps extends GridSettingsControlsProps {
   onClose: () => void;
   saveRef?: React.RefObject<(() => Promise<void>) | null>;
   activeTab: "basic" | "mgmt" | "appearance" | "grid";
+  /** Called instead of saving when a section has errors, with the section to show */
+  onInvalid?: (tab: "mgmt") => void;
 }
 
 export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
@@ -29,6 +31,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   onClose,
   saveRef,
   activeTab,
+  onInvalid,
   gridLineWidth,
   onGridLineWidthChange,
   gridStyle,
@@ -59,6 +62,10 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   }, []);
 
   const handleSave = async () => {
+    if (!areTopologySettingsReadOnly && !state.isValid) {
+      onInvalid?.("mgmt");
+      return;
+    }
     // Save appearance before lab settings: every save pushes a host snapshot into the
     // store, and appearance in that snapshot comes from the annotations file.
     const {
@@ -67,6 +74,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeStyle,
       nodeBoxSpacing,
       linkStyle,
+      mgmtNetworkBadge,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent
     } = useTopoViewerStore.getState();
@@ -87,6 +95,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeStyle,
       nodeBoxSpacing,
       linkStyle,
+      mgmtNetworkBadge,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,
@@ -118,7 +127,8 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
         setMgmt={state.setMgmt}
         driverOpts={state.driverOpts}
         isViewMode={areTopologySettingsReadOnly}
-        networks={labSettings?.mgmtNetworks}
+        networks={state.mgmtNetworks}
+        labSettings={labSettings}
       />
     );
   }

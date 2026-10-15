@@ -20,6 +20,7 @@ const YAML_TO_EDITOR_MAP: Partial<Record<string, keyof NodeEditorData>> = {
   "startup-delay": "startupDelay",
   "mgmt-ipv4": "mgmtIpv4",
   "mgmt-ipv6": "mgmtIpv6",
+  "mgmt-net": "mgmtNet",
   "network-mode": "networkMode",
   "cpu-set": "cpuSet",
   "shm-size": "shmSize",

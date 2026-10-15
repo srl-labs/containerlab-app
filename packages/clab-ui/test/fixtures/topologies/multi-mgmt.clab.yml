@@ -1,0 +1,40 @@
+name: multi-mgmt
+
+mgmt:
+  - network: oob
+    ipv4-subnet: 172.31.10.0/24
+  - network: lab
+    ipv4-subnet: 172.31.20.0/24
+    bridge: br-lab
+
+topology:
+  defaults:
+    mgmt-net: oob
+  kinds:
+    linux:
+      mgmt-net: lab
+  nodes:
+    spine1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+      mgmt-ipv4: 172.31.10.11
+    leaf1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+    leaf2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+      mgmt-net: lab
+    client1:
+      kind: linux
+      image: alpine:latest
+    client2:
+      kind: linux
+      image: alpine:latest
+      mgmt-net: storage
+
+  links:
+    - endpoints: ["spine1:e1-1", "leaf1:e1-49"]
+    - endpoints: ["spine1:e1-2", "leaf2:e1-49"]
+    - endpoints: ["leaf1:e1-1", "client1:eth1"]
+    - endpoints: ["leaf2:e1-1", "client2:eth1"]
