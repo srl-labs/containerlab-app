@@ -3,7 +3,7 @@
  * New nodes of these kinds get the type written explicitly so that editors
  * which depend on it (e.g. the SR OS components tab) show the right chassis.
  */
-export const DEFAULT_NODE_TYPES: Record<string, string> = {
+const DEFAULT_NODE_TYPES: Record<string, string> = {
   nokia_srlinux: "ixr-d2l",
   nokia_srsim: "SR-1",
   nokia_sros: "sr-1"

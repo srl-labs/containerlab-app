@@ -7,7 +7,7 @@ import type { ClabTopology, NodeAnnotation, TopologyAnnotations } from "../types
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 /** Topology `prefix` value that makes containerlab use the bare lab name as prefix. */
-export const LAB_NAME_PREFIX = "__lab-name";
+const LAB_NAME_PREFIX = "__lab-name";
 
 /**
  * Computes the full prefix for container names, following containerlab's rules:
