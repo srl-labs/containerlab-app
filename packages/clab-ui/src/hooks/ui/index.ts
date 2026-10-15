@@ -10,7 +10,6 @@ export { useFooterControlsRef } from "./useFooterControlsRef";
 export { useApplySaveHandlers } from "./useApplySaveHandlers";
 
 // Shake Animation
-export { useShakeAnimation } from "./useShakeAnimation";
 
 // Keyboard & Shortcuts
 export { useShortcutDisplay } from "./useShortcutDisplay";

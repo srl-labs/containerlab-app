@@ -14,12 +14,10 @@ interface ImageVersionMap {
 }
 
 interface UseDockerImagesResult {
-  dockerImages: string[];
   baseImages: string[];
   getVersionsForImage: (baseImage: string) => string[];
   parseImageString: (fullImage: string) => { base: string; version: string };
   combineImageVersion: (base: string, version: string) => string;
-  isLoaded: boolean;
   hasImages: boolean;
 }
 
@@ -143,12 +141,10 @@ export function useDockerImages(): UseDockerImagesResult {
   const combineImageVersion = useCallback(joinImageVersion, []);
 
   return {
-    dockerImages,
     baseImages,
     getVersionsForImage,
     parseImageString,
     combineImageVersion,
-    isLoaded: provided !== undefined,
     hasImages: baseImages.length > 0
   };
 }

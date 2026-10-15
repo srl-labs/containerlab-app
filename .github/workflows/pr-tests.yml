@@ -50,6 +50,9 @@ jobs:
       - name: Check unused code and dependencies
         run: pnpm knip
 
+      - name: Check unused hook return fields
+        run: pnpm hook-returns
+
       - name: Release routing tests
         run: node --test scripts/release-targets.test.mjs
 

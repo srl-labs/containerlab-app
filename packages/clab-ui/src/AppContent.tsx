@@ -61,7 +61,6 @@ import {
   useAppHandlers,
   useContextMenuHandlers,
   usePanelVisibility,
-  useShakeAnimation,
   useShortcutDisplay,
   type useLayoutControls
 } from "./hooks/ui";
@@ -745,7 +744,6 @@ export const AppContent: React.FC<AppContentProps> = ({
   }, [host]);
 
   const undoRedo = useUndoRedoControls(state.canUndo, state.canRedo);
-  const { trigger: triggerLockShake } = useShakeAnimation();
 
   const { toasts, dismissToast, addToast } = useAppToasts({
     customNodeError: state.customNodeError,
@@ -753,9 +751,8 @@ export const AppContent: React.FC<AppContentProps> = ({
   });
 
   const handleLockedAction = React.useCallback(() => {
-    triggerLockShake();
     addToast("Lab is locked (read-only)", "error", 2000);
-  }, [triggerLockShake, addToast]);
+  }, [addToast]);
 
   const annotationRuntimeRef = React.useRef<AnnotationContextValue | null>(null);
   const annotationUiState = useAnnotationUIState();

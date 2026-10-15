@@ -422,7 +422,7 @@ function useRenderConfig(
     [isLowDetail, suppressRuntimeBadges]
   );
 
-  return { isLargeGraph, isLowDetail, edgeRenderConfig, nodeRenderConfig };
+  return { isLowDetail, edgeRenderConfig, nodeRenderConfig };
 }
 
 /** Hook for node drag handler wrappers with helper line support */

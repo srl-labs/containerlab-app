@@ -58,6 +58,7 @@ catalog:
   monaco-editor: 0.55.1
   monaco-yaml: 5.5.1
   ovsx: 1.2.0
+  oxc-parser: 0.148.0
   oxlint: 1.83.0
   oxlint-tsgolint: 7.0.2001
   postcss: 8.5.28
