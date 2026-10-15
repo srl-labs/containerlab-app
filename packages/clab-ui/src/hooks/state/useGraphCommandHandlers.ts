@@ -10,7 +10,8 @@ import type {
   TopologyEdgeData,
   EdgeCreatedData,
   EdgeCreatedHandler,
-  NodeCreatedHandler
+  NodeCreatedHandler,
+  PastedElements
 } from "../../core/types/graph";
 import type { NodeSaveData } from "../../core/io/NodePersistenceIO";
 import type { TopologyHostCommand } from "../../core/types/messages";
@@ -60,7 +61,7 @@ interface UseGraphHandlersWithContextParams {
 interface GraphHandlersResult {
   handleEdgeCreated: EdgeCreatedHandler;
   handleNodeCreatedCallback: NodeCreatedHandler;
-  handleBatchPaste: (payload: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+  handleBatchPaste: (payload: PastedElements) => void;
   handleDeleteNode: (nodeId: string) => void;
   handleDeleteLink: (edgeId: string) => void;
 }
@@ -142,6 +143,25 @@ function toNodeSaveData(node: TopoNode): NodeSaveData {
     position: node.position,
     extraData: mergeNodeExtraData(data)
   };
+}
+
+/** addNode commands for pasted YAML nodes; copied own YAML is passed on when available */
+function toPastedNodeCommands(
+  nodes: TopoNode[],
+  yamlSources: PastedElements["yamlSources"] = {}
+): TopologyHostCommand[] {
+  const commands: TopologyHostCommand[] = [];
+  for (const node of nodes) {
+    if (isAnnotationNodeType(node.type)) continue;
+    if (isSpecialNetworkNode(node) && !isBridgeNetworkNode(node)) continue;
+    const yamlSource = yamlSources[node.id];
+    const payload = toNodeSaveData(node);
+    commands.push({
+      command: "addNode",
+      payload: yamlSource ? { ...payload, yamlSource } : payload
+    });
+  }
+  return commands;
 }
 
 function isSpecialNetworkNode(node: TopoNode): boolean {
@@ -284,17 +304,11 @@ export function useGraphHandlersWithContext(
   );
 
   const handleBatchPaste = React.useCallback(
-    (payload: { nodes: TopoNode[]; edges: TopoEdge[] }) => {
-      const { nodes: pastedNodes, edges: pastedEdges } = payload;
+    (payload: PastedElements) => {
+      const { nodes: pastedNodes, edges: pastedEdges, yamlSources } = payload;
       if (pastedNodes.length === 0 && pastedEdges.length === 0) return;
 
-      const commands: TopologyHostCommand[] = [];
-
-      for (const node of pastedNodes) {
-        if (isAnnotationNodeType(node.type)) continue;
-        if (isSpecialNetworkNode(node) && !isBridgeNetworkNode(node)) continue;
-        commands.push({ command: "addNode", payload: toNodeSaveData(node) });
-      }
+      const commands = toPastedNodeCommands(pastedNodes, yamlSources);
 
       for (const edge of pastedEdges) {
         commands.push({ command: "addLink", payload: toLinkSaveData(edge) });
