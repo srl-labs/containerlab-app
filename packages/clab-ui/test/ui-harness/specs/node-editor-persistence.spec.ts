@@ -399,7 +399,7 @@ test.describe("Node Editor Persistence", () => {
     await page.locator(SEL_APPLY_BTN).click();
     await expect
       .poll(async () => topoViewerPage.getYamlFromFile(TEST_TOPOLOGY), { timeout: 5000 })
-      .toContain("image-pull-policy: always");
+      .toContain("image-pull-policy: Always");
   });
 
   test("values persist after page reload", async ({ page, topoViewerPage }) => {
@@ -439,5 +439,197 @@ test.describe("Node Editor Persistence", () => {
 
     await navigateToTab(page, TAB.RUNTIME);
     await expect(page.locator("#node-user")).toHaveValue("admin");
+  });
+});
+
+/** Load a topology from YAML text and open the editor of one node */
+async function openNodeFromYaml(
+  page: Page,
+  topoViewerPage: {
+    writeYamlFile: (file: string, content: string) => Promise<void>;
+    gotoFile: (file: string) => Promise<void>;
+    waitForCanvasReady: () => Promise<void>;
+    setEditMode: () => Promise<void>;
+    unlock: () => Promise<void>;
+    fit: () => Promise<void>;
+  },
+  yaml: string,
+  nodeId: string
+): Promise<void> {
+  await topoViewerPage.writeYamlFile(TEST_TOPOLOGY, yaml);
+  await topoViewerPage.gotoFile(TEST_TOPOLOGY);
+  await topoViewerPage.waitForCanvasReady();
+  await topoViewerPage.setEditMode();
+  await topoViewerPage.unlock();
+  await topoViewerPage.fit();
+  await openNodeEditor(page, nodeId);
+}
+
+async function readNode(
+  topoViewerPage: { getYamlFromFile: (file: string) => Promise<string> },
+  nodeId: string
+): Promise<Record<string, unknown> | null> {
+  const parsed = YAML.parse(await topoViewerPage.getYamlFromFile(TEST_TOPOLOGY)) as {
+    topology?: { nodes?: Record<string, Record<string, unknown>> };
+  } | null;
+  return parsed?.topology?.nodes?.[nodeId] ?? null;
+}
+
+const NODE_SHAPES_YAML = `name: simple
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+      network-mode: container:srl2
+      image-pull-policy: IfNotPresent
+      restart-policy: Always
+      runtime: podman
+      auto-remove: false
+      startup-delay: 0
+      env:
+        COUNT: 3
+        ENABLED: true
+      sysctls:
+        net.ipv4.ip_forward: 1
+      dns:
+        servers:
+          - 1.1.1.1
+        search:
+          - example.com
+      certificate:
+        issue: true
+        key-size: 4096
+        sans:
+          - srl1.lab
+      healthcheck:
+        test:
+          - CMD-SHELL
+          - cat /etc/os-release
+        retries: 3
+      components:
+        - slot: 1
+          type: imm36-800g-qsfpdd
+    srl2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+  links:
+    - endpoints: ["srl1:e1-1", "srl2:e1-1"]
+`;
+
+/**
+ * Dropdowns only offer values containerlab accepts, and existing values in the
+ * YAML show up in them.
+ */
+test.describe("Node Editor Dropdown Values", () => {
+  test.beforeEach(async ({ topoViewerPage }) => {
+    await topoViewerPage.resetFiles();
+  });
+
+  test("existing values load into the dropdowns", async ({ page, topoViewerPage }) => {
+    await openNodeFromYaml(page, topoViewerPage, NODE_SHAPES_YAML, "srl1");
+
+    await navigateToTab(page, TAB.NETWORK);
+    await expect(page.locator("#node-network-mode")).toContainText("Container");
+    await expect(page.locator("#node-network-mode-container")).toHaveValue("srl2");
+
+    await navigateToTab(page, TAB.RUNTIME);
+    await expect(page.locator("#node-restart-policy")).toContainText("Always");
+
+    await navigateToTab(page, TAB.ADVANCED);
+    await expect(page.locator("#node-image-pull-policy")).toContainText("If Not Present");
+    await expect(page.locator("#node-runtime")).toContainText("podman");
+    await expect(page.locator("#node-cert-key-size")).toContainText("4096");
+  });
+
+  test("runtime offers only docker and podman", async ({ page, topoViewerPage }) => {
+    await topoViewerPage.gotoFile(TEST_TOPOLOGY);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await topoViewerPage.fit();
+    await openNodeEditor(page, "srl1");
+    await navigateToTab(page, TAB.ADVANCED);
+
+    const select = page.locator("#node-runtime");
+    await select.scrollIntoViewIfNeeded();
+    await select.click();
+    const listbox = page.locator('[role="listbox"]:visible').last();
+    await expect(listbox.getByRole("option")).toHaveText(["Default", "docker", "podman"]);
+    await listbox.getByRole("option", { name: "podman" }).click();
+
+    await page.locator(SEL_APPLY_BTN).click();
+    await expect
+      .poll(async () => (await readNode(topoViewerPage, "srl1"))?.runtime ?? null, {
+        timeout: 5000
+      })
+      .toBe("podman");
+  });
+
+  test("container network mode writes container:<node>", async ({ page, topoViewerPage }) => {
+    await topoViewerPage.gotoFile(TEST_TOPOLOGY);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await topoViewerPage.fit();
+    await openNodeEditor(page, "srl1");
+    await navigateToTab(page, TAB.NETWORK);
+
+    await selectMuiOption(page, "node-network-mode", "Container");
+    const target = page.locator("#node-network-mode-container");
+    await expect(target).toBeVisible();
+    await target.click();
+    await page.getByRole("option", { name: "srl2", exact: true }).click();
+
+    await page.locator(SEL_APPLY_BTN).click();
+    await expect
+      .poll(async () => (await readNode(topoViewerPage, "srl1"))?.["network-mode"] ?? null, {
+        timeout: 5000
+      })
+      .toBe("container:srl2");
+  });
+
+  test("editing one field keeps every other value and its shape", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await openNodeFromYaml(page, topoViewerPage, NODE_SHAPES_YAML, "srl1");
+    const before = YAML.parse(NODE_SHAPES_YAML) as {
+      topology: { nodes: Record<string, Record<string, unknown>> };
+    };
+
+    await navigateToTab(page, TAB.RUNTIME);
+    await fillField(page, "node-user", TEST_USER);
+    await page.locator(SEL_APPLY_BTN).click();
+
+    await expect
+      .poll(async () => readNode(topoViewerPage, "srl1"), { timeout: 5000 })
+      .toEqual({ ...before.topology.nodes.srl1, user: TEST_USER });
+  });
+
+  test("dns search and healthcheck test are written as lists", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await openNodeFromYaml(page, topoViewerPage, NODE_SHAPES_YAML, "srl1");
+
+    await navigateToTab(page, TAB.NETWORK);
+    const searchSection = page.getByText("DNS Search Domains", { exact: true }).locator("..");
+    await searchSection.getByRole("button", { name: "Add" }).click();
+    const searchInputs = page.getByPlaceholder("e.g., example.com");
+    await searchInputs.last().fill("lab.local");
+
+    await navigateToTab(page, TAB.ADVANCED);
+    const testSection = page.getByText("Health Check Test", { exact: true }).locator("..");
+    await testSection.getByRole("button", { name: "Add" }).click();
+    await page.getByPlaceholder("e.g., cat /etc/os-release").last().fill("-q");
+
+    await page.locator(SEL_APPLY_BTN).click();
+    await expect
+      .poll(async () => readNode(topoViewerPage, "srl1"), { timeout: 5000 })
+      .toMatchObject({
+        dns: { servers: ["1.1.1.1"], search: ["example.com", "lab.local"] },
+        healthcheck: { test: ["CMD-SHELL", "cat /etc/os-release", "-q"], retries: 3 }
+      });
   });
 });

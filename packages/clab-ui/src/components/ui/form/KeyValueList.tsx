@@ -8,9 +8,15 @@ import TextField from "@mui/material/TextField";
 import { AddItemButton, DeleteItemButton } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
 
-interface KeyValueListProps {
-  items: Record<string, string>;
-  onChange: (items: Record<string, string>) => void;
+type KeyValueScalar = string | number | boolean;
+
+/**
+ * Values may be numbers or booleans (e.g. sysctls read from YAML). Untouched
+ * entries keep their type; an edited value is reported as the text typed in.
+ */
+interface KeyValueListProps<V extends KeyValueScalar = string> {
+  items: Record<string, V>;
+  onChange: (items: Record<string, V | string>) => void;
   keyPlaceholder?: string;
   valuePlaceholder?: string;
   addLabel?: string;
@@ -18,7 +24,7 @@ interface KeyValueListProps {
   hideAddButton?: boolean;
 }
 
-export const KeyValueList: React.FC<KeyValueListProps> = ({
+export const KeyValueList = <V extends KeyValueScalar = string>({
   items,
   onChange,
   keyPlaceholder = "Key",
@@ -26,7 +32,7 @@ export const KeyValueList: React.FC<KeyValueListProps> = ({
   addLabel = "Add",
   disabled,
   hideAddButton
-}) => {
+}: KeyValueListProps<V>): React.ReactElement => {
   const entries = Object.entries(items);
 
   // Stable per-row identities so removing or renaming a row doesn't reassign
@@ -56,7 +62,7 @@ export const KeyValueList: React.FC<KeyValueListProps> = ({
 
   const handleKeyChange = (oldKey: string, newKey: string) => {
     if (oldKey === newKey) return;
-    const newItems: Record<string, string> = {};
+    const newItems: Record<string, V | string> = {};
     for (const [k, v] of Object.entries(items)) {
       newItems[k === oldKey ? newKey : k] = v;
     }
@@ -73,7 +79,7 @@ export const KeyValueList: React.FC<KeyValueListProps> = ({
         <KeyValueItem
           key={rowIds[index]}
           itemKey={key}
-          value={value}
+          value={String(value)}
           onKeyChange={(newKey) => handleKeyChange(key, newKey)}
           onValueChange={(val) => handleValueChange(key, val)}
           onRemove={() => handleRemove(key, index)}

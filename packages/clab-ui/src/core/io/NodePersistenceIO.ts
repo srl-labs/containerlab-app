@@ -172,6 +172,7 @@ const NODE_YAML_PROPERTIES = [
   "image-pull-policy",
   "runtime",
   "components",
+  "sfm",
   "stages"
 ] as const;
 
@@ -298,8 +299,9 @@ function updateNodeYaml(
       continue;
     }
 
-    // If value matches inherited, remove node-level override
-    if (deepEqual(value, inherited)) {
+    // If value matches inherited, remove node-level override. containerlab flags
+    // default to false, so false only needs writing when it overrides an inherited value.
+    if (deepEqual(value, inherited) || (value === false && inherited === undefined)) {
       if (nodeMap.has(prop)) nodeMap.delete(prop);
       continue;
     }
@@ -393,6 +395,31 @@ function updateLinksForRename(doc: YAML.Document.Parsed, oldId: string, newId: s
       }
     }
   }
+}
+
+/** Read a non-empty string value of a node key */
+function readNodeString(nodeMap: YAML.YAMLMap, key: string): string | undefined {
+  const value: unknown = nodeMap.get(key);
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/**
+ * Resolves the inherited configuration of an edited node. The node editor only
+ * sends changed keys, so kind and group may have to come from the node itself.
+ */
+function resolveEditInheritedConfig(
+  topo: ClabTopology,
+  nodeData: NodeSaveData,
+  nodeMap: YAML.YAMLMap
+): Partial<Record<string, unknown>> {
+  const group = nodeData.extraData?.group ?? readNodeString(nodeMap, "group");
+  const groupKind = group !== undefined ? topo.topology?.groups?.[group]?.kind : undefined;
+  const kind =
+    nodeData.extraData?.kind ??
+    readNodeString(nodeMap, "kind") ??
+    groupKind ??
+    topo.topology?.defaults?.kind;
+  return resolveInheritedConfig(topo, group, kind);
 }
 
 /**
@@ -509,11 +536,7 @@ export function editNodeInDoc(
       return { success: false, error: "Failed to find or create node" };
     }
 
-    const inheritedConfig = resolveInheritedConfig(
-      topoObj,
-      nodeData.extraData?.group ?? undefined,
-      nodeData.extraData?.kind ?? undefined
-    );
+    const inheritedConfig = resolveEditInheritedConfig(topoObj, nodeData, nodeMap);
 
     if (isRename) {
       if (nodesMap.has(newName)) {
