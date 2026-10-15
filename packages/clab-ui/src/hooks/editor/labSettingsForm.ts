@@ -5,13 +5,18 @@
 import type {
   LabSettings,
   LabSettingsUpdate,
+  MgmtNetworkUpdate,
+  MgmtSettings,
   MgmtSettingsUpdate
 } from "../../core/types/labSettings";
+import { getMgmtNetworks } from "../../core/types/labSettings";
 import type {
   PrefixType,
   IpType,
   DriverOption,
   BasicSettingsState,
+  MgmtFormState,
+  MgmtNetworkFormState,
   MgmtSettingsState
 } from "../../components/panels/lab-settings/types";
 
@@ -81,8 +86,7 @@ export function buildInitialBasic(settings?: LabSettings): BasicSettingsState {
   };
 }
 
-export function buildInitialMgmt(settings?: LabSettings): MgmtSettingsState {
-  const mgmt = settings?.mgmt ?? undefined;
+function parseMgmtNetwork(mgmt?: MgmtSettings): MgmtSettingsState {
   const ipv4 = parseIpv4Settings(mgmt);
   const ipv6 = parseIpv6Settings(mgmt);
 
@@ -100,6 +104,28 @@ export function buildInitialMgmt(settings?: LabSettings): MgmtSettingsState {
     externalAccess: mgmt?.["external-access"] !== false,
     driverOptions: parseDriverOptions(mgmt)
   };
+}
+
+let nextNetworkId = 0;
+
+/** A blank network for the Add button; it has no source entry in the file. */
+export function createMgmtNetworkForm(networkName = ""): MgmtNetworkFormState {
+  nextNetworkId += 1;
+  return { ...parseMgmtNetwork(), networkName, id: `new-${nextNetworkId}` };
+}
+
+export function buildInitialMgmt(settings?: LabSettings): MgmtFormState {
+  const loaded = getMgmtNetworks(settings);
+  const networks: MgmtNetworkFormState[] =
+    loaded.length > 0
+      ? loaded.map((network, index) => ({
+          ...parseMgmtNetwork(network),
+          id: `network-${index}`,
+          source: index,
+          driver: typeof network.driver === "string" ? network.driver : undefined
+        }))
+      : [{ ...parseMgmtNetwork(), id: "network-0" }];
+  return { networks, defaultMgmtNet: settings?.defaultMgmtNet ?? "" };
 }
 
 function gatherPrefix(prefixType: PrefixType, customPrefix: string): string | null {
@@ -205,15 +231,58 @@ function diffMgmtSettings(before: GatheredMgmt, after: GatheredMgmt): MgmtSettin
   return changes;
 }
 
+const EMPTY_MGMT: GatheredMgmt = {};
+
+/**
+ * The management network list to write, or undefined when it is unchanged. A
+ * lab without `mgmt` shows one blank network; leaving it blank changes nothing.
+ */
+function buildMgmtNetworksUpdate(
+  loaded: MgmtSettings[],
+  initial: MgmtFormState,
+  form: MgmtFormState
+): MgmtNetworkUpdate[] | undefined {
+  const networks = form.networks.map((network): MgmtNetworkUpdate => {
+    const before =
+      network.source !== undefined
+        ? gatherMgmtSettings(initial.networks[network.source])
+        : EMPTY_MGMT;
+    const changes = diffMgmtSettings(before, gatherMgmtSettings(network));
+    return network.source !== undefined ? { source: network.source, changes } : { changes };
+  });
+
+  const hasChanges = networks.some((network) => Object.keys(network.changes).length > 0);
+  const sameEntries =
+    form.networks.length === Math.max(loaded.length, 1) &&
+    form.networks.every((network, index) =>
+      loaded.length === 0 ? network.source === undefined : network.source === index
+    );
+  return hasChanges || !sameEntries ? networks : undefined;
+}
+
+/** Old -> new names of loaded networks the form renamed. */
+function collectMgmtNetRenames(
+  loaded: MgmtSettings[],
+  form: MgmtFormState
+): Record<string, string> {
+  const renames: Record<string, string> = {};
+  for (const network of form.networks) {
+    if (network.source === undefined) continue;
+    const oldName = loaded[network.source]?.network ?? "";
+    const newName = network.networkName.trim();
+    if (oldName !== "" && newName !== "" && oldName !== newName) renames[oldName] = newName;
+  }
+  return renames;
+}
+
 /**
  * Compares the form against the settings it was loaded from and returns only the
- * changes, or null when nothing changed. A list of management networks is never
- * touched by the single-network form.
+ * changes, or null when nothing changed.
  */
 export function buildLabSettingsUpdate(
   settings: LabSettings | undefined,
   basic: BasicSettingsState,
-  mgmt: MgmtSettingsState
+  mgmt: MgmtFormState
 ): LabSettingsUpdate | null {
   const initialBasic = buildInitialBasic(settings);
   const update: LabSettingsUpdate = {};
@@ -227,13 +296,60 @@ export function buildLabSettingsUpdate(
     update.prefix = prefix;
   }
 
-  if (!settings?.mgmtNetworks) {
-    const mgmtChanges = diffMgmtSettings(
-      gatherMgmtSettings(buildInitialMgmt(settings)),
-      gatherMgmtSettings(mgmt)
-    );
-    if (Object.keys(mgmtChanges).length > 0) update.mgmt = mgmtChanges;
+  const loaded = getMgmtNetworks(settings);
+  const initialMgmt = buildInitialMgmt(settings);
+  const networks = buildMgmtNetworksUpdate(loaded, initialMgmt, mgmt);
+  if (networks) update.mgmt = networks;
+
+  const renames = collectMgmtNetRenames(loaded, mgmt);
+  if (Object.keys(renames).length > 0) update.mgmtNetRenames = renames;
+
+  // A renamed default follows the rename, so only a different choice is written.
+  const initialDefault = initialMgmt.defaultMgmtNet;
+  const expectedDefault = renames[initialDefault] ?? initialDefault;
+  const nextDefault = mgmt.defaultMgmtNet.trim();
+  if (nextDefault !== expectedDefault) {
+    update.defaultMgmtNet = nextDefault === "" ? null : nextDefault;
   }
 
   return Object.keys(update).length > 0 ? update : null;
+}
+
+export interface MgmtNetworkIssues {
+  networkName?: string;
+  bridge?: string;
+}
+
+/**
+ * Problems containerlab rejects at deploy time: with several networks each
+ * needs a unique name, and two networks cannot share a bridge.
+ */
+export function validateMgmtNetworks(form: MgmtFormState): MgmtNetworkIssues[] {
+  const several = form.networks.length > 1;
+  const nameCounts = new Map<string, number>();
+  const bridgeCounts = new Map<string, number>();
+  for (const network of form.networks) {
+    const name = network.networkName.trim();
+    const bridge = network.bridge.trim();
+    if (name !== "") nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+    if (bridge !== "") bridgeCounts.set(bridge, (bridgeCounts.get(bridge) ?? 0) + 1);
+  }
+  return form.networks.map((network) => {
+    const issues: MgmtNetworkIssues = {};
+    const name = network.networkName.trim();
+    const bridge = network.bridge.trim();
+    if (several && name === "") {
+      issues.networkName = "Required when the lab has several management networks";
+    } else if ((nameCounts.get(name) ?? 0) > 1) {
+      issues.networkName = "Another management network uses this name";
+    }
+    if ((bridgeCounts.get(bridge) ?? 0) > 1) {
+      issues.bridge = "Another management network uses this bridge";
+    }
+    return issues;
+  });
+}
+
+export function hasMgmtNetworkIssues(issues: MgmtNetworkIssues[]): boolean {
+  return issues.some((issue) => Object.keys(issue).length > 0);
 }

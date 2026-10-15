@@ -34,6 +34,7 @@ import {
   getNodeRuntimeBadgeState
 } from "./nodeStyles";
 import { NodeBox, useNodeBoxLabel } from "./NodeBox";
+import { NodeMgmtNetworkBadge } from "./NodeMgmtNetworkBadge";
 
 const RuntimeBadge = React.lazy(() => import("./NodeRuntimeBadge"));
 
@@ -226,6 +227,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
 
       {/* Node icon - hover effect for link creation handled via CSS */}
       <div style={iconStyle} className={iconClassName} />
+      <NodeMgmtNetworkBadge extraData={nodeData.extraData} />
       {!suppressRuntimeBadges && (
         <React.Suspense fallback={null}>
           <RuntimeBadge state={runtimeBadgeState} />

@@ -61,6 +61,9 @@ function toFixtureName(value: string | null): SnapshotFixtureName {
 }
 
 function toYamlPath(value: string | null): string {
+  // ?fixture=<name> opens test/fixtures/topologies/<name>.clab.yml when it exists.
+  const named = `${TOPOLOGY_ROOT}/${value ?? ""}.clab.yml`;
+  if (value !== null && value !== "empty" && named in fixtureFiles) return named;
   const fixture = toFixtureName(value);
   return fixture === "empty" ? `${TOPOLOGY_ROOT}/empty.clab.yml` : `${TOPOLOGY_ROOT}/simple.clab.yml`;
 }

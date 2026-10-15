@@ -285,6 +285,7 @@ export interface TopologyAnnotations {
     nodeStyle?: "icon" | "boxed";
     nodeBoxSpacing?: "default" | "narrow";
     linkStyle?: "straight" | "elbow";
+    mgmtNetworkBadge?: "always" | "hover";
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;

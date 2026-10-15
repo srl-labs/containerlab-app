@@ -30,6 +30,7 @@ interface SelectFieldProps {
   helperText?: string;
   required?: boolean;
   clearable?: boolean;
+  error?: boolean;
 }
 
 const INLINE_FLEX_DISPLAY = "inline-flex";
@@ -79,7 +80,8 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   disabled,
   helperText,
   required,
-  clearable
+  clearable,
+  error
 }) => {
   const hasLabel = label !== undefined && label.length > 0;
   const hasPlaceholder = placeholder !== undefined && placeholder.length > 0;
@@ -87,7 +89,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   const showClear = clearable === true && value.length > 0 && disabled !== true;
 
   return (
-    <FormControl fullWidth size="small" disabled={disabled} required={required}>
+    <FormControl fullWidth size="small" disabled={disabled} required={required} error={error}>
       {hasLabel ? <InputLabel id={`${id}-label`}>{label}</InputLabel> : null}
       <Select
         id={id}

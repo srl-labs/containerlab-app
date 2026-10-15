@@ -162,6 +162,7 @@ const NODE_YAML_PROPERTIES = [
   "startup-delay",
   "mgmt-ipv4",
   "mgmt-ipv6",
+  "mgmt-net",
   "network-mode",
   "ports",
   "dns",

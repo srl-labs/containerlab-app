@@ -43,6 +43,10 @@ import {
   parseNodeStyle
 } from "../components/canvas/nodeBox";
 import { DEFAULT_LINK_STYLE, parseLinkStyle } from "../components/canvas/elbowRouting";
+import {
+  DEFAULT_MGMT_NETWORK_BADGE,
+  parseMgmtNetworkBadgeMode
+} from "../core/utilities/mgmtNetworks";
 import { hasPresetPositions, normalizeLayoutableNodePositions } from "../components/canvas/layout/types";
 import { snapToGrid } from "../utils/grid";
 import {
@@ -644,6 +648,7 @@ function buildInitialTopoViewerData(
   const nodeStyle = parseNodeStyle(viewerSettings.nodeStyle);
   const nodeBoxSpacing = parseNodeBoxSpacing(viewerSettings.nodeBoxSpacing);
   const linkStyle = parseLinkStyle(viewerSettings.linkStyle);
+  const mgmtNetworkBadge = parseMgmtNetworkBadgeMode(viewerSettings.mgmtNetworkBadge);
   const telemetryNodeSizePx = parseTelemetryNodeSizePx(viewerSettings.telemetryNodeSizePx);
   const telemetryInterfaceSizePercent = parseTelemetryInterfaceSizePercent(
     viewerSettings.telemetryInterfaceSizePercent
@@ -675,6 +680,7 @@ function buildInitialTopoViewerData(
     nodeStyle: nodeStyle ?? DEFAULT_NODE_STYLE,
     nodeBoxSpacing: nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
     linkStyle: linkStyle ?? DEFAULT_LINK_STYLE,
+    mgmtNetworkBadge: mgmtNetworkBadge ?? DEFAULT_MGMT_NETWORK_BADGE,
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,

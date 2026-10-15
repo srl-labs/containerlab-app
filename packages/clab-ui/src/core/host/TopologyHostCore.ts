@@ -14,7 +14,7 @@ import type {
   TopologyAnnotations,
   NodeAnnotation
 } from "../types/topology";
-import type { LabSettings, LabSettingsUpdate, MgmtSettingsUpdate } from "../types/labSettings";
+import type { LabSettingsUpdate } from "../types/labSettings";
 import type {
   TopologyHostCommand,
   TopologyHostResponseMessage,
@@ -30,6 +30,7 @@ import type { FileSystemAdapter, IOLogger } from "../io/types";
 import { AnnotationsIO } from "../io/AnnotationsIO";
 import { TopologyIO, migrateGeneratedNetworkNodeAnnotations } from "../io/TopologyIO";
 import { TransactionalFileSystemAdapter } from "../io/TransactionalFileSystemAdapter";
+import { applyLabSettingsUpdate, extractLabSettings } from "./labSettingsYaml";
 import { createEmptyAnnotations } from "../annotations/types";
 import { isNonEmptyString, toFiniteNumber, toPosition } from "../../annotations/valueParsers";
 
@@ -557,28 +558,7 @@ export class TopologyHostCore implements TopologyHost {
       throw new Error("Topology document not initialized");
     }
 
-    const rootContents = doc.contents;
-    if (!rootContents || !YAML.isMap(rootContents)) {
-      throw new Error("YAML document root is not a map");
-    }
-    const rootMap = rootContents;
-
-    if (update.name !== undefined) {
-      setScalarKey(doc, rootMap, "name", update.name);
-    }
-
-    if (update.prefix !== undefined) {
-      if (update.prefix === null) {
-        deleteKey(rootMap, "prefix");
-      } else {
-        setScalarKey(doc, rootMap, "prefix", update.prefix, "name");
-      }
-    }
-
-    if (update.mgmt !== undefined && Object.keys(update.mgmt).length > 0) {
-      applyMgmtUpdate(doc, rootMap, update.mgmt);
-    }
-
+    applyLabSettingsUpdate(doc, update);
     await this.topologyIO.save();
   }
 
@@ -1334,118 +1314,6 @@ function migrateLegacyAnnotations(annotations: TopologyAnnotations): {
   };
 }
 
-function extractLabSettings(doc: YAML.Document.Parsed): LabSettings {
-  const settings: LabSettings = {};
-  const nameValue = doc.get("name");
-  const name = typeof nameValue === "string" ? nameValue : undefined;
-  const prefixValue = doc.get("prefix");
-  const prefix = typeof prefixValue === "string" ? prefixValue : undefined;
-  const mgmtRaw = doc.get("mgmt");
-  const mgmt =
-    mgmtRaw !== undefined && mgmtRaw !== null && YAML.isMap(mgmtRaw)
-      ? toRecord(mgmtRaw.toJSON())
-      : toRecord(mgmtRaw);
-
-  if (name !== undefined && name !== "") settings.name = name;
-  if (prefix !== undefined) settings.prefix = prefix;
-  if (YAML.isSeq(mgmtRaw)) {
-    settings.mgmtNetworks = mgmtRaw.items.map((item) =>
-      YAML.isMap(item) ? (toRecord(item.toJSON()) ?? {}) : {}
-    );
-  } else if (mgmt !== undefined) {
-    settings.mgmt = mgmt;
-  }
-
-  return settings;
-}
-
-function findPair(map: YAML.YAMLMap, key: string): YAML.Pair | undefined {
-  return map.items.find((pair) => YAML.isScalar(pair.key) && pair.key.value === key);
-}
-
-/** Sets a scalar value, keeping the existing node (and its comments) when there is one. */
-function setScalarKey(
-  doc: YAML.Document,
-  map: YAML.YAMLMap,
-  key: string,
-  value: unknown,
-  afterKey?: string
-): void {
-  const existing = findPair(map, key);
-  if (existing && YAML.isScalar(existing.value)) {
-    if (existing.value.value !== value) existing.value.value = value;
-    return;
-  }
-  const node = doc.createNode(value);
-  if (afterKey !== undefined) {
-    setKeyAfter(map, key, node, afterKey);
-  } else {
-    setKey(map, key, node);
-  }
-}
-
-/**
- * Merges Lab Settings form changes into the existing mgmt map. Keys the form does
- * not own, comments and key order are kept. A list of management networks is never
- * rewritten by the single-network form.
- */
-function applyMgmtUpdate(
-  doc: YAML.Document,
-  rootMap: YAML.YAMLMap,
-  update: MgmtSettingsUpdate
-): void {
-  const mgmtPair = findPair(rootMap, "mgmt");
-  if (mgmtPair && YAML.isSeq(mgmtPair.value)) return;
-
-  const entries: Array<[string, unknown]> = Object.entries(update);
-  let mgmtMap: YAML.YAMLMap;
-  if (mgmtPair && YAML.isMap(mgmtPair.value)) {
-    mgmtMap = mgmtPair.value;
-  } else {
-    if (!entries.some(([, value]) => value !== null && value !== undefined)) return;
-    mgmtMap = new YAML.YAMLMap();
-    const afterKey = findPair(rootMap, "prefix") ? "prefix" : "name";
-    setKeyAfter(rootMap, "mgmt", mgmtMap, afterKey);
-  }
-
-  for (const [key, value] of entries) {
-    if (value === undefined) continue;
-    if (value === null) {
-      deleteKey(mgmtMap, key);
-    } else if (key === "driver-opts" && isRecord(value)) {
-      mergeStringMap(doc, mgmtMap, key, value);
-    } else {
-      setScalarKey(doc, mgmtMap, key, value);
-    }
-  }
-
-  if (mgmtMap.items.length === 0) deleteKey(rootMap, "mgmt");
-}
-
-function mergeStringMap(
-  doc: YAML.Document,
-  parent: YAML.YAMLMap,
-  key: string,
-  update: Record<string, unknown>
-): void {
-  const pair = findPair(parent, key);
-  let map: YAML.YAMLMap;
-  if (pair && YAML.isMap(pair.value)) {
-    map = pair.value;
-  } else {
-    map = new YAML.YAMLMap();
-    setKey(parent, key, map);
-  }
-  for (const [entryKey, entryValue] of Object.entries(update)) {
-    if (entryValue === null) {
-      deleteKey(map, entryKey);
-    } else {
-      setScalarKey(doc, map, entryKey, entryValue);
-    }
-  }
-  if (map.items.length === 0) deleteKey(parent, key);
-}
-
 function persistGraphLabelMigrations(
   annotations: TopologyAnnotations,
   migrations: GraphLabelMigration[]
@@ -1516,42 +1384,3 @@ function applyNodeGroupMembershipsToAnnotations(
   return { ...annotations, nodeAnnotations: result };
 }
 
-function setKeyAfter(map: YAML.YAMLMap, key: string, value: YAML.Node, afterKey: string): void {
-  const existingIndex = map.items.findIndex(
-    (pair) => YAML.isScalar(pair.key) && pair.key.value === key
-  );
-  if (existingIndex >= 0) {
-    map.items[existingIndex].value = value;
-    return;
-  }
-
-  const afterIndex = map.items.findIndex(
-    (pair) => YAML.isScalar(pair.key) && pair.key.value === afterKey
-  );
-
-  const newPair = new YAML.Pair(new YAML.Scalar(key), value);
-
-  if (afterIndex >= 0) {
-    map.items.splice(afterIndex + 1, 0, newPair);
-  } else {
-    map.items.push(newPair);
-  }
-}
-
-function deleteKey(map: YAML.YAMLMap, key: string): void {
-  const index = map.items.findIndex((pair) => YAML.isScalar(pair.key) && pair.key.value === key);
-  if (index >= 0) {
-    map.items.splice(index, 1);
-  }
-}
-
-function setKey(map: YAML.YAMLMap, key: string, value: YAML.Node): void {
-  const existingIndex = map.items.findIndex(
-    (pair) => YAML.isScalar(pair.key) && pair.key.value === key
-  );
-  if (existingIndex >= 0) {
-    map.items[existingIndex].value = value;
-  } else {
-    map.items.push(new YAML.Pair(new YAML.Scalar(key), value));
-  }
-}

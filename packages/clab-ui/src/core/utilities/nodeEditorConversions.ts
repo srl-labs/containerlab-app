@@ -10,6 +10,7 @@ import type {
   SrosComponent
 } from "../types/editors";
 import type { NodeSaveData } from "../io/NodePersistenceIO";
+import { INHERITED_FROM_KEY } from "../parsing/NodeConfigResolver";
 import { deepEqual } from "../io/YamlDocumentIO";
 
 import {
@@ -196,6 +197,7 @@ function parseNetworkProps(
   NodeEditorData,
   | "mgmtIpv4"
   | "mgmtIpv6"
+  | "mgmtNet"
   | "networkMode"
   | "ports"
   | "dnsServers"
@@ -206,6 +208,7 @@ function parseNetworkProps(
   return {
     mgmtIpv4: getString(extra["mgmt-ipv4"]),
     mgmtIpv6: getString(extra["mgmt-ipv6"]),
+    mgmtNet: getString(extra["mgmt-net"]),
     networkMode: getString(extra["network-mode"]),
     ports: getStringArray(extra.ports),
     ...parseDnsProps(extra.dns),
@@ -360,8 +363,20 @@ export function convertToEditorData(
     ...parseAdvancedProps(extra),
     ...parseCertProps(extra),
     ...parseHealthCheckProps(extra),
-    ...parseComponentsProps(extra)
+    ...parseComponentsProps(extra),
+    ...parseInheritedFrom(extra)
   };
+}
+
+/** Level each inherited key comes from, as set by the topology parser */
+function parseInheritedFrom(extra: Record<string, unknown>): Pick<NodeEditorData, "inheritedFrom"> {
+  const levels = getRecordUnknown(extra[INHERITED_FROM_KEY]);
+  if (!levels) return {};
+  const inheritedFrom: Record<string, string> = {};
+  for (const [key, level] of Object.entries(levels)) {
+    if (typeof level === "string") inheritedFrom[key] = level;
+  }
+  return { inheritedFrom };
 }
 
 // ============================================================================
@@ -391,6 +406,7 @@ export interface YamlExtraData {
   "startup-delay"?: number | null;
   "mgmt-ipv4"?: string | null;
   "mgmt-ipv6"?: string | null;
+  "mgmt-net"?: string | null;
   "network-mode"?: string | null;
   ports?: string[] | null;
   dns?: Record<string, string[]> | null;
@@ -583,6 +599,7 @@ function convertDnsToYaml(data: Record<string, unknown>, extraData: YamlExtraDat
 function convertNetworkToYaml(data: Record<string, unknown>, extraData: YamlExtraData): void {
   if ("mgmtIpv4" in data) extraData["mgmt-ipv4"] = toStringOrNull(data.mgmtIpv4);
   if ("mgmtIpv6" in data) extraData["mgmt-ipv6"] = toStringOrNull(data.mgmtIpv6);
+  if ("mgmtNet" in data) extraData["mgmt-net"] = toStringOrNull(data.mgmtNet);
   if ("networkMode" in data) extraData["network-mode"] = toStringOrNull(data.networkMode);
   if (getStringArray(data.ports) !== undefined) extraData.ports = toListOrNull(data.ports);
   convertDnsToYaml(data, extraData);

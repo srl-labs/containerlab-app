@@ -1,12 +1,15 @@
 // Network editor content for the ContextPanel.
-import React, { useCallback } from "react";
+import React, { useCallback, useMemo } from "react";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 
 import { InputField, FilterableDropdown, KeyValueList, PanelSection } from "../../../ui/form";
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
 import { useApplySaveHandlers, useFooterControlsRef } from "../../../../hooks/ui";
 import { useNetworkEditorForm } from "../../../../hooks/editor/useNetworkEditorForm";
 import type { NetworkEditorData, NetworkType } from "../../network-editor/types";
+import { getMgmtNetworkName, getMgmtNetworks } from "../../../../core/types/labSettings";
+import { useTopoViewerStore } from "../../../../stores/topoViewerStore";
 import {
   NETWORK_TYPES,
   VXLAN_TYPES,
@@ -53,6 +56,23 @@ function isNetworkType(value: string): value is NetworkType {
   }
 }
 
+/** mgmt-net links attach to the bridge of the first (default) management network only. */
+const MgmtNetLinkNote: React.FC = () => {
+  const labSettings = useTopoViewerStore((state) => state.labSettings);
+  const networks = useMemo(() => getMgmtNetworks(labSettings), [labSettings]);
+  if (networks.length < 2) return null;
+  return (
+    <Typography
+      variant="caption"
+      data-testid="network-mgmt-net-note"
+      sx={{ color: "text.secondary", display: "block" }}
+    >
+      Connects to the bridge of the default management network ({getMgmtNetworkName(networks[0])}),
+      not to the other networks of this lab.
+    </Typography>
+  );
+};
+
 // This form is intentionally dense (conditional sections depend on network type).
 /* eslint-disable complexity */
 const NetworkEditorContent: React.FC<{
@@ -90,6 +110,7 @@ const NetworkEditorContent: React.FC<{
           placeholder="Select network type..."
           allowFreeText={false}
         />
+        {formData.networkType === "mgmt-net" && <MgmtNetLinkNote />}
 
         {showInterfaceField(formData.networkType) && (
           <InputField

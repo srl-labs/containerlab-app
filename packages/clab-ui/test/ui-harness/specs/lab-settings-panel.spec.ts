@@ -588,7 +588,7 @@ test.describe("Lab Settings Modal", () => {
     expect(await topoViewerPage.getYamlFromFile(SIMPLE_FILE)).toContain(`name: renamed-lab\n${mgmt}\n`);
   });
 
-  test("Management tab is read-only when several management networks are defined", async ({
+  test("a list of management networks is listed and survives a lab name change", async ({
     page,
     topoViewerPage
   }) => {
@@ -607,12 +607,11 @@ test.describe("Lab Settings Modal", () => {
     const modal = await openModal(page);
     await modal.locator(SEL_LAB_SETTINGS_TAB_MGMT).click();
 
-    const notice = modal.getByTestId("lab-settings-mgmt-multi-network");
-    await expect(notice).toBeVisible();
-    await expect(notice).toContainText("2 management networks");
-    await expect(notice).toContainText("net1 (default)");
-    await expect(notice).toContainText("net2 - macvlan");
-    await expect(modal.getByRole("textbox", { name: "Network Name" })).toHaveCount(0);
+    await expect(modal.getByTestId("lab-settings-mgmt-network-0")).toContainText("net1");
+    await expect(modal.getByTestId("lab-settings-mgmt-network-0")).toContainText("default");
+    await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText("net2");
+    await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText("macvlan");
+    await expect(modal.getByRole("textbox", { name: "Network Name" })).toHaveValue("net1");
 
     await modal.locator(SEL_LAB_SETTINGS_TAB_BASIC).click();
     const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
