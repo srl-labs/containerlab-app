@@ -15,8 +15,10 @@ import type {
   TopoNode,
   TopoEdge,
   TopologyNodeData,
-  TopologyEdgeData
+  TopologyEdgeData,
+  PastedElements
 } from "../../core/types/graph";
+import { isNodeYamlSource, type NodeYamlSource } from "../../core/io/NodeYamlClone";
 import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
@@ -42,6 +44,8 @@ interface SerializedNode {
   height?: number;
   /** zIndex for proper layering */
   zIndex?: number;
+  /** Own YAML of the copied topology node */
+  yamlSource?: NodeYamlSource;
 }
 
 /** Serialized edge data for clipboard */
@@ -100,8 +104,10 @@ export interface UseClipboardOptions extends PasteCallbacks {
   rfInstance?: ReactFlowInstance | null;
   /** Get node's group membership (for topology nodes whose groupId is not in node.data) */
   getNodeMembership?: (nodeId: string) => string | null;
+  /** Read the own YAML of copied topology nodes, keyed by node id */
+  getNodeYamlSources?: (nodeIds: string[]) => Map<string, NodeYamlSource>;
   /** Optional callback for batch persistence after paste */
-  onPasteComplete?: (result: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+  onPasteComplete?: (result: PastedElements) => void;
 }
 
 /** Return type for useClipboard hook */
@@ -333,6 +339,29 @@ function buildIdMapping(
   return idMapping;
 }
 
+/**
+ * Applies the identity changes paste makes to the node's YAML (see NodeYamlClone)
+ * to its graph data, so the canvas and editors match the saved node.
+ */
+function resetPastedIdentity(
+  data: Record<string, unknown>,
+  oldName: string,
+  newName: string
+): Record<string, unknown> {
+  const extra = isRecord(data.extraData) ? { ...data.extraData } : undefined;
+  if (!extra) return data;
+
+  delete extra["mgmt-ipv4"];
+  delete extra["mgmt-ipv6"];
+  if (extra.hostname === oldName) extra.hostname = newName;
+  if (isRecord(extra.labels)) {
+    extra.labels = Object.fromEntries(
+      Object.entries(extra.labels).map(([key, value]) => [key, value === oldName ? newName : value])
+    );
+  }
+  return { ...data, extraData: extra };
+}
+
 /** Create a single pasted node */
 function createPastedNode(
   node: SerializedNode,
@@ -349,7 +378,7 @@ function createPastedNode(
     ...(node.height !== undefined && { height: node.height }),
     ...(node.zIndex !== undefined && { zIndex: node.zIndex }),
     data: {
-      ...node.data,
+      ...resetPastedIdentity(node.data, node.id, newId),
       id: newId,
       name: newId,
       label: newId,
@@ -459,6 +488,7 @@ interface PasteContext extends PasteCallbacks {
   offset: number;
   pastedNodes: TopoNode[];
   pastedEdges: TopoEdge[];
+  yamlSources: Record<string, NodeYamlSource>;
   pastedNodeIds: string[];
   pastedEdgeIds: string[];
   addNode: (node: TopoNode) => void;
@@ -482,6 +512,9 @@ function pasteNodes(clipboardNodes: SerializedNode[], ctx: PasteContext): void {
         : undefined;
     const newNode = createPastedNode(node, newId, newPosition, newGroupId);
     ctx.pastedNodes.push(newNode);
+    if (isNodeYamlSource(node.yamlSource)) {
+      ctx.yamlSources[newId] = node.yamlSource;
+    }
 
     if (ctx.onNodeCreated) {
       ctx.onNodeCreated(newId, newNode, newPosition);
@@ -558,6 +591,7 @@ function createPasteContext(
     offset: params.offset,
     pastedNodes: [],
     pastedEdges: [],
+    yamlSources: {},
     pastedNodeIds: [],
     pastedEdgeIds: [],
     addNode: params.addNode,
@@ -572,11 +606,15 @@ function finalizePaste(
   ctx: PasteContext,
   options: {
     rfInstance?: ReactFlowInstance | null;
-    onPasteComplete?: (result: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+    onPasteComplete?: (result: PastedElements) => void;
   }
 ): void {
   if (options.onPasteComplete) {
-    options.onPasteComplete({ nodes: ctx.pastedNodes, edges: ctx.pastedEdges });
+    options.onPasteComplete({
+      nodes: ctx.pastedNodes,
+      edges: ctx.pastedEdges,
+      yamlSources: ctx.yamlSources
+    });
   }
 
   setTimeout(() => {
@@ -596,7 +634,7 @@ interface PerformPasteParams extends PasteCallbacks {
   getNodes: () => Array<{ id: string }>;
   addNode: (node: TopoNode) => void;
   addEdge: (edge: TopoEdge) => void;
-  onPasteComplete?: (result: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+  onPasteComplete?: (result: PastedElements) => void;
 }
 
 async function performPaste(params: PerformPasteParams): Promise<boolean> {
@@ -663,6 +701,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     onNodeCreated,
     onEdgeCreated,
     getNodeMembership,
+    getNodeYamlSources,
     addNodeToGroup,
     rfInstance,
     onPasteComplete
@@ -709,6 +748,14 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
     const positions = selectedNodes.map((n: { position: { x: number; y: number } }) => n.position);
     const origin = calculateCenter(positions);
 
+    // Copy the own YAML of topology nodes so paste keeps every key written on them
+    const yamlSources =
+      getNodeYamlSources?.(
+        selectedNodes
+          .filter((n: { type?: string }) => !ANNOTATION_TYPES.has(n.type ?? ""))
+          .map((n: { id: string }) => n.id)
+      ) ?? new Map<string, NodeYamlSource>();
+
     const serializedNodes: SerializedNode[] = selectedNodes.map(
       (node: {
         id: string;
@@ -726,6 +773,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
         if (groupId == null && getNodeMembership) {
           groupId = getNodeMembership(node.id) ?? undefined;
         }
+        const yamlSource = yamlSources.get(node.id);
         return {
           id: node.id,
           data: { ...nodeData, groupId },
@@ -738,7 +786,8 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
           // Preserve top-level dimensions for annotation nodes (groups, shapes, text)
           width: node.width,
           height: node.height,
-          zIndex: node.zIndex
+          zIndex: node.zIndex,
+          ...(yamlSource && { yamlSource })
         };
       }
     );
@@ -774,7 +823,7 @@ export function useClipboard(options: UseClipboardOptions = {}): UseClipboardRet
       log.warn(`[Clipboard] Browser clipboard write failed; using in-memory copy: ${String(err)}`);
       return true;
     }
-  }, [rfInstance, getNodeMembership]);
+  }, [rfInstance, getNodeMembership, getNodeYamlSources]);
 
   /**
    * Paste clipboard contents at the given position (or viewport center).

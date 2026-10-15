@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import * as YAML from "yaml";
 
 import { test, expect } from "../fixtures/topoviewer";
 import { shiftClick } from "../helpers/react-flow-helpers";
@@ -781,5 +782,132 @@ test.describe("Copy, Paste, and Cut Operations", () => {
     expect(nodeCountAfter).toBe(0);
 
     console.log("[INFO] Copy/paste on empty topology handled gracefully");
+  });
+});
+
+const RICH_YAML = `name: simple
+topology:
+  defaults:
+    labels:
+      owner: lab-team
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+      hostname: srl1
+      mgmt-net: oob # second management network
+      mgmt-ipv4: 172.20.20.11
+      credentials:
+        username: admin
+      volumes:
+        - data:/data
+      components:
+        - slot: A
+          type: cpm2-ixr-e
+      ports:
+        - 50080:80
+    srl2:
+      kind: nokia_srlinux
+  links:
+    - endpoints: ["srl1:e1-1", "srl2:e1-1"]
+`;
+
+type TopologyNodes = Record<string, Record<string, unknown> | null>;
+
+function parseNodes(yaml: string): TopologyNodes {
+  const parsed = YAML.parse(yaml) as { topology?: { nodes?: TopologyNodes } };
+  return parsed.topology?.nodes ?? {};
+}
+
+test.describe("Copy and paste keep the node's own YAML", () => {
+  test.beforeEach(async ({ topoViewerPage }) => {
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.writeYamlFile(SIMPLE_FILE, RICH_YAML);
+    await topoViewerPage.gotoFile(SIMPLE_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+  });
+
+  async function pastedNode(
+    topoViewerPage: { readYamlFile: (file: string) => Promise<string> },
+    name: string
+  ): Promise<Record<string, unknown>> {
+    let node: Record<string, unknown> | null | undefined;
+    await expect
+      .poll(async () => {
+        node = parseNodes(await topoViewerPage.readYamlFile(SIMPLE_FILE))[name];
+        return node != null;
+      })
+      .toBe(true);
+    return node as Record<string, unknown>;
+  }
+
+  test("paste keeps own keys, leaves inherited values out and renames identity fields", async ({
+    topoViewerPage,
+    page
+  }) => {
+    await topoViewerPage.selectNode("srl1");
+    await topoViewerPage.copy();
+    await topoViewerPage.paste();
+
+    const node = await pastedNode(topoViewerPage, "srl3");
+    expect(node).toEqual({
+      kind: "nokia_srlinux",
+      hostname: "srl3",
+      "mgmt-net": "oob",
+      credentials: { username: "admin" },
+      volumes: ["data:/data"],
+      components: [{ slot: "A", type: "cpm2-ixr-e" }],
+      ports: ["50081:80"]
+    });
+    const yaml = await topoViewerPage.readYamlFile(SIMPLE_FILE);
+    expect(yaml).toMatch(/srl3:\n(?: {6}.*\n)* {6}mgmt-net: oob # second management network/);
+
+    // The pasted node's graph data matches what was saved
+    const extraData = await page.evaluate(() => {
+      const rf = (window as any).__DEV__?.rfInstance;
+      return rf?.getNode("srl3")?.data?.extraData as Record<string, unknown> | undefined;
+    });
+    expect(extraData?.hostname).toBe("srl3");
+    expect(extraData?.["mgmt-ipv4"]).toBeUndefined();
+  });
+
+  test("copy, delete and paste keeps the keys of the deleted node", async ({
+    topoViewerPage,
+    page
+  }) => {
+    await topoViewerPage.selectNode("srl1");
+    await topoViewerPage.copy();
+    await topoViewerPage.deleteNode("srl1");
+    await expect
+      .poll(async () => parseNodes(await topoViewerPage.readYamlFile(SIMPLE_FILE)).srl1)
+      .toBeUndefined();
+
+    // Deleting may move focus to the side panel; paste targets the canvas
+    await page.locator(".react-flow__pane").click({ position: { x: 200, y: 400 } });
+    await topoViewerPage.paste();
+    await expect.poll(() => topoViewerPage.getNodeCount()).toBe(2);
+    const pastedIds = (await topoViewerPage.getNodeIds()).filter((id) => id !== "srl2");
+    expect(pastedIds).toHaveLength(1);
+    const node = await pastedNode(topoViewerPage, pastedIds[0]);
+    expect(node.credentials).toEqual({ username: "admin" });
+    expect(node.components).toEqual([{ slot: "A", type: "cpm2-ixr-e" }]);
+    expect(node.image).toBeUndefined();
+    expect(node.labels).toBeUndefined();
+    expect(node["mgmt-ipv4"]).toBeUndefined();
+  });
+
+  test("undo after delete restores the node's YAML exactly", async ({ topoViewerPage }) => {
+    const before = await topoViewerPage.readYamlFile(SIMPLE_FILE);
+    await topoViewerPage.deleteNode("srl1");
+    await expect
+      .poll(async () => parseNodes(await topoViewerPage.readYamlFile(SIMPLE_FILE)).srl1)
+      .toBeUndefined();
+
+    await topoViewerPage.undo();
+    await expect.poll(() => topoViewerPage.readYamlFile(SIMPLE_FILE)).toBe(before);
   });
 });

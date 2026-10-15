@@ -3,6 +3,7 @@ import type { Node, Edge } from "@xyflow/react";
 
 import type { TextStyle, BoxStyle, TrafficRateStyle } from "./annotationStyles";
 import type { NodeBoxAppearance } from "./topology";
+import type { NodeYamlSource } from "../io/NodeYamlClone";
 import { BUILTIN_ICON_ALIASES, BUILTIN_ICONS, type BuiltInIcon } from "./icons";
 
 // ============================================================================
@@ -240,6 +241,16 @@ export type NodeCreatedHandler = (
   nodeElement: TopoNode,
   position: { x: number; y: number }
 ) => void;
+
+/**
+ * Elements created by one paste / duplicate
+ */
+export interface PastedElements {
+  nodes: TopoNode[];
+  edges: TopoEdge[];
+  /** Copied own YAML of each pasted node, keyed by the new node id */
+  yamlSources?: Partial<Record<string, NodeYamlSource>>;
+}
 
 // ============================================================================
 // Constants

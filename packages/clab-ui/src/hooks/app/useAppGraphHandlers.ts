@@ -10,7 +10,8 @@ import type {
   TopoEdge,
   TopoNode,
   EdgeCreatedHandler,
-  NodeCreatedHandler
+  NodeCreatedHandler,
+  PastedElements
 } from "../../core/types/graph";
 import { getRecordUnknown } from "../../core/utilities/typeHelpers";
 import type { GraphActions } from "../../stores/graphStore";
@@ -49,7 +50,7 @@ function isTopologyEdgeData(value: unknown): value is TopologyEdgeData {
 export interface AppGraphHandlers {
   handleEdgeCreated: EdgeCreatedHandler;
   handleNodeCreatedCallback: NodeCreatedHandler;
-  handleBatchPaste: (payload: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+  handleBatchPaste: (payload: PastedElements) => void;
   handleDeleteNode: (nodeId: string) => void;
   handleDeleteLink: (edgeId: string) => void;
   handleUpdateNodeData: (nodeId: string, extraData: Record<string, unknown>) => void;

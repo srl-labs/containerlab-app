@@ -7,7 +7,9 @@
 import React from "react";
 import type { ReactFlowInstance } from "@xyflow/react";
 
-import type { TopoNode, TopoEdge } from "../../core/types/graph";
+import type { TopoNode, PastedElements } from "../../core/types/graph";
+import { extractNodeYamlSources, type NodeYamlSource } from "../../core/io/NodeYamlClone";
+import { useTopoViewerStore } from "../../stores/topoViewerStore";
 
 import {
   useClipboard,
@@ -22,6 +24,11 @@ interface AnnotationsClipboardSubset {
   getNodeMembership: (nodeId: string) => string | null;
   addNodeToGroup: (nodeId: string, groupId: string) => void;
   deleteAllSelected: () => void;
+}
+
+/** Reads copied nodes' own YAML from the topology file the host last sent */
+function getNodeYamlSources(nodeIds: string[]): Map<string, NodeYamlSource> {
+  return extractNodeYamlSources(useTopoViewerStore.getState().yamlContent, nodeIds);
 }
 
 /** Debounce interval in milliseconds */
@@ -102,7 +109,7 @@ export interface ClipboardHandlersConfig {
     }
   ) => void;
   /** Batch paste handler for unified undo/redo */
-  handleBatchPaste?: (result: { nodes: TopoNode[]; edges: TopoEdge[] }) => void;
+  handleBatchPaste?: (result: PastedElements) => void;
 }
 
 /**
@@ -140,6 +147,7 @@ export function useClipboardHandlers(config: ClipboardHandlersConfig): Clipboard
       onNodeCreated: handleNodeCreatedCallback,
       onEdgeCreated: handleEdgeCreated,
       getNodeMembership: annotations.getNodeMembership,
+      getNodeYamlSources,
       addNodeToGroup: annotations.addNodeToGroup,
       onPasteComplete: handleBatchPaste
     }),

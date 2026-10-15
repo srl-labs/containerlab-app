@@ -9,6 +9,7 @@ import type {
   TopologySnapshot
 } from "../types/messages";
 import type { FileSystemAdapter } from "../io/types";
+import { extractNodeYamlSources } from "../io/NodeYamlClone";
 
 type AckWithSnapshot = Extract<TopologyHostResponseMessage, { type: "topology-host:ack" }> & {
   snapshot: TopologySnapshot;
@@ -355,4 +356,104 @@ topology:
       ?.position,
     { x: 300, y: 400 }
   );
+});
+
+const RICH_NODE_YAML = `name: demo
+topology:
+  defaults:
+    image: ghcr.io/example/default:1.0
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    # border router
+    frr1:
+      kind: frr
+      hostname: frr1
+      mgmt-ipv4: 172.20.20.21 # pinned
+      credentials:
+        username: admin
+      volumes:
+        - frr-data:/data
+      daemons: [bgpd, ospfd]
+      ports:
+        - 2601:2601
+  links:
+    - endpoints: ["srl1:e1-1", "frr1:eth1"]
+`;
+
+test("undo after deleting a node restores the exact YAML", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/undo-delete.clab.yml";
+  await fs.writeFile(yamlFilePath, RICH_NODE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath,
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+
+  const { revision } = await host.getSnapshot();
+  const deleted = await apply(host, revision, {
+    command: "deleteNode",
+    payload: { id: "frr1" }
+  });
+  assert.equal((await fs.readFile(yamlFilePath)).includes("frr1"), false);
+
+  const undone = await host.applyCommand({ command: "undo" }, deleted.snapshot.revision);
+  assertAck(undone);
+  assert.equal(await fs.readFile(yamlFilePath), RICH_NODE_YAML);
+});
+
+test("pasting a copied node keeps its own keys and undo removes it again", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/paste.clab.yml";
+  await fs.writeFile(yamlFilePath, RICH_NODE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath,
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+
+  const snapshot = await host.getSnapshot();
+  const yamlSource = extractNodeYamlSources(snapshot.yamlContent, ["frr1"]).get("frr1");
+  assert.ok(yamlSource);
+
+  const pasted = await apply(host, snapshot.revision, {
+    command: "batch",
+    payload: {
+      commands: [
+        {
+          command: "addNode",
+          payload: {
+            id: "frr2",
+            name: "frr2",
+            position: { x: 10, y: 10 },
+            extraData: { kind: "frr", image: "ghcr.io/example/default:1.0" },
+            yamlSource
+          }
+        }
+      ]
+    }
+  });
+  const yaml = await fs.readFile(yamlFilePath);
+  assert.ok(
+    yaml.includes(`    # border router
+    frr2:
+      kind: frr
+      hostname: frr2
+      credentials:
+        username: admin
+      volumes:
+        - frr-data:/data
+      daemons: [ bgpd, ospfd ]
+      ports:
+        - 2602:2601
+`),
+    yaml
+  );
+
+  const undone = await host.applyCommand({ command: "undo" }, pasted.snapshot.revision);
+  assertAck(undone);
+  assert.equal(await fs.readFile(yamlFilePath), RICH_NODE_YAML);
 });

@@ -13,6 +13,7 @@ import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 import type { SaveResult, IOLogger } from "./types";
 import { ERROR_NODES_NOT_MAP, noopLogger } from "./types";
 import { deepEqual, setOrDelete } from "./YamlDocumentIO";
+import { createPastedNodePair, type NodeYamlSource } from "./NodeYamlClone";
 
 function getYamlMapIn(
   doc: YAML.Document.Parsed,
@@ -114,6 +115,11 @@ export interface NodeSaveData {
     [key: string]: unknown;
   };
   position?: { x: number; y: number };
+  /**
+   * Own YAML of a copied node. When set, addNode clones it instead of
+   * building the node from extraData (copy / paste / duplicate).
+   */
+  yamlSource?: NodeYamlSource;
 }
 
 /** Node annotation data that can be saved to annotations file */
@@ -268,6 +274,30 @@ function createNodeYaml(doc: YAML.Document, nodeData: NodeSaveData): YAML.YAMLMa
   }
 
   return nodeMap;
+}
+
+/**
+ * Clones a copied node's own YAML for paste / duplicate.
+ * Returns undefined when there is no usable copy, so the caller falls back to createNodeYaml.
+ */
+function createPastedPair(
+  doc: YAML.Document,
+  nodeData: NodeSaveData,
+  nodeId: string,
+  logger: IOLogger
+): YAML.Pair | undefined {
+  if (!nodeData.yamlSource) return undefined;
+  const extra = nodeData.extraData ?? {};
+  try {
+    return createPastedNodePair(doc, nodeData.yamlSource, nodeId, {
+      kind: extra.kind,
+      image: extra.image
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn(`[SaveTopology] ${message}; creating "${nodeId}" from node data`);
+    return undefined;
+  }
 }
 
 /**
@@ -462,8 +492,12 @@ export function addNodeToDoc(
     }
 
     // Create and add the node
-    const nodeYaml = createNodeYaml(doc, nodeData);
-    nodesMap.set(nodeId, nodeYaml);
+    const pastedPair = createPastedPair(doc, nodeData, nodeId, logger);
+    if (pastedPair) {
+      nodesMap.items.push(pastedPair);
+    } else {
+      nodesMap.set(nodeId, createNodeYaml(doc, nodeData));
+    }
 
     logger.info(`[SaveTopology] Added node: ${nodeId}`);
     return { success: true };
