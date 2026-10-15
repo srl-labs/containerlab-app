@@ -15,6 +15,7 @@ import type {
   IpType,
   DriverOption,
   BasicSettingsState,
+  MacvlanMode,
   MgmtFormState,
   MgmtNetworkFormState,
   MgmtSettingsState
@@ -56,8 +57,8 @@ function parseIpv4Settings(
 
 function parseIpv6Settings(
   mgmt?: LabSettings["mgmt"]
-): Pick<MgmtSettingsState, "ipv6Type" | "ipv6Subnet" | "ipv6Gateway"> {
-  const result = { ipv6Type: "default" as IpType, ipv6Subnet: "", ipv6Gateway: "" };
+): Pick<MgmtSettingsState, "ipv6Type" | "ipv6Subnet" | "ipv6Gateway" | "ipv6Range"> {
+  const result = { ipv6Type: "default" as IpType, ipv6Subnet: "", ipv6Gateway: "", ipv6Range: "" };
   const ipv6Subnet = mgmt?.["ipv6-subnet"];
   if (ipv6Subnet === undefined || ipv6Subnet === "") return result;
 
@@ -67,8 +68,16 @@ function parseIpv6Settings(
   return {
     ipv6Type: "custom",
     ipv6Subnet,
-    ipv6Gateway: mgmt?.["ipv6-gw"] ?? ""
+    ipv6Gateway: mgmt?.["ipv6-gw"] ?? "",
+    ipv6Range: mgmt?.["ipv6-range"] ?? ""
   };
+}
+
+const MACVLAN_MODES: readonly MacvlanMode[] = ["bridge", "private", "vepa", "passthru"];
+
+/** Docker's default mode is `bridge`. */
+function parseMacvlanMode(value: unknown): MacvlanMode {
+  return MACVLAN_MODES.find((mode) => mode === value) ?? "bridge";
 }
 
 function parseDriverOptions(mgmt?: LabSettings["mgmt"]): DriverOption[] {
@@ -86,12 +95,34 @@ export function buildInitialBasic(settings?: LabSettings): BasicSettingsState {
   };
 }
 
+function parseDriverSettings(
+  mgmt?: MgmtSettings
+): Pick<MgmtSettingsState, "driver" | "macvlanParent" | "macvlanMode" | "macvlanAux"> {
+  return {
+    driver: mgmt?.driver === "macvlan" ? "macvlan" : "bridge",
+    macvlanParent: mgmt?.["macvlan-parent"] ?? "",
+    macvlanMode: parseMacvlanMode(mgmt?.["macvlan-mode"]),
+    macvlanAux: mgmt?.["macvlan-aux"] !== false
+  };
+}
+
+function parseAllocationSettings(
+  mgmt?: MgmtSettings
+): Pick<MgmtSettingsState, "ipamProvider" | "ipamDad" | "skipWhenUnused"> {
+  return {
+    ipamProvider: mgmt?.ipam?.provider === "runtime" ? "runtime" : "containerlab",
+    ipamDad: mgmt?.ipam?.dad !== false,
+    skipWhenUnused: mgmt?.["skip-when-unused"] === true
+  };
+}
+
 function parseMgmtNetwork(mgmt?: MgmtSettings): MgmtSettingsState {
   const ipv4 = parseIpv4Settings(mgmt);
   const ipv6 = parseIpv6Settings(mgmt);
 
   return {
     networkName: mgmt?.network ?? "",
+    ...parseDriverSettings(mgmt),
     ipv4Type: ipv4.ipv4Type,
     ipv4Subnet: ipv4.ipv4Subnet,
     ipv4Gateway: ipv4.ipv4Gateway,
@@ -99,9 +130,11 @@ function parseMgmtNetwork(mgmt?: MgmtSettings): MgmtSettingsState {
     ipv6Type: ipv6.ipv6Type,
     ipv6Subnet: ipv6.ipv6Subnet,
     ipv6Gateway: ipv6.ipv6Gateway,
+    ipv6Range: ipv6.ipv6Range,
     mtu: mgmt?.mtu !== undefined ? String(mgmt.mtu) : "",
     bridge: mgmt?.bridge ?? "",
     externalAccess: mgmt?.["external-access"] !== false,
+    ...parseAllocationSettings(mgmt),
     driverOptions: parseDriverOptions(mgmt)
   };
 }
@@ -121,8 +154,7 @@ export function buildInitialMgmt(settings?: LabSettings): MgmtFormState {
       ? loaded.map((network, index) => ({
           ...parseMgmtNetwork(network),
           id: `network-${index}`,
-          source: index,
-          driver: typeof network.driver === "string" ? network.driver : undefined
+          source: index
         }))
       : [{ ...parseMgmtNetwork(), id: "network-0" }];
   return { networks, defaultMgmtNet: settings?.defaultMgmtNet ?? "" };
@@ -134,7 +166,8 @@ function gatherPrefix(prefixType: PrefixType, customPrefix: string): string | nu
   return null;
 }
 
-type GatheredMgmt = Record<string, string | number | boolean | Record<string, string>>;
+type GatheredMap = Record<string, string | boolean>;
+type GatheredMgmt = Record<string, string | number | boolean | GatheredMap>;
 
 function gatherIpv4Settings(mgmtState: MgmtSettingsState): Record<string, string> {
   const ipv4: Record<string, string> = {};
@@ -159,21 +192,57 @@ function gatherIpv6Settings(mgmtState: MgmtSettingsState): Record<string, string
   if (mgmtState.ipv6Type === "custom") {
     if (mgmtState.ipv6Subnet) ipv6["ipv6-subnet"] = mgmtState.ipv6Subnet;
     if (mgmtState.ipv6Gateway) ipv6["ipv6-gw"] = mgmtState.ipv6Gateway;
+    if (mgmtState.ipv6Range) ipv6["ipv6-range"] = mgmtState.ipv6Range;
   }
   return ipv6;
+}
+
+/**
+ * Keys of the selected driver only. containerlab rejects macvlan keys on a
+ * bridge network, and bridge, mtu and external-access: false on a macvlan one,
+ * so switching the driver drops the keys of the other.
+ */
+function gatherDriverSettings(mgmtState: MgmtSettingsState): GatheredMgmt {
+  const mgmt: GatheredMgmt = {};
+  if (mgmtState.driver === "macvlan") {
+    mgmt.driver = "macvlan";
+    if (mgmtState.macvlanParent) mgmt["macvlan-parent"] = mgmtState.macvlanParent;
+    if (mgmtState.macvlanMode !== "bridge") mgmt["macvlan-mode"] = mgmtState.macvlanMode;
+    if (!mgmtState.macvlanAux) mgmt["macvlan-aux"] = false;
+    return mgmt;
+  }
+  const mtu = mgmtState.mtu ? parseInt(mgmtState.mtu, 10) : NaN;
+  if (Number.isFinite(mtu)) mgmt.mtu = mtu;
+  if (mgmtState.bridge) mgmt.bridge = mgmtState.bridge;
+  if (!mgmtState.externalAccess) mgmt["external-access"] = false;
+  return mgmt;
+}
+
+function gatherIpam(mgmtState: MgmtSettingsState): GatheredMap | undefined {
+  const ipam: GatheredMap = {};
+  if (mgmtState.ipamProvider === "runtime") ipam.provider = "runtime";
+  if (!mgmtState.ipamDad) ipam.dad = false;
+  return Object.keys(ipam).length > 0 ? ipam : undefined;
 }
 
 /** mgmt keys the form owns, in the order new keys are written. */
 const MGMT_FORM_KEYS = [
   "network",
+  "driver",
+  "macvlan-parent",
+  "macvlan-mode",
+  "macvlan-aux",
   "ipv4-subnet",
   "ipv4-gw",
   "ipv4-range",
   "ipv6-subnet",
   "ipv6-gw",
+  "ipv6-range",
   "mtu",
   "bridge",
   "external-access",
+  "ipam",
+  "skip-when-unused",
   "driver-opts"
 ] as const;
 
@@ -182,12 +251,16 @@ function gatherMgmtSettings(mgmtState: MgmtSettingsState): GatheredMgmt {
   const mgmt: GatheredMgmt = {};
 
   if (mgmtState.networkName) mgmt.network = mgmtState.networkName;
-  Object.assign(mgmt, gatherIpv4Settings(mgmtState), gatherIpv6Settings(mgmtState));
+  Object.assign(
+    mgmt,
+    gatherDriverSettings(mgmtState),
+    gatherIpv4Settings(mgmtState),
+    gatherIpv6Settings(mgmtState)
+  );
 
-  const mtu = mgmtState.mtu ? parseInt(mgmtState.mtu, 10) : NaN;
-  if (Number.isFinite(mtu)) mgmt.mtu = mtu;
-  if (mgmtState.bridge) mgmt.bridge = mgmtState.bridge;
-  if (!mgmtState.externalAccess) mgmt["external-access"] = false;
+  const ipam = gatherIpam(mgmtState);
+  if (ipam) mgmt.ipam = ipam;
+  if (mgmtState.skipWhenUnused) mgmt["skip-when-unused"] = true;
 
   const driverOpts: Record<string, string> = {};
   mgmtState.driverOptions.forEach((opt) => {
@@ -198,11 +271,11 @@ function gatherMgmtSettings(mgmtState: MgmtSettingsState): GatheredMgmt {
   return mgmt;
 }
 
-function diffStringMap(
-  before: Record<string, string>,
-  after: Record<string, string>
-): Record<string, string | null> {
-  const changes: Record<string, string | null> = {};
+function diffScalarMap(
+  before: GatheredMap,
+  after: GatheredMap
+): Record<string, string | boolean | null> {
+  const changes: Record<string, string | boolean | null> = {};
   for (const [key, value] of Object.entries(after)) {
     if (before[key] !== value) changes[key] = value;
   }
@@ -217,13 +290,15 @@ function diffMgmtSettings(before: GatheredMgmt, after: GatheredMgmt): MgmtSettin
   for (const key of MGMT_FORM_KEYS) {
     const prev = before[key] as GatheredMgmt[string] | undefined;
     const next = after[key] as GatheredMgmt[string] | undefined;
-    if (next === undefined) {
-      if (prev !== undefined) changes[key] = null;
-    } else if (typeof next === "object") {
-      const optChanges = diffStringMap(typeof prev === "object" ? prev : {}, next);
-      if (Object.keys(optChanges).length > 0) {
-        changes[key] = prev === undefined ? next : optChanges;
+    if (typeof prev === "object" || typeof next === "object") {
+      // Nested maps change key by key, so keys the form does not own stay.
+      const nextMap = typeof next === "object" ? next : {};
+      const mapChanges = diffScalarMap(typeof prev === "object" ? prev : {}, nextMap);
+      if (Object.keys(mapChanges).length > 0) {
+        changes[key] = prev === undefined ? nextMap : mapChanges;
       }
+    } else if (next === undefined) {
+      if (prev !== undefined) changes[key] = null;
     } else if (prev !== next) {
       changes[key] = next;
     }
@@ -232,6 +307,29 @@ function diffMgmtSettings(before: GatheredMgmt, after: GatheredMgmt): MgmtSettin
 }
 
 const EMPTY_MGMT: GatheredMgmt = {};
+
+/** Keys containerlab only accepts with one driver. */
+const DRIVER_ONLY_KEYS: Record<MgmtSettingsState["driver"], readonly (keyof MgmtSettings)[]> = {
+  bridge: ["mtu", "bridge", "external-access"],
+  macvlan: ["macvlan-parent", "macvlan-mode", "macvlan-aux"]
+};
+
+/**
+ * After a driver switch, removes every key of the old driver that the file
+ * sets, including explicit defaults such as `macvlan-mode: bridge`.
+ */
+function dropOldDriverKeys(
+  loaded: MgmtSettings | undefined,
+  oldDriver: MgmtSettingsState["driver"],
+  newDriver: MgmtSettingsState["driver"],
+  changes: MgmtSettingsUpdate
+): void {
+  if (!loaded || oldDriver === newDriver) return;
+  const target: Record<string, unknown> = changes;
+  for (const key of DRIVER_ONLY_KEYS[oldDriver]) {
+    if (loaded[key] !== undefined && !(key in target)) target[key] = null;
+  }
+}
 
 /**
  * The management network list to write, or undefined when it is unchanged. A
@@ -243,12 +341,16 @@ function buildMgmtNetworksUpdate(
   form: MgmtFormState
 ): MgmtNetworkUpdate[] | undefined {
   const networks = form.networks.map((network): MgmtNetworkUpdate => {
-    const before =
-      network.source !== undefined
-        ? gatherMgmtSettings(initial.networks[network.source])
-        : EMPTY_MGMT;
-    const changes = diffMgmtSettings(before, gatherMgmtSettings(network));
-    return network.source !== undefined ? { source: network.source, changes } : { changes };
+    if (network.source === undefined) {
+      return { changes: diffMgmtSettings(EMPTY_MGMT, gatherMgmtSettings(network)) };
+    }
+    const initialNetwork = initial.networks[network.source];
+    const changes = diffMgmtSettings(
+      gatherMgmtSettings(initialNetwork),
+      gatherMgmtSettings(network)
+    );
+    dropOldDriverKeys(loaded[network.source], initialNetwork.driver, network.driver, changes);
+    return { source: network.source, changes };
   });
 
   const hasChanges = networks.some((network) => Object.keys(network.changes).length > 0);
@@ -318,32 +420,79 @@ export function buildLabSettingsUpdate(
 export interface MgmtNetworkIssues {
   networkName?: string;
   bridge?: string;
+  macvlanParent?: string;
+  ipv4Type?: string;
+  ipv6Type?: string;
+  driverOptions?: string;
+}
+
+/** Linux interface names: at most 15 characters, no slash, colon or whitespace. */
+const MAX_INTERFACE_NAME_LENGTH = 15;
+const INVALID_INTERFACE_NAME = /[/:\s]/;
+
+/** Driver options containerlab derives from the macvlan settings. */
+function conflictingMacvlanOption(network: MgmtSettingsState): string | undefined {
+  const expected: Record<string, string> = {
+    parent: network.macvlanParent,
+    macvlan_mode: network.macvlanMode
+  };
+  return network.driverOptions.find(
+    (opt) => opt.key in expected && opt.value !== "" && opt.value !== expected[opt.key]
+  )?.key;
+}
+
+function countValues(values: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    if (value !== "") counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function macvlanIssues(
+  network: MgmtSettingsState,
+  parentCounts: Map<string, number>
+): MgmtNetworkIssues {
+  const issues: MgmtNetworkIssues = {};
+  const parent = network.macvlanParent;
+  if (parent.trim() === "") {
+    issues.macvlanParent = "Required for macvlan networks";
+  } else if (parent.length > MAX_INTERFACE_NAME_LENGTH || INVALID_INTERFACE_NAME.test(parent)) {
+    issues.macvlanParent = "Not a valid interface name";
+  } else if ((parentCounts.get(parent) ?? 0) > 1) {
+    issues.macvlanParent = "Another management network uses this parent interface";
+  }
+  if (network.ipv4Type === "auto") issues.ipv4Type = "Macvlan networks cannot auto-assign a subnet";
+  if (network.ipv6Type === "auto") issues.ipv6Type = "Macvlan networks cannot auto-assign a subnet";
+  const conflict = conflictingMacvlanOption(network);
+  if (conflict !== undefined) {
+    issues.driverOptions = `${conflict} conflicts with the macvlan settings above`;
+  }
+  return issues;
 }
 
 /**
  * Problems containerlab rejects at deploy time: with several networks each
- * needs a unique name, and two networks cannot share a bridge.
+ * needs a unique name, two networks cannot share a bridge or a macvlan parent,
+ * and a macvlan network needs a valid parent and no auto subnet.
  */
 export function validateMgmtNetworks(form: MgmtFormState): MgmtNetworkIssues[] {
   const several = form.networks.length > 1;
-  const nameCounts = new Map<string, number>();
-  const bridgeCounts = new Map<string, number>();
-  for (const network of form.networks) {
-    const name = network.networkName.trim();
-    const bridge = network.bridge.trim();
-    if (name !== "") nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
-    if (bridge !== "") bridgeCounts.set(bridge, (bridgeCounts.get(bridge) ?? 0) + 1);
-  }
+  const bridges = form.networks.filter((network) => network.driver === "bridge");
+  const macvlans = form.networks.filter((network) => network.driver === "macvlan");
+  const nameCounts = countValues(form.networks.map((network) => network.networkName.trim()));
+  const bridgeCounts = countValues(bridges.map((network) => network.bridge.trim()));
+  const parentCounts = countValues(macvlans.map((network) => network.macvlanParent));
   return form.networks.map((network) => {
-    const issues: MgmtNetworkIssues = {};
+    const issues: MgmtNetworkIssues =
+      network.driver === "macvlan" ? macvlanIssues(network, parentCounts) : {};
     const name = network.networkName.trim();
-    const bridge = network.bridge.trim();
     if (several && name === "") {
       issues.networkName = "Required when the lab has several management networks";
     } else if ((nameCounts.get(name) ?? 0) > 1) {
       issues.networkName = "Another management network uses this name";
     }
-    if ((bridgeCounts.get(bridge) ?? 0) > 1) {
+    if (network.driver === "bridge" && (bridgeCounts.get(network.bridge.trim()) ?? 0) > 1) {
       issues.bridge = "Another management network uses this bridge";
     }
     return issues;

@@ -225,3 +225,72 @@ test.describe("Single management network", () => {
     await expect(page.locator('[data-id="srl1"] [data-mgmt-net="clab"]')).toHaveCount(1);
   });
 });
+
+test.describe("Macvlan management network", () => {
+  test.beforeEach(async ({ topoViewerPage }) => {
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(MULTI_FILE);
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+  });
+
+  test("switching a network to macvlan swaps the bridge fields for macvlan ones", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const modal = await openMgmtTab(page);
+    await modal.getByRole("button", { name: "Edit management network lab" }).click();
+    await expect(modal.getByRole("textbox", { name: "Bridge Name" })).toHaveValue("br-lab");
+
+    await modal.getByRole("combobox", { name: "Driver" }).click();
+    await page.getByRole("option", { name: "Macvlan" }).click();
+    await expect(modal.getByRole("textbox", { name: "Bridge Name" })).toHaveCount(0);
+    await expect(modal.getByRole("textbox", { name: "MTU" })).toHaveCount(0);
+    await expect(modal.getByText("Required for macvlan networks")).toBeVisible();
+    await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText(
+      "Needs attention"
+    );
+
+    await modal.getByRole("textbox", { name: "Parent Interface" }).fill("eth1");
+    await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText(
+      "macvlan on eth1"
+    );
+    await modal.getByRole("combobox", { name: "Macvlan Mode" }).click();
+    await page.getByRole("option", { name: "Private" }).click();
+    // Host access only exists in bridge mode.
+    await expect(modal.getByRole("switch", { name: "Host Access" })).toHaveCount(0);
+    await modal.getByRole("combobox", { name: "Address Allocation" }).click();
+    await page.getByRole("option", { name: "Container runtime" }).click();
+    await expect(modal.getByRole("switch", { name: "Duplicate Address Detection" })).toHaveCount(
+      0
+    );
+    await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
+    await expect(modal).toBeHidden();
+
+    await expect
+      .poll(async () => (await readTopology(topoViewerPage, MULTI_FILE)).mgmt)
+      .toEqual([
+        { network: "oob", "ipv4-subnet": "172.31.10.0/24" },
+        {
+          network: "lab",
+          "ipv4-subnet": "172.31.20.0/24",
+          driver: "macvlan",
+          "macvlan-parent": "eth1",
+          "macvlan-mode": "private",
+          ipam: { provider: "runtime" }
+        }
+      ]);
+  });
+
+  test("a macvlan network offers no auto subnet", async ({ page }) => {
+    const modal = await openMgmtTab(page);
+    await modal.getByRole("combobox", { name: "Driver" }).click();
+    await page.getByRole("option", { name: "Macvlan" }).click();
+    await modal.getByRole("combobox", { name: "IPv4 Subnet" }).click();
+    await expect(page.getByRole("option", { name: "Custom" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "From parent interface" })).toBeVisible();
+    await expect(page.getByRole("option", { name: "Auto-assign" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+  });
+});

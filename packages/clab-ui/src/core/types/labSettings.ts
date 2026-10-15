@@ -22,11 +22,25 @@ export interface MgmtSettings {
   "ipv4-range"?: string;
   "ipv6-subnet"?: string;
   "ipv6-gw"?: string;
+  "ipv6-range"?: string;
   mtu?: number;
   bridge?: string;
   "external-access"?: boolean;
+  "skip-when-unused"?: boolean;
   "driver-opts"?: Record<string, string>;
+  /** `bridge` (default) or `macvlan` */
   driver?: string;
+  ipam?: MgmtIpamSettings;
+  "macvlan-parent"?: string;
+  "macvlan-mode"?: string;
+  "macvlan-aux"?: boolean;
+}
+
+export interface MgmtIpamSettings {
+  /** `containerlab` (default) or `runtime` */
+  provider?: string;
+  /** Duplicate address detection; on unless false */
+  dad?: boolean;
 }
 
 /** Docker network containerlab uses when a management network has no name. */
@@ -72,8 +86,10 @@ export interface MgmtNetworkUpdate {
   changes: MgmtSettingsUpdate;
 }
 
+/** Nested maps are merged key by key; `null` removes a key. */
 export type MgmtSettingsUpdate = {
-  [K in Exclude<keyof MgmtSettings, "driver-opts">]?: MgmtSettings[K] | null;
+  [K in Exclude<keyof MgmtSettings, "driver-opts" | "ipam">]?: MgmtSettings[K] | null;
 } & {
   "driver-opts"?: Record<string, string | null> | null;
+  ipam?: { [K in keyof MgmtIpamSettings]?: MgmtIpamSettings[K] | null } | null;
 };

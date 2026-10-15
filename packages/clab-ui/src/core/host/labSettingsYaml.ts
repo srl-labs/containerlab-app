@@ -149,8 +149,8 @@ function applyMgmtChanges(doc: YAML.Document, mgmtMap: YAML.YAMLMap, changes: Mg
     if (value === undefined) continue;
     if (value === null) {
       deleteKey(mgmtMap, key);
-    } else if (key === "driver-opts" && isRecord(value)) {
-      mergeStringMap(doc, mgmtMap, key, value);
+    } else if (isRecord(value)) {
+      mergeScalarMap(doc, mgmtMap, key, value);
     } else {
       setScalarKey(doc, mgmtMap, key, value);
     }
@@ -167,7 +167,7 @@ function existingMgmtMaps(value: unknown): YAML.YAMLMap[] {
 
 /**
  * Writes the management networks. Each entry reuses the map it was loaded from,
- * so keys the form does not show (macvlan, ipam, tailscale, ...) survive edits,
+ * so keys the form does not show (tailscale, ...) survive edits,
  * reordering and switching between the map and the list form.
  */
 function applyMgmtNetworks(
@@ -209,7 +209,8 @@ function applyMgmtNetworks(
   }
 }
 
-function mergeStringMap(
+/** Merges scalars into a nested map (`driver-opts`, `ipam`), dropping the map once empty. */
+function mergeScalarMap(
   doc: YAML.Document,
   parent: YAML.YAMLMap,
   key: string,

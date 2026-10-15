@@ -9,8 +9,12 @@ import type {
   IpType,
   DriverOption,
   BasicSettingsState,
+  IpamProvider,
+  MacvlanMode,
+  MgmtDriver,
   MgmtFormState,
   MgmtNetworkFormState,
+  MgmtSettingsSetters,
   MgmtSettingsState
 } from "../../components/panels/lab-settings/types";
 import { useTopologySessionClient } from "../../host";
@@ -49,19 +53,7 @@ export interface UseLabSettingsStateResult {
     setPrefixType: (v: PrefixType) => void;
     setCustomPrefix: (v: string) => void;
   };
-  setMgmt: {
-    setNetworkName: (v: string) => void;
-    setIpv4Type: (v: IpType) => void;
-    setIpv4Subnet: (v: string) => void;
-    setIpv4Gateway: (v: string) => void;
-    setIpv4Range: (v: string) => void;
-    setIpv6Type: (v: IpType) => void;
-    setIpv6Subnet: (v: string) => void;
-    setIpv6Gateway: (v: string) => void;
-    setMtu: (v: string) => void;
-    setBridge: (v: string) => void;
-    setExternalAccess: (v: boolean) => void;
-  };
+  setMgmt: MgmtSettingsSetters;
   driverOpts: {
     add: () => void;
     remove: (index: number) => void;
@@ -112,7 +104,7 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
   const setField = <K extends keyof MgmtSettingsState>(key: K, value: MgmtSettingsState[K]) =>
     updateSelected((network) => ({ ...network, [key]: value }));
 
-  const setMgmt = {
+  const setMgmt: MgmtSettingsSetters = {
     // The node default follows a rename of the network it points at.
     setNetworkName: (v: string) =>
       setMgmtForm((prev) => {
@@ -126,6 +118,21 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
           )
         };
       }),
+    // Macvlan networks take an explicit subnet or the parent's, never `auto`.
+    setDriver: (v: MgmtDriver) =>
+      updateSelected((network) => ({
+        ...network,
+        driver: v,
+        ...(v === "macvlan"
+          ? {
+              ipv4Type: network.ipv4Type === "auto" ? "default" : network.ipv4Type,
+              ipv6Type: network.ipv6Type === "auto" ? "default" : network.ipv6Type
+            }
+          : {})
+      })),
+    setMacvlanParent: (v: string) => setField("macvlanParent", v),
+    setMacvlanMode: (v: MacvlanMode) => setField("macvlanMode", v),
+    setMacvlanAux: (v: boolean) => setField("macvlanAux", v),
     setIpv4Type: (v: IpType) => setField("ipv4Type", v),
     setIpv4Subnet: (v: string) => setField("ipv4Subnet", v),
     setIpv4Gateway: (v: string) => setField("ipv4Gateway", v),
@@ -133,9 +140,13 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
     setIpv6Type: (v: IpType) => setField("ipv6Type", v),
     setIpv6Subnet: (v: string) => setField("ipv6Subnet", v),
     setIpv6Gateway: (v: string) => setField("ipv6Gateway", v),
+    setIpv6Range: (v: string) => setField("ipv6Range", v),
     setMtu: (v: string) => setField("mtu", v),
     setBridge: (v: string) => setField("bridge", v),
-    setExternalAccess: (v: boolean) => setField("externalAccess", v)
+    setExternalAccess: (v: boolean) => setField("externalAccess", v),
+    setIpamProvider: (v: IpamProvider) => setField("ipamProvider", v),
+    setIpamDad: (v: boolean) => setField("ipamDad", v),
+    setSkipWhenUnused: (v: boolean) => setField("skipWhenUnused", v)
   };
 
   const driverOpts = {
