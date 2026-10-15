@@ -750,9 +750,8 @@ export const AppContent: React.FC<AppContentProps> = ({
     clearCustomNodeError: topoActions.clearCustomNodeError
   });
 
-  const handleLockedAction = React.useCallback(() => {
-    addToast("Lab is locked (read-only)", "error", 2000);
-  }, [addToast]);
+  // Every blocked edit shakes the navbar lock.
+  const handleLockedAction = topoActions.nudgeLock;
 
   const annotationRuntimeRef = React.useRef<AnnotationContextValue | null>(null);
   const annotationUiState = useAnnotationUIState();
@@ -1240,7 +1239,8 @@ export const AppContent: React.FC<AppContentProps> = ({
       handleDeleteLink: graphHandlers.handleDeleteLink,
       handleDeleteSelection
     },
-    handleDeselectAll
+    handleDeselectAll,
+    onLockedAction: handleLockedAction
   });
 
   // Auto-open context panel when selection/editing state changes

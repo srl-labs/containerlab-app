@@ -4,7 +4,7 @@ import Box from "@mui/material/Box";
 
 import { useFooterControlsRef } from "../../../hooks/ui/useFooterControlsRef";
 import type { FooterControlsRef } from "../../../hooks/ui/useFooterControlsRef";
-import { FIELDSET_RESET_STYLE } from "../../panels/context-panel/ContextPanelScrollArea";
+import { ReadOnlyFieldset } from "./ReadOnlyFieldset";
 
 import type { TabDefinition } from "./TabNavigation";
 import { TabNavigation } from "./TabNavigation";
@@ -92,9 +92,9 @@ function renderTabbedMode<TProps extends object>(
         variant="secondary"
       />
       <Box sx={{ flex: 1, overflow: "auto" }}>
-        <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
+        <ReadOnlyFieldset readOnly={readOnly}>
           {ActiveComponent && tabProps !== undefined ? <ActiveComponent {...tabProps} /> : null}
-        </fieldset>
+        </ReadOnlyFieldset>
       </Box>
     </Box>
   );
@@ -104,9 +104,9 @@ function renderChildrenMode(children: React.ReactNode, readOnly: boolean): React
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Box sx={{ flex: 1, overflow: "auto" }}>
-        <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
+        <ReadOnlyFieldset readOnly={readOnly}>
           {children}
-        </fieldset>
+        </ReadOnlyFieldset>
       </Box>
     </Box>
   );

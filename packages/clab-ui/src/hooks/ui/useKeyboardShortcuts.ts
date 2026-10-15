@@ -60,6 +60,8 @@ interface KeyboardShortcutsOptions {
   hasGraphClipboard?: () => boolean;
   /** Create group from selected nodes (Ctrl+G) */
   onCreateGroup?: () => void;
+  /** Called when an edit shortcut is blocked because the lab is locked */
+  onLockedAction?: () => void;
 }
 
 const EDITABLE_SELECTOR = [
@@ -634,6 +636,30 @@ function handleBatchedDeleteInEditMode(
 }
 
 /**
+ * Locked labs swallow Delete, paste and duplicate; report the attempt so the
+ * user sees why nothing happened.
+ */
+function handleLockedEditShortcut(
+  event: KeyboardEvent,
+  hasSelection: boolean,
+  hasClipboard: boolean,
+  onLockedAction?: () => void
+): boolean {
+  if (!onLockedAction) return false;
+  const key = event.key.toLowerCase();
+  const withModifier = event.ctrlKey || event.metaKey;
+  const isDelete = !withModifier && (event.key === "Delete" || event.key === "Backspace");
+  const isPaste = withModifier && key === "v";
+  const isDuplicate = withModifier && key === "d";
+  const blocked = ((isDelete || isDuplicate) && hasSelection) || (isPaste && hasClipboard);
+  if (!blocked) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  onLockedAction();
+  return true;
+}
+
+/**
  * Handle Delete/Backspace: Delete selected element (nodes/edges and/or annotations)
  */
 function handleDelete(
@@ -749,7 +775,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     onDuplicateAnnotations,
     onDeleteAnnotations,
     onClearAnnotationSelection,
-    onCreateGroup
+    hasAnnotationClipboard,
+    hasGraphClipboard,
+    onCreateGroup,
+    onLockedAction
   } = options;
 
   const lastInteractionAreaRef = useRef<ShortcutInteractionArea>("other");
@@ -788,6 +817,18 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     if (handleRedo(event, mode, canRedo, onRedo)) return;
     // Copy/Paste/Duplicate (with annotation support)
     if (handleCopy(event, onCopy, selectedAnnotationIds, onCopyAnnotations)) return;
+    if (
+      isLocked &&
+      handleLockedEditShortcut(
+        event,
+        // Deployed labs (view mode) only ever edit annotations.
+        (selectedAnnotationIds?.size ?? 0) > 0 ||
+          (mode === "edit" && (selectedNode !== null || selectedEdge !== null)),
+        hasGraphClipboard?.() === true || hasAnnotationClipboard?.() === true,
+        onLockedAction
+      )
+    )
+      return;
     if (handlePaste(event, mode, isLocked, onPaste, onPasteAnnotations)) return;
     if (
       handleDuplicate(

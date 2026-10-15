@@ -43,6 +43,7 @@ export interface AppKeyboardShortcutsConfig {
     handleDeleteSelection?: () => void;
   };
   handleDeselectAll: () => void;
+  onLockedAction?: () => void;
 }
 
 /**
@@ -58,7 +59,8 @@ export function useAppKeyboardShortcuts(config: AppKeyboardShortcutsConfig): voi
     annotations,
     clipboardHandlers,
     deleteHandlers,
-    handleDeselectAll
+    handleDeselectAll,
+    onLockedAction
   } = config;
 
   // Combined selection IDs (text + shape + group annotations)
@@ -103,6 +105,7 @@ export function useAppKeyboardShortcuts(config: AppKeyboardShortcutsConfig): voi
     onClearAnnotationSelection: annotations.clearAllSelections,
     hasAnnotationClipboard: clipboardHandlers.hasClipboardData,
     hasGraphClipboard: clipboardHandlers.hasClipboardData,
-    onCreateGroup: annotations.handleAddGroup
+    onCreateGroup: annotations.handleAddGroup,
+    onLockedAction
   });
 }

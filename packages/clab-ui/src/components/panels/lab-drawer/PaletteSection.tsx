@@ -14,6 +14,7 @@ import FileDownloadIcon from "@mui/icons-material/FileDownloadOutlined";
 import FileUploadIcon from "@mui/icons-material/FileUploadOutlined";
 import HubIcon from "@mui/icons-material/HubOutlined";
 import LanIcon from "@mui/icons-material/LanOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import PowerIcon from "@mui/icons-material/PowerOutlined";
 import RemoveIcon from "@mui/icons-material/RemoveOutlined";
 import SaveIcon from "@mui/icons-material/SaveOutlined";
@@ -159,6 +160,14 @@ const PALETTE_CARD_SX = {
   "@media (hover: none)": { [`& .${CARD_ACTIONS_CLASS} [data-reveal]`]: { opacity: 1 } }
 } as const;
 
+/** A card that cannot be dragged right now: dimmed, no hover lift, not-allowed cursor. */
+const PALETTE_CARD_BLOCKED_SX = {
+  cursor: "not-allowed",
+  opacity: 0.4,
+  "&:hover": { bgcolor: "transparent" },
+  "&:active": { cursor: "not-allowed" }
+} as const;
+
 const ROW_ICON_SX = { fontSize: 16 } as const;
 const DESTRUCTIVE_HOVER_SX = {
   "&:hover": {
@@ -182,6 +191,17 @@ function isSourceTab(tabId: string): boolean {
 
 const MonacoCodeEditor = React.lazy(preloadMonacoCodeEditor);
 
+/** Stands in for the Save button while the source can't be edited. */
+const ReadOnlyLabel: React.FC = () => (
+  <Box
+    data-testid="palette-source-readonly"
+    sx={{ display: "flex", alignItems: "center", gap: 0.5, color: TEXT_SECONDARY, flexShrink: 0 }}
+  >
+    <LockOutlinedIcon sx={{ fontSize: 14 }} />
+    <Typography variant="caption">Read-only</Typography>
+  </Box>
+);
+
 const SourceEditorTab: React.FC<{
   readOnly: boolean;
   error: string | null;
@@ -189,14 +209,21 @@ const SourceEditorTab: React.FC<{
   value: string;
   jsonSchema?: object;
   onChange: (next: string) => void;
-}> = ({ readOnly, error, language, value, jsonSchema, onChange }) => (
+  onReadOnlyEditAttempt?: () => void;
+}> = ({ readOnly, error, language, value, jsonSchema, onChange, onReadOnlyEditAttempt }) => (
   <Box sx={{ flex: 1, minHeight: 0, overflowY: "hidden", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
       <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
         {error}
       </Typography>
     )}
-    <Box sx={{ flex: 1, minHeight: 0 }}>
+    {/* Read-only source shows no caret, so it doesn't invite typing. */}
+    <Box
+      sx={[
+        { flex: 1, minHeight: 0 },
+        readOnly && { "& .monaco-editor .cursors-layer": { display: "none" } }
+      ]}
+    >
       <Suspense
         fallback={
           <Box
@@ -218,33 +245,53 @@ const SourceEditorTab: React.FC<{
           readOnly={readOnly}
           jsonSchema={jsonSchema}
           onChange={readOnly ? undefined : onChange}
+          onReadOnlyEditAttempt={onReadOnlyEditAttempt}
         />
       </Suspense>
     </Box>
   </Box>
 );
 
+/** Why palette cards in a section can't be dragged, and what to do when someone tries. */
+interface PaletteBlock {
+  reason: string;
+  onAttempt?: () => void;
+}
+
+const PaletteBlockContext = React.createContext<PaletteBlock | null>(null);
+
 const PaletteDraggableCard: React.FC<{
   onDragStart: (event: React.DragEvent) => void;
   onDragEnd?: () => void;
   children: React.ReactNode;
-}> = ({ onDragStart, onDragEnd, children }) => (
-  <Tooltip
-    title="Drag to canvas"
-    placement="top"
-    enterDelay={500}
-    slotProps={{ popper: { modifiers: [{ name: "offset", options: { offset: [-20, -20] } }] } }}
-  >
-    <Box
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      sx={PALETTE_CARD_SX}
+}> = ({ onDragStart, onDragEnd, children }) => {
+  const block = React.useContext(PaletteBlockContext);
+  return (
+    <Tooltip
+      title={block?.reason ?? "Drag to canvas"}
+      placement="top"
+      enterDelay={block ? 0 : 500}
+      slotProps={{ popper: { modifiers: [{ name: "offset", options: { offset: [-20, -20] } }] } }}
     >
-      {children}
-    </Box>
-  </Tooltip>
-);
+      <Box
+        draggable={!block}
+        aria-disabled={block ? true : undefined}
+        onDragStart={block ? undefined : onDragStart}
+        onDragEnd={block ? undefined : onDragEnd}
+        onMouseDown={
+          block?.onAttempt
+            ? (event: React.MouseEvent) => {
+                if (event.button === 0) block.onAttempt?.();
+              }
+            : undefined
+        }
+        sx={block ? [PALETTE_CARD_SX, PALETTE_CARD_BLOCKED_SX] : PALETTE_CARD_SX}
+      >
+        {children}
+      </Box>
+    </Tooltip>
+  );
+};
 
 /** Square tile behind palette glyphs, sized like a node icon so every row lines up. */
 const PaletteGlyphTile: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -328,6 +375,7 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
   onSetDefault
 }) => {
   const isDefaultNode = isDefault === true;
+  const isBlocked = React.useContext(PaletteBlockContext) !== null;
   const iconInk = useIconInk();
   const iconUrl = useMemo(
     () => getTemplateIconUrl(template, customIconMap, iconInk),
@@ -359,46 +407,55 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
         />
       </Box>
       <PaletteCardText title={template.name} subtitle={template.kind} mono />
-      <Box className={CARD_ACTIONS_CLASS} sx={{ display: "flex", gap: 0.25 }}>
-        <Tooltip title="Edit">
-          <IconButton
-            size="small"
-            data-reveal
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit?.(template.name);
-            }}
-          >
-            <EditOutlinedIcon sx={ROW_ICON_SX} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Delete">
-          <IconButton
-            size="small"
-            data-reveal
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete?.(template.name);
-            }}
-            sx={DESTRUCTIVE_HOVER_SX}
-          >
-            <DeleteOutlinedIcon sx={ROW_ICON_SX} />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={isDefaultNode ? "Default node" : "Set as default"}>
-          <IconButton
-            size="small"
-            data-reveal={isDefaultNode ? undefined : true}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isDefaultNode) onSetDefault?.(template.name);
-            }}
-            sx={isDefaultNode ? { color: "warning.main" } : undefined}
-          >
-            {isDefaultNode ? <StarIcon sx={ROW_ICON_SX} /> : <StarOutlineIcon sx={ROW_ICON_SX} />}
-          </IconButton>
-        </Tooltip>
-      </Box>
+      {isBlocked ? (
+        isDefaultNode && (
+          <StarIcon
+            titleAccess="Default node"
+            sx={{ ...ROW_ICON_SX, color: "warning.main", mx: 0.75 }}
+          />
+        )
+      ) : (
+        <Box className={CARD_ACTIONS_CLASS} sx={{ display: "flex", gap: 0.25 }}>
+          <Tooltip title="Edit">
+            <IconButton
+              size="small"
+              data-reveal
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit?.(template.name);
+              }}
+            >
+              <EditOutlinedIcon sx={ROW_ICON_SX} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton
+              size="small"
+              data-reveal
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete?.(template.name);
+              }}
+              sx={DESTRUCTIVE_HOVER_SX}
+            >
+              <DeleteOutlinedIcon sx={ROW_ICON_SX} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={isDefaultNode ? "Default node" : "Set as default"}>
+            <IconButton
+              size="small"
+              data-reveal={isDefaultNode ? undefined : true}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isDefaultNode) onSetDefault?.(template.name);
+              }}
+              sx={isDefaultNode ? { color: "warning.main" } : undefined}
+            >
+              {isDefaultNode ? <StarIcon sx={ROW_ICON_SX} /> : <StarOutlineIcon sx={ROW_ICON_SX} />}
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
     </PaletteDraggableCard>
   );
 };
@@ -514,6 +571,17 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   const annotationsContent = useTopoViewerStore((state) => state.annotationsContent);
   const [filter, setFilter] = useState("");
   const isViewMode = mode === "view";
+  const nudgeLock = useTopoViewerStore((state) => state.nudgeLock);
+  // The lock wins: unlocking is the one thing that helps. Deployed labs (view
+  // mode) take annotations but not new nodes or networks.
+  const lockBlock = useMemo<PaletteBlock | null>(
+    () => (isLocked ? { reason: "Unlock lab to edit", onAttempt: nudgeLock } : null),
+    [isLocked, nudgeLock]
+  );
+  const nodesBlock = useMemo<PaletteBlock | null>(() => {
+    if (lockBlock) return lockBlock;
+    return isViewMode ? { reason: "Nodes can't be added while the lab is deployed" } : null;
+  }, [lockBlock, isViewMode]);
 
   const visibleTabs = useMemo(
     () => {
@@ -739,26 +807,23 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
         <Typography variant="subtitle1" noWrap>
           {drawerTitle}
         </Typography>
-        {activeTab === "edit" && onEditDelete && (
+        {activeTab === "edit" && onEditDelete && !isLocked && (
           <IconButton size="small" onClick={onEditDelete} title="Delete" sx={DESTRUCTIVE_HOVER_SX}>
             <DeleteOutlinedIcon fontSize="small" />
           </IconButton>
         )}
-        {activeTab === "yaml" && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
-            {!isSourceReadOnly && (
-              <IconButton
-                size="small"
-                onClick={() => {
-                  handleSaveYaml().catch(() => undefined);
-                }}
-                disabled={!yamlDirty}
-                title="Save"
-              >
-                <SaveIcon fontSize="small" />
-              </IconButton>
-            )}
-          </Box>
+        {isSourceTab(activeTab) && isSourceReadOnly && <ReadOnlyLabel />}
+        {activeTab === "yaml" && !isSourceReadOnly && (
+          <IconButton
+            size="small"
+            onClick={() => {
+              handleSaveYaml().catch(() => undefined);
+            }}
+            disabled={!yamlDirty}
+            title="Save"
+          >
+            <SaveIcon fontSize="small" />
+          </IconButton>
         )}
         {activeTab === "json" && !isSourceReadOnly && (
           <IconButton
@@ -794,11 +859,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       {(activeTab === "nodes" || activeTab === "annotations") && (
         <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
           {activeTab === "nodes" && (
-            <Box
-              sx={{
-                ...(isLocked || isViewMode ? { pointerEvents: "none", opacity: 0.6 } : undefined)
-              }}
-            >
+            <PaletteBlockContext.Provider value={nodesBlock}>
               <Box sx={{ px: 2, pt: 2 }}>
                 <TextField
                   fullWidth
@@ -828,7 +889,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               <PanelSectionHeader
                 title="Node Templates"
                 action={
-                  !filter ? (
+                  !filter && !isLocked ? (
                     <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, mr: -0.5 }}>
                       <Tooltip title="Import templates">
                         <IconButton
@@ -899,11 +960,11 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                   ))
                 )}
               </Box>
-            </Box>
+            </PaletteBlockContext.Provider>
           )}
 
           {activeTab === "annotations" && (
-            <Box sx={{ ...(isLocked ? { pointerEvents: "none" } : undefined) }}>
+            <PaletteBlockContext.Provider value={lockBlock}>
               <PanelSectionHeader title="Text" />
               <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
@@ -955,7 +1016,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                   payload={{ annotationType: "traffic-rate" }}
                 />
               </Box>
-            </Box>
+            </PaletteBlockContext.Provider>
           )}
         </Box>
       )}
@@ -963,6 +1024,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       {activeTab === "yaml" && (
         <SourceEditorTab
           readOnly={isSourceReadOnly}
+          onReadOnlyEditAttempt={lockBlock?.onAttempt}
           error={yamlError}
           language="yaml"
           value={yamlDraft}
@@ -977,6 +1039,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
       {activeTab === "json" && (
         <SourceEditorTab
           readOnly={isSourceReadOnly}
+          onReadOnlyEditAttempt={lockBlock?.onAttempt}
           error={annotationsError}
           language="json"
           value={annotationsDraft}

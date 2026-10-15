@@ -10,7 +10,7 @@ import { resolveComputedColor } from "../../../../utils/color";
 import { getTrafficMonitorOptions } from "../../../../utils/trafficRateAnnotation";
 import type { TrafficMonitorOptions } from "../../../../utils/trafficRateAnnotation";
 import { CheckboxField, ColorField, InputField, PanelSection, SelectField } from "../../../ui/form";
-import { FIELDSET_RESET_STYLE } from "../ContextPanelScrollArea";
+import { ReadOnlyFieldset } from "../../../ui/editor/ReadOnlyFieldset";
 
 import { useAnnotationLiveApply } from "./useAnnotationLiveApply";
 
@@ -387,7 +387,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
 
   return (
     <Box sx={{ flex: 1, overflow: "auto" }}>
-      <fieldset disabled={readOnly} style={FIELDSET_RESET_STYLE}>
+      <ReadOnlyFieldset readOnly={readOnly}>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
           <PanelSection title="Monitor">
             <>
@@ -584,7 +584,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
             </PanelSection>
           )}
         </Box>
-      </fieldset>
+      </ReadOnlyFieldset>
     </Box>
   );
 };
