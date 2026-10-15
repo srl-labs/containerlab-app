@@ -43,6 +43,7 @@ function getStubPath(request: string): string | null {
 
 describe("deploy command", () => {
   let deploy: Function;
+  let runClabAction: Function;
   let clabStub: any;
   let graphStub: any;
 
@@ -66,6 +67,7 @@ describe("deploy command", () => {
     graphStub = require("../../helpers/graph-stub");
     const deployModule = require("../../../src/commands/deploy");
     deploy = deployModule.deploy;
+    runClabAction = require("../../../src/commands/runClabAction").runClabAction;
   });
 
   after(() => {
@@ -102,5 +104,23 @@ describe("deploy command", () => {
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
     expect(spy.calledOnceWithExactly()).to.be.true;
+  });
+
+  it("adds lifecycle options as containerlab flags", async () => {
+    const node = { labPath: { absolute: "/home/user/lab.yml" } } as any;
+    await runClabAction("deploy", node, false, { nodeFilter: ["r1", "r2"], maxWorkers: 2 });
+
+    const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
+    expect(spy.calledOnceWithExactly(["--node-filter", "r1,r2", "--max-workers", "2"])).to.be.true;
+    expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: false });
+  });
+
+  it("keeps the lab marked running after destroying some of its nodes", async () => {
+    const node = { labPath: { absolute: "/home/user/lab.yml" } } as any;
+    await runClabAction("destroy", node, false, { nodeFilter: ["r1"], graceful: true });
+
+    const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
+    expect(spy.calledOnceWithExactly(["--node-filter", "r1", "--graceful"])).to.be.true;
+    expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: true });
   });
 });

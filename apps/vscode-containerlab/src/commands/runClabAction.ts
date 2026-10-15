@@ -1,4 +1,9 @@
 import * as vscode from "vscode";
+import {
+  isPartialDestroy,
+  labLifecycleCliFlags,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { getSelectedLabNode } from "../utils/utils";
@@ -15,7 +20,8 @@ export type LabLifecycleAction = LifecycleCommandType;
 export async function runClabAction(
   action: LabLifecycleAction,
   node?: ClabLabTreeNode,
-  cleanup = false
+  cleanup = false,
+  lifecycleOptions?: LabLifecycleOptions
 ): Promise<void> {
   node = await getSelectedLabNode(node);
   if (!node) {
@@ -24,7 +30,10 @@ export async function runClabAction(
   }
 
   const execute = async () => {
-    const handlers = createTopoViewerLifecycleHandlers(action);
+    const handlers = createTopoViewerLifecycleHandlers(action, {
+      // Destroying some nodes leaves the rest of the lab running.
+      labKeepsRunning: action === "destroy" && isPartialDestroy(lifecycleOptions)
+    });
     const cmd = new ClabCommand(
       action,
       node,
@@ -35,8 +44,9 @@ export async function runClabAction(
       handlers.onFailure,
       handlers.onOutputLine
     );
-    if (cleanup) {
-      await cmd.run(["-c"]);
+    const flags = [...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(lifecycleOptions)];
+    if (flags.length > 0) {
+      await cmd.run(flags);
     } else {
       await cmd.run();
     }

@@ -191,13 +191,17 @@ async function postLifecycleLog(
  * Notifies the current active topoviewer about successful command completion
  * This should ONLY be called after a containerlab command has successfully completed
  */
-async function notifyCurrentTopoViewerOfCommandSuccess(commandType: LifecycleCommandType) {
+async function notifyCurrentTopoViewerOfCommandSuccess(
+  commandType: LifecycleCommandType,
+  labKeepsRunning = false
+) {
   if (!currentTopoViewer?.currentPanel) {
     return;
   }
 
   // Determine the new state based on the command
-  const newDeploymentState = commandType === "destroy" ? "undeployed" : "deployed";
+  const newDeploymentState =
+    commandType === "destroy" && !labKeepsRunning ? "undeployed" : "deployed";
 
   try {
     if (typeof currentTopoViewer.refreshAfterExternalCommand === "function") {
@@ -227,11 +231,12 @@ async function notifyCurrentTopoViewerOfCommandLog(
 }
 
 export function createTopoViewerLifecycleHandlers(
-  commandType: LifecycleCommandType
+  commandType: LifecycleCommandType,
+  options: { labKeepsRunning?: boolean } = {}
 ): TopoViewerLifecycleHandlers {
   return {
     onSuccess: async () => {
-      await notifyCurrentTopoViewerOfCommandSuccess(commandType);
+      await notifyCurrentTopoViewerOfCommandSuccess(commandType, options.labKeepsRunning);
     },
     onFailure: async (error) => {
       await notifyCurrentTopoViewerOfCommandFailure(commandType, error);

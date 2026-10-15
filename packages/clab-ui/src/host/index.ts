@@ -27,9 +27,11 @@ import type {
   TopoViewerSvgExportPayload
 } from "./contracts";
 import type { ClabUiExtensions, ClabUiRuntime } from "./runtimeContext";
+import type { LabLifecycleOptions } from "./lifecycleOptions";
 import { isRecord } from "../core/utilities/typeHelpers";
 export * from "./controllers";
 export * from "./contracts";
+export * from "./lifecycleOptions";
 export * from "./runtimeContext";
 export * from "./runtimeModel";
 
@@ -376,6 +378,13 @@ function createMessageSubscription(targetWindow: Window) {
   };
 }
 
+function lifecycleMessage(
+  action: TopoViewerLifecycleAction,
+  options: LabLifecycleOptions | undefined
+): Record<string, unknown> {
+  return options ? { command: action, options } : { command: action };
+}
+
 export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiHost {
   const targetWindow = options.targetWindow ?? window;
   const resolvedVsCodeApi = options.vscodeApi ?? resolveWindowVsCodeApi(targetWindow);
@@ -410,8 +419,8 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
   const topoViewer =
     options.topoViewer ??
     {
-      runLifecycle(action: TopoViewerLifecycleAction): void {
-        postMessage({ command: action });
+      runLifecycle(action: TopoViewerLifecycleAction, lifecycleOptions?: LabLifecycleOptions): void {
+        postMessage(lifecycleMessage(action, lifecycleOptions));
       },
       cancelLifecycle(): void {
         postMessage({ command: "cancelLabLifecycle" });

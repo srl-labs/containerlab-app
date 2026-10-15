@@ -172,13 +172,17 @@ export class MessageRouter {
     });
   }
 
-  private async handleLifecycleCommand(command: LifecycleCommand): Promise<void> {
+  private async handleLifecycleCommand(command: LifecycleCommand, options: unknown): Promise<void> {
     const yamlFilePath = this.context.yamlFilePath;
     if (!yamlFilePath) {
       log.warn(`[MessageRouter] Cannot run ${command}: no YAML path available`);
       return;
     }
-    const res = await labLifecycleService.handleLabLifecycleEndpoint(command, yamlFilePath);
+    const res = await labLifecycleService.handleLabLifecycleEndpoint(
+      command,
+      yamlFilePath,
+      options
+    );
     if (res.error != null && res.error.length > 0) {
       log.error(`[MessageRouter] ${res.error}`);
     } else if (res.result != null) {
@@ -573,7 +577,7 @@ export class MessageRouter {
     if (!command) return false;
 
     if (isLifecycleCommand(command)) {
-      await this.handleLifecycleCommand(command);
+      await this.handleLifecycleCommand(command, message.options);
       return true;
     }
 

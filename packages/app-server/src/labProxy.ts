@@ -2,6 +2,10 @@
  * Lab lifecycle action proxy - deploy, destroy, redeploy, start, stop, restart.
  */
 
+import {
+  normalizeLabLifecycleOptions,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Response } from "undici";
@@ -30,6 +34,8 @@ interface LabTarget {
 
 interface LabActionBody extends LabTarget {
   cleanup?: boolean;
+  /** Extra containerlab options (`LabLifecycleOptions`); checked before use. */
+  options?: unknown;
 }
 
 interface LabApplyBody extends LabTarget {
@@ -59,6 +65,7 @@ const LIFECYCLE_RECONCILE_INTERVAL_MS = 1000;
 interface LifecycleStreamOptions {
   cleanup?: boolean;
   path?: string;
+  lifecycleOptions?: LabLifecycleOptions;
 }
 
 type EndpointResolver = (
@@ -490,6 +497,7 @@ export function registerLabProxy(
             client.deployLab(endpoint.token, target.labName, {
               path: target.yamlPath,
               cleanup: request.body.cleanup === true,
+              lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options),
               includeLogs: true
             }),
           { preRunning }
@@ -522,7 +530,8 @@ export function registerLabProxy(
           target.labName,
           {
             path: target.yamlPath,
-            cleanup: request.body.cleanup === true
+            cleanup: request.body.cleanup === true,
+            lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
           }
         );
       } catch (error) {
@@ -554,6 +563,7 @@ export function registerLabProxy(
           () =>
             client.destroyLab(endpoint.token, target.labName, {
               cleanup: request.body.cleanup === true,
+              lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options),
               includeLogs: true
             }),
           { preRunning }
@@ -585,7 +595,8 @@ export function registerLabProxy(
           "destroy",
           target.labName,
           {
-            cleanup: request.body.cleanup === true
+            cleanup: request.body.cleanup === true,
+            lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
           }
         );
       } catch (error) {
@@ -616,6 +627,7 @@ export function registerLabProxy(
           () =>
             client.redeployLab(endpoint.token, target.labName, {
               cleanup: request.body.cleanup === true,
+              lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options),
               includeLogs: true
             })
         );
@@ -646,7 +658,8 @@ export function registerLabProxy(
           "redeploy",
           target.labName,
           {
-            cleanup: request.body.cleanup === true
+            cleanup: request.body.cleanup === true,
+            lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
           }
         );
       } catch (error) {

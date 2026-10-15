@@ -9,6 +9,7 @@
 import { useCallback, useState } from "react";
 
 import { useClabUiHost } from "../../host";
+import type { LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
 
 export interface DeploymentCommands {
   onApply: () => void;
@@ -21,6 +22,8 @@ export interface DeploymentCommands {
   onStartLab: () => void;
   onStopLab: () => void;
   onRestartLab: () => void;
+  /** Run deploy, redeploy or destroy with extra containerlab options. */
+  onRunWithOptions: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
 
 // Keep deployment commands - they need extension to run containerlab CLI
@@ -43,7 +46,12 @@ export function useDeploymentCommands(): DeploymentCommands {
     ),
     onStartLab: useCallback(() => topoViewer.runLifecycle("startLab"), [topoViewer]),
     onStopLab: useCallback(() => topoViewer.runLifecycle("stopLab"), [topoViewer]),
-    onRestartLab: useCallback(() => topoViewer.runLifecycle("restartLab"), [topoViewer])
+    onRestartLab: useCallback(() => topoViewer.runLifecycle("restartLab"), [topoViewer]),
+    onRunWithOptions: useCallback(
+      (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) =>
+        topoViewer.runLifecycle(action, options),
+      [topoViewer]
+    )
   };
 }
 

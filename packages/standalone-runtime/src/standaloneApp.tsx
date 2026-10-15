@@ -688,6 +688,7 @@ type VscodeMessage = {
   message?: string;
   name?: string;
   nodeName?: string;
+  options?: unknown;
   panelYaml?: string;
   requestId?: string;
   svgContent?: string;
@@ -1269,7 +1270,7 @@ function setupStandaloneUiHost(): void {
 
     if (isStandaloneLifecycleCommand(msg.command)) {
       const lifecycleCommand = msg.command;
-      void lifecycleManager.run(lifecycleCommand).catch((error: unknown) => {
+      void lifecycleManager.run(lifecycleCommand, msg.options).catch((error: unknown) => {
         console.error(`[Standalone] lifecycle command failed:`, error);
       });
       return;

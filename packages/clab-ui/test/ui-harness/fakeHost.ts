@@ -361,7 +361,9 @@ export function createFakeClabUiHost(
     },
 
     topoViewer: {
-      runLifecycle() {},
+      runLifecycle(action, options) {
+        recordHarnessMessage(options ? { command: action, options } : { command: action });
+      },
       cancelLifecycle() {},
       toggleSplitView() {},
       runNodeAction() {},

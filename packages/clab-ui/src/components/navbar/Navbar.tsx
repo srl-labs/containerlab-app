@@ -32,6 +32,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
 import VerticalSplitOutlinedIcon from "@mui/icons-material/VerticalSplitOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
@@ -50,8 +51,14 @@ import {
 import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
 import { FindNodeSearchWidget } from "../panels/find-node/FindNodeSearchWidget";
+import type { LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
 
 import { useLockShake } from "./useLockShake";
+
+const LazyLifecycleOptionsDialog = React.lazy(async () => {
+  const module = await import("../panels/lifecycle-options/LifecycleOptionsDialog");
+  return { default: module.LifecycleOptionsDialog };
+});
 
 const ERROR_MAIN = "error.main";
 const SUCCESS_MAIN = "success.main";
@@ -375,6 +382,26 @@ export const Navbar: React.FC<NavbarProps> = ({
     deploymentCommands.onRestartLab();
   }, [setProcessing, deploymentCommands]);
 
+  const [lifecycleOptionsOpen, setLifecycleOptionsOpen] = React.useState(false);
+
+  const handleOpenLifecycleOptions = React.useCallback(() => {
+    setDeployMenuPosition(null);
+    setLifecycleOptionsOpen(true);
+  }, []);
+
+  const handleCloseLifecycleOptions = React.useCallback(() => {
+    setLifecycleOptionsOpen(false);
+  }, []);
+
+  const handleRunWithOptions = React.useCallback(
+    (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => {
+      setLifecycleOptionsOpen(false);
+      setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy");
+      deploymentCommands.onRunWithOptions(action, options);
+    },
+    [setProcessing, deploymentCommands]
+  );
+
   // Primary action: apply the on-disk topology (deploys when absent,
   // reconciles when running).
   const handlePrimaryAction = React.useCallback(() => {
@@ -638,9 +665,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </ListItemIcon>
                 <ListItemText>Restart Nodes</ListItemText>
               </MenuItem>
+              <Divider />
+              <MenuItem
+                onClick={handleOpenLifecycleOptions}
+                disabled={isProcessing || !isTopologyActive}
+                data-testid="navbar-deploy-item-options"
+              >
+                <ListItemIcon>
+                  <TuneRoundedIcon />
+                </ListItemIcon>
+                <ListItemText>Run with options…</ListItemText>
+              </MenuItem>
               {extraDeployMenuItems ? <Divider /> : null}
               {extraDeployMenuItems}
             </Menu>
+            {lifecycleOptionsOpen && (
+              <React.Suspense fallback={null}>
+                <LazyLifecycleOptionsDialog
+                  open
+                  deploymentState={deploymentState}
+                  onClose={handleCloseLifecycleOptions}
+                  onRun={handleRunWithOptions}
+                />
+              </React.Suspense>
+            )}
 
             <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
           </>

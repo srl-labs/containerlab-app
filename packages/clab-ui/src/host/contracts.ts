@@ -19,6 +19,8 @@ import type {
   KindImageReference
 } from "../image-manager/types";
 
+import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
+
 export type TopoViewerLifecycleAction =
   | "deployLab"
   | "deployLabCleanup"
@@ -30,6 +32,18 @@ export type TopoViewerLifecycleAction =
   | "startLab"
   | "stopLab"
   | "restartLab";
+
+/** Lifecycle actions that take `LabLifecycleOptions`, with the option set each one uses. */
+export const LIFECYCLE_ACTION_OPTION_KIND: Partial<
+  Record<TopoViewerLifecycleAction, LabLifecycleOptionKind>
+> = {
+  deployLab: "deploy",
+  deployLabCleanup: "deploy",
+  redeployLab: "redeploy",
+  redeployLabCleanup: "redeploy",
+  destroyLab: "destroy",
+  destroyLabCleanup: "destroy"
+};
 
 export type TopoViewerNodeAction = "ssh" | "shell" | "logs" | "start" | "stop" | "restart";
 
@@ -174,7 +188,8 @@ export interface CaptureTargetRef {
 }
 
 export interface ClabUiTopoViewerHost {
-  runLifecycle(action: TopoViewerLifecycleAction): void;
+  /** `options` adds containerlab flags to deploy, redeploy and destroy; other actions ignore it. */
+  runLifecycle(action: TopoViewerLifecycleAction, options?: LabLifecycleOptions): void;
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;

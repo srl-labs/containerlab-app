@@ -1552,6 +1552,92 @@ test("/api/lab/destroy/stream forwards DELETE lifecycle request with cleanup", a
   assert.equal(response.body, upstreamBody);
 });
 
+test("/api/lab/destroy/stream forwards only the options destroy takes", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "destroyed" })}\n`;
+  context.fetchMock.on(
+    "DELETE",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\?/,
+    (call) => {
+      const params = call.url.searchParams;
+      assert.equal(params.get("nodeFilter"), "r1,r2");
+      assert.equal(params.get("graceful"), "true");
+      assert.equal(params.get("keepMgmtNet"), "true");
+      // Not destroy options, or malformed: dropped before reaching the API.
+      assert.equal(params.has("maxWorkers"), false);
+      assert.equal(params.has("skipPostDeploy"), false);
+      assert.equal(params.has("cleanup"), false);
+      return ndjsonResponse(upstreamBody);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/destroy/stream",
+    headers: { cookie },
+    payload: {
+      topologyRef: demoTopologyRef(endpointId),
+      options: {
+        nodeFilter: ["r1", "r2", "bad name"],
+        graceful: true,
+        keepMgmtNet: true,
+        maxWorkers: 4,
+        skipPostDeploy: true,
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
+test("/api/lab/deploy/stream forwards deploy options", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+
+  const upstreamBody = `${JSON.stringify({ type: "done", message: "deployed" })}\n`;
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/deploy\?/,
+    (call) => {
+      const params = call.url.searchParams;
+      assert.equal(params.get("nodeFilter"), "r1");
+      assert.equal(params.get("maxWorkers"), "3");
+      assert.equal(params.get("skipLabdirAcl"), "true");
+      assert.equal(params.get("exportTemplate"), "__full");
+      assert.equal(params.has("graceful"), false);
+      return ndjsonResponse(upstreamBody);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/lab/deploy/stream",
+    headers: { cookie },
+    payload: {
+      topologyRef: demoTopologyRef(endpointId),
+      options: {
+        nodeFilter: ["r1"],
+        maxWorkers: 3,
+        skipLabdirAcl: true,
+        exportTemplate: "__full",
+        graceful: true,
+      },
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.body, upstreamBody);
+});
+
 test("/api/lab/redeploy/stream forwards PUT lifecycle request", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);

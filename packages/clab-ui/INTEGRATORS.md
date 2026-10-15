@@ -631,6 +631,15 @@ Important lifecycle action names:
 - `redeployLab`
 - `redeployLabCleanup`
 
+`runLifecycle(action, options)` takes optional `LabLifecycleOptions` for the deploy,
+redeploy and destroy actions (node filter, max workers, graceful shutdown, and so on).
+The window host posts them as `{ command, options }`. Pass the received value through
+`normalizeLabLifecycleOptions(kind, value)` from `/host` before use: it keeps only the
+options that action takes and drops malformed values. `LIFECYCLE_ACTION_OPTION_KIND`
+maps an action name to its kind, and `labLifecycleCliFlags` / `labLifecycleQueryParams`
+turn the options into `containerlab` flags or `clab-api-server` query parameters. A
+destroy with a node filter (`isPartialDestroy`) leaves the rest of the lab running.
+
 Important node action names:
 
 - `ssh`
