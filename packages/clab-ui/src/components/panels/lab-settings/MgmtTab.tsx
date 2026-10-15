@@ -1,11 +1,15 @@
 // Management network settings tab.
 import React from "react";
+import Alert from "@mui/material/Alert";
+import AlertTitle from "@mui/material/AlertTitle";
+import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 
 import { SettingsField } from "../../../settings/SettingsField";
 import { KeyValueList } from "../../ui/form";
+import type { MgmtSettings } from "../../../core/types/labSettings";
 
 import type {
   DriverOption,
@@ -20,6 +24,8 @@ interface MgmtTabProps {
   setMgmt: MgmtSettingsSetters;
   driverOpts: DriverOptionsActions;
   isViewMode: boolean;
+  /** Management networks when `mgmt` is a list; the single-network form is then hidden. */
+  networks?: MgmtSettings[];
 }
 
 function driverOptionsToRecord(options: DriverOption[]): Record<string, string> {
@@ -34,7 +40,37 @@ function recordToDriverOptions(record: Record<string, string>): DriverOption[] {
   return Object.entries(record).map(([key, value]) => ({ key, value }));
 }
 
-export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isViewMode }) => (
+function describeNetwork(network: MgmtSettings): string {
+  const details = [network.driver, network["ipv4-subnet"], network["ipv6-subnet"]];
+  return details.filter((detail) => typeof detail === "string" && detail !== "").join(", ");
+}
+
+const MultipleNetworksNotice: React.FC<{ networks: MgmtSettings[] }> = ({ networks }) => (
+  <Alert severity="info" variant="outlined" data-testid="lab-settings-mgmt-multi-network">
+    <AlertTitle>Multiple management networks</AlertTitle>
+    This lab defines {networks.length} management networks. Edit them in the YAML file for now;
+    Apply leaves them unchanged.
+    <Box component="ul" sx={{ m: 0, mt: 1, pl: 2.5 }}>
+      {networks.map((network, index) => {
+        const details = describeNetwork(network);
+        return (
+          <li key={`${network.network ?? ""}-${index}`}>
+            {network.network ?? `Network ${index + 1}`}
+            {index === 0 ? " (default)" : ""}
+            {details ? ` - ${details}` : ""}
+          </li>
+        );
+      })}
+    </Box>
+  </Alert>
+);
+
+const MgmtForm: React.FC<Omit<MgmtTabProps, "networks">> = ({
+  mgmt,
+  setMgmt,
+  driverOpts,
+  isViewMode
+}) => (
   <>
     <SettingsField title="Network Name" description="Docker network name (default: clab).">
       <TextField
@@ -187,3 +223,6 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({ mgmt, setMgmt, driverOpts, isV
     </SettingsField>
   </>
 );
+
+export const MgmtTab: React.FC<MgmtTabProps> = ({ networks, ...formProps }) =>
+  networks ? <MultipleNetworksNotice networks={networks} /> : <MgmtForm {...formProps} />;

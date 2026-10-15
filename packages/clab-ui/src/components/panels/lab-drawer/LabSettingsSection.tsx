@@ -118,6 +118,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
         setMgmt={state.setMgmt}
         driverOpts={state.driverOpts}
         isViewMode={areTopologySettingsReadOnly}
+        networks={labSettings?.mgmtNetworks}
       />
     );
   }
