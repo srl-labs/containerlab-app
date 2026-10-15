@@ -101,7 +101,7 @@ function updateNodeExtraData(data: NodeEditorData): Record<string, unknown> {
   for (const [key, value] of Object.entries(data)) {
     recordData[key] = value;
   }
-  const yamlExtraData = convertEditorDataToYaml(recordData);
+  const yamlExtraData = convertEditorDataToYaml(recordData, { keepExplicitDefaults: true });
   const newExtraData: Record<string, unknown> = { ...yamlExtraData };
   for (const key of Object.keys(newExtraData)) {
     if (newExtraData[key] === null) {
@@ -212,16 +212,6 @@ function applyNodeChanges(
   }
 
   refreshEditorData?.();
-}
-
-function needsDefaultCleanup(data: NodeEditorData | null): boolean {
-  if (!data) return false;
-  return (
-    data.autoRemove === false ||
-    data.enforceStartupConfig === false ||
-    data.suppressStartupConfig === false ||
-    data.startupDelay === 0
-  );
 }
 
 function isBridgeAliasCandidate(
@@ -504,7 +494,7 @@ export function useNodeEditorHandlers(
       clearNodeBoxPreview();
       const beforeData = initialDataRef.current;
       const hasChanges = beforeData ? JSON.stringify(beforeData) !== JSON.stringify(data) : true;
-      if (!hasChanges && !needsDefaultCleanup(data)) {
+      if (!hasChanges) {
         editNode(null);
         return;
       }
@@ -512,7 +502,7 @@ export function useNodeEditorHandlers(
       const oldName = beforeData?.name !== data.name ? beforeData?.name : undefined;
       applyNodeChanges(data, oldName, persistDeps);
 
-      const saveData = convertEditorDataToNodeSaveData(data, oldName);
+      const saveData = convertEditorDataToNodeSaveData(data, oldName, beforeData);
       void executeTopologyCommand({ command: "editNode", payload: saveData }, {}, sessionClient);
 
       initialDataRef.current = null;
@@ -525,13 +515,13 @@ export function useNodeEditorHandlers(
     (data: NodeEditorData) => {
       const beforeData = initialDataRef.current;
       const hasChanges = beforeData ? JSON.stringify(beforeData) !== JSON.stringify(data) : true;
-      if (!hasChanges && !needsDefaultCleanup(data)) return;
+      if (!hasChanges) return;
 
       const oldName = beforeData?.name !== data.name ? beforeData?.name : undefined;
       applyNodeChanges(data, oldName, persistDeps);
       clearNodeBoxPreview();
 
-      const saveData = convertEditorDataToNodeSaveData(data, oldName);
+      const saveData = convertEditorDataToNodeSaveData(data, oldName, beforeData);
       void executeTopologyCommand({ command: "editNode", payload: saveData }, {}, sessionClient);
 
       initialDataRef.current = { ...data };

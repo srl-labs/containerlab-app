@@ -557,6 +557,76 @@ test.describe("Lab Settings Modal", () => {
     await expect(muiSelectTriggerByLabel(modal, "IPv6 Subnet")).toBeVisible();
   });
 
+  test("Apply after a name change keeps mgmt keys the form does not edit", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const yaml = await topoViewerPage.getYamlFromFile(SIMPLE_FILE);
+    const mgmt = [
+      "mgmt:",
+      "  network: lab-mgmt # keep me",
+      "  driver: macvlan",
+      "  macvlan-parent: eth1",
+      "  ipv4-subnet: 172.31.20.0/24",
+      "  ipam:",
+      "    provider: runtime",
+      "  skip-when-unused: true"
+    ].join("\n");
+    await topoViewerPage.writeYamlFile(SIMPLE_FILE, yaml.replace("name: simple\n", `name: simple\n${mgmt}\n`));
+    await topoViewerPage.waitForCanvasReady();
+
+    const modal = await openModal(page);
+    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    await labNameInput.clear();
+    await labNameInput.fill("renamed-lab");
+    await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
+    await expect(modal).not.toBeVisible({ timeout: 3000 });
+
+    await expect
+      .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE), { timeout: 5000 })
+      .toContain("name: renamed-lab");
+    expect(await topoViewerPage.getYamlFromFile(SIMPLE_FILE)).toContain(`name: renamed-lab\n${mgmt}\n`);
+  });
+
+  test("Management tab is read-only when several management networks are defined", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const yaml = await topoViewerPage.getYamlFromFile(SIMPLE_FILE);
+    const mgmt = [
+      "mgmt:",
+      "  - network: net1",
+      "    ipv4-subnet: 172.31.10.0/24",
+      "  - network: net2",
+      "    driver: macvlan",
+      "    macvlan-parent: eth1"
+    ].join("\n");
+    await topoViewerPage.writeYamlFile(SIMPLE_FILE, yaml.replace("name: simple\n", `name: simple\n${mgmt}\n`));
+    await topoViewerPage.waitForCanvasReady();
+
+    const modal = await openModal(page);
+    await modal.locator(SEL_LAB_SETTINGS_TAB_MGMT).click();
+
+    const notice = modal.getByTestId("lab-settings-mgmt-multi-network");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("2 management networks");
+    await expect(notice).toContainText("net1 (default)");
+    await expect(notice).toContainText("net2 - macvlan");
+    await expect(modal.getByRole("textbox", { name: "Network Name" })).toHaveCount(0);
+
+    await modal.locator(SEL_LAB_SETTINGS_TAB_BASIC).click();
+    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    await labNameInput.clear();
+    await labNameInput.fill("multi-lab");
+    await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
+    await expect(modal).not.toBeVisible({ timeout: 3000 });
+
+    await expect
+      .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE), { timeout: 5000 })
+      .toContain("name: multi-lab");
+    expect(await topoViewerPage.getYamlFromFile(SIMPLE_FILE)).toContain(`name: multi-lab\n${mgmt}\n`);
+  });
+
   test("reopening modal preserves original data", async ({ page }) => {
     const modal = await openModal(page);
     const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });

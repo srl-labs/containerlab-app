@@ -63,3 +63,22 @@ export function getRecord(val: unknown): Record<string, string> | undefined {
     Object.entries(val).filter((entry): entry is [string, string] => typeof entry[1] === "string")
   );
 }
+
+/**
+ * Safely get a record of scalar values (string, number, boolean), keeping each
+ * value's type. A key without a value (YAML `KEY:`) reads as an empty string.
+ */
+export function getScalarRecord(
+  val: unknown
+): Record<string, string | number | boolean> | undefined {
+  if (!isRecord(val)) return undefined;
+  const result: Record<string, string | number | boolean> = {};
+  for (const [key, entry] of Object.entries(val)) {
+    if (typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean") {
+      result[key] = entry;
+    } else if (entry === null) {
+      result[key] = "";
+    }
+  }
+  return result;
+}

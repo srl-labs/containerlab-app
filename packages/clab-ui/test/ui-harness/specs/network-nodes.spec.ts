@@ -795,6 +795,35 @@ test.describe("Network Node Modification", () => {
     });
   }
 
+  test("macvlan mode offers source and saves it", async ({ page, topoViewerPage }) => {
+    await topoViewerPage.createNode("router1", { x: 300, y: 200 }, KIND_NOKIA_SRLINUX);
+    await page.waitForTimeout(300);
+
+    const macvlanId = await topoViewerPage.createNetwork({ x: 100, y: 200 }, "macvlan");
+    expect(macvlanId).not.toBeNull();
+    await page.waitForTimeout(300);
+
+    await topoViewerPage.createLink("router1", macvlanId!, "e1-1", "eth0");
+    await page.waitForTimeout(500);
+
+    await openNetworkEditor(page, macvlanId!);
+    await expectNetworkEditorOpen(page);
+
+    await page.locator("#macvlan-mode").click();
+    await page.getByRole("option", { name: "source", exact: true }).click();
+    await page.locator(SEL_APPLY_BTN).click();
+
+    await expect
+      .poll(async () => {
+        const parsed = YAML.parse(await topoViewerPage.getYamlFromFile(EMPTY_FILE));
+        return findLinkByType(parsed, "macvlan")?.mode ?? null;
+      }, { timeout: 15000 })
+      .toBe("source");
+
+    const validation = validateYamlAgainstSchema(await topoViewerPage.getYamlFromFile(EMPTY_FILE));
+    expect(validation.valid).toBe(true);
+  });
+
   test("editing bridge label persists to annotations", async ({ page, topoViewerPage }) => {
     await topoViewerPage.createNode("router1", { x: 300, y: 200 }, KIND_NOKIA_SRLINUX);
     await page.waitForTimeout(300);
