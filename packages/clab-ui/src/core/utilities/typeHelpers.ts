@@ -55,16 +55,6 @@ export function getRecordUnknown(val: unknown): Record<string, unknown> | undefi
 }
 
 /**
- * Safely get record (object) value with only string values.
- */
-export function getRecord(val: unknown): Record<string, string> | undefined {
-  if (!isRecord(val)) return undefined;
-  return Object.fromEntries(
-    Object.entries(val).filter((entry): entry is [string, string] => typeof entry[1] === "string")
-  );
-}
-
-/**
  * Safely get a record of scalar values (string, number, boolean), keeping each
  * value's type. A key without a value (YAML `KEY:`) reads as an empty string.
  */

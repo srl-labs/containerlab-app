@@ -14,7 +14,9 @@ import type { EdgeAnnotation, NodeAnnotation, NodeBoxAppearance } from "../../co
 import {
   convertEditorDataToYaml,
   convertEditorDataToNodeSaveData,
-  convertNetworkEditorDataToYaml
+  convertNetworkEditorDataToYaml,
+  convertNetworkEditorDataToLinkExtraData,
+  buildNetworkLinkEditExtraData
 } from "../../core/utilities";
 import {
   executeTopologyCommand,
@@ -69,12 +71,6 @@ type GraphState = ReturnType<typeof useGraphStore.getState>;
 
 function toRecord(value: unknown): Record<string, unknown> | undefined {
   return isRecord(value) ? value : undefined;
-}
-
-function toOptionalNumber(value: string | undefined): number | undefined {
-  if (value == null || value.length === 0) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function getEdgeData(edge: BasicEdge): {
@@ -736,9 +732,6 @@ export function useLinkEditorHandlers(
 // useNetworkEditorHandlers
 // ============================================================================
 
-/** VXLAN types that need link property updates */
-const VXLAN_NETWORK_TYPES = new Set(["vxlan", "vxlan-stitch"]);
-
 /** Host-like types that have host-interface property */
 const HOST_INTERFACE_TYPES = new Set(["host", "mgmt-net", "macvlan"]);
 
@@ -767,45 +760,6 @@ function calculateExpectedNodeId(data: NetworkEditorData): string {
     return data.interfaceName || data.id;
   }
   return data.id;
-}
-
-function applyVxlanFields(extraData: Record<string, unknown>, data: NetworkEditorData): void {
-  if (!VXLAN_NETWORK_TYPES.has(data.networkType)) return;
-  Object.assign(extraData, {
-    extRemote: data.vxlanRemote ?? undefined,
-    extVni: toOptionalNumber(data.vxlanVni),
-    extDstPort: toOptionalNumber(data.vxlanDstPort),
-    extSrcPort: toOptionalNumber(data.vxlanSrcPort)
-  });
-}
-
-function applyHostInterfaceFields(
-  extraData: Record<string, unknown>,
-  data: NetworkEditorData
-): void {
-  if (!HOST_INTERFACE_TYPES.has(data.networkType)) return;
-  extraData.extHostInterface = data.interfaceName || undefined;
-  extraData.extMode = data.networkType === "macvlan" ? (data.macvlanMode ?? undefined) : undefined;
-}
-
-function applyCommonNetworkFields(
-  extraData: Record<string, unknown>,
-  data: NetworkEditorData
-): void {
-  Object.assign(extraData, {
-    extMtu: toOptionalNumber(data.mtu),
-    extMac: data.mac ?? undefined,
-    extVars: data.vars && Object.keys(data.vars).length > 0 ? data.vars : undefined,
-    extLabels: data.labels && Object.keys(data.labels).length > 0 ? data.labels : undefined
-  });
-}
-
-function buildNetworkExtraData(data: NetworkEditorData): Record<string, unknown> {
-  const extraData: Record<string, unknown> = { extType: data.networkType };
-  applyVxlanFields(extraData, data);
-  applyHostInterfaceFields(extraData, data);
-  applyCommonNetworkFields(extraData, data);
-  return extraData;
 }
 
 function sanitizeLinkExtraData(
@@ -871,7 +825,7 @@ export function useNetworkEditorHandlers(
         nextExtraData = { ...existingExtra, ...convertNetworkEditorDataToYaml(data) };
       } else if (LINK_BASED_NETWORK_TYPES.has(data.networkType)) {
         // Mirror main-branch behavior: keep only network link properties on the node.
-        nextExtraData = buildNetworkExtraData(data);
+        nextExtraData = convertNetworkEditorDataToLinkExtraData(data);
       } else {
         nextExtraData = convertNetworkEditorDataToYaml(data);
       }
@@ -883,10 +837,15 @@ export function useNetworkEditorHandlers(
   );
 
   const persistLinkBasedNetwork = React.useCallback(
-    async (data: NetworkEditorData, newNodeId: string, connectedEdges: BasicEdge[]) => {
+    async (
+      data: NetworkEditorData,
+      newNodeId: string,
+      connectedEdges: BasicEdge[],
+      beforeData: NetworkEditorData | null
+    ) => {
       if (!LINK_BASED_NETWORK_TYPES.has(data.networkType)) return;
 
-      const extraData = buildNetworkExtraData(data);
+      const extraData = buildNetworkLinkEditExtraData(data, beforeData);
       const linkCommands = connectedEdges.map((edge) => {
         const edgeData = getEdgeData(edge);
         const sourceEndpoint = edgeData.sourceEndpoint;
@@ -1045,7 +1004,7 @@ export function useNetworkEditorHandlers(
       applyGraphUpdates(data, newNodeId);
 
       if (LINK_BASED_NETWORK_TYPES.has(data.networkType)) {
-        await persistLinkBasedNetwork(data, newNodeId, preRenameConnectedEdges);
+        await persistLinkBasedNetwork(data, newNodeId, preRenameConnectedEdges, beforeData);
       } else if (BRIDGE_NETWORK_TYPES.has(data.networkType)) {
         persistBridgeNetwork(data, newNodeId);
       }

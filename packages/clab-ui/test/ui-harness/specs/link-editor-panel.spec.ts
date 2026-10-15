@@ -142,4 +142,56 @@ test.describe("Link Editor Panel", () => {
     await expect(applyBtn).toBeVisible();
     await expect(applyBtn).toHaveText("Apply");
   });
+
+  test("editing an interface keeps link fields the editor does not show", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const file = "simple.clab.yml";
+    const yaml = `name: simple
+
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    srl2:
+      kind: nokia_srlinux
+
+  links:
+    # uplink
+    - type: veth
+      endpoints:
+        - node: srl1
+          interface: e1-3
+          vars:
+            port-role: uplink
+        - node: srl2
+          interface: e1-3
+      mtu: 9000
+      vars:
+        cost: 10
+        bgp:
+          asn: 65001
+`;
+    await topoViewerPage.writeYamlFile(file, yaml);
+    await expect
+      .poll(() => topoViewerPage.findEdgeByEndpoints("srl1", "srl2", "e1-3", "e1-3"), {
+        timeout: 10000
+      })
+      .not.toBeNull();
+
+    const edge = await topoViewerPage.findEdgeByEndpoints("srl1", "srl2", "e1-3", "e1-3");
+    await openLinkEditor(page, edge!.id);
+
+    const sourceInterface = page.locator("#link-source-interface");
+    await sourceInterface.fill("e1-4");
+    await sourceInterface.blur();
+    await page.locator(SEL_PANEL_APPLY_BTN).click();
+
+    // Only the interface changes: comments, endpoint vars and nested vars are kept
+    const expected = yaml.replace("interface: e1-3", "interface: e1-4");
+    await expect
+      .poll(() => topoViewerPage.getYamlFromFile(file), { timeout: 15000 })
+      .toBe(expected);
+  });
 });

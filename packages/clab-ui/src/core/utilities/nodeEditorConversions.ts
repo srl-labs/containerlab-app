@@ -28,13 +28,10 @@ import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
 // ============================================================================
 
 /** Image pull policies as containerlab spells them */
-export const IMAGE_PULL_POLICIES = ["Always", "Never", "IfNotPresent"] as const;
+const IMAGE_PULL_POLICIES = ["Always", "Never", "IfNotPresent"] as const;
 
 /** Restart policies accepted by containerlab */
-export const RESTART_POLICIES = ["no", "always", "on-failure", "unless-stopped"] as const;
-
-/** Container runtimes containerlab supports */
-export const CONTAINER_RUNTIMES = ["docker", "podman"] as const;
+const RESTART_POLICIES = ["no", "always", "on-failure", "unless-stopped"] as const;
 
 /** Prefix of the network mode that shares another container's network namespace */
 export const CONTAINER_NETWORK_MODE_PREFIX = "container:";
@@ -54,7 +51,7 @@ export function normalizeImagePullPolicy(value: string | undefined): string | un
 }
 
 /** Map a restart policy onto its lowercase spelling; unknown values are returned unchanged. */
-export function normalizeRestartPolicy(value: string | undefined): string | undefined {
+function normalizeRestartPolicy(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const key = value.trim().toLowerCase();
   return RESTART_POLICIES.find((policy) => policy === key) ?? value;
@@ -852,7 +849,7 @@ function settleAgainstBaseline(data: NodeEditorData, baseline: NodeEditorData): 
  * them as written (including comments, kind-specific keys and values the
  * editor only shows). A key the user cleared is set to null (deletion).
  */
-export function convertEditorChangesToYaml(
+function convertEditorChangesToYaml(
   data: NodeEditorData,
   baseline: NodeEditorData
 ): YamlExtraData {

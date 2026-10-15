@@ -12,7 +12,9 @@ export {
 // Network editor conversions
 export {
   convertToNetworkEditorData,
-  convertNetworkEditorDataToYaml
+  convertNetworkEditorDataToYaml,
+  convertNetworkEditorDataToLinkExtraData,
+  buildNetworkLinkEditExtraData
 } from "./networkEditorConversions";
 
 // Link types and utilities

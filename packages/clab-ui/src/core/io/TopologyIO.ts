@@ -532,7 +532,14 @@ export class TopologyIO {
     const linkMap = item;
 
     const linkType = linkMap.get("type");
-    if (linkType === undefined || linkType === null) return false;
+    if (linkType === undefined || linkType === null) {
+      // Brief form: endpoints: ["srl1:e1-1", "host:eth0"]
+      const endpoints = linkMap.get("endpoints", true);
+      return (
+        YAML.isSeq(endpoints) &&
+        endpoints.items.some((ep) => YAML.isScalar(ep) && String(ep.value) === nodeId)
+      );
+    }
     const typeStr = YAML.isScalar(linkType) ? String(linkType.value) : String(linkType);
 
     const expectedId = this.buildExpectedNetworkNodeId(typeStr, linkMap, nodeId);
