@@ -14,7 +14,7 @@ import type {
   TopologyAnnotations,
   NodeAnnotation
 } from "../types/topology";
-import type { LabSettings } from "../types/labSettings";
+import type { LabSettings, LabSettingsUpdate, MgmtSettingsUpdate } from "../types/labSettings";
 import type {
   TopologyHostCommand,
   TopologyHostResponseMessage,
@@ -550,7 +550,7 @@ export class TopologyHostCore implements TopologyHost {
     }
   }
 
-  private async applyLabSettings(settings: LabSettings): Promise<void> {
+  private async applyLabSettings(update: LabSettingsUpdate): Promise<void> {
     await this.ensureTopologyInitialized();
     const doc = this.topologyIO.getDocument();
     if (!doc) {
@@ -563,29 +563,20 @@ export class TopologyHostCore implements TopologyHost {
     }
     const rootMap = rootContents;
 
-    if (settings.name !== undefined) {
-      setKey(rootMap, "name", doc.createNode(settings.name));
+    if (update.name !== undefined) {
+      setScalarKey(doc, rootMap, "name", update.name);
     }
 
-    if (settings.prefix !== undefined) {
-      if (settings.prefix === null) {
+    if (update.prefix !== undefined) {
+      if (update.prefix === null) {
         deleteKey(rootMap, "prefix");
       } else {
-        setKeyAfter(rootMap, "prefix", doc.createNode(settings.prefix), "name");
+        setScalarKey(doc, rootMap, "prefix", update.prefix, "name");
       }
     }
 
-    if (settings.mgmt !== undefined) {
-      if (settings.mgmt === null) {
-        deleteKey(rootMap, "mgmt");
-      } else {
-        const mgmtMap = doc.createNode(settings.mgmt) as YAML.YAMLMap;
-        const hasPrefixKey = rootMap.items.some(
-          (pair) => YAML.isScalar(pair.key) && pair.key.value === "prefix"
-        );
-        const afterKey = hasPrefixKey ? "prefix" : "name";
-        setKeyAfter(rootMap, "mgmt", mgmtMap, afterKey);
-      }
+    if (update.mgmt !== undefined && Object.keys(update.mgmt).length > 0) {
+      applyMgmtUpdate(doc, rootMap, update.mgmt);
     }
 
     await this.topologyIO.save();
@@ -1357,11 +1348,102 @@ function extractLabSettings(doc: YAML.Document.Parsed): LabSettings {
 
   if (name !== undefined && name !== "") settings.name = name;
   if (prefix !== undefined) settings.prefix = prefix;
-  if (mgmt !== undefined) {
+  if (YAML.isSeq(mgmtRaw)) {
+    settings.mgmtNetworks = mgmtRaw.items.map((item) =>
+      YAML.isMap(item) ? (toRecord(item.toJSON()) ?? {}) : {}
+    );
+  } else if (mgmt !== undefined) {
     settings.mgmt = mgmt;
   }
 
   return settings;
+}
+
+function findPair(map: YAML.YAMLMap, key: string): YAML.Pair | undefined {
+  return map.items.find((pair) => YAML.isScalar(pair.key) && pair.key.value === key);
+}
+
+/** Sets a scalar value, keeping the existing node (and its comments) when there is one. */
+function setScalarKey(
+  doc: YAML.Document,
+  map: YAML.YAMLMap,
+  key: string,
+  value: unknown,
+  afterKey?: string
+): void {
+  const existing = findPair(map, key);
+  if (existing && YAML.isScalar(existing.value)) {
+    if (existing.value.value !== value) existing.value.value = value;
+    return;
+  }
+  const node = doc.createNode(value);
+  if (afterKey !== undefined) {
+    setKeyAfter(map, key, node, afterKey);
+  } else {
+    setKey(map, key, node);
+  }
+}
+
+/**
+ * Merges Lab Settings form changes into the existing mgmt map. Keys the form does
+ * not own, comments and key order are kept. A list of management networks is never
+ * rewritten by the single-network form.
+ */
+function applyMgmtUpdate(
+  doc: YAML.Document,
+  rootMap: YAML.YAMLMap,
+  update: MgmtSettingsUpdate
+): void {
+  const mgmtPair = findPair(rootMap, "mgmt");
+  if (mgmtPair && YAML.isSeq(mgmtPair.value)) return;
+
+  const entries: Array<[string, unknown]> = Object.entries(update);
+  let mgmtMap: YAML.YAMLMap;
+  if (mgmtPair && YAML.isMap(mgmtPair.value)) {
+    mgmtMap = mgmtPair.value;
+  } else {
+    if (!entries.some(([, value]) => value !== null && value !== undefined)) return;
+    mgmtMap = new YAML.YAMLMap();
+    const afterKey = findPair(rootMap, "prefix") ? "prefix" : "name";
+    setKeyAfter(rootMap, "mgmt", mgmtMap, afterKey);
+  }
+
+  for (const [key, value] of entries) {
+    if (value === undefined) continue;
+    if (value === null) {
+      deleteKey(mgmtMap, key);
+    } else if (key === "driver-opts" && isRecord(value)) {
+      mergeStringMap(doc, mgmtMap, key, value);
+    } else {
+      setScalarKey(doc, mgmtMap, key, value);
+    }
+  }
+
+  if (mgmtMap.items.length === 0) deleteKey(rootMap, "mgmt");
+}
+
+function mergeStringMap(
+  doc: YAML.Document,
+  parent: YAML.YAMLMap,
+  key: string,
+  update: Record<string, unknown>
+): void {
+  const pair = findPair(parent, key);
+  let map: YAML.YAMLMap;
+  if (pair && YAML.isMap(pair.value)) {
+    map = pair.value;
+  } else {
+    map = new YAML.YAMLMap();
+    setKey(parent, key, map);
+  }
+  for (const [entryKey, entryValue] of Object.entries(update)) {
+    if (entryValue === null) {
+      deleteKey(map, entryKey);
+    } else {
+      setScalarKey(doc, map, entryKey, entryValue);
+    }
+  }
+  if (map.items.length === 0) deleteKey(parent, key);
 }
 
 function persistGraphLabelMigrations(

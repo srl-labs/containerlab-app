@@ -9,7 +9,7 @@ import type { LinkSaveData } from "../io/LinkPersistenceIO";
 
 import type { TopologyAnnotations, EdgeAnnotation, DeploymentState } from "./topology";
 import type { TopoNode, TopoEdge } from "./graph";
-import type { LabSettings } from "./labSettings";
+import type { LabSettings, LabSettingsUpdate } from "./labSettings";
 
 /**
  * Base message interface for all messages
@@ -96,7 +96,7 @@ export type TopologyHostCommand =
       };
     }
   | { command: "batch"; payload: { commands: TopologyHostCommand[] } }
-  | { command: "setLabSettings"; payload: LabSettings }
+  | { command: "setLabSettings"; payload: LabSettingsUpdate }
   | { command: "undo" }
   | { command: "redo" };
 

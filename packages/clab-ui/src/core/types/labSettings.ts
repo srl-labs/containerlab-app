@@ -9,6 +9,8 @@ export interface LabSettings {
   name?: string;
   prefix?: string | null;
   mgmt?: MgmtSettings | null;
+  /** Set instead of `mgmt` when the topology defines a list of management networks. */
+  mgmtNetworks?: MgmtSettings[];
 }
 
 export interface MgmtSettings {
@@ -22,4 +24,21 @@ export interface MgmtSettings {
   bridge?: string;
   "external-access"?: boolean;
   "driver-opts"?: Record<string, string>;
+  driver?: string;
 }
+
+/**
+ * Changes applied by the Lab Settings form. Absent keys stay untouched and `null`
+ * removes a key. `mgmt` is merged key by key into the existing map.
+ */
+export interface LabSettingsUpdate {
+  name?: string;
+  prefix?: string | null;
+  mgmt?: MgmtSettingsUpdate;
+}
+
+export type MgmtSettingsUpdate = {
+  [K in Exclude<keyof MgmtSettings, "driver-opts">]?: MgmtSettings[K] | null;
+} & {
+  "driver-opts"?: Record<string, string | null> | null;
+};
