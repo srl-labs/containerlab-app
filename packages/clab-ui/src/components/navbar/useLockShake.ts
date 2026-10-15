@@ -25,7 +25,7 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-export function playLockShake(element: HTMLElement): void {
+function playLockShake(element: HTMLElement): void {
   if (typeof element.animate !== "function") return;
   const reduced = prefersReducedMotion();
   element.animate(reduced ? PULSE_FRAMES : SHAKE_FRAMES, {
