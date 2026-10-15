@@ -33,10 +33,17 @@ export const INTEGRATED_SROS_TYPES = new Set([
 ]);
 
 /**
+ * Scalar value of an env, label or sysctl entry. YAML keeps numbers and
+ * booleans unquoted, so the editor keeps their type until the value is edited.
+ */
+export type NodeScalarValue = string | number | boolean;
+
+/**
  * Health check configuration
  */
 export interface HealthCheckConfig {
-  test?: string;
+  /** Test command as a list, e.g. ["CMD-SHELL", "cat /etc/os-release"] */
+  test?: string[];
   startPeriod?: number;
   interval?: number;
   timeout?: number;
@@ -66,9 +73,10 @@ export interface SrosXiom {
 export interface SrosComponent {
   slot?: string | number;
   type?: string;
-  sfm?: string;
   mda?: SrosMda[];
   xiom?: SrosXiom[];
+  /** Component keys the editor does not show (e.g. env, cpu, ram), kept as they are */
+  extra?: Record<string, unknown>;
 }
 
 /**
@@ -80,10 +88,10 @@ export interface AdvancedNodeFields {
   memory?: string;
   shmSize?: string;
   capAdd?: string[];
-  sysctls?: Record<string, string>;
+  sysctls?: Record<string, NodeScalarValue>;
   devices?: string[];
   certIssue?: boolean;
-  certKeySize?: string;
+  certKeySize?: number;
   certValidity?: string;
   sans?: string[];
   healthCheck?: HealthCheckConfig;
@@ -101,9 +109,9 @@ interface SharedTemplateFields extends AdvancedNodeFields {
   suppressStartupConfig?: boolean;
   license?: string;
   binds?: string[];
-  env?: Record<string, string>;
+  env?: Record<string, NodeScalarValue>;
   envFiles?: string[];
-  labels?: Record<string, string>;
+  labels?: Record<string, NodeScalarValue>;
   // Runtime
   user?: string;
   entrypoint?: string;
@@ -118,10 +126,14 @@ interface SharedTemplateFields extends AdvancedNodeFields {
   networkMode?: string;
   ports?: string[];
   dnsServers?: string[];
+  dnsSearch?: string[];
+  dnsOptions?: string[];
   aliases?: string[];
   // Components (SROS)
   isDistributed?: boolean;
   components?: SrosComponent[];
+  /** Node-level SFM type of a distributed SR-SIM chassis */
+  sfm?: string;
 }
 
 /**
@@ -188,7 +200,7 @@ export interface NetworkEditorData {
   vxlanDstPort?: string;
   /** VXLAN source port */
   vxlanSrcPort?: string;
-  /** MACVLAN mode (bridge, vepa, private, passthru) */
+  /** MACVLAN mode (bridge, vepa, private, passthru, source) */
   macvlanMode?: string;
   /** MAC address */
   mac?: string;
@@ -227,7 +239,7 @@ export const SINGLE_ENDPOINT_NETWORK_TYPES: NetworkType[] = NETWORK_TYPES.filter
 );
 
 /** MACVLAN mode options */
-export const MACVLAN_MODES = ["bridge", "vepa", "private", "passthru"] as const;
+export const MACVLAN_MODES = ["bridge", "vepa", "private", "passthru", "source"] as const;
 
 /**
  * Get the interface field label based on network type

@@ -12,6 +12,7 @@ import {
 } from "../../ui/form";
 
 import type { TabProps } from "./types";
+import { withCurrentOption } from "./selectOptions";
 
 const RESTART_POLICY_OPTIONS = [
   { value: "", label: "Default" },
@@ -77,7 +78,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           label="Restart Policy"
           value={data.restartPolicy ?? ""}
           onChange={(value) => onChange({ restartPolicy: value })}
-          options={RESTART_POLICY_OPTIONS}
+          options={withCurrentOption(RESTART_POLICY_OPTIONS, data.restartPolicy ?? "")}
         />
         <CheckboxField
           id="node-auto-remove"

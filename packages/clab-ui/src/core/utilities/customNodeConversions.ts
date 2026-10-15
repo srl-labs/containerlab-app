@@ -9,6 +9,7 @@ import type {
 } from "../types/editors";
 
 import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
+import { normalizeHealthcheckTest } from "./nodeEditorConversions";
 
 /**
  * Data format for saving custom node to extension.
@@ -26,6 +27,22 @@ export interface SaveCustomNodeData extends Omit<CustomNodeTemplate, "name"> {
  * uniformly for each of them.
  */
 type TemplateFieldSource = NodeEditorData | CustomTemplateEditorData | CustomNodeTemplate;
+
+/** Templates saved by older versions hold the healthcheck test as a string */
+function normalizeTemplateHealthCheck(
+  healthCheck: TemplateFieldSource["healthCheck"]
+): TemplateFieldSource["healthCheck"] {
+  if (!healthCheck) return healthCheck;
+  return { ...healthCheck, test: normalizeHealthcheckTest(healthCheck.test) };
+}
+
+/** Templates saved by older versions hold the key size as a string */
+function normalizeTemplateKeySize(keySize: unknown): number | undefined {
+  if (typeof keySize === "number") return keySize;
+  if (typeof keySize !== "string" || keySize.trim() === "") return undefined;
+  const num = Number(keySize);
+  return Number.isFinite(num) ? num : undefined;
+}
 
 function buildCommonTemplateFields(data: TemplateFieldSource) {
   return {
@@ -66,6 +83,8 @@ function buildCommonTemplateFields(data: TemplateFieldSource) {
     networkMode: data.networkMode,
     ports: data.ports,
     dnsServers: data.dnsServers,
+    dnsSearch: data.dnsSearch,
+    dnsOptions: data.dnsOptions,
     aliases: data.aliases,
 
     // Advanced tab fields
@@ -77,16 +96,17 @@ function buildCommonTemplateFields(data: TemplateFieldSource) {
     sysctls: data.sysctls,
     devices: data.devices,
     certIssue: data.certIssue,
-    certKeySize: data.certKeySize,
+    certKeySize: normalizeTemplateKeySize(data.certKeySize),
     certValidity: data.certValidity,
     sans: data.sans,
-    healthCheck: data.healthCheck,
+    healthCheck: normalizeTemplateHealthCheck(data.healthCheck),
     imagePullPolicy: data.imagePullPolicy,
     runtime: data.runtime,
 
     // Components tab fields (SROS)
     isDistributed: data.isDistributed,
-    components: data.components
+    components: data.components,
+    sfm: data.sfm
   };
 }
 

@@ -917,17 +917,13 @@ export const ComponentsTab: React.FC<TabProps> = ({ data, onChange }) => {
   const isIntegrated = isIntegratedType(data.type);
   const components = data.components ?? [];
 
-  // Extract shared SFM value from first component that has it
-  const sfmValue = components.find((c) => typeof c.sfm === "string" && c.sfm.length > 0)?.sfm ?? "";
-
   const handleComponentsChange = (newComponents: SrosComponent[]) => {
     onChange({ components: newComponents });
   };
 
+  // The SFM is a node-level key of the chassis, not part of a component
   const handleSfmChange = (sfm: string) => {
-    // Apply SFM to all components
-    const newComponents = components.map((c) => ({ ...c, sfm: sfm || undefined }));
-    onChange({ components: newComponents.length > 0 ? newComponents : [{ sfm }] });
+    onChange({ sfm });
   };
 
   return (
@@ -941,7 +937,7 @@ export const ComponentsTab: React.FC<TabProps> = ({ data, onChange }) => {
       ) : (
         <DistributedModeSection
           components={components}
-          sfmValue={sfmValue}
+          sfmValue={data.sfm ?? ""}
           srosTypes={srosComponentTypes}
           onComponentsChange={handleComponentsChange}
           onSfmChange={handleSfmChange}
