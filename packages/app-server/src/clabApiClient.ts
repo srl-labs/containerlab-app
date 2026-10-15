@@ -501,7 +501,7 @@ export class ClabApiClient {
       params.set("path", options.path);
     }
     if (options.cleanup) {
-      params.set("cleanup", "true");
+      params.set(lifecycleCleanupParam("deploy"), "true");
     }
     if (options.includeLogs) {
       params.set("includeLogs", "true");
@@ -666,7 +666,7 @@ export class ClabApiClient {
       params.set("path", options.path);
     }
     if (options.cleanup) {
-      params.set("cleanup", "true");
+      params.set(lifecycleCleanupParam(endpoint), "true");
     }
 
     const { method, path, hasJsonBody } = lifecycleStreamRequestTarget(
@@ -1357,6 +1357,15 @@ function upstreamNetworkErrorMessage(baseUrl: string, error: unknown): string {
       ? `: ${cause.message}`
       : "";
   return `Unable to connect to clab-api-server at ${baseUrl}: ${message}${causeMessage}`;
+}
+
+/**
+ * Query parameter that carries the "cleanup" variant of a lifecycle action.
+ * Deploy has no `cleanup` flag upstream: `reconfigure` is the equivalent of
+ * `containerlab deploy -c` and is also what lets a running lab be redeployed.
+ */
+function lifecycleCleanupParam(endpoint: LifecycleEndpoint): "cleanup" | "reconfigure" {
+  return endpoint === "deploy" ? "reconfigure" : "cleanup";
 }
 
 function lifecycleStreamRequestTarget(

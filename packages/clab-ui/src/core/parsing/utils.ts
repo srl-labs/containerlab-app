@@ -6,21 +6,33 @@
 import type { ClabTopology, NodeAnnotation, TopologyAnnotations } from "../types/topology";
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
+/** Topology `prefix` value that makes containerlab use the bare lab name as prefix. */
+const LAB_NAME_PREFIX = "__lab-name";
+
 /**
- * Computes the full prefix for container names.
+ * Computes the full prefix for container names, following containerlab's rules:
+ * - no `prefix`: `clab-<lab>`
+ * - empty `prefix`: no prefix, containers are named after the node
+ * - `prefix: __lab-name`: `<lab>`
+ * - any other `prefix`: `<prefix>-<lab>`
  *
  * @param parsed - The parsed topology
  * @param clabName - The lab name
- * @returns The full prefix (e.g., "clab-labname")
+ * @returns The full prefix (e.g., "clab-labname"), or "" when containers have no prefix
  */
 export function computeFullPrefix(parsed: ClabTopology, clabName: string): string {
-  if (parsed.prefix === undefined) {
+  // A missing or null `prefix` (bare `prefix:` in YAML) keeps the default.
+  if (typeof parsed.prefix !== "string") {
     return `clab-${clabName}`;
   }
-  if (parsed.prefix === "" || parsed.prefix.trim() === "") {
+  const prefix = parsed.prefix.trim();
+  if (prefix === "") {
     return "";
   }
-  return `${parsed.prefix.trim()}-${clabName}`;
+  if (prefix === LAB_NAME_PREFIX) {
+    return clabName;
+  }
+  return `${prefix}-${clabName}`;
 }
 
 /**

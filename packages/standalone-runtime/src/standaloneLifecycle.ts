@@ -543,13 +543,6 @@ export function createStandaloneLifecycleManager(
       `Starting ${config.label} for "${label}"...`,
       "stdout"
     );
-    if (config.endpoint === "deploy" && config.cleanup) {
-      postLifecycleLogMessage(
-        config.commandType,
-        "Cleanup is not supported by deploy API; running a standard deploy.",
-        "stdout"
-      );
-    }
   }
 
   async function invokeConfiguredLifecycleStream(
