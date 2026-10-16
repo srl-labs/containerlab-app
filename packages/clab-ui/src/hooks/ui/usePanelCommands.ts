@@ -9,10 +9,12 @@
 import { useCallback, useState } from "react";
 
 import { useClabUiHost } from "../../host";
-import type { LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
+import type { ApplyPlan, LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
 
 export interface DeploymentCommands {
   onApply: () => void;
+  /** Dry-run apply; undefined when the host cannot show a plan. */
+  planApply: (() => Promise<ApplyPlan>) | undefined;
   onDeploy: () => void;
   onDeployCleanup: () => void;
   onDestroy: () => void;
@@ -29,9 +31,15 @@ export interface DeploymentCommands {
 // Keep deployment commands - they need extension to run containerlab CLI
 export function useDeploymentCommands(): DeploymentCommands {
   const { topoViewer } = useClabUiHost();
+  const canPlanApply = typeof topoViewer.planApply === "function";
+  const planApply = useCallback(() => {
+    if (!topoViewer.planApply) return Promise.reject(new Error("Apply plans are not available"));
+    return topoViewer.planApply();
+  }, [topoViewer]);
 
   return {
     onApply: useCallback(() => topoViewer.runLifecycle("applyLab"), [topoViewer]),
+    planApply: canPlanApply ? planApply : undefined,
     onDeploy: useCallback(() => topoViewer.runLifecycle("deployLab"), [topoViewer]),
     onDeployCleanup: useCallback(() => topoViewer.runLifecycle("deployLabCleanup"), [topoViewer]),
     onDestroy: useCallback(() => topoViewer.runLifecycle("destroyLab"), [topoViewer]),

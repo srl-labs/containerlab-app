@@ -56,6 +56,7 @@ import {
   extractEndpointIdFromTopologyId,
   isStandaloneLifecycleCommand,
   labsEqualForExplorer,
+  planTopologyApply,
   resolveStandaloneStartupScreen,
   useAuth,
   useEndpointStore,
@@ -1343,9 +1344,22 @@ function setupStandaloneUiHost(): void {
     return response;
   };
 
+  // The dry run goes straight to the app server instead of through postMessage.
+  const planApply = async () => {
+    const topologyRef = topologyManager.getCurrentTopologyRef();
+    if (!topologyRef) {
+      throw new Error("No active topology session is available.");
+    }
+    return planTopologyApply({
+      sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+      topologyRef,
+    });
+  };
+
   standaloneRuntime = createClabUiRuntime({
     host: {
       ...apiHost,
+      topoViewer: { ...apiHost.topoViewer, planApply },
       topology: {
         ...apiHost.topology,
         dispatchCommand,

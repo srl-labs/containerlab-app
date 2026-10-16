@@ -283,6 +283,25 @@ describe("MessageRouter with the clab-ui webview host", () => {
     ]);
   });
 
+  it("answers apply plan requests with the dry-run plan or its error", async () => {
+    const planApply = sinon.stub(labLifecycleService, "planApply");
+    planApply.onFirstCall().resolves({ "added-nodes": ["r3"], "deployed-lab": false });
+    planApply.onSecondCall().rejects(new Error("Error: lab not found"));
+    const webview = connectWebview();
+    const requestPlan = webview.host.topoViewer.planApply;
+    expect(requestPlan).to.be.a("function");
+
+    const plan = await requestPlan!();
+    let failure: unknown;
+    await requestPlan!().catch((err: unknown) => {
+      failure = err;
+    });
+
+    expect(planApply.args).to.deep.equal([[YAML_PATH], [YAML_PATH]]);
+    expect(plan.addedNodes).to.deep.equal(["r3"]);
+    expect(String(failure)).to.contain("lab not found");
+  });
+
   it("forwards a multi-interface capture to the capture endpoint", async () => {
     const interfaceEndpoint = sinon
       .stub(nodeCommandService, "handleInterfaceEndpoint")

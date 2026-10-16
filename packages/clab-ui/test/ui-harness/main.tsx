@@ -30,7 +30,10 @@ const showWorkspaceSidebar = hostLayout !== "vscode" && !isDevExplorerDisabledBy
 const lifecycleParam = params.get("lifecycleActions");
 const lifecycleActionsAvailable =
   lifecycleParam === null ? hostLayout !== "sandbox" : lifecycleParam !== "false";
-const host = createFakeClabUiHost(params.get("fixture"), hostLayout);
+// ?templates=none starts without node templates, as the browser specs expect.
+const host = createFakeClabUiHost(params.get("fixture"), hostLayout, {
+  seedTemplates: params.get("templates") !== "none"
+});
 const runtime = createClabUiRuntime({
   host,
   initialContext: {
@@ -44,8 +47,7 @@ const runtime = createClabUiRuntime({
 const initialData = {
   schemaData: defaultSchemaData,
   dockerImages: [],
-  customNodes: [],
-  defaultNode: "",
+  ...host.harness.getCustomNodes(),
   customIcons: []
 };
 

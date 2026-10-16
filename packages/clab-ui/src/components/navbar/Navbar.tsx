@@ -51,13 +51,18 @@ import {
 import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
 import { FindNodeSearchWidget } from "../panels/find-node/FindNodeSearchWidget";
-import type { LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
+import type { ApplyPlan, LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
 
 import { useLockShake } from "./useLockShake";
 
 const LazyLifecycleOptionsDialog = React.lazy(async () => {
   const module = await import("../panels/lifecycle-options/LifecycleOptionsDialog");
   return { default: module.LifecycleOptionsDialog };
+});
+
+const LazyApplyPlanDialog = React.lazy(async () => {
+  const module = await import("../panels/apply-plan/ApplyPlanDialog");
+  return { default: module.ApplyPlanDialog };
 });
 
 const ERROR_MAIN = "error.main";
@@ -328,11 +333,35 @@ export const Navbar: React.FC<NavbarProps> = ({
     closeMenu: handleDeployMenuClose
   });
 
-  const handleApply = React.useCallback(() => {
-    setDeployMenuPosition(null);
+  const runApply = React.useCallback(() => {
     setProcessing(true, "apply");
     deploymentCommands.onApply();
   }, [setProcessing, deploymentCommands]);
+
+  // A running lab shows the dry-run plan first; an absent lab is simply deployed.
+  const [applyPlanRequest, setApplyPlanRequest] = React.useState<Promise<ApplyPlan> | null>(null);
+  const { planApply } = deploymentCommands;
+
+  const handleApply = React.useCallback(() => {
+    setDeployMenuPosition(null);
+    if (isDeployed && planApply) {
+      const request = planApply();
+      // The dialog shows a failed dry run; it may still be loading when one fails.
+      request.catch(() => undefined);
+      setApplyPlanRequest(request);
+      return;
+    }
+    runApply();
+  }, [isDeployed, planApply, runApply]);
+
+  const handleCloseApplyPlan = React.useCallback(() => {
+    setApplyPlanRequest(null);
+  }, []);
+
+  const handleConfirmApply = React.useCallback(() => {
+    setApplyPlanRequest(null);
+    runApply();
+  }, [runApply]);
 
   const handleDeployCleanup = React.useCallback(() => {
     setDeployMenuPosition(null);
@@ -686,6 +715,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   deploymentState={deploymentState}
                   onClose={handleCloseLifecycleOptions}
                   onRun={handleRunWithOptions}
+                />
+              </React.Suspense>
+            )}
+            {applyPlanRequest && (
+              <React.Suspense fallback={null}>
+                <LazyApplyPlanDialog
+                  open
+                  planRequest={applyPlanRequest}
+                  onClose={handleCloseApplyPlan}
+                  onApply={handleConfirmApply}
                 />
               </React.Suspense>
             )}

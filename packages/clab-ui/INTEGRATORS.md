@@ -640,6 +640,14 @@ maps an action name to its kind, and `labLifecycleCliFlags` / `labLifecycleQuery
 turn the options into `containerlab` flags or `clab-api-server` query parameters. A
 destroy with a node filter (`isPartialDestroy`) leaves the rest of the lab running.
 
+`planApply()` is optional. When a host provides it, Apply on a running lab first shows
+what `containerlab apply --dry-run` would change, and runs `applyLab` only after the
+user confirms; without it, Apply runs straight away. It resolves to an `ApplyPlan`
+(see `parseApplyPlan` in `/host`, which reads both the API's camelCase result and the
+CLI's `--format json` kebab-case output) and rejects with a message the dialog shows.
+The window host posts `{ command: "planApplyLab", requestId }` and expects
+`{ type: "apply-plan-result", requestId, success, plan?, error? }` back.
+
 Important node action names:
 
 - `ssh`

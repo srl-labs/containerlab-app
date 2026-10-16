@@ -28,7 +28,11 @@ import type {
 } from "./contracts";
 import type { ClabUiExtensions, ClabUiRuntime } from "./runtimeContext";
 import type { LabLifecycleOptions } from "./lifecycleOptions";
+import { parseApplyPlan, type ApplyPlan } from "./applyPlan";
 import { isRecord } from "../core/utilities/typeHelpers";
+import { MSG_PLAN_APPLY_LAB } from "../core/messages/extension";
+import { MSG_APPLY_PLAN_RESULT } from "../core/messages/webview";
+export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./lifecycleOptions";
@@ -378,6 +382,57 @@ function createMessageSubscription(targetWindow: Window) {
   };
 }
 
+/** A dry run reads the whole lab from the runtime, which can take a while on big labs. */
+const APPLY_PLAN_TIMEOUT_MS = 120_000;
+
+interface PendingApplyPlanRequest {
+  resolve: (plan: ApplyPlan) => void;
+  reject: (err: Error) => void;
+  timeoutId: ReturnType<typeof setTimeout>;
+}
+
+function createApplyPlanRequester(
+  postMessage: (message: unknown) => void,
+  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void
+): () => Promise<ApplyPlan> {
+  const pending = new Map<string, PendingApplyPlanRequest>();
+  let listenerStarted = false;
+
+  const ensureListener = (): void => {
+    if (listenerStarted) return;
+    subscribe((event) => {
+      const message = event.data;
+      if (!isRecord(message) || message.type !== MSG_APPLY_PLAN_RESULT) return;
+      const requestId = typeof message.requestId === "string" ? message.requestId : "";
+      const request = pending.get(requestId);
+      if (!request) return;
+      clearTimeout(request.timeoutId);
+      pending.delete(requestId);
+      const plan = message.success === true ? parseApplyPlan(message.plan) : undefined;
+      if (plan) {
+        request.resolve(plan);
+        return;
+      }
+      const error = typeof message.error === "string" && message.error ? message.error : "";
+      request.reject(new Error(error || "The dry run returned no plan"));
+    });
+    listenerStarted = true;
+  };
+
+  return () => {
+    ensureListener();
+    const requestId = newId();
+    return new Promise<ApplyPlan>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!pending.delete(requestId)) return;
+        reject(new Error("The dry run timed out"));
+      }, APPLY_PLAN_TIMEOUT_MS);
+      pending.set(requestId, { resolve, reject, timeoutId });
+      postMessage({ command: MSG_PLAN_APPLY_LAB, requestId });
+    });
+  };
+}
+
 function lifecycleMessage(
   action: TopoViewerLifecycleAction,
   options: LabLifecycleOptions | undefined
@@ -422,6 +477,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       runLifecycle(action: TopoViewerLifecycleAction, lifecycleOptions?: LabLifecycleOptions): void {
         postMessage(lifecycleMessage(action, lifecycleOptions));
       },
+      planApply: createApplyPlanRequester(postMessage, subscribe),
       cancelLifecycle(): void {
         postMessage({ command: "cancelLabLifecycle" });
       },

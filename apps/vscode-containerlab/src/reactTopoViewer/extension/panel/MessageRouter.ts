@@ -14,11 +14,13 @@ import { customNodeConfigManager } from "../services/CustomNodeConfigManager";
 import type { CustomNodeConfig } from "../services/CustomNodeConfigManager";
 import { iconService } from "../services/IconService";
 import {
+  MSG_APPLY_PLAN_RESULT,
   MSG_CANCEL_LAB_LIFECYCLE,
   MSG_CUSTOM_NODE_ERROR,
   MSG_CUSTOM_NODE_UPDATED,
   MSG_ICON_LIST_RESPONSE,
   MSG_LAB_LIFECYCLE_STATUS,
+  MSG_PLAN_APPLY_LAB,
   MSG_SVG_EXPORT_RESULT,
   MSG_TOGGLE_SPLIT_VIEW,
   isCustomNodeCommand,
@@ -187,6 +189,25 @@ export class MessageRouter {
       log.error(`[MessageRouter] ${res.error}`);
     } else if (res.result != null) {
       log.info(`[MessageRouter] ${formatUnknownForLog(res.result)}`);
+    }
+  }
+
+  private async handlePlanApply(
+    message: WebviewMessage,
+    panel: vscode.WebviewPanel
+  ): Promise<void> {
+    const requestId = typeof message.requestId === "string" ? message.requestId : "";
+    const yamlFilePath = this.context.yamlFilePath;
+    try {
+      if (!yamlFilePath) {
+        throw new Error("No topology file is open");
+      }
+      const plan = await labLifecycleService.planApply(yamlFilePath);
+      panel.webview.postMessage({ type: MSG_APPLY_PLAN_RESULT, requestId, success: true, plan });
+    } catch (err) {
+      const error = formatErrorMessage(err);
+      log.warn(`[MessageRouter] Apply dry run failed: ${error}`);
+      panel.webview.postMessage({ type: MSG_APPLY_PLAN_RESULT, requestId, success: false, error });
     }
   }
 
@@ -583,6 +604,11 @@ export class MessageRouter {
 
     if (command === MSG_CANCEL_LAB_LIFECYCLE) {
       this.handleCancelLabLifecycle(panel);
+      return true;
+    }
+
+    if (command === MSG_PLAN_APPLY_LAB) {
+      await this.handlePlanApply(message, panel);
       return true;
     }
 

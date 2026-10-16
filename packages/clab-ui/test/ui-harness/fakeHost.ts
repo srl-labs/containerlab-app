@@ -14,7 +14,11 @@ import {
   type TopologySnapshot
 } from "../../src/session";
 import type { HostRuntimeContainer } from "../../src/host";
+import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
 
+import { fakeRuntimeContainers } from "./fakeLab";
+import { createFakeLifecycle } from "./fakeLifecycle";
+import { createFakeTemplates, type TemplateState } from "./fakeTemplates";
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
 import {
   buildHarnessExplorerSnapshot,
@@ -54,6 +58,24 @@ function recordHarnessMessage(message: unknown): void {
   };
   harnessWindow.__CLAB_UI_HARNESS_MESSAGES__ ??= [];
   harnessWindow.__CLAB_UI_HARNESS_MESSAGES__.push(message);
+}
+
+/** How long the fake dry run takes, so the dialog's loading state shows. */
+const FAKE_DRY_RUN_MS = 400;
+
+/**
+ * A dry-run answer forced by a spec: `window.__CLAB_UI_HARNESS_APPLY_PLAN__` set to
+ * an apply result, or to `{ error }` to make the dry run fail. Undefined when unset.
+ */
+function stubbedApplyPlan(): Promise<ApplyPlan> | undefined {
+  const stub = (window as unknown as { __CLAB_UI_HARNESS_APPLY_PLAN__?: unknown })
+    .__CLAB_UI_HARNESS_APPLY_PLAN__;
+  if (stub === undefined) return undefined;
+  if (typeof stub === "object" && stub !== null && "error" in stub) {
+    return Promise.reject(new Error(String(stub.error)));
+  }
+  const plan = parseApplyPlan(stub);
+  return plan ? Promise.resolve(plan) : Promise.reject(new Error("The dry run returned no plan"));
 }
 
 function toFixtureName(value: string | null): SnapshotFixtureName {
@@ -130,6 +152,8 @@ export interface FakeClabUiHost extends ClabUiHost {
     writeAnnotationsFile(filename: string, content: unknown): Promise<void>;
     writeYamlFile(filename: string, content: string): Promise<void>;
     setCustomIcons(icons: CustomIconInfo[]): void;
+    /** Node templates the editor starts with. */
+    getCustomNodes(): TemplateState;
     emitHostMessage(message: unknown): void;
     applyRuntimeContainers(containers: HostRuntimeContainer[]): Promise<void>;
   };
@@ -137,7 +161,8 @@ export interface FakeClabUiHost extends ClabUiHost {
 
 export function createFakeClabUiHost(
   initialFixture: string | null,
-  explorerLayout: HarnessHostLayout
+  explorerLayout: HarnessHostLayout,
+  options: { seedTemplates?: boolean } = {}
 ): FakeClabUiHost {
   let files = cloneFiles();
   let fs = new MemoryFsAdapter(files);
@@ -148,6 +173,53 @@ export function createFakeClabUiHost(
   const explorerSubscribers = new Set<(message: ExplorerIncomingMessage) => void>();
   let explorerFilter = "";
   let explorerUiState: ExplorerUiState = HARNESS_EXPLORER_UI_STATE;
+  // Whether the editor was last told the lab is deployed by the fake lifecycle.
+  let publishedDeployed = false;
+  const fakeLifecycle = createFakeLifecycle({
+    currentPath: () => currentYamlPath,
+    readYaml: (path) => files.get(path),
+    publish: publishFakeLab,
+    emit: emitTopoViewerEvent
+  });
+  const templates = createFakeTemplates(options.seedTemplates ?? true, emitTopoViewerEvent);
+
+  function emitTopoViewerEvent(event: ClabUiTopoViewerEvent): void {
+    for (const subscriber of Array.from(topoViewerSubscribers)) {
+      subscriber(event);
+    }
+  }
+
+  /** Show the current file's fake lab, as a host does after a lifecycle command. */
+  async function publishFakeLab(): Promise<void> {
+    const lab = fakeLifecycle.labFor(currentYamlPath);
+    const dirty = fakeLifecycle.dirtyFor(currentYamlPath);
+    publishedDeployed = lab !== undefined;
+    if (lab) {
+      core.updateContext({ dirty });
+      await host.harness.applyRuntimeContainers(fakeRuntimeContainers(lab));
+    } else {
+      core.updateContext({
+        deploymentState: "undeployed",
+        dirty: undefined,
+        containerDataProvider: createRuntimeContainerDataProvider([])
+      });
+      emitSnapshot(await core.getSnapshot());
+    }
+    emitTopoViewerEvent({
+      type: "modeChanged",
+      mode: "editor",
+      deploymentState: lab ? "deployed" : "undeployed",
+      ...(dirty !== undefined ? { dirty } : {})
+    });
+  }
+
+  /** After an edit, tell the editor whether the running fake lab now differs. */
+  function refreshFakeDirty(): void {
+    const dirty = fakeLifecycle.dirtyFor(currentYamlPath);
+    if (dirty === undefined) return;
+    core.updateContext({ dirty });
+    emitTopoViewerEvent({ type: "modeChanged", mode: "editor", deploymentState: "deployed", dirty });
+  }
 
   function emitExplorerMessage(message: ExplorerIncomingMessage): void {
     for (const subscriber of Array.from(explorerSubscribers)) {
@@ -181,10 +253,14 @@ export function createFakeClabUiHost(
     core = createCore(nextYamlPath, fs);
     const snapshot = await core.getSnapshot();
     emitSnapshot(snapshot);
+    if (publishedDeployed || fakeLifecycle.labFor(nextYamlPath)) {
+      await publishFakeLab();
+    }
     return snapshot;
   }
 
   async function resetFiles(): Promise<void> {
+    fakeLifecycle.reset();
     files = cloneFiles();
     fs = new MemoryFsAdapter(files);
     await loadTopologyFile(currentYamlPath);
@@ -202,7 +278,7 @@ export function createFakeClabUiHost(
     }
   }
 
-  return {
+  const host: FakeClabUiHost = {
     async getSnapshot() {
       return core.getSnapshot();
     },
@@ -232,6 +308,8 @@ export function createFakeClabUiHost(
           subscriber(event);
         }
       },
+
+      getCustomNodes: () => templates.state(),
 
       setCustomIcons(icons) {
         for (const subscriber of topoViewerSubscribers) {
@@ -363,10 +441,22 @@ export function createFakeClabUiHost(
     topoViewer: {
       runLifecycle(action, options) {
         recordHarnessMessage(options ? { command: action, options } : { command: action });
+        void fakeLifecycle.run(action, options);
       },
-      cancelLifecycle() {},
+      async planApply() {
+        recordHarnessMessage({ command: "planApplyLab" });
+        const stubbed = stubbedApplyPlan();
+        if (stubbed) return stubbed;
+        await new Promise((resolve) => setTimeout(resolve, FAKE_DRY_RUN_MS));
+        return fakeLifecycle.planFor(currentYamlPath);
+      },
+      cancelLifecycle() {
+        fakeLifecycle.cancel();
+      },
       toggleSplitView() {},
-      runNodeAction() {},
+      runNodeAction(action, nodeName) {
+        void fakeLifecycle.nodeAction(action, nodeName);
+      },
       captureInterface(nodeName, interfaceName, options = {}) {
         recordHarnessMessage({
           command: "clab-interface-capture",
@@ -395,9 +485,15 @@ export function createFakeClabUiHost(
         });
       },
       setLinkImpairment() {},
-      saveCustomNode() {},
-      deleteCustomNode() {},
-      setDefaultCustomNode() {},
+      saveCustomNode(data) {
+        templates.save(data);
+      },
+      deleteCustomNode(nodeName) {
+        templates.remove(nodeName);
+      },
+      setDefaultCustomNode(nodeName) {
+        templates.setDefault(nodeName);
+      },
       importCustomNodes() {},
       requestIconList() {},
       uploadIcon() {},
@@ -432,8 +528,11 @@ export function createFakeClabUiHost(
       },
 
       async dispatchCommand(_context, baseRevision, command): Promise<TopologyHostResponseMessage> {
-        return core.applyCommand(command as TopologyHostCommand, baseRevision);
+        const response = await core.applyCommand(command as TopologyHostCommand, baseRevision);
+        refreshFakeDirty();
+        return response;
       }
     }
   };
+  return host;
 }
