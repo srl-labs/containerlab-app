@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import type { NetemFields } from "@containerlab/clab-ui/node-impairments";
+import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
-import { outputChannel, containerlabBinaryPath } from "../globals";
-import { runCommand } from "../utils/utils";
+import { outputChannel } from "../globals";
+import { getLabBackend } from "../backend/labBackends";
 import { NODE_IMPAIRMENTS_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 /**
@@ -115,24 +116,10 @@ function ensureDefaults(map: Record<string, NetemFields>, node: ClabContainerTre
 async function refreshNetemSettings(
   node: ClabContainerTreeNode
 ): Promise<Record<string, NetemFields>> {
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const runtime = config.get<string>("runtime", "docker");
-  const showCmd = `${containerlabBinaryPath} tools -r ${runtime} netem show -n ${node.name} --format json`;
   let netemMap: Record<string, NetemFields> = {};
 
   try {
-    const stdoutResult = await runCommand(
-      showCmd,
-      "Refresh netem settings",
-      outputChannel,
-      true,
-      false
-    );
-    if (typeof stdoutResult !== "string" || stdoutResult.length === 0) {
-      throw new Error("No output from netem show command");
-    }
-    const stdout = stdoutResult;
-    const rawData = toNetemRawData(JSON.parse(stdout));
+    const rawData = toNetemRawData(await getLabBackend().netemShow(node.name));
     const interfacesData = rawData[node.name] ?? [];
     for (const item of interfacesData) {
       const parsed = parseNetemItem(item);
@@ -145,37 +132,33 @@ async function refreshNetemSettings(
   } catch (err: unknown) {
     const msg = getErrorMessage(err);
     vscode.window.showWarningMessage(`Failed to retrieve netem settings: ${msg}`);
-    outputChannel.info(`Error executing "${showCmd}": ${msg}`);
+    outputChannel.info(`Error reading netem settings of ${node.name}: ${msg}`);
   }
 
   ensureDefaults(netemMap, node);
   return netemMap;
 }
 
-function buildNetemArgs(fields: NetemFields): string[] {
-  const netemArgs: string[] = [];
-  if (fields.delay) {
-    netemArgs.push(`--delay ${fields.delay}`);
-  }
-  if (fields.jitter) {
-    netemArgs.push(`--jitter ${fields.jitter}`);
-  }
-  if (fields.loss) {
-    const numericLoss = stripPercentage(fields.loss);
-    if (numericLoss !== "" && numericLoss !== "0") {
-      netemArgs.push(`--loss ${numericLoss}`);
-    }
-  }
-  if (fields.rate) {
-    netemArgs.push(`--rate ${fields.rate}`);
-  }
-  if (fields.corruption) {
-    const numericCorruption = stripPercentage(fields.corruption);
-    if (numericCorruption !== "" && numericCorruption !== "0") {
-      netemArgs.push(`--corruption ${numericCorruption}`);
-    }
-  }
-  return netemArgs;
+function positiveNumber(value: string | undefined): number | undefined {
+  const numeric = Number(stripPercentage(value ?? ""));
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
+
+function buildNetemRequest(
+  containerName: string,
+  intfName: string,
+  fields: NetemFields
+): NetemSetRequest | undefined {
+  const request: NetemSetRequest = { containerName, interface: intfName };
+  if (fields.delay) request.delay = fields.delay;
+  if (fields.jitter) request.jitter = fields.jitter;
+  const loss = positiveNumber(fields.loss);
+  if (loss !== undefined) request.loss = loss;
+  const rate = positiveNumber(fields.rate);
+  if (rate !== undefined) request.rate = rate;
+  const corruption = positiveNumber(fields.corruption);
+  if (corruption !== undefined) request.corruption = corruption;
+  return Object.keys(request).length > 2 ? request : undefined;
 }
 
 async function applyNetem(
@@ -183,12 +166,13 @@ async function applyNetem(
   panel: vscode.WebviewPanel,
   netemData: Record<string, NetemFields>
 ) {
+  const backend = getLabBackend();
   const ops: Promise<unknown>[] = [];
   for (const [intfName, fields] of Object.entries(netemData)) {
-    const netemArgs = buildNetemArgs(fields);
-    if (netemArgs.length > 0) {
-      const cmd = `${containerlabBinaryPath} tools netem set -n ${node.name} -i ${intfName} ${netemArgs.join(" ")} > /dev/null 2>&1`;
-      ops.push(runCommand(cmd, `Apply netem to ${intfName}`, outputChannel, false, false));
+    const request = buildNetemRequest(node.name, intfName, fields);
+    if (request) {
+      outputChannel.info(`Applying netem to ${node.name} ${intfName}: ${JSON.stringify(request)}`);
+      ops.push(backend.netemSet(request));
     }
   }
   if (ops.length === 0) {
@@ -208,14 +192,14 @@ async function applyNetem(
 }
 
 async function clearNetem(node: ClabContainerTreeNode, panel: vscode.WebviewPanel) {
+  const backend = getLabBackend();
   const ops: Promise<unknown>[] = [];
   for (const ifNode of node.interfaces) {
     const norm = normalizeInterfaceName(ifNode.name);
     if (norm === "lo") {
       continue;
     }
-    const cmd = `${containerlabBinaryPath} tools netem set -n ${node.name} -i ${norm} --delay 0s --jitter 0s --loss 0 --rate 0 --corruption 0.0000000000000001 > /dev/null 2>&1`;
-    ops.push(runCommand(cmd, `Clear netem for ${norm}`, outputChannel, false, false));
+    ops.push(backend.netemReset({ containerName: node.name, interface: norm }));
   }
   try {
     await Promise.all(ops);

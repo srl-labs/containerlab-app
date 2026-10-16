@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { getLabBackend } from "../backend/labBackends";
 import * as events from "../services/containerlabEvents";
 import * as fallback from "../services/containerlabInspectFallback";
 import { outputChannel } from "../globals";
@@ -30,7 +31,7 @@ export async function update(): Promise<void> {
 
   // If user explicitly wants polling, or we've been forced into polling mode
   if (preferPolling || forcedPollingMode) {
-    await updateWithPolling(runtime);
+    await updateWithPolling();
     return;
   }
 
@@ -39,7 +40,8 @@ export async function update(): Promise<void> {
     outputChannel.debug("[inspector] Updating inspect data via events stream");
     const start = Date.now();
 
-    await events.ensureEventStream(runtime);
+    const backend = getLabBackend();
+    await events.ensureEventStream(backend, `${backend.scope}|${runtime}`);
     rawInspectData = events.getGroupedContainers();
 
     const duration = (Date.now() - start) / 1000;
@@ -56,15 +58,15 @@ export async function update(): Promise<void> {
     forcedPollingMode = true;
 
     // Use polling fallback
-    await updateWithPolling(runtime);
+    await updateWithPolling();
   }
 }
 
-async function updateWithPolling(runtime: string): Promise<void> {
+async function updateWithPolling(): Promise<void> {
   outputChannel.debug("[inspector] Updating inspect data via polling fallback");
   const start = Date.now();
 
-  await fallback.ensureFallback(runtime);
+  await fallback.ensureFallback();
   rawInspectData = fallback.getGroupedContainers();
 
   const duration = (Date.now() - start) / 1000;

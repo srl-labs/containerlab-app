@@ -17,7 +17,11 @@ function isMissing(error: unknown): boolean {
 
 /** Resolves workspace-relative paths and keeps them inside the workspace root. */
 export class WorkspacePaths {
-  constructor(readonly root: string) {}
+  readonly root: string;
+
+  constructor(root: string) {
+    this.root = root;
+  }
 
   /** A clean relative POSIX path; "" is the root, which only `allowRoot` accepts. */
   clean(rawPath: string, allowRoot = false): string {

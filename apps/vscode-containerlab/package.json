@@ -291,7 +291,7 @@
       },
       {
         "command": "containerlab.node.captureInterfaces",
-        "title": "Capture Interfaces…",
+        "title": "Capture Interfaces\u2026",
         "category": "Containerlab"
       },
       {
@@ -1106,7 +1106,7 @@
     "lint:cpd": "jscpd src/",
     "lint:barrels": "node scripts/check-barrel-exports.js",
     "test": "pnpm run test:compile && mocha --exit --extension js --reporter mochawesome \"out/test/**/*.test.js\"",
-    "test:compile": "rm -rf out/test && tsc -p test/tsconfig.mocha.json && tsc -p test/tsconfig.mocha.json --noEmit false --noCheck --module NodeNext --moduleResolution NodeNext",
+    "test:compile": "rm -rf out/test && tsc -p test/tsconfig.mocha.json && tsc -p test/tsconfig.mocha.json --noEmit false --noCheck --allowImportingTsExtensions false --module NodeNext --moduleResolution NodeNext",
     "test:e2e": "pnpm run build && pnpm run test:e2e:compile && node ./out/e2e/run.js",
     "test:e2e:compile": "rm -rf out/e2e && tsc -p test/tsconfig.e2e.json",
     "test:unit": "pnpm test",
@@ -1149,6 +1149,7 @@
     "url": "https://github.com/srl-labs/containerlab-app/issues"
   },
   "dependencies": {
-    "@containerlab/clab-ui": "workspace:*"
+    "@containerlab/clab-ui": "workspace:*",
+    "@srl-labs/containerlab-lab-backend": "workspace:*"
   }
 }

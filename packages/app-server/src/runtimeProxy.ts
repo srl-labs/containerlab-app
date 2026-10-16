@@ -766,7 +766,7 @@ export function registerRuntimeProxy(
           nodeFilter = resolvedNode.nodeFilter;
         }
 
-        const result = await backend.save(target.labName, { nodeFilter });
+        const result = await backend.save({ labName: target.labName }, { nodeFilter });
         return reply.send(result);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -976,7 +976,7 @@ export function registerRuntimeProxy(
 
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
-        return reply.send(await backend.fcli(target.labName, command));
+        return reply.send(await backend.fcli({ labName: target.labName }, command));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -999,7 +999,7 @@ export function registerRuntimeProxy(
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return reply.send(
-          await backend.graphDrawio(target.labName, {
+          await backend.graphDrawio({ labName: target.labName }, {
             layout,
             theme: normalizeOptionalString(request.body.theme)
           })

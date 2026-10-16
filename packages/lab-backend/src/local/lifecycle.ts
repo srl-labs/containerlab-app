@@ -105,6 +105,13 @@ function parseJsonOutput(stdout: string): unknown {
   return JSON.parse(stdout.slice(start, end + 1)) as unknown;
 }
 
+/** The lab's name, or its topology file name when the host gave none. */
+function labDisplayName(lab: LabTarget): string {
+  if (lab.labName) return lab.labName;
+  const file = (lab.path ?? "").split(/[\\/]/).pop() ?? "";
+  return file.replace(/\.clab\.ya?ml$/i, "") || "lab";
+}
+
 export interface LifecycleContext {
   options: ResolvedLocalOptions;
   /** Absolute path of a workspace topology, or of an absolute/URL path given as is. */
@@ -124,7 +131,11 @@ interface PreparedCommand {
 export class LocalLifecycle {
   private readonly busy = new Map<string, LabLifecycleAction>();
 
-  constructor(private readonly context: LifecycleContext) {}
+  private readonly context: LifecycleContext;
+
+  constructor(context: LifecycleContext) {
+    this.context = context;
+  }
 
   private async prepare(
     action: LabLifecycleAction,
@@ -171,6 +182,10 @@ export class LocalLifecycle {
   }
 
   private async topologyFor(action: LabLifecycleAction, lab: LabTarget): Promise<string | undefined> {
+    // A host that knows the file (an absolute path or a URL) uses it for every action.
+    if (lab.path && (path.isAbsolute(lab.path) || /^[a-z][a-z0-9+.-]*:\/\//i.test(lab.path))) {
+      return this.context.resolveTopology(lab.labName, lab.path);
+    }
     if (action === "deploy" || (action === "apply" && lab.path)) {
       const rawPath = lab.path ?? `${lab.labName}/${lab.labName}.clab.yml`;
       return this.context.resolveTopology(lab.labName, rawPath);
@@ -184,7 +199,8 @@ export class LocalLifecycle {
     throw new LabBackendError(`Lab '${lab.labName}' not found.`, 404);
   }
 
-  private acquire(labName: string, action: LabLifecycleAction): () => void {
+  private acquire(lab: LabTarget, action: LabLifecycleAction): () => void {
+    const labName = labDisplayName(lab);
     const current = this.busy.get(labName);
     if (current) {
       throw new LabBackendError(`Lab '${labName}' is busy with ${current} operation.`, 409);
@@ -222,7 +238,7 @@ export class LocalLifecycle {
     if (action === "apply" && options.dryRun) {
       return { result: await this.plan(lab), logs: [] };
     }
-    const release = this.acquire(lab.labName, action);
+    const release = this.acquire(lab, action);
     try {
       const plan = action === "apply" ? await this.plan(lab) : undefined;
       const prepared = await this.prepare(action, lab, options);
@@ -238,11 +254,11 @@ export class LocalLifecycle {
         .filter((line): line is string => line !== undefined);
       if (result.code !== 0) {
         const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
-        throw Object.assign(new LabBackendError(this.failure(action, lab.labName, detail), 500), { logs });
+        throw Object.assign(new LabBackendError(this.failure(action, labDisplayName(lab), detail), 500), { logs });
       }
       return {
-        result: await this.resultFor(action, lab.labName, plan),
-        message: this.successMessage(action, lab.labName),
+        result: lab.labName ? await this.resultFor(action, lab.labName, plan) : undefined,
+        message: this.successMessage(action, labDisplayName(lab)),
         logs
       };
     } finally {
@@ -255,7 +271,7 @@ export class LocalLifecycle {
     lab: LabTarget,
     options: LifecycleRunOptions = {}
   ): Promise<AsyncIterable<LifecycleStreamEvent>> {
-    const release = this.acquire(lab.labName, action);
+    const release = this.acquire(lab, action);
     let command: StreamingCommand;
     try {
       const prepared = await this.prepare(action, lab, options);
@@ -269,8 +285,8 @@ export class LocalLifecycle {
       release();
       throw error;
     }
-    const failure = (detail: string) => this.failure(action, lab.labName, detail);
-    const message = this.successMessage(action, lab.labName);
+    const failure = (detail: string) => this.failure(action, labDisplayName(lab), detail);
+    const message = this.successMessage(action, labDisplayName(lab));
     const startStop = action === "start" || action === "stop" || action === "restart";
 
     async function* events(): AsyncGenerator<LifecycleStreamEvent> {
@@ -306,9 +322,9 @@ export class LocalLifecycle {
     const result = await runCommand(file, args, { cwd: prepared.cwd, env: this.context.options.env });
     if (result.code !== 0) {
       const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
-      throw new LabBackendError(this.failure("apply", lab.labName, detail), 500);
+      throw new LabBackendError(this.failure("apply", labDisplayName(lab), detail), 500);
     }
-    return toApplyLabResponse(parseJsonOutput(result.stdout) as ApplyPlanJson, lab.labName, true);
+    return toApplyLabResponse(parseJsonOutput(result.stdout) as ApplyPlanJson, labDisplayName(lab), true);
   }
 
   private async resultFor(

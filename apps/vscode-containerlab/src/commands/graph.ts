@@ -9,7 +9,14 @@ import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
 
-import { ClabCommand } from "./clabCommand";
+import {
+  getLabBackend,
+  getLocalBackend,
+  labNameForPath,
+  labTargetForPath
+} from "../backend/labBackends";
+
+import { execCommandInTerminal, runWithProgress } from "./command";
 
 /**
  * Core routine for generating draw.io graphs.
@@ -22,36 +29,41 @@ async function runGraphDrawIO(
   if (!node) {
     return;
   }
-
-  const graphCmd = new ClabCommand("graph", node);
-
-  // Figure out the .drawio filename
   if (!node.labPath.absolute) {
     vscode.window.showErrorMessage("No lab path found. Cannot open .drawio file.");
     return;
   }
   const labPath = node.labPath.absolute;
-  const drawioPath = labPath.replace(/\.(ya?ml)$/i, ".drawio");
-  const drawioUri = vscode.Uri.file(drawioPath);
+  const labName = node.name ?? labNameForPath(labPath);
+  const drawioTheme = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<string>("drawioDefaultTheme", "nokia_modern");
 
-  // Read the default theme from configuration.
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const drawioTheme = config.get<string>("drawioDefaultTheme", "nokia_modern");
-
-  // Wait for containerlab to finish generating the .drawio file,
-  // passing the theme argument.
-  await graphCmd
-    .run(["--drawio", "--drawio-args", `--theme ${drawioTheme} --layout ${layout}`])
-    .then(() => {
-      // Verify the file exists.
+  let drawioPath = labPath.replace(/\.(ya?ml)$/i, ".drawio");
+  await runWithProgress(
+    async ({ output }) => {
+      const result = await getLabBackend().graphDrawio(labTargetForPath(labPath, labName), {
+        layout,
+        theme: drawioTheme
+      });
+      for (const line of (result.output ?? "").split("\n")) output(line, "stdout");
+      drawioPath = path.join(path.dirname(labPath), result.fileName);
       if (!fs.existsSync(drawioPath)) {
-        vscode.window.showErrorMessage(
-          `Containerlab failed to generate .drawio file for lab: ${node.name}.`
-        );
-        return;
+        // A lab host elsewhere returns the file instead of writing it next to the topology.
+        await fs.promises.writeFile(drawioPath, result.content, "utf8");
       }
-      vscode.commands.executeCommand("vscode.open", drawioUri);
-    });
+    },
+    {
+      spinnerMsg: {
+        progressMsg: `Generating the draw.io graph of ${labName}...`,
+        successMsg: ""
+      },
+      actionName: "graph",
+      onSuccess: async () => {
+        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(drawioPath));
+      }
+    }
+  );
 }
 
 export async function graphDrawIOHorizontal(node?: ClabLabTreeNode) {
@@ -71,9 +83,20 @@ export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
     return;
   }
 
-  const graphCmd = new ClabCommand("graph", node, undefined, true, "Containerlab Graph");
-
-  void graphCmd.run(["--drawio", "--drawio-args", `"-I"`]);
+  const backend = getLocalBackend();
+  execCommandInTerminal(
+    backend.commandLine([
+      "graph",
+      "-r",
+      backend.options.runtime,
+      "--drawio",
+      "--drawio-args",
+      "-I",
+      "-t",
+      node.labPath.absolute
+    ]),
+    "Containerlab Graph"
+  );
 }
 
 /**

@@ -8,7 +8,8 @@ import { promisify } from "util";
 import * as vscode from "vscode";
 
 import { ClabLabTreeNode } from "../treeView/common";
-import { containerlabBinaryPath, outputChannel } from "../globals";
+import { outputChannel } from "../globals";
+import { getLocalBackend } from "../backend/labBackends";
 
 const execAsync = promisify(exec);
 
@@ -269,16 +270,9 @@ export async function checkAndUpdateClabIfNeeded(
   context: vscode.ExtensionContext
 ): Promise<void> {
   try {
-    const versionOutputRaw = await runCommand(
-      `${containerlabBinaryPath} version check`,
-      "containerlab version check",
-      outputChannel,
-      true,
-      true
-    );
-    const versionOutput = (typeof versionOutputRaw === "string" ? versionOutputRaw : "").trim();
-    if (!versionOutput) {
-      throw new Error("No output from containerlab version check command.");
+    const versionOutput = (await getLocalBackend().versionCheck()).checkResult.trim();
+    if (!versionOutput || versionOutput === "Failed fetching latest version information") {
+      throw new Error(versionOutput || "No output from containerlab version check.");
     }
 
     if (versionOutput.includes("Version check timed out")) {
@@ -297,7 +291,7 @@ export async function checkAndUpdateClabIfNeeded(
         vscode.commands.registerCommand(updateCommandId, () => {
           const terminal = vscode.window.createTerminal("Containerlab Update");
           terminal.show();
-          terminal.sendText(`${containerlabBinaryPath} version upgrade`);
+          terminal.sendText(getLocalBackend().commandLine(["version", "upgrade"]));
           vscode.window.showInformationMessage(
             `Containerlab update started in terminal 'Containerlab Update'. Please follow the prompts.`
           );

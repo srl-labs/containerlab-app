@@ -167,19 +167,19 @@ export class ApiLabBackend implements LabBackend {
     });
   }
 
-  save(labName: string, options: { nodeFilter?: string } = {}) {
-    return this.client.saveLab(this.token, labName, options);
+  save(lab: LabTarget, options: { nodeFilter?: string } = {}) {
+    return this.client.saveLab(this.token, lab.labName, options);
   }
 
   graphDrawio(
-    labName: string,
+    lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ) {
-    return this.client.generateDrawioGraph(this.token, labName, options);
+    return this.client.generateDrawioGraph(this.token, lab.labName, options);
   }
 
-  fcli(labName: string, command: string) {
-    return this.client.runFcliCommand(this.token, labName, command);
+  fcli(lab: LabTarget, command: string) {
+    return this.client.runFcliCommand(this.token, lab.labName, command);
   }
 
   shareTool(

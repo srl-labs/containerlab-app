@@ -133,10 +133,13 @@ interface VncSession extends CaptureWiresharkVncSession {
 export class LocalCapture {
   private readonly vncSessions = new Map<string, VncSession>();
 
-  constructor(
-    private readonly options: ResolvedLocalOptions,
-    private readonly docker: () => Docker
-  ) {}
+  private readonly options: ResolvedLocalOptions;
+  private readonly docker: () => Docker;
+
+  constructor(options: ResolvedLocalOptions, docker: () => Docker) {
+    this.options = options;
+    this.docker = docker;
+  }
 
   async edgesharkStatus(): Promise<EdgeSharkStatusResponse> {
     const status: EdgeSharkStatusResponse = {

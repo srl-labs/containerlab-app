@@ -90,10 +90,13 @@ type ProcessEvents = {
 export class LocalTerminals {
   private readonly sessions = new Map<string, Session>();
 
-  constructor(
-    private readonly docker: () => Docker,
-    private readonly username: string
-  ) {}
+  private readonly docker: () => Docker;
+  private readonly username: string;
+
+  constructor(docker: () => Docker, username: string) {
+    this.docker = docker;
+    this.username = username;
+  }
 
   create(target: TerminalTarget, options: TerminalCreateOptions): TerminalSessionInfo {
     const protocol = options.protocol;

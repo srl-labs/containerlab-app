@@ -55,6 +55,10 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   sharedWorkspace: false
 };
 
+function shellQuote(value: string): string {
+  return /^[A-Za-z0-9_./:=@%+,-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 function isUrl(value: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
 }
@@ -195,28 +199,88 @@ export class LocalLabBackend implements LabBackend {
     return Object.fromEntries(Object.entries(after).filter(([labName]) => !before.has(labName)));
   }
 
-  async save(labName: string, options: { nodeFilter?: string } = {}) {
-    return tools.saveLab(this.options, await this.requireRunningTopology(labName), options.nodeFilter);
+  /** The topology file of a lab: the host's absolute path, else the running lab's. */
+  private async labTopology(lab: LabTarget): Promise<string> {
+    if (lab.path && path.isAbsolute(lab.path)) return lab.path;
+    if (lab.path) return this.resolveTopology(lab.labName, lab.path);
+    return this.requireRunningTopology(lab.labName);
+  }
+
+  async save(lab: LabTarget, options: { nodeFilter?: string } = {}) {
+    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter);
   }
 
   async graphDrawio(
-    labName: string,
+    lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ) {
     const topology =
-      (await this.runningTopologyFile(labName)) ??
-      (await this.resolveTopology(labName, `${labName}/${labName}.clab.yml`));
+      lab.path || (await this.runningTopologyFile(lab.labName))
+        ? await this.labTopology(lab)
+        : await this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
     return tools.drawioGraph(this.options, topology, options.layout, options.theme);
   }
 
-  async fcli(labName: string, command: string) {
-    const containers = await this.inspectLab(labName);
+  async fcli(lab: LabTarget, command: string) {
+    const containers = await this.inspectLab(lab.labName);
     const network = inspectField(containers[0], "mgmt_network") || "clab";
-    return tools.fcli(this.options, await this.requireRunningTopology(labName), network, command);
+    return tools.fcli(this.options, await this.labTopology(lab), network, command);
+  }
+
+  /**
+   * A containerlab command line for a terminal, for interactive commands such
+   * as `graph --drawio-args -I`. Arguments are quoted for a POSIX shell.
+   */
+  commandLine(args: string[]): string {
+    const [file, commandArgs] = containerlabCommand(this.options, args);
+    return [file, ...commandArgs].map(shellQuote).join(" ");
   }
 
   shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: { port?: number } = {}) {
     return tools.shareTool(this.options, tool, labName, action, options.port);
+  }
+
+  /**
+   * `containerlab inspect --all --details`: every lab's containers with their
+   * runtime details and labels, keyed by lab name.
+   */
+  async inspectDetails(): Promise<Record<string, unknown[]>> {
+    const [file, args] = containerlabCommand(this.options, [
+      "inspect",
+      "-r",
+      this.options.runtime,
+      "--all",
+      "--details",
+      "--format",
+      "json"
+    ]);
+    const result = await runChecked(file, args, { env: this.options.env, timeoutMs: 60_000 });
+    const start = result.stdout.indexOf("{");
+    if (start < 0) return {};
+    const parsed = JSON.parse(result.stdout.slice(start)) as unknown;
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown[]>) : {};
+  }
+
+  /** `containerlab inspect interfaces`: the interfaces of one container. */
+  async inspectInterfaces(topology: string, containerName: string): Promise<unknown[]> {
+    const [file, args] = containerlabCommand(this.options, [
+      "inspect",
+      "interfaces",
+      "-t",
+      topology,
+      "-f",
+      "json",
+      "-n",
+      containerName
+    ]);
+    const result = await runChecked(file, args, { env: this.options.env, timeoutMs: 10_000 });
+    const parsed = JSON.parse(result.stdout.slice(Math.max(0, result.stdout.indexOf("[")))) as unknown;
+    return Array.isArray(parsed) ? parsed : [];
+  }
+
+  /** The sshx or GoTTY sessions of all labs, as `containerlab tools <tool> list` reports them. */
+  listShareSessions(tool: "sshx" | "gotty"): Promise<unknown[]> {
+    return tools.listShareSessions(this.options, tool);
   }
 
   async nodeAction(labName: string, containerName: string, action: NodeLifecycleAction): Promise<void> {
@@ -226,7 +290,14 @@ export class LocalLabBackend implements LabBackend {
       return;
     }
     const topology = await this.requireRunningTopology(labName);
-    const nodeName = inspectField(container, "nodeName") || container.name;
+    // Slot containers of a distributed node start and stop through their root node.
+    const labels = await this.docker
+      .getContainer(container.name)
+      .inspect()
+      .then((details) => details.Config.Labels ?? {})
+      .catch((): Record<string, string> => ({}));
+    const nodeName =
+      labels["clab-root-node-name"] || inspectField(container, "nodeName") || container.name;
     const [file, args] = containerlabCommand(this.options, [
       action,
       "-r",

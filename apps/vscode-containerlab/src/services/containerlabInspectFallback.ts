@@ -1,5 +1,5 @@
 /**
- * Fallback data provider using `containerlab inspect` polling.
+ * Fallback data provider that polls the lab backend's inspect data.
  *
  * This module provides an alternative to the event-based system for fetching
  * container and lab data. It polls containerlab inspect at configurable intervals.
@@ -8,16 +8,18 @@
  * is stable and widely available.
  */
 
-import { promisify } from "util";
-import { exec, execFileSync } from "child_process";
+import * as path from "path";
 
 import * as vscode from "vscode";
+import type {
+  InspectAllLabsResponse,
+  InspectContainerInfo
+} from "@srl-labs/containerlab-lab-backend";
 
-import { containerlabBinaryPath, outputChannel } from "../globals";
+import { getLabBackend, getLocalBackend } from "../backend/labBackends";
+import { outputChannel } from "../globals";
 import type { ClabDetailedJSON } from "../treeView/common";
 import type { ClabInterfaceSnapshot } from "../types/containerlab";
-
-const execAsync = promisify(exec);
 
 // Internal state
 let rawInspectData: Record<string, ClabDetailedJSON[]> | undefined;
@@ -58,8 +60,7 @@ function isClabDetailedArray(value: unknown): value is ClabDetailedJSON[] {
   return Array.isArray(value) && value.every((entry) => isClabDetailedJSON(entry));
 }
 
-function parseInspectDataJson(stdout: string): Record<string, ClabDetailedJSON[]> | undefined {
-  const parsed: unknown = JSON.parse(stdout);
+function parseInspectData(parsed: unknown): Record<string, ClabDetailedJSON[]> | undefined {
   if (!isRecord(parsed)) return undefined;
   const result: Record<string, ClabDetailedJSON[]> = {};
   for (const [labName, value] of Object.entries(parsed)) {
@@ -119,23 +120,83 @@ function scheduleDataChanged(): void {
   }, DATA_NOTIFY_DELAY_MS);
 }
 
-/**
- * Fetch lab data using containerlab inspect command
- */
-async function fetchInspectData(
-  runtime: string
-): Promise<Record<string, ClabDetailedJSON[]> | undefined> {
-  const cmd = `${containerlabBinaryPath} inspect -r ${runtime} --all --details --format json 2>/dev/null`;
+function inspectString(container: InspectContainerInfo, ...keys: string[]): string {
+  const record = container as unknown as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0 && value !== "N/A") return value;
+  }
+  return "";
+}
 
+function splitAddress(value: string): { address?: string; prefixLength?: number } {
+  if (!value) return {};
+  const [address, prefix] = value.split("/");
+  return { address, prefixLength: prefix ? Number(prefix) : undefined };
+}
+
+/** A lab backend's inspect record in the detailed `containerlab inspect` shape. */
+function toDetailedContainer(container: InspectContainerInfo): ClabDetailedJSON {
+  const labPath = inspectString(container, "absLabPath", "labPath");
+  const labName = inspectString(container, "lab_name", "labName");
+  const nodeName = inspectString(container, "nodeName");
+  const ipv4 = splitAddress(inspectString(container, "ipv4_address", "ipv4Address"));
+  const ipv6 = splitAddress(inspectString(container, "ipv6_address", "ipv6Address"));
+  const id = inspectString(container, "container_id", "containerId");
+  return {
+    Names: [container.name],
+    ID: id,
+    ShortID: id.slice(0, 12),
+    Image: container.image,
+    State: container.state,
+    Status: container.status,
+    Labels: {
+      "clab-node-kind": container.kind,
+      "clab-node-lab-dir": labPath
+        ? path.join(path.dirname(labPath), `clab-${labName}`, nodeName)
+        : "",
+      "clab-node-longname": container.name,
+      "clab-node-name": nodeName,
+      "clab-owner": container.owner,
+      "clab-topo-file": labPath,
+      "clab-node-group": container.group,
+      containerlab: labName
+    },
+    NetworkSettings: {
+      IPv4addr: ipv4.address,
+      IPv4pLen: ipv4.prefixLength,
+      IPv6addr: ipv6.address,
+      IPv6pLen: ipv6.prefixLength
+    },
+    Mounts: [],
+    Ports: [],
+    NetworkName: inspectString(container, "mgmt_network") || undefined
+  };
+}
+
+function toDetailedLabs(labs: InspectAllLabsResponse): Record<string, ClabDetailedJSON[]> {
+  return Object.fromEntries(
+    Object.entries(labs).map(([labName, containers]) => [
+      labName,
+      containers.map(toDetailedContainer)
+    ])
+  );
+}
+
+/**
+ * Fetch lab data: containerlab's detailed inspect on this machine, the
+ * backend's inspect records otherwise.
+ */
+async function fetchInspectData(): Promise<Record<string, ClabDetailedJSON[]> | undefined> {
   try {
-    const { stdout } = await execAsync(cmd);
-    if (!stdout) {
-      return undefined;
+    const backend = getLabBackend();
+    if (backend.kind === "local") {
+      return parseInspectData(await getLocalBackend().inspectDetails());
     }
-    return parseInspectDataJson(stdout);
+    return toDetailedLabs(await backend.inspectAll());
   } catch (err) {
     console.error(
-      `[containerlabInspectFallback]: Failed to run inspect: ${err instanceof Error ? err.message : String(err)}`
+      `[containerlabInspectFallback]: Failed to inspect labs: ${err instanceof Error ? err.message : String(err)}`
     );
     return undefined;
   }
@@ -199,8 +260,8 @@ function hasDataChanged(
 /**
  * Poll for updates
  */
-async function pollOnce(runtime: string): Promise<void> {
-  const newData = await fetchInspectData(runtime);
+async function pollOnce(): Promise<void> {
+  const newData = await fetchInspectData();
 
   if (hasDataChanged(rawInspectData, newData)) {
     rawInspectData = newData;
@@ -211,7 +272,7 @@ async function pollOnce(runtime: string): Promise<void> {
 /**
  * Start polling for lab data
  */
-function startPolling(runtime: string, intervalMs: number = DEFAULT_POLL_INTERVAL_MS): void {
+function startPolling(intervalMs: number = DEFAULT_POLL_INTERVAL_MS): void {
   if (isPolling) {
     return;
   }
@@ -222,11 +283,11 @@ function startPolling(runtime: string, intervalMs: number = DEFAULT_POLL_INTERVA
   );
 
   // Initial fetch
-  void pollOnce(runtime);
+  void pollOnce();
 
   // Set up polling interval
   pollingInterval = setInterval(() => {
-    void pollOnce(runtime);
+    void pollOnce();
   }, intervalMs);
 }
 
@@ -252,8 +313,8 @@ export function getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
 /**
  * Force an immediate update
  */
-async function forceUpdate(runtime: string): Promise<void> {
-  const newData = await fetchInspectData(runtime);
+async function forceUpdate(): Promise<void> {
+  const newData = await fetchInspectData();
   rawInspectData = newData;
   scheduleDataChanged();
 }
@@ -261,16 +322,16 @@ async function forceUpdate(runtime: string): Promise<void> {
 /**
  * Ensure the fallback is running (similar API to ensureEventStream)
  */
-export async function ensureFallback(runtime: string): Promise<void> {
+export async function ensureFallback(): Promise<void> {
   const config = vscode.workspace.getConfiguration("containerlab");
   const pollInterval = config.get<number>("pollInterval", DEFAULT_POLL_INTERVAL_MS);
 
   if (!isPolling) {
-    startPolling(runtime, pollInterval);
+    startPolling(pollInterval);
   }
 
   // Do an initial fetch and wait for it
-  await forceUpdate(runtime);
+  await forceUpdate();
 }
 
 /**
@@ -329,18 +390,21 @@ function findLabPathForContainer(containerName: string): string | undefined {
   return undefined;
 }
 
+const pendingInterfaceFetches = new Set<string>();
+
 /**
- * Fetch interface data for a container using containerlab inspect interfaces
+ * Fetch interface data for a container with `containerlab inspect interfaces`.
+ * Only labs on this machine can be inspected this way.
  */
-function fetchInterfacesSync(labPath: string, containerName: string): ClabInspectInterfaceJSON[] {
+async function fetchInterfaces(
+  labPath: string,
+  containerName: string
+): Promise<ClabInspectInterfaceJSON[]> {
+  if (getLabBackend().kind !== "local") {
+    return [];
+  }
   try {
-    const clabStdout = execFileSync(
-      containerlabBinaryPath,
-      ["inspect", "interfaces", "-t", labPath, "-f", "json", "-n", containerName],
-      { stdio: ["pipe", "pipe", "ignore"], timeout: 10000 }
-    ).toString();
-    const parsed: unknown = JSON.parse(clabStdout);
-    if (!Array.isArray(parsed)) return [];
+    const parsed = await getLocalBackend().inspectInterfaces(labPath, containerName);
     return parsed.filter((entry) => isClabInspectInterfaceJSON(entry));
   } catch (err) {
     console.error(
@@ -391,20 +455,21 @@ export function getInterfaceSnapshot(
   const cacheKey = `${labPath}::${containerName}`;
   const cached = interfaceCache.get(cacheKey);
 
-  // Return cached data if still valid
-  if (cached && Date.now() - cached.timestamp < INTERFACE_CACHE_TTL_MS) {
-    return cached.interfaces;
+  // Refresh stale data in the background; listeners hear about the update.
+  if (
+    (!cached || Date.now() - cached.timestamp >= INTERFACE_CACHE_TTL_MS) &&
+    !pendingInterfaceFetches.has(cacheKey)
+  ) {
+    pendingInterfaceFetches.add(cacheKey);
+    void fetchInterfaces(labPath, containerName)
+      .then((rawInterfaces) => {
+        const interfaces = toInterfaceSnapshot(rawInterfaces);
+        const changed = JSON.stringify(interfaces) !== JSON.stringify(cached?.interfaces ?? []);
+        interfaceCache.set(cacheKey, { timestamp: Date.now(), interfaces });
+        if (changed) scheduleDataChanged();
+      })
+      .finally(() => pendingInterfaceFetches.delete(cacheKey));
   }
 
-  // Fetch fresh data
-  const rawInterfaces = fetchInterfacesSync(labPath, containerName);
-  const interfaces = toInterfaceSnapshot(rawInterfaces);
-
-  // Update cache
-  interfaceCache.set(cacheKey, {
-    timestamp: Date.now(),
-    interfaces
-  });
-
-  return interfaces;
+  return cached?.interfaces ?? [];
 }

@@ -1,9 +1,11 @@
 import * as path from "path";
 import * as fs from "fs";
-import { execSync } from "child_process";
 
 import * as vscode from "vscode";
 import Docker from "dockerode";
+import { findBinary } from "@srl-labs/containerlab-lab-backend/local";
+
+import { disposeLabBackends } from "./backend/labBackends";
 
 import * as cmd from "./commands";
 import * as utils from "./utils";
@@ -164,10 +166,6 @@ async function runFullStartupTasks(
   const welcomePage = new WelcomePage(context);
   await welcomePage.show();
   void ins.update();
-}
-
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }
 
 function stopRealtimeBackgroundWorkers(): void {
@@ -539,46 +537,34 @@ function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   ins.refreshFromEventStream();
 }
 
-function setClabBinPath(): boolean {
+async function setClabBinPath(): Promise<boolean> {
   const configPath = vscode.workspace
     .getConfiguration("containerlab")
     .get<string>("binaryPath", "");
 
   // if empty fall back to resolving from PATH
   if (!configPath || configPath.trim() === "") {
-    for (const lookup of ["which containerlab", "command -v containerlab"]) {
-      try {
-        // eslint-disable-next-line sonarjs/no-os-command-from-path
-        const stdout = execSync(lookup, { encoding: "utf-8" });
-        const resolvedPath = stdout.trim();
-        if (resolvedPath) {
-          setContainerlabBinaryPath(resolvedPath);
-          outputChannel.info(`Resolved containerlab binary from sys PATH as: ${resolvedPath}`);
-          return true;
-        }
-      } catch (err) {
-        const message = getErrorMessage(err);
-        outputChannel.warn(`Could not resolve containerlab bin path via '${lookup}': ${message}`);
-      }
+    const resolvedPath = await findBinary("containerlab");
+    if (resolvedPath !== undefined) {
+      setContainerlabBinaryPath(resolvedPath);
+      outputChannel.info(`Resolved containerlab binary from sys PATH as: ${resolvedPath}`);
+    } else {
+      outputChannel.warn("Could not resolve the containerlab binary from PATH");
+      setContainerlabBinaryPath("containerlab");
     }
-    setContainerlabBinaryPath("containerlab");
     return true;
   }
 
-  try {
-    // Check if file exists and is executable
-    fs.accessSync(configPath, fs.constants.X_OK);
+  if ((await findBinary(configPath)) !== undefined) {
     setContainerlabBinaryPath(configPath);
     outputChannel.info(`Using user configured containerlab binary: ${configPath}`);
     return true;
-  } catch (err) {
-    // Path is invalid or not executable - try to resolve from PATH as fallback
-    const message = getErrorMessage(err);
-    outputChannel.error(`Invalid containerlab.binaryPath "${configPath}": ${message}`);
-    vscode.window.showErrorMessage(
-      `Configured containerlab binary path "${configPath}" is invalid or not executable.`
-    );
   }
+
+  outputChannel.error(`Invalid containerlab.binaryPath "${configPath}": not an executable file`);
+  vscode.window.showErrorMessage(
+    `Configured containerlab binary path "${configPath}" is invalid or not executable.`
+  );
   return false;
 }
 
@@ -606,7 +592,7 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  if (!setClabBinPath()) {
+  if (!(await setClabBinPath())) {
     // don't activate
     outputChannel.error(`Error setting containerlab binary. Exiting activation.`);
     return;
@@ -735,5 +721,6 @@ export async function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   explorerViewProvider = undefined;
   stopRealtimeBackgroundWorkers();
+  void disposeLabBackends();
   outputChannel.info("Deactivating Containerlab extension.");
 }

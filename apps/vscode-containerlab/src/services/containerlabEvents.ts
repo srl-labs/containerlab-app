@@ -1,12 +1,8 @@
-import type { ChildProcess } from "child_process";
-import { spawn } from "child_process";
-import * as readline from "readline";
-
 import * as vscode from "vscode";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabDetailedJSON } from "../treeView/common";
 import type { ClabInterfaceSnapshot, ClabInterfaceSnapshotEntry } from "../types/containerlab";
-import { containerlabBinaryPath } from "../globals";
 
 interface ContainerlabEvent {
   timestamp?: string;
@@ -251,10 +247,9 @@ interface LabRecord {
 const INITIAL_IDLE_TIMEOUT_MS = 250;
 const INITIAL_FALLBACK_TIMEOUT_MS = 2000;
 
-let currentRuntime: string | undefined;
+let currentStreamKey: string | undefined;
 let receivedInitialEvent = false;
-let child: ChildProcess | null = null;
-let stdoutInterface: readline.Interface | null = null;
+let streamController: AbortController | null = null;
 let initialLoadComplete = false;
 let initialLoadPromise: Promise<void> | null = null;
 let resolveInitialLoad: (() => void) | null = null;
@@ -363,20 +358,9 @@ function finalizeInitialLoad(error?: Error): void {
 }
 
 function stopProcess(): void {
-  if (stdoutInterface) {
-    stdoutInterface.removeAllListeners();
-    stdoutInterface.close();
-    stdoutInterface = null;
-  }
-
-  if (child) {
-    child.removeAllListeners();
-    try {
-      child.kill();
-    } catch {
-      // ignore errors during shutdown
-    }
-    child = null;
+  if (streamController) {
+    streamController.abort();
+    streamController = null;
   }
 
   initialLoadComplete = false;
@@ -1226,6 +1210,17 @@ function markInterfacesDown(containerId: string): boolean {
   return true;
 }
 
+function handleEvent(parsed: unknown): void {
+  if (!isContainerlabEvent(parsed)) {
+    return;
+  }
+  if (parsed.type === "container") {
+    applyContainerEvent(parsed);
+  } else if (parsed.type === "interface") {
+    applyInterfaceEvent(parsed);
+  }
+}
+
 function handleEventLine(line: string): void {
   const trimmed = line.trim();
   if (!trimmed) {
@@ -1233,16 +1228,7 @@ function handleEventLine(line: string): void {
   }
 
   try {
-    const parsed: unknown = JSON.parse(trimmed);
-    if (!isContainerlabEvent(parsed)) {
-      return;
-    }
-    const event = parsed;
-    if (event.type === "container") {
-      applyContainerEvent(event);
-    } else if (event.type === "interface") {
-      applyInterfaceEvent(event);
-    }
+    handleEvent(JSON.parse(trimmed));
   } catch (err) {
     console.error(
       `[containerlabEvents]: Failed to parse event line: ${err instanceof Error ? err.message : String(err)}`
@@ -1250,8 +1236,8 @@ function handleEventLine(line: string): void {
   }
 }
 
-function startProcess(runtime: string): void {
-  currentRuntime = runtime;
+function startProcess(backend: LabBackend, streamKey: string): void {
+  currentStreamKey = streamKey;
   initialLoadComplete = false;
 
   initialLoadPromise = new Promise<void>((resolve, reject) => {
@@ -1262,40 +1248,42 @@ function startProcess(runtime: string): void {
   const config = vscode.workspace.getConfiguration("containerlab");
   const enableInterfaceStats = config.get<boolean>("enableInterfaceStats", true);
 
-  const containerlabBinary = containerlabBinaryPath;
-  const baseArgs = ["events", "--format", "json", "--initial-state"];
-
-  // Only add --interface-stats if enabled in settings
-  if (enableInterfaceStats) {
-    baseArgs.push("--interface-stats");
-  }
-
-  if (runtime) {
-    baseArgs.splice(1, 0, "-r", runtime);
-  }
-
-  const spawned = spawn(containerlabBinary, baseArgs, { stdio: ["ignore", "pipe", "pipe"] });
-  child = spawned;
-
-  stdoutInterface = readline.createInterface({ input: spawned.stdout });
-  stdoutInterface.on("line", handleEventLine);
-
-  spawned.stderr.on("data", (chunk) => {
-    console.warn(`[containerlabEvents]: stderr: ${chunk}`);
-  });
-
-  spawned.on("error", (err) => {
-    finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
-    stopProcess();
-  });
-
-  spawned.on("exit", (code, signal) => {
-    if (!initialLoadComplete) {
-      const message = `containerlab events exited prematurely (code=${code}, signal=${signal ?? ""})`;
-      finalizeInitialLoad(new Error(message));
+  const controller = new AbortController();
+  streamController = controller;
+  void (async () => {
+    try {
+      const events = await backend.events(
+        {
+          initialState: true,
+          ...(enableInterfaceStats ? { interfaceStats: true, interfaceStatsInterval: "1s" } : {})
+        },
+        controller.signal
+      );
+      for await (const event of events) {
+        if (controller.signal.aborted) {
+          break;
+        }
+        try {
+          handleEvent(event);
+        } catch (err) {
+          console.error(
+            `[containerlabEvents]: Failed to apply event: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+      if (!controller.signal.aborted && !initialLoadComplete) {
+        finalizeInitialLoad(new Error("containerlab events ended prematurely"));
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
+      }
+    } finally {
+      if (streamController === controller) {
+        stopProcess();
+      }
     }
-    stopProcess();
-  });
+  })();
 
   if (fallbackTimer) {
     clearTimeout(fallbackTimer);
@@ -1303,8 +1291,12 @@ function startProcess(runtime: string): void {
   fallbackTimer = setTimeout(() => finalizeInitialLoad(), INITIAL_FALLBACK_TIMEOUT_MS);
 }
 
-export async function ensureEventStream(runtime: string): Promise<void> {
-  if (child !== null && currentRuntime === runtime) {
+/**
+ * Starts streaming lab events from the backend, or keeps the running stream
+ * when `streamKey` (backend and runtime) is unchanged.
+ */
+export async function ensureEventStream(backend: LabBackend, streamKey: string): Promise<void> {
+  if (streamController !== null && currentStreamKey === streamKey) {
     if (initialLoadComplete) {
       return;
     }
@@ -1314,7 +1306,8 @@ export async function ensureEventStream(runtime: string): Promise<void> {
   }
 
   stopProcess();
-  startProcess(runtime);
+  resetState();
+  startProcess(backend, streamKey);
 
   if (!initialLoadPromise) {
     throw new Error("Failed to initialize containerlab events stream");
@@ -1369,14 +1362,19 @@ export function getInterfaceSnapshot(
   ];
 }
 
-export function resetForTests(): void {
-  stopProcess();
+/** Forgets every lab, e.g. before streaming from another backend. */
+function resetState(): void {
   containersById.clear();
   labsByName.clear();
   interfacesByContainer.clear();
   interfaceVersions.clear();
   nodeSnapshots.clear();
   scheduleDataChanged();
+}
+
+export function resetForTests(): void {
+  stopProcess();
+  resetState();
 }
 
 export function estimateStartedAtFromStatusForTests(

@@ -1,9 +1,3 @@
-import { spawn } from "child_process";
-import type { ChildProcessWithoutNullStreams } from "child_process";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
-
 import * as vscode from "vscode";
 
 import { outputChannel } from "../globals";
@@ -42,130 +36,6 @@ export function execCommandInTerminal(
   terminal.show();
 }
 
-/**
- * Execute a shell command in the extension's Output channel.
- * We *strip ANSI codes* from both stdout and stderr
- *
- * @param command Command to execute in output.
- * @param show Whether to focus the output channel or not.
- * @param stdoutCb Optional extra function to run on stdout data event. The process and cleaned stdout data is passed to the func.
- * @param stderrCb Optional extra function to run on stderr data. The process and Cleaned stderr data is passed to the func
- */
-function splitArgs(input: string): string[] {
-  const args: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | null = null;
-
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i];
-
-    // Inside a quoted segment
-    if (quote) {
-      if (ch === quote) {
-        quote = null;
-        continue;
-      }
-      current += ch;
-      continue;
-    }
-
-    // Not in quotes
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-      continue;
-    }
-    if (ch === " ") {
-      if (current) {
-        args.push(current);
-        current = "";
-      }
-      continue;
-    }
-    current += ch;
-  }
-
-  if (current) args.push(current);
-  return args;
-}
-
-let activeSpinnerProcess: ChildProcessWithoutNullStreams | null = null;
-let activeSpinnerCommand: string | null = null;
-
-function clearActiveSpinnerProcess(child: ChildProcessWithoutNullStreams): void {
-  if (activeSpinnerProcess !== child) {
-    return;
-  }
-  activeSpinnerProcess = null;
-  activeSpinnerCommand = null;
-}
-
-export function cancelActiveCommand(): boolean {
-  if (!activeSpinnerProcess || activeSpinnerProcess.killed) {
-    return false;
-  }
-  const suffix =
-    activeSpinnerCommand !== null && activeSpinnerCommand.length > 0
-      ? ` for ${activeSpinnerCommand}`
-      : "";
-  outputChannel.info(`[command] Cancellation requested${suffix}`);
-  activeSpinnerProcess.kill();
-  return true;
-}
-
-type OutputCallback = (proc: ReturnType<typeof spawn>, cleanedOutput: string) => void;
-
-export async function execCommandInOutput(
-  command: string,
-  show?: boolean,
-  stdoutCb?: OutputCallback,
-  stderrCb?: OutputCallback
-) {
-  const [cmd, ...args] = splitArgs(command);
-  const proc = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
-
-  if (show === true) {
-    outputChannel.show();
-  }
-
-  proc.stdout.on("data", (data: Buffer) => {
-    const cleaned = utils.stripAnsi(data.toString());
-    outputChannel.info(cleaned);
-    if (stdoutCb) {
-      stdoutCb(proc, cleaned);
-    }
-  });
-
-  proc.stderr.on("data", (data: Buffer) => {
-    const cleaned = utils.stripAnsi(data.toString());
-    outputChannel.info(cleaned);
-    if (stderrCb) {
-      stderrCb(proc, cleaned);
-    }
-  });
-
-  proc.on("close", (code) => {
-    outputChannel.info(`Exited with code ${code}`);
-  });
-}
-
-export type SpinnerOptions = {
-  useSpinner?: true;
-  command: string;
-  spinnerMsg: SpinnerMsg;
-  onOutputLine?: OutputLineHandler;
-  terminalName?: never;
-};
-
-export type TerminalOptions = {
-  useSpinner?: false;
-  command: string;
-  onOutputLine?: OutputLineHandler;
-  terminalName: string;
-  spinnerMsg?: never;
-};
-
-export type CmdOptions = SpinnerOptions | TerminalOptions;
-
 export type SpinnerMsg = {
   progressMsg: string;
   successMsg: string;
@@ -174,162 +44,103 @@ export type SpinnerMsg = {
 
 export type OutputLineStream = "stdout" | "stderr";
 export type OutputLineHandler = (line: string, stream: OutputLineStream) => void;
-
-/**
- * A base command class which can be derived to build specific commmand classes (ie. Docker, Clab)
- */
 export type CommandFailureHandler = (error: unknown) => Promise<void>;
 
-export class Command {
-  protected command: string;
-  protected useSpinner: boolean;
-  protected spinnerMsg?: SpinnerMsg;
-  protected terminalName?: string;
-  protected onSuccessCallback?: () => Promise<void>;
-  protected onFailureCallback?: CommandFailureHandler;
-  protected onOutputLineCallback?: OutputLineHandler;
+/** What a long-running lab task reports while it runs. */
+export interface ProgressTaskContext {
+  /** Logs a line of output, shows stdout lines in the notification, and forwards it. */
+  output(line: string, stream: OutputLineStream): void;
+  signal: AbortSignal;
+}
 
-  constructor(options: CmdOptions) {
-    this.command = options.command;
-    this.useSpinner = options.useSpinner ?? false;
-    this.spinnerMsg = options.spinnerMsg;
-    this.terminalName = options.terminalName;
-    this.onOutputLineCallback = options.onOutputLine;
+export interface ProgressTaskOptions {
+  spinnerMsg: SpinnerMsg;
+  /** Name of the action in failure messages, e.g. "deploy". */
+  actionName: string;
+  onSuccess?: () => Promise<void>;
+  onFailure?: CommandFailureHandler;
+  onOutputLine?: OutputLineHandler;
+}
+
+let activeTask: { controller: AbortController; name: string } | null = null;
+
+/** Cancels the lab task that runs with a progress notification, if any. */
+export function cancelActiveCommand(): boolean {
+  if (!activeTask || activeTask.controller.signal.aborted) {
+    return false;
   }
+  outputChannel.info(`[command] Cancellation requested for ${activeTask.name}`);
+  activeTask.controller.abort();
+  return true;
+}
 
-  protected execute(args?: string[]): Promise<void> {
-    let cmd: string[] = [];
-
-    cmd.push(this.command);
-    if (args) {
-      cmd.push(...args);
-    }
-
-    outputChannel.info(`[${this.command}] Running: ${cmd.join(" ")}`);
-
-    if (this.useSpinner) {
-      return this.execSpinner(cmd);
-    } else {
-      execCommandInTerminal(cmd.join(" "), this.terminalName!);
-      return Promise.resolve();
-    }
-  }
-
-  private getCwd(): string {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const cwd = workspaceFolder ?? path.join(os.homedir(), ".clab");
-    if (workspaceFolder === undefined || workspaceFolder.length === 0) {
-      try {
-        fs.mkdirSync(cwd, { recursive: true });
-      } catch {
-        // ignore errors creating fallback dir
-      }
-    }
-    return cwd;
-  }
-
-  private handleOutput(
-    data: Buffer,
-    progress: vscode.Progress<{ message?: string }>,
-    toProgress: boolean,
-    stream: OutputLineStream
-  ) {
-    const lines = data.toString().split("\n");
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        continue;
-      }
-      const cleanLine = utils.stripAnsi(trimmed);
-      if (toProgress) {
-        progress.report({ message: cleanLine });
-      }
-      outputChannel.info(cleanLine);
-      if (this.onOutputLineCallback) {
-        this.onOutputLineCallback(cleanLine, stream);
-      }
-    }
-  }
-
-  private runChildProcess(
-    cmd: string[],
-    cwd: string,
-    progress: vscode.Progress<{ message?: string }>,
-    token: vscode.CancellationToken
-  ) {
-    return new Promise<void>((resolve, reject) => {
-      const child = spawn(cmd[0], cmd.slice(1), { cwd });
-      activeSpinnerProcess = child;
-      activeSpinnerCommand = cmd.join(" ");
-
-      token.onCancellationRequested(() => {
-        child.kill();
-        reject(new Error(`User cancelled the '${this.command.toLowerCase()}' command.`));
-      });
-
-      child.stdout.on("data", (data: Buffer) => this.handleOutput(data, progress, true, "stdout"));
-      child.stderr.on("data", (data: Buffer) => this.handleOutput(data, progress, false, "stderr"));
-
-      child.on("error", (error) => {
-        clearActiveSpinnerProcess(child);
-        reject(error);
-      });
-
-      child.on("close", (code, signal) => {
-        clearActiveSpinnerProcess(child);
-        if (code === 0) {
-          resolve();
-        } else if (signal) {
-          reject(new Error(`Process terminated by signal ${signal}`));
-        } else {
-          reject(new Error(`Process exited with code ${code}`));
-        }
-      });
-    });
-  }
-
-  private async execSpinner(cmd: string[]) {
-    try {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: this.spinnerMsg?.progressMsg,
-          cancellable: true
-        },
-        async (progress, token) => {
-          progress.report({ message: " [View Logs](command:containerlab.viewLogs)" });
-          const cwd = this.getCwd();
-          await this.runChildProcess(cmd, cwd, progress, token);
-        }
-      );
-
-      if (this.onSuccessCallback) {
-        await this.onSuccessCallback();
-      }
-
-      const successMsg = this.spinnerMsg?.successMsg;
-      if (successMsg !== undefined && successMsg.length > 0) {
-        vscode.window.showInformationMessage(successMsg, "Show Logs").then((choice) => {
-          if (choice === "Show Logs") {
-            outputChannel.show(true);
-          }
+/**
+ * Runs a lab task with a cancellable progress notification, logs its output,
+ * and reports success or failure like every containerlab command does.
+ */
+export async function runWithProgress(
+  task: (context: ProgressTaskContext) => Promise<void>,
+  options: ProgressTaskOptions
+): Promise<void> {
+  const controller = new AbortController();
+  const current = { controller, name: options.actionName };
+  try {
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: options.spinnerMsg.progressMsg,
+        cancellable: true
+      },
+      async (progress, token) => {
+        progress.report({ message: " [View Logs](command:containerlab.viewLogs)" });
+        activeTask = current;
+        token.onCancellationRequested(() => controller.abort());
+        const cancelled = new Promise<never>((_resolve, reject) => {
+          controller.signal.addEventListener("abort", () =>
+            reject(new Error(`User cancelled the '${options.actionName.toLowerCase()}' command.`))
+          );
         });
+        cancelled.catch(() => {});
+        const output = (rawLine: string, stream: OutputLineStream) => {
+          const line = utils.stripAnsi(rawLine).trim();
+          if (!line) return;
+          if (stream === "stdout") progress.report({ message: line });
+          outputChannel.info(line);
+          options.onOutputLine?.(line, stream);
+        };
+        await Promise.race([task({ output, signal: controller.signal }), cancelled]);
       }
-    } catch (err: unknown) {
-      const command = cmd[1];
-      const errMessage = err instanceof Error ? err.message : String(err);
-      const customFailMsg = this.spinnerMsg?.failMsg;
-      const failMsg =
-        customFailMsg !== undefined && customFailMsg.length > 0
-          ? `${customFailMsg}. Err: ${errMessage}`
-          : `${utils.titleCase(command)} failed: ${errMessage}`;
-      const viewOutputBtn = await vscode.window.showErrorMessage(failMsg, "View logs");
-      if (viewOutputBtn === "View logs") {
-        outputChannel.show();
-      }
-      if (this.onFailureCallback) {
-        await this.onFailureCallback(err);
-      }
+    );
+
+    if (options.onSuccess) {
+      await options.onSuccess();
+    }
+    const successMsg = options.spinnerMsg.successMsg;
+    if (successMsg.length > 0) {
+      vscode.window.showInformationMessage(successMsg, "Show Logs").then((choice) => {
+        if (choice === "Show Logs") {
+          outputChannel.show(true);
+        }
+      });
+    }
+  } catch (err: unknown) {
+    const errMessage = err instanceof Error ? err.message : String(err);
+    outputChannel.error(errMessage);
+    const customFailMsg = options.spinnerMsg.failMsg;
+    const failMsg =
+      customFailMsg !== undefined && customFailMsg.length > 0
+        ? `${customFailMsg}. Err: ${errMessage}`
+        : `${utils.titleCase(options.actionName)} failed: ${errMessage}`;
+    const viewOutputBtn = await vscode.window.showErrorMessage(failMsg, "View logs");
+    if (viewOutputBtn === "View logs") {
+      outputChannel.show();
+    }
+    if (options.onFailure) {
+      await options.onFailure(err);
+    }
+  } finally {
+    if (activeTask === current) {
+      activeTask = null;
     }
   }
 }

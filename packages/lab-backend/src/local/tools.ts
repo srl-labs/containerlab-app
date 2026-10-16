@@ -254,12 +254,22 @@ export async function shareTool(
   if (tool === "gotty" && action !== "detach") args.push("--port", String(port ?? 8080));
   const result = await clab(options, args, 5 * 60_000);
   const output = stripAnsi(`${result.stdout}\n${result.stderr}`).trim();
-  const link = /https?:\/\/[^\s"'<>]+/.exec(output)?.[0]?.replace("HOST_IP", "localhost");
+  // Like clab-api-server, the link may still say HOST_IP; hosts know which name reaches them.
+  const link = /https?:\/\/[^\s"'<>]+/.exec(output)?.[0];
   return {
     message: `${tool.toUpperCase()} ${action} completed for lab '${labName}'.`,
     ...(link ? { link } : {}),
     ...(output ? { output } : {})
   };
+}
+
+/** `containerlab tools sshx|gotty list -f json`: the running share sessions. */
+export async function listShareSessions(options: ResolvedLocalOptions, tool: "sshx" | "gotty"): Promise<unknown[]> {
+  const result = await clab(options, ["tools", tool, "list", "-f", "json"], 60_000);
+  const start = result.stdout.indexOf("[");
+  if (start < 0) return [];
+  const parsed = JSON.parse(result.stdout.slice(start)) as unknown;
+  return Array.isArray(parsed) ? parsed : [];
 }
 
 interface DockerImageRow {

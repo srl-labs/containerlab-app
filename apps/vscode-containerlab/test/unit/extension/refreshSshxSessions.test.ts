@@ -9,7 +9,7 @@ describe("refreshSshxSessions", () => {
   const originalResolve = (Module as any)._resolveFilename;
   let refreshSshxSessions: () => Promise<void>;
   let sshxSessions: Map<string, string>;
-  let utilsStub: any;
+  let backendStub: any;
   let vscodeStub: any;
   let globals: any;
 
@@ -36,8 +36,8 @@ describe("refreshSshxSessions", () => {
       if (request === "vscode") {
         return path.join(__dirname, "..", "..", "helpers", "vscode-stub.js");
       }
-      if (request.includes("utils") && !request.includes("stub")) {
-        return path.join(__dirname, "..", "..", "helpers", "utils-stub.js");
+      if (request.endsWith("/backend/labBackends")) {
+        return path.join(__dirname, "..", "..", "helpers", "labBackends-stub.js");
       }
       if (request === "dockerode") {
         return path.join(__dirname, "..", "..", "helpers", "dockerode-stub.js");
@@ -47,7 +47,7 @@ describe("refreshSshxSessions", () => {
 
     // Now require the modules fresh
     vscodeStub = require("../../helpers/vscode-stub");
-    utilsStub = require("../../helpers/utils-stub");
+    backendStub = require("../../helpers/labBackends-stub");
     globals = require("../../../src/globals");
     const sessionRefresh = require("../../../src/services/sessionRefresh");
     refreshSshxSessions = sessionRefresh.refreshSshxSessions;
@@ -60,8 +60,7 @@ describe("refreshSshxSessions", () => {
   });
 
   beforeEach(() => {
-    utilsStub.calls.length = 0;
-    utilsStub.setOutput("");
+    backendStub.reset();
     sshxSessions.clear();
     globals.outputChannel = vscodeStub.window.createOutputChannel("test", { log: true });
   });
@@ -71,7 +70,7 @@ describe("refreshSshxSessions", () => {
   });
 
   it("parses sessions from container name when network lacks prefix", async () => {
-    const sample = JSON.stringify([
+    backendStub.shareSessions.sshx = [
       {
         name: "clab-atest-sshx",
         network: "clab",
@@ -88,10 +87,9 @@ describe("refreshSshxSessions", () => {
         link: "N/A",
         owner: "tester"
       }
-    ]);
-    utilsStub.setOutput(sample);
+    ];
     await refreshSshxSessions();
-    expect(utilsStub.calls[0]).to.contain("containerlab tools sshx list -f json");
+    expect(backendStub.calls[0]).to.deep.equal({ method: "listShareSessions", args: ["sshx"] });
     expect(sshxSessions.size).to.equal(1);
     expect(sshxSessions.get("atest")).to.equal("https://sshx.io/s/QfCkbDXUnk#FINGn1xZar19RC");
   });

@@ -1,65 +1,51 @@
 import * as vscode from "vscode";
+import type { LabLifecycleAction } from "@srl-labs/containerlab-lab-backend";
+import type { LabLifecycleOptions } from "@containerlab/clab-ui/host";
 
 import { ClabLabTreeNode } from "../treeView/common";
-import { containerlabBinaryPath } from "../globals";
+import { getLabBackend, labTargetForPath } from "../backend/labBackends";
 
 import * as cmd from "./command";
+
+export interface LabLifecycleRequest {
+  /** Remove configuration artifacts (`-c`). */
+  cleanup?: boolean;
+  /** Extra containerlab options of deploy, redeploy and destroy. */
+  lifecycleOptions?: LabLifecycleOptions;
+}
+
 /**
- * A helper class to build a 'containerlab' command (with optional sudo, etc.)
- * and run it either in the Output channel or in a Terminal.
+ * Runs a containerlab lifecycle action on a lab through the lab backend, with
+ * a progress notification and the lab's output in the Output channel.
  */
-export class ClabCommand extends cmd.Command {
-  private node?: ClabLabTreeNode;
-  private action: string;
-  private runtime: string;
+export class ClabCommand {
+  private readonly node?: ClabLabTreeNode;
+  private readonly action: LabLifecycleAction;
+  private readonly spinnerMsg: cmd.SpinnerMsg;
+  private readonly onSuccess?: () => Promise<void>;
+  private readonly onFailure?: cmd.CommandFailureHandler;
+  private readonly onOutputLine?: cmd.OutputLineHandler;
 
   constructor(
-    action: string,
-    node: ClabLabTreeNode,
+    action: LabLifecycleAction,
+    node: ClabLabTreeNode | undefined,
     spinnerMsg?: cmd.SpinnerMsg,
-    useTerminal?: boolean,
-    terminalName?: string,
     onSuccess?: () => Promise<void>,
     onFailure?: cmd.CommandFailureHandler,
     onOutputLine?: cmd.OutputLineHandler
   ) {
-    const binaryPath = containerlabBinaryPath || "containerlab";
-    let options: cmd.CmdOptions;
-    if (useTerminal === true) {
-      options = {
-        command: binaryPath,
-        useSpinner: false,
-        terminalName: terminalName ?? "Containerlab",
-        onOutputLine
-      };
-    } else {
-      options = {
-        command: binaryPath,
-        useSpinner: true,
-        spinnerMsg: spinnerMsg ?? {
-          progressMsg: `Running ${action}...`,
-          successMsg: `${action} completed successfully`
-        },
-        onOutputLine
-      };
-    }
-    super(options);
-
-    // Read the runtime from configuration.
-    const config = vscode.workspace.getConfiguration("containerlab");
-    this.runtime = config.get<string>("runtime", "docker");
-
     this.action = action;
     this.node = node instanceof ClabLabTreeNode ? node : undefined;
-    if (onSuccess) {
-      this.onSuccessCallback = onSuccess;
-    }
-    if (onFailure) {
-      this.onFailureCallback = onFailure;
-    }
+    this.spinnerMsg = spinnerMsg ?? {
+      progressMsg: `Running ${action}...`,
+      successMsg: `${action} completed successfully`
+    };
+    this.onSuccess = onSuccess;
+    this.onFailure = onFailure;
+    this.onOutputLine = onOutputLine;
   }
 
-  public async run(flags?: string[]): Promise<void> {
+  public async run(request: LabLifecycleRequest = {}): Promise<void> {
     // Try node.details -> fallback to active editor
     let labPath: string;
     if (!this.node) {
@@ -78,29 +64,30 @@ export class ClabCommand extends cmd.Command {
       return;
     }
 
-    // Build the command
-    const config = vscode.workspace.getConfiguration("containerlab");
-    let extraFlags: string[] = [];
-    if (this.action === "deploy" || this.action === "redeploy") {
-      const extra = config.get<string>("deploy.extraArgs", "");
-      if (extra) {
-        extraFlags = extra.split(/\s+/).filter((f) => f);
+    const backend = getLabBackend();
+    const action = this.action;
+    await cmd.runWithProgress(
+      async ({ output, signal }) => {
+        const events = await backend.streamLifecycle(action, labTargetForPath(labPath), {
+          cleanup: request.cleanup,
+          lifecycleOptions: request.lifecycleOptions,
+          signal
+        });
+        for await (const event of events) {
+          if (event.type === "log") {
+            output(event.line, event.stream ?? "stdout");
+          } else if (event.type === "error") {
+            throw new Error(event.error);
+          }
+        }
+      },
+      {
+        spinnerMsg: this.spinnerMsg,
+        actionName: action,
+        onSuccess: this.onSuccess,
+        onFailure: this.onFailure,
+        onOutputLine: this.onOutputLine
       }
-    } else if (this.action === "destroy") {
-      const extra = config.get<string>("destroy.extraArgs", "");
-      if (extra) {
-        extraFlags = extra.split(/\s+/).filter((f) => f);
-      }
-    }
-
-    const allFlags = [...extraFlags];
-    if (flags) {
-      allFlags.push(...flags);
-    }
-
-    const cmdArgs = [this.action, "-r", this.runtime, ...allFlags, "-t", labPath];
-
-    // Return the promise from .execute() so we can await
-    return this.execute(cmdArgs);
+    );
   }
 }

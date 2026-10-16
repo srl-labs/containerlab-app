@@ -470,6 +470,9 @@ importers:
       '@containerlab/clab-ui':
         specifier: workspace:*
         version: link:../../packages/clab-ui
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../../packages/lab-backend
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'

@@ -257,12 +257,12 @@ export interface LabBackend {
     options?: LifecycleRunOptions
   ): Promise<AsyncIterable<LifecycleStreamEvent>>;
   deployFromUrl(source: { url: string; labName?: string }): Promise<InspectAllLabsResponse>;
-  save(labName: string, options?: { nodeFilter?: string }): Promise<SaveConfigResponse>;
+  save(lab: LabTarget, options?: { nodeFilter?: string }): Promise<SaveConfigResponse>;
   graphDrawio(
-    labName: string,
+    lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ): Promise<DrawioGenerateResponse>;
-  fcli(labName: string, command: string): Promise<FcliCommandResponse>;
+  fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
   shareTool(
     tool: "sshx" | "gotty",
     labName: string,
