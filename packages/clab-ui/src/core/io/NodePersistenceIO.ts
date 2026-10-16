@@ -10,6 +10,7 @@ import * as YAML from "yaml";
 import type { ClabNode, ClabTopology, NodeBoxAppearance } from "../types/topology";
 import { resolveInheritedConfig, subtractInherited } from "../parsing/NodeConfigResolver";
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
+import { KIND_CONFIG_KEYS, KIND_SPECIFIC_KEYS } from "../utilities/nodeKindConfig";
 
 import type { SaveResult, IOLogger } from "./types";
 import { ERROR_NODES_NOT_MAP, noopLogger } from "./types";
@@ -182,8 +183,10 @@ const NODE_YAML_PROPERTIES = [
   "components",
   "sfm",
   "stages",
-  "credentials"
-] as const;
+  "credentials",
+  // Kind-specific config keys from the schema (custom-prompt, daemons, ...)
+  ...KIND_CONFIG_KEYS
+];
 
 /**
  * Sets a single property on a node map if the value is valid.
@@ -298,8 +301,8 @@ function updateNodeYaml(
     }
 
     // containerlab flags default to false, so false only needs writing when it
-    // overrides an inherited value.
-    if (value === false && inherited === undefined) {
+    // overrides an inherited value. Kind-specific flags often default to true.
+    if (value === false && inherited === undefined && !KIND_SPECIFIC_KEYS.has(prop)) {
       if (nodeMap.has(prop)) nodeMap.delete(prop);
       continue;
     }

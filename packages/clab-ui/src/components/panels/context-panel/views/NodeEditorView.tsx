@@ -1,3 +1,4 @@
+/* eslint-disable import-x/max-dependencies */
 // Node editor content for the ContextPanel.
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 
@@ -16,12 +17,14 @@ import { ConfigTab } from "../../node-editor/ConfigTab";
 import { RuntimeTab } from "../../node-editor/RuntimeTab";
 import { NetworkTab } from "../../node-editor/NetworkTab";
 import { StagesTab } from "../../node-editor/StagesTab";
+import { KindConfigTab, getKindConfigFields } from "../../node-editor/KindConfigTab";
 import { AdvancedTab } from "../../node-editor/AdvancedTab";
 import type { ClabTopology } from "../../../../core/types/topology";
 import {
   computeNodeInheritance,
   rebaseInheritedValues
 } from "../../../../core/utilities/nodeInheritance";
+import { hasSrosComponents, pruneKindConfig } from "../../../../core/utilities/nodeKindConfig";
 
 export interface NodeEditorViewProps {
   nodeData: NodeEditorData | null;
@@ -59,16 +62,35 @@ const COMPONENTS_TAB: TabConfig<NodeEditorTabProps> = {
   component: ComponentsTab
 };
 
+const KIND_CONFIG_TAB: TabConfig<NodeEditorTabProps> = {
+  id: "kind",
+  label: "Kind",
+  component: KindConfigTab
+};
+
 function getTabsForNode(
   kind: string | undefined,
-  isCustomTemplate: boolean
+  isCustomTemplate: boolean,
+  hasKindConfig: boolean
 ): Array<TabConfig<NodeEditorTabProps>> {
   // Stages refer to other nodes of the lab, so a node template has none
   const tabs = isCustomTemplate ? BASE_TABS.filter((tab) => tab.id !== "stages") : BASE_TABS;
-  if (kind === "nokia_srsim") {
-    return [tabs[0], COMPONENTS_TAB, ...tabs.slice(1)];
-  }
-  return tabs;
+  const kindTabs = [
+    ...(hasSrosComponents(kind) ? [COMPONENTS_TAB] : []),
+    ...(hasKindConfig ? [KIND_CONFIG_TAB] : [])
+  ];
+  return [tabs[0], ...kindTabs, ...tabs.slice(1)];
+}
+
+/** On a kind change, drop the kind-specific keys the new kind does not accept. */
+function withKindConfigPruned(
+  updates: Partial<NodeEditorData>,
+  formData: NodeEditorData
+): Partial<NodeEditorData> {
+  if (!("kind" in updates) || updates.kind === formData.kind) return updates;
+  const kindConfig = "kindConfig" in updates ? updates.kindConfig : formData.kindConfig;
+  const pruned = pruneKindConfig(kindConfig, updates.kind);
+  return pruned === kindConfig ? updates : { ...updates, kindConfig: pruned };
 }
 
 function mergeNodeEditorTabs(
@@ -112,13 +134,14 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     originalData
   } = useNodeEditorForm(nodeData, readOnly);
 
+  const hasKindConfig = formData ? getKindConfigFields(formData).length > 0 : false;
   const tabs = useMemo(
     () =>
       mergeNodeEditorTabs(
-        getTabsForNode(formData?.kind, formData?.isCustomTemplate === true),
+        getTabsForNode(formData?.kind, formData?.isCustomTemplate === true, hasKindConfig),
         nodeEditorTabs
       ),
-    [formData?.kind, formData?.isCustomTemplate, nodeEditorTabs]
+    [formData?.kind, formData?.isCustomTemplate, hasKindConfig, nodeEditorTabs]
   );
 
   const formKind = formData?.kind;
@@ -142,19 +165,20 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
     (updates: Partial<NodeEditorData>) => {
       const formData = formDataRef.current;
       const inheritance = inheritanceRef.current;
-      if (!inheritanceTopology || !formData || !inheritance) {
+      if (!formData) {
         handleChange(updates);
         return;
       }
       const kindChanged = "kind" in updates && updates.kind !== formData.kind;
       const groupChanged = "group" in updates && updates.group !== formData.group;
-      if (!kindChanged && !groupChanged) {
-        handleChange(updates);
+      if (!inheritanceTopology || !inheritance || (!kindChanged && !groupChanged)) {
+        handleChange(withKindConfigPruned(updates, formData));
         return;
       }
       const next = { ...formData, ...updates };
       const after = computeNodeInheritance(inheritanceTopology, next.kind, next.group);
-      handleChange({ ...updates, ...rebaseInheritedValues(next, inheritance.values, after.values) });
+      const rebased = { ...updates, ...rebaseInheritedValues(next, inheritance.values, after.values) };
+      handleChange(withKindConfigPruned(rebased, formData));
     },
     [handleChange, inheritanceTopology]
   );

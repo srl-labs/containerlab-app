@@ -84,6 +84,8 @@ export interface NodeInheritance {
   mapEntries: (field: InheritedMapField) => Record<string, InheritanceSource>;
   /** Inherited list items, with the level each comes from */
   listItems: (field: InheritedListField) => Map<string, InheritanceSource>;
+  /** Level an inherited kind-specific key (custom-prompt, daemons, ...) comes from */
+  kindConfigSource: (key: string) => InheritanceSource | undefined;
 }
 
 export function describeInheritanceSource(source: InheritanceSource): string {
@@ -183,7 +185,9 @@ export function computeNodeInheritance(
         if (layer) items.set(item, sourceOf(layer));
       }
       return items;
-    }
+    },
+    // containerlab takes a kind-specific value whole from the most specific level
+    kindConfigSource: (key) => findSource(layers, [key])
   };
 }
 
@@ -237,6 +241,7 @@ export function rebaseInheritedValues(
   for (const field of LIST_FIELD_NAMES) {
     updates[field] = rebaseList(data[field], before[field], after[field]);
   }
+  updates.kindConfig = rebaseMap(data.kindConfig, before.kindConfig, after.kindConfig);
   return Object.fromEntries(
     Object.entries(updates).filter(([field, value]) => !deepEqual(read(data, field), value))
   );

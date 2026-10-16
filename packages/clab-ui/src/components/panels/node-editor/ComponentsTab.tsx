@@ -21,6 +21,7 @@ import Typography from "@mui/material/Typography";
 import { InputField, FilterableDropdown, PanelAddSection, PanelSection } from "../../ui/form";
 import { controlRadius } from "../../../theme/surfaces";
 import { useSchema, type SrosComponentTypes } from "../../../hooks/editor";
+import { kindComponentKeys } from "../../../core/utilities/nodeKindConfig";
 
 import type { TabProps, SrosComponent, SrosMda, SrosXiom } from "./types";
 import { INTEGRATED_SROS_TYPES } from "./types";
@@ -277,6 +278,8 @@ interface ComponentEntryProps extends ComponentCallbacks {
   component: SrosComponent;
   index: number;
   srosTypes: SrosComponentTypes;
+  /** VM resource keys (cpu, ram, max-nics) the kind accepts per component */
+  resourceKeys: string[];
   onUpdate: (index: number, updates: Partial<SrosComponent>) => void;
   onRemove: (index: number) => void;
 }
@@ -476,6 +479,7 @@ interface ComponentSectionProps {
   filteredComponents: SrosComponent[];
   allComponents: SrosComponent[];
   srosTypes: SrosComponentTypes;
+  resourceKeys: string[];
   updateComponent: (index: number, updates: Partial<SrosComponent>) => void;
   removeComponent: (index: number) => void;
   addMda: (compIndex: number) => void;
@@ -502,6 +506,7 @@ const ComponentSection: React.FC<ComponentSectionProps> = ({
   filteredComponents,
   allComponents,
   srosTypes,
+  resourceKeys,
   updateComponent,
   removeComponent,
   addMda,
@@ -532,6 +537,7 @@ const ComponentSection: React.FC<ComponentSectionProps> = ({
             component={comp}
             index={realIndex}
             srosTypes={srosTypes}
+            resourceKeys={resourceKeys}
             onUpdate={updateComponent}
             onRemove={removeComponent}
             onAddMda={addMda}
@@ -603,8 +609,60 @@ const ComponentSlotTypeRow: React.FC<ComponentSlotTypeRowProps> = ({
   </Box>
 );
 
+const RESOURCE_FIELDS: Partial<Record<string, { label: string; suffix?: string }>> = {
+  cpu: { label: "vCPUs" },
+  ram: { label: "RAM", suffix: "GB" },
+  "max-nics": { label: "NICs" }
+};
+
+/** VM resources of a card (nokia_sros runs each card as its own VM) */
+const ComponentResourcesRow: React.FC<{
+  index: number;
+  component: SrosComponent;
+  resourceKeys: string[];
+  onUpdate: (index: number, updates: Partial<SrosComponent>) => void;
+  padded?: boolean;
+}> = ({ index, component, resourceKeys, onUpdate, padded = false }) => {
+  if (resourceKeys.length === 0) return null;
+  const extra = component.extra ?? {};
+  const setResource = (key: string, text: string) => {
+    const next = { ...extra };
+    const num = Number(text);
+    if (text.trim() === "" || !Number.isFinite(num)) delete next[key];
+    else next[key] = Math.trunc(num);
+    onUpdate(index, { extra: Object.keys(next).length > 0 ? next : undefined });
+  };
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${resourceKeys.length}, minmax(0, 1fr))`,
+        gap: 1.5,
+        ...(padded ? { px: 1.5, pt: 2, pb: 0.5 } : { pt: 2 })
+      }}
+    >
+      {resourceKeys.map((key) => {
+        const value = extra[key];
+        return (
+          <InputField
+            key={key}
+            id={`comp-${key}-${index}`}
+            label={RESOURCE_FIELDS[key]?.label ?? key}
+            type="number"
+            min={1}
+            value={typeof value === "number" || typeof value === "string" ? String(value) : ""}
+            onChange={(text) => setResource(key, text)}
+            suffix={RESOURCE_FIELDS[key]?.suffix}
+            placeholder={key === "max-nics" ? "From MDAs" : "Default"}
+          />
+        );
+      })}
+    </Box>
+  );
+};
+
 const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
-  const { component, index, srosTypes, onUpdate, onRemove } = props;
+  const { component, index, srosTypes, resourceKeys, onUpdate, onRemove } = props;
   const [isExpanded, setIsExpanded] = useState(true);
   const isCpm = isCpmSlot(component.slot);
   const typeOptions = isCpm ? srosTypes.cpm : srosTypes.card;
@@ -620,6 +678,12 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
           onUpdate={onUpdate}
           onRemove={() => onRemove(index)}
           removeTitle="Remove CPM"
+        />
+        <ComponentResourcesRow
+          index={index}
+          component={component}
+          resourceKeys={resourceKeys}
+          onUpdate={onUpdate}
         />
       </Paper>
     );
@@ -649,6 +713,13 @@ const ComponentEntry: React.FC<ComponentEntryProps> = (props) => {
             component={component}
             typeOptions={typeOptions}
             slotPlaceholder="1, 2, ..."
+            onUpdate={onUpdate}
+            padded={true}
+          />
+          <ComponentResourcesRow
+            index={index}
+            component={component}
+            resourceKeys={resourceKeys}
             onUpdate={onUpdate}
             padded={true}
           />
@@ -723,6 +794,7 @@ interface DistributedModeSectionProps {
   components: SrosComponent[];
   sfmValue: string;
   srosTypes: SrosComponentTypes;
+  resourceKeys: string[];
   onComponentsChange: (components: SrosComponent[]) => void;
   onSfmChange: (sfm: string) => void;
 }
@@ -731,6 +803,7 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
   components,
   sfmValue,
   srosTypes,
+  resourceKeys,
   onComponentsChange,
   onSfmChange
 }) => {
@@ -856,6 +929,7 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
   const commonSectionProps = {
     allComponents: components,
     srosTypes,
+    resourceKeys,
     updateComponent,
     removeComponent,
     addMda,
@@ -908,14 +982,20 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
 // Main ComponentsTab
 // ============================================================================
 
+/** Per-component VM resources, in the order the form shows them */
+const RESOURCE_KEYS = ["cpu", "ram", "max-nics"];
+
 /**
  * ComponentsTab - Main component for SROS component configuration
- * Only visible for nokia_srsim nodes
+ * Only visible for nokia_srsim and nokia_sros nodes
  */
 export const ComponentsTab: React.FC<TabProps> = ({ data, onChange }) => {
   const { srosComponentTypes } = useSchema();
-  const isIntegrated = isIntegratedType(data.type);
+  // nokia_sros reads components only as a distributed chassis; the type then names the chassis
+  const isIntegrated = data.kind?.toLowerCase() !== "nokia_sros" && isIntegratedType(data.type);
   const components = data.components ?? [];
+  const componentKeys = kindComponentKeys(data.kind);
+  const resourceKeys = RESOURCE_KEYS.filter((key) => componentKeys.has(key));
 
   const handleComponentsChange = (newComponents: SrosComponent[]) => {
     onChange({ components: newComponents });
@@ -939,6 +1019,7 @@ export const ComponentsTab: React.FC<TabProps> = ({ data, onChange }) => {
           components={components}
           sfmValue={data.sfm ?? ""}
           srosTypes={srosComponentTypes}
+          resourceKeys={resourceKeys}
           onComponentsChange={handleComponentsChange}
           onSfmChange={handleSfmChange}
         />

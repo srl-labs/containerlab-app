@@ -28,6 +28,7 @@ import {
   isRecord
 } from "./typeHelpers";
 import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
+import { parseKindConfig, serializeKindConfig } from "./nodeKindConfig";
 import {
   INHERITED_STAGES_KEY,
   parseInheritedStages,
@@ -319,7 +320,7 @@ function parseComponentExtra(c: Record<string, unknown>): Record<string, unknown
 }
 
 /** Parse a single SROS component */
-function parseComponent(c: Record<string, unknown>): SrosComponent {
+export function parseComponent(c: Record<string, unknown>): SrosComponent {
   const slot = c.slot;
   const component: SrosComponent = {
     slot: typeof slot === "string" || typeof slot === "number" ? slot : undefined,
@@ -358,6 +359,12 @@ function parseComponentsProps(
   };
 }
 
+/** Parse the kind-specific config keys the editor keeps by YAML key */
+function parseKindConfigProps(extra: Record<string, unknown>): Pick<NodeEditorData, "kindConfig"> {
+  const kindConfig = parseKindConfig(extra);
+  return kindConfig ? { kindConfig } : {};
+}
+
 /** Parse the node's own stages and the stages it inherits */
 function parseStagesProps(
   extra: Record<string, unknown>
@@ -389,6 +396,7 @@ export function convertToEditorData(
     ...parseCertProps(extra),
     ...parseHealthCheckProps(extra),
     ...parseComponentsProps(extra),
+    ...parseKindConfigProps(extra),
     ...parseStagesProps(extra),
     ...parseCredentialsProps(extra),
     ...parseInheritedFrom(extra)
@@ -793,7 +801,7 @@ function convertMdaArray(
 }
 
 /** Convert a single SROS component to YAML format, returns null if empty */
-function convertSingleComponent(c: SrosComponent): Record<string, unknown> | null {
+export function convertSingleComponent(c: SrosComponent): Record<string, unknown> | null {
   // Keys the editor does not show (env, cpu, ...) are written back unchanged
   const comp: Record<string, unknown> = { ...c.extra };
 
@@ -860,6 +868,9 @@ export function convertEditorDataToYaml(
   convertCertToYaml(data, extraData, options);
   convertHealthcheckToYaml(data, extraData, options);
   convertComponentsToYaml(data, extraData);
+  if ("kindConfig" in data) {
+    Object.assign(extraData, serializeKindConfig(data.kindConfig));
+  }
   if ("stages" in data) {
     extraData.stages = serializeNodeStages(data.stages);
   }
