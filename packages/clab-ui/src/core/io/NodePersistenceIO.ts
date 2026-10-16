@@ -7,7 +7,8 @@
 
 import * as YAML from "yaml";
 
-import type { ClabTopology, NodeBoxAppearance } from "../types/topology";
+import type { ClabNode, ClabTopology, NodeBoxAppearance } from "../types/topology";
+import { resolveInheritedConfig, subtractInherited } from "../parsing/NodeConfigResolver";
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 import type { SaveResult, IOLogger } from "./types";
@@ -184,41 +185,6 @@ const NODE_YAML_PROPERTIES = [
 ] as const;
 
 /**
- * Resolves inherited configuration from defaults, kinds, and groups
- */
-function resolveInheritedConfig(
-  topo: ClabTopology,
-  group?: string,
-  kind?: string
-): Partial<Record<string, unknown>> {
-  const result: Record<string, unknown> = {};
-  const topology = topo.topology;
-
-  // Apply defaults
-  if (topology?.defaults !== undefined) {
-    Object.assign(result, topology.defaults);
-  }
-
-  // Apply kind defaults
-  if (kind !== undefined && kind.length > 0) {
-    const kindDefaults = topology?.kinds?.[kind];
-    if (kindDefaults !== undefined) {
-      Object.assign(result, kindDefaults);
-    }
-  }
-
-  // Apply group defaults
-  if (group !== undefined && group.length > 0) {
-    const groupDefaults = topology?.groups?.[group];
-    if (groupDefaults !== undefined) {
-      Object.assign(result, groupDefaults);
-    }
-  }
-
-  return result;
-}
-
-/**
  * Sets a single property on a node map if the value is valid.
  * Returns true if the property was set, false otherwise.
  */
@@ -330,15 +296,21 @@ function updateNodeYaml(
       continue;
     }
 
-    // If value matches inherited, remove node-level override. containerlab flags
-    // default to false, so false only needs writing when it overrides an inherited value.
-    if (deepEqual(value, inherited) || (value === false && inherited === undefined)) {
+    // containerlab flags default to false, so false only needs writing when it
+    // overrides an inherited value.
+    if (value === false && inherited === undefined) {
       if (nodeMap.has(prop)) nodeMap.delete(prop);
       continue;
     }
 
-    // Set the value
-    setOrDelete(doc, nodeMap, prop, value);
+    // Keep only what the node does not inherit: merged maps and lists drop the
+    // inherited entries, other keys drop a value equal to the inherited one.
+    const own = subtractInherited(prop, value, inherited, deepEqual);
+    if (own === undefined) {
+      if (nodeMap.has(prop)) nodeMap.delete(prop);
+      continue;
+    }
+    setOrDelete(doc, nodeMap, prop, own);
   }
 }
 
@@ -443,14 +415,12 @@ function resolveEditInheritedConfig(
   nodeData: NodeSaveData,
   nodeMap: YAML.YAMLMap
 ): Partial<Record<string, unknown>> {
-  const group = nodeData.extraData?.group ?? readNodeString(nodeMap, "group");
-  const groupKind = group !== undefined ? topo.topology?.groups?.[group]?.kind : undefined;
-  const kind =
-    nodeData.extraData?.kind ??
-    readNodeString(nodeMap, "kind") ??
-    groupKind ??
-    topo.topology?.defaults?.kind;
-  return resolveInheritedConfig(topo, group, kind);
+  const node: ClabNode = {};
+  const group = nodeData.extraData?.group;
+  const kind = nodeData.extraData?.kind;
+  node.group = group === null ? undefined : (group ?? readNodeString(nodeMap, "group"));
+  node.kind = kind === null ? undefined : (kind ?? readNodeString(nodeMap, "kind"));
+  return resolveInheritedConfig(topo, node);
 }
 
 /**

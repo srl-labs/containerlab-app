@@ -1,6 +1,7 @@
 // Network tab for node editor.
 import React, { useMemo } from "react";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 
 import {
   InputField,
@@ -26,6 +27,7 @@ import {
 
 import type { TabProps } from "./types";
 import { withCurrentOption } from "./selectOptions";
+import { inheritedFieldHint } from "./inheritanceHints";
 
 const CONTAINER_MODE = "container";
 
@@ -65,7 +67,8 @@ function useContainerTargetOptions(nodeId: string): Array<{ value: string; label
   );
 }
 
-const NetworkModeFields: React.FC<TabProps> = ({ data, onChange }) => {
+const NetworkModeFields: React.FC<TabProps> = (props) => {
+  const { data, onChange } = props;
   const networkMode = data.networkMode ?? "";
   const selection = getNetworkModeSelection(networkMode);
   const target = getContainerTarget(networkMode);
@@ -87,6 +90,7 @@ const NetworkModeFields: React.FC<TabProps> = ({ data, onChange }) => {
         value={selection}
         onChange={handleModeChange}
         options={withCurrentOption(NETWORK_MODE_OPTIONS, selection)}
+        helperText={inheritedFieldHint(props, "networkMode")}
       />
       {selection === CONTAINER_MODE && (
         <FilterableDropdown
@@ -139,10 +143,18 @@ function DotIcon({ color }: { color: string }) {
 
 /** Problem or note shown under the management network select */
 function describeMgmtNet(
-  data: TabProps["data"],
+  props: TabProps,
   networks: MgmtSettings[],
   inheritedProps: string[]
 ): { text?: string; error: boolean } {
+  const { data } = props;
+  if (data.section !== undefined) {
+    const name = data.mgmtNet ?? "";
+    const known = name === "" || networks.some((network) => getMgmtNetworkName(network) === name);
+    return known
+      ? { text: name === "" ? "Not set here" : undefined, error: false }
+      : { text: `${name} is not a management network of this lab`, error: true };
+  }
   if (isMgmtNetExempt(undefined, data.networkMode)) {
     return { text: "Ignored: the node uses a network mode", error: false };
   }
@@ -159,11 +171,15 @@ function describeMgmtNet(
   if (networks.length > 1 && data.runtime === "podman") {
     return { text: "Several management networks need the Docker runtime", error: true };
   }
-  return { text: describeInheritance(data, inheritedProps), error: false };
+  return {
+    text: inheritedFieldHint(props, "mgmtNet") ?? describeInheritance(data, inheritedProps),
+    error: false
+  };
 }
 
 /** `mgmt-net` picker; shown when the lab has several networks or the node sets one */
-const MgmtNetworkField: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
+const MgmtNetworkField: React.FC<TabProps> = (props) => {
+  const { data, onChange, inheritedProps = [] } = props;
   const networks = useMgmtNetworks();
   const value = data.mgmtNet ?? "";
   const options = useMemo(() => {
@@ -181,7 +197,7 @@ const MgmtNetworkField: React.FC<TabProps> = ({ data, onChange, inheritedProps =
     );
   }, [networks, value]);
   if (data.isCustomTemplate === true || (networks.length < 2 && value === "")) return null;
-  const note = describeMgmtNet(data, networks, inheritedProps);
+  const note = describeMgmtNet(props, networks, inheritedProps);
 
   return (
     <SelectField
@@ -215,8 +231,18 @@ function useAddressWarning(
   return `Outside ${resolved.name} (${subnet})`;
 }
 
+/** Where a list that is replaced as a whole (ports, DNS) comes from */
+const InheritedListHint: React.FC<{ hint: string | undefined }> = ({ hint }) =>
+  hint === undefined ? null : (
+    <Typography variant="caption" sx={{ color: "text.secondary" }}>
+      {hint}
+    </Typography>
+  );
+
 export const NetworkTab: React.FC<TabProps> = (props) => {
   const { data, onChange } = props;
+  // Defaults, kinds and groups cannot set node addresses or aliases.
+  const isSection = data.section !== undefined;
   const ipv4Warning = useAddressWarning(data, data.mgmtIpv4, "ipv4");
   const ipv6Warning = useAddressWarning(data, data.mgmtIpv6, "ipv6");
 
@@ -244,24 +270,28 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Management Network">
         <MgmtNetworkField {...props} />
-        <InputField
-          id="node-mgmt-ipv4"
-          label="Management IPv4"
-          value={data.mgmtIpv4 ?? ""}
-          onChange={(value) => onChange({ mgmtIpv4: value })}
-          placeholder="e.g., 172.20.20.100"
-          error={ipv4Warning !== undefined}
-          helperText={ipv4Warning}
-        />
-        <InputField
-          id="node-mgmt-ipv6"
-          label="Management IPv6"
-          value={data.mgmtIpv6 ?? ""}
-          onChange={(value) => onChange({ mgmtIpv6: value })}
-          placeholder="e.g., 2001:db8::100"
-          error={ipv6Warning !== undefined}
-          helperText={ipv6Warning}
-        />
+        {!isSection && (
+          <>
+            <InputField
+              id="node-mgmt-ipv4"
+              label="Management IPv4"
+              value={data.mgmtIpv4 ?? ""}
+              onChange={(value) => onChange({ mgmtIpv4: value })}
+              placeholder="e.g., 172.20.20.100"
+              error={ipv4Warning !== undefined}
+              helperText={ipv4Warning}
+            />
+            <InputField
+              id="node-mgmt-ipv6"
+              label="Management IPv6"
+              value={data.mgmtIpv6 ?? ""}
+              onChange={(value) => onChange({ mgmtIpv6: value })}
+              placeholder="e.g., 2001:db8::100"
+              error={ipv6Warning !== undefined}
+              helperText={ipv6Warning}
+            />
+          </>
+        )}
         <NetworkModeFields {...props} />
       </PanelSection>
 
@@ -272,6 +302,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
           placeholder="host:container[/protocol]"
           hideAddButton
         />
+        <InheritedListHint hint={inheritedFieldHint(props, "ports")} />
       </PanelAddSection>
 
       <PanelAddSection title="DNS Servers" onAdd={handleAddDns}>
@@ -281,6 +312,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
           placeholder="DNS server address"
           hideAddButton
         />
+        <InheritedListHint hint={inheritedFieldHint(props, "dnsServers")} />
       </PanelAddSection>
 
       <PanelAddSection title="DNS Search Domains" onAdd={handleAddDnsSearch}>
@@ -301,14 +333,16 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
         />
       </PanelAddSection>
 
-      <PanelAddSection title="Network Aliases" onAdd={handleAddAlias}>
-        <DynamicList
-          items={data.aliases ?? []}
-          onChange={(items) => onChange({ aliases: items })}
-          placeholder="Alias name"
-          hideAddButton
-        />
-      </PanelAddSection>
+      {!isSection && (
+        <PanelAddSection title="Network Aliases" onAdd={handleAddAlias}>
+          <DynamicList
+            items={data.aliases ?? []}
+            onChange={(items) => onChange({ aliases: items })}
+            placeholder="Alias name"
+            hideAddButton
+          />
+        </PanelAddSection>
+      )}
     </Box>
   );
 };

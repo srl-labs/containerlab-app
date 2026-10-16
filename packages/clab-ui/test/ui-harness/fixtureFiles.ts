@@ -3,6 +3,8 @@ import aiFabricAnnotations from "../fixtures/topologies/ai-fabric.clab.yml.annot
 import datacenterYaml from "../fixtures/topologies/datacenter.clab.yml?raw";
 import datacenterAnnotations from "../fixtures/topologies/datacenter.clab.yml.annotations.json?raw";
 import emptyYaml from "../fixtures/topologies/empty.clab.yml?raw";
+import inheritanceYaml from "../fixtures/topologies/inheritance.clab.yml?raw";
+import inheritanceAnnotations from "../fixtures/topologies/inheritance.clab.yml.annotations.json?raw";
 import multiMgmtYaml from "../fixtures/topologies/multi-mgmt.clab.yml?raw";
 import multiMgmtAnnotations from "../fixtures/topologies/multi-mgmt.clab.yml.annotations.json?raw";
 import networkYaml from "../fixtures/topologies/network.clab.yml?raw";
@@ -20,6 +22,8 @@ export const fixtureFiles: Record<string, string> = {
   [`${TOPOLOGY_ROOT}/datacenter.clab.yml`]: datacenterYaml,
   [`${TOPOLOGY_ROOT}/datacenter.clab.yml.annotations.json`]: datacenterAnnotations,
   [`${TOPOLOGY_ROOT}/empty.clab.yml`]: emptyYaml,
+  [`${TOPOLOGY_ROOT}/inheritance.clab.yml`]: inheritanceYaml,
+  [`${TOPOLOGY_ROOT}/inheritance.clab.yml.annotations.json`]: inheritanceAnnotations,
   [`${TOPOLOGY_ROOT}/multi-mgmt.clab.yml`]: multiMgmtYaml,
   [`${TOPOLOGY_ROOT}/multi-mgmt.clab.yml.annotations.json`]: multiMgmtAnnotations,
   [`${TOPOLOGY_ROOT}/network.clab.yml`]: networkYaml,

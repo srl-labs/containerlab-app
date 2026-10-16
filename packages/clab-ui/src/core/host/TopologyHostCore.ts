@@ -15,6 +15,7 @@ import type {
   NodeAnnotation
 } from "../types/topology";
 import type { LabSettingsUpdate } from "../types/labSettings";
+import type { InheritanceSectionUpdate } from "../types/inheritance";
 import type {
   TopologyHostCommand,
   TopologyHostResponseMessage,
@@ -31,6 +32,7 @@ import { AnnotationsIO } from "../io/AnnotationsIO";
 import { TopologyIO, migrateGeneratedNetworkNodeAnnotations } from "../io/TopologyIO";
 import { TransactionalFileSystemAdapter } from "../io/TransactionalFileSystemAdapter";
 import { applyLabSettingsUpdate, extractLabSettings } from "./labSettingsYaml";
+import { applyInheritanceSectionUpdate } from "./inheritanceSectionYaml";
 import { createEmptyAnnotations, createNewLabAnnotations } from "../annotations/types";
 import { isNonEmptyString, toFiniteNumber, toPosition } from "../../annotations/valueParsers";
 
@@ -391,6 +393,10 @@ export class TopologyHostCore implements TopologyHost {
       await this.applyLabSettings(command.payload);
       return;
     }
+    if (command.command === "setInheritanceSection") {
+      await this.applyInheritanceSection(command.payload);
+      return;
+    }
     throw new Error(`${command.command} handled before executeCommand`);
   }
 
@@ -559,6 +565,17 @@ export class TopologyHostCore implements TopologyHost {
     }
 
     applyLabSettingsUpdate(doc, update);
+    await this.topologyIO.save();
+  }
+
+  private async applyInheritanceSection(update: InheritanceSectionUpdate): Promise<void> {
+    await this.ensureTopologyInitialized();
+    const doc = this.topologyIO.getDocument();
+    if (!doc) {
+      throw new Error("Topology document not initialized");
+    }
+
+    applyInheritanceSectionUpdate(doc, update);
     await this.topologyIO.save();
   }
 

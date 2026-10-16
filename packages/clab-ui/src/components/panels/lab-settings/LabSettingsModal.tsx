@@ -4,6 +4,7 @@ import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import CloseIcon from "@mui/icons-material/Close";
 import GridOnOutlinedIcon from "@mui/icons-material/GridOnOutlined";
 import LanOutlinedIcon from "@mui/icons-material/LanOutlined";
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import LockOpenIcon from "@mui/icons-material/LockOpenOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
@@ -33,6 +34,12 @@ const LAB_SETTINGS_SECTIONS = [
     label: "Management",
     description: "Management subnet and docker network",
     icon: <LanOutlinedIcon fontSize="small" />
+  },
+  {
+    key: "inheritance",
+    label: "Defaults & Groups",
+    description: "Settings nodes inherit from defaults, kinds and groups. Edits save right away.",
+    icon: <LayersOutlinedIcon fontSize="small" />
   },
   {
     key: "appearance",
@@ -107,7 +114,7 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
           sx: {
             ...floatingSurfaceSx,
             boxShadow: overlayShadow,
-            // Four short sections: size for the content, not the screen.
+            // Short sections: size for the content, not the screen.
             minHeight: { xs: "calc(100vh - 32px)", md: 0 },
             height: { xs: "calc(100vh - 32px)", md: "min(560px, 80vh)" },
             overflow: "hidden"

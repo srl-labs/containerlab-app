@@ -105,6 +105,7 @@ function parseBasicProps(
   | "kind"
   | "type"
   | "image"
+  | "group"
   | "icon"
   | "iconColor"
   | "iconCornerRadius"
@@ -120,6 +121,7 @@ function parseBasicProps(
     kind: getString(extra.kind) ?? getString(rawData.kind),
     type: getString(extra.type) ?? getString(rawData.type),
     image: getString(extra.image) ?? getString(rawData.image),
+    group: getString(extra.group) === "" ? undefined : getString(extra.group),
     // ReactFlow node data uses "role", parsed element format uses "topoViewerRole"
     icon: getString(rawData.role) ?? getString(rawData.topoViewerRole) ?? "",
     iconColor: getString(rawData.iconColor),
@@ -866,7 +868,7 @@ function settleAgainstBaseline(data: NodeEditorData, baseline: NodeEditorData): 
  * them as written (including comments, kind-specific keys and values the
  * editor only shows). A key the user cleared is set to null (deletion).
  */
-function convertEditorChangesToYaml(
+export function convertEditorChangesToYaml(
   data: NodeEditorData,
   baseline: NodeEditorData
 ): YamlExtraData {

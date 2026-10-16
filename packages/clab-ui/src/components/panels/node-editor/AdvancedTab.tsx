@@ -15,6 +15,7 @@ import {
 
 import { isGoDuration } from "../../../core/utilities/nodeEditorConversions";
 
+import { inheritedFieldHint, inheritedListItems, inheritedMapEntries } from "./inheritanceHints";
 import type { TabProps, HealthCheckConfig } from "./types";
 import { withCurrentOption } from "./selectOptions";
 
@@ -42,7 +43,7 @@ const RUNTIME_OPTIONS = [
 const VALIDITY_HELP = "Go duration, e.g. 720h (30 days) or 8760h (1 year)";
 const VALIDITY_ERROR = "Use a Go duration such as 720h or 1h30m; d and y are not units";
 
-const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
+const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => (
   <PanelSection title="Resource Limits">
     <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
       <InputField
@@ -54,6 +55,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
         placeholder="e.g., 1.5"
         step={0.1}
         min={0}
+        helperText={inheritedFieldHint({ data, inheritance }, "cpu")}
       />
       <InputField
         id="node-cpu-set"
@@ -61,6 +63,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
         value={data.cpuSet ?? ""}
         onChange={(v) => onChange({ cpuSet: v })}
         placeholder="e.g., 0-3, 0,3"
+        helperText={inheritedFieldHint({ data, inheritance }, "cpuSet")}
       />
       <InputField
         id="node-memory"
@@ -68,6 +71,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
         value={data.memory ?? ""}
         onChange={(v) => onChange({ memory: v })}
         placeholder="e.g., 1Gb, 512Mb"
+        helperText={inheritedFieldHint({ data, inheritance }, "memory")}
       />
       <InputField
         id="node-shm-size"
@@ -75,6 +79,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange }) => (
         value={data.shmSize ?? ""}
         onChange={(v) => onChange({ shmSize: v })}
         placeholder="e.g., 256MB"
+        helperText={inheritedFieldHint({ data, inheritance }, "shmSize")}
       />
     </Box>
   </PanelSection>
@@ -220,7 +225,7 @@ const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, on
   </PanelSection>
 );
 
-const RuntimeSection: React.FC<TabProps> = ({ data, onChange }) => (
+const RuntimeSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => (
   <PanelSection title="Container Runtime">
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <SelectField
@@ -229,6 +234,7 @@ const RuntimeSection: React.FC<TabProps> = ({ data, onChange }) => (
         value={data.imagePullPolicy ?? ""}
         onChange={(v) => onChange({ imagePullPolicy: v })}
         options={withCurrentOption(PULL_POLICY_OPTIONS, data.imagePullPolicy ?? "")}
+        helperText={inheritedFieldHint({ data, inheritance }, "imagePullPolicy")}
       />
       <SelectField
         id="node-runtime"
@@ -236,12 +242,14 @@ const RuntimeSection: React.FC<TabProps> = ({ data, onChange }) => (
         value={data.runtime ?? ""}
         onChange={(v) => onChange({ runtime: v })}
         options={withCurrentOption(RUNTIME_OPTIONS, data.runtime ?? "")}
+        helperText={inheritedFieldHint({ data, inheritance }, "runtime")}
       />
     </Box>
   </PanelSection>
 );
 
-export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
+export const AdvancedTab: React.FC<TabProps> = (props) => {
+  const { data, onChange, inheritance } = props;
   const healthCheck = data.healthCheck ?? {};
   const capAdd = data.capAdd ?? [];
   const sysctls = data.sysctls ?? {};
@@ -271,13 +279,14 @@ export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <ResourceLimitsSection data={data} onChange={onChange} />
+      <ResourceLimitsSection data={data} onChange={onChange} inheritance={inheritance} />
       <PanelAddSection title="Capabilities" onAdd={handleAddCapability}>
         <DynamicList
           items={capAdd}
           onChange={(items) => onChange({ capAdd: items })}
           placeholder="e.g., NET_ADMIN"
           hideAddButton
+          inheritedItems={inheritedListItems(props, "capAdd")}
         />
       </PanelAddSection>
       <PanelAddSection title="Sysctls" onAdd={handleAddSysctl}>
@@ -287,6 +296,7 @@ export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
           keyPlaceholder="Sysctl key"
           valuePlaceholder="Value"
           hideAddButton
+          inheritedEntries={inheritedMapEntries(props, "sysctls")}
         />
       </PanelAddSection>
       <PanelAddSection title="Devices" onAdd={handleAddDevice}>
@@ -295,6 +305,7 @@ export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
           onChange={(items) => onChange({ devices: items })}
           placeholder="host:container[:permissions]"
           hideAddButton
+          inheritedItems={inheritedListItems(props, "devices")}
         />
       </PanelAddSection>
       <TlsCertificateSection data={data} onChange={onChange} certIssue={certIssue} />
@@ -307,7 +318,7 @@ export const AdvancedTab: React.FC<TabProps> = ({ data, onChange }) => {
       />
       <HealthCheckTestSection healthCheck={healthCheck} onUpdate={updateHealthCheck} />
       <HealthCheckSection healthCheck={healthCheck} onUpdate={updateHealthCheck} />
-      <RuntimeSection data={data} onChange={onChange} />
+      <RuntimeSection data={data} onChange={onChange} inheritance={inheritance} />
     </Box>
   );
 };

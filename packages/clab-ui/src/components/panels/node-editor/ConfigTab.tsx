@@ -12,6 +12,7 @@ import {
 } from "../../ui/form";
 
 import type { TabProps } from "./types";
+import { inheritedFieldHint, inheritedListItems, inheritedMapEntries } from "./inheritanceHints";
 
 type StartupConfigMode = "default" | "enforce" | "suppress";
 
@@ -34,8 +35,12 @@ function getStartupConfigMode(data: {
   return "default";
 }
 
-export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
+export const ConfigTab: React.FC<TabProps> = (props) => {
+  const { data, onChange } = props;
   const mode = getStartupConfigMode(data);
+  const modeHint =
+    inheritedFieldHint(props, "enforceStartupConfig") ??
+    inheritedFieldHint(props, "suppressStartupConfig");
 
   const handleModeChange = (newMode: StartupConfigMode) => {
     onChange({
@@ -69,6 +74,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.startupConfig ?? ""}
           onChange={(value) => onChange({ startupConfig: value })}
           placeholder="Path to startup configuration file"
+          helperText={inheritedFieldHint(props, "startupConfig")}
         />
         <SelectField
           id="node-startup-config-mode"
@@ -80,6 +86,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
             }
           }}
           options={STARTUP_CONFIG_MODE_OPTIONS}
+          helperText={modeHint}
         />
       </PanelSection>
 
@@ -90,6 +97,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.license ?? ""}
           onChange={(value) => onChange({ license: value })}
           placeholder="Path to license file"
+          helperText={inheritedFieldHint(props, "license")}
         />
       </PanelSection>
 
@@ -99,6 +107,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           onChange={(items) => onChange({ binds: items })}
           placeholder="host:container[:options]"
           hideAddButton
+          inheritedItems={inheritedListItems(props, "binds")}
         />
       </PanelAddSection>
 
@@ -109,6 +118,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           keyPlaceholder="Variable"
           valuePlaceholder="Value"
           hideAddButton
+          inheritedEntries={inheritedMapEntries(props, "env")}
         />
       </PanelAddSection>
 
@@ -118,6 +128,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           onChange={(items) => onChange({ envFiles: items })}
           placeholder="Path to env file"
           hideAddButton
+          inheritedItems={inheritedListItems(props, "envFiles")}
         />
       </PanelAddSection>
 
@@ -128,6 +139,7 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           keyPlaceholder="Label"
           valuePlaceholder="Value"
           hideAddButton
+          inheritedEntries={inheritedMapEntries(props, "labels")}
         />
       </PanelAddSection>
     </Box>

@@ -9,7 +9,14 @@ import {
 } from "../../../services";
 import { useGraphStore, useTopoViewerStore } from "../../../stores";
 import type { GridSettingsControlsProps } from "../GridSettingsPopover";
-import { BasicTab, MgmtTab, AppearanceTab, GridTab, type LabSettings } from "../lab-settings";
+import {
+  BasicTab,
+  MgmtTab,
+  InheritanceTab,
+  AppearanceTab,
+  GridTab,
+  type LabSettings
+} from "../lab-settings";
 
 import { syncRateLabelAnnotationsForLinks } from "./trafficRateAnnotationAutoCreate";
 
@@ -19,7 +26,7 @@ export interface LabSettingsSectionProps extends GridSettingsControlsProps {
   labSettings?: LabSettings;
   onClose: () => void;
   saveRef?: React.RefObject<(() => Promise<void>) | null>;
-  activeTab: "basic" | "mgmt" | "appearance" | "grid";
+  activeTab: "basic" | "mgmt" | "inheritance" | "appearance" | "grid";
   /** Called instead of saving when a section has errors, with the section to show */
   onInvalid?: (tab: "mgmt") => void;
 }
@@ -131,6 +138,9 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
         labSettings={labSettings}
       />
     );
+  }
+  if (activeTab === "inheritance") {
+    return <InheritanceTab isViewMode={areTopologySettingsReadOnly} />;
   }
   if (activeTab === "appearance") {
     return (

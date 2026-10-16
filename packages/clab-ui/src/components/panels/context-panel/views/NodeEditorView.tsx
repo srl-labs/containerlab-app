@@ -1,5 +1,5 @@
 // Node editor content for the ContextPanel.
-import React, { useCallback, useEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
 import type { TabConfig } from "../../../ui/editor/EditorPanel";
@@ -16,6 +16,11 @@ import { ConfigTab } from "../../node-editor/ConfigTab";
 import { RuntimeTab } from "../../node-editor/RuntimeTab";
 import { NetworkTab } from "../../node-editor/NetworkTab";
 import { AdvancedTab } from "../../node-editor/AdvancedTab";
+import type { ClabTopology } from "../../../../core/types/topology";
+import {
+  computeNodeInheritance,
+  rebaseInheritedValues
+} from "../../../../core/utilities/nodeInheritance";
 
 export interface NodeEditorViewProps {
   nodeData: NodeEditorData | null;
@@ -23,6 +28,8 @@ export interface NodeEditorViewProps {
   onApply: (data: NodeEditorData) => void;
   onPreview?: (data: NodeEditorData) => void;
   inheritedProps?: string[];
+  /** Topology the node belongs to, for showing what it inherits from defaults, kinds and groups */
+  inheritanceTopology?: ClabTopology | null;
   /** Disable editing, but keep scrolling and tab navigation available */
   readOnly?: boolean;
   /** Exposed for ContextPanel footer */
@@ -82,6 +89,7 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   onApply,
   onPreview,
   inheritedProps = [],
+  inheritanceTopology,
   readOnly = false,
   onFooterRef
 }) => {
@@ -100,6 +108,44 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   const tabs = useMemo(
     () => mergeNodeEditorTabs(getTabsForNode(formData?.kind), nodeEditorTabs),
     [formData?.kind, nodeEditorTabs]
+  );
+
+  const formKind = formData?.kind;
+  const formGroup = formData?.group;
+  const inheritance = useMemo(
+    () =>
+      inheritanceTopology
+        ? computeNodeInheritance(inheritanceTopology, formKind, formGroup)
+        : undefined,
+    [inheritanceTopology, formKind, formGroup]
+  );
+
+  // Read through refs so the change handler stays stable while the form changes.
+  const formDataRef = useRef(formData);
+  formDataRef.current = formData;
+  const inheritanceRef = useRef(inheritance);
+  inheritanceRef.current = inheritance;
+
+  // A new kind or group brings other inherited values; swap the ones the node took from the old.
+  const handleChangeWithInheritance = useCallback(
+    (updates: Partial<NodeEditorData>) => {
+      const formData = formDataRef.current;
+      const inheritance = inheritanceRef.current;
+      if (!inheritanceTopology || !formData || !inheritance) {
+        handleChange(updates);
+        return;
+      }
+      const kindChanged = "kind" in updates && updates.kind !== formData.kind;
+      const groupChanged = "group" in updates && updates.group !== formData.group;
+      if (!kindChanged && !groupChanged) {
+        handleChange(updates);
+        return;
+      }
+      const next = { ...formData, ...updates };
+      const after = computeNodeInheritance(inheritanceTopology, next.kind, next.group);
+      handleChange({ ...updates, ...rebaseInheritedValues(next, inheritance.values, after.values) });
+    },
+    [handleChange, inheritanceTopology]
   );
 
   const effectiveInheritedProps = useMemo(() => {
@@ -147,9 +193,10 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
 
   const tabProps = {
     data: formData,
-    onChange: handleChange,
+    onChange: handleChangeWithInheritance,
     onPreview: previewChange,
-    inheritedProps: effectiveInheritedProps
+    inheritedProps: effectiveInheritedProps,
+    inheritance
   };
 
   return (

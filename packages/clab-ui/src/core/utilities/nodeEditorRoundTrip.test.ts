@@ -173,7 +173,8 @@ test("the editor loads every field with its containerlab shape", () => {
 
   assert.equal(data.autoRemove, false);
   assert.equal(data.enforceStartupConfig, false);
-  assert.equal(data.startupDelay, 0);
+  // containerlab reads startup-delay 0 as unset, so the kind's 5 applies
+  assert.equal(data.startupDelay, 5);
   assert.equal(data.restartPolicy, "always");
   assert.equal(data.imagePullPolicy, "IfNotPresent");
   assert.equal(data.runtime, "podman");
@@ -370,7 +371,8 @@ test("explicit false and 0 overrides survive, and are written when chosen", () =
   const node = nodeOf(out, "srl2");
   assert.equal(node["auto-remove"], false);
   assert.equal(node["enforce-startup-config"], false);
-  assert.equal(node["startup-delay"], 0);
+  // startup-delay 0 cannot override in containerlab, so it is not written
+  assert.equal(node["startup-delay"], undefined);
 
   // Checking and unchecking a box that was unset writes nothing
   const noop = saveEdit(RICH_TOPOLOGY, "srl2", (data) => ({
@@ -526,4 +528,54 @@ test("mgmt-net is written on the node only when it differs from the inherited va
   assert.equal(nodeOf(back, "r2")["mgmt-net"], undefined);
 
   assert.equal(saveEdit(MULTI_MGMT_TOPOLOGY, "r2"), MULTI_MGMT_TOPOLOGY);
+});
+
+test("merged maps and lists save only the entries the node does not inherit", () => {
+  const yaml = fixture(`topology:
+  defaults:
+    env:
+      SHARED: d
+  kinds:
+    linux:
+      binds:
+        - /k:/data
+      exec:
+        - echo kind
+  groups:
+    edge:
+      env:
+        GROUP: g
+  nodes:
+    n1:
+      kind: linux
+      group: edge
+`);
+  const opened = openEditor(yaml, "n1");
+  assert.deepEqual(opened.env, { SHARED: "d", GROUP: "g" });
+  assert.deepEqual(opened.exec, ["echo kind"]);
+
+  const out = saveEdit(yaml, "n1", (data) => ({
+    ...data,
+    env: { ...data.env, GROUP: "own", EXTRA: "x" },
+    exec: [...(data.exec ?? []), "echo node"],
+    binds: [...(data.binds ?? []), "/n:/n"]
+  }));
+  const node = nodeOf(out, "n1");
+  assert.deepEqual(node.env, { GROUP: "own", EXTRA: "x" });
+  assert.deepEqual(node.exec, ["echo node"]);
+  assert.deepEqual(node.binds, ["/n:/n"]);
+});
+
+test("a kind name in another case still finds the kind section on save", () => {
+  const yaml = fixture(`topology:
+  kinds:
+    Linux:
+      image: alpine:3
+  nodes:
+    n1:
+      kind: linux
+`);
+  assert.equal(openEditor(yaml, "n1").image, "alpine:3");
+  const out = saveEdit(yaml, "n1", (data) => ({ ...data, image: "alpine:3", cmd: "sh" }));
+  assert.deepEqual(nodeOf(out, "n1"), { kind: "linux", cmd: "sh" });
 });
