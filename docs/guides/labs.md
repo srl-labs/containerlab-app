@@ -20,6 +20,12 @@ Running nodes expose actions such as:
 
 In VS Code, shell and SSH actions open VS Code terminals. In Desktop and Web, terminal sessions are proxied through `clab-api-server` and shown in standalone terminal windows.
 
+### Apply changes to a running lab
+
+The play button applies the topology file. A lab that is not running is deployed. For a running lab, the GUI first runs `containerlab apply --dry-run` and lists what applying would do: nodes to create, start, restart, recreate or remove, and links to connect or disconnect, with containerlab's reason for each restart or recreate (for example `config drift: image`). Nothing changes until you click **Apply**.
+
+Recreated and removed nodes lose configuration that was not saved, so the dialog warns when the plan includes them. If the running lab already matches the file, the dialog says so and there is nothing to apply. If the dry run fails, the dialog shows the error and you can still **Apply anyway**.
+
 ### Run with options
 
 The arrow next to the topology viewer's play button opens the lifecycle menu. **Run with options…** at the bottom of that menu deploys, redeploys, or destroys the lab with extra containerlab flags:

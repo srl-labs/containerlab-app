@@ -8,6 +8,7 @@ import { runtimeFetch } from "./backend";
  * snapshots carry the same flag.
  */
 import { useTopoViewerStore } from "@containerlab/clab-ui";
+import { applyPlanHasChanges, parseApplyPlan, type ApplyPlan } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import { standaloneServerUrl } from "./standaloneServerOrigin";
@@ -31,29 +32,46 @@ function setTopologyDirtyState(dirty: boolean | undefined): void {
   store.setInitialData?.(dirty === undefined ? {} : { isDirty: dirty });
 }
 
+/** Run `containerlab apply --dry-run` for the topology and return the server's answer. */
+async function requestDryRunApply(
+  target: DirtyStateTarget
+): Promise<{ result?: unknown; changesPending?: unknown; error?: unknown }> {
+  const payload: { dryRun: true; sessionId?: string; topologyRef: TopologyRef } = {
+    dryRun: true,
+    topologyRef: target.topologyRef
+  };
+  if (target.sessionId) {
+    payload.sessionId = target.sessionId;
+  }
+  const response = await runtimeFetch(standaloneServerUrl("/api/lab/apply"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload)
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    result?: unknown;
+    changesPending?: unknown;
+    error?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(
+      typeof body.error === "string" && body.error
+        ? body.error
+        : `Dry run failed: ${response.status} ${response.statusText}`
+    );
+  }
+  return body;
+}
+
 export async function refreshTopologyDirtyState(
   target: DirtyStateTarget
 ): Promise<boolean | undefined> {
   let dirty: boolean | undefined;
   try {
-    const payload: { dryRun: true; sessionId?: string; topologyRef: TopologyRef } = {
-      dryRun: true,
-      topologyRef: target.topologyRef
-    };
-    if (target.sessionId) {
-      payload.sessionId = target.sessionId;
-    }
-    const response = await runtimeFetch(standaloneServerUrl("/api/lab/apply"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(payload)
-    });
-    if (response.ok) {
-      const body = (await response.json()) as { changesPending?: unknown };
-      if (typeof body.changesPending === "boolean") {
-        dirty = body.changesPending;
-      }
+    const body = await requestDryRunApply(target);
+    if (typeof body.changesPending === "boolean") {
+      dirty = body.changesPending;
     }
   } catch {
     // Leave the sync state unknown when the dry-run cannot run.
@@ -61,6 +79,17 @@ export async function refreshTopologyDirtyState(
 
   setTopologyDirtyState(dirty);
   return dirty;
+}
+
+/** The changes applying the topology would make; refreshes the sync state on the way. */
+export async function planTopologyApply(target: DirtyStateTarget): Promise<ApplyPlan> {
+  const body = await requestDryRunApply(target);
+  const plan = parseApplyPlan(body.result);
+  if (!plan) {
+    throw new Error("The dry run returned no plan");
+  }
+  setTopologyDirtyState(applyPlanHasChanges(plan));
+  return plan;
 }
 
 export function resetTopologyDirtyState(): void {
