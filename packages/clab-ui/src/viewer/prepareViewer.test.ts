@@ -41,3 +41,9 @@ test("invalid annotation collections fail with an actionable error", () => {
     assert.throws(() => prepareViewer(yaml, annotations), /Topology annotations must be/);
   }
 });
+
+test("topologies without annotations show boxed nodes, saved annotations keep their style", () => {
+  const yaml = "name: style\ntopology:\n  nodes: {a: {kind: linux}}\n";
+  assert.equal(prepareViewer(yaml).snapshot.annotations.viewerSettings?.nodeStyle, "boxed");
+  assert.equal(prepareViewer(yaml, "{}").snapshot.annotations.viewerSettings?.nodeStyle, undefined);
+});

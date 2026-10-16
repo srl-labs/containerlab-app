@@ -26,12 +26,12 @@ import type { TopologyData } from "../types/graph";
 import type { ContainerDataProvider, ParserLogger } from "../parsing/types";
 import { TopologyParser } from "../parsing/TopologyParser";
 import { applyInterfacePatternMigrations } from "../utilities";
-import type { FileSystemAdapter, IOLogger } from "../io/types";
+import { isFileNotFoundError, type FileSystemAdapter, type IOLogger } from "../io/types";
 import { AnnotationsIO } from "../io/AnnotationsIO";
 import { TopologyIO, migrateGeneratedNetworkNodeAnnotations } from "../io/TopologyIO";
 import { TransactionalFileSystemAdapter } from "../io/TransactionalFileSystemAdapter";
 import { applyLabSettingsUpdate, extractLabSettings } from "./labSettingsYaml";
-import { createEmptyAnnotations } from "../annotations/types";
+import { createEmptyAnnotations, createNewLabAnnotations } from "../annotations/types";
 import { isNonEmptyString, toFiniteNumber, toPosition } from "../../annotations/valueParsers";
 
 interface TopologyHostCoreOptions {
@@ -732,7 +732,7 @@ export class TopologyHostCore implements TopologyHost {
       yamlFileName,
       annotationsFileName,
       yamlContent,
-      annotationsContent: annotationsContent ?? JSON.stringify(createEmptyAnnotations(), null, 2),
+      annotationsContent: annotationsContent ?? JSON.stringify(createNewLabAnnotations(), null, 2),
       labName: labName ?? "",
       mode: this.mode,
       deploymentState: this.deploymentState,
@@ -1042,14 +1042,6 @@ function toRecord(value: unknown): Record<string, unknown> | undefined {
 function errorToMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error);
-}
-
-function isFileNotFoundError(error: unknown): boolean {
-  if (isRecord(error) && error.code === "ENOENT") {
-    return true;
-  }
-  const msg = errorToMessage(error);
-  return msg.includes("ENOENT") || /no such file/i.test(msg);
 }
 
 function normalizeParsedTopologyValue(parsed: unknown): ClabTopology {

@@ -3,6 +3,7 @@ import { applyGraphLabelMigrations } from "../core/parsing/GraphLabelMigrator";
 import type { TopologySnapshot } from "../core/types/messages";
 import type { TopologyAnnotations } from "../core/types/topology";
 import { isRecord } from "../core/utilities/typeHelpers";
+import { createNewLabAnnotations } from "../core/annotations/types";
 import { migrateGeneratedNetworkNodeAnnotations } from "../core/io/TopologyIO";
 import { parseViewerSource } from "./describeTopology";
 import { buildEdgeAnnotationLookup, findEdgeAnnotationInLookup } from "../annotations/edgeAnnotations";
@@ -18,7 +19,7 @@ function isAnnotations(value: unknown): value is TopologyAnnotations {
 /** The same graph parser and legacy graph labels as the editor, with no host or file I/O. */
 export function prepareViewer(yaml: string, annotationsSource?: string) {
   const { topology, description } = parseViewerSource(yaml);
-  const value: unknown = annotationsSource !== undefined && annotationsSource.trim() !== "" ? JSON.parse(annotationsSource) : {};
+  const value: unknown = annotationsSource !== undefined && annotationsSource.trim() !== "" ? JSON.parse(annotationsSource) : createNewLabAnnotations();
   if (!isAnnotations(value)) throw new Error("Topology annotations must be a JSON object with annotation arrays");
   migrateGeneratedNetworkNodeAnnotations(value, new Set(Object.keys(topology.topology?.nodes ?? {})));
   const parsed = TopologyParser.parseToReactFlowFromParsed(topology, { annotations: value });

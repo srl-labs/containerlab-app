@@ -33,6 +33,18 @@ export const noopLogger: IOLogger = {
 };
 
 /**
+ * Whether a FileSystemAdapter read failed because the file does not exist.
+ * Adapters signal this with an ENOENT code or an ENOENT / "no such file" message.
+ */
+export function isFileNotFoundError(error: unknown): boolean {
+  if (typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT") {
+    return true;
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes("ENOENT") || /no such file/i.test(msg);
+}
+
+/**
  * FileSystemAdapter - Abstraction for file system operations
  *
  * This allows the same I/O logic to work in both:
