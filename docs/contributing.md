@@ -1,6 +1,7 @@
-# Contributing to the docs
+# Contribute to the docs
 
-The documentation lives in `docs/` and builds with Zensical. It consumes `@containerlab/clab-viewer`, which builds the same parser and renderers as the apps. Improvements to topology rendering are available in the docs too.
+The docs live in `docs/` and build with Zensical. Every diagram is rendered by `@containerlab/clab-viewer`, built from this repository, so rendering improvements in the apps show up here too.
+{ .lead }
 
 ## Local development
 
@@ -28,11 +29,33 @@ The build produces `site/`. The tests exercise Markdown validation and the built
 
 Run the performance check on its own so other builds or browser tests do not compete for CPU. It checks three cold starts per profile with a 10 Mbps connection and 40 ms latency: the whole page and viewer at normal CPU speed, then viewer startup under 4× CPU slowdown. The viewer build also rejects editor dependencies in the initial bundle and enforces size limits.
 
-## Add an example
+## Examples and diagrams
 
-Keep the deployable YAML in `docs/examples/`. Use an optional annotations JSON file for layout, then reference both from a `clab` fence. Include prerequisites and be explicit about whether a topology includes device configuration or only physical links.
+| Folder | Holds |
+| --- | --- |
+| `docs/examples/` | Labs people can download and deploy. Say whether a lab is configured or wiring only, and what it needs to run. |
+| `docs/diagrams/` | Concept drawings, such as how the apps reach a lab host. They are topology files too, but not meant to be deployed; each starts with a comment saying so. |
 
-The same file feeds the topology, YAML view, copy button, and download. There is no separate diagram asset to maintain.
+Both are a `.clab.yml` file plus an optional `.clab.yml.annotations.json`, referenced from a `clab` fence. There is no separate image to keep in sync. To change a drawing, open the file in the app or the sandbox, arrange it, and save; or edit the annotations JSON directly. Annotation colors may use `var(--vscode-editor-foreground)` and `var(--vscode-descriptionForeground)` for text that follows the light and dark theme.
+
+## Screenshots
+
+App screenshots live in `docs/images/app/` as WebP, one per theme: `<name>-dark.webp` and `<name>-light.webp`. Show both, and the page picks the one that matches:
+
+```markdown
+![Node Editor](../images/app/node-editor-dark.webp#only-dark){ .shot }
+![Node Editor](../images/app/node-editor-light.webp#only-light){ .shot }
+```
+
+Add `.narrow` for dialogs. Take them from the UI harness (`pnpm ui:dev`). It renders the real app with demo labs and no personal data, and fakes deploying, so running-lab views need no containers.
+
+## Writing
+
+- Start each page with one sentence that says what the reader gets, styled `{ .lead }`.
+- Use the reader's task as headings: "Capture packets", not "Packet capture support".
+- Name buttons exactly as the app shows them, in bold.
+- Prefer a numbered `steps` block for procedures and a table only for real comparisons.
+- Settings tables belong in the Reference section, not in guides.
 
 ## Publishing
 
@@ -42,4 +65,4 @@ Every pull request builds and tests a combined preview of the documentation and 
 
 Run `pnpm preview:build` and `pnpm preview:test` to build and check that combined site locally. The build produces `site/` and changes sandbox links in the generated docs to `/sandbox/`. CI sets `PREVIEW_SITE_URL` to the commit's Cloudflare branch URL; the local default is `http://127.0.0.1:8011/`.
 
-The initial app guides and screenshots came from the containerlab repository. See [documentation sources](SOURCES.md) for provenance. The core CLI and node-kind reference stays on [containerlab.dev](https://containerlab.dev/).
+The first version of the app guides came from the containerlab repository; see [documentation sources](SOURCES.md). The CLI and node-kind reference stays on [containerlab.dev](https://containerlab.dev/).

@@ -1,0 +1,275 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "alice",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "icon": "client",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3d9bd1",
+      "iconCornerRadius": 10
+    },
+    {
+      "id": "bob",
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "icon": "client",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#8a72d6",
+      "iconCornerRadius": 10
+    },
+    {
+      "id": "clab-api-server",
+      "position": {
+        "x": 200,
+        "y": 100
+      },
+      "icon": "server",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3ba57e",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "alice-lab",
+      "position": {
+        "x": 420,
+        "y": 0
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3d9bd1",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "team-lab",
+      "position": {
+        "x": 420,
+        "y": 100
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#d0913a",
+      "iconCornerRadius": 10,
+      "groupId": "shared"
+    },
+    {
+      "id": "bob-lab",
+      "position": {
+        "x": 420,
+        "y": 200
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#8a72d6",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "host",
+      "name": "LAB HOST",
+      "level": "1",
+      "position": {
+        "x": 160,
+        "y": -45
+      },
+      "width": 360,
+      "height": 320,
+      "backgroundColor": "#3ba57e",
+      "backgroundOpacity": 7,
+      "borderColor": "#3ba57e",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#3ba57e",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "shared",
+      "name": "SHARED LABS",
+      "level": "1",
+      "position": {
+        "x": 385,
+        "y": 75
+      },
+      "width": 110,
+      "height": 95,
+      "backgroundColor": "#d0913a",
+      "backgroundOpacity": 12,
+      "borderColor": "#d0913a",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#d0913a",
+      "labelPosition": "top-left",
+      "zIndex": -4,
+      "parentId": "host"
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "text-0",
+      "text": "personal",
+      "position": {
+        "x": 290,
+        "y": 28
+      },
+      "width": 90,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    },
+    {
+      "id": "text-1",
+      "text": "personal",
+      "position": {
+        "x": 290,
+        "y": 178
+      },
+      "width": 90,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    },
+    {
+      "id": "text-2",
+      "text": "everyone",
+      "position": {
+        "x": 300,
+        "y": 90
+      },
+      "width": 90,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "arrow-0",
+      "shapeType": "line",
+      "position": {
+        "x": 45,
+        "y": 20
+      },
+      "endPosition": {
+        "x": 195,
+        "y": 112
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-1",
+      "shapeType": "line",
+      "position": {
+        "x": 45,
+        "y": 220
+      },
+      "endPosition": {
+        "x": 195,
+        "y": 128
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-2",
+      "shapeType": "line",
+      "position": {
+        "x": 245,
+        "y": 110
+      },
+      "endPosition": {
+        "x": 415,
+        "y": 22
+      },
+      "borderColor": "#3d9bd1",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-3",
+      "shapeType": "line",
+      "position": {
+        "x": 245,
+        "y": 120
+      },
+      "endPosition": {
+        "x": 415,
+        "y": 120
+      },
+      "borderColor": "#d0913a",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-4",
+      "shapeType": "line",
+      "position": {
+        "x": 245,
+        "y": 130
+      },
+      "endPosition": {
+        "x": 415,
+        "y": 218
+      },
+      "borderColor": "#8a72d6",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    }
+  ],
+  "viewerSettings": {
+    "nodeStyle": "icon",
+    "linkLabelMode": "hide",
+    "linkStyle": "straight"
+  }
+}

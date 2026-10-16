@@ -8,7 +8,7 @@ edit_uri = "edit/main/docs/"
 docs_dir = "docs"
 site_dir = "site"
 # External fence inputs must invalidate Markdown cached by Zensical.
-watch = ["docs/examples", "tools/clab_docs/topology.py"]
+watch = ["docs/examples", "docs/diagrams", "tools/clab_docs/topology.py"]
 copyright = "Containerlab Apps · Open source. Built for network people."
 extra_css = ["assets/stylesheets/site.css", "assets/viewer/component.css", "assets/stylesheets/customization.css"]
 # The template loads this asynchronously in the head, ahead of the docs bundle.
@@ -16,42 +16,49 @@ extra_javascript = []
 nav = [
   { "Overview" = "index.md" },
   { "Get started" = [
-    { "Choose your app" = "getting-started/index.md" },
-    { "Your first lab" = "getting-started/first-lab.md" },
+    { "Choose an app" = "getting-started/index.md" },
+    { "Quick start" = "getting-started/first-lab.md" },
+    { "How it works" = "getting-started/how-it-works.md" },
   ] },
-  { "Installation" = [
-    { "VS Code extension" = "manual/gui/vsc-extension.md" },
-    { "Desktop app" = "manual/gui/desktop.md" },
-    { "Web app" = "manual/gui/web.md" },
-    { "Connect a lab host" = "manual/api-server.md" },
+  { "Install" = [
+    { "VS Code extension" = "install/vscode.md" },
+    { "Desktop app" = "install/desktop.md" },
+    { "Web app" = "install/web.md" },
+    { "Lab host" = "install/lab-host.md" },
+    { "Sign in to a lab host" = "install/sign-in.md" },
   ] },
-  { "User guide" = [
-    { "The workspace" = "manual/gui/index.md" },
-    { "Design a topology" = "guides/topologies.md" },
-    { "Layouts and templates" = "guides/layouts.md" },
-    { "Run your labs" = "guides/labs.md" },
-    { "Inspect and troubleshoot" = "guides/troubleshooting.md" },
-    { "Export and share" = "guides/sharing.md" },
+  { "Guides" = [
+    { "Tour the workspace" = "guides/workspace.md" },
+    { "Build a topology" = "guides/topologies.md" },
+    { "Node templates" = "guides/templates.md" },
+    { "Layout and style" = "guides/appearance.md" },
+    { "Run a lab" = "guides/labs.md" },
+    { "Troubleshoot" = "guides/troubleshooting.md" },
+    { "Shared labs" = "guides/shared-labs.md" },
+    { "Export" = "guides/export.md" },
     { "Keyboard shortcuts" = "guides/shortcuts.md" },
   ] },
   { "Examples" = [
-    { "Topology gallery" = "examples/index.md" },
+    { "Gallery" = "examples/index.md" },
     { "Leaf–spine fabric" = "examples/fabric.md" },
     { "Linux playground" = "examples/linux.md" },
   ] },
-  { "Developers" = [
-    { "Standalone viewer" = [
-      { "Overview" = "viewer/standalone.md" },
-      { "Zensical integration" = "viewer/index.md" },
-      { "Customization studio" = "viewer/customize.md" },
-      { "Component reference" = "viewer/reference.md" },
-    ] },
-    { "Contribute to the docs" = "contributing.md" },
+  { "Reference" = [
+    { "VS Code settings" = "reference/vscode-settings.md" },
+    { "Web and desktop settings" = "reference/app-settings.md" },
+    { "API server settings" = "reference/api-server.md" },
   ] },
-  { "Resources" = [
-    { "Containerlab manual" = "https://containerlab.dev/" },
+  { "Embed the viewer" = [
+    { "Overview" = "viewer/standalone.md" },
+    { "In Zensical" = "viewer/index.md" },
+    { "Customization studio" = "viewer/customize.md" },
+    { "Component reference" = "viewer/reference.md" },
+  ] },
+  { "Project" = [
+    { "Contribute to the docs" = "contributing.md" },
     { "Releases" = "https://github.com/srl-labs/containerlab-app/releases" },
-    { "Community" = "https://discord.gg/vAyddtaEV9" },
+    { "Containerlab manual" = "https://containerlab.dev/" },
+    { "Discord" = "https://discord.gg/vAyddtaEV9" },
   ] },
 ]
 

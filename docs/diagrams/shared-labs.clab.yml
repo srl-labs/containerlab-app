@@ -1,0 +1,11 @@
+# Diagram only: personal and shared lab folders on one API server.
+name: shared-labs
+
+topology:
+  nodes:
+    alice: {kind: linux}
+    bob: {kind: linux}
+    clab-api-server: {kind: linux}
+    alice-lab: {kind: linux}
+    team-lab: {kind: linux}
+    bob-lab: {kind: linux}

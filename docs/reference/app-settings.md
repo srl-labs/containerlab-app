@@ -1,0 +1,35 @@
+---
+description: Environment variables for the containerlab web app and desktop app.
+---
+
+# Web and desktop settings
+
+Both apps are configured with environment variables. Everything else, like endpoints and appearance, is set in the app.
+{ .lead }
+
+## Web app
+
+Pass these with `-e` to `docker run`.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `PORT` | `3001` | Port the web app listens on. |
+| `CLAB_API_URL` | `https://localhost:8090` | API server URL pre-filled on the sign-in screen. |
+| `CLAB_API_TLS_VERIFY` | `false` | Verify the API server's certificate. Turn on when it is trusted. |
+| `WEB_TLS_ENABLE` | `true` | Serve the app over HTTPS. |
+| `WEB_TLS_AUTO_CERT` | `true` | Create a self-signed certificate when no certificate files are set. |
+| `WEB_TLS_CERT_FILE` | unset | Path to your certificate inside the container. |
+| `WEB_TLS_KEY_FILE` | unset | Path to its private key. |
+| `WEB_TLS_HOST` | detected | Host name written into the self-signed certificate. |
+| `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | How often interface statistics refresh. |
+
+## Desktop app
+
+Set these in the environment that starts the app.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `CLAB_API_URL` | `https://localhost:8090` | API server URL pre-filled on the sign-in screen. |
+| `CLAB_API_TLS_VERIFY` | `false` | Verify the API server's certificate. |
+| `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local port for the app's built-in server. It only listens on loopback. |
+| `CONTAINERLAB_DESKTOP_DEBUG` | unset | Log debug output from the built-in server. |

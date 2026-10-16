@@ -25,7 +25,7 @@ test(`cold documentation viewer is painted in under one second (${cpuSlowdown}x 
         }, { once: true });
       });
       await page.goto(String(testInfo.project.use.baseURL));
-      await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
+      await expect(page.locator("clab-topology").first()).toHaveAttribute("data-loaded", "true");
       const frame = page.frames().find(frame => frame.url().includes("viewer.html"))!;
       await expect(frame.locator(".react-flow__node-topology-node")).toHaveCount(8);
       const timing = await page.evaluate(() => ({

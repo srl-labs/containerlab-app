@@ -1,0 +1,276 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "vs-code",
+      "position": {
+        "x": 0,
+        "y": 60
+      },
+      "icon": "client",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3d9bd1",
+      "iconCornerRadius": 10,
+      "groupId": "laptop"
+    },
+    {
+      "id": "extension",
+      "position": {
+        "x": 260,
+        "y": 0
+      },
+      "icon": "controller",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3d9bd1",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "containerlab",
+      "position": {
+        "x": 260,
+        "y": 130
+      },
+      "icon": "controller",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3ba57e",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "docker",
+      "position": {
+        "x": 420,
+        "y": 130
+      },
+      "icon": "container",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3ba57e",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "r1",
+      "position": {
+        "x": 560,
+        "y": 70
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconCornerRadius": 10,
+      "groupId": "lab"
+    },
+    {
+      "id": "r2",
+      "position": {
+        "x": 560,
+        "y": 190
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconCornerRadius": 10,
+      "groupId": "lab"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "laptop",
+      "name": "WHERE YOU SIT",
+      "level": "1",
+      "position": {
+        "x": -40,
+        "y": 20
+      },
+      "width": 120,
+      "height": 120,
+      "backgroundColor": "#3d9bd1",
+      "backgroundOpacity": 7,
+      "borderColor": "#3d9bd1",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#3d9bd1",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "host",
+      "name": "WHERE THE EXTENSION RUNS",
+      "level": "1",
+      "position": {
+        "x": 210,
+        "y": -40
+      },
+      "width": 440,
+      "height": 310,
+      "backgroundColor": "#3ba57e",
+      "backgroundOpacity": 7,
+      "borderColor": "#3ba57e",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#3ba57e",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "lab",
+      "name": "LAB",
+      "level": "1",
+      "position": {
+        "x": 525,
+        "y": 35
+      },
+      "width": 110,
+      "height": 220,
+      "backgroundColor": "#7d8fa5",
+      "backgroundOpacity": 7,
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1,
+      "borderStyle": "dashed",
+      "borderRadius": 14,
+      "labelColor": "#7d8fa5",
+      "labelPosition": "top-left",
+      "zIndex": -4,
+      "parentId": "host"
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "text-0",
+      "text": "same machine, WSL\nor Remote SSH",
+      "position": {
+        "x": 100,
+        "y": 70
+      },
+      "width": 150,
+      "height": 44,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    },
+    {
+      "id": "text-1",
+      "text": "runs",
+      "position": {
+        "x": 290,
+        "y": 75
+      },
+      "width": 60,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    },
+    {
+      "id": "text-2",
+      "text": "uses",
+      "position": {
+        "x": 330,
+        "y": 120
+      },
+      "width": 60,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "arrow-0",
+      "shapeType": "line",
+      "position": {
+        "x": 45,
+        "y": 80
+      },
+      "endPosition": {
+        "x": 255,
+        "y": 20
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-1",
+      "shapeType": "line",
+      "position": {
+        "x": 280,
+        "y": 45
+      },
+      "endPosition": {
+        "x": 280,
+        "y": 125
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-2",
+      "shapeType": "line",
+      "position": {
+        "x": 305,
+        "y": 150
+      },
+      "endPosition": {
+        "x": 415,
+        "y": 150
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-3",
+      "shapeType": "line",
+      "position": {
+        "x": 465,
+        "y": 150
+      },
+      "endPosition": {
+        "x": 521,
+        "y": 150
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "dashed",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    }
+  ],
+  "viewerSettings": {
+    "nodeStyle": "icon",
+    "linkLabelMode": "hide",
+    "linkStyle": "straight"
+  }
+}

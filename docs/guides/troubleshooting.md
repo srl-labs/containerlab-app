@@ -1,33 +1,60 @@
-# Inspect and troubleshoot
+---
+description: Open shells, read logs, capture packets, and impair links on a running lab.
+---
 
-Follow the state of a running lab, capture traffic on an interface, and test how a network behaves under difficult conditions.
+# Troubleshoot a running lab
 
-## Inspect and impairments
+Right-click a node, a link, or an interface. Everything you need to look inside a running network is in that menu.
+{ .lead }
 
-The inspect view shows running lab details in a table similar to `containerlab inspect`.
+These actions need a running lab, so they are not in the browser sandbox.
 
-![Inspect lab view](../images/gui/inspect.png)
+## Get into a node
 
-The GUI can also manage link impairments where supported by the host platform. Link impairments include delay, jitter, packet loss, rate limiting, and corruption.
+Right-click a node on the canvas:
 
-![Link impairment editor](../images/gui/link-impairments.png)
+| Action | Does |
+| --- | --- |
+| **Shell** | Opens a shell in the container. In VS Code, `node.execCommandMapping` can drop you straight into a network OS's CLI. |
+| **SSH** | Opens an SSH session to the node's management address. |
+| **Logs** | Shows the container's log output. |
+| **Start**, **Stop**, **Restart** | Acts on this node's container only. |
+| **Info** | Shows the node's kind, image, state, and addresses. |
 
-/// admonition | Platform support
-    type: tip
-Link impairments require Linux networking support on the Containerlab host.
-///
+The same node in the explorer has a few more, such as copying its name, addresses, or image.
 
-## Packet capture
+In VS Code, terminals open as VS Code terminals. The desktop and web apps open them in terminal windows inside the app, connected through the lab host.
 
-Packet capture is available from interface actions when the host supports capture operations. The GUI uses Edgeshark/Packetflix capture URIs and Wireshark VNC sessions.
+## Capture packets
 
-![Packet capture in Containerlab GUI](../images/gui/packet-capture.png)
+Right-click a node or a link and choose **Capture**, then tick the interfaces: for a link, one end or both. Choose **One Wireshark** for all of them together, or **One per interface**. Wireshark opens in a window, streaming live from the lab host; there is nothing to install on your computer. You can also start a capture from an interface in the explorer.
 
-The launch path depends on the host:
+![Packet capture](../images/app/capture-dark.webp#only-dark){ .shot }
+![Packet capture](../images/app/capture-light.webp#only-light){ .shot }
 
-| Host | Capture behavior |
-| ---- | ---------------- |
-| VS Code | The extension starts the capture flow from the VS Code host and opens Wireshark VNC in a VS Code webview. |
-| Desktop and Web | The app calls API server capture endpoints and opens Wireshark VNC in a desktop or browser window. |
+Capture runs [Edgeshark](https://edgeshark.siemens.io/) and a Wireshark container on the lab host, so Docker there must be able to pull and run them. In VS Code you can switch the default to Edgeshark with your local Wireshark; see the [capture settings](../reference/vscode-settings.md#packet-capture).
 
-For packet capture to work, the Containerlab host must be able to run the required capture containers and expose the capture stream to the GUI host.
+## Impair a link
+
+Right-click a link and choose **Link Impairments** to add delay, jitter, packet loss, rate limits, or corruption to its interfaces. Use it to see how routing reacts to a bad link without touching the configuration.
+
+![Link impairments](../images/app/impairments-dark.webp#only-dark){ .shot }
+![Link impairments](../images/app/impairments-light.webp#only-light){ .shot }
+
+Impairments use Linux traffic control on the lab host and last until you remove them or the lab is destroyed.
+
+## Inspect a lab
+
+**Inspect** shows a lab's containers, states, images, and addresses, like `containerlab inspect`. **Inspect All Labs**, in the explorer's running labs header, does the same for every lab on the host.
+
+![Inspect](../images/app/inspect-dark.webp#only-dark){ .shot }
+![Inspect](../images/app/inspect-light.webp#only-light){ .shot }
+
+## Watch interfaces
+
+Expand a running lab in the explorer down to its interfaces to see live counters. On the canvas, a traffic-rate annotation shows one interface's throughput as a chart or a number; see [Layout and style](appearance.md#groups-text-and-shapes).
+
+<div class="next" markdown>
+[:lucide-arrow-right: Run a lab](labs.md)
+[:lucide-arrow-right: Export a diagram](export.md)
+</div>

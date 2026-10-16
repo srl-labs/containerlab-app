@@ -1,0 +1,14 @@
+# Diagram only: where the VS Code extension runs. Not a deployable lab.
+name: vscode-host
+
+topology:
+  nodes:
+    vs-code: {kind: linux}
+    extension: {kind: linux}
+    containerlab: {kind: linux}
+    docker: {kind: linux}
+    r1: {kind: linux}
+    r2: {kind: linux}
+
+  links:
+    - endpoints: [r1:eth1, r2:eth1]

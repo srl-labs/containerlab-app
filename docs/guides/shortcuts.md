@@ -1,34 +1,43 @@
+---
+description: Keyboard and mouse shortcuts for the topology canvas.
+---
+
 # Keyboard shortcuts
 
-Keep your hands on the keyboard while working on the topology canvas.
+They work while the canvas has focus, not while you type in a field. On macOS, use ++cmd++ for ++ctrl++ and ++option++ for ++alt++.
+{ .lead }
 
-TopoViewer handles common canvas shortcuts when focus is on the canvas rather than an input field.
+## Build
 
-/// tab | Viewer Mode
+Unlock the canvas first.
 
-| Action | Shortcut |
-| ------ | -------- |
-| Select node/link | ++left-button++ |
-| Draw selection box | ++shift++ + drag |
-| Open node/link actions | ++right-button++ |
+| Do | Press |
+| --- | --- |
+| Add a node | ++shift++ + click empty canvas |
+| Connect two nodes | ++shift++ + click a node, then click the other |
+| Edit anything | Double-click it |
+| Delete a node or link | ++alt++ + click it |
+| Delete the selection | ++delete++ |
+| Group the selection | ++ctrl+g++ |
 
-///
-/// tab | Editor Mode
+## Select and copy
 
-| Action | Shortcut |
-| ------ | -------- |
-| Add node | ++shift++ + click empty canvas |
-| Create link | ++shift++ + click source node, then click target node |
-| Draw selection box | ++shift++ + drag |
-| Context menu | ++right-button++ |
-| Select all | ++ctrl+a++ / ++cmd+a++ |
-| Copy | ++ctrl+c++ / ++cmd+c++ |
-| Paste | ++ctrl+v++ / ++cmd+v++ |
-| Duplicate | ++ctrl+d++ / ++cmd+d++ |
-| Undo | ++ctrl+z++ / ++cmd+z++ |
-| Redo | ++ctrl+y++ / ++cmd+y++ or ++ctrl+shift+z++ / ++cmd+shift+z++ |
-| Create group | ++ctrl+g++ / ++cmd+g++ |
-| Delete selection | ++delete++ / ++backspace++ |
-| Delete node | ++alt++ + click node |
+| Do | Press |
+| --- | --- |
+| Select | Click |
+| Add to the selection | ++shift++ + click |
+| Select an area | ++shift++ + drag |
+| Select all | ++ctrl+a++ |
+| Clear the selection | ++esc++ |
+| Copy, paste | ++ctrl+c++, ++ctrl+v++ |
+| Duplicate | ++ctrl+d++ |
+| Undo, redo | ++ctrl+z++, ++ctrl+y++ |
 
-///
+## On a running lab
+
+| Do | Press |
+| --- | --- |
+| Node actions: shell, SSH, logs, … | Right-click the node |
+| Capture packets | Right-click the link |
+
+The **Shortcuts & Interactions** dialog in the app lists these too. VS Code has extra shortcuts for deploy, redeploy, and destroy; see the [VS Code extension](../install/vscode.md#work-from-the-editor).
