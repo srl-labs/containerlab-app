@@ -2,6 +2,14 @@
 // change, and the containers a host would report. No containers are involved.
 import YAML from "yaml";
 
+import {
+  findWaitForCycle,
+  listWaitForDependencies,
+  parseNodeStages,
+  resolveEffectiveStages,
+  type InheritedStages,
+  type WaitForDependency
+} from "../../src/core/utilities/nodeStages";
 import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
 import type { HostRuntimeContainer, HostRuntimeInterface } from "../../src/host/contracts";
 
@@ -14,6 +22,8 @@ interface DesiredNode {
   linkApplyMode: LinkApplyMode;
   /** The node's own settings, compared to spot config drift. */
   config: Record<string, unknown>;
+  /** wait-for entries from defaults, kind, group and the node, merged like containerlab. */
+  waitFor: WaitForDependency[];
 }
 
 export interface DesiredLab {
@@ -76,11 +86,28 @@ function readLinks(rawLinks: unknown, nodes: Map<string, DesiredNode>): string[]
   return links;
 }
 
+function readWaitFor(
+  name: string,
+  levels: Array<[string, Record<string, unknown>]>,
+  config: Record<string, unknown>
+): WaitForDependency[] {
+  const inherited: InheritedStages[] = [];
+  for (const [level, section] of levels) {
+    const stages = parseNodeStages(section.stages);
+    if (stages) inherited.push({ level, stages });
+  }
+  return listWaitForDependencies(
+    name,
+    resolveEffectiveStages(parseNodeStages(config.stages), inherited)
+  );
+}
+
 export function readTopology(yaml: string): DesiredLab {
   const doc = asRecord(YAML.parse(yaml));
   const topology = asRecord(doc.topology);
   const defaults = asRecord(topology.defaults);
   const kinds = asRecord(topology.kinds);
+  const groups = asRecord(topology.groups);
   const nodes = new Map<string, DesiredNode>();
   for (const [name, rawNode] of Object.entries(asRecord(topology.nodes))) {
     const config = asRecord(rawNode);
@@ -92,7 +119,17 @@ export function readTopology(yaml: string): DesiredLab {
       .map((level) => level["link-apply-mode"])
       .find(isLinkApplyMode);
     const linkApplyMode = override ?? KIND_LINK_APPLY_MODES[kind] ?? "recreate";
-    nodes.set(name, { kind, image, linkApplyMode, config });
+    const groupConfig = asRecord(groups[asString(config.group)]);
+    const waitFor = readWaitFor(
+      name,
+      [
+        ["defaults", defaults],
+        ["kind", kindConfig],
+        ["group", groupConfig]
+      ],
+      config
+    );
+    nodes.set(name, { kind, image, linkApplyMode, config, waitFor });
   }
   return { labName: asString(doc.name) || "lab", nodes, links: readLinks(topology.links, nodes) };
 }
@@ -172,6 +209,51 @@ export function planFakeApply(running: FakeLab | undefined, desired: DesiredLab)
     deletedEndpoints: [...new Set(deletedEndpoints)],
     nodeChangeReasons: reasons
   }) as ApplyPlan;
+}
+
+/** One step of a deploy: nodes created together once everything they wait for is up. */
+export interface DeployWave {
+  nodes: string[];
+  /** The wait-for entries these nodes had to honour. */
+  waitedFor: WaitForDependency[];
+}
+
+/**
+ * Order a deploy by wait-for, a simpler take on containerlab's scheduler: a
+ * node starts once every node it waits for is fully up, whatever the stages.
+ * Dependencies on nodes outside the deploy are ignored. Returns an error for a
+ * loop, which containerlab refuses too.
+ */
+export function planFakeDeployWaves(
+  desired: DesiredLab,
+  nodeFilter?: string[]
+): { waves: DeployWave[] } | { error: string } {
+  const selected = new Set(
+    nodeFilter && nodeFilter.length > 0
+      ? [...desired.nodes.keys()].filter((name) => nodeFilter.includes(name))
+      : desired.nodes.keys()
+  );
+  const dependencies = [...selected].flatMap((name) =>
+    (desired.nodes.get(name)?.waitFor ?? []).filter((dep) => selected.has(dep.dependsOn))
+  );
+  const cycle = findWaitForCycle(dependencies);
+  if (cycle) return { error: `cyclic dependencies found! ${cycle.join(" -> ")}` };
+
+  const waves: DeployWave[] = [];
+  const done = new Set<string>();
+  while (done.size < selected.size) {
+    const ready = [...selected].filter(
+      (name) =>
+        !done.has(name) &&
+        dependencies.every((dep) => dep.node !== name || done.has(dep.dependsOn))
+    );
+    waves.push({
+      nodes: ready,
+      waitedFor: dependencies.filter((dep) => ready.includes(dep.node))
+    });
+    for (const name of ready) done.add(name);
+  }
+  return { waves };
 }
 
 /** The lab after deploying `desired`, or only the nodes in `nodeFilter`. */

@@ -1,0 +1,41 @@
+name: stages
+
+topology:
+  defaults:
+    kind: linux
+    image: alpine:latest
+  kinds:
+    nokia_srlinux:
+      stages:
+        create:
+          wait-for:
+            - node: ca
+              stage: healthy
+  nodes:
+    ca:
+      healthcheck:
+        test: [CMD-SHELL, "test -f /tmp/ready"]
+    spine1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+    leaf1:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+      stages:
+        create:
+          wait-for:
+            - node: spine1
+              stage: healthy
+        create-links:
+          exec:
+            - command: ip link show
+              phase: on-enter
+    leaf2:
+      kind: nokia_srlinux
+      image: ghcr.io/nokia/srlinux:latest
+    client1: {}
+
+  links:
+    - endpoints: ["spine1:e1-1", "leaf1:e1-49"]
+    - endpoints: ["spine1:e1-2", "leaf2:e1-49"]
+    - endpoints: ["leaf1:e1-1", "client1:eth1"]

@@ -215,6 +215,8 @@ export interface NavbarProps {
   onLinkLabelModeChange: (mode: LinkLabelMode) => void;
   showDummyLinks?: boolean;
   onToggleDummyLinks?: () => void;
+  showWaitFor?: boolean;
+  onToggleWaitFor?: () => void;
   renderDeployMenuItems?: (context: {
     isViewerMode: boolean;
     closeMenu: () => void;
@@ -246,6 +248,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLinkLabelModeChange,
   showDummyLinks = true,
   onToggleDummyLinks,
+  showWaitFor = false,
+  onToggleWaitFor,
   renderDeployMenuItems
 }) => {
   const isTopologyActive = hasActiveTopology;
@@ -940,6 +944,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <ListItemIcon>{!showDummyLinks && <CheckRoundedIcon />}</ListItemIcon>
             <ListItemText>Hide Dummy Links</ListItemText>
+          </MenuItem>
+          <MenuItem
+            role="menuitemcheckbox"
+            aria-checked={showWaitFor}
+            onClick={() => {
+              onToggleWaitFor?.();
+              handleLinkLabelClose();
+            }}
+            disabled={!onToggleWaitFor}
+            data-testid="navbar-show-wait-for"
+          >
+            <ListItemIcon>{showWaitFor && <CheckRoundedIcon />}</ListItemIcon>
+            <ListItemText>Show Wait-for Dependencies</ListItemText>
           </MenuItem>
         </Menu>
 

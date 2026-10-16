@@ -91,3 +91,27 @@ export function resolveInheritedFrom(
   }
   return result;
 }
+
+/**
+ * The `stages` each level gives the node, in the order containerlab merges
+ * them: defaults, kind, then group. Stages add up instead of overriding, so
+ * every level is kept.
+ */
+export function resolveInheritedStages(
+  parsed: ClabTopology,
+  node: ClabNode
+): Array<{ level: InheritanceLevel; stages: Record<string, unknown> }> {
+  const { defaults = {}, groups, kinds } = parsed.topology ?? {};
+  const groupCfg = getSection(groups, node.group);
+  const kindCfg = getSection(kinds, resolveKindName(node, groupCfg, defaults));
+  const levels: Array<[InheritanceLevel, ClabNode]> = [
+    ["defaults", defaults],
+    ["kind", kindCfg],
+    ["group", groupCfg]
+  ];
+  const result: Array<{ level: InheritanceLevel; stages: Record<string, unknown> }> = [];
+  for (const [level, section] of levels) {
+    if (isRecord(section.stages)) result.push({ level, stages: section.stages });
+  }
+  return result;
+}

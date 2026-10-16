@@ -13,14 +13,18 @@ import {
   destroyFakeNodes,
   fakeContainerName,
   planFakeApply,
+  planFakeDeployWaves,
   readTopology,
   resolveFakeNode,
+  type DeployWave,
   type DesiredLab,
   type FakeLab
 } from "./fakeLab";
 
 /** Pause between log lines, so the progress dialog is visible. */
 const STEP_MS = 250;
+/** Pause after each wait-for wave, so the nodes coming up one group at a time are visible. */
+const WAVE_MS = 1500;
 
 interface FakeLifecycleDeps {
   currentPath(): string;
@@ -35,8 +39,14 @@ interface ActiveRun {
   cancelled: boolean;
 }
 
+/** Part of a staged deploy: log lines, then the lab as it stands afterwards. */
+interface DeployStep {
+  lines: string[];
+  lab: FakeLab;
+}
+
 type Outcome =
-  | { lines: string[]; next: FakeLab | undefined }
+  | { lines: string[]; next: FakeLab | undefined; steps?: DeployStep[]; trailer?: string[] }
   | { lines: string[]; error: string };
 
 const info = (message: string) => `INFO ${message}`;
@@ -48,6 +58,51 @@ function deployLines(lab: FakeLab): string[] {
     ...lab.links.map((link) => info(`Created link: ${link.replace(" -- ", " ▪┄┄▪ ")}`)),
     info("Adding host entries path=/etc/hosts")
   ];
+}
+
+function waveLines(wave: DeployWave, watchedHealthy: Set<string>): string[] {
+  return [
+    ...wave.waitedFor.map((dep) =>
+      info(
+        `Dependencies met node=${dep.node} stage=${dep.nodeStage} wait-for=${dep.dependsOn}:${dep.dependsOnStage}`
+      )
+    ),
+    ...wave.nodes.map((name) => info(`Creating container name=${name}`)),
+    ...wave.nodes
+      .filter((name) => watchedHealthy.has(name))
+      .map((name) => info(`Node reached stage healthy name=${name}`))
+  ];
+}
+
+/**
+ * Deploy in wait-for order: when nodes wait for others, each wave is published
+ * on its own so the canvas shows them coming up one group at a time.
+ */
+function stagedDeploy(desired: DesiredLab, nodeFilter: string[] | undefined, before: string[]): Outcome {
+  const next = deployFakeLab(desired, nodeFilter);
+  const plan = planFakeDeployWaves(desired, nodeFilter);
+  if ("error" in plan) return { lines: before, error: plan.error };
+  if (plan.waves.length < 2) return { lines: [...before, ...deployLines(next)], next };
+
+  const watchedHealthy = new Set(
+    plan.waves.flatMap((wave) =>
+      wave.waitedFor.filter((dep) => dep.dependsOnStage === "healthy").map((dep) => dep.dependsOn)
+    )
+  );
+  const started: string[] = [];
+  const steps = plan.waves.map((wave) => {
+    started.push(...wave.nodes);
+    return { lines: waveLines(wave, watchedHealthy), lab: deployFakeLab(desired, [...started]) };
+  });
+  return {
+    lines: [...before, info(`Creating lab directory path=./clab-${next.labName}`)],
+    steps,
+    trailer: [
+      ...next.links.map((link) => info(`Created link: ${link.replace(" -- ", " ▪┄┄▪ ")}`)),
+      info("Adding host entries path=/etc/hosts")
+    ],
+    next
+  };
 }
 
 function destroyLines(lab: FakeLab, nodes: string[], cleanup: boolean): string[] {
@@ -94,23 +149,21 @@ const deployOutcome: OutcomeHandler = (running, desired, options, cleanup) => {
       error: `the "${desired.labName}" lab has already been deployed. Destroy it before deploying it again`
     };
   }
-  const next = deployFakeLab(desired, options?.nodeFilter);
-  return { lines: deployLines(next), next };
+  return stagedDeploy(desired, options?.nodeFilter, []);
 };
 
 const applyOutcome: OutcomeHandler = (running, desired) => {
-  const next = deployFakeLab(desired);
-  if (!running) return { lines: deployLines(next), next };
-  return { lines: applyLines(planFakeApply(running, desired)), next };
+  if (!running) return stagedDeploy(desired, undefined, []);
+  return { lines: applyLines(planFakeApply(running, desired)), next: deployFakeLab(desired) };
 };
 
 const redeployOutcome: OutcomeHandler = (running, desired, _options, cleanup) => {
   if (!running) return notRunning(desired.labName);
-  const next = deployFakeLab(desired);
-  return {
-    lines: [...destroyLines(running, [...running.nodes.keys()], cleanup), ...deployLines(next)],
-    next
-  };
+  return stagedDeploy(
+    desired,
+    undefined,
+    destroyLines(running, [...running.nodes.keys()], cleanup)
+  );
 };
 
 const destroyOutcome: OutcomeHandler = (running, desired, options, cleanup) => {
@@ -154,6 +207,13 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
   const status = (event: Extract<ClabUiTopoViewerEvent, { type: "lifecycleStatus" }>) =>
     deps.emit(event);
 
+  async function pause(ms: number, run: ActiveRun): Promise<boolean> {
+    await new Promise<void>((resolve) => {
+      run.timer = setTimeout(resolve, ms);
+    });
+    return !run.cancelled;
+  }
+
   async function stream(lines: string[], run: ActiveRun): Promise<boolean> {
     for (const line of lines) {
       await new Promise<void>((resolve) => {
@@ -163,6 +223,21 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
       deps.emit({ type: "lifecycleLog", line, stream: "stdout" });
     }
     return true;
+  }
+
+  /** Publish each wave of a staged deploy, then stream what follows it. */
+  async function runSteps(
+    path: string,
+    outcome: { steps?: DeployStep[]; trailer?: string[] },
+    run: ActiveRun
+  ): Promise<boolean> {
+    for (const step of outcome.steps ?? []) {
+      if (!(await stream(step.lines, run))) return false;
+      labs.set(path, step.lab);
+      await deps.publish();
+      if (!(await pause(WAVE_MS, run))) return false;
+    }
+    return stream(outcome.trailer ?? [], run);
   }
 
   return {
@@ -210,7 +285,8 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
         info("Containerlab started version=0.81.1 (harness)"),
         info(`Parsing & checking topology file=${path.split("/").pop() ?? path}`)
       ];
-      const finished = await stream([...header, ...outcome.lines], run);
+      let finished = await stream([...header, ...outcome.lines], run);
+      if (finished && "steps" in outcome) finished = await runSteps(path, outcome, run);
       if (active === run) active = undefined;
       if (!finished) return;
 

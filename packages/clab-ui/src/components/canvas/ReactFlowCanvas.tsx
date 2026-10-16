@@ -64,6 +64,7 @@ import { edgeTypes, edgeTypesLite } from "./edges";
 import { CustomConnectionLine, LinkCreationLine } from "./LinkPreview";
 import { nodeTypes, nodeTypesLite } from "./nodes";
 import { RotationMatchOverlay } from "./RotationMatchOverlay";
+import { WaitForOverlay } from "./WaitForOverlay";
 import type {
   AnnotationHandlers,
   CanvasDropData,
@@ -1964,6 +1965,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
           style={reactFlowStyle}
         >
           {overlays.backgroundLayer}
+          {!isGeoLayout && <WaitForOverlay />}
           {/* Embedded viewer has no navbar — give it the standard zoom in/out + fit controls.
               showInteractive is hidden: it toggles node draggability, which a viewer locks off. */}
           {readOnlyViewer && <Controls position="top-right" showInteractive={false} />}

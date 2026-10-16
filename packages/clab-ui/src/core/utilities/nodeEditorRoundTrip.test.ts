@@ -527,3 +527,104 @@ test("mgmt-net is written on the node only when it differs from the inherited va
 
   assert.equal(saveEdit(MULTI_MGMT_TOPOLOGY, "r2"), MULTI_MGMT_TOPOLOGY);
 });
+
+const STAGES_TOPOLOGY = fixture(`name: stages
+
+topology:
+  defaults:
+    kind: linux
+    image: alpine:3
+    stages:
+      create:
+        wait-for:
+          - node: ca
+            stage: healthy
+  nodes:
+    ca: {}
+    spine1:
+      stages:
+        create:
+          wait-for:
+            - node: ca # explicit, also inherited
+              stage: healthy
+        create-links:
+          exec:
+            - command: ip link
+              phase: on-enter
+              target: container
+    leaf1:
+      cmd: sh
+`);
+
+test("stages: the editor keeps the node's own stages apart from inherited ones", () => {
+  const leaf = openEditor(STAGES_TOPOLOGY, "leaf1");
+  assert.equal(leaf.stages, undefined);
+  assert.deepEqual(leaf.inheritedStages, [
+    { level: "defaults", stages: { create: { waitFor: [{ node: "ca", stage: "healthy" }] } } }
+  ]);
+
+  const spine = openEditor(STAGES_TOPOLOGY, "spine1");
+  assert.deepEqual(spine.stages, {
+    create: { waitFor: [{ node: "ca", stage: "healthy" }] },
+    "create-links": { exec: [{ command: "ip link", phase: "on-enter", target: "container" }] }
+  });
+});
+
+test("stages: saving another field leaves stages as written", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "spine1", (data) => ({ ...data, cmd: "sh" }));
+  assert.ok(saved.includes("- node: ca # explicit, also inherited"));
+  assert.ok(saved.includes("target: container"));
+  // Inherited stages are not copied into a node that has none
+  assert.equal(nodeOf(saveEdit(STAGES_TOPOLOGY, "leaf1", (data) => ({ ...data, cmd: "bash" })), "leaf1").stages, undefined);
+});
+
+test("stages: adding a wait-for writes the node's stages only", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "leaf1", (data) => ({
+    ...data,
+    stages: {
+      configure: { waitFor: [{ node: "spine1", stage: "configure" }] },
+      healthy: { exec: [{ command: "echo up", phase: "on-exit", target: "host" }] }
+    }
+  }));
+  assert.deepEqual(nodeOf(saved, "leaf1").stages, {
+    configure: { "wait-for": [{ node: "spine1", stage: "configure" }] },
+    healthy: { exec: [{ command: "echo up", phase: "on-exit", target: "host" }] }
+  });
+});
+
+test("stages: removing every row deletes the key", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "spine1", (data) => ({ ...data, stages: {} }));
+  assert.equal(nodeOf(saved, "spine1").stages, undefined);
+});
+
+test("stages: the phase map form is rewritten as a list when edited", () => {
+  const yaml = fixture(`name: m
+topology:
+  nodes:
+    n1:
+      kind: linux
+      stages:
+        healthy:
+          exec:
+            on-enter:
+              - echo a
+`);
+  const saved = saveEdit(yaml, "n1", (data) => ({
+    ...data,
+    stages: {
+      ...data.stages,
+      create: { waitFor: [{ node: "n2", stage: "create" }] }
+    }
+  }));
+  assert.deepEqual(nodeOf(saved, "n1").stages, {
+    create: { "wait-for": [{ node: "n2", stage: "create" }] },
+    healthy: { exec: [{ command: "echo a", phase: "on-enter" }] }
+  });
+});
+
+test("stages: convertEditorDataToYaml does not write inherited stages", () => {
+  const leaf = openEditor(STAGES_TOPOLOGY, "leaf1");
+  const yaml = convertEditorDataToYaml({ ...leaf });
+  assert.equal(yaml.stages, undefined);
+  assert.equal("inheritedStages" in yaml, false);
+});

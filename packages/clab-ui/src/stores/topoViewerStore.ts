@@ -80,6 +80,8 @@ export interface TopoViewerState {
   linkLabelMode: LinkLabelMode;
   lastNonTelemetryLinkLabelMode: NonTelemetryLinkLabelMode;
   showDummyLinks: boolean;
+  /** Draw wait-for dependencies between nodes as arrows on the canvas */
+  showWaitFor: boolean;
   endpointLabelOffsetEnabled: boolean;
   endpointLabelOffset: number;
   nodeStyle: NodeStyle;
@@ -134,6 +136,7 @@ export interface TopoViewerActions {
   setLinkLabelMode: (mode: LinkLabelMode) => void;
   toggleDummyLinks: () => void;
   setShowDummyLinks: (enabled: boolean) => void;
+  setShowWaitFor: (enabled: boolean) => void;
   toggleEndpointLabelOffset: () => void;
   setEndpointLabelOffset: (value: number) => void;
   setNodeStyle: (style: NodeStyle) => void;
@@ -210,6 +213,7 @@ const initialState: TopoViewerState = {
   linkLabelMode: "show-all",
   lastNonTelemetryLinkLabelMode: "show-all",
   showDummyLinks: true,
+  showWaitFor: false,
   endpointLabelOffsetEnabled: true,
   endpointLabelOffset: DEFAULT_ENDPOINT_LABEL_OFFSET,
   nodeStyle: DEFAULT_NODE_STYLE,
@@ -452,6 +456,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
 
   setShowDummyLinks: (showDummyLinks) => {
     set({ showDummyLinks });
+  },
+
+  setShowWaitFor: (showWaitFor) => {
+    set({ showWaitFor });
   },
 
   toggleEndpointLabelOffset: () => {
@@ -753,6 +761,7 @@ export const useTopoViewerActions = () =>
       setLinkLabelMode: state.setLinkLabelMode,
       toggleDummyLinks: state.toggleDummyLinks,
       setShowDummyLinks: state.setShowDummyLinks,
+      setShowWaitFor: state.setShowWaitFor,
       toggleEndpointLabelOffset: state.toggleEndpointLabelOffset,
       setEndpointLabelOffset: state.setEndpointLabelOffset,
       setNodeStyle: state.setNodeStyle,

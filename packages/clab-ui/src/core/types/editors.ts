@@ -7,6 +7,7 @@
  */
 
 import type { NodeBoxAppearance } from "./topology";
+import type { InheritedStages, NodeStages } from "../utilities/nodeStages";
 
 // ============================================================================
 // Node Editor Types
@@ -18,6 +19,7 @@ export type NodeEditorTabId =
   | "config"
   | "runtime"
   | "network"
+  | "stages"
   | "advanced";
 
 /**
@@ -160,6 +162,10 @@ export interface NodeEditorData extends SharedTemplateFields {
   mgmtNet?: string;
   /** Level each inherited key comes from (defaults, kind or group) */
   inheritedFrom?: Record<string, string>;
+  /** The node's own deployment stages (wait-for and per-stage exec) */
+  stages?: NodeStages;
+  /** Stages added by defaults, kind and group; read-only, containerlab adds them up */
+  inheritedStages?: InheritedStages[];
   // Custom node settings
   customName?: string;
   baseName?: string;
