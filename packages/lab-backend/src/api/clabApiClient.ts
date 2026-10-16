@@ -227,9 +227,11 @@ export class ClabApiClient {
       { stream: true },
     );
     if (!res.ok) {
-      throw new Error(
+      const error: HttpError = new Error(
         `Failed to open workspace event stream: ${res.status} ${res.statusText}`,
       );
+      error.status = res.status;
+      throw error;
     }
     return res;
   }
@@ -1131,9 +1133,11 @@ export class ClabApiClient {
       { stream: true },
     );
     if (!res.ok) {
-      throw new Error(
+      const error: HttpError = new Error(
         `Failed to open event stream: ${res.status} ${res.statusText}`,
       );
+      error.status = res.status;
+      throw error;
     }
     return res;
   }

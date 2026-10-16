@@ -12,7 +12,7 @@ import {
   normalizeLabLifecycleOptions
 } from "@containerlab/clab-ui/host";
 
-import { getLabBackend, labTargetForPath } from "../../../backend/labBackends";
+import { resolveLab } from "../../../backend/labBackends";
 
 import { log } from "./logger";
 
@@ -161,9 +161,8 @@ class LabLifecycleService {
 
   /** Plan `containerlab apply` without changing the lab; the plan's JSON. */
   async planApply(labPath: string): Promise<unknown> {
-    const plan = await getLabBackend().runLifecycle("apply", labTargetForPath(labPath), {
-      dryRun: true
-    });
+    const { backend, target } = await resolveLab(labPath);
+    const plan = await backend.runLifecycle("apply", target, { dryRun: true });
     return plan.result;
   }
 }

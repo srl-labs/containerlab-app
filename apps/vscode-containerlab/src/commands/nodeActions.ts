@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { NodeLifecycleAction } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
-import { getLabBackend, labNameForPath } from "../backend/labBackends";
+import { labNameForPath, resolveLab } from "../backend/labBackends";
 import { outputChannel } from "../globals";
 
 import { runWithProgress } from "./command";
@@ -28,7 +28,12 @@ async function runNodeAction(
   }
 
   try {
-    await getLabBackend().nodeAction(labNameForPath(node.labPath.absolute), node.name, action);
+    const { backend } = await resolveLab(node.labPath.absolute, node.labName);
+    await backend.nodeAction(
+      node.labName ?? labNameForPath(node.labPath.absolute),
+      node.name,
+      action
+    );
     vscode.window.showInformationMessage(
       `${action === "pause" ? "Paused" : "Unpaused"} ${node.name}`
     );
@@ -98,11 +103,13 @@ async function runTopologyNodeLifecycleAction(
   }
 
   const handlers = createTopoViewerLifecycleHandlers(action);
-  const labName = labNameForPath(node.labPath.absolute);
+  const labPath = node.labPath.absolute;
+  const labName = node.labName ?? labNameForPath(labPath);
   const containerName = node.name;
   await runWithProgress(
     async () => {
-      await getLabBackend().nodeAction(labName, containerName, action);
+      const { backend } = await resolveLab(labPath, labName);
+      await backend.nodeAction(labName, containerName, action);
     },
     {
       spinnerMsg: {

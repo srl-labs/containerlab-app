@@ -5,6 +5,8 @@ import * as vscode from "vscode";
 import * as utils from "../utils/utils";
 import { favoriteLabs, outputChannel } from "../globals";
 import { FilterUtils } from "../helpers/filterUtils";
+import { activeConnection, getConnections, remoteUri } from "../backend/labBackends";
+import type { LabConnection } from "../backend/connections";
 
 import * as c from "./common";
 import * as ins from "./inspector";
@@ -143,7 +145,56 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     if (element) {
       return undefined;
     }
+    const active = activeConnection();
+    if (active.kind === "api") {
+      return this.discoverRemoteLabs(active);
+    }
     return this.discoverLabs();
+  }
+
+  /** Topologies in the lab server's workspace that are not running. */
+  private async discoverRemoteLabs(
+    connection: LabConnection
+  ): Promise<c.ClabLabTreeNode[] | undefined> {
+    const manager = getConnections();
+    if (!manager?.apiBackend(connection)) {
+      return undefined;
+    }
+    let entries;
+    try {
+      entries = await manager.remoteTopologies(connection);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      outputChannel.warn(
+        `[LocalTreeDataProvider] Listing labs on ${connection.label} failed: ${message}`
+      );
+      return undefined;
+    }
+    const running = new Set(Object.keys(ins.rawInspectData ?? {}));
+    const filter = this.treeFilter ? FilterUtils.createFilter(this.treeFilter) : undefined;
+    const nodes = entries
+      .filter((entry) => !running.has(entry.labName))
+      .map((entry) => {
+        const folder = path.posix.dirname(entry.yamlFileName);
+        const node = new c.ClabLabTreeNode(
+          path.posix.basename(entry.yamlFileName),
+          vscode.TreeItemCollapsibleState.None,
+          {
+            relative: entry.yamlFileName,
+            absolute: remoteUri(connection, entry.yamlFileName).toString()
+          },
+          entry.labName,
+          undefined,
+          undefined,
+          "containerlabLabUndeployed"
+        );
+        node.description = folder === "." ? connection.label : folder;
+        node.tooltip = `${entry.labName} on ${connection.label}\n${entry.absolutePath ?? entry.yamlFileName}`;
+        return node;
+      })
+      .filter((node) => !filter || filter(String(node.label)) || filter(node.labPath.relative))
+      .sort((a, b) => a.labPath.relative.localeCompare(b.labPath.relative));
+    return nodes.length > 0 ? nodes : undefined;
   }
 
   private async discoverLabs(

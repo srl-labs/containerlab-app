@@ -9,7 +9,7 @@ import * as vscode from "vscode";
 
 import { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
-import { getLocalBackend } from "../backend/labBackends";
+import { getLocalBackend, isUriString, labPathOf } from "../backend/labBackends";
 
 const execAsync = promisify(exec);
 
@@ -25,6 +25,10 @@ function stripFileName(p: string): string {
 }
 
 export function getRelativeFolderPath(targetPath: string): string {
+  if (isUriString(targetPath)) {
+    // A lab server file: its path in the server's workspace.
+    return vscode.Uri.parse(targetPath).path.replace(/^\/+/, "");
+  }
   const workspacePath = vscode.workspace.workspaceFolders
     ? vscode.workspace.workspaceFolders[0].uri.path
     : "";
@@ -44,7 +48,7 @@ export function getRelLabFolderPath(labPath: string): string {
  *   5) Using realpathSync if exists
  */
 export function normalizeLabPath(labPath: string, singleFolderBase?: string): string {
-  if (!labPath) {
+  if (!labPath || isUriString(labPath)) {
     return labPath;
   }
   labPath = path.normalize(labPath);
@@ -342,16 +346,19 @@ export async function getSelectedLabNode(
   // instead of a tree node. Fall back to the active editor when no Uri is given.
   let labPath: string | undefined;
   if (node instanceof vscode.Uri) {
-    labPath = node.fsPath;
+    labPath = labPathOf(node);
   } else {
-    labPath = vscode.window.activeTextEditor?.document.uri.fsPath;
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    labPath = activeUri ? labPathOf(activeUri) : undefined;
   }
 
   if (labPath === undefined || labPath === "" || !/\.clab\.(yml|yaml)$/i.test(labPath)) {
     return undefined;
   }
 
-  const fileName = path.basename(labPath);
+  const fileName = isUriString(labPath)
+    ? path.posix.basename(vscode.Uri.parse(labPath).path)
+    : path.basename(labPath);
   return new ClabLabTreeNode(fileName, vscode.TreeItemCollapsibleState.None, {
     absolute: labPath,
     relative: fileName

@@ -22,7 +22,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onFileSystem:clab-api"
   ],
   "categories": [
     "Programming Languages",
@@ -484,6 +485,37 @@
         "title": "Open Settings",
         "category": "Containerlab",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "containerlab.connection.switch",
+        "title": "Switch Lab Server",
+        "category": "Containerlab",
+        "icon": "$(cloud)"
+      },
+      {
+        "command": "containerlab.connection.add",
+        "title": "Add Lab Server\u2026",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.signIn",
+        "title": "Sign In to Lab Server",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.signOut",
+        "title": "Sign Out of Lab Server",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.remove",
+        "title": "Remove Lab Server\u2026",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.openWorkspace",
+        "title": "Open Lab Server Workspace",
+        "category": "Containerlab"
       }
     ],
     "submenus": [
@@ -736,6 +768,14 @@
         {
           "command": "containerlab.uninstall.edgeshark",
           "when": "true"
+        },
+        {
+          "command": "containerlab.connection.signOut",
+          "when": "containerlab:remoteConnection"
+        },
+        {
+          "command": "containerlab.connection.openWorkspace",
+          "when": "containerlab:remoteConnection"
         }
       ],
       "containerlab.submenu.lab.graph.drawio": [
@@ -753,6 +793,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "containerlab.connection.switch",
+          "when": "view == containerlabExplorerWebview",
+          "group": "navigation@90"
+        },
         {
           "command": "containerlab.settings.open",
           "when": "view == containerlabExplorerWebview",
@@ -868,6 +913,42 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "Enable interface statistics (RX/TX bytes, packets, etc.) in the explorer. Disable to reduce resource usage."
+          }
+        }
+      },
+      {
+        "title": "Lab Servers",
+        "properties": {
+          "containerlab.connections": {
+            "type": "array",
+            "default": [],
+            "markdownDescription": "clab-api-servers to run labs on, each with a `url` (for example `https://lab-host:8080`), a `label` and optionally a `username`. Passwords are not stored here: sign in with **Containerlab: Sign In to Lab Server**, and the token is kept in VS Code's secret storage.",
+            "items": {
+              "type": "object",
+              "required": [
+                "url"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Name shown in the lab server switcher."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL of the clab-api-server."
+                },
+                "username": {
+                  "type": "string",
+                  "description": "User name to sign in with."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "containerlab.localConnection": {
+            "type": "boolean",
+            "default": true,
+            "description": "Offer \"Local\", containerlab on this machine, next to the lab servers. Turn it off to work with lab servers only."
           }
         }
       },
@@ -1142,7 +1223,9 @@
     "typescript": "catalog:",
     "yaml": "catalog:",
     "chokidar": "catalog:",
-    "ovsx": "catalog:"
+    "ovsx": "catalog:",
+    "ws": "catalog:",
+    "@types/ws": "catalog:"
   },
   "private": true,
   "bugs": {

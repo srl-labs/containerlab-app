@@ -85,8 +85,12 @@ describe("ClabCommand", () => {
     );
     await clab.run({ cleanup: true, lifecycleOptions: { nodeFilter: ["r1"] } });
 
-    expect(backendStub.calls).to.have.lengthOf(1);
-    const [action, target, options] = backendStub.calls[0].args;
+    expect(backendStub.calls.map((call: { method: string }) => call.method)).to.deep.equal([
+      "resolveLab",
+      "streamLifecycle"
+    ]);
+    expect(backendStub.calls[0].args[0]).to.equal("/home/user/lab.clab.yml");
+    const [action, target, options] = backendStub.calls[1].args;
     expect(action).to.equal("deploy");
     expect(target).to.deep.equal({ labName: "", path: "/home/user/lab.clab.yml" });
     expect(options.cleanup).to.equal(true);

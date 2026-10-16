@@ -17,6 +17,9 @@ import {
 } from "../utils/packetflix";
 import type { ImagePullPolicy } from "../utils/consts";
 import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
+import { getLabBackend } from "../backend/labBackends";
+import { isRemoteNode, remoteHostname, remoteLabNameOf } from "../backend/remoteNode";
+import { startVncProxy } from "../backend/vncProxy";
 import {
   DEFAULT_WIRESHARK_VNC_DOCKER_IMAGE,
   DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY,
@@ -303,6 +306,9 @@ export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]
 ) {
+  if (isRemoteNode()) {
+    return captureRemote(node, allSelectedNodes, "packetflix");
+  }
   const packetflixUri = await buildPacketflixUri(node, allSelectedNodes);
   if (!packetflixUri) {
     return;
@@ -488,6 +494,9 @@ export async function captureEdgesharkVNC(
   >("capture.wireshark.pullPolicy", DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY);
   const wiresharkThemeSetting = wsConfig.get<string>("capture.wireshark.theme");
   const keepOpenInBackground = wsConfig.get<boolean>("capture.wireshark.stayOpenInBackground");
+  if (isRemoteNode()) {
+    return captureRemote(node, allSelectedNodes, "vnc");
+  }
 
   const packetflixUri = await buildPacketflixUri(node, allSelectedNodes, true);
   if (!packetflixUri) {
@@ -518,24 +527,104 @@ export async function captureEdgesharkVNC(
     return;
   }
 
+  await openWiresharkPanel({
+    title: `Wireshark (${node.parentName}:${formatPanelInterfaces(capturedNames)})`,
+    localUrl: `http://localhost:${port}`,
+    showVolumeTip: Boolean(volumeMount),
+    keepOpenInBackground,
+    onDispose: async () => {
+      try {
+        const container = dockerClient.getContainer(containerId);
+        await container.stop();
+        outputChannel.info(`Stopped Wireshark VNC container: ${containerId}`);
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
+
+/**
+ * Capture on a lab server: Edgeshark runs there, and so does the Wireshark
+ * VNC container, whose page this window loads through a local proxy.
+ */
+async function captureRemote(
+  node: ClabInterfaceTreeNode,
+  allSelectedNodes: ClabInterfaceTreeNode[] | undefined,
+  mode: "vnc" | "packetflix"
+): Promise<void> {
+  const selected = allSelectedNodes && allSelectedNodes.length > 0 ? allSelectedNodes : [node];
+  const targets = selected.map((iface) => ({
+    containerName: iface.parentName,
+    interfaceName: iface.name,
+    nodeNamespace: !isHostNetnsInterface(iface.name)
+  }));
+  try {
+    const backend = getLabBackend();
+    const labName = await remoteLabNameOf(backend, node.parentName, node.labName);
+    if (mode === "packetflix") {
+      const { captures } = await backend.capturePacketflix(labName, {
+        targets,
+        remoteHostname: remoteHostname()
+      });
+      for (const capture of captures) {
+        await vscode.env.openExternal(vscode.Uri.parse(capture.packetflixUri));
+      }
+      return;
+    }
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const { sessions } = await backend.createWiresharkVnc(labName, {
+      targets,
+      theme: isDarkModeEnabled(config.get<string>("capture.wireshark.theme")) ? "dark" : "light"
+    });
+    for (const session of sessions) {
+      const proxy = await startVncProxy(backend, session.sessionId);
+      await openWiresharkPanel({
+        title: `Wireshark (${session.containerName}:${formatPanelInterfaces(session.interfaceNames)})`,
+        localUrl: proxy.url,
+        showVolumeTip: session.showVolumeTip,
+        keepOpenInBackground: config.get<boolean>("capture.wireshark.stayOpenInBackground"),
+        onDispose: async () => {
+          proxy.close();
+          await backend.closeWiresharkVnc(session.sessionId).catch(() => {});
+        }
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(`Capture failed: ${message}`);
+  }
+}
+
+interface WiresharkPanelOptions {
+  title: string;
+  /** The noVNC page on this machine; VS Code forwards it when the window is remote. */
+  localUrl: string;
+  showVolumeTip: boolean;
+  keepOpenInBackground?: boolean;
+  onDispose: () => Promise<void> | void;
+}
+
+async function openWiresharkPanel(options: WiresharkPanelOptions): Promise<void> {
   // let vscode port forward for us
-  const localUri = vscode.Uri.parse(`http://localhost:${port}`);
+  const localUri = vscode.Uri.parse(options.localUrl);
   const externalUri = (await vscode.env.asExternalUri(localUri)).toString();
   const extensionUri = vscode.extensions.getExtension("srl-labs.vscode-containerlab")?.extensionUri;
   if (!extensionUri) {
     void vscode.window.showErrorMessage(
       "Unable to render Wireshark panel because extension resources are unavailable."
     );
+    await options.onDispose();
     return;
   }
 
   const panel = vscode.window.createWebviewPanel(
     "clabWiresharkVNC",
-    `Wireshark (${node.parentName}:${formatPanelInterfaces(capturedNames)})`,
+    options.title,
     vscode.ViewColumn.One,
     {
       enableScripts: true,
-      retainContextWhenHidden: keepOpenInBackground,
+      retainContextWhenHidden: options.keepOpenInBackground,
       localResourceRoots: [
         vscode.Uri.joinPath(extensionUri, "dist"),
         vscode.Uri.joinPath(extensionUri, "resources")
@@ -543,20 +632,14 @@ export async function captureEdgesharkVNC(
     }
   );
 
-  panel.onDidDispose(async () => {
-    try {
-      const container = dockerClient.getContainer(containerId);
-      await container.stop();
-      outputChannel.info(`Stopped Wireshark VNC container: ${containerId}`);
-    } catch {
-      // ignore
-    }
+  panel.onDidDispose(() => {
+    void options.onDispose();
   });
 
   const iframeUrl = externalUri;
 
   // Show info about where to save pcap files if volume is mounted
-  if (volumeMount) {
+  if (options.showVolumeTip) {
     vscode.window.showInformationMessage(
       `Wireshark started. Save pcap files to /pcaps to persist them in the lab directory.`
     );
@@ -564,7 +647,7 @@ export async function captureEdgesharkVNC(
 
   panel.webview.html = createPanelWebviewHtml(WIRESHARK_VNC_PANEL, panel.webview, extensionUri, {
     iframeUrl,
-    showVolumeTip: Boolean(volumeMount)
+    showVolumeTip: options.showVolumeTip
   });
 
   const readinessMonitor = createVncReadinessMonitor(panel, localUri.toString(), iframeUrl);
@@ -669,6 +752,16 @@ async function runVncReadinessLoop(
 }
 
 export async function killAllWiresharkVNCCtrs() {
+  if (isRemoteNode()) {
+    try {
+      const result = await getLabBackend().closeAllWiresharkVnc();
+      outputChannel.info(result.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Failed to close Wireshark VNC sessions: ${message}`);
+    }
+    return;
+  }
   const dockerImage = vscode.workspace
     .getConfiguration("containerlab")
     .get<string>("capture.wireshark.dockerImage", DEFAULT_WIRESHARK_VNC_DOCKER_IMAGE);

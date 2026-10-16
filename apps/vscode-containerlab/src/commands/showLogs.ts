@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
+import { isRemoteNode, showRemoteLogs } from "../backend/remoteNode";
 
 import { execCommandInTerminal } from "./command";
 
@@ -17,6 +18,10 @@ export function showLogs(node?: ClabContainerTreeNode) {
   }
 
   const container = node.name || containerId;
+  if (isRemoteNode()) {
+    void showRemoteLogs(node);
+    return;
+  }
 
   const config = vscode.workspace.getConfiguration("containerlab");
   const runtime = config.get<string>("runtime", "docker");

@@ -4,6 +4,7 @@
  */
 
 import * as inspector from "../../../treeView/inspector";
+import { viewLabPath } from "../../../backend/labBackends";
 import type { DeploymentState } from "@containerlab/clab-ui/session";
 
 import { formatErrorMessage, log } from "./logger";
@@ -94,7 +95,8 @@ class DeploymentStateChecker {
       if (!hasNonEmptyString(topo)) {
         continue;
       }
-      const normalizedTopoFile = topo.replace(/\\/g, "/");
+      // On a lab server, the topology's workspace URI when the server lists it
+      const normalizedTopoFile = viewLabPath(topo).replace(/\\/g, "/");
       if (normalizedTopoFile === normalizedYamlPath) {
         return deployedLabName;
       }

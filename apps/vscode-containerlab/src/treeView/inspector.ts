@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
+import { errorStatus } from "@srl-labs/containerlab-lab-backend";
 
-import { getLabBackend } from "../backend/labBackends";
+import { activeConnection, getConnections, getLabBackend } from "../backend/labBackends";
 import * as events from "../services/containerlabEvents";
 import * as fallback from "../services/containerlabInspectFallback";
 import { outputChannel } from "../globals";
@@ -24,7 +25,24 @@ export function isPollingMode(): boolean {
   return config.get<string>("refreshMode", "events") === "polling";
 }
 
+/**
+ * Starts over after the active connection changed: the new backend may
+ * stream events although the previous one could not.
+ */
+export function resetForConnectionChange(): void {
+  forcedPollingMode = false;
+  events.stopEventStream();
+  fallback.stopPolling();
+  rawInspectData = undefined;
+}
+
 export async function update(): Promise<void> {
+  const active = activeConnection();
+  if (active.kind === "api" && !getConnections()?.activeBackend()) {
+    // Signed out: no labs to show until the user signs in.
+    rawInspectData = {};
+    return;
+  }
   const config = vscode.workspace.getConfiguration("containerlab");
   const runtime = config.get<string>("runtime", "docker");
   const preferPolling = config.get<string>("refreshMode", "events") === "polling";
@@ -50,6 +68,12 @@ export async function update(): Promise<void> {
       `[inspector] Updated inspect data for ${labsCount} labs in ${duration.toFixed(3)}s`
     );
   } catch (err) {
+    if (active.kind === "api" && errorStatus(err) === 401) {
+      // The token expired: no labs until the user signs in again.
+      rawInspectData = {};
+      void getConnections()?.expire(active);
+      return;
+    }
     // Events failed - likely "Unknown command" error
     const errorMsg = err instanceof Error ? err.message : String(err);
     outputChannel.warn(`[inspector] Events stream failed: ${errorMsg}, falling back to polling`);

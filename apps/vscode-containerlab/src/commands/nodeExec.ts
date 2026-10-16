@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { execCmdMapping } from "../globals";
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { DEFAULT_ATTACH_SHELL_CMD, DEFAULT_ATTACH_TELNET_PORT } from "../utils";
+import { isRemoteNode, openRemoteTerminal } from "../backend/remoteNode";
 
 import { execCommandInTerminal } from "./command";
 
@@ -33,7 +34,11 @@ function getNodeContext(node: ClabContainerTreeNode | undefined): NodeContext | 
 
 export function attachShell(node: ClabContainerTreeNode | undefined): void {
   const ctx = getNodeContext(node);
-  if (!ctx) return;
+  if (!ctx || !node) return;
+  if (isRemoteNode()) {
+    void openRemoteTerminal(node, "shell", `Shell - ${ctx.container}`);
+    return;
+  }
 
   const defaultMapping = execCmdMapping as Record<string, string>;
   let execCmd = defaultMapping[ctx.containerKind] ?? DEFAULT_ATTACH_SHELL_CMD;
@@ -52,9 +57,13 @@ export function attachShell(node: ClabContainerTreeNode | undefined): void {
 
 export function telnetToNode(node: ClabContainerTreeNode | undefined): void {
   const ctx = getNodeContext(node);
-  if (!ctx) return;
+  if (!ctx || !node) return;
   const config = vscode.workspace.getConfiguration("containerlab");
   const port = config.get<number>("node.telnetPort", DEFAULT_ATTACH_TELNET_PORT);
+  if (isRemoteNode()) {
+    void openRemoteTerminal(node, "telnet", `Telnet - ${ctx.container}`, { telnetPort: port });
+    return;
+  }
   const runtime = config.get<string>("runtime", "docker");
   execCommandInTerminal(
     `${runtime} exec -it ${ctx.containerId} telnet 127.0.0.1 ${port}`,

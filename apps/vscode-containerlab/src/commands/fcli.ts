@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import * as YAML from "yaml";
 
 import type { ClabLabTreeNode } from "../treeView/common";
+import { isRemoteActive, resolveLab } from "../backend/labBackends";
 
 import { execCommandInTerminal } from "./command";
 
@@ -44,6 +45,11 @@ function runFcli(node: ClabLabTreeNode | undefined, cmd: string) {
     return;
   }
 
+  if (isRemoteActive()) {
+    void runRemoteFcli(node, cmd);
+    return;
+  }
+
   const config = vscode.workspace.getConfiguration("containerlab");
   const runtime = config.get<string>("runtime", "docker");
   const extraArgs = config.get<string>("extras.fcli.extraDockerArgs", "");
@@ -53,6 +59,22 @@ function runFcli(node: ClabLabTreeNode | undefined, cmd: string) {
   const command = `${runtime} run --pull always -it --network ${network} --rm -v /etc/hosts:/etc/hosts:ro -v "${topo}":/topo.yml ${extraArgs} ghcr.io/srl-labs/nornir-srl:latest -t /topo.yml ${cmd}`;
 
   execCommandInTerminal(command, `fcli - ${node.label}`);
+}
+
+/** fcli on the lab server; its report opens in an editor. */
+async function runRemoteFcli(node: ClabLabTreeNode, cmd: string): Promise<void> {
+  try {
+    const { backend, target } = await resolveLab(node.labPath.absolute, node.name);
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `fcli ${cmd}` },
+      () => backend.fcli(target, cmd)
+    );
+    const document = await vscode.workspace.openTextDocument({ content: result.output });
+    await vscode.window.showTextDocument(document, { preview: false });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`fcli ${cmd} failed: ${message}`);
+  }
 }
 
 export const fcliBgpPeers = (node: ClabLabTreeNode) => runFcli(node, "bgp-peers");

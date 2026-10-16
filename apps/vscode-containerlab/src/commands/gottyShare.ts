@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel, gottySessions, runningLabsProvider } from "../globals";
 import { getLabBackend } from "../backend/labBackends";
+import { isRemoteNode, remoteHostname } from "../backend/remoteNode";
 import { refreshGottySessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
 
 import { getHostname } from "./capture";
@@ -63,7 +64,8 @@ function tryParseLinkFromText(output: string, bracketedHost?: string): string | 
 }
 
 async function getBracketedHostname(): Promise<string | undefined> {
-  const hostname = await getHostname();
+  // GoTTY listens on the lab host, which is the lab server for remote labs.
+  const hostname = (isRemoteNode() ? remoteHostname() : undefined) ?? (await getHostname());
   if (hostname.length === 0) return undefined;
   return hostname.includes(":") ? `[${hostname}]` : hostname;
 }

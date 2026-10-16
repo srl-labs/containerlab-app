@@ -56,8 +56,33 @@ export function getLocalBackend() {
   return backend;
 }
 
-export function labTargetForPath(labPath: string, labName = ""): LabTarget {
-  return { labName, path: labPath };
+export function isRemoteActive(): boolean {
+  return false;
+}
+
+export function getConnections(): undefined {
+  return undefined;
+}
+
+export function activeConnection() {
+  return { id: "local", label: "Local", kind: "local" as const };
+}
+
+export function isUriString(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+}
+
+export function isLabSourceUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+export function labPathOf(uri: { scheme: string; fsPath: string; toString(): string }): string {
+  return uri.scheme === "file" ? uri.fsPath : uri.toString();
+}
+
+export async function resolveLab(labPath: string, labName?: string) {
+  record("resolveLab", [labPath, labName]);
+  return { backend, target: { labName: "", path: labPath } as LabTarget };
 }
 
 export function labNameForPath(labPath: string): string {

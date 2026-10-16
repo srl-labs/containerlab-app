@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 
 import { outputChannel, dockerClient } from "../globals";
 import type { ClabContainerTreeNode } from "../treeView/common";
+import { isRemoteNode, remoteBrowserPorts, remoteHostname } from "../backend/remoteNode";
 
 interface PortMapping {
   containerPort: string;
@@ -20,7 +21,8 @@ export async function openBrowser(node: ClabContainerTreeNode) {
     return;
   }
 
-  const portMappings = await getExposedPorts(containerId);
+  const remote = isRemoteNode();
+  const portMappings = remote ? await getRemotePorts(node) : await getExposedPorts(containerId);
   if (portMappings.length === 0) {
     vscode.window.showInformationMessage(`No exposed ports found for container ${node.name}.`);
     return;
@@ -31,7 +33,17 @@ export async function openBrowser(node: ClabContainerTreeNode) {
     return;
   }
 
-  openPortInBrowser(mapping, node.name);
+  openPortInBrowser(mapping, node.name, remote ? remoteHostname() : undefined);
+}
+
+async function getRemotePorts(node: ClabContainerTreeNode): Promise<PortMapping[]> {
+  try {
+    return await remoteBrowserPorts(node);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    outputChannel.error(`Error getting port mappings: ${message}`);
+    return [];
+  }
 }
 
 function resolveContainerId(node?: ClabContainerTreeNode): string | undefined {
@@ -153,9 +165,9 @@ function addBinding(
 /**
  * Open a specific port in the default browser
  */
-function openPortInBrowser(mapping: PortMapping, containerName: string) {
+function openPortInBrowser(mapping: PortMapping, containerName: string, host = "localhost") {
   // Always use HTTP protocol - simple and direct
-  const url = `http://localhost:${mapping.hostPort}`;
+  const url = `http://${host.includes(":") ? `[${host}]` : host}:${mapping.hostPort}`;
 
   outputChannel.info(`Opening ${url} for container ${containerName}`);
 

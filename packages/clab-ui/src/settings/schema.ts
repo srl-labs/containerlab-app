@@ -61,6 +61,8 @@ const TITLES: Record<string, string> = {
   refreshMode: "Refresh mode",
   pollInterval: "Polling interval",
   enableInterfaceStats: "Interface statistics",
+  connections: "Lab servers",
+  localConnection: "Labs on this machine",
   "editor.customNodes": "Custom node templates",
   "editor.updateLinkEndpointsOnKindChange": "Update link endpoints",
   "editor.lockLabByDefault": "Lock canvas by default",

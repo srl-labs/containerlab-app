@@ -14,6 +14,7 @@ import {
 } from "../globals";
 import { refreshSshxSessions, refreshGottySessions } from "../services/sessionRefresh";
 import { getCurrentTopoViewer } from "../commands/graph";
+import { activeConnection, getConnections, viewLabPath } from "../backend/labBackends";
 import type {
   ClabInterfaceSnapshot,
   ClabInterfaceSnapshotEntry,
@@ -1008,8 +1009,8 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
 
         // Extract name from Names array or Labels
         const name = container.Names[0] || container.Labels["clab-node-longname"];
-        // Always get absolute lab path
-        const absLabPath = container.Labels["clab-topo-file"];
+        // Always get absolute lab path; on a lab server, its workspace file when listed
+        const absLabPath = viewLabPath(container.Labels["clab-topo-file"]);
 
         // Convert to the simpler format
         return {
@@ -1303,6 +1304,13 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
     if (parsedData === undefined) {
       return undefined;
     }
+    const active = activeConnection();
+    if (active.kind === "api") {
+      // Lab paths map to workspace files through the server's topology list.
+      await getConnections()
+        ?.remoteTopologies(active)
+        .catch(() => []);
+    }
     return this.convertDetailedToSimpleFormat(parsedData);
   }
 
@@ -1391,6 +1399,8 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
       );
 
       node.rootNodeName = container.root_node_name;
+      node.labName = container.lab_name;
+      for (const iface of interfaces) iface.labName = container.lab_name;
       node.description =
         container.status !== undefined && container.status !== "" ? ` ${container.status}` : "";
       node.tooltip = tooltipParts.join("\n");

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { ClabLabTreeNode } from "../treeView/common";
+import { activeConnection, labPathOf, remoteUri } from "../backend/labBackends";
 
 import { runClabAction } from "./runClabAction";
 
@@ -25,18 +26,21 @@ export async function deploySpecificFile() {
   let labRef: string | undefined;
 
   if (mode === "Select local file") {
+    const active = activeConnection();
     const opts: vscode.OpenDialogOptions = {
       title: "Select containerlab topology file",
       filters: {
         yaml: ["yaml", "yml"]
-      }
+      },
+      // A lab server deploys topologies from its own workspace.
+      ...(active.kind === "api" ? { defaultUri: remoteUri(active, "") } : {})
     };
 
     const uri = await vscode.window.showOpenDialog(opts);
     if (uri === undefined || uri.length === 0) {
       return;
     }
-    labRef = uri[0].fsPath;
+    labRef = labPathOf(uri[0]);
   } else if (mode === "Enter Git/HTTP URL") {
     const input = await vscode.window.showInputBox({
       title: "Git/HTTP URL",

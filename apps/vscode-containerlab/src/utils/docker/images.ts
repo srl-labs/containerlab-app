@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { dockerClient, outputChannel } from "../../globals";
+import { getLabBackend, isRemoteActive } from "../../backend/labBackends";
 
 let dockerImagesCache: string[] = [];
 
@@ -32,7 +33,31 @@ function validDockerReference(value: unknown): value is string {
   );
 }
 
+function toNumber(value: number | string | undefined): number | undefined {
+  const parsed = typeof value === "string" ? Number(value) : value;
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** Images on the lab server of the active connection. */
+async function listRemoteImageSummaries(): Promise<DockerImageSummary[]> {
+  const { images } = await getLabBackend().listImages();
+  return images
+    .map((image) => ({
+      id: image.id,
+      shortId: image.shortId ?? image.id.replace(/^sha256:/, "").slice(0, 12),
+      repoTags: image.repoTags.filter(validDockerReference),
+      repoDigests: image.repoDigests.filter(validDockerReference),
+      created: image.created,
+      size: toNumber(image.size),
+      virtualSize: toNumber(image.virtualSize)
+    }))
+    .sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
+}
+
 export async function listDockerImageSummaries(): Promise<DockerImageSummary[]> {
+  if (isRemoteActive()) {
+    return listRemoteImageSummaries();
+  }
   const images = await dockerClient.listImages({ all: true });
   return images
     .map((img) => {
@@ -97,7 +122,12 @@ export async function refreshDockerImages() {
 }
 
 export async function removeDockerImage(reference: string, force = false): Promise<void> {
-  await dockerClient.getImage(reference).remove({ force });
+  if (isRemoteActive()) {
+    const result = await getLabBackend().removeImage(reference, force);
+    if (!result.success) throw new Error(result.message ?? `Removing ${reference} failed`);
+  } else {
+    await dockerClient.getImage(reference).remove({ force });
+  }
   await refreshDockerImages();
 }
 

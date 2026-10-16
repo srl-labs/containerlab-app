@@ -102,3 +102,13 @@ export {
   fcliSysInfo,
   fcliCustom
 } from "./external";
+
+// Lab server connections
+export {
+  addConnection,
+  switchConnection,
+  signIn as signInToLabServer,
+  signOut as signOutOfLabServer,
+  removeConnection,
+  openRemoteWorkspace
+} from "./connections";

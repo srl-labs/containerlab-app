@@ -12,6 +12,8 @@ import * as path from "path";
 
 import * as vscode from "vscode";
 
+import { isUriString } from "../../../backend/labBackends";
+
 import type { CustomIconInfo, CustomNodeTemplateExportIcon } from "@containerlab/clab-ui/session";
 import {
   getIconFormat,
@@ -152,11 +154,12 @@ class IconService {
    * Resolution order: workspace wins over global for same-named icons
    */
   async loadAllIcons(yamlFilePath: string): Promise<CustomIconInfo[]> {
-    const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
     const globalDir = this.getGlobalIconDir();
 
-    // Load workspace icons first (they take priority)
-    const workspaceIcons = await this.listIconsFromDir(workspaceDir, "workspace");
+    // Load workspace icons first (they take priority); a lab server keeps its own.
+    const workspaceIcons = isUriString(yamlFilePath)
+      ? []
+      : await this.listIconsFromDir(this.getWorkspaceIconDir(yamlFilePath), "workspace");
 
     // Load global icons
     const globalIcons = await this.listIconsFromDir(globalDir, "global");
@@ -329,6 +332,7 @@ class IconService {
    * Copy an icon from global to workspace .clab-icons/ folder
    */
   async copyToWorkspace(iconName: string, yamlFilePath: string): Promise<boolean> {
+    if (isUriString(yamlFilePath)) return false;
     try {
       const globalDir = this.getGlobalIconDir();
       const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
@@ -370,6 +374,7 @@ class IconService {
    * Delete an icon from workspace .clab-icons/ folder
    */
   async deleteFromWorkspace(iconName: string, yamlFilePath: string): Promise<boolean> {
+    if (isUriString(yamlFilePath)) return false;
     try {
       const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
 
@@ -430,6 +435,7 @@ class IconService {
    * - Removes unused icons from workspace
    */
   async reconcileWorkspaceIcons(yamlFilePath: string, usedIconNames: string[]): Promise<void> {
+    if (isUriString(yamlFilePath)) return;
     try {
       const workspaceDir = this.getWorkspaceIconDir(yamlFilePath);
       const globalDir = this.getGlobalIconDir();

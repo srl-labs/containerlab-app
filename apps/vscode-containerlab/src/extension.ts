@@ -1,11 +1,14 @@
 import * as path from "path";
 import * as fs from "fs";
+import * as os from "os";
 
 import * as vscode from "vscode";
 import Docker from "dockerode";
 import { findBinary } from "@srl-labs/containerlab-lab-backend/local";
 
-import { disposeLabBackends } from "./backend/labBackends";
+import { disposeLabBackends, initConnections, isRemoteActive } from "./backend/labBackends";
+import type { ConnectionManager } from "./backend/connections";
+import { RemoteLabFileSystem } from "./backend/remoteFileSystem";
 
 import * as cmd from "./commands";
 import * as utils from "./utils";
@@ -76,7 +79,10 @@ async function promptToInstallContainerlab(): Promise<void> {
   }
 }
 
-async function ensureContainerlabBinary(e2eSmokeTest: boolean): Promise<boolean> {
+async function ensureContainerlabBinary(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
   if (containerlabBinaryPath !== "containerlab") {
     return true;
   }
@@ -86,11 +92,15 @@ async function ensureContainerlabBinary(e2eSmokeTest: boolean): Promise<boolean>
     return true;
   }
 
-  await promptToInstallContainerlab();
+  if (hasLabServers) {
+    outputChannel.warn("Containerlab binary not found; only labs on lab servers are available.");
+    return false;
+  }
+  void promptToInstallContainerlab();
   return false;
 }
 
-function validateUserPermissions(e2eSmokeTest: boolean): boolean {
+function validateUserPermissions(e2eSmokeTest: boolean, hasLabServers: boolean): boolean {
   outputChannel.debug(`Starting user permissions check`);
   const userInfo = utils.getUserInfo();
   setUsername(userInfo.username);
@@ -109,6 +119,9 @@ function validateUserPermissions(e2eSmokeTest: boolean): boolean {
     outputChannel.warn("Continuing despite insufficient permissions in E2E smoke mode.");
     return true;
   }
+  if (hasLabServers) {
+    return false;
+  }
 
   const runtime = utils.getConfig<string>("runtime", "docker");
   const requiredGroups = runtime === "podman" ? "'clab_admins'" : "'clab_admins' and 'docker'";
@@ -118,7 +131,10 @@ function validateUserPermissions(e2eSmokeTest: boolean): boolean {
   return false;
 }
 
-async function connectDockerSocket(e2eSmokeTest: boolean): Promise<boolean | undefined> {
+async function connectDockerSocket(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean | undefined> {
   try {
     const socketPath = utils.getConfig<string>("dockerSocketPath", "/var/run/docker.sock");
     const docker = new Docker({ socketPath });
@@ -133,6 +149,9 @@ async function connectDockerSocket(e2eSmokeTest: boolean): Promise<boolean | und
       outputChannel.warn("Continuing without Docker in E2E smoke mode.");
       return false;
     }
+    if (hasLabServers) {
+      return undefined;
+    }
     vscode.window.showErrorMessage(
       `Failed to connect to Docker. Ensure Docker is running and you have proper permissions.`
     );
@@ -144,10 +163,11 @@ async function runFullStartupTasks(
   context: vscode.ExtensionContext,
   config: vscode.WorkspaceConfiguration,
   dockerAvailable: boolean,
-  e2eSmokeTest: boolean
+  e2eSmokeTest: boolean,
+  localReady: boolean
 ): Promise<void> {
   const skipUpdateCheck = config.get<boolean>("skipUpdateCheck", false);
-  if (!skipUpdateCheck && !e2eSmokeTest) {
+  if (!skipUpdateCheck && !e2eSmokeTest && localReady) {
     utils.checkAndUpdateClabIfNeeded(outputChannel, context).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       outputChannel.error(`Update check error: ${message}`);
@@ -157,6 +177,9 @@ async function runFullStartupTasks(
   if (dockerAvailable) {
     void utils.refreshDockerImages();
     utils.startDockerImageEventMonitor(context);
+  } else if (isRemoteActive()) {
+    // The image list of the lab server, for the TopoViewer's image picker.
+    void utils.refreshDockerImages();
   }
 
   if (e2eSmokeTest) {
@@ -243,7 +266,8 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
 <body>
   <div class="wrap">
     <h3>Containerlab Requires Linux or WSL</h3>
-    <p>Features are disabled on this platform.</p>
+    <p>Labs cannot run on this platform.</p>
+    <p>To manage labs on a Linux host from here, run <b>Containerlab: Add Lab Server</b> from the Command Palette, then reload the window.</p>
     <p><a href="https://containerlab.dev/manual/vsc-extension/">Open documentation</a></p>
   </div>
 </body>
@@ -265,6 +289,25 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
       unsupportedProvider
     )
   );
+}
+
+/**
+ * Checks containerlab on this machine. Problems block activation no longer:
+ * the user may run labs on a lab server instead.
+ */
+async function prepareLocalContainerlab(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
+  if (!(await setClabBinPath())) {
+    outputChannel.error("Error setting containerlab binary. Labs on this machine are unavailable.");
+    return false;
+  }
+  if (!(await ensureContainerlabBinary(e2eSmokeTest, hasLabServers))) {
+    return false;
+  }
+  outputChannel.info("Containerlab extension activated.");
+  return validateUserPermissions(e2eSmokeTest, hasLabServers);
 }
 
 // Session refresh functions are available from ./services/sessionRefresh directly
@@ -487,6 +530,101 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 }
 
+function registerConnectionCommands(context: vscode.ExtensionContext) {
+  const commands: Array<[string, () => unknown]> = [
+    ["containerlab.connection.add", cmd.addConnection],
+    ["containerlab.connection.switch", cmd.switchConnection],
+    ["containerlab.connection.signIn", cmd.signInToLabServer],
+    ["containerlab.connection.signOut", cmd.signOutOfLabServer],
+    ["containerlab.connection.remove", cmd.removeConnection],
+    ["containerlab.connection.openWorkspace", cmd.openRemoteWorkspace]
+  ];
+  for (const [name, handler] of commands) {
+    context.subscriptions.push(vscode.commands.registerCommand(name, handler));
+  }
+}
+
+/**
+ * Lab servers report workspace changes; new and removed topologies show up in
+ * the explorer without polling.
+ */
+function watchRemoteWorkspace(connections: ConnectionManager): vscode.Disposable {
+  let controller: AbortController | undefined;
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleRefresh = () => {
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      void connections
+        .remoteTopologies(connections.active, 0)
+        .catch(() => [])
+        .then(() => localLabsProvider.forceRefresh());
+    }, 300);
+  };
+  const restart = () => {
+    controller?.abort();
+    controller = undefined;
+    const backend = connections.activeBackend();
+    if (!backend) return;
+    const current = new AbortController();
+    controller = current;
+    void (async () => {
+      try {
+        for await (const event of await backend.fs.watch(current.signal)) {
+          if (event.kind !== "file" || /\.clab\.ya?ml$/i.test(event.path)) scheduleRefresh();
+        }
+      } catch (err) {
+        if (!current.signal.aborted) {
+          outputChannel.debug(
+            `[connections] Workspace events of ${connections.active.label} stopped: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    })();
+  };
+  restart();
+  const subscriptions = [connections.onDidChangeActive(restart), connections.onDidSignIn(restart)];
+  return new vscode.Disposable(() => {
+    controller?.abort();
+    if (refreshTimer) clearTimeout(refreshTimer);
+    for (const subscription of subscriptions) subscription.dispose();
+  });
+}
+
+/** Shows the labs of another connection after a switch or a sign-in. */
+function registerConnectionUpdates(
+  context: vscode.ExtensionContext,
+  connections: ConnectionManager
+) {
+  const setRemoteContext = () =>
+    vscode.commands.executeCommand(
+      "setContext",
+      "containerlab:remoteConnection",
+      connections.active.kind === "api"
+    );
+  void setRemoteContext();
+  const reload = async () => {
+    await setRemoteContext();
+    ins.resetForConnectionChange();
+    await runningLabsProvider.refresh().catch((err: unknown) => {
+      outputChannel.warn(
+        `[connections] Refreshing running labs failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
+    localLabsProvider.forceRefresh();
+    void utils.refreshDockerImages();
+    await refreshSshxSessions();
+    await refreshGottySessions();
+  };
+  context.subscriptions.push(
+    connections.onDidChangeActive(() => void reload()),
+    connections.onDidSignIn((connection) => {
+      if (connection.id === connections.active.id) void reload();
+    }),
+    watchRemoteWorkspace(connections)
+  );
+}
+
 function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   // Common handler for data changes (used by both events and fallback)
   const handleDataChanged = () => {
@@ -585,34 +723,33 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration("containerlab");
   const isSupportedPlatform = process.platform === "linux" || vscode.env.remoteName === "wsl";
 
-  // Allow activation only on Linux or when connected via WSL.
+  // Lab servers work from any platform; labs on this machine need Linux or WSL.
+  const connections = initConnections(context, { localSupported: isSupportedPlatform });
+  context.subscriptions.push(connections, RemoteLabFileSystem.register(connections));
+  await connections.restoreAll();
+  registerConnectionCommands(context);
+  const hasLabServers = connections.list().some((connection) => connection.kind === "api");
+
+  // Without a lab server, activate only on Linux or when connected via WSL.
   // If unsupported, stay silent until the user opens the Containerlab view, then show a warning.
-  if (!isSupportedPlatform) {
+  if (!isSupportedPlatform && !hasLabServers) {
     registerUnsupportedViews(context);
     return;
   }
 
-  if (!(await setClabBinPath())) {
-    // don't activate
-    outputChannel.error(`Error setting containerlab binary. Exiting activation.`);
-    return;
+  const localReady =
+    isSupportedPlatform && (await prepareLocalContainerlab(e2eSmokeTest, hasLabServers));
+  if (!localReady && !isSupportedPlatform) {
+    setUsername(os.userInfo().username);
   }
-
-  if (!(await ensureContainerlabBinary(e2eSmokeTest))) {
-    return;
+  if (!localReady && hasLabServers && connections.active.kind === "local") {
+    // containerlab cannot run here: show the labs of a lab server instead.
+    const firstServer = connections.list().find((connection) => connection.kind === "api");
+    if (firstServer) await connections.setActive(firstServer.id);
   }
-
-  outputChannel.info("Containerlab extension activated.");
-
-  if (!validateUserPermissions(e2eSmokeTest)) {
-    return;
-  }
-
-  const dockerAvailable = await connectDockerSocket(e2eSmokeTest);
-  if (dockerAvailable === undefined) {
-    return;
-  }
-  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest);
+  const dockerAvailable =
+    localReady && (await connectDockerSocket(e2eSmokeTest, hasLabServers)) === true;
+  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest, localReady);
 
   // Explorer data providers (backing model for React explorer)
   setExtensionContext(context);
@@ -702,6 +839,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   registerRealtimeUpdates(context);
+  registerConnectionUpdates(context, connections);
   registerProcessShutdownHooks(context);
 
   // Language features (YAML completion)
@@ -714,7 +852,8 @@ export async function activate(context: vscode.ExtensionContext) {
   // Expose a stable API surface for other extensions to access providers safely.
   return {
     getLocalLabsProvider: () => localLabsProvider,
-    getRunningLabsProvider: () => runningLabsProvider
+    getRunningLabsProvider: () => runningLabsProvider,
+    getConnections: () => connections
   };
 }
 

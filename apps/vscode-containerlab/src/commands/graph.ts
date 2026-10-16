@@ -10,10 +10,13 @@ import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
 
 import {
-  getLabBackend,
   getLocalBackend,
+  isRemoteActive,
+  isUriString,
   labNameForPath,
-  labTargetForPath
+  labPathOf,
+  labUri,
+  resolveLab
 } from "../backend/labBackends";
 
 import { execCommandInTerminal, runWithProgress } from "./command";
@@ -39,18 +42,17 @@ async function runGraphDrawIO(
     .getConfiguration("containerlab")
     .get<string>("drawioDefaultTheme", "nokia_modern");
 
-  let drawioPath = labPath.replace(/\.(ya?ml)$/i, ".drawio");
+  let drawioUri = labUri(labPath);
   await runWithProgress(
     async ({ output }) => {
-      const result = await getLabBackend().graphDrawio(labTargetForPath(labPath, labName), {
-        layout,
-        theme: drawioTheme
-      });
+      const lab = await resolveLab(labPath, labName);
+      const result = await lab.backend.graphDrawio(lab.target, { layout, theme: drawioTheme });
       for (const line of (result.output ?? "").split("\n")) output(line, "stdout");
-      drawioPath = path.join(path.dirname(labPath), result.fileName);
-      if (!fs.existsSync(drawioPath)) {
-        // A lab host elsewhere returns the file instead of writing it next to the topology.
-        await fs.promises.writeFile(drawioPath, result.content, "utf8");
+      const topologyUri = labUri(labPath);
+      drawioUri = vscode.Uri.joinPath(topologyUri, "..", result.fileName);
+      if (topologyUri.scheme !== "file" || !fs.existsSync(drawioUri.fsPath)) {
+        // A lab server returns the file instead of writing it next to the topology.
+        await vscode.workspace.fs.writeFile(drawioUri, Buffer.from(result.content, "utf8"));
       }
     },
     {
@@ -60,7 +62,7 @@ async function runGraphDrawIO(
       },
       actionName: "graph",
       onSuccess: async () => {
-        await vscode.commands.executeCommand("vscode.open", vscode.Uri.file(drawioPath));
+        await vscode.commands.executeCommand("vscode.open", drawioUri);
       }
     }
   );
@@ -80,6 +82,12 @@ export async function graphDrawIOVertical(node?: ClabLabTreeNode) {
 export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
   node = await getSelectedLabNode(node);
   if (!node) {
+    return;
+  }
+  if (isRemoteActive() || isUriString(node.labPath.absolute)) {
+    vscode.window.showInformationMessage(
+      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab server."
+    );
     return;
   }
 
@@ -121,8 +129,8 @@ function resolveLabPath(node?: ClabLabTreeNode): string | undefined {
 
   const editor = vscode.window.activeTextEditor;
   const topoFileRegex = /\.clab\.(yaml|yml)$/;
-  if (editor && topoFileRegex.test(editor.document.uri.fsPath)) {
-    return editor.document.uri.fsPath;
+  if (editor && topoFileRegex.test(editor.document.uri.path)) {
+    return labPathOf(editor.document.uri);
   }
 
   vscode.window.showErrorMessage("No lab node or topology file selected");
@@ -146,7 +154,9 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
   // Derive the lab name
   const labName =
     node?.name ??
-    (labPath ? path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, "") : "Unknown Lab");
+    (isUriString(labPath)
+      ? labNameForPath(labPath)
+      : path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, ""));
 
   // Use the provider to create/get the viewer. The viewer is always editable;
   // it attaches runtime data on its own when the lab is deployed.

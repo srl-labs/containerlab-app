@@ -2,7 +2,7 @@
 import * as vscode from "vscode";
 
 import type { ClabContainerTreeNode, ClabLabTreeNode } from "../treeView/common";
-import { getLabBackend, labNameForPath, labTargetForPath } from "../backend/labBackends";
+import { labNameForPath, resolveLab } from "../backend/labBackends";
 
 import { runWithProgress } from "./command";
 
@@ -11,14 +11,11 @@ async function saveConfiguration(
   labName: string,
   nodeFilter?: string
 ): Promise<void> {
-  const backend = getLabBackend();
   const target = nodeFilter ? `node ${nodeFilter}` : `lab ${labName}`;
   await runWithProgress(
     async ({ output }) => {
-      const result = await backend.save(
-        labTargetForPath(labPath, labName),
-        nodeFilter ? { nodeFilter } : {}
-      );
+      const lab = await resolveLab(labPath, labName);
+      const result = await lab.backend.save(lab.target, nodeFilter ? { nodeFilter } : {});
       for (const line of result.output.split("\n")) output(line, "stdout");
     },
     {
@@ -54,5 +51,5 @@ export async function saveNode(node: ClabContainerTreeNode) {
   }
   // The short node name supports custom container name prefixes.
   const labPath = node.labPath.absolute;
-  void saveConfiguration(labPath, labNameForPath(labPath), node.name_short);
+  void saveConfiguration(labPath, node.labName ?? labNameForPath(labPath), node.name_short);
 }

@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
+import { isUriString, labUri } from "../backend/labBackends";
 
 export async function addLabFolderToWorkspace(node: ClabLabTreeNode): Promise<void> {
   if (!node.labPath.absolute) {
@@ -11,7 +12,10 @@ export async function addLabFolderToWorkspace(node: ClabLabTreeNode): Promise<vo
   }
 
   // Get the folder that contains the .clab.yaml
-  const folderPath = path.dirname(node.labPath.absolute);
+  const labPath = node.labPath.absolute;
+  const folderUri = isUriString(labPath)
+    ? vscode.Uri.joinPath(labUri(labPath), "..")
+    : vscode.Uri.file(path.dirname(labPath));
 
   // Add it to the current workspace
   const existingCount = vscode.workspace.workspaceFolders
@@ -19,7 +23,7 @@ export async function addLabFolderToWorkspace(node: ClabLabTreeNode): Promise<vo
     : 0;
 
   vscode.workspace.updateWorkspaceFolders(existingCount, null, {
-    uri: vscode.Uri.file(folderPath),
+    uri: folderUri,
     name: node.label // or any other display name
   });
 

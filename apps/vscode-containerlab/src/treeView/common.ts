@@ -112,6 +112,8 @@ export class ClabContainerTreeNode extends vscode.TreeItem {
   public nodeType?: string; // Added node type from clab-node-type
   public nodeGroup?: string; // Added node group from clab-node-group
   public rootNodeName?: string; // clab-root-node-name — set if this is a sub-container
+  /** The lab the container belongs to (the `containerlab` label). */
+  public labName?: string;
   public status?: string;
 
   // eslint-disable-next-line max-params -- TreeItem subclass with many optional properties
@@ -219,6 +221,8 @@ export class ClabInterfaceTreeNode extends vscode.TreeItem {
   public state: string; // Added state tracking
   public stats?: ClabInterfaceStats;
   public netemState?: NetemState;
+  /** The lab of the parent container. */
+  public labName?: string;
 
   // eslint-disable-next-line max-params -- TreeItem subclass with many interface properties
   constructor(
