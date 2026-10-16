@@ -11,6 +11,7 @@ import type {
 import { DEFAULT_INTERFACE_PATTERNS } from "../constants/interfacePatterns";
 
 import { INHERITED_FROM_KEY, resolveInheritedFrom, resolveNodeConfig } from "./NodeConfigResolver";
+import { INHERITED_CREDENTIALS_KEY, resolveNodeCredentials } from "./NodeCredentials";
 import { NODE_KIND_BRIDGE, NODE_KIND_OVS_BRIDGE } from "./LinkNormalizer";
 import { isDistributedSrosNode, findDistributedSrosContainer } from "./DistributedSrosMapper";
 import { extractIconVisuals, sanitizeLabels, getNodeLatLng, computeLongname } from "./utils";
@@ -374,6 +375,10 @@ function buildNodeElement(params: {
     interfacePatternMapping,
     nodeAnn
   });
+  const inheritedCredentials = resolveNodeCredentials(parsed, nodeObj, { inheritedOnly: true });
+  if (Object.keys(inheritedCredentials).length > 0) {
+    extraData[INHERITED_CREDENTIALS_KEY] = inheritedCredentials;
+  }
 
   const labels = mergedNode.labels;
   const topoViewerRole = resolveTopoViewerRole(mergedNode, nodeAnn, labels);

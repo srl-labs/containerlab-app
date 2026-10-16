@@ -7,6 +7,7 @@
  */
 
 import type { NodeBoxAppearance } from "./topology";
+import type { NodeCredentials, ResolvedNodeCredentials } from "../parsing/NodeCredentials";
 
 // ============================================================================
 // Node Editor Types
@@ -160,6 +161,10 @@ export interface NodeEditorData extends SharedTemplateFields {
   mgmtNet?: string;
   /** Level each inherited key comes from (defaults, kind or group) */
   inheritedFrom?: Record<string, string>;
+  /** The node's own login credentials; unset when it inherits them */
+  credentials?: NodeCredentials;
+  /** Credentials the node falls back to from its group, kind or the defaults */
+  inheritedCredentials?: ResolvedNodeCredentials;
   // Custom node settings
   customName?: string;
   baseName?: string;
