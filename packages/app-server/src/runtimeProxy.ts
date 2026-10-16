@@ -30,6 +30,7 @@ import {
   resolveRunningLabNameForTopology
 } from "./topologyIdentity.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
+import { resolveTopologySshUsername } from "./topologyCredentials.ts";
 
 interface RuntimeTargetBody {
   endpointId?: string;
@@ -351,6 +352,24 @@ async function resolveNodeTarget(
     container: bestMatch,
     nodeFilter: stripContainerPrefix(labName, bestMatch.name)
   };
+}
+
+/**
+ * SSH login for a node: the username the lab's topology `credentials` give it,
+ * otherwise the one the client asked for (its per-kind setting).
+ */
+async function resolveSshUsername(
+  client: ClabApiClient,
+  token: string,
+  labName: string,
+  node: { nodeFilter: string },
+  body: { nodeName: string; sshUsername?: unknown }
+): Promise<string | undefined> {
+  const topologyUsername = await resolveTopologySshUsername(client, token, labName, [
+    node.nodeFilter,
+    body.nodeName.trim()
+  ]);
+  return topologyUsername ?? normalizeOptionalString(body.sshUsername);
 }
 
 function parseOptionalNumber(value: unknown): number | undefined {
@@ -787,13 +806,20 @@ export function registerRuntimeProxy(
           target.labName,
           request.body.nodeName
         );
+        const sshUsername = await resolveSshUsername(
+          client,
+          endpoint.token,
+          target.labName,
+          resolvedNode,
+          request.body
+        );
         const sshAccess = await client.requestSshAccess(
           endpoint.token,
           target.labName,
           resolvedNode.container.name,
           {
             duration: normalizeOptionalString(request.body.duration),
-            sshUsername: normalizeOptionalString(request.body.sshUsername)
+            sshUsername
           }
         );
         return reply.send(sshAccess);
@@ -1032,7 +1058,16 @@ export function registerRuntimeProxy(
             protocol: request.body.protocol,
             cols: normalizeOptionalInteger(request.body.cols) ?? 120,
             rows: normalizeOptionalInteger(request.body.rows) ?? 36,
-            sshUsername: normalizeOptionalString(request.body.sshUsername),
+            sshUsername:
+              request.body.protocol === "ssh"
+                ? await resolveSshUsername(
+                    client,
+                    endpoint.token,
+                    target.labName,
+                    resolvedNode,
+                    request.body
+                  )
+                : normalizeOptionalString(request.body.sshUsername),
             telnetPort: normalizeOptionalInteger(request.body.telnetPort)
           }
         );

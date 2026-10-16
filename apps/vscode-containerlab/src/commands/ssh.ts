@@ -1,4 +1,12 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
+
 import * as vscode from "vscode";
+import {
+  resolveNodeCredentialsFromYaml,
+  type ResolvedNodeCredentials
+} from "@containerlab/clab-ui/host";
 
 import {
   type ClabContainerTreeNode,
@@ -53,6 +61,47 @@ function resolveSshTarget(node: ClabContainerTreeNode): string | undefined {
   return undefined;
 }
 
+/** Credentials the lab's topology file gives the node, if it can be read. */
+function readTopologyCredentials(node: ClabContainerTreeNode): ResolvedNodeCredentials {
+  const topologyPath = node.labPath?.absolute;
+  if (topologyPath === undefined || topologyPath.length === 0) {
+    return {};
+  }
+  let yaml: string;
+  try {
+    yaml = fs.readFileSync(topologyPath, "utf8");
+  } catch {
+    return {};
+  }
+  // Distributed SR SIM containers belong to their root node in the topology
+  const nodeNames = [node.rootNodeName, node.name_short].filter(
+    (name): name is string => name !== undefined && name.trim().length > 0
+  );
+  for (const nodeName of nodeNames) {
+    const credentials = resolveNodeCredentialsFromYaml(yaml, nodeName.trim());
+    if (credentials.username !== undefined || credentials.identityFile !== undefined) {
+      return credentials;
+    }
+  }
+  return {};
+}
+
+/** Resolve an identity-file path like containerlab: `~` is home, relative paths start at the topology folder. */
+function resolveIdentityFile(identityFile: string, topologyPath: string): string {
+  if (identityFile === "~" || identityFile.startsWith("~/")) {
+    return path.join(os.homedir(), identityFile.slice(1));
+  }
+  return path.resolve(path.dirname(topologyPath), identityFile);
+}
+
+/** Quote a value for the terminal shell unless it is plainly safe. */
+function shellQuote(value: string): string {
+  if (/^[\w.@%+=:,/-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
 export function sshToNode(node: ClabContainerTreeNode | undefined): void {
   if (!node) {
     vscode.window.showErrorMessage("No container node selected.");
@@ -70,10 +119,17 @@ export function sshToNode(node: ClabContainerTreeNode | undefined): void {
   const userSshMapping = config.get<Partial<Record<string, string>>>("node.sshUserMapping", {});
   const defaultMapping = sshUserMapping as Partial<Record<string, string>>;
 
-  // Use user setting first, then default mapping, then fallback to "admin"
-  const sshUser = userSshMapping[node.kind] ?? defaultMapping[node.kind] ?? "admin";
+  // The topology's credentials come first, then the user setting, the default mapping and "admin"
+  const credentials = readTopologyCredentials(node);
+  const sshUser = shellQuote(
+    credentials.username ?? userSshMapping[node.kind] ?? defaultMapping[node.kind] ?? "admin"
+  );
+  const identityOption =
+    credentials.identityFile !== undefined
+      ? `-i ${shellQuote(resolveIdentityFile(credentials.identityFile, node.labPath.absolute))} `
+      : "";
 
-  execCommandInTerminal(`ssh ${sshUser}@${sshTarget}`, `SSH - ${sshTarget}`, true);
+  execCommandInTerminal(`ssh ${identityOption}${sshUser}@${sshTarget}`, `SSH - ${sshTarget}`, true);
 }
 
 export function sshToLab(node: ClabLabTreeNode | undefined): void {

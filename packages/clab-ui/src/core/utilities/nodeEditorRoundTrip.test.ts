@@ -628,3 +628,75 @@ test("stages: convertEditorDataToYaml does not write inherited stages", () => {
   assert.equal(yaml.stages, undefined);
   assert.equal("inheritedStages" in yaml, false);
 });
+
+const CREDENTIALS_TOPOLOGY = fixture(`name: creds
+
+topology:
+  kinds:
+    nokia_srlinux:
+      credentials:
+        username: srl-admin
+        password: srl-password
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    srl2:
+      kind: nokia_srlinux
+      credentials:
+        username: ops # own login
+        password: "1234"
+  links: []
+`);
+
+test("credentials load as own or inherited", () => {
+  const inherited = openEditor(CREDENTIALS_TOPOLOGY, "srl1");
+  assert.equal(inherited.credentials, undefined);
+  assert.deepEqual(inherited.inheritedCredentials, {
+    username: "srl-admin",
+    password: "srl-password",
+    source: "kind"
+  });
+
+  const own = openEditor(CREDENTIALS_TOPOLOGY, "srl2");
+  assert.deepEqual(own.credentials, { username: "ops", password: "1234" });
+  assert.equal(own.inheritedCredentials?.source, "kind");
+});
+
+test("unchanged credentials leave the YAML as written", () => {
+  assert.equal(saveEdit(CREDENTIALS_TOPOLOGY, "srl1"), CREDENTIALS_TOPOLOGY);
+  assert.equal(saveEdit(CREDENTIALS_TOPOLOGY, "srl2"), CREDENTIALS_TOPOLOGY);
+});
+
+test("typing credentials writes them to the node only", () => {
+  const yaml = saveEdit(CREDENTIALS_TOPOLOGY, "srl1", (data) => ({
+    ...data,
+    credentials: { username: " lab ", password: " secret ", identityFile: "keys/srl1" }
+  }));
+  assert.deepEqual(nodeOf(yaml, "srl1").credentials, {
+    username: "lab",
+    password: " secret ",
+    "identity-file": "keys/srl1"
+  });
+  const parsed = YAML.parse(yaml) as ClabTopology;
+  assert.deepEqual(parsed.topology?.kinds?.nokia_srlinux.credentials, {
+    username: "srl-admin",
+    password: "srl-password"
+  });
+});
+
+test("clearing every credential field removes the node's credentials", () => {
+  const yaml = saveEdit(CREDENTIALS_TOPOLOGY, "srl2", (data) => ({
+    ...data,
+    credentials: { username: "", password: "" }
+  }));
+  assert.equal(nodeOf(yaml, "srl2").credentials, undefined);
+});
+
+test("convertEditorDataToYaml writes the credentials map", () => {
+  assert.deepEqual(
+    convertEditorDataToYaml({ credentials: { username: "admin", identityFile: " ~/.ssh/k " } })
+      .credentials,
+    { username: "admin", "identity-file": "~/.ssh/k" }
+  );
+  assert.equal(convertEditorDataToYaml({ credentials: {} }).credentials, null);
+});

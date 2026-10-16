@@ -11,6 +11,11 @@ import type {
 } from "../types/editors";
 import type { NodeSaveData } from "../io/NodePersistenceIO";
 import { INHERITED_FROM_KEY } from "../parsing/NodeConfigResolver";
+import {
+  INHERITED_CREDENTIALS_KEY,
+  readNodeCredentials,
+  type ResolvedNodeCredentials
+} from "../parsing/NodeCredentials";
 import { deepEqual } from "../io/YamlDocumentIO";
 
 import {
@@ -383,7 +388,27 @@ export function convertToEditorData(
     ...parseHealthCheckProps(extra),
     ...parseComponentsProps(extra),
     ...parseStagesProps(extra),
+    ...parseCredentialsProps(extra),
     ...parseInheritedFrom(extra)
+  };
+}
+
+/**
+ * Parse the node's own credentials and the ones it inherits. The parser fills
+ * `credentials` with the inherited map when the node sets none, so it only
+ * counts as the node's own when no inheritance level is recorded for it.
+ */
+function parseCredentialsProps(
+  extra: Record<string, unknown>
+): Pick<NodeEditorData, "credentials" | "inheritedCredentials"> {
+  const inheritedLevel = getRecordUnknown(extra[INHERITED_FROM_KEY])?.credentials;
+  const own = inheritedLevel === undefined ? readNodeCredentials(extra.credentials) : undefined;
+  const inherited = getRecordUnknown(extra[INHERITED_CREDENTIALS_KEY]) as
+    | ResolvedNodeCredentials
+    | undefined;
+  return {
+    ...(own && Object.keys(own).length > 0 ? { credentials: own } : {}),
+    ...(inherited ? { inheritedCredentials: inherited } : {})
   };
 }
 
@@ -444,6 +469,7 @@ export interface YamlExtraData {
   components?: unknown[] | null;
   sfm?: string | null;
   stages?: Record<string, unknown> | null;
+  credentials?: Record<string, string> | null;
   [key: string]: unknown;
 }
 
@@ -663,6 +689,23 @@ function convertAdvancedToYaml(
   if ("runtime" in data) extraData.runtime = toStringOrNull(data.runtime);
 }
 
+/**
+ * Convert the node's own credentials to the YAML `credentials` map. The
+ * username and identity file are trimmed; the password is written as typed.
+ */
+function convertCredentialsToYaml(data: Record<string, unknown>, extraData: YamlExtraData): void {
+  if (!("credentials" in data)) return;
+  const credentials = getRecordUnknown(data.credentials);
+  const result: Record<string, string> = {};
+  const username = getString(credentials?.username)?.trim();
+  if (username !== undefined && username !== "") result.username = username;
+  const password = getString(credentials?.password);
+  if (password !== undefined && password !== "") result.password = password;
+  const identityFile = getString(credentials?.identityFile)?.trim();
+  if (identityFile !== undefined && identityFile !== "") result["identity-file"] = identityFile;
+  extraData.credentials = Object.keys(result).length > 0 ? result : null;
+}
+
 /** Convert certificate properties to YAML format */
 function convertCertToYaml(
   data: Record<string, unknown>,
@@ -818,6 +861,7 @@ export function convertEditorDataToYaml(
   if ("stages" in data) {
     extraData.stages = serializeNodeStages(data.stages);
   }
+  convertCredentialsToYaml(data, extraData);
 
   return extraData;
 }

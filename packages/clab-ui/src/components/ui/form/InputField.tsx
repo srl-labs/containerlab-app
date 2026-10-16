@@ -1,5 +1,5 @@
-// Text or number input field.
-import React from "react";
+// Text, number or password input field.
+import React, { useState } from "react";
 import TextField from "@mui/material/TextField";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
@@ -10,6 +10,8 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import ClearIcon from "@mui/icons-material/Clear";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 interface InputFieldProps {
@@ -19,7 +21,8 @@ interface InputFieldProps {
   label?: string;
   ariaLabel?: string;
   placeholder?: string;
-  type?: "text" | "number";
+  /** A password field hides its value behind a show / hide toggle */
+  type?: "text" | "number" | "password";
   min?: number;
   max?: number;
   step?: number;
@@ -102,6 +105,7 @@ interface AdornmentStateOptions {
   tooltip?: string;
   suffix?: string;
   isNumberField: boolean;
+  isPasswordField: boolean;
   min?: number;
   max?: number;
   parsedValue?: number;
@@ -109,6 +113,7 @@ interface AdornmentStateOptions {
 
 interface AdornmentState {
   showClear: boolean;
+  showReveal: boolean;
   hasTooltip: boolean;
   hasSuffix: boolean;
   showStepper: boolean;
@@ -127,6 +132,7 @@ const getAdornmentState = ({
   tooltip,
   suffix,
   isNumberField,
+  isPasswordField,
   min,
   max,
   parsedValue
@@ -140,10 +146,13 @@ const getAdornmentState = ({
   const canStepUp = max === undefined || parsedValue === undefined || parsedValue < max;
   const stepperRightGap = hasSuffix ? 0.75 : 0.5;
   const suffixRightGap = showClear || hasTooltip ? 0.5 : 0;
-  const hasEndAdornment = hasTooltip || hasSuffix || showClear || showStepper;
+  const hasEndAdornment = [hasTooltip, hasSuffix, showClear, showStepper, isPasswordField].some(
+    Boolean
+  );
 
   return {
     showClear,
+    showReveal: isPasswordField,
     hasTooltip,
     hasSuffix,
     showStepper,
@@ -225,6 +234,9 @@ interface InputEndAdornmentProps {
   suffixRightGap: number;
   showClear: boolean;
   onClear: () => void;
+  showReveal: boolean;
+  revealed: boolean;
+  onToggleReveal: () => void;
   hasTooltip: boolean;
   tooltipText: string;
 }
@@ -240,6 +252,9 @@ const InputEndAdornment: React.FC<InputEndAdornmentProps> = ({
   suffixRightGap,
   showClear,
   onClear,
+  showReveal,
+  revealed,
+  onToggleReveal,
   hasTooltip,
   tooltipText
 }) => (
@@ -278,6 +293,22 @@ const InputEndAdornment: React.FC<InputEndAdornmentProps> = ({
         <ClearIcon fontSize="small" />
       </IconButton>
     ) : null}
+    {showReveal ? (
+      <IconButton
+        size="small"
+        onClick={onToggleReveal}
+        onMouseDown={(e) => e.preventDefault()}
+        edge="end"
+        aria-label={revealed ? "Hide value" : "Show value"}
+        aria-pressed={revealed}
+      >
+        {revealed ? (
+          <VisibilityOffIcon sx={{ fontSize: 18 }} />
+        ) : (
+          <VisibilityIcon sx={{ fontSize: 18 }} />
+        )}
+      </IconButton>
+    ) : null}
     {hasTooltip ? (
       <Tooltip title={tooltipText} arrow>
         <IconButton size="small" edge="end" tabIndex={-1}>
@@ -307,7 +338,9 @@ export const InputField: React.FC<InputFieldProps> = ({
   suffix,
   clearable
 }) => {
+  const [revealed, setRevealed] = useState(false);
   const isNumberField = type === "number";
+  const isPasswordField = type === "password";
   const safeStep = normalizeStep(step);
   const parsedValue = parseNumericValue(value);
   const precision = getPrecision(safeStep, min, max);
@@ -328,6 +361,7 @@ export const InputField: React.FC<InputFieldProps> = ({
     tooltip,
     suffix,
     isNumberField,
+    isPasswordField,
     min,
     max,
     parsedValue
@@ -346,6 +380,9 @@ export const InputField: React.FC<InputFieldProps> = ({
             suffixRightGap={adornmentState.suffixRightGap}
             showClear={adornmentState.showClear}
             onClear={() => onChange("")}
+            showReveal={adornmentState.showReveal}
+            revealed={revealed}
+            onToggleReveal={() => setRevealed((current) => !current)}
             hasTooltip={adornmentState.hasTooltip}
             tooltipText={adornmentState.tooltipText}
           />
@@ -356,7 +393,7 @@ export const InputField: React.FC<InputFieldProps> = ({
   return (
     <TextField
       id={id}
-      type={type}
+      type={isPasswordField && revealed ? "text" : type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       label={label}
@@ -371,6 +408,8 @@ export const InputField: React.FC<InputFieldProps> = ({
       slotProps={{
         htmlInput: {
           "aria-label": ariaLabel,
+          // Keep the browser from filling in the user's own saved login
+          autoComplete: isPasswordField ? "new-password" : undefined,
           min,
           max,
           step
