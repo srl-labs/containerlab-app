@@ -16,6 +16,7 @@ import {
   listFileExplorerDirectory,
   type FileExplorerEntry,
 } from "./runtimeApi";
+import { endpointDisplayAddress } from "./endpointAddress";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type {
   ContainerState,
@@ -582,8 +583,9 @@ function buildEndpointRootItem(
   children: ExplorerTreeItem[],
   healthState?: EndpointHealthCacheEntry,
 ): ExplorerTreeItem {
-  const endpointUrl = endpoint.url.replace(/^https?:\/\//i, "");
-  const baseTooltip = `${endpoint.url}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
+  const address = endpointDisplayAddress(endpoint);
+  const endpointUrl = address.replace(/^https?:\/\//i, "");
+  const baseTooltip = `${address}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
   const healthTooltip = endpointHealthTooltip(healthState);
   return {
     id: `${idPrefix}:${endpoint.id}`,
@@ -1066,7 +1068,7 @@ export function createStandaloneExplorerBridge(
             .map((endpoint) => ({
               id: `file-root:${endpoint.id}`,
               label: endpoint.label,
-              tooltip: `${endpoint.label} (${endpoint.url}): lab workspace`,
+              tooltip: `${endpoint.label} (${endpointDisplayAddress(endpoint)}): lab workspace`,
               contextValue: "containerlabFileExplorerRoot",
               endpointId: endpoint.id,
               resourceKind: "directory",

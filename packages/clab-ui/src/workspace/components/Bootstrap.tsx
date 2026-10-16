@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, type FormEvent } from "react";
 import { ENDPOINT_EXPORT_FILENAME, DEFAULT_ENDPOINT_SESSION_DURATION, isValidEndpointSessionDuration } from "../endpoints";
-import type { EndpointImportResult, EndpointSessionDuration } from "../types";
+import type { EndpointImportResult, EndpointSessionDuration, LocalEndpointOffer } from "../types";
 import { controlRadius, dialogRadius, overlayShadow } from "../../theme/surfaces";
 import { UI_FONT_FAMILY } from "../../theme/typography";
 
@@ -51,6 +51,11 @@ const LOGIN_CSS = `
   background: color-mix(in srgb, var(--vscode-testing-iconPassed) 10%, transparent); border-color: var(--vscode-testing-iconPassed);
 }
 .clab-login-form { display: grid; gap: 18px; }
+.clab-login-local { display: grid; gap: 10px; margin: 0 0 22px; }
+.clab-login-local-problems { color: var(--login-muted); margin: 0; padding-left: 18px; }
+.clab-login-local-problems li + li { margin-top: 4px; }
+.clab-login-divider { align-items: center; color: var(--login-muted); display: flex; font-size: 11px; gap: 10px; margin: 0 0 18px; text-transform: uppercase; }
+.clab-login-divider::before, .clab-login-divider::after { border-top: 1px solid var(--login-border); content: ""; flex: 1; }
 .clab-login-row { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
 .clab-login-field { display: block; min-width: 0; position: relative; }
 /* The label sits in a notch of the field's top border, like the app's other inputs. */
@@ -151,8 +156,11 @@ export function BootstrapLoginPage(props: {
   }) => Promise<void>;
   onExportEndpoints: () => string;
   onImportEndpoints: (content: string) => EndpointImportResult;
+  /** Offered when the host can run labs on this machine. */
+  localEndpoint?: LocalEndpointOffer;
 }) {
-  const { defaultApiUrl, error, logoUrl, onAddEndpoint, onExportEndpoints, onImportEndpoints } = props;
+  const { defaultApiUrl, error, logoUrl, localEndpoint, onAddEndpoint, onExportEndpoints, onImportEndpoints } =
+    props;
   const [url, setUrl] = useState(defaultApiUrl);
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
@@ -230,6 +238,22 @@ export function BootstrapLoginPage(props: {
     }
   }, [onExportEndpoints]);
 
+  const addLocalEndpoint = useCallback(async () => {
+    if (!localEndpoint || busy) {
+      return;
+    }
+    setBusy(true);
+    setLocalError(null);
+    setNotice(null);
+    try {
+      await localEndpoint.onAdd();
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, localEndpoint]);
+
   const handleSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void submit();
@@ -244,7 +268,9 @@ export function BootstrapLoginPage(props: {
         {logoUrl !== undefined ? <img className="clab-login-logo" src={logoUrl} alt="" aria-hidden="true" /> : null}
         <h1 className="clab-login-title">Add Endpoint</h1>
         <p className="clab-login-copy">
-          Connect one or more `clab-api-server` endpoints to manage labs in the browser.
+          {localEndpoint
+            ? "Run labs on this computer, or connect one or more `clab-api-server` endpoints."
+            : "Connect one or more `clab-api-server` endpoints to manage labs in the browser."}
         </p>
 
         {visibleError ? (
@@ -257,6 +283,30 @@ export function BootstrapLoginPage(props: {
             {notice}
           </div>
         ) : null}
+
+        {localEndpoint ? (
+          <section className="clab-login-local" aria-label="This computer">
+            <button
+              className="clab-login-button"
+              data-testid="standalone-local-endpoint-add"
+              disabled={busy || !localEndpoint.available}
+              onClick={() => {
+                void addLocalEndpoint();
+              }}
+              type="button"
+            >
+              Use This Computer
+            </button>
+            {localEndpoint.available ? null : (
+              <ul className="clab-login-local-problems" role="note">
+                {localEndpoint.problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
+        {localEndpoint ? <div className="clab-login-divider">or connect to clab-api-server</div> : null}
 
         <form className="clab-login-form" onSubmit={handleSubmit}>
           <label className="clab-login-field">

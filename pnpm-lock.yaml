@@ -430,6 +430,9 @@ importers:
       '@srl-labs/containerlab-app-server':
         specifier: workspace:*
         version: link:../../packages/app-server
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../../packages/lab-backend
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'

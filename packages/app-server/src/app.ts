@@ -9,7 +9,11 @@ import fastifyWebsocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
-import type { AppConfigResponse } from "@srl-labs/containerlab-app-contract";
+import type {
+  AppConfigResponse,
+  LocalEndpointStatus
+} from "@srl-labs/containerlab-app-contract";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 import { registerAuthRoutes } from "./auth.ts";
 import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.ts";
@@ -28,13 +32,28 @@ import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { normalizeBasePath } from "./basePath.ts";
 import type { ResolvedEndpoint } from "./endpointResolver.ts";
-import { apiUiStore } from "./uiStore.ts";
+import { apiUiStore, type EndpointUiStore } from "./uiStore.ts";
+
+/** A "This computer" endpoint that runs labs with containerlab on this machine. */
+export interface LocalEndpointOptions {
+  /** The backend every local endpoint uses; it acts as the app's own OS user. */
+  backend: LabBackend;
+  /** Custom node templates and icons of that user. */
+  ui: EndpointUiStore;
+  /** Whether containerlab can run here, and what is missing if not. */
+  status(): Promise<LocalEndpointStatus>;
+}
 
 export interface CreateStandaloneAppOptions {
   basePath?: string;
   defaultClabApiUrl?: string;
   https?: HttpsServerOptions;
   isDev?: boolean;
+  /**
+   * Offer a local endpoint. Only a single-user app such as the desktop app
+   * should: every browser session would act as the server's OS user.
+   */
+  localEndpoint?: LocalEndpointOptions;
   logger?: boolean;
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
@@ -230,6 +249,7 @@ export async function createStandaloneApp(
 
     const migratedEntry: EndpointEntry = {
       id: buildEndpointId(),
+      kind: "api",
       url: legacy.url,
       label: defaultEndpointLabel(legacy.url),
       token: legacy.token,
@@ -271,11 +291,16 @@ export async function createStandaloneApp(
     return endpointSessions.replaceSession(sessionId, []);
   };
 
-  const backendsFor = (endpoint: EndpointEntry): Omit<ResolvedEndpoint, "endpoint"> => {
+  const local = options.localEndpoint;
+  const backendsFor = (endpoint: EndpointEntry): Omit<ResolvedEndpoint, "endpoint"> | null => {
+    if (endpoint.kind === "local") {
+      return local ? { backend: local.backend, ui: local.ui } : null;
+    }
     const backend = new ApiLabBackend({ baseUrl: endpoint.url, token: endpoint.token });
     return { backend, ui: apiUiStore(backend) };
   };
-  const backendFor = (endpoint: EndpointEntry) => backendsFor(endpoint).backend;
+  const backendFor = (endpoint: EndpointEntry): LabBackend | null =>
+    backendsFor(endpoint)?.backend ?? null;
 
   const resolveEndpoint = (
     request: FastifyRequest,
@@ -291,11 +316,12 @@ export async function createStandaloneApp(
     const endpoint = endpointId
       ? (session.endpoints.get(endpointId) ?? null)
       : (Array.from(session.endpoints.values())[0] ?? null);
-    if (!endpoint?.token) {
+    if (!endpoint || (endpoint.kind === "api" && !endpoint.token)) {
       return null;
     }
 
-    return { endpoint, ...backendsFor(endpoint) };
+    const backends = backendsFor(endpoint);
+    return backends ? { endpoint, ...backends } : null;
   };
 
   const listEndpoints = (
@@ -310,6 +336,7 @@ export async function createStandaloneApp(
     async (scoped: FastifyInstance) => {
       registerAuthRoutes(scoped, {
         backendFor,
+        localEndpoint: local,
         defaultApiUrl: defaultClabApiUrl,
         disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
         ensureSession,
@@ -326,12 +353,16 @@ export async function createStandaloneApp(
       scoped.get("/api/config", async (request, reply) => {
         const endpoints = listEndpoints(request, reply).map((entry) => ({
           id: entry.id,
+          kind: entry.kind,
           url: entry.url,
           label: entry.label,
           username: entry.username,
           sessionDuration: entry.sessionDuration,
         }));
         const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
+        if (local) {
+          payload.localEndpoint = await local.status();
+        }
         return reply.send(payload);
       });
     },

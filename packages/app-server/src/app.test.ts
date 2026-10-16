@@ -518,6 +518,7 @@ test("POST /auth/login normalizes endpoint URL, forwards credentials, and hides 
     clabApiUrl: "https://api.example.test",
     endpoint: {
       id: response.json<{ endpoint: { id: string } }>().endpoint.id,
+      kind: "api",
       url: "https://api.example.test",
       label: "Primary API",
       username: "alice",

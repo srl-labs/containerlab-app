@@ -12,6 +12,7 @@ import type { StandaloneTopologySessionManager } from "./topologySessionManager"
 
 const endpoint: EndpointEntry = {
   id: "endpoint-remote",
+  kind: "api",
   url: "http://remote.test",
   label: "Remote",
   token: "secret-token",

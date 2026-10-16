@@ -403,6 +403,10 @@ function normalizeShareToolAction(value: unknown): ShareToolAction | undefined {
 }
 
 function endpointHostname(endpointUrl: string): string | undefined {
+  if (endpointUrl.startsWith("local:")) {
+    // Labs of a local endpoint publish their ports on this machine.
+    return "localhost";
+  }
   try {
     return new URL(endpointUrl).hostname || undefined;
   } catch {

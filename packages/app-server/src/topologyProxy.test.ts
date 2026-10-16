@@ -18,6 +18,7 @@ test("/api/topology/command resolves endpoint from topologyRef", async (t) => {
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",
@@ -121,6 +122,7 @@ test("/api/topology/sessions preserves running-lab-doc topology ref", async (t) 
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",
@@ -197,6 +199,7 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",

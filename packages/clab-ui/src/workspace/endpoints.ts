@@ -1,5 +1,10 @@
 import type { EndpointSessionDuration } from "./types";
-export type { EndpointConfig, EndpointImportResult, EndpointSessionDuration } from "./types";
+export type {
+  EndpointConfig,
+  EndpointImportResult,
+  EndpointSessionDuration,
+  LocalEndpointOffer
+} from "./types";
 
 const ENDPOINT_SESSION_DURATION_PATTERN =
   /^(?:(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))|(?:\d+(?:\.\d+)?(?:d|w)))+$/i;

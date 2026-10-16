@@ -140,8 +140,13 @@ export interface LabState {
 }
 
 export type InterfaceNetemPatch = Partial<Pick<InterfaceState, "netemDelay" | "netemJitter" | "netemLoss" | "netemRate" | "netemCorruption">>;
+/** `api` is a clab-api-server; `local` runs labs with containerlab on the app's machine. */
+export type EndpointKind = "api" | "local";
+
 export interface EndpointConfig {
   id: string;
+  /** Missing on endpoints from before endpoint kinds, which are all `api`. */
+  kind?: EndpointKind;
   url: string;
   label: string;
   username: string;
@@ -151,6 +156,18 @@ export interface EndpointConfig {
 }
 
 export type EndpointStatus = "connected" | "session_expired" | "offline" | "saved";
+
+/**
+ * Labs on the app's own machine, which hosts that can run containerlab there
+ * offer (the desktop app on Linux). It needs no URL or sign-in.
+ */
+export interface LocalEndpointOffer {
+  /** containerlab and the container runtime are ready for this user. */
+  available: boolean;
+  /** What is missing, each with how to fix it. */
+  problems: string[];
+  onAdd: () => Promise<void>;
+}
 export type EndpointSessionDuration = string;
 export interface EndpointImportResult { added: number; duplicates: number; total: number; unchanged: number; updated: number; }
 export interface EndpointHealthMetrics {

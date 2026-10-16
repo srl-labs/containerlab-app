@@ -56,6 +56,7 @@ describeTopologyHostContract("Web and desktop app server", {
   async createFixture(yaml) {
     const endpoint: EndpointEntry = {
       id: "contract-endpoint",
+      kind: "api",
       url: "http://clab-api.test",
       label: "Contract",
       token: "token",

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import type { EndpointKind, LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 
@@ -11,13 +12,16 @@ import type {
 } from "./endpointSessionStore.ts";
 import {
   buildEndpointId,
+  DEFAULT_ENDPOINT_SESSION_DURATION,
   isValidEndpointSessionDuration,
+  LOCAL_ENDPOINT_URL,
   normalizeEndpointSessionDuration
 } from "./endpointSessionStore.ts";
 import { clearLegacySessionCookies, clearSessionCookie, normalizeApiUrl } from "./middleware.ts";
 
 interface EndpointPublicInfo {
   id: string;
+  kind: EndpointKind;
   url: string;
   label: string;
   username: string;
@@ -27,6 +31,8 @@ interface EndpointPublicInfo {
 }
 
 interface AddEndpointBody {
+  /** `local` adds the "This computer" endpoint; it takes no URL or credentials. */
+  kind?: EndpointKind;
   label?: string;
   password: string;
   sessionDuration?: EndpointSessionDuration;
@@ -36,6 +42,7 @@ interface AddEndpointBody {
 }
 
 interface ReconnectEndpointBody {
+  kind?: EndpointKind;
   label?: string;
   password: string;
   sessionDuration?: EndpointSessionDuration;
@@ -55,8 +62,9 @@ interface UpdateEndpointBody {
 }
 
 interface AuthRouteOptions {
-  /** The backend of a signed-in endpoint. */
-  backendFor: (entry: EndpointEntry) => LabBackend;
+  /** The backend of a signed-in endpoint; null for a local endpoint this app does not offer. */
+  backendFor: (entry: EndpointEntry) => LabBackend | null;
+  localEndpoint?: { status(): Promise<LocalEndpointStatus> };
   defaultApiUrl: string;
   disposeEndpointSessions: (endpointId: string) => void;
   ensureSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
@@ -82,6 +90,7 @@ function toPublicInfo(
 ): EndpointPublicInfo {
   return {
     id: entry.id,
+    kind: entry.kind,
     url: entry.url,
     label: entry.label,
     username: entry.username,
@@ -95,9 +104,11 @@ async function validateEndpoint(
   entry: EndpointEntry,
   backendFor: AuthRouteOptions["backendFor"]
 ): Promise<EndpointPublicInfo> {
-  if (!entry.token) return toPublicInfo(entry, "session_expired");
+  if (entry.kind === "api" && !entry.token) return toPublicInfo(entry, "session_expired");
+  const backend = backendFor(entry);
+  if (!backend) return toPublicInfo(entry, "offline");
   try {
-    await backendFor(entry).version({ timeoutMs: 3000 });
+    await backend.version({ timeoutMs: 3000 });
     return toPublicInfo(entry, "connected");
   } catch (error) {
     if (
@@ -147,7 +158,8 @@ function authErrorStatusCode(error: unknown): number {
     "status" in error &&
     ((error as { status?: unknown }).status === 400 ||
       (error as { status?: unknown }).status === 401 ||
-      (error as { status?: unknown }).status === 403)
+      (error as { status?: unknown }).status === 403 ||
+      (error as { status?: unknown }).status === 409)
   ) {
     return Number((error as { status?: unknown }).status);
   }
@@ -191,6 +203,7 @@ async function authenticateEndpoint(
 
   return {
     id: buildEndpointId(),
+    kind: "api",
     url: normalizedUrl,
     label: defaultEndpointLabel(normalizedUrl, body.label),
     token: backend.token,
@@ -223,6 +236,7 @@ async function reconnectEndpoint(
   });
   const updated: EndpointEntry = {
     id: endpointId || existing?.id || buildEndpointId(),
+    kind: "api",
     url: normalizedUrl,
     label: defaultEndpointLabel(normalizedUrl, body.label ?? existing?.label),
     token: backend.token,
@@ -234,9 +248,47 @@ async function reconnectEndpoint(
   return updated;
 }
 
+/**
+ * The session's local endpoint, added once: the app's own machine needs no
+ * sign-in, and its labs belong to the app's OS user.
+ */
+async function addLocalEndpoint(
+  body: { label?: string },
+  session: EndpointSession,
+  options: AuthRouteOptions,
+  endpointId?: string
+): Promise<EndpointEntry> {
+  if (!options.localEndpoint) {
+    throw Object.assign(new Error("This app cannot run labs on its own machine."), { status: 400 });
+  }
+  const status = await options.localEndpoint.status();
+  if (!status.available) {
+    throw Object.assign(new Error(status.problems.join(" ") || "containerlab cannot run here."), {
+      status: 409
+    });
+  }
+  const existing = Array.from(session.endpoints.values()).find((entry) => entry.kind === "local");
+  const entry: EndpointEntry = {
+    id: existing?.id ?? endpointId ?? buildEndpointId(),
+    kind: "local",
+    url: LOCAL_ENDPOINT_URL,
+    label: body.label?.trim() || existing?.label || status.label,
+    token: "",
+    username: status.username,
+    sessionDuration: existing?.sessionDuration ?? DEFAULT_ENDPOINT_SESSION_DURATION
+  };
+  options.endpointSessions.upsertEndpoint(session.sessionId, entry);
+  return entry;
+}
+
 export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptions): void {
   app.post<{ Body: AddEndpointBody }>("/auth/endpoints/add", async (request, reply) => {
     try {
+      if (request.body.kind === "local") {
+        const session = options.ensureSession(request, reply);
+        const entry = await addLocalEndpoint(request.body, session, options);
+        return reply.send(await validateEndpoint(entry, options.backendFor));
+      }
       const entry = await authenticateEndpoint(request.body, options.defaultApiUrl);
       const session = options.ensureSession(request, reply);
       options.disposeEndpointSessions(entry.id);
@@ -289,8 +341,12 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.status(404).send({ error: "Endpoint not found" });
     }
 
+    const backend = options.backendFor(endpoint);
+    if (!backend) {
+      return reply.status(404).send({ error: "Endpoint not available" });
+    }
     try {
-      return reply.send(await options.backendFor(endpoint).healthMetrics());
+      return reply.send(await backend.healthMetrics());
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load endpoint metrics";
       return reply.status(authErrorStatusCode(error)).send({ error: message });
@@ -322,6 +378,22 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
     "/auth/endpoints/:id/reconnect",
     async (request, reply) => {
       const endpointId = request.params.id.trim();
+      const local = options.resolveSession(request, reply)?.endpoints.get(endpointId);
+      if (local?.kind === "local") {
+        // Nothing to sign in to: report whether containerlab answers again.
+        return reply.send(await validateEndpoint(local, options.backendFor));
+      }
+      if (request.body.kind === "local") {
+        // A saved local endpoint whose server session is gone comes back under its id.
+        try {
+          const session = options.ensureSession(request, reply);
+          const entry = await addLocalEndpoint(request.body, session, options, endpointId);
+          return reply.send(await validateEndpoint(entry, options.backendFor));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Reconnect failed";
+          return reply.status(authErrorStatusCode(error)).send({ error: message });
+        }
+      }
       const credentialError = requireCredentials(request.body.username, request.body.password);
       if (credentialError) {
         return reply.status(400).send({ error: credentialError });
@@ -359,7 +431,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
           sessionDuration: resolveEndpointSessionDuration(request.body.sessionDuration)
         };
         options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-        return reply.send(toPublicInfo(updated, updated.token ? "connected" : "session_expired"));
+        return reply.send(
+          toPublicInfo(updated, updated.kind === "local" || updated.token ? "connected" : "session_expired")
+        );
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to update endpoint preferences";
@@ -380,6 +454,19 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       const existing = session.endpoints.get(endpointId) ?? null;
       if (!existing) {
         return reply.status(404).send({ error: "Endpoint not found" });
+      }
+
+      if (existing.kind === "local") {
+        const updated: EndpointEntry = {
+          ...existing,
+          label: request.body.label?.trim() || existing.label,
+          sessionDuration:
+            request.body.sessionDuration !== undefined
+              ? resolveEndpointSessionDuration(request.body.sessionDuration)
+              : existing.sessionDuration
+        };
+        options.endpointSessions.upsertEndpoint(session.sessionId, updated);
+        return reply.send(await validateEndpoint(updated, options.backendFor));
       }
 
       const nextUrl =

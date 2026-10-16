@@ -46,7 +46,8 @@ import {
 import {
   type EndpointConfig,
   type EndpointImportResult,
-  type EndpointSessionDuration
+  type EndpointSessionDuration,
+  type LocalEndpointOffer
 } from "../endpoints";
 import { SettingsLayout } from "../../settings/SettingsLayout";
 import { SettingsField } from "../../settings/SettingsField";
@@ -110,6 +111,8 @@ interface SettingsOverlayProps {
     }
   ) => void;
   onAppearanceChange: (next: StandaloneAppearance) => void;
+  /** Offered when the host can run labs on this machine. */
+  localEndpoint?: LocalEndpointOffer;
   tabOrientation?: TabOrientation;
   onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -512,6 +515,7 @@ export function SettingsOverlay({
   onSetEndpointSessionDuration,
   onSaveTerminalPreferences,
   onAppearanceChange,
+  localEndpoint,
   tabOrientation = "horizontal",
   onTabOrientationChange,
   terminalPreferences
@@ -707,6 +711,7 @@ export function SettingsOverlay({
               onRemoveEndpoint={onRemoveEndpoint}
               onUpdateEndpoint={onUpdateEndpoint}
               onSetEndpointSessionDuration={onSetEndpointSessionDuration}
+              localEndpoint={localEndpoint}
               onRequestedActionHandled={() => setRequestedEndpointAction(null)}
               requestedAction={requestedEndpointAction}
             />

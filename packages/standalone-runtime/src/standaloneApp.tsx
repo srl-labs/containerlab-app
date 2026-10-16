@@ -11,6 +11,7 @@ import {
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
+import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
 import { workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import {
@@ -1402,10 +1403,12 @@ function StandaloneApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     addEndpoint,
+    addLocalEndpoint,
     defaultApiUrl,
     endpointList,
     error,
     exportEndpoints,
+    localEndpoint,
     hasConnectedEndpoint,
     hasEndpointSession,
     importEndpoints,
@@ -1553,6 +1556,22 @@ function StandaloneApp() {
     [addEndpoint, refreshConfig],
   );
 
+  const localEndpointOffer = useMemo<LocalEndpointOffer | undefined>(
+    () =>
+      localEndpoint
+        ? {
+            available: localEndpoint.available,
+            problems: localEndpoint.problems,
+            onAdd: async () => {
+              await addLocalEndpoint();
+              await refreshConfig().catch(() => {});
+              scheduleExplorerSnapshot(0);
+            }
+          }
+        : undefined,
+    [addLocalEndpoint, localEndpoint, refreshConfig],
+  );
+
   const handleExportEndpoints = useCallback(() => {
     return exportEndpoints();
   }, [exportEndpoints]);
@@ -1670,6 +1689,7 @@ function StandaloneApp() {
         <Suspense fallback={null}>
           <LazyLoginPage
             defaultApiUrl={defaultApiUrl}
+            localEndpoint={localEndpointOffer}
             endpoints={endpointList}
             error={error}
             onAddEndpoint={handleAddEndpoint}
@@ -1773,6 +1793,7 @@ function StandaloneApp() {
             onSetEndpointSessionDuration={handleSetEndpointSessionDuration}
             onSaveTerminalPreferences={handleSaveTerminalPreferences}
             terminalPreferences={terminalPreferences}
+            localEndpoint={localEndpointOffer}
           />
       </>
     </>
@@ -1827,6 +1848,7 @@ function SettingsOverlayMounted(props: {
   tabOrientation: TabOrientation;
   onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
+  localEndpoint?: LocalEndpointOffer;
 }) {
   return (
     <MuiThemeProvider>
@@ -1852,6 +1874,7 @@ function SettingsOverlayMounted(props: {
           onSetEndpointSessionDuration={props.onSetEndpointSessionDuration}
           onSaveTerminalPreferences={props.onSaveTerminalPreferences}
           terminalPreferences={props.terminalPreferences}
+          localEndpoint={props.localEndpoint}
         />
       </Suspense>
     </MuiThemeProvider>

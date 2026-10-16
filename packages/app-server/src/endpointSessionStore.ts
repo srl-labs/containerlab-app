@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { isValidEndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
-import type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
+import type { EndpointKind, EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
 export {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   normalizeEndpointSessionDuration,
@@ -13,6 +13,8 @@ export type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contrac
 
 export interface EndpointEntry {
   id: string;
+  /** A local endpoint has no URL to sign in to and no token. */
+  kind: EndpointKind;
   url: string;
   label: string;
   token: string;
@@ -27,6 +29,9 @@ export interface EndpointSession {
 }
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** The address a local endpoint shows in place of an API URL. */
+export const LOCAL_ENDPOINT_URL = "local://this-computer";
 
 function cloneEntries(entries: Iterable<EndpointEntry>): Map<string, EndpointEntry> {
   return new Map(Array.from(entries, (entry) => [entry.id, { ...entry }]));
@@ -67,7 +72,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isEndpointEntry(value: unknown): value is EndpointEntry {
+/** A stored endpoint; entries saved before endpoint kinds existed are API endpoints. */
+function toEndpointEntry(value: unknown): EndpointEntry | null {
+  if (!isEndpointRecord(value)) return null;
+  const kind = value.kind === "local" ? "local" : "api";
+  return { ...value, kind } as EndpointEntry;
+}
+
+function isEndpointRecord(value: unknown): value is Omit<EndpointEntry, "kind"> & { kind?: unknown } {
   return (
     isObject(value) &&
     typeof value.id === "string" &&
@@ -128,7 +140,9 @@ function readPersistedSessions(persistenceFile: string | undefined): Map<string,
       continue;
     }
 
-    const endpoints = persistedSession.endpoints.filter(isEndpointEntry);
+    const endpoints = persistedSession.endpoints
+      .map(toEndpointEntry)
+      .filter((entry): entry is EndpointEntry => entry !== null);
     const session: EndpointSession = {
       sessionId: persistedSession.sessionId,
       endpoints: cloneEntries(endpoints),

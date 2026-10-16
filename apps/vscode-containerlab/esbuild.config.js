@@ -121,7 +121,9 @@ const browserAssetLoaders = {
   ".eot": "dataurl"
 };
 
-// Plugin to stub native .node files - ssh2 has JS fallbacks
+// Plugin to stub native .node files. ssh2 loads them inside try/catch and uses
+// its JavaScript fallbacks when loading throws; an empty object would look like
+// a working addon.
 const nativeNodeModulesPlugin = {
   name: "native-node-modules",
   setup(build) {
@@ -130,7 +132,7 @@ const nativeNodeModulesPlugin = {
       namespace: "native-node-empty"
     }));
     build.onLoad({ filter: /.*/, namespace: "native-node-empty" }, () => ({
-      contents: "module.exports = {};"
+      contents: 'throw new Error("Native addons are not bundled");'
     }));
   }
 };

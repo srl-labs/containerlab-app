@@ -42,7 +42,8 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ignoreDependencies: ["tsx"]
   },
   "apps/desktop": {
-    entry: ["scripts/after-pack.cjs"],
+    // scripts/build.mjs bundles the main process and preload script.
+    entry: ["scripts/after-pack.cjs", "src/main.ts", "src/preload.ts"],
     // Provided by WSL for the native Windows development launcher.
     ignoreBinaries: ["wslpath"]
   },

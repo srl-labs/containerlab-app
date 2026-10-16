@@ -31,7 +31,8 @@ import { ENDPOINT_EXPORT_FILENAME,
   isValidEndpointSessionDuration,
   type EndpointConfig,
   type EndpointImportResult,
-  type EndpointSessionDuration } from "../endpoints";
+  type EndpointSessionDuration,
+  type LocalEndpointOffer } from "../endpoints";
 import {
   formatEndpointHealthPercent,
   formatEndpointHealthUsedTotal,
@@ -76,6 +77,8 @@ interface EndpointManagerProps {
     endpointId: string,
     sessionDuration: EndpointSessionDuration
   ) => void;
+  /** Offered when the host can run labs on this machine. */
+  localEndpoint?: LocalEndpointOffer;
 }
 
 type EndpointHealthState =
@@ -386,12 +389,14 @@ function ManagedEndpointList(props: {
                     noWrap
                     sx={{
                       color: "text.secondary",
-                      fontFamily: MONO_FONT_FAMILY,
+                      fontFamily: endpoint.kind === "local" ? undefined : MONO_FONT_FAMILY,
                       display: "block",
                       mt: 0.25
                     }}
                   >
-                    {endpoint.url}
+                    {endpoint.kind === "local"
+                      ? `containerlab on this computer as ${endpoint.username}`
+                      : endpoint.url}
                   </Typography>
                   <Typography
                     variant="caption"
@@ -404,14 +409,16 @@ function ManagedEndpointList(props: {
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0, mt: -0.5, mr: -0.75 }}>
-                  <IconButton
-                    size="small"
-                    onClick={() => props.onEdit(endpoint)}
-                    aria-label={`Edit ${endpoint.label}`}
-                    disabled={props.busyKey !== null}
-                  >
-                    <EditOutlinedIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
+                  {endpoint.kind === "local" ? null : (
+                    <IconButton
+                      size="small"
+                      onClick={() => props.onEdit(endpoint)}
+                      aria-label={`Edit ${endpoint.label}`}
+                      disabled={props.busyKey !== null}
+                    >
+                      <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  )}
                   <IconButton
                     size="small"
                     onClick={() => props.onReconnect(endpoint)}
@@ -437,48 +444,93 @@ function ManagedEndpointList(props: {
                   state={props.endpointHealth[endpoint.id]}
                 />
               ) : null}
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                sx={{
-                  alignItems: { xs: "stretch", sm: "flex-start" }
-                }}
-              >
-                <TextField
-                  label="Keep signed in"
-                  size="small"
-                  value={durationDraft}
-                  onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
-                  error={Boolean(durationDraft.trim()) && !durationValid}
-                  helperText={
-                    durationValid
-                      ? "Examples: 24h, 36h, 7d, 1h30m"
-                      : "Use values like 24h, 36h, 7d, or 1h30m"
-                  }
-                  placeholder="24h"
-                  disabled={props.busyKey !== null}
-                  sx={{ flex: 1, mt: 0.5 }}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-                <Button
-                  variant="outlined"
-                  disabled={saveDurationDisabled}
-                  onClick={() =>
-                    props.onSetEndpointSessionDuration?.(endpoint.id, durationDraft.trim())
-                  }
+              {endpoint.kind === "local" ? null : (
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1}
                   sx={{
-                    mt: { sm: 0.5 },
-                    alignSelf: { xs: "stretch", sm: "flex-start" }
+                    alignItems: { xs: "stretch", sm: "flex-start" }
                   }}
                 >
-                  Save
-                </Button>
-              </Stack>
+                  <TextField
+                    label="Keep signed in"
+                    size="small"
+                    value={durationDraft}
+                    onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
+                    error={Boolean(durationDraft.trim()) && !durationValid}
+                    helperText={
+                      durationValid
+                        ? "Examples: 24h, 36h, 7d, 1h30m"
+                        : "Use values like 24h, 36h, 7d, or 1h30m"
+                    }
+                    placeholder="24h"
+                    disabled={props.busyKey !== null}
+                    sx={{ flex: 1, mt: 0.5 }}
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                  <Button
+                    variant="outlined"
+                    disabled={saveDurationDisabled}
+                    onClick={() =>
+                      props.onSetEndpointSessionDuration?.(endpoint.id, durationDraft.trim())
+                    }
+                    sx={{
+                      mt: { sm: 0.5 },
+                      alignSelf: { xs: "stretch", sm: "flex-start" }
+                    }}
+                  >
+                    Save
+                  </Button>
+                </Stack>
+              )}
             </Stack>
           </Paper>
         );
       })}
     </Stack>
+  );
+}
+
+/** Runs labs with containerlab on this machine instead of a clab-api-server. */
+function LocalEndpointCard(props: {
+  busy: boolean;
+  offer: LocalEndpointOffer;
+  onAdd: () => void;
+  variant: "initial" | "manage";
+}) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{ p: 2, borderColor: "divider", bgcolor: "background.paper" }}
+      data-testid="standalone-local-endpoint"
+    >
+      <Stack spacing={1.25}>
+        <Box>
+          <Typography variant="subtitle1">This Computer</Typography>
+          <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.25 }}>
+            Run labs with containerlab on this machine, without a clab-api-server.
+          </Typography>
+        </Box>
+        {props.offer.available ? null : (
+          <Alert severity="warning" variant="outlined">
+            <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2 }}>
+              {props.offer.problems.map((problem) => (
+                <li key={problem}>{problem}</li>
+              ))}
+            </Stack>
+          </Alert>
+        )}
+        <Button
+          variant={props.variant === "initial" ? "contained" : "outlined"}
+          onClick={props.onAdd}
+          disabled={props.busy || !props.offer.available}
+          sx={{ alignSelf: props.variant === "initial" ? "stretch" : "flex-start" }}
+          data-testid="standalone-local-endpoint-add"
+        >
+          Use This Computer
+        </Button>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -562,6 +614,8 @@ function useEndpointHealthState(
 }
 
 function useRequestedEndpointActionDialog(input: {
+  /** Checks a local endpoint again; it has no credentials to ask for. */
+  onReconnectLocal: (endpoint: EndpointConfig) => void;
   onRequestedActionHandled?: () => void;
   requestedAction?: EndpointUiAction | null;
   setError: (message: string | null) => void;
@@ -573,6 +627,7 @@ function useRequestedEndpointActionDialog(input: {
 }): void {
   useEffect(() => {
     const {
+      onReconnectLocal,
       onRequestedActionHandled,
       requestedAction,
       setError,
@@ -594,7 +649,9 @@ function useRequestedEndpointActionDialog(input: {
     }
 
     setError(null);
-    if (requestedAction.action === "reconnect") {
+    if (requestedAction.action === "reconnect" && endpoint.kind === "local") {
+      onReconnectLocal(endpoint);
+    } else if (requestedAction.action === "reconnect") {
       setReconnectEndpointId(endpoint.id);
       setReconnectUsername(endpoint.username);
       setReconnectPassword("");
@@ -603,6 +660,7 @@ function useRequestedEndpointActionDialog(input: {
     }
     onRequestedActionHandled?.();
   }, [
+    input.onReconnectLocal,
     input.onRequestedActionHandled,
     input.requestedAction,
     input.setError,
@@ -912,7 +970,8 @@ export function EndpointManager({
   onUpdateEndpoint,
   onRequestedActionHandled,
   requestedAction,
-  onSetEndpointSessionDuration
+  onSetEndpointSessionDuration,
+  localEndpoint
 }: EndpointManagerProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -963,7 +1022,35 @@ export function EndpointManager({
     sortedEndpoints
   );
 
+  const reconnectLocal = useCallback(
+    (endpoint: EndpointConfig) => {
+      if (busyKey !== null) return;
+      setBusyKey(`reconnect:${endpoint.id}`);
+      setError(null);
+      onReconnectEndpoint({ endpointId: endpoint.id, username: endpoint.username, password: "" })
+        .catch((reconnectError: unknown) => {
+          setError(reconnectError instanceof Error ? reconnectError.message : String(reconnectError));
+        })
+        .finally(() => setBusyKey(null));
+    },
+    [busyKey, onReconnectEndpoint]
+  );
+  const addLocalEndpoint = useCallback(() => {
+    if (!localEndpoint || busyKey !== null) return;
+    setBusyKey("add-local");
+    setError(null);
+    localEndpoint
+      .onAdd()
+      .catch((addError: unknown) => {
+        setError(addError instanceof Error ? addError.message : String(addError));
+      })
+      .finally(() => setBusyKey(null));
+  }, [busyKey, localEndpoint]);
+  const offerLocalEndpoint =
+    localEndpoint !== undefined && !sortedEndpoints.some((endpoint) => endpoint.kind === "local");
+
   useRequestedEndpointActionDialog({
+    onReconnectLocal: reconnectLocal,
     onRequestedActionHandled,
     requestedAction,
     setError,
@@ -1062,10 +1149,21 @@ export function EndpointManager({
           healthStatsEnabled={healthStatsEnabled}
           onDraftChange={handleEndpointDurationDraftChange}
           onEdit={editDialog.open}
-          onReconnect={reconnectDialog.open}
+          onReconnect={(endpoint) =>
+            endpoint.kind === "local" ? reconnectLocal(endpoint) : reconnectDialog.open(endpoint)
+          }
           onRemove={removeDialog.open}
           onSetEndpointSessionDuration={onSetEndpointSessionDuration}
           sessionDurationDrafts={endpointSessionDurationDrafts}
+        />
+      ) : null}
+
+      {offerLocalEndpoint ? (
+        <LocalEndpointCard
+          busy={busyKey !== null}
+          offer={localEndpoint}
+          onAdd={addLocalEndpoint}
+          variant={mode}
         />
       ) : null}
 
