@@ -6,7 +6,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
 
-import { parseBooleanEnv } from "./env.ts";
+import { parseBooleanEnv } from "@srl-labs/containerlab-lab-backend";
 
 const CERT_RENEWAL_MS = 30 * 24 * 60 * 60 * 1000;
 const CERT_DAYS = 3650;

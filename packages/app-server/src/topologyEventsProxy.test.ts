@@ -3,7 +3,9 @@ import test from "node:test";
 
 import Fastify from "fastify";
 
-import type { ClabApiClient } from "./clabApiClient";
+import { ApiLabBackend, type ClabApiClient } from "@srl-labs/containerlab-lab-backend/api";
+
+import { apiUiStore } from "./uiStore";
 import type { EndpointEntry } from "./endpointSessionStore";
 import { registerTopologyEventsProxy } from "./topologyEventsProxy";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager";
@@ -66,8 +68,10 @@ async function injectTopologyEvents(options: {
       openedLabName = labName;
       openedPath = filePath;
       return ndjsonResponse(options.lines);
-    }
-  } as Pick<ClabApiClient, "openTopologyEventStream"> as ClabApiClient;
+    },
+    getBaseUrl: () => "http://clab-api.test"
+  } as Pick<ClabApiClient, "openTopologyEventStream" | "getBaseUrl"> as ClabApiClient;
+  const backend = new ApiLabBackend({ baseUrl: "http://clab-api.test", token: endpoint.token, client });
 
   const sessions = {
     acquireSession(id: string, endpointId?: string) {
@@ -95,7 +99,6 @@ async function injectTopologyEvents(options: {
     disposeSession() {
       return false;
     },
-    disposeSessionsForToken() {},
     getSession(id: string, endpointId?: string) {
       if (id !== sessionId || endpointId !== endpoint.id) {
         return null;
@@ -112,7 +115,9 @@ async function injectTopologyEvents(options: {
   registerTopologyEventsProxy(
     app,
     (_request, _reply, preferredEndpointId) =>
-      preferredEndpointId === endpoint.id ? { client, endpoint } : null,
+      preferredEndpointId === endpoint.id
+        ? { backend, endpoint, ui: apiUiStore(backend) }
+        : null,
     sessions
   );
 

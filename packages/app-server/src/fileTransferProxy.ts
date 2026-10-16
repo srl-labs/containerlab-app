@@ -1,20 +1,10 @@
 import { gzipSync } from "node:zlib";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { Response } from "undici";
+import type { LabFileSystem, WorkspaceFileEntry } from "@srl-labs/containerlab-lab-backend";
+import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
 
-import {
-  getHttpErrorStatus,
-  type ClabApiClient,
-  type WorkspaceFileEntry,
-} from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
+import type { EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
 import { getEndpointIdFromRequest } from "./middleware.ts";
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string,
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 type ArchiveFormat = "zip" | "tar.gz";
 
@@ -321,16 +311,11 @@ function assertLabFolderEntries(labFolder: string, entries: WorkspaceFileEntry[]
   }
 }
 
-async function responseToBuffer(response: Response): Promise<Buffer> {
-  return Buffer.from(await response.arrayBuffer());
-}
-
 async function collectWorkspaceFiles(
-  client: ClabApiClient,
-  token: string,
+  fs: LabFileSystem,
   labFolder: string,
 ): Promise<ArchiveFileEntry[]> {
-  const rootEntries = await client.listWorkspaceTree(token, labFolder);
+  const rootEntries = await fs.list(labFolder);
   assertLabFolderEntries(labFolder, rootEntries);
 
   const files: ArchiveFileEntry[] = [];
@@ -338,11 +323,11 @@ async function collectWorkspaceFiles(
     for (const entry of entries) {
       const entryPath = normalizeWorkspacePath(entry.path);
       if (entry.kind === "directory") {
-        await visit(await client.listWorkspaceTree(token, entryPath));
+        await visit(await fs.list(entryPath));
         continue;
       }
-      const response = await client.openWorkspaceFile(token, entryPath);
-      files.push({ path: entryPath, data: await responseToBuffer(response) });
+      const { data } = await fs.read(entryPath);
+      files.push({ path: entryPath, data: Buffer.from(data) });
     }
   };
   await visit(rootEntries);
@@ -525,7 +510,7 @@ export function registerFileTransferProxy(
   const resolveFileEndpoint = (
     request: FastifyRequest,
     reply: FastifyReply,
-  ): { client: ClabApiClient; endpoint: EndpointEntry } | null =>
+  ): ResolvedEndpoint | null =>
     resolveEndpoint(request, reply, getEndpointIdFromRequest(request));
 
   app.get("/api/runtime/file-explorer/download", async (request, reply) => {
@@ -535,12 +520,10 @@ export function registerFileTransferProxy(
     }
     try {
       const pathValue = normalizeWorkspacePath(queryString(request, "path"));
-      const response = await resolved.client.openWorkspaceFile(resolved.endpoint.token, pathValue);
-      const data = await responseToBuffer(response);
-      const contentType = response.headers.get("content-type") ?? "application/octet-stream";
+      const { data, contentType } = await resolved.backend.fs.read(pathValue);
       reply.header("Content-Type", contentType);
       reply.header("Content-Disposition", contentDisposition(safeFileName(pathValue)));
-      return reply.send(data);
+      return reply.send(Buffer.from(data));
     } catch (error) {
       return sendRouteError(reply, error);
     }
@@ -566,12 +549,7 @@ export function registerFileTransferProxy(
         const pathValue = useDirectoryTarget
           ? normalizeWorkspacePath(joinWorkspacePath(basePath, normalizeUploadFileName(file.fileName)))
           : basePath;
-        await resolved.client.putWorkspaceFileBytes(
-          resolved.endpoint.token,
-          pathValue,
-          file.data,
-          file.contentType,
-        );
+        await resolved.backend.fs.write(pathValue, file.data, file.contentType);
         paths.push(pathValue);
       }
       return reply.send({
@@ -594,7 +572,7 @@ export function registerFileTransferProxy(
     try {
       const labFolder = normalizeLabFolderPath(queryString(request, "path"));
       const format = archiveFormatFromRequest(request);
-      const files = await collectWorkspaceFiles(resolved.client, resolved.endpoint.token, labFolder);
+      const files = await collectWorkspaceFiles(resolved.backend.fs, labFolder);
       const archive = buildArchive(format, files);
       const extension = format === "zip" ? "zip" : "tar.gz";
       reply.header("Content-Type", format === "zip" ? "application/zip" : "application/gzip");

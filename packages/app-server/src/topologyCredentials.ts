@@ -1,6 +1,6 @@
 import { resolveNodeCredentialsFromYaml } from "@containerlab/clab-ui/host";
 
-import type { ClabApiClient } from "./clabApiClient.ts";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 /**
  * SSH username from the `credentials` the lab's topology gives a node, tried
@@ -8,14 +8,13 @@ import type { ClabApiClient } from "./clabApiClient.ts";
  * username for the node or cannot be read; the caller then keeps its own.
  */
 export async function resolveTopologySshUsername(
-  client: Pick<ClabApiClient, "getLabTopologyYaml">,
-  token: string,
+  backend: Pick<LabBackend, "runningTopologyYaml">,
   labName: string,
   nodeNames: string[]
 ): Promise<string | undefined> {
   let yaml: string;
   try {
-    yaml = await client.getLabTopologyYaml(token, labName);
+    yaml = await backend.runningTopologyYaml(labName);
   } catch {
     return undefined;
   }

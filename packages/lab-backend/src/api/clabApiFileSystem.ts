@@ -4,7 +4,7 @@
  */
 
 import type { ClabApiClient } from "./clabApiClient.ts";
-import { isNotFoundError } from "./clabApiClient.ts";
+import { isNotFoundError } from "../contract/errors.ts";
 
 export interface ClabApiFileSystemOptions {
   client: ClabApiClient;

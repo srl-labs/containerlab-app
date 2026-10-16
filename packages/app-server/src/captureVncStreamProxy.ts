@@ -1,30 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
+import { isValidCloseCode } from "@srl-labs/containerlab-lab-backend/api";
 
-import { buildWebSocketUrl } from "./clabApiClient.ts";
 import { getCaptureSessionEndpoint, setCaptureSessionEndpoint } from "./captureSessionStore.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
-import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
+import type { EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
 
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
-
-type ResolvedCaptureEndpoint = NonNullable<ReturnType<EndpointResolver>>;
-
-function isValidCloseCode(code: number): boolean {
-  return (
-    Number.isInteger(code) &&
-    ((code >= 1000 &&
-      code <= 1014 &&
-      code !== 1004 &&
-      code !== 1005 &&
-      code !== 1006) ||
-      (code >= 3000 && code <= 4999))
-  );
-}
+type ResolvedCaptureEndpoint = ResolvedEndpoint;
 
 function closeSocket(socket: WebSocket, code: number | undefined, reason: string): void {
   if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
@@ -35,6 +16,11 @@ function closeSocket(socket: WebSocket, code: number | undefined, reason: string
     return;
   }
   socket.close();
+}
+
+function rawBytes(data: RawData): Uint8Array {
+  if (Array.isArray(data)) return Buffer.concat(data);
+  return data instanceof ArrayBuffer ? new Uint8Array(data) : data;
 }
 
 function requestQueryString(request: FastifyRequest): string {
@@ -78,17 +64,6 @@ function requestedWebSocketProtocols(request: FastifyRequest): string[] {
     .filter((value) => value.length > 0);
 }
 
-function createUpstreamSocket(
-  upstreamUrl: string,
-  protocols: string[],
-  headers: Record<string, string>
-): WebSocket {
-  const options = { headers, perMessageDeflate: false, ...apiTlsWebSocketOptions() };
-  return protocols.length > 0
-    ? new WebSocket(upstreamUrl, protocols, options)
-    : new WebSocket(upstreamUrl, options);
-}
-
 export function registerCaptureVncStreamProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver
@@ -116,54 +91,42 @@ export function registerCaptureVncStreamProxy(
       const suffix = suffixResolver(request);
       const query = requestQueryString(request);
 
-      const upstreamPath =
-        `/api/v1/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/vnc/websockify` +
-        suffix +
-        query;
-
-      const upstreamUrl = buildWebSocketUrl(resolved.client.getBaseUrl(), upstreamPath);
       const origin = typeof request.headers.origin === "string" ? request.headers.origin : undefined;
-      const upstreamHeaders: Record<string, string> = {
-        Authorization: `Bearer ${resolved.endpoint.token}`
-      };
-      if (origin) {
-        upstreamHeaders.Origin = origin;
-      }
-
-      const upstream = createUpstreamSocket(upstreamUrl, requestedWebSocketProtocols(request), upstreamHeaders);
+      const upstream = resolved.backend.connectWiresharkVnc(sessionId, `/websockify${suffix}${query}`, {
+        protocols: requestedWebSocketProtocols(request),
+        origin
+      });
 
       const forwardUpstreamError = (error: Error): void => {
         app.log.warn({ err: error, sessionId }, "capture vnc upstream websocket error");
         closeSocket(socket, 1011, "Upstream VNC websocket failed");
       };
 
-      upstream.on("open", () => {
+      upstream.onOpen(() => {
         socket.on("message", (data: RawData, isBinary: boolean) => {
-          if (upstream.readyState === WebSocket.OPEN) {
-            upstream.send(data, { binary: isBinary });
-          }
+          upstream.send(isBinary ? rawBytes(data) : String(data), isBinary);
         });
       });
 
-      upstream.on("message", (data: RawData, isBinary: boolean) => {
+      upstream.onMessage((data, isBinary) => {
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(data, { binary: isBinary });
         }
       });
 
-      upstream.on("close", (code: number, reason: Buffer) => {
-        closeSocket(socket, code, reason.toString() || "VNC websocket closed");
+      upstream.onClose((code, reason) => {
+        closeSocket(socket, code, reason || "VNC websocket closed");
       });
 
-      upstream.on("error", forwardUpstreamError);
+      upstream.onError(forwardUpstreamError);
 
       socket.on("close", () => {
-        closeSocket(upstream, 1000, "Client closed");
+        upstream.close(1000, "Client closed");
       });
 
       socket.on("error", (error: Error) => {
         app.log.warn({ err: error, sessionId }, "capture vnc websocket proxy error");
-        closeSocket(upstream, 1011, "Proxy socket error");
+        upstream.close(1011, "Proxy socket error");
       });
     };
 

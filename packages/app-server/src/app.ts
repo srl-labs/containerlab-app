@@ -8,6 +8,7 @@ import fastifyCors from "@fastify/cors";
 import fastifyWebsocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
+import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 import type { AppConfigResponse } from "@srl-labs/containerlab-app-contract";
 
 import { registerAuthRoutes } from "./auth.ts";
@@ -25,14 +26,9 @@ import {
 } from "./middleware.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
-import { ClabApiClient } from "./clabApiClient.ts";
 import { normalizeBasePath } from "./basePath.ts";
-
-interface ResolvedEndpoint {
-  client: ClabApiClient;
-  endpoint: EndpointEntry;
-  session: EndpointSession;
-}
+import type { ResolvedEndpoint } from "./endpointResolver.ts";
+import { apiUiStore } from "./uiStore.ts";
 
 export interface CreateStandaloneAppOptions {
   basePath?: string;
@@ -275,6 +271,12 @@ export async function createStandaloneApp(
     return endpointSessions.replaceSession(sessionId, []);
   };
 
+  const backendsFor = (endpoint: EndpointEntry): Omit<ResolvedEndpoint, "endpoint"> => {
+    const backend = new ApiLabBackend({ baseUrl: endpoint.url, token: endpoint.token });
+    return { backend, ui: apiUiStore(backend) };
+  };
+  const backendFor = (endpoint: EndpointEntry) => backendsFor(endpoint).backend;
+
   const resolveEndpoint = (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -293,11 +295,7 @@ export async function createStandaloneApp(
       return null;
     }
 
-    return {
-      session,
-      endpoint,
-      client: new ClabApiClient({ baseUrl: endpoint.url }),
-    };
+    return { endpoint, ...backendsFor(endpoint) };
   };
 
   const listEndpoints = (
@@ -311,6 +309,7 @@ export async function createStandaloneApp(
   await app.register(
     async (scoped: FastifyInstance) => {
       registerAuthRoutes(scoped, {
+        backendFor,
         defaultApiUrl: defaultClabApiUrl,
         disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
         ensureSession,

@@ -62,7 +62,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ]
   },
   "packages/app-contract": {},
-  "packages/lab-backend": {},
+  "packages/lab-backend": {
+    entry: ["src/**/*.test.ts"]
+  },
   "packages/clab-viewer": {
     entry: ["src/index.ts"]
   },

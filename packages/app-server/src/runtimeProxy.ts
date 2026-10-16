@@ -1,20 +1,20 @@
-import { apiFetch } from "./upstreamRequest.ts";
-
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-
-import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient.ts";
 import type {
   CaptureTarget,
   InspectContainerInfo,
-  RuntimeImageActionResponse,
-  RuntimeImagesResponse,
-  NodeLifecycleAction,
+  LabBackend,
   NetemResetRequest,
   NetemSetRequest,
+  NodeLifecycleAction,
+  RuntimeImageActionResponse,
+  RuntimeImagesResponse,
   ShareToolAction,
   TerminalProtocol
-} from "./clabApiClient.ts";
+} from "@srl-labs/containerlab-lab-backend";
+import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
+
+import type { EndpointListResolver, EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
 import { getEndpointIdFromRequest } from "./middleware.ts";
 import {
@@ -148,13 +148,6 @@ interface UiIconReconcileBody extends RuntimeTargetBody {
   usedIcons?: string[];
 }
 
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
-
-type EndpointListResolver = (request: FastifyRequest, reply: FastifyReply) => EndpointEntry[];
 
 interface ResolvedLabTarget {
   labName: string;
@@ -188,7 +181,7 @@ function resolveEndpointForCaptureSession(
   reply: FastifyReply,
   resolveEndpoint: EndpointResolver,
   sessionId: string
-): { client: ClabApiClient; endpoint: EndpointEntry } | null {
+): ResolvedEndpoint | null {
   const explicitEndpointId = getEndpointIdFromRequest(request);
   if (explicitEndpointId) {
     const explicit = resolveEndpoint(request, reply, explicitEndpointId);
@@ -211,7 +204,7 @@ function resolveEndpointForCaptureSession(
 
 async function resolveLabTarget(
   endpoint: EndpointEntry,
-  client: ClabApiClient,
+  backend: LabBackend,
   sessions: StandaloneTopologySessionManager,
   target: RuntimeTargetBody
 ): Promise<ResolvedLabTarget> {
@@ -222,8 +215,7 @@ async function resolveLabTarget(
       throw new RequestError("Topology session not found", 404);
     }
     const labName = await resolveRunningLabNameForTopology(
-      client,
-      endpoint.token,
+      backend,
       session.topologyRef,
       session.topologyRef.labName
     );
@@ -236,14 +228,12 @@ async function resolveLabTarget(
 
   if (target.topologyRef) {
     const topologyRef = await resolveCanonicalStandaloneTopologyRef(
-      client,
-      endpoint.token,
+      backend,
       target.topologyRef,
       endpoint.id
     );
     const labName = await resolveRunningLabNameForTopology(
-      client,
-      endpoint.token,
+      backend,
       topologyRef,
       topologyRef.labName
     );
@@ -322,8 +312,7 @@ function scoreNodeMatch(labName: string, containerName: string, requestedNodeNam
 }
 
 async function resolveNodeTarget(
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   requestedNodeName: string
 ): Promise<{ container: InspectContainerInfo; nodeFilter: string }> {
@@ -332,7 +321,7 @@ async function resolveNodeTarget(
     throw new RequestError("Missing nodeName", 400);
   }
 
-  const containers = await client.inspectLab(token, labName);
+  const containers = await backend.inspectLab(labName);
   let bestMatch: InspectContainerInfo | null = null;
   let bestScore = 0;
 
@@ -359,13 +348,12 @@ async function resolveNodeTarget(
  * otherwise the one the client asked for (its per-kind setting).
  */
 async function resolveSshUsername(
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   node: { nodeFilter: string },
   body: { nodeName: string; sshUsername?: unknown }
 ): Promise<string | undefined> {
-  const topologyUsername = await resolveTopologySshUsername(client, token, labName, [
+  const topologyUsername = await resolveTopologySshUsername(backend, labName, [
     node.nodeFilter,
     body.nodeName.trim()
   ]);
@@ -498,8 +486,7 @@ function normalizeCaptureTargets(rawTargets: unknown): CaptureTarget[] {
 }
 
 async function resolveCaptureTargets(
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   rawTargets: unknown
 ): Promise<CaptureTarget[]> {
@@ -508,7 +495,7 @@ async function resolveCaptureTargets(
     return targets;
   }
 
-  const containers = await client.inspectLab(token, labName);
+  const containers = await backend.inspectLab(labName);
   if (containers.length === 0) {
     return targets;
   }
@@ -585,7 +572,7 @@ export function registerRuntimeProxy(
         return reply.status(401).send({ error: "Not authenticated" });
       }
       try {
-        return reply.send(await specific.client.listLabs(specific.endpoint.token));
+        return reply.send(await specific.backend.inspectAll());
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -598,10 +585,13 @@ export function registerRuntimeProxy(
 
     try {
       const responses = await Promise.all(
-        endpoints.map(async (endpoint) => ({
-          endpoint,
-          labs: await new ClabApiClient({ baseUrl: endpoint.url }).listLabs(endpoint.token)
-        }))
+        endpoints.map(async (endpoint) => {
+          const resolvedEndpoint = resolveEndpoint(request, reply, endpoint.id);
+          return {
+            endpoint,
+            labs: resolvedEndpoint ? await resolvedEndpoint.backend.inspectAll() : {}
+          };
+        })
       );
       return reply.send(mergeInspectAllResponses(responses));
     } catch (error) {
@@ -616,9 +606,9 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const lab = await client.inspectLab(endpoint.token, target.labName);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const lab = await backend.inspectLab(target.labName);
         return reply.send(lab);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -652,9 +642,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      const response: RuntimeImagesResponse = await resolved.client.listRuntimeImages(
-        resolved.endpoint.token
-      );
+      const response: RuntimeImagesResponse = await resolved.backend.listImages();
       return reply.send(response);
     } catch (error) {
       return handleRouteError(reply, error);
@@ -672,10 +660,7 @@ export function registerRuntimeProxy(
         if (!image) {
           throw new RequestError("Missing image reference", 400);
         }
-        const response: RuntimeImageActionResponse = await resolved.client.pullRuntimeImage(
-          resolved.endpoint.token,
-          image
-        );
+        const response: RuntimeImageActionResponse = await resolved.backend.pullImage(image);
         return reply.send(response);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -694,8 +679,7 @@ export function registerRuntimeProxy(
         if (!reference) {
           throw new RequestError("Missing image reference", 400);
         }
-        const response: RuntimeImageActionResponse = await resolved.client.removeRuntimeImage(
-          resolved.endpoint.token,
+        const response: RuntimeImageActionResponse = await resolved.backend.removeImage(
           reference,
           request.body.force === true
         );
@@ -717,10 +701,10 @@ export function registerRuntimeProxy(
         if (!topologySourceUrl) {
           throw new RequestError("Missing topologySourceUrl", 400);
         }
-        const { client, endpoint } = resolved;
-        const deployed = await client.deployLabFromUrl(endpoint.token, {
-          topologySourceUrl,
-          labNameOverride: normalizeOptionalString(request.body.labNameOverride)
+        const { backend } = resolved;
+        const deployed = await backend.deployFromUrl({
+          url: topologySourceUrl,
+          labName: normalizeOptionalString(request.body.labNameOverride)
         });
         return reply.send({
           success: true,
@@ -744,10 +728,10 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing topologySourceUrl", 400);
         }
 
-        const { client, endpoint } = resolved;
-        const imported = await client.importTopologyFromUrl(endpoint.token, {
-          topologySourceUrl,
-          labNameOverride: normalizeOptionalString(request.body.labNameOverride)
+        const { backend, endpoint } = resolved;
+        const imported = await backend.importTopologyFromUrl({
+          url: topologySourceUrl,
+          labName: normalizeOptionalString(request.body.labNameOverride)
         });
 
         return reply.send({
@@ -769,21 +753,20 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         let nodeFilter: string | undefined;
 
         if (typeof request.body.nodeName === "string" && request.body.nodeName.trim().length > 0) {
           const resolvedNode = await resolveNodeTarget(
-            client,
-            endpoint.token,
+            backend,
             target.labName,
             request.body.nodeName
           );
           nodeFilter = resolvedNode.nodeFilter;
         }
 
-        const result = await client.saveLab(endpoint.token, target.labName, { nodeFilter });
+        const result = await backend.save(target.labName, { nodeFilter });
         return reply.send(result);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -798,23 +781,20 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
         const sshUsername = await resolveSshUsername(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           resolvedNode,
           request.body
         );
-        const sshAccess = await client.requestSshAccess(
-          endpoint.token,
+        const sshAccess = await backend.requestSshAccess(
           target.labName,
           resolvedNode.container.name,
           {
@@ -836,15 +816,14 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
-        const logs = await client.getNodeLogs(endpoint.token, target.labName, resolvedNode.container.name, {
+        const logs = await backend.nodeLogs(target.labName, resolvedNode.container.name, {
           tail: normalizeOptionalString(request.body.tail) ?? "200"
         });
         return reply.send(logs);
@@ -869,17 +848,15 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
 
-        await client.controlNodeLifecycle(
-          endpoint.token,
+        await backend.nodeAction(
           target.labName,
           resolvedNode.container.name,
           action
@@ -899,17 +876,15 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
 
-        const payload = await client.getNodeBrowserPorts(
-          endpoint.token,
+        const payload = await backend.nodeBrowserPorts(
           target.labName,
           resolvedNode.container.name
         );
@@ -942,9 +917,9 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const payload = await client.runSshxShareAction(endpoint.token, target.labName, action);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const payload = await backend.shareTool("sshx", target.labName, action);
         return reply.send({
           ...payload,
           link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
@@ -970,13 +945,13 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const port = normalizeOptionalInteger(request.body.port);
         if (port !== undefined && (port <= 0 || port > 65535)) {
           throw new RequestError("Invalid gotty port value.", 400);
         }
-        const payload = await client.runGottyShareAction(endpoint.token, target.labName, action, { port });
+        const payload = await backend.shareTool("gotty", target.labName, action, { port });
         return reply.send({
           ...payload,
           link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
@@ -999,9 +974,9 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing fcli command.", 400);
         }
 
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        return reply.send(await client.runFcliCommand(endpoint.token, target.labName, command));
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        return reply.send(await backend.fcli(target.labName, command));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1021,10 +996,10 @@ export function registerRuntimeProxy(
           throw new RequestError("Invalid drawio layout.", 400);
         }
 
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return reply.send(
-          await client.generateDrawioGraph(endpoint.token, target.labName, {
+          await backend.graphDrawio(target.labName, {
             layout,
             theme: normalizeOptionalString(request.body.theme)
           })
@@ -1042,16 +1017,14 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
-        const session = await client.createTerminalSession(
-          endpoint.token,
+        const session = await backend.createTerminal(
           target.labName,
           resolvedNode.container.name,
           {
@@ -1061,8 +1034,7 @@ export function registerRuntimeProxy(
             sshUsername:
               request.body.protocol === "ssh"
                 ? await resolveSshUsername(
-                    client,
-                    endpoint.token,
+                    backend,
                     target.labName,
                     resolvedNode,
                     request.body
@@ -1085,10 +1057,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const session = await resolved.client.getTerminalSession(
-          resolved.endpoint.token,
-          request.params.sessionId
-        );
+        const session = await resolved.backend.getTerminal(request.params.sessionId);
         return reply.send(session);
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1103,7 +1072,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        await resolved.client.deleteTerminalSession(resolved.endpoint.token, request.params.sessionId);
+        await resolved.backend.closeTerminal(request.params.sessionId);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1118,15 +1087,14 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
-        const impairments = await client.showNetem(endpoint.token, resolvedNode.container.name);
+        const impairments = await backend.netemShow(resolvedNode.container.name);
         return reply.send({
           containerName: resolvedNode.container.name,
           impairments
@@ -1149,11 +1117,10 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing interfaceName", 400);
         }
 
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
@@ -1166,7 +1133,7 @@ export function registerRuntimeProxy(
           rate: parseOptionalNumber(request.body.rate),
           corruption: parseOptionalNumber(request.body.corruption)
         };
-        await client.setNetem(endpoint.token, netemRequest);
+        await backend.netemSet(netemRequest);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1186,11 +1153,10 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing interfaceName", 400);
         }
 
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const resolvedNode = await resolveNodeTarget(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.nodeName
         );
@@ -1198,7 +1164,7 @@ export function registerRuntimeProxy(
           containerName: resolvedNode.container.name,
           interface: interfaceName
         };
-        await client.resetNetem(endpoint.token, netemRequest);
+        await backend.netemReset(netemRequest);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1211,7 +1177,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      return reply.send(await resolved.client.getEdgeSharkStatus(resolved.endpoint.token));
+      return reply.send(await resolved.backend.edgesharkStatus());
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -1224,7 +1190,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        await resolved.client.installEdgeShark(resolved.endpoint.token);
+        await resolved.backend.edgesharkInstall();
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1239,7 +1205,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        await resolved.client.uninstallEdgeShark(resolved.endpoint.token);
+        await resolved.backend.edgesharkUninstall();
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1254,11 +1220,10 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const targets = await resolveCaptureTargets(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.targets
         );
@@ -1266,7 +1231,7 @@ export function registerRuntimeProxy(
           throw new RequestError("At least one capture target is required", 400);
         }
         const remoteHostname = normalizeOptionalString(request.body.remoteHostname);
-        const payload = await client.buildPacketflixCapture(endpoint.token, target.labName, {
+        const payload = await backend.capturePacketflix(target.labName, {
           targets,
           remoteHostname
         });
@@ -1284,11 +1249,10 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const targets = await resolveCaptureTargets(
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           request.body.targets
         );
@@ -1296,7 +1260,7 @@ export function registerRuntimeProxy(
           throw new RequestError("At least one capture target is required", 400);
         }
         const theme = normalizeOptionalString(request.body.theme);
-        const payload = await client.createWiresharkVncSessions(endpoint.token, target.labName, {
+        const payload = await backend.createWiresharkVnc(target.labName, {
           targets,
           theme
         });
@@ -1317,7 +1281,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const payload = await resolved.client.deleteAllWiresharkVncSessions(resolved.endpoint.token);
+        const payload = await resolved.backend.closeAllWiresharkVnc();
         deleteCaptureSessionsForEndpoint(resolved.endpoint.id);
         return reply.send(payload);
       } catch (error) {
@@ -1338,10 +1302,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const payload = await resolved.client.getWiresharkVncSessionReady(
-          resolved.endpoint.token,
-          request.params.sessionId
-        );
+        const payload = await resolved.backend.wiresharkVncReady(request.params.sessionId);
         return reply.send({
           ...payload,
           url: `${app.prefix}/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}/vnc/`
@@ -1365,7 +1326,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      await resolved.client.deleteWiresharkVncSession(resolved.endpoint.token, request.params.sessionId);
+      await resolved.backend.closeWiresharkVnc(request.params.sessionId);
       deleteCaptureSessionEndpoint(request.params.sessionId);
       return reply.send({ success: true });
     } catch (error) {
@@ -1401,14 +1362,7 @@ export function registerRuntimeProxy(
         const rawUrl = request.raw.url ?? "";
         const queryIndex = rawUrl.indexOf("?");
         const query = queryIndex >= 0 ? rawUrl.slice(queryIndex) : "";
-        const upstreamUrl =
-          `${resolved.client.getBaseUrl()}` +
-          `/api/v1/capture/wireshark-vnc-sessions/${encodeURIComponent(request.params.sessionId)}` +
-          `/vnc${suffix}${query}`;
-
-        const headers: Record<string, string> = {
-          Authorization: `Bearer ${resolved.endpoint.token}`
-        };
+        const headers: Record<string, string> = {};
         for (const [key, value] of Object.entries(request.headers)) {
           if (typeof value !== "string") {
             continue;
@@ -1420,13 +1374,14 @@ export function registerRuntimeProxy(
           headers[key] = value;
         }
 
-        const upstreamResponse = await apiFetch(upstreamUrl, {
+        const upstreamResponse = await resolved.backend.fetchWiresharkVnc(request.params.sessionId, {
           method: request.method,
+          path: `${suffix}${query}`,
           headers
         });
 
         reply.status(upstreamResponse.status);
-        for (const [key, value] of upstreamResponse.headers.entries()) {
+        for (const [key, value] of upstreamResponse.headers) {
           const lower = key.toLowerCase();
           if (lower === "transfer-encoding" || lower === "connection") {
             continue;
@@ -1434,8 +1389,7 @@ export function registerRuntimeProxy(
           reply.header(key, value);
         }
 
-        const body = await upstreamResponse.arrayBuffer();
-        return reply.send(Buffer.from(body));
+        return reply.send(Buffer.from(upstreamResponse.body));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1447,7 +1401,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      return reply.send(await resolved.client.getVersion(resolved.endpoint.token));
+      return reply.send(await resolved.backend.version());
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -1458,7 +1412,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      return reply.send(await resolved.client.checkVersion(resolved.endpoint.token));
+      return reply.send(await resolved.backend.versionCheck());
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -1469,7 +1423,7 @@ export function registerRuntimeProxy(
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
     try {
-      return reply.send(await resolved.client.getCustomNodes(resolved.endpoint.token));
+      return reply.send(await resolved.ui.getCustomNodes());
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -1482,7 +1436,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        return reply.send(await resolved.client.saveCustomNode(resolved.endpoint.token, request.body));
+        return reply.send(await resolved.ui.saveCustomNode(request.body));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1501,10 +1455,7 @@ export function registerRuntimeProxy(
           throw new RequestError("Missing customNodes array", 400);
         }
         return reply.send(
-          await resolved.client.replaceCustomNodes(
-            resolved.endpoint.token,
-            customNodes as Record<string, unknown>[]
-          )
+          await resolved.ui.replaceCustomNodes(customNodes as Record<string, unknown>[])
         );
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1519,7 +1470,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        return reply.send(await resolved.client.deleteCustomNode(resolved.endpoint.token, request.params.name));
+        return reply.send(await resolved.ui.deleteCustomNode(request.params.name));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1537,7 +1488,7 @@ export function registerRuntimeProxy(
         if (!name) {
           throw new RequestError("Missing custom node name", 400);
         }
-        return reply.send(await resolved.client.setDefaultCustomNode(resolved.endpoint.token, name));
+        return reply.send(await resolved.ui.setDefaultCustomNode(name));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1551,8 +1502,8 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const target = await resolveLabTarget(resolved.endpoint, resolved.client, sessions, request.body);
-        return reply.send(await resolved.client.listLabIcons(resolved.endpoint.token, target.labName));
+        const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, request.body);
+        return reply.send(await resolved.ui.listLabIcons(target.labName));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1566,7 +1517,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        return reply.send(await resolved.client.uploadGlobalIcon(resolved.endpoint.token, request.body));
+        return reply.send(await resolved.ui.uploadGlobalIcon(request.body));
       } catch (error) {
         return handleRouteError(reply, error);
       }
@@ -1580,7 +1531,7 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        await resolved.client.deleteGlobalIcon(resolved.endpoint.token, request.params.iconName);
+        await resolved.ui.deleteGlobalIcon(request.params.iconName);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1595,11 +1546,11 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const target = await resolveLabTarget(resolved.endpoint, resolved.client, sessions, request.body);
+        const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, request.body);
         const usedIcons = Array.isArray(request.body.usedIcons)
           ? request.body.usedIcons.filter((value): value is string => typeof value === "string")
           : [];
-        await resolved.client.reconcileLabIcons(resolved.endpoint.token, target.labName, usedIcons);
+        await resolved.ui.reconcileLabIcons(target.labName, usedIcons);
         return reply.send({ success: true });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -1614,22 +1565,23 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
+        const { backend, endpoint } = resolved;
         const fileName = validateTopologyFileName(request.body.fileName);
         const labName = stripTopologySuffix(fileName.split("/").at(-1) ?? fileName);
-        if (await client.headFile(endpoint.token, labName, fileName)) {
+        const files = backend.topologyFiles({ labName });
+        if (await files.exists(fileName)) {
           throw new RequestError(`Topology file "${fileName}" already exists.`, 409);
         }
 
         const content =
           normalizeOptionalString(request.body.content) ?? buildDefaultTopologyContent(labName);
         if (fileName.includes("/")) {
-          await client.putWorkspaceFile(endpoint.token, fileName, content);
+          await backend.fs.write(fileName, content);
         } else {
-          await client.putFile(endpoint.token, labName, fileName, content);
+          await files.writeFile(fileName, content);
         }
 
-        const topologies = await client.listTopologies(endpoint.token);
+        const topologies = await backend.listTopologies();
         const topologyEntry = topologies.find(
           (entry) => entry.yamlFileName === fileName
         );
@@ -1661,12 +1613,12 @@ export function registerRuntimeProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         if (!target.yamlPath) {
           throw new RequestError("Missing topology file path", 400);
         }
-        await client.deleteFile(endpoint.token, target.labName, target.yamlPath);
+        await backend.topologyFiles({ labName: target.labName }).unlink(target.yamlPath);
         return reply.send({ success: true, path: target.yamlPath });
       } catch (error) {
         return handleRouteError(reply, error);

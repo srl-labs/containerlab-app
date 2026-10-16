@@ -2264,7 +2264,7 @@ test("prefixed terminal WebSockets forward authenticated upstream output", async
   upstream.on("connection", (client, request) => {
     upstreamPath = request.url;
     upstreamAuthorization = request.headers.authorization;
-    client.send("terminal output");
+    client.send(JSON.stringify({ type: "output", data: "b3V0cHV0", encoding: "base64" }));
   });
   const { cookie, endpointId } = await loginEndpoint(context, { url: upstreamOrigin });
   const address = await context.app.listen({ host: "127.0.0.1", port: 0 });
@@ -2273,7 +2273,11 @@ test("prefixed terminal WebSockets forward authenticated upstream output", async
     { headers: { cookie } }
   );
   const [message] = await once(socket, "message", { signal: AbortSignal.timeout(5000) });
-  assert.equal(String(message), "terminal output");
+  assert.deepEqual(JSON.parse(String(message)), {
+    type: "output",
+    data: "b3V0cHV0",
+    encoding: "base64",
+  });
   assert.equal(upstreamPath, "/api/v1/terminal-sessions/terminal-1/stream");
   assert.equal(upstreamAuthorization, "Bearer test-token");
   socket.close();

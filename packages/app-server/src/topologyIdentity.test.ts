@@ -10,7 +10,7 @@ import {
   resolveRunningLabNameForTopology,
   TopologySourceConflictError
 } from "./topologyIdentity";
-import type { ClabApiClient, TopologyEntry, InspectAllLabsResponse } from "./clabApiClient";
+import type { InspectAllLabsResponse, TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 
 test("normalizeStandaloneTopologyRef canonicalizes standalone paths", () => {
   const normalized = normalizeStandaloneTopologyRef({
@@ -46,11 +46,9 @@ test("resolveCanonicalStandaloneTopologyRef prefers the server topology entry fo
       deploymentState: "unknown"
     }
   ];
-  const client = {
-    listTopologies: async () => entries
-  } as Pick<ClabApiClient, "listTopologies"> as ClabApiClient;
+  const backend = { listTopologies: async () => entries };
 
-  const topologyRef = await resolveCanonicalStandaloneTopologyRef(client, "token", {
+  const topologyRef = await resolveCanonicalStandaloneTopologyRef(backend, {
     topologyId: "standalone:./labs/a/demo.clab.yml",
     labName: "wrong",
     yamlPath: "./labs/a/demo.clab.yml",
@@ -117,11 +115,14 @@ test("absolute source identity overrides duplicate names and preserves case", ()
 });
 
 test("runtime actions cannot fall back to a same-named lab from another source", async () => {
-  const client = { listLabs: async () => ({ demo: [{ labName: "demo", absLabPath: "/srv/shared/demo.clab.yml" }] }) } as unknown as ClabApiClient;
-  await assert.rejects(resolveRunningLabNameForTopology(client, "token", {
+  const backend = {
+    inspectAll: async () =>
+      ({ demo: [{ labName: "demo", absLabPath: "/srv/shared/demo.clab.yml" }] }) as unknown as InspectAllLabsResponse
+  };
+  await assert.rejects(resolveRunningLabNameForTopology(backend, {
     labName: "demo", yamlPath: "demo.clab.yml", absoluteYamlPath: "/home/alice/demo.clab.yml"
   }, "demo"), TopologySourceConflictError);
-  await assert.rejects(resolveRunningLabNameForTopology(client, "token", {
+  await assert.rejects(resolveRunningLabNameForTopology(backend, {
     labName: "demo", yamlPath: "@shared/demo.clab.yml"
   }, "demo"), TopologySourceConflictError);
 });

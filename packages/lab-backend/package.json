@@ -6,19 +6,25 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./api": "./src/api/index.ts"
   },
   "dependencies": {
-    "@containerlab/clab-ui": "workspace:*"
+    "@containerlab/clab-ui": "workspace:*",
+    "undici": "catalog:",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
     "lint": "oxlint --type-aware --import-plugin src"
   }
 }

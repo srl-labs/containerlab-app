@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import { ClabApiClient } from "./clabApiClient.ts";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
+import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
+
 import type {
   EndpointEntry,
   EndpointSession,
@@ -53,6 +55,8 @@ interface UpdateEndpointBody {
 }
 
 interface AuthRouteOptions {
+  /** The backend of a signed-in endpoint. */
+  backendFor: (entry: EndpointEntry) => LabBackend;
   defaultApiUrl: string;
   disposeEndpointSessions: (endpointId: string) => void;
   ensureSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
@@ -87,11 +91,13 @@ function toPublicInfo(
   };
 }
 
-async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInfo> {
+async function validateEndpoint(
+  entry: EndpointEntry,
+  backendFor: AuthRouteOptions["backendFor"]
+): Promise<EndpointPublicInfo> {
   if (!entry.token) return toPublicInfo(entry, "session_expired");
-  const client = new ClabApiClient({ baseUrl: entry.url });
   try {
-    await client.getVersion(entry.token, 3000);
+    await backendFor(entry).version({ timeoutMs: 3000 });
     return toPublicInfo(entry, "connected");
   } catch (error) {
     if (
@@ -107,9 +113,12 @@ async function validateEndpoint(entry: EndpointEntry): Promise<EndpointPublicInf
   }
 }
 
-async function listEndpointInfos(session: EndpointSession): Promise<EndpointPublicInfo[]> {
+async function listEndpointInfos(
+  session: EndpointSession,
+  backendFor: AuthRouteOptions["backendFor"]
+): Promise<EndpointPublicInfo[]> {
   return await Promise.all(
-    Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry))
+    Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry, backendFor))
   );
 }
 
@@ -173,14 +182,18 @@ async function authenticateEndpoint(
     throw new Error("Invalid API endpoint URL");
   }
 
-  const client = new ClabApiClient({ baseUrl: normalizedUrl });
-  const result = await client.login(username, password, sessionDuration);
+  const backend = await ApiLabBackend.login({
+    baseUrl: normalizedUrl,
+    username,
+    password,
+    sessionDuration
+  });
 
   return {
     id: buildEndpointId(),
     url: normalizedUrl,
     label: defaultEndpointLabel(normalizedUrl, body.label),
-    token: result.token,
+    token: backend.token,
     username,
     sessionDuration
   };
@@ -202,16 +215,17 @@ async function reconnectEndpoint(
   const sessionDuration = resolveEndpointSessionDuration(
     body.sessionDuration ?? existing?.sessionDuration
   );
-  const result = await new ClabApiClient({ baseUrl: normalizedUrl }).login(
-    body.username.trim(),
-    body.password,
+  const backend = await ApiLabBackend.login({
+    baseUrl: normalizedUrl,
+    username: body.username.trim(),
+    password: body.password,
     sessionDuration
-  );
+  });
   const updated: EndpointEntry = {
     id: endpointId || existing?.id || buildEndpointId(),
     url: normalizedUrl,
     label: defaultEndpointLabel(normalizedUrl, body.label ?? existing?.label),
-    token: result.token,
+    token: backend.token,
     username: body.username.trim(),
     sessionDuration
   };
@@ -260,7 +274,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ endpoints: [] });
     }
 
-    return reply.send({ endpoints: await listEndpointInfos(session) });
+    return reply.send({ endpoints: await listEndpointInfos(session, options.backendFor) });
   });
 
   app.get<{ Params: { id: string } }>("/auth/endpoints/:id/metrics", async (request, reply) => {
@@ -276,8 +290,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
     }
 
     try {
-      const client = new ClabApiClient({ baseUrl: endpoint.url });
-      return reply.send(await client.getHealthMetrics(endpoint.token));
+      return reply.send(await options.backendFor(endpoint).healthMetrics());
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load endpoint metrics";
       return reply.status(authErrorStatusCode(error)).send({ error: message });
@@ -401,7 +414,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
 
       options.disposeEndpointSessions(endpointId);
       options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-      return reply.send(await validateEndpoint(updated));
+      return reply.send(await validateEndpoint(updated, options.backendFor));
     }
   );
 
@@ -411,7 +424,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ authenticated: false, endpoints: [] });
     }
 
-    const endpoints = await listEndpointInfos(session);
+    const endpoints = await listEndpointInfos(session, options.backendFor);
     return reply.send({
       authenticated: endpoints.some((endpoint) => endpoint.connected),
       endpoints

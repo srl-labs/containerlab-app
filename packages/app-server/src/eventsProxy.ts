@@ -1,24 +1,19 @@
 /**
- * NDJSON-to-SSE bridge for clab-api-server events.
+ * SSE bridge for containerlab events.
  *
- * Opens a long-lived NDJSON stream from the API server and converts each
- * line into an SSE event for the browser's EventSource.
+ * Opens the endpoint's long-lived event stream and sends each event as an
+ * SSE message to the browser's EventSource.
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import type { ClabApiClient } from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
+
+import type { EndpointResolver } from "./endpointResolver.ts";
 import {
   disableStreamTimeouts,
   startSseHeartbeat,
   streamResponseHeaders,
 } from "./streamResponseHeaders.ts";
 
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string,
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 const DEFAULT_INTERFACE_STATS_INTERVAL = "1s";
 
 function resolveInterfaceStatsInterval(): string {
@@ -38,7 +33,7 @@ export function registerEventsProxy(
         return reply.status(401).send({ error: "Not authenticated" });
       }
 
-      const { client, endpoint } = resolved;
+      const { backend } = resolved;
 
       disableStreamTimeouts(request, reply);
 
@@ -67,49 +62,20 @@ export function registerEventsProxy(
       reply.raw.on("close", abort);
 
       try {
-        const response = await client.openEventStream(
-          endpoint.token,
+        const events = await backend.events(
           {
             initialState: true,
             interfaceStats: true,
             interfaceStatsInterval: resolveInterfaceStatsInterval(),
           },
-          {
-            signal: abortController.signal,
-          },
+          abortController.signal,
         );
 
-        if (!response.body) {
-          reply.raw.write("event: error\ndata: No event stream body\n\n");
-          reply.raw.end();
-          return;
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
         let eventId = 0;
-
-        try {
-          while (!aborted) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() ?? "";
-
-            for (const line of lines) {
-              if (aborted) break;
-              const trimmed = line.trim();
-              if (!trimmed) continue;
-
-              eventId++;
-              reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
-            }
-          }
-        } finally {
-          reader.cancel().catch(() => {});
+        for await (const event of events) {
+          if (aborted) break;
+          eventId++;
+          reply.raw.write(`id: ${eventId}\ndata: ${JSON.stringify(event)}\n\n`);
         }
       } catch (error) {
         if (!aborted) {

@@ -33,7 +33,7 @@ import type {
   VersionCheckResponse,
   VersionResponse,
   WorkspaceFileEntry
-} from "./dto";
+} from "./dto.ts";
 
 export type LabBackendKind = "local" | "api";
 
