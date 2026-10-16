@@ -23,6 +23,7 @@ interface FilterableDropdownProps {
   menuClassName?: string;
   helperText?: string;
   required?: boolean;
+  error?: boolean;
 }
 
 export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
@@ -36,7 +37,8 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   disabled = false,
   renderOption,
   helperText,
-  required
+  required,
+  error
 }) => {
   const selectedOption = options.find((opt) => opt.value === value) ?? null;
 
@@ -90,6 +92,7 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
           placeholder={placeholder}
           helperText={helperText}
           required={required}
+          error={error}
         />
       )}
       slotProps={{

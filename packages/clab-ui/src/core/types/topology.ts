@@ -290,6 +290,7 @@ export interface TopologyAnnotations {
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;
     showDummyLinks?: boolean;
+    showWaitFor?: boolean;
     autoCreateTrafficRateAnnotations?: boolean;
   };
   [key: string]: unknown;

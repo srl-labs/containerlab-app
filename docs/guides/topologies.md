@@ -51,6 +51,17 @@ Double-click a node to open the **Node Editor**: kind, type, image, startup conf
 ![Node Editor](../images/app/node-editor-dark.webp#only-dark){ .shot }
 ![Node Editor](../images/app/node-editor-light.webp#only-light){ .shot }
 
+## Set the boot order
+
+The **Stages** tab of the Node Editor sets containerlab [stages](https://containerlab.dev/manual/nodes/#stages). Under each stage (**Create**, **Create Links**, **Configure**, **Healthy**, **Exit**):
+
+- **Wait for** holds the stage back until another node has finished a stage, for example: create `leaf1` only after `spine1` is healthy.
+- **Command** runs a command when the node enters or leaves the stage, in the container or on the host.
+
+Entries from `defaults`, `kinds`, or `groups` are listed with their source and can't be edited here; containerlab adds them to the node's own. The tab flags a node name that doesn't exist and nodes that wait for each other in a loop, since containerlab won't deploy that.
+
+To see the order on the canvas, open the **Links** menu and choose **Show Wait-for Dependencies**. Dashed arrows point from the node that goes first to the node that waits.
+
 ## Edit the YAML
 
 **Toggle YAML Split View** opens the file in a panel next to the canvas, on its **YAML** tab. The editor completes and checks containerlab keys as you type, and changes on either side show up on the other.

@@ -28,6 +28,12 @@ import {
   isRecord
 } from "./typeHelpers";
 import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
+import {
+  INHERITED_STAGES_KEY,
+  parseInheritedStages,
+  parseNodeStages,
+  serializeNodeStages
+} from "./nodeStages";
 
 // ============================================================================
 // Value normalization shared by the editor and the conversions
@@ -350,6 +356,18 @@ function parseComponentsProps(
   };
 }
 
+/** Parse the node's own stages and the stages it inherits */
+function parseStagesProps(
+  extra: Record<string, unknown>
+): Pick<NodeEditorData, "stages" | "inheritedStages"> {
+  const stages = parseNodeStages(extra.stages);
+  const inheritedStages = parseInheritedStages(extra[INHERITED_STAGES_KEY]);
+  return {
+    ...(stages ? { stages } : {}),
+    ...(inheritedStages.length > 0 ? { inheritedStages } : {})
+  };
+}
+
 /**
  * Converts raw node data (from the graph/YAML) to NodeEditorData format
  * Maps from YAML kebab-case properties (in extraData) to camelCase NodeEditorData
@@ -369,6 +387,7 @@ export function convertToEditorData(
     ...parseCertProps(extra),
     ...parseHealthCheckProps(extra),
     ...parseComponentsProps(extra),
+    ...parseStagesProps(extra),
     ...parseCredentialsProps(extra),
     ...parseInheritedFrom(extra)
   };
@@ -449,6 +468,7 @@ export interface YamlExtraData {
   runtime?: string | null;
   components?: unknown[] | null;
   sfm?: string | null;
+  stages?: Record<string, unknown> | null;
   credentials?: Record<string, string> | null;
   [key: string]: unknown;
 }
@@ -838,6 +858,9 @@ export function convertEditorDataToYaml(
   convertCertToYaml(data, extraData, options);
   convertHealthcheckToYaml(data, extraData, options);
   convertComponentsToYaml(data, extraData);
+  if ("stages" in data) {
+    extraData.stages = serializeNodeStages(data.stages);
+  }
   convertCredentialsToYaml(data, extraData);
 
   return extraData;

@@ -15,6 +15,7 @@ import { ComponentsTab } from "../../node-editor/ComponentsTab";
 import { ConfigTab } from "../../node-editor/ConfigTab";
 import { RuntimeTab } from "../../node-editor/RuntimeTab";
 import { NetworkTab } from "../../node-editor/NetworkTab";
+import { StagesTab } from "../../node-editor/StagesTab";
 import { AdvancedTab } from "../../node-editor/AdvancedTab";
 
 export interface NodeEditorViewProps {
@@ -40,6 +41,7 @@ const BASE_TABS: Array<TabConfig<NodeEditorTabProps>> = [
   { id: "basic", label: "Basic", component: BasicTab },
   { id: "config", label: "Configuration", component: ConfigTab },
   { id: "runtime", label: "Runtime", component: RuntimeTab },
+  { id: "stages", label: "Stages", component: StagesTab },
   { id: "network", label: "Network", component: NetworkTab },
   { id: "advanced", label: "Advanced", component: AdvancedTab }
 ];
@@ -50,11 +52,16 @@ const COMPONENTS_TAB: TabConfig<NodeEditorTabProps> = {
   component: ComponentsTab
 };
 
-function getTabsForNode(kind: string | undefined): Array<TabConfig<NodeEditorTabProps>> {
+function getTabsForNode(
+  kind: string | undefined,
+  isCustomTemplate: boolean
+): Array<TabConfig<NodeEditorTabProps>> {
+  // Stages refer to other nodes of the lab, so a node template has none
+  const tabs = isCustomTemplate ? BASE_TABS.filter((tab) => tab.id !== "stages") : BASE_TABS;
   if (kind === "nokia_srsim") {
-    return [BASE_TABS[0], COMPONENTS_TAB, ...BASE_TABS.slice(1)];
+    return [tabs[0], COMPONENTS_TAB, ...tabs.slice(1)];
   }
-  return BASE_TABS;
+  return tabs;
 }
 
 function mergeNodeEditorTabs(
@@ -98,8 +105,12 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   } = useNodeEditorForm(nodeData, readOnly);
 
   const tabs = useMemo(
-    () => mergeNodeEditorTabs(getTabsForNode(formData?.kind), nodeEditorTabs),
-    [formData?.kind, nodeEditorTabs]
+    () =>
+      mergeNodeEditorTabs(
+        getTabsForNode(formData?.kind, formData?.isCustomTemplate === true),
+        nodeEditorTabs
+      ),
+    [formData?.kind, formData?.isCustomTemplate, nodeEditorTabs]
   );
 
   const effectiveInheritedProps = useMemo(() => {
