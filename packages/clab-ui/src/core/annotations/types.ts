@@ -23,3 +23,11 @@ export function createEmptyAnnotations(): TopologyAnnotations {
     viewerSettings: {}
   };
 }
+
+/**
+ * Annotations for a lab without an annotations file. New labs start with boxed nodes;
+ * an existing file that sets no node style keeps the icon style.
+ */
+export function createNewLabAnnotations(): TopologyAnnotations {
+  return { ...createEmptyAnnotations(), viewerSettings: { nodeStyle: "boxed" } };
+}

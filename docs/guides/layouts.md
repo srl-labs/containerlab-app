@@ -34,6 +34,8 @@ The Appearance tab also controls:
 * grid style, grid color, and canvas background color
 * node style, which shows nodes as icons or as boxes with the node name inside
 
+New labs, which have no annotations file yet, start with the **Boxed** node style. Labs that already have an annotations file keep the style saved in it, or **Icons** if it does not set one.
+
 With the **Boxed** node style, each node sits in a square box with its name inside, and links attach to the box outline. Switching styles never moves nodes. **Box spacing** sets how much room each box leaves around its icon and name: **Default**, or **Narrow** for smaller boxes in dense topologies. Long names are shortened in the middle, for example `srl-d…eaf-01`; hover the node to see the full name. In this style the node editor replaces the label position, direction, and label background options with box options: fill color, opacity, frosted glass, border color and width, corner radius, name color, and shadow. Options you leave unset follow the theme.
 
 The **Link Labels** toolbar menu is separate from Telemetry Style. Use it to show all link labels, show them only when a link is selected, or hide them on the canvas.

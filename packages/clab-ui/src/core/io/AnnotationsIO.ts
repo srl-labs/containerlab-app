@@ -6,10 +6,10 @@
  */
 
 import type { TopologyAnnotations } from "../types/topology";
-import { createEmptyAnnotations } from "../annotations/types";
+import { createEmptyAnnotations, createNewLabAnnotations } from "../annotations/types";
 
 import type { FileSystemAdapter, IOLogger } from "./types";
-import { noopLogger } from "./types";
+import { isFileNotFoundError, noopLogger } from "./types";
 
 function toTopologyAnnotations(value: unknown): TopologyAnnotations {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -131,10 +131,12 @@ export class AnnotationsIO {
       this.cache.set(annotationsPath, { data: annotations, timestamp: Date.now() });
       return annotations;
     } catch (error) {
-      const code = (error as { code?: string } | undefined)?.code;
-      if (code !== "ENOENT") {
-        this.logger.warn(`Failed to load annotations from ${annotationsPath}: ${error}`);
+      if (isFileNotFoundError(error)) {
+        const newLabAnnotations = createNewLabAnnotations();
+        this.cache.set(annotationsPath, { data: newLabAnnotations, timestamp: Date.now() });
+        return newLabAnnotations;
       }
+      this.logger.warn(`Failed to load annotations from ${annotationsPath}: ${error}`);
     }
 
     const emptyAnnotations = createEmptyAnnotations();
