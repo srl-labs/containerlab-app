@@ -251,7 +251,9 @@ describe("MessageRouter with the clab-ui webview host", () => {
     webview.host.topoViewer.captureInterface("r1", "e1-1");
     await webview.settle();
 
-    expect(lifecycle.args).to.deep.equal(LIFECYCLE_ACTIONS.map((action) => [action, YAML_PATH]));
+    expect(lifecycle.args).to.deep.equal(
+      LIFECYCLE_ACTIONS.map((action) => [action, YAML_PATH, undefined])
+    );
     expect(nodeEndpoint.args.map(([command]) => command)).to.have.members(
       Object.values(NODE_COMMANDS)
     );
@@ -265,6 +267,20 @@ describe("MessageRouter with the clab-ui webview host", () => {
         YAML_PATH
       )
     ).to.equal(true);
+  });
+
+  it("forwards lifecycle options from the webview", async () => {
+    const lifecycle = sinon
+      .stub(labLifecycleService, "handleLabLifecycleEndpoint")
+      .resolves({ result: null, error: null });
+    const webview = connectWebview();
+
+    webview.host.topoViewer.runLifecycle("destroyLab", { nodeFilter: ["r1"], graceful: true });
+    await webview.settle();
+
+    expect(lifecycle.args).to.deep.equal([
+      ["destroyLab", YAML_PATH, { nodeFilter: ["r1"], graceful: true }]
+    ]);
   });
 
   it("forwards a multi-interface capture to the capture endpoint", async () => {

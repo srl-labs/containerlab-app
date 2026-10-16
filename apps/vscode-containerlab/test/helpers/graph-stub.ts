@@ -4,18 +4,20 @@ type LifecycleHandlers = ReturnType<typeof graph.createTopoViewerLifecycleHandle
 
 export const createdHandlers: {
   commandType: graph.LifecycleCommandType;
+  options?: Parameters<typeof graph.createTopoViewerLifecycleHandlers>[1];
   handlers: LifecycleHandlers;
 }[] = [];
 
 export const createTopoViewerLifecycleHandlers: typeof graph.createTopoViewerLifecycleHandlers = (
-  commandType
+  commandType,
+  options
 ) => {
   const handlers: LifecycleHandlers = {
     onSuccess: async () => {},
     onFailure: async () => {},
     onOutputLine: () => {}
   };
-  createdHandlers.push({ commandType, handlers });
+  createdHandlers.push({ commandType, options, handlers });
   return handlers;
 };
 

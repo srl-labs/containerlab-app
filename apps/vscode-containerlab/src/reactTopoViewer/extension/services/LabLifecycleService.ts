@@ -6,7 +6,11 @@
 import * as vscode from "vscode";
 
 import type { EndpointResult } from "@containerlab/clab-ui/session";
-import { createLifecycleCommandController } from "@containerlab/clab-ui/host";
+import {
+  createLifecycleCommandController,
+  LIFECYCLE_ACTION_OPTION_KIND,
+  normalizeLabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 
 import { log } from "./logger";
 
@@ -102,8 +106,13 @@ class LabLifecycleService {
    * Handles lab lifecycle endpoint requests.
    * @param endpointName The action to perform (deployLab, destroyLab, etc.)
    * @param labPath The path to the lab topology file
+   * @param rawOptions Extra containerlab options sent by the webview (deploy, redeploy, destroy)
    */
-  async handleLabLifecycleEndpoint(endpointName: string, labPath: string): Promise<EndpointResult> {
+  async handleLabLifecycleEndpoint(
+    endpointName: string,
+    labPath: string,
+    rawOptions?: unknown
+  ): Promise<EndpointResult> {
     if (!isLabActionName(endpointName)) {
       const error = `Unknown endpoint "${endpointName}".`;
       log.error(error);
@@ -123,7 +132,21 @@ class LabLifecycleService {
             absolute: labPath,
             relative: ""
           });
-          vscode.commands.executeCommand(action.command, tempNode);
+          const optionKind = LIFECYCLE_ACTION_OPTION_KIND[endpointName];
+          const lifecycleOptions = optionKind
+            ? normalizeLabLifecycleOptions(optionKind, rawOptions)
+            : undefined;
+          if (optionKind && lifecycleOptions) {
+            const { runClabAction } = await import("../../../commands/runClabAction");
+            void runClabAction(
+              optionKind,
+              tempNode,
+              endpointName.endsWith("Cleanup"),
+              lifecycleOptions
+            );
+          } else {
+            vscode.commands.executeCommand(action.command, tempNode);
+          }
           return { result: `${action.resultMsg} for ${labPath}`, error: null };
         } catch (innerError) {
           const error = `${action.errorMsg}: ${String(innerError)}`;

@@ -1,3 +1,7 @@
+import {
+  labLifecycleQueryParams,
+  type LabLifecycleOptions,
+} from "@containerlab/clab-ui/host";
 import type { Response } from "undici";
 
 import type {
@@ -71,6 +75,12 @@ export interface ClabApiClientOptions {
 
 interface StreamRequestOptions {
   signal?: AbortSignal;
+}
+
+/** Cleanup flag plus the extra containerlab options of deploy, redeploy and destroy. */
+interface LifecycleRequestOptions {
+  cleanup?: boolean;
+  lifecycleOptions?: LabLifecycleOptions;
 }
 
 export interface LoginResponse {
@@ -494,7 +504,7 @@ export class ClabApiClient {
   async deployLab(
     token: string,
     labName: string,
-    options: { path?: string; includeLogs?: boolean; cleanup?: boolean } = {},
+    options: LifecycleRequestOptions & { path?: string; includeLogs?: boolean } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.path) {
@@ -503,6 +513,7 @@ export class ClabApiClient {
     if (options.cleanup) {
       params.set(lifecycleCleanupParam("deploy"), "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
@@ -559,12 +570,13 @@ export class ClabApiClient {
   async destroyLab(
     token: string,
     labName: string,
-    options: { cleanup?: boolean; includeLogs?: boolean } = {},
+    options: LifecycleRequestOptions & { includeLogs?: boolean } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.cleanup) {
       params.set("cleanup", "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
@@ -609,12 +621,13 @@ export class ClabApiClient {
   async redeployLab(
     token: string,
     labName: string,
-    options: { cleanup?: boolean; includeLogs?: boolean } = {},
+    options: LifecycleRequestOptions & { includeLogs?: boolean } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.cleanup) {
       params.set("cleanup", "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
@@ -656,7 +669,7 @@ export class ClabApiClient {
     token: string,
     endpoint: LifecycleEndpoint,
     labName: string,
-    options: { path?: string; cleanup?: boolean } = {},
+    options: LifecycleRequestOptions & { path?: string } = {},
     requestOptions: StreamRequestOptions = {},
   ): Promise<Response> {
     const params = new URLSearchParams();
@@ -668,6 +681,7 @@ export class ClabApiClient {
     if (options.cleanup) {
       params.set(lifecycleCleanupParam(endpoint), "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
 
     const { method, path, hasJsonBody } = lifecycleStreamRequestTarget(
       endpoint,
@@ -1357,6 +1371,15 @@ function upstreamNetworkErrorMessage(baseUrl: string, error: unknown): string {
       ? `: ${cause.message}`
       : "";
   return `Unable to connect to clab-api-server at ${baseUrl}: ${message}${causeMessage}`;
+}
+
+function appendLifecycleOptionParams(
+  params: URLSearchParams,
+  lifecycleOptions: LabLifecycleOptions | undefined,
+): void {
+  for (const [key, value] of labLifecycleQueryParams(lifecycleOptions)) {
+    params.set(key, value);
+  }
 }
 
 /**

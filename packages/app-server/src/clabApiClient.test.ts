@@ -105,3 +105,30 @@ test("redeploy and destroy with cleanup forward the cleanup flag", async (t) => 
   assert.equal(urls[0].searchParams.get("cleanup"), "true");
   assert.equal(urls[1].searchParams.get("cleanup"), "true");
 });
+
+test("lifecycle options become clab-api-server query parameters", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.openLifecycleStream("token", "deploy", "demo", {
+    lifecycleOptions: { nodeFilter: ["r1", "r2"], maxWorkers: 2, skipPostDeploy: true }
+  });
+  await client.destroyLab("token", "demo", {
+    lifecycleOptions: { graceful: true, keepMgmtNet: true }
+  });
+  await client.redeployLab("token", "demo", {
+    cleanup: true,
+    lifecycleOptions: { exportTemplate: "__full", skipLabdirAcl: true }
+  });
+
+  const [deploy, destroy, redeploy] = urls;
+  assert.equal(deploy.searchParams.get("nodeFilter"), "r1,r2");
+  assert.equal(deploy.searchParams.get("maxWorkers"), "2");
+  assert.equal(deploy.searchParams.get("skipPostDeploy"), "true");
+  assert.equal(deploy.searchParams.get("stream"), "true");
+  assert.equal(destroy.searchParams.get("graceful"), "true");
+  assert.equal(destroy.searchParams.get("keepMgmtNet"), "true");
+  assert.equal(redeploy.searchParams.get("cleanup"), "true");
+  assert.equal(redeploy.searchParams.get("exportTemplate"), "__full");
+  assert.equal(redeploy.searchParams.get("skipLabdirAcl"), "true");
+});

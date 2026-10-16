@@ -1,6 +1,12 @@
 import { runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
-import { createLifecycleCommandController } from "@containerlab/clab-ui/host";
+import {
+  createLifecycleCommandController,
+  isPartialDestroy,
+  LIFECYCLE_ACTION_OPTION_KIND,
+  normalizeLabLifecycleOptions,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 import {
   MSG_LAB_LIFECYCLE_LOG,
   MSG_LAB_LIFECYCLE_STATUS,
@@ -43,6 +49,8 @@ interface LifecycleCommandConfig {
   endpoint: LifecycleCommandEndpoint;
   cleanup: boolean;
   label: string;
+  /** Extra containerlab options for this run (deploy, redeploy, destroy). */
+  lifecycleOptions?: LabLifecycleOptions;
 }
 
 interface ActiveLifecycleRequest {
@@ -73,7 +81,7 @@ interface StandaloneLifecycleManagerOptions {
 
 export interface StandaloneLifecycleManager {
   cancel(): boolean;
-  run(command: StandaloneLifecycleCommand): Promise<void>;
+  run(command: StandaloneLifecycleCommand, rawOptions?: unknown): Promise<void>;
   runTarget(
     endpoint: LifecycleCommandEndpoint,
     topologyRef: TopologyRef,
@@ -363,13 +371,30 @@ function processingModeForLifecycle(commandType: LifecycleCommandType): UiProces
   return "deploy";
 }
 
-function shouldWaitForLabRunningState(commandType: LifecycleCommandType): boolean {
+/** A destroy limited to some nodes leaves the rest of the lab running. */
+function removesLab(config: LifecycleCommandConfig): boolean {
+  return config.commandType === "destroy" && !isPartialDestroy(config.lifecycleOptions);
+}
+
+function shouldWaitForLabRunningState(config: LifecycleCommandConfig): boolean {
+  if (config.commandType === "destroy") {
+    return removesLab(config);
+  }
   return (
-    commandType === "deploy" ||
-    commandType === "destroy" ||
-    commandType === "redeploy" ||
-    commandType === "apply"
+    config.commandType === "deploy" ||
+    config.commandType === "redeploy" ||
+    config.commandType === "apply"
   );
+}
+
+function withLifecycleOptions(
+  command: StandaloneLifecycleCommand,
+  config: LifecycleCommandConfig,
+  rawOptions: unknown
+): LifecycleCommandConfig {
+  const kind = LIFECYCLE_ACTION_OPTION_KIND[command];
+  const lifecycleOptions = kind ? normalizeLabLifecycleOptions(kind, rawOptions) : undefined;
+  return lifecycleOptions ? { ...config, lifecycleOptions } : config;
 }
 
 function expectedRunningState(commandType: LifecycleCommandType): boolean {
@@ -397,16 +422,25 @@ export function createStandaloneLifecycleManager(
     topologyRef: TopologyRef,
     cleanup: boolean,
     invokeOptions: {
+      lifecycleOptions?: LabLifecycleOptions;
       sessionId?: string;
       signal?: AbortSignal;
       onLog: (line: string, stream: LifecycleCommandStream) => void;
     }
   ): Promise<{ message?: string }> {
-    const payload: { cleanup?: boolean; sessionId?: string; topologyRef: TopologyRef } = {
+    const payload: {
+      cleanup?: boolean;
+      options?: LabLifecycleOptions;
+      sessionId?: string;
+      topologyRef: TopologyRef;
+    } = {
       topologyRef
     };
     if (cleanup) {
       payload.cleanup = true;
+    }
+    if (invokeOptions.lifecycleOptions) {
+      payload.options = invokeOptions.lifecycleOptions;
     }
     if (invokeOptions.sessionId) {
       payload.sessionId = invokeOptions.sessionId;
@@ -500,7 +534,7 @@ export function createStandaloneLifecycleManager(
   }
 
   function syncActiveTopologyAfterLifecycle(
-    commandType: LifecycleCommandType,
+    config: LifecycleCommandConfig,
     topologyRef: TopologyRef
   ): void {
     const currentTopologyRef = options.getCurrentTopologyRef();
@@ -512,7 +546,7 @@ export function createStandaloneLifecycleManager(
     }
 
     options.syncHostContext({
-      deploymentState: commandType === "destroy" ? "undeployed" : "deployed"
+      deploymentState: removesLab(config) ? "undeployed" : "deployed"
     });
     options.scheduleTopologySnapshotRefresh(0);
   }
@@ -551,6 +585,7 @@ export function createStandaloneLifecycleManager(
   ): Promise<{ message?: string }> {
     postLifecycleLogMessage(config.commandType, `Sending ${config.label} request to API...`, "stdout");
     return await invokeLifecycleApiStream(config.endpoint, request.topologyRef, config.cleanup, {
+      lifecycleOptions: config.lifecycleOptions,
       sessionId: request.sessionId,
       signal: request.signal,
       onLog: (line, stream) => {
@@ -578,13 +613,13 @@ export function createStandaloneLifecycleManager(
   }
 
   function completeLifecycleSuccess(config: LifecycleCommandConfig, topologyRef: TopologyRef): void {
-    if (config.commandType === "destroy") {
+    if (removesLab(config)) {
       options.removeLabFromRuntimeStore(topologyRef);
     }
 
     options.invalidateTopologyFileListCache();
     options.scheduleExplorerSnapshot(0);
-    syncActiveTopologyAfterLifecycle(config.commandType, topologyRef);
+    syncActiveTopologyAfterLifecycle(config, topologyRef);
     refreshDirtyStateAfterLifecycle(config.commandType, topologyRef);
     postLifecycleLogMessage(config.commandType, `${config.label} completed.`, "stdout");
     postLifecycleStatusMessage(config.commandType, "success");
@@ -613,7 +648,7 @@ export function createStandaloneLifecycleManager(
     config: LifecycleCommandConfig,
     request: ActiveLifecycleRequest
   ): Promise<void> {
-    if (config.commandType === "destroy" || !options.refreshRuntimeStore) {
+    if (removesLab(config) || !options.refreshRuntimeStore) {
       return;
     }
     try {
@@ -654,7 +689,7 @@ export function createStandaloneLifecycleManager(
         );
       }
 
-      if (!shouldWaitForLabRunningState(config.commandType)) {
+      if (!shouldWaitForLabRunningState(config)) {
         await refreshRuntimeStoreAfterLifecycle(config, request);
         completeLifecycleSuccess(config, topologyRef);
         return;
@@ -688,13 +723,14 @@ export function createStandaloneLifecycleManager(
 
   async function executeStandaloneLifecycleCommand(
     command: StandaloneLifecycleCommand,
+    rawOptions: unknown,
     execution: {
       signal: AbortSignal;
       isCurrent(): boolean;
       isCancelled(): boolean;
     }
   ): Promise<void> {
-    const config = LIFECYCLE_COMMAND_CONFIG[command];
+    const config = withLifecycleOptions(command, LIFECYCLE_COMMAND_CONFIG[command], rawOptions);
     const currentTopologyRef = options.getCurrentTopologyRef();
     if (!currentTopologyRef) {
       postLifecycleStatusMessage(
@@ -725,9 +761,9 @@ export function createStandaloneLifecycleManager(
       }
       return true;
     },
-    async run(command) {
+    async run(command, rawOptions) {
       await lifecycleController.run(command, (execution) =>
-        executeStandaloneLifecycleCommand(command, execution)
+        executeStandaloneLifecycleCommand(command, rawOptions, execution)
       );
     },
     async runTarget(endpoint, topologyRef, cleanup) {
