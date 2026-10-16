@@ -92,6 +92,45 @@ test("createWindowClabUiHost correlates snapshot requests with responses", async
   assert.equal(snapshot.revision, 3);
 });
 
+test("createWindowClabUiHost correlates apply plan requests with results", async () => {
+  const messages: Array<Record<string, unknown>> = [];
+  const targetWindow = new FakeWindow();
+  targetWindow.vscode = {
+    postMessage: (message: unknown) => {
+      messages.push(message as Record<string, unknown>);
+    }
+  };
+
+  const host = createWindowClabUiHost({ targetWindow: targetWindow as unknown as Window });
+  const planApply = host.topoViewer.planApply;
+  assert.ok(planApply);
+  const planned = planApply();
+  const failed = planApply();
+
+  assert.deepEqual(
+    messages.map((message) => message.command),
+    ["planApplyLab", "planApplyLab"]
+  );
+  const [first, second] = messages.map((message) => message.requestId);
+
+  targetWindow.dispatch({
+    type: "apply-plan-result",
+    requestId: second,
+    success: false,
+    error: "Error: lab not found"
+  });
+  targetWindow.dispatch({
+    type: "apply-plan-result",
+    requestId: first,
+    success: true,
+    plan: { "added-nodes": ["leaf3"], "recreated-nodes": [], "deployed-lab": false }
+  });
+
+  const plan = await planned;
+  assert.deepEqual(plan.addedNodes, ["leaf3"]);
+  await assert.rejects(failed, /lab not found/);
+});
+
 test("createWindowClabUiHost maps incoming topo viewer events", async () => {
   const targetWindow = new FakeWindow();
   targetWindow.vscode = {

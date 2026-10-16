@@ -19,6 +19,7 @@ import type {
   KindImageReference
 } from "../image-manager/types";
 
+import type { ApplyPlan } from "./applyPlan";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
 
 export type TopoViewerLifecycleAction =
@@ -190,6 +191,11 @@ export interface CaptureTargetRef {
 export interface ClabUiTopoViewerHost {
   /** `options` adds containerlab flags to deploy, redeploy and destroy; other actions ignore it. */
   runLifecycle(action: TopoViewerLifecycleAction, options?: LabLifecycleOptions): void;
+  /**
+   * Dry-run `containerlab apply` and return what it would change. Hosts that
+   * omit it apply without showing a plan first.
+   */
+  planApply?(): Promise<ApplyPlan>;
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;

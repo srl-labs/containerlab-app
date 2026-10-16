@@ -47,7 +47,7 @@ App screenshots live in `docs/images/app/` as WebP, one per theme: `<name>-dark.
 ![Node Editor](../images/app/node-editor-light.webp#only-light){ .shot }
 ```
 
-Add `.narrow` for dialogs. Take them from the UI test harness (`pnpm --filter @containerlab/clab-ui dev:ui-harness`), which renders the real app with fixture labs and no personal data.
+Add `.narrow` for dialogs. Take them from the UI harness (`pnpm ui:dev`). It renders the real app with demo labs and no personal data, and fakes deploying, so running-lab views need no containers.
 
 ## Writing
 

@@ -18,3 +18,4 @@ export {
   labsEqualForExplorer
 } from "./standaloneHostShared";
 export { createStandaloneTopologyManager } from "./standaloneTopology";
+export { planTopologyApply } from "./standaloneDirtyState";

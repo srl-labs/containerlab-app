@@ -15,7 +15,15 @@ The play button is **Apply**. It does the right thing for the lab's state:
 | --- | --- |
 | Not running | Deploys it. |
 | Running, file unchanged | Nothing to do; the button is disabled. |
-| Running, file changed | Runs `containerlab apply`, which brings the running lab in line with the file. A dot on the button tells you there are changes. |
+| Running, file changed | Shows a plan first, then runs `containerlab apply` to bring the running lab in line with the file. A dot on the button tells you there are changes. |
+
+### Check the plan before applying
+
+For a running lab, Apply first runs `containerlab apply --dry-run` and lists what would happen: nodes to create, start, restart, recreate, or remove, and links to connect or disconnect. Restarts and recreates come with containerlab's reason, for example `config drift: image`. Nothing changes until you select **Apply**.
+
+- Recreated and removed nodes lose configuration you did not save, so the dialog warns you about them.
+- If the running lab already matches the file, the dialog says there is nothing to apply.
+- If the dry run fails, the dialog shows the error, and you can still choose **Apply anyway**.
 
 When a lab is running, its nodes show a status badge, and right-clicking a node gives you its [runtime actions](troubleshooting.md).
 

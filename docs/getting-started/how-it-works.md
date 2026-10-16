@@ -78,7 +78,7 @@ Your positions and icons.
 
 ## Editing a running lab
 
-You can keep editing while a lab runs. The play button then shows that the file differs from what is deployed, and **Apply** makes containerlab bring the running lab in line with the file. See [Run a lab](../guides/labs.md).
+You can keep editing while a lab runs. The play button then shows that the file differs from what is deployed. **Apply** lists what containerlab would change, and applies it when you confirm. See [Run a lab](../guides/labs.md).
 
 Labs open locked by default, so a stray drag changes nothing. Select the lock in the toolbar to start editing.
 

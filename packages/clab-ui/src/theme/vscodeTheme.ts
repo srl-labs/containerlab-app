@@ -913,7 +913,9 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
   },
   MuiBadge: {
     styleOverrides: {
-      badge: { fontSize: 10, fontWeight: 600, height: 16, minWidth: 16, padding: "0 4px" }
+      badge: { fontSize: 10, fontWeight: 600, height: 16, minWidth: 16, padding: "0 4px" },
+      // The size above is for counts; a status dot stays a small circle.
+      dot: { height: 8, minWidth: 8, padding: 0, borderRadius: 4 }
     }
   },
   MuiAvatar: {

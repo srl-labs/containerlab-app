@@ -420,7 +420,7 @@ export const test = base.extend<{ topoViewerPage: TopoViewerPage }>({
     });
 
     const navigateToHarness = async (): Promise<void> => {
-      const target = `/?sessionId=${sessionId}&devExplorer=0`;
+      const target = `/?sessionId=${sessionId}&devExplorer=0&templates=none`;
       let lastError: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
