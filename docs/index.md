@@ -10,11 +10,10 @@ hide:
 <div class="home-hero" markdown>
 # The GUI<br> for containerlab.
 
-Design, deploy, and troubleshoot your containerlab networks in one visual workspace. In VS Code, on your desktop, or in your browser.
+Draw a network, deploy it, and look inside it. In VS Code, on your desktop, or in your browser.
 
 <div class="hero-actions" markdown>
-[Build your first lab :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
-[Find your app :lucide-arrow-right:](getting-started/index.md){ .hero-button .hero-button-secondary }
+[Read the docs :lucide-arrow-right:](getting-started/index.md){ .hero-button .hero-button-primary }
 [Try the sandbox :lucide-arrow-up-right:](https://srl-labs.github.io/containerlab-app/){ .hero-button .hero-button-secondary }
 </div>
 
@@ -23,48 +22,114 @@ Design, deploy, and troubleshoot your containerlab networks in one visual worksp
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="420" loading="eager"
 ```
 
-<div class="demo-caption">Select a node to inspect its configuration and find it in the YAML.</div>
+<div class="demo-caption">This is the real editor's renderer. Select a node to find it in the YAML.</div>
 
 <div class="home-section-heading" markdown>
-## Get started
+## From drawing to a running network
 
-Choose an app, create a topology, and run your first lab.
+The topology file stays the source of truth. The app is a faster way to write it, run it, and debug it.
 </div>
+
+<div class="home-features" markdown>
+<div markdown>
+<span class="card-icon">:lucide-pen-tool:</span>
+
+### Draw
+
+Drag nodes in, connect interfaces, or write YAML. Both views stay in sync.
+
+[Build a topology](guides/topologies.md){ .card-link }
+</div>
+<div markdown>
+<span class="card-icon">:lucide-play:</span>
+
+### Deploy
+
+Deploy, apply changes, redeploy, or destroy from one button.
+
+[Run a lab](guides/labs.md){ .card-link }
+</div>
+<div markdown>
+<span class="card-icon">:lucide-square-terminal:</span>
+
+### Get in
+
+A shell, SSH, or the logs of any node, one right-click away.
+
+[Troubleshoot](guides/troubleshooting.md#get-into-a-node){ .card-link }
+</div>
+<div markdown>
+<span class="card-icon">:lucide-radio-tower:</span>
+
+### Capture
+
+Wireshark on any link, streamed from the lab host. Nothing to install locally.
+
+[Capture packets](guides/troubleshooting.md#capture-packets){ .card-link }
+</div>
+<div markdown>
+<span class="card-icon">:lucide-activity:</span>
+
+### Break things
+
+Add delay, jitter, loss, or rate limits to a link and watch the network react.
+
+[Impair a link](guides/troubleshooting.md#impair-a-link){ .card-link }
+</div>
+<div markdown>
+<span class="card-icon">:lucide-share-2:</span>
+
+### Share
+
+Export SVG or a Grafana dashboard, work on shared labs, or embed live diagrams like these.
+
+[Export](guides/export.md){ .card-link }
+</div>
+</div>
+
+<div class="home-section-heading" markdown>
+## Runs where your labs are
+
+Labs run on Linux next to Docker. Pick the app that gets you there.
+</div>
+
+```clab file="diagrams/architecture.clab.yml" annotations="diagrams/architecture.clab.yml.annotations.json" title="How the apps reach a lab host" height="380" borderless="true" zoom="false" pan="false" fit-padding="0.1"
+```
 
 <div class="home-cards" markdown>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-panels-top-left:</span>
+<span class="card-icon">:material-microsoft-visual-studio-code:</span>
 
-### Choose your app
+### VS Code
 
-Use VS Code, the desktop app, or your browser. Connect to a Linux host to run your labs.
+Runs containerlab where VS Code runs: locally, in WSL, or over Remote SSH.
 
-[Choose your app :lucide-arrow-up-right:](getting-started/index.md){ .card-link }
+[Install the extension :lucide-arrow-up-right:](install/vscode.md){ .card-link }
 </div>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-workflow:</span>
+<span class="card-icon">:lucide-monitor:</span>
 
-### Design a topology
+### Desktop
 
-Add nodes and connect interfaces on the canvas, or edit the topology YAML directly.
+A native app for Linux, macOS, and Windows that signs in to your lab hosts.
 
-[Explore the canvas :lucide-arrow-up-right:](guides/topologies.md){ .card-link }
+[Get the desktop app :lucide-arrow-up-right:](install/desktop.md){ .card-link }
 </div>
 <div class="home-card" markdown>
-<span class="card-icon">:lucide-flask-conical:</span>
+<span class="card-icon">:lucide-globe:</span>
 
-### Explore examples
+### Web
 
-Inspect a topology, read its YAML, and download the lab to run it yourself.
+One container, every browser on your team, several lab hosts.
 
-[Browse the gallery :lucide-arrow-up-right:](examples/index.md){ .card-link }
+[Run the web app :lucide-arrow-up-right:](install/web.md){ .card-link }
 </div>
 </div>
 
 <div class="home-bottom" markdown>
 <div markdown>
-### Run your first lab
-Create a two-node network and test the connection between its devices.
+### Two containers, one link, five minutes
+Deploy a tiny lab and ping across it.
 </div>
-[Follow the tutorial :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
+[Start the quick start :lucide-arrow-up-right:](getting-started/first-lab.md){ .hero-button .hero-button-primary }
 </div>

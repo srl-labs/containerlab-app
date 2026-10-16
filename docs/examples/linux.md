@@ -1,18 +1,31 @@
+---
+description: Two Linux containers, one link, addresses ready to ping.
+---
+
 # Linux playground
 
-One link is all you need to start exploring interfaces, addressing, and packet captures. The `exec` commands assign addresses when the nodes start.
+The smallest useful lab: two Linux containers with the usual network tools, and one link. No network OS image, no license, runs on any Docker host.
+{ .lead }
 
 ```clab file="examples/linux.clab.yml" annotations="examples/linux.clab.yml.annotations.json" title="Two nodes. One connection." view="split" height="360"
 ```
 
+The `exec` lines give `client` the address `10.10.10.1/24` and `server` `10.10.10.2/24` on `eth1` when the containers start.
+
 ## Try it
 
-Download the topology, deploy it from your app, and open a shell on `client`:
+<div class="steps" markdown>
 
-```sh
-ping -c 3 10.10.10.2
-```
+1. **Deploy** the downloaded file from your app.
 
-Use the app's packet capture action on `client:eth1` to inspect the ICMP exchange. Then experiment with the [troubleshooting tools](../guides/troubleshooting.md) and see how loss or delay changes the result.
+2. **Ping** from a shell on `client`:
 
-Follow the [first lab walkthrough](../getting-started/first-lab.md) for the full setup.
+    ```sh
+    ping -c 3 10.10.10.2
+    ```
+
+3. **Watch the packets.** Right-click the link and choose **Capture**.
+
+4. **Break it a little.** Add 200 ms of delay with [Link Impairments](../guides/troubleshooting.md#impair-a-link) and ping again.
+
+</div>

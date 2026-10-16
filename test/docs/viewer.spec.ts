@@ -8,7 +8,7 @@ test("landing example renders the real graph and links a selected node to its YA
   await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab.");
   await expect(page.getByText("Diagrams that speak YAML", { exact: true })).toHaveCount(0);
   await expect(page.locator(".hero-eyebrow, .hero-caption")).toHaveCount(0);
-  const component = page.locator("clab-topology");
+  const component = page.locator("clab-topology").first();
   await expect(component).toHaveAttribute("data-loaded", "true");
   const viewer = component.frameLocator("iframe");
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
@@ -32,30 +32,28 @@ test("landing example renders the real graph and links a selected node to its YA
 test("the full sidebar keeps categories and the active page together across instant navigation", async ({ page }) => {
   await page.goto("guides/topologies/");
   const sidebar = page.locator(".md-sidebar--primary");
-  const groups = ["Get started", "Installation", "User guide", "Examples", "Developers", "Resources"];
+  const groups = ["Get started", "Install", "Guides", "Examples", "Reference", "Embed the viewer", "Project"];
   for (const group of groups) {
     await expect(sidebar.locator("label.md-nav__link").getByText(group, { exact: true })).toBeVisible();
   }
-  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Design a topology");
-  await expect(sidebar.getByRole("link", { name: "Layouts and templates", exact: true })).toBeVisible();
-  await expect(page.locator(".md-path")).toContainText("User guide");
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Build a topology");
+  await expect(sidebar.getByRole("link", { name: "Layout and style", exact: true })).toBeVisible();
+  await expect(page.locator(".md-path")).toContainText("Guides");
   await expect(page.locator(".md-tabs")).toHaveCount(0);
 
-  await sidebar.locator("label.md-nav__link").getByText("Installation", { exact: true }).click();
+  await sidebar.locator("label.md-nav__link").getByText("Install", { exact: true }).click();
   await sidebar.getByRole("link", { name: "Desktop app", exact: true }).click();
-  await expect(page).toHaveURL(/manual\/gui\/desktop\//);
+  await expect(page).toHaveURL(/install\/desktop\//);
   await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Desktop app");
   await expect(sidebar.getByRole("link", { name: "VS Code extension", exact: true })).toBeVisible();
-  await expect(page.locator(".md-path")).toContainText("Installation");
+  await expect(page.locator(".md-path")).toContainText("Install");
 
-  await sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true }).click();
-  await sidebar.locator("label.md-nav__link").getByText("Standalone viewer", { exact: true }).click();
-  await sidebar.getByRole("link", { name: "Zensical integration", exact: true }).click();
+  await sidebar.locator("label.md-nav__link").getByText("Embed the viewer", { exact: true }).click();
+  await sidebar.getByRole("link", { name: "In Zensical", exact: true }).click();
   await expect(page).toHaveURL(/\/viewer\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Diagrams that speak YAML");
-  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
-  await expect(page.locator(".md-path")).toContainText("Developers");
-  await expect(page.locator(".md-path")).toContainText("Standalone viewer");
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("In Zensical");
+  await expect(page.locator(".md-path")).toContainText("Embed the viewer");
   for (const group of groups) {
     await expect(sidebar.locator("label.md-nav__link").getByText(group, { exact: true })).toBeVisible();
   }
@@ -67,10 +65,9 @@ test("mobile navigation exposes the same hierarchy and closes when a guide is se
   await page.locator('.md-header label[for="__drawer"]').click();
   await expect(page.locator("#__drawer")).toBeChecked();
   const sidebar = page.locator(".md-sidebar--primary");
-  await expect(sidebar.locator("label.md-nav__link").getByText("Developers", { exact: true })).toBeInViewport();
-  await expect(sidebar.locator("label.md-nav__link").getByText("Standalone viewer", { exact: true })).toBeInViewport();
-  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Zensical integration");
-  await sidebar.locator("label.md-nav__link").getByText("User guide", { exact: true }).click();
+  await expect(sidebar.locator("label.md-nav__link").getByText("Embed the viewer", { exact: true })).toBeInViewport();
+  await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("In Zensical");
+  await sidebar.locator("label.md-nav__link").getByText("Guides", { exact: true }).click();
   await sidebar.getByRole("link", { name: "Keyboard shortcuts", exact: true }).click();
   await expect(page).toHaveURL(/guides\/shortcuts\//);
   await expect(page.locator("#__drawer")).not.toBeChecked();
@@ -78,7 +75,7 @@ test("mobile navigation exposes the same hierarchy and closes when a guide is se
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('.md-header label[for="__drawer"]').click();
   await expect(sidebar.locator("a.md-nav__link--active")).toHaveText("Keyboard shortcuts");
-  await expect(sidebar.locator("label.md-nav__link").getByText("User guide", { exact: true })).toBeInViewport();
+  await expect(sidebar.locator("label.md-nav__link").getByText("Guides", { exact: true })).toBeInViewport();
 });
 
 test("copy and download contain the original YAML, and tabs work from the keyboard", async ({ page }) => {
@@ -100,21 +97,25 @@ test("copy and download contain the original YAML, and tabs work from the keyboa
 
 test("theme changes preserve the iframe, and instant navigation initializes new examples", async ({ page }) => {
   await page.goto("./");
-  const component = page.locator("clab-topology");
+  const component = page.locator("clab-topology").first();
   await expect(component).toHaveAttribute("data-loaded", "true");
   await component.locator("iframe").evaluate((frame) => frame.setAttribute("data-preserved", "true"));
   await page.locator('label[title="Switch to light mode"]').click();
   await expect(component.frameLocator("iframe").locator("html")).toHaveAttribute("data-clab-theme", "light");
   await expect(component.locator("iframe")).toHaveAttribute("data-preserved", "true");
   await page.evaluate(() => { (window as unknown as { docsNavigationMarker: boolean }).docsNavigationMarker = true; });
-  await page.getByRole("link", { name: "Build your first lab" }).click();
+  await page.getByRole("link", { name: "Read the docs" }).click();
+  await expect(page).toHaveURL(/getting-started\/$/);
+  await page.getByRole("link", { name: "Run your first lab" }).click();
   await expect(page).toHaveURL(/getting-started\/first-lab\//);
   expect(await page.evaluate(() => (window as unknown as { docsNavigationMarker: boolean }).docsNavigationMarker)).toBe(true);
   await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
   await expect(page.frameLocator("clab-topology iframe").locator(".react-flow__node-topology-node")).toHaveCount(2);
   await page.goBack();
-  await expect(page.locator("clab-topology")).toHaveAttribute("data-loaded", "true");
-  await expect(page.frameLocator("clab-topology iframe").locator(".react-flow__node-topology-node")).toHaveCount(8);
+  await page.goBack();
+  const landing = page.locator("clab-topology").first();
+  await expect(landing).toHaveAttribute("data-loaded", "true");
+  await expect(landing.frameLocator("iframe").locator(".react-flow__node-topology-node")).toHaveCount(8);
 });
 
 test("multiple components stay independent and YAML-first examples defer loading", async ({ page }) => {
@@ -144,7 +145,7 @@ test("multiple components stay independent and YAML-first examples defer loading
 test("mobile layout has no horizontal overflow and retains all controls", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("./");
-  const component = page.locator("clab-topology");
+  const component = page.locator("clab-topology").first();
   await component.scrollIntoViewIfNeeded();
   await expect(component).toHaveAttribute("data-loaded", "true");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -287,12 +288,12 @@ test("a failed borderless viewer exposes readable YAML and can retry", async ({ 
 test("the page outline tracks the current section", async ({ page }) => {
   await page.goto("guides/topologies/");
   const toc = page.locator(".md-sidebar--secondary");
-  await toc.getByRole("link", { name: "Topology editor", exact: true }).click();
-  await expect(page).toHaveURL(/#topology-editor$/);
-  await expect(toc.getByRole("link", { name: "Topology editor", exact: true })).toHaveClass(/md-nav__link--active/);
-  await expect(page.locator("#topology-editor")).toBeInViewport();
-  await toc.getByRole("link", { name: "Follow the connections", exact: true }).click();
-  await expect(toc.getByRole("link", { name: "Follow the connections", exact: true })).toHaveClass(/md-nav__link--active/);
+  await toc.getByRole("link", { name: "Connect interfaces", exact: true }).click();
+  await expect(page).toHaveURL(/#connect-interfaces$/);
+  await expect(toc.getByRole("link", { name: "Connect interfaces", exact: true })).toHaveClass(/md-nav__link--active/);
+  await expect(page.locator("#connect-interfaces")).toBeInViewport();
+  await toc.getByRole("link", { name: "Add nodes", exact: true }).click();
+  await expect(toc.getByRole("link", { name: "Add nodes", exact: true })).toHaveClass(/md-nav__link--active/);
 });
 
 test("full screen and read-only interactions preserve the topology", async ({ page }) => {

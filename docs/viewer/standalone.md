@@ -1,48 +1,54 @@
 ---
-description: Embed the Containerlab topology viewer in your own website or documentation.
+description: Embed the containerlab topology viewer in your own website or documentation.
 ---
 
-# Use the standalone viewer
+# Embed the viewer
 
-`@containerlab/clab-viewer` brings the Containerlab GUI's topology rendering to your own website or documentation. It bundles its browser dependencies and works without Zensical, a React application, or an API server.
+`@containerlab/clab-viewer` renders a `.clab.yml` file the way the apps do, on any web page. No React app, no API server, no deployed lab.
+{ .lead }
 
-Give it a containerlab YAML file and, optionally, an annotations file for a saved layout. Readers can explore the topology without deploying the lab.
+Every diagram on this site is the viewer. Give it a topology file, and optionally its annotations file for a saved layout:
 
-## Choose an integration
+```clab title="Hello, network" view="split" height="300"
+name: hello
+topology:
+  defaults:
+    kind: linux
+    image: alpine:3.23
+  nodes:
+    client: {}
+    server: {}
+  links:
+    - endpoints: [client:eth1, server:eth1]
+```
 
-| Where you want to use it | Integration |
+## Pick an integration
+
+| Your site | Use |
 | --- | --- |
-| A Zensical documentation site | [Markdown component](index.md): a `clab` fence creates Topology, YAML, and split views. |
-| A website, with any frontend framework | [HTML component](reference.md#use-it-in-plain-html): load the static assets and add `<clab-topology>`. |
-| A custom host that controls the surrounding UI | [Standalone iframe](reference.md#standalone-viewer-messages): send YAML to `viewer.html` using its message protocol. |
-| A JavaScript application with one viewer | Import `mountViewer` from `@containerlab/clab-viewer` and `@containerlab/clab-viewer/styles.css`. |
+| Zensical docs | A [`clab` Markdown fence](index.md). Write the fence, get the topology, the YAML, and a split view. |
+| Any website | The [`<clab-topology>` element](reference.md#use-it-in-plain-html). Load two static files and add the tag. |
+| Your own UI around it | The [iframe protocol](reference.md#standalone-viewer-messages). Post YAML to `viewer.html`. |
+| A JavaScript app with one viewer | `mountViewer` from `@containerlab/clab-viewer`, plus `@containerlab/clab-viewer/styles.css`. |
 
-The iframe integrations keep every topology's styles and state independent. Use those when a page contains multiple viewers.
+The element and the iframe isolate each diagram's styles and state. Use one of them when a page has several diagrams.
 
-## Get the viewer
-
-Install the standalone viewer package:
+## Get the files
 
 ```sh
 npm install @containerlab/clab-viewer
 ```
 
-Copy its `dist/` directory into your site's public assets. Keep the directory intact: `viewer.html`, `component.mjs`, `component.css`, and the bundled assets work together. The package also exposes these files through `@containerlab/clab-viewer/static/*`.
+Copy the package's `dist/` directory into your site's static assets and keep it whole: `viewer.html`, `component.mjs`, `component.css`, and the bundled chunks belong together. They are also exported as `@containerlab/clab-viewer/static/*`.
 
-When working in this repository, build the same assets with:
+To build from this repository, run `pnpm viewer`; the output lands in `packages/clab-viewer/dist/`. `pnpm viewer:pack` creates `artifacts/clab-viewer.tgz` for testing an unreleased version elsewhere. The older `@containerlab/clab-ui/viewer` entry point still works.
 
-```sh
-pnpm viewer
-```
+## Layouts
 
-The result is in `packages/clab-viewer/dist/`. For an unreleased version, run `pnpm viewer:pack` and install `artifacts/clab-viewer.tgz` in the external project. Existing `@containerlab/clab-ui/viewer` integrations remain supported.
+Without annotations, the viewer lays out the topology on its own. To keep a layout you arranged in the app, ship the `.clab.yml.annotations.json` file next to the YAML. The YAML stays the source for rendering, copying, and downloading.
 
-## Keep the lab and its layout together
-
-The `.clab.yml` file describes the network. An optional `.clab.yml.annotations.json` file holds its layout, icons, groups, and other visual annotations. Export or save that file from the GUI to reuse the arrangement in an embed.
-
-Without annotations, the viewer arranges the topology automatically. The YAML remains the source used for rendering, copying, and downloading the lab.
-
-## Put it in your docs
-
-The [Zensical integration](index.md) turns a YAML file into a diagram readers can explore. The [component reference](reference.md) covers options, theming, embedding, and messages.
+<div class="next" markdown>
+[:lucide-arrow-right: Use it in Zensical](index.md)
+[:lucide-arrow-right: Style it in the studio](customize.md)
+[:lucide-arrow-right: Component reference](reference.md)
+</div>

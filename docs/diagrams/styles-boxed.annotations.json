@@ -1,0 +1,44 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "spine1",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "icon": "spine",
+      "iconColor": "#3d9bd1"
+    },
+    {
+      "id": "spine2",
+      "position": {
+        "x": 180,
+        "y": 0
+      },
+      "icon": "spine",
+      "iconColor": "#3d9bd1"
+    },
+    {
+      "id": "leaf1",
+      "position": {
+        "x": 0,
+        "y": 150
+      },
+      "icon": "leaf",
+      "iconColor": "#3d9bd1"
+    },
+    {
+      "id": "leaf2",
+      "position": {
+        "x": 180,
+        "y": 150
+      },
+      "icon": "leaf",
+      "iconColor": "#3d9bd1"
+    }
+  ],
+  "viewerSettings": {
+    "nodeStyle": "boxed",
+    "linkLabelMode": "hide"
+  }
+}

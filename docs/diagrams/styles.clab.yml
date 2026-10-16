@@ -1,0 +1,17 @@
+# A small fabric for comparing node styles.
+name: styles
+
+topology:
+  defaults:
+    kind: nokia_srlinux
+    image: ghcr.io/nokia/srlinux:latest
+  nodes:
+    spine1: {}
+    spine2: {}
+    leaf1: {}
+    leaf2: {}
+  links:
+    - endpoints: [spine1:e1-1, leaf1:e1-49]
+    - endpoints: [spine1:e1-2, leaf2:e1-49]
+    - endpoints: [spine2:e1-1, leaf1:e1-50]
+    - endpoints: [spine2:e1-2, leaf2:e1-50]

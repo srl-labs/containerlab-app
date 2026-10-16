@@ -1,0 +1,9 @@
+# Diagram only: how a browser reaches a lab through the web app.
+name: web-path
+
+topology:
+  nodes:
+    browser: {kind: linux}
+    web-app: {kind: linux}
+    clab-api-server: {kind: linux}
+    lab: {kind: linux}

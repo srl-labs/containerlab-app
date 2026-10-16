@@ -1,12 +1,13 @@
 # Diagrams that speak YAML
 
-Use the [standalone Containerlab viewer](standalone.md) in a Zensical documentation site. Write the topology once. Get an interactive diagram, highlighted YAML, and a split view in your documentation. Readers can inspect nodes and download the same file to use in their labs.
+Write the topology once in your Zensical docs. Readers get an interactive diagram, the highlighted YAML, and a download of the exact file.
+{ .lead }
 
-The component uses the `@containerlab/clab-viewer` package. Each diagram runs in its own iframe, keeping its state and styles independent of other diagrams and the documentation theme.
+Each diagram runs in its own iframe, so it never clashes with your theme or with other diagrams on the page.
 
-## A fence is all it takes
+## Add a fence
 
-Add a `clab` fence to a Markdown page:
+In any Markdown page:
 
 ````markdown
 ```clab title="Hello, network" view="split"
@@ -23,7 +24,7 @@ topology:
 ```
 ````
 
-And your readers get this:
+Readers see this:
 
 ```clab title="Hello, network" view="split" height="320"
 name: hello
@@ -38,20 +39,20 @@ topology:
     - endpoints: [client:eth1, server:eth1]
 ```
 
-## Use the actual lab file
+## Point at a lab file
 
-For examples that you also run, reference the YAML directly. Paths are relative to the `docs/` directory, regardless of which page contains the fence.
+For labs people should run, reference the file instead of pasting it. Paths are relative to `docs/`, whatever page the fence is on.
 
 ````markdown
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="460"
 ```
 ````
 
-Export an annotations file from the app to preserve a deliberate layout. Without annotations, the viewer arranges the nodes automatically.
+Add the annotations file saved by the app to keep your layout. Without it, the viewer arranges the nodes itself.
 
-## Borderless diagrams
+## Just the drawing
 
-Set `borderless="true"` to place just the canvas between paragraphs. The transparent background blends into the page in either theme. There is no title bar, tab strip, grid, inspector, or toolbar. Readers can still drag to pan and use the mouse wheel or pinch to zoom.
+`borderless="true"` drops the frame, tabs, grid, inspector, and toolbar, and makes the background transparent. Readers can still pan and zoom. The architecture diagrams in these docs are drawn this way.
 
 ````markdown
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="360" borderless="true"
@@ -63,7 +64,7 @@ Set `borderless="true"` to place just the canvas between paragraphs. The transpa
 
 The title still names the diagram for assistive technology. Bring back individual controls with options such as `toolbar="true"` or `controls="true"`; see [customization recipes](customize.md). In plain HTML, add the boolean `borderless` attribute to `<clab-topology>`. Without JavaScript, the source remains readable; a viewer error also reveals the YAML.
 
-## Made for reading
+## What readers can do
 
 - **Topology, YAML, or both.** Keyboard accessible tabs with arrow-key navigation.
 - **Inspect a node.** Click a device or choose it from the node menu. Reveal its source lines with **Show in YAML**.

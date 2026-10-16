@@ -1,42 +1,51 @@
-# A network in a few minutes
+---
+description: Deploy two Linux containers, connect them with one link, and ping across it.
+---
 
-Start small: two Linux containers and one link. No network OS image to obtain, no device license to configure. This example assigns an address to each end so you can test the connection immediately.
+# Quick start
 
-## 1. Explore the lab
+Two Linux containers, one link, a ping across it. No network OS image to download and no license to configure.
+{ .lead }
 
-Click a node to inspect it, then select **Show in YAML** to reveal its configuration. The two tabs are views of the same file.
+You need one of the apps [installed](index.md) and connected to a Linux machine with Docker. To only look around, the [browser sandbox](https://srl-labs.github.io/containerlab-app/) is enough for steps 1 and 2.
 
-```clab file="examples/linux.clab.yml" annotations="examples/linux.clab.yml.annotations.json" title="Your first connection" height="340"
+```clab file="examples/linux.clab.yml" annotations="examples/linux.clab.yml.annotations.json" title="Your first lab" view="split" height="360"
 ```
 
-## 2. Open it in your app
+Click a node to see its definition. **Show in YAML** jumps to its lines in the file. The `exec` commands give each container an address on `eth1` when it starts.
 
-Use the example's **Download YAML** button and save `linux.clab.yml`.
+<div class="steps" markdown>
 
-=== "VS Code"
+1. **Get the file.** Use **Download YAML** above and save it as `linux.clab.yml`.
 
-    Open a folder containing the file. Select the Containerlab icon in the Activity Bar, find the lab, and open its topology viewer. The extension needs containerlab and Docker on its Linux host.
+2. **Open it in your app.**
 
-=== "Web or desktop"
+    === "VS Code"
 
-    Connect to your API endpoint. Upload the topology file through the Explorer, then open it in the topology editor. Files are saved on the API host for the Linux user you logged in as.
+        Put the file in the folder you have open. Select the containerlab icon in the Activity Bar. The lab shows up under undeployed labs; open it in the topology editor.
 
-=== "Browser sandbox"
+    === "Desktop or web"
 
-    Open the [sandbox](https://srl-labs.github.io/containerlab-app/) and import the YAML to explore and edit it. Move the file to a connected app when you're ready to deploy.
+        Open **Files** in the left rail and upload the file to your workspace on the lab host. Then open it.
 
-## 3. Deploy and test
+    === "Sandbox"
 
-Use **Deploy** on the lab. After the containers start, open a shell on `client` and run:
+        Open the [sandbox](https://srl-labs.github.io/containerlab-app/) and import the file. You can edit and arrange it, but not deploy it.
 
-```sh
-ping -c 3 10.10.10.2
-```
+3. **Deploy.** Select the green play button in the editor toolbar. Each node shows a status badge once its container is up.
 
-The addresses come from the `exec` commands in the YAML. The `eth1` interfaces come from its `links` section. Your diagram, topology file, and running network describe the same connection.
+4. **Ping across the link.** Right-click `client`, choose **Shell**, and run:
 
-## 4. Make it yours
+    ```sh
+    ping -c 3 10.10.10.2
+    ```
 
-Add another node on the canvas, connect it to the network, and inspect the resulting YAML. When you're finished, use **Destroy** to remove the running lab containers.
+5. **Change it.** Add a third node from the palette, connect it, and watch the YAML update. When you are done, open the arrow next to the play button and choose **Destroy**. Your file stays; only the containers go away.
 
-Continue with the [topology design guide](../guides/topologies.md), or explore a [leaf–spine fabric](../examples/fabric.md).
+</div>
+
+<div class="next" markdown>
+[:lucide-arrow-right: Build a topology](../guides/topologies.md)
+[:lucide-arrow-right: Run a lab](../guides/labs.md)
+[:lucide-arrow-right: Explore a leaf–spine fabric](../examples/fabric.md)
+</div>

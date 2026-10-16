@@ -1,18 +1,23 @@
+---
+description: A small SR Linux leaf–spine fabric with three clients.
+---
+
 # Leaf–spine fabric
 
-The building block of a data center: each leaf connects to every spine. Clients attach at the leaves. This example describes the physical topology; configuring routing is your next experiment.
+The shape of most data center networks: every leaf connects to every spine, and clients hang off the leaves. This file is wiring only; bring your own routing.
+{ .lead }
 
 ```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" view="split" height="500"
 ```
 
-## Read the topology
+## Read the file
 
-The `defaults` section supplies the SR Linux kind and image to the fabric nodes. Clients override these with a Linux image. A link lists exactly two endpoints, each written as `node:interface`.
-
-Select `leaf2` to see its node definition, then follow its uplinks to both spines. Each leaf has one client connection and two fabric uplinks.
+- `defaults` gives every node the SR Linux kind and image. The clients override both with a Linux image.
+- Each link has two endpoints written as `node:interface`. SR Linux names its ports `e1-1`, `e1-2`, …
+- Select `leaf2` and follow its two uplinks and its one client link.
 
 ## Run it
 
-Download the YAML and open it in a [connected app](../getting-started/index.md), then deploy. This lab requires a Linux host with enough resources for five SR Linux containers and three Linux clients. See [SR Linux requirements](https://containerlab.dev/manual/kinds/srl/) before deploying.
+You need a Linux host with room for five SR Linux nodes and three Linux containers; check the [SR Linux requirements](https://containerlab.dev/manual/kinds/srl/). Download the file, deploy it, and open the CLI on a leaf with **Shell**.
 
-The file contains no routing or client IP configuration. It is a starting point for experimenting with your own underlay and overlay. For a ready-to-ping example, try the [Linux playground](linux.md).
+There is no routing and no client addressing yet. That is the exercise. For something that pings right away, start with the [Linux playground](linux.md).

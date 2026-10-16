@@ -1,53 +1,67 @@
 ---
-description: Choose Containerlab for VS Code, desktop, or the browser.
+description: Pick the VS Code extension, the desktop app, the web app, or the browser sandbox.
 ---
 
-# Your workspace, your way
+# Choose an app
 
-Three ways in. The same topology editor, lab explorer, and troubleshooting tools once you're there.
+The editor, the explorer, and the lab tools are the same in every app. What differs is where your files live and which machine runs the labs.
+{ .lead }
 
 <div class="grid cards" markdown>
 
--   :material-microsoft-visual-studio-code: **VS Code**
+-   :material-microsoft-visual-studio-code: **VS Code extension**
 
     ---
 
-    Keep labs next to your code. Work locally on Linux, in WSL, or on a host through Remote SSH.
+    Your labs sit next to your code. The extension runs containerlab on the machine where VS Code runs: your Linux box, WSL, or a server over Remote SSH.
 
-    [Install the extension →](../manual/gui/vsc-extension.md)
+    **Needs:** containerlab and Docker on that machine.
 
--   :lucide-monitor: **Desktop**
+    [Install the extension :lucide-arrow-right:](../install/vscode.md)
 
-    ---
-
-    A dedicated app for Linux, macOS, and Windows. Connect to the API on your Linux lab host.
-
-    [Get the desktop app →](../manual/gui/desktop.md)
-
--   :lucide-globe: **Web**
+-   :lucide-monitor: **Desktop app**
 
     ---
 
-    Run the app on a server and reach your labs from a browser. Connect multiple lab hosts in one workspace.
+    A standalone window for Linux, macOS, and Windows. It signs in to one or more lab hosts.
 
-    [Run the web app →](../manual/gui/web.md)
+    **Needs:** `clab-api-server` on each lab host.
+
+    [Install the desktop app :lucide-arrow-right:](../install/desktop.md)
+
+-   :lucide-globe: **Web app**
+
+    ---
+
+    One container that serves the app to every browser on your team. Same sign-in as the desktop app.
+
+    **Needs:** `clab-api-server` on each lab host, and Docker to run the web app.
+
+    [Run the web app :lucide-arrow-right:](../install/web.md)
+
+-   :lucide-flask-conical: **Browser sandbox**
+
+    ---
+
+    Draw and edit topologies with nothing installed. Files stay in your browser. It cannot deploy labs.
+
+    **Needs:** nothing.
+
+    [Open the sandbox :lucide-arrow-up-right:](https://srl-labs.github.io/containerlab-app/)
 
 </div>
 
-## Just exploring?
+## Where things live
 
-[Open the browser sandbox](https://srl-labs.github.io/containerlab-app/){ .md-button .md-button--primary }
-
-The sandbox lets you design and visualize topologies without an installation. Its files stay in browser storage. To deploy labs and interact with devices, use an app connected to a Linux lab host.
-
-## What runs where?
-
-| Environment | Where your files live | Where your labs run |
+| | Your topology files | Your running labs |
 | --- | --- | --- |
-| VS Code | The workspace you opened | The Linux environment running the extension |
-| Web / desktop | Your user directory on the API host | The Linux host running `clab-api-server` |
-| Browser sandbox | Your browser's local storage | Design only |
+| VS Code | The folder you opened | The machine running the extension |
+| Desktop and web | Your home directory on the lab host | The lab host running `clab-api-server` |
+| Sandbox | Browser storage | Nowhere: design only |
 
-For web and desktop, [connect a lab host](../manual/api-server.md) before deploying. For VS Code, install containerlab and Docker in the Linux environment where the extension runs.
+Not sure? Start in the [sandbox](https://srl-labs.github.io/containerlab-app/) to get a feel for the editor. If you already use VS Code on Linux, the extension is the fastest way to a running lab. If several people share one lab server, run the web app.
 
-Next: [build your first lab](first-lab.md).
+<div class="next" markdown>
+[:lucide-arrow-right: Run your first lab](first-lab.md)
+[:lucide-arrow-right: How the apps reach a lab host](how-it-works.md)
+</div>

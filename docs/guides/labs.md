@@ -1,31 +1,52 @@
-# Run your labs
+---
+description: Deploy, apply changes, redeploy, and destroy labs, run them with containerlab options, and manage images.
+---
 
-Deploy a topology, work with its devices, and manage the images your lab needs. These actions run on the Linux host connected to your app.
+# Run a lab
 
-## Operating labs
+The green play button and the arrow next to it hold every lifecycle action. They run on the machine behind your app: the VS Code host, or the lab host you signed in to.
+{ .lead }
 
-From the GUI you can deploy, redeploy, destroy, start, stop, restart, save, graph, and inspect labs where the host supports those actions.
+## Deploy and apply
 
-![Running lab in Containerlab GUI](../images/gui/running-lab.png)
+The play button is **Apply**. It does the right thing for the lab's state:
 
-Running nodes expose actions such as:
+| The lab is… | Apply… |
+| --- | --- |
+| Not running | Deploys it. |
+| Running, file unchanged | Nothing to do; the button is disabled. |
+| Running, file changed | Runs `containerlab apply`, which brings the running lab in line with the file. A dot on the button tells you there are changes. |
 
-* open shell
-* open SSH session
-* show logs
-* copy node details
-* start, stop, or restart the node
-* capture packets from an interface
-* manage link impairments
+When a lab is running, its nodes show a status badge, and right-clicking a node gives you its [runtime actions](troubleshooting.md).
 
-In VS Code, shell and SSH actions open VS Code terminals. In Desktop and Web, terminal sessions are proxied through `clab-api-server` and shown in standalone terminal windows.
+![A running lab with a node's actions open](../images/app/running-lab-dark.webp#only-dark){ .shot }
+![A running lab with a node's actions open](../images/app/running-lab-light.webp#only-light){ .shot }
 
-### Run with options
+## The lifecycle menu
 
-The arrow next to the topology viewer's play button opens the lifecycle menu. **Run with options…** at the bottom of that menu deploys, redeploys, or destroys the lab with extra containerlab flags:
+The arrow next to the play button opens the rest:
 
-| Option | Deploy | Redeploy | Destroy | containerlab flag |
-| ------ | :----: | :------: | :-----: | ----------------- |
+| Action | What happens |
+| --- | --- |
+| **Deploy (cleanup)** | Deploy after removing leftovers of an earlier run. |
+| **Redeploy** | Destroy and deploy again. Node changes you did not save are lost. |
+| **Redeploy (cleanup)** | The same, and remove the lab directory first. |
+| **Destroy** | Remove the containers and links. Your files stay. |
+| **Destroy (cleanup)** | Also remove the lab directory with generated configs and certificates. |
+| **Start Nodes**, **Stop Nodes**, **Restart Nodes** | Start, stop, or restart the containers without redeploying. |
+| **Run with options…** | Any of the above with extra containerlab flags. |
+
+In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanupWarning` is on.
+
+## Run with options
+
+**Run with options…** deploys, redeploys, or destroys with flags you pick for this run only. The dialog shows the resulting `containerlab` command as you go.
+
+![Run with options](../images/app/lifecycle-options-dark.webp#only-dark){ .shot .narrow }
+![Run with options](../images/app/lifecycle-options-light.webp#only-light){ .shot .narrow }
+
+| Option | Deploy | Redeploy | Destroy | Flag |
+| --- | :---: | :---: | :---: | --- |
 | Clean up | ✓ | ✓ | ✓ | `-c` |
 | Nodes | ✓ | | ✓ | `--node-filter` |
 | Graceful shutdown | | ✓ | ✓ | `--graceful` |
@@ -35,14 +56,16 @@ The arrow next to the topology viewer's play button opens the lifecycle menu. **
 | Max workers | ✓ | ✓ | | `--max-workers` |
 | Export template | ✓ | ✓ | | `--export-template` |
 
-The dialog shows the matching `containerlab` command as you change options. Deploy is offered when the lab is not running; redeploy and destroy when it is. Destroying only some nodes leaves the rest of the lab running, so it cannot be combined with clean up.
+Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
 
-In VS Code the flags are added for that run, after any `deploy.extraArgs` or `destroy.extraArgs` from the settings. In Desktop and Web they are passed to `clab-api-server`, which does not accept an absolute path for the export template.
+## Images
 
-## Image manager
+**Manage Images**, in the header of the explorer's running labs section, lists the images your labs and templates use, pulls missing ones, and removes those you no longer need.
 
-The GUI can manage local container images when the host exposes image operations.
+![Image manager](../images/app/image-manager-dark.webp#only-dark){ .shot }
+![Image manager](../images/app/image-manager-light.webp#only-light){ .shot }
 
-![Image manager](../images/gui/image-manager.png)
-
-Use the image manager to see images referenced by labs and custom node templates, pull missing images, and remove images that are no longer needed.
+<div class="next" markdown>
+[:lucide-arrow-right: Troubleshoot a running lab](troubleshooting.md)
+[:lucide-arrow-right: Shared labs](shared-labs.md)
+</div>

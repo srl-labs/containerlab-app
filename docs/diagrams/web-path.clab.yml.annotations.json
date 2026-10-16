@@ -1,0 +1,194 @@
+{
+  "nodeAnnotations": [
+    {
+      "id": "browser",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "icon": "client",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3d9bd1",
+      "iconCornerRadius": 10
+    },
+    {
+      "id": "web-app",
+      "position": {
+        "x": 210,
+        "y": 40
+      },
+      "icon": "server",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#8a72d6",
+      "iconCornerRadius": 10,
+      "groupId": "web"
+    },
+    {
+      "id": "clab-api-server",
+      "position": {
+        "x": 440,
+        "y": 40
+      },
+      "icon": "server",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconColor": "#3ba57e",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    },
+    {
+      "id": "lab",
+      "position": {
+        "x": 600,
+        "y": 40
+      },
+      "icon": "router",
+      "labelPosition": "bottom",
+      "labelBackgroundColor": "transparent",
+      "iconCornerRadius": 10,
+      "groupId": "host"
+    }
+  ],
+  "groupStyleAnnotations": [
+    {
+      "id": "web",
+      "name": "CONTAINER",
+      "level": "1",
+      "position": {
+        "x": 170,
+        "y": 0
+      },
+      "width": 120,
+      "height": 110,
+      "backgroundColor": "#8a72d6",
+      "backgroundOpacity": 7,
+      "borderColor": "#8a72d6",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#8a72d6",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    },
+    {
+      "id": "host",
+      "name": "LAB HOST",
+      "level": "1",
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "width": 280,
+      "height": 110,
+      "backgroundColor": "#3ba57e",
+      "backgroundOpacity": 7,
+      "borderColor": "#3ba57e",
+      "borderWidth": 1,
+      "borderStyle": "solid",
+      "borderRadius": 14,
+      "labelColor": "#3ba57e",
+      "labelPosition": "top-left",
+      "zIndex": -5
+    }
+  ],
+  "freeTextAnnotations": [
+    {
+      "id": "text-0",
+      "text": "HTTPS :3001",
+      "position": {
+        "x": 70,
+        "y": 30
+      },
+      "width": 120,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    },
+    {
+      "id": "text-1",
+      "text": "HTTPS :8090",
+      "position": {
+        "x": 310,
+        "y": 30
+      },
+      "width": 120,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
+    }
+  ],
+  "freeShapeAnnotations": [
+    {
+      "id": "arrow-0",
+      "shapeType": "line",
+      "position": {
+        "x": 45,
+        "y": 60
+      },
+      "endPosition": {
+        "x": 205,
+        "y": 60
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-1",
+      "shapeType": "line",
+      "position": {
+        "x": 255,
+        "y": 60
+      },
+      "endPosition": {
+        "x": 435,
+        "y": 60
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-2",
+      "shapeType": "line",
+      "position": {
+        "x": 485,
+        "y": 60
+      },
+      "endPosition": {
+        "x": 595,
+        "y": 60
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "dashed",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    }
+  ],
+  "viewerSettings": {
+    "nodeStyle": "icon",
+    "linkLabelMode": "hide",
+    "linkStyle": "straight"
+  }
+}

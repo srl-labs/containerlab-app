@@ -1,49 +1,74 @@
-# Think in topologies
+---
+description: Add nodes, connect interfaces, and edit the topology on the canvas or as YAML.
+---
 
-A `.clab.yml` file describes the nodes and links in your network. The apps turn that file into an interactive canvas, and changes in the editor become changes in the topology.
+# Build a topology
 
-## Follow the connections
+Draw it or type it. The canvas and the YAML are two views of the same file, and every change shows up in both.
+{ .lead }
 
-This fabric has two spines, three leaves, and three clients. Each leaf connects to both spines. Scroll over the diagram to zoom, or drag the canvas to pan.
+<figure class="diagram" markdown>
 
-```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="400" borderless="true"
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric" height="380" borderless="true"
 ```
 
-[Open the fabric example](../examples/fabric.md) to inspect nodes alongside their YAML and download the topology.
+<figcaption>Every leaf connects to both spines. Scroll to zoom, drag to pan.</figcaption>
+</figure>
 
-## Topology editor
+Unlock the canvas first: select the lock in the toolbar.
 
-TopoViewer is the shared canvas and source editor.
+## Add nodes
 
-Use it to:
+- **Drag a template** from the **Palette** onto the canvas.
+- **++shift++ + click** an empty spot to drop your default template there.
+- **Copy and paste** existing nodes with ++ctrl+c++ and ++ctrl+v++, or duplicate with ++ctrl+d++.
 
-* add nodes from built-in or custom templates
-* drag nodes, networks, and annotations from the palette to the canvas
-* create links between nodes
-* edit node, link, lab, and annotation properties
-* move nodes and arrange the lab
-* add free text, shapes, groups, and interface labels
-* edit the topology YAML and annotations JSON, including in split view
-* save topology changes back to files
+Names count up from the template's base name: `srl1`, `srl2`, `srl3`. To make your own templates, see [Node templates](templates.md).
 
-When the lab is not running, TopoViewer opens in editor mode. Editor mode allows topology changes and writes them back to the topology file.
+## Connect interfaces
 
-When the lab is running, TopoViewer opens in viewer mode. Viewer mode focuses on operational actions and avoids accidental topology changes while the deployed lab is active. You can unlock the canvas when you need to edit visual annotations.
+**++shift++ + click** the first node, then click the second. The editor picks the next free interface on each side, following the node kind's naming, for example `e1-1` on SR Linux and `eth1` on Linux.
 
-The toolbar also includes **Bulk Link Devices**, **Find Node**, **Fit to Viewport**, **Link Labels**, and **Toggle YAML Split View**. Bulk linking is useful for leaf-spine and numbered topologies: match node names with patterns such as `leaf*`, `spine*`, `srl?`, or `leaf(\d+)` to `spine$1`, then confirm the generated links before they are added.
+Double-click a link to change its interfaces or properties in the **Link Editor**.
 
-## Keep topology and presentation separate
+## Connect many at once
 
-The YAML defines the actual lab: device kinds, images, interfaces, and configuration. An optional `.annotations.json` file stores how that topology is presented: positions, icon choices, text, and groups.
+**Bulk Link Devices** connects every node matching a **Source Pattern** to every node matching a **Target Pattern**.
 
-Moving a node on the canvas does not change its network connections. Editing the topology file does.
+| Source | Target | Result |
+| --- | --- | --- |
+| `leaf*` | `spine*` | A full mesh between leaves and spines |
+| `srl?` | `client` | `srl1` to `srl9` each connect to `client` |
+| `leaf(\d+)` | `server$1` | `leaf1`–`server1`, `leaf2`–`server2`, … |
 
-## Work visually or in YAML
+![Bulk Link Devices](../images/app/bulk-link-dark.webp#only-dark){ .shot .narrow }
+![Bulk Link Devices](../images/app/bulk-link-light.webp#only-light){ .shot .narrow }
 
-In the app, use the node palette to add devices and the link tools to connect their interfaces. The YAML editor is useful for repeated configurations, defaults, and more detailed node properties. Use [layouts and templates](layouts.md) to arrange the canvas and reuse device definitions. See [export and share](sharing.md) to capture or publish the result.
+## Edit node properties
 
-The diagrams in this documentation use a read-only version of that viewer. You can pan, zoom, inspect, and download a topology; edit or deploy it in one of the apps.
+Double-click a node to open the **Node Editor**: kind, type, image, startup config, binds, environment, ports, and the rest of what containerlab supports.
 
-## Go deeper
+![Node Editor](../images/app/node-editor-dark.webp#only-dark){ .shot }
+![Node Editor](../images/app/node-editor-light.webp#only-light){ .shot }
 
-The core containerlab documentation remains the reference for [topology syntax](https://containerlab.dev/manual/topo-def-file/), [node properties](https://containerlab.dev/manual/nodes/), [supported kinds](https://containerlab.dev/manual/kinds/), and [networking](https://containerlab.dev/manual/network/).
+## Edit the YAML
+
+**Toggle YAML Split View** opens the file in a panel next to the canvas, on its **YAML** tab. The editor completes and checks containerlab keys as you type, and changes on either side show up on the other.
+
+![Canvas and YAML side by side](../images/app/split-view-dark.webp#only-dark){ .shot }
+![Canvas and YAML side by side](../images/app/split-view-light.webp#only-light){ .shot }
+
+YAML is the faster way to change many nodes at once, for example through `defaults` or `kinds`.
+
+## Add networks
+
+The **Palette** also has **Networks**: **Host**, **Mgmt Net**, **Macvlan**, **VXLAN**, **VXLAN Stitch**, **Dummy**, **Bridge**, and **OVS Bridge**. Drag one in and connect nodes to it like to any other node.
+
+## Learn the format
+
+The containerlab manual covers the file in depth: [topology syntax](https://containerlab.dev/manual/topo-def-file/), [node properties](https://containerlab.dev/manual/nodes/), [kinds](https://containerlab.dev/manual/kinds/), and [networking](https://containerlab.dev/manual/network/).
+
+<div class="next" markdown>
+[:lucide-arrow-right: Layout and style](appearance.md)
+[:lucide-arrow-right: Run a lab](labs.md)
+</div>

@@ -1,27 +1,53 @@
-# A gallery you can explore
+---
+description: Example containerlab topologies you can explore here and download.
+---
 
-Every example is a real containerlab YAML file, rendered by the shared topology viewer. Inspect the network, switch to its source, and take the YAML with you.
+# Examples
 
-For more annotated examples, and to try viewer settings on them, see the [customization studio](../viewer/customize.md).
+Each example is a real `.clab.yml` file. Look around, then download it and deploy it from your app.
+{ .lead }
 
-<div class="grid cards" markdown>
+<div class="pair" markdown>
+<div markdown>
 
--   :lucide-network: **Leaf–spine fabric**
+Linux playground
 
-    ---
+```clab file="examples/linux.clab.yml" annotations="examples/linux.clab.yml.annotations.json" title="Linux playground preview" height="240" borderless="true" zoom="false" pan="false" fit-padding="0.3"
+```
 
-    Two spines. Three leaves. Three clients. Explore the physical connections of a small data center.
-
-    [Explore the fabric →](fabric.md)
-
--   :lucide-terminal: **Linux playground**
-
-    ---
-
-    Two Linux nodes, one link, and addresses ready to ping. An approachable first lab.
-
-    [Make your first connection →](linux.md)
+Two Linux nodes with addresses, ready to ping. Runs anywhere. [Open the example :lucide-arrow-right:](linux.md)
 
 </div>
+<div markdown>
 
-Looking for more? The [containerlab example library](https://containerlab.dev/lab-examples/lab-examples/) covers routing protocols, network operating systems, and larger labs.
+Leaf–spine fabric
+
+```clab file="examples/fabric.clab.yml" annotations="examples/fabric.clab.yml.annotations.json" title="Leaf–spine fabric preview" height="240" borderless="true" zoom="false" pan="false" fit-padding="0.12"
+```
+
+Two spines, three leaves, three clients on SR Linux. Wiring only. [Open the example :lucide-arrow-right:](fabric.md)
+
+</div>
+<div markdown>
+
+Packet walk
+
+```clab file="examples/packet-walk.clab.yml" annotations="examples/packet-walk.clab.yml.annotations.json" title="Packet walk preview" height="240" borderless="true" theme="light" transparent="false" zoom="false" pan="false" fit-padding="0.08"
+```
+
+Client, router, server across two subnets, with addresses and routes. [Open the example :lucide-arrow-right:](../viewer/customize.md#packet-walk)
+
+</div>
+<div markdown>
+
+Branch office
+
+```clab file="examples/branch-office.clab.yml" annotations="examples/branch-office.clab.yml.annotations.json" title="Branch office preview" height="240" borderless="true" theme="light" transparent="false" zoom="false" pan="false" fit-padding="0.08"
+```
+
+Two uplinks, a redundant core, three floors. Wiring only. [Open the example :lucide-arrow-right:](../viewer/customize.md#branch-office)
+
+</div>
+</div>
+
+More styled labs, with their annotation files, are in the [customization studio](../viewer/customize.md#collection). For routing protocols, network operating systems, and bigger labs, see the [containerlab lab examples](https://containerlab.dev/lab-examples/lab-examples/).
