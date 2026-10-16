@@ -685,6 +685,7 @@ function buildInitialTopoViewerData(
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,
     showDummyLinks: viewerSettings.showDummyLinks !== false,
+    showWaitFor: viewerSettings.showWaitFor === true,
     ...(resolvedLinkLabelMode !== null ? { linkLabelMode: resolvedLinkLabelMode } : {}),
     ...(resolvedLastNonTelemetryLinkLabelMode !== null
       ? { lastNonTelemetryLinkLabelMode: resolvedLastNonTelemetryLinkLabelMode }

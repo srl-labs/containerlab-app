@@ -579,3 +579,176 @@ test("a kind name in another case still finds the kind section on save", () => {
   const out = saveEdit(yaml, "n1", (data) => ({ ...data, image: "alpine:3", cmd: "sh" }));
   assert.deepEqual(nodeOf(out, "n1"), { kind: "linux", cmd: "sh" });
 });
+
+const STAGES_TOPOLOGY = fixture(`name: stages
+
+topology:
+  defaults:
+    kind: linux
+    image: alpine:3
+    stages:
+      create:
+        wait-for:
+          - node: ca
+            stage: healthy
+  nodes:
+    ca: {}
+    spine1:
+      stages:
+        create:
+          wait-for:
+            - node: ca # explicit, also inherited
+              stage: healthy
+        create-links:
+          exec:
+            - command: ip link
+              phase: on-enter
+              target: container
+    leaf1:
+      cmd: sh
+`);
+
+test("stages: the editor keeps the node's own stages apart from inherited ones", () => {
+  const leaf = openEditor(STAGES_TOPOLOGY, "leaf1");
+  assert.equal(leaf.stages, undefined);
+  assert.deepEqual(leaf.inheritedStages, [
+    { level: "defaults", stages: { create: { waitFor: [{ node: "ca", stage: "healthy" }] } } }
+  ]);
+
+  const spine = openEditor(STAGES_TOPOLOGY, "spine1");
+  assert.deepEqual(spine.stages, {
+    create: { waitFor: [{ node: "ca", stage: "healthy" }] },
+    "create-links": { exec: [{ command: "ip link", phase: "on-enter", target: "container" }] }
+  });
+});
+
+test("stages: saving another field leaves stages as written", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "spine1", (data) => ({ ...data, cmd: "sh" }));
+  assert.ok(saved.includes("- node: ca # explicit, also inherited"));
+  assert.ok(saved.includes("target: container"));
+  // Inherited stages are not copied into a node that has none
+  assert.equal(nodeOf(saveEdit(STAGES_TOPOLOGY, "leaf1", (data) => ({ ...data, cmd: "bash" })), "leaf1").stages, undefined);
+});
+
+test("stages: adding a wait-for writes the node's stages only", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "leaf1", (data) => ({
+    ...data,
+    stages: {
+      configure: { waitFor: [{ node: "spine1", stage: "configure" }] },
+      healthy: { exec: [{ command: "echo up", phase: "on-exit", target: "host" }] }
+    }
+  }));
+  assert.deepEqual(nodeOf(saved, "leaf1").stages, {
+    configure: { "wait-for": [{ node: "spine1", stage: "configure" }] },
+    healthy: { exec: [{ command: "echo up", phase: "on-exit", target: "host" }] }
+  });
+});
+
+test("stages: removing every row deletes the key", () => {
+  const saved = saveEdit(STAGES_TOPOLOGY, "spine1", (data) => ({ ...data, stages: {} }));
+  assert.equal(nodeOf(saved, "spine1").stages, undefined);
+});
+
+test("stages: the phase map form is rewritten as a list when edited", () => {
+  const yaml = fixture(`name: m
+topology:
+  nodes:
+    n1:
+      kind: linux
+      stages:
+        healthy:
+          exec:
+            on-enter:
+              - echo a
+`);
+  const saved = saveEdit(yaml, "n1", (data) => ({
+    ...data,
+    stages: {
+      ...data.stages,
+      create: { waitFor: [{ node: "n2", stage: "create" }] }
+    }
+  }));
+  assert.deepEqual(nodeOf(saved, "n1").stages, {
+    create: { "wait-for": [{ node: "n2", stage: "create" }] },
+    healthy: { exec: [{ command: "echo a", phase: "on-enter" }] }
+  });
+});
+
+test("stages: convertEditorDataToYaml does not write inherited stages", () => {
+  const leaf = openEditor(STAGES_TOPOLOGY, "leaf1");
+  const yaml = convertEditorDataToYaml({ ...leaf });
+  assert.equal(yaml.stages, undefined);
+  assert.equal("inheritedStages" in yaml, false);
+});
+
+const CREDENTIALS_TOPOLOGY = fixture(`name: creds
+
+topology:
+  kinds:
+    nokia_srlinux:
+      credentials:
+        username: srl-admin
+        password: srl-password
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    srl2:
+      kind: nokia_srlinux
+      credentials:
+        username: ops # own login
+        password: "1234"
+  links: []
+`);
+
+test("credentials load as own or inherited", () => {
+  const inherited = openEditor(CREDENTIALS_TOPOLOGY, "srl1");
+  assert.equal(inherited.credentials, undefined);
+  assert.deepEqual(inherited.inheritedCredentials, {
+    username: "srl-admin",
+    password: "srl-password",
+    source: "kind"
+  });
+
+  const own = openEditor(CREDENTIALS_TOPOLOGY, "srl2");
+  assert.deepEqual(own.credentials, { username: "ops", password: "1234" });
+  assert.equal(own.inheritedCredentials?.source, "kind");
+});
+
+test("unchanged credentials leave the YAML as written", () => {
+  assert.equal(saveEdit(CREDENTIALS_TOPOLOGY, "srl1"), CREDENTIALS_TOPOLOGY);
+  assert.equal(saveEdit(CREDENTIALS_TOPOLOGY, "srl2"), CREDENTIALS_TOPOLOGY);
+});
+
+test("typing credentials writes them to the node only", () => {
+  const yaml = saveEdit(CREDENTIALS_TOPOLOGY, "srl1", (data) => ({
+    ...data,
+    credentials: { username: " lab ", password: " secret ", identityFile: "keys/srl1" }
+  }));
+  assert.deepEqual(nodeOf(yaml, "srl1").credentials, {
+    username: "lab",
+    password: " secret ",
+    "identity-file": "keys/srl1"
+  });
+  const parsed = YAML.parse(yaml) as ClabTopology;
+  assert.deepEqual(parsed.topology?.kinds?.nokia_srlinux.credentials, {
+    username: "srl-admin",
+    password: "srl-password"
+  });
+});
+
+test("clearing every credential field removes the node's credentials", () => {
+  const yaml = saveEdit(CREDENTIALS_TOPOLOGY, "srl2", (data) => ({
+    ...data,
+    credentials: { username: "", password: "" }
+  }));
+  assert.equal(nodeOf(yaml, "srl2").credentials, undefined);
+});
+
+test("convertEditorDataToYaml writes the credentials map", () => {
+  assert.deepEqual(
+    convertEditorDataToYaml({ credentials: { username: "admin", identityFile: " ~/.ssh/k " } })
+      .credentials,
+    { username: "admin", "identity-file": "~/.ssh/k" }
+  );
+  assert.equal(convertEditorDataToYaml({ credentials: {} }).credentials, null);
+});

@@ -66,7 +66,7 @@ A template can hold a full node definition:
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `node.execCommandMapping` | `{}` | Command to run per kind when you open a shell. |
-| `node.sshUserMapping` | `{}` | SSH user per kind. |
+| `node.sshUserMapping` | `{}` | SSH user per kind. A `credentials` username in the topology takes precedence. |
 | `node.telnetPort` | `5000` | Port for the Telnet action. |
 
 ```json

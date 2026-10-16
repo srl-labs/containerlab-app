@@ -10,7 +10,13 @@ import type {
 } from "../types/topology";
 import { DEFAULT_INTERFACE_PATTERNS } from "../constants/interfacePatterns";
 
-import { INHERITED_FROM_KEY, resolveInheritedFrom, resolveNodeConfig } from "./NodeConfigResolver";
+import {
+  INHERITED_FROM_KEY,
+  resolveInheritedFrom,
+  resolveInheritedStages,
+  resolveNodeConfig
+} from "./NodeConfigResolver";
+import { INHERITED_CREDENTIALS_KEY, resolveNodeCredentials } from "./NodeCredentials";
 import { NODE_KIND_BRIDGE, NODE_KIND_OVS_BRIDGE } from "./LinkNormalizer";
 import { isDistributedSrosNode, findDistributedSrosContainer } from "./DistributedSrosMapper";
 import { extractIconVisuals, sanitizeLabels, getNodeLatLng, computeLongname } from "./utils";
@@ -21,6 +27,7 @@ import type {
   ParserLogger
 } from "./types";
 import { isRecord } from "../utilities/typeHelpers";
+import { INHERITED_STAGES_KEY } from "../utilities/nodeStages";
 import {
   RUNTIME_INTERFACES_KEY,
   toRuntimeCaptureInterfaces,
@@ -162,6 +169,8 @@ interface NodeExtraDataResult {
  */
 function createNodeExtraData(params: {
   mergedNode: ClabNode;
+  ownStages: unknown;
+  inheritedStages: Array<{ level: string; stages: Record<string, unknown> }>;
   inheritedProps: string[];
   inheritedFrom: Record<string, string>;
   nodeName: string;
@@ -176,6 +185,8 @@ function createNodeExtraData(params: {
 }): NodeExtraDataResult {
   const {
     mergedNode,
+    ownStages,
+    inheritedStages,
     inheritedProps,
     inheritedFrom,
     nodeName,
@@ -225,6 +236,11 @@ function createNodeExtraData(params: {
     state: containerFields.state,
     weight: "3"
   };
+  // Stages add up across levels instead of overriding: keep the node's own
+  // stages apart from what defaults, kind and group add.
+  if (ownStages === undefined) delete extraData.stages;
+  else extraData.stages = ownStages;
+  if (inheritedStages.length > 0) extraData[INHERITED_STAGES_KEY] = inheritedStages;
   if (interfacePattern !== undefined && interfacePattern.length > 0) {
     extraData.interfacePattern = interfacePattern;
   }
@@ -362,6 +378,8 @@ function buildNodeElement(params: {
   const { lat, lng } = getNodeLatLng(nodeAnn);
   const { extraData, migrationPattern } = createNodeExtraData({
     mergedNode,
+    ownStages: nodeObj.stages,
+    inheritedStages: resolveInheritedStages(parsed, nodeObj),
     inheritedProps,
     inheritedFrom: resolveInheritedFrom(parsed, nodeObj),
     nodeName,
@@ -374,6 +392,10 @@ function buildNodeElement(params: {
     interfacePatternMapping,
     nodeAnn
   });
+  const inheritedCredentials = resolveNodeCredentials(parsed, nodeObj, { inheritedOnly: true });
+  if (Object.keys(inheritedCredentials).length > 0) {
+    extraData[INHERITED_CREDENTIALS_KEY] = inheritedCredentials;
+  }
 
   const labels = mergedNode.labels;
   const topoViewerRole = resolveTopoViewerRole(mergedNode, nodeAnn, labels);

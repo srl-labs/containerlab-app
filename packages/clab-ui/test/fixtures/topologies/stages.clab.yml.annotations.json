@@ -1,0 +1,13 @@
+{
+  "freeTextAnnotations": [],
+  "freeShapeAnnotations": [],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    { "id": "ca", "icon": "server", "position": { "x": 560, "y": 100 } },
+    { "id": "spine1", "icon": "spine", "position": { "x": 300, "y": 100 } },
+    { "id": "leaf1", "icon": "leaf", "position": { "x": 180, "y": 280 } },
+    { "id": "leaf2", "icon": "leaf", "position": { "x": 420, "y": 280 } },
+    { "id": "client1", "icon": "client", "position": { "x": 180, "y": 440 } }
+  ]
+}

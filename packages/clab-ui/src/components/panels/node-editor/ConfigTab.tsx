@@ -13,6 +13,7 @@ import {
 
 import type { TabProps } from "./types";
 import { inheritedFieldHint, inheritedListItems, inheritedMapEntries } from "./inheritanceHints";
+import { CredentialsSection } from "./CredentialsSection";
 
 type StartupConfigMode = "default" | "enforce" | "suppress";
 
@@ -100,6 +101,8 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
           helperText={inheritedFieldHint(props, "license")}
         />
       </PanelSection>
+
+      <CredentialsSection {...props} />
 
       <PanelAddSection title="Bind Mounts" onAdd={handleAddBind}>
         <DynamicList

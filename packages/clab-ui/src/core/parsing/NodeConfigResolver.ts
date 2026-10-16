@@ -336,3 +336,19 @@ function subtractEntries(
   );
   return Object.keys(own).length > 0 ? own : undefined;
 }
+
+/**
+ * The `stages` each level gives the node, in the order containerlab merges
+ * them: defaults, kind, then group. Stages add up instead of overriding, so
+ * every level is kept.
+ */
+export function resolveInheritedStages(
+  parsed: ClabTopology,
+  node: ClabNode
+): Array<{ level: InheritanceLevel; stages: Record<string, unknown> }> {
+  const result: Array<{ level: InheritanceLevel; stages: Record<string, unknown> }> = [];
+  for (const { level, config } of getInheritanceLayers(parsed, node)) {
+    if (isRecord(config.stages)) result.push({ level, stages: config.stages });
+  }
+  return result;
+}

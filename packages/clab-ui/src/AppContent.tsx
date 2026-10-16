@@ -593,6 +593,7 @@ type AppContentStateSlice = Pick<
   | "isLocked"
   | "linkLabelMode"
   | "showDummyLinks"
+  | "showWaitFor"
   | "endpointLabelOffsetEnabled"
   | "endpointLabelOffset"
   | "edgeAnnotations"
@@ -624,6 +625,7 @@ function selectAppContentState(state: TopoViewerState): AppContentStateSlice {
     isLocked: state.isLocked,
     linkLabelMode: state.linkLabelMode,
     showDummyLinks: state.showDummyLinks,
+    showWaitFor: state.showWaitFor,
     endpointLabelOffsetEnabled: state.endpointLabelOffsetEnabled,
     endpointLabelOffset: state.endpointLabelOffset,
     edgeAnnotations: state.edgeAnnotations,
@@ -1447,6 +1449,12 @@ export const AppContent: React.FC<AppContentProps> = ({
     void saveViewerSettings(sessionClient, { showDummyLinks: next });
   }, [sessionClient, topoActions]);
 
+  const handleToggleWaitFor = React.useCallback(() => {
+    const next = !useTopoViewerStore.getState().showWaitFor;
+    topoActions.setShowWaitFor(next);
+    void saveViewerSettings(sessionClient, { showWaitFor: next });
+  }, [sessionClient, topoActions]);
+
   return (
     <MuiThemeProvider>
       <Box
@@ -1644,6 +1652,8 @@ export const AppContent: React.FC<AppContentProps> = ({
                     onLinkLabelModeChange={handleLinkLabelModeChange}
                     showDummyLinks={state.showDummyLinks}
                     onToggleDummyLinks={handleToggleDummyLinks}
+                    showWaitFor={state.showWaitFor}
+                    onToggleWaitFor={handleToggleWaitFor}
                     shortcutDisplayEnabled={shortcutDisplay.isEnabled}
                     onToggleShortcutDisplay={shortcutDisplay.toggle}
                     canUndo={undoRedo.canUndo}
