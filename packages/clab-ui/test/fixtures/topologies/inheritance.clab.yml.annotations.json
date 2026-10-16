@@ -1,0 +1,11 @@
+{
+  "freeTextAnnotations": [],
+  "freeShapeAnnotations": [],
+  "groupStyleAnnotations": [],
+  "networkNodeAnnotations": [],
+  "nodeAnnotations": [
+    { "id": "spine1", "icon": "spine", "position": { "x": 300, "y": 100 } },
+    { "id": "leaf1", "icon": "leaf", "position": { "x": 300, "y": 260 } },
+    { "id": "client1", "icon": "client", "position": { "x": 300, "y": 420 } }
+  ]
+}

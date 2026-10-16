@@ -13,6 +13,7 @@ import type {
   NodeEditorData as _NodeEditorData
 } from "../../../core/types/editors";
 import { INTEGRATED_SROS_TYPES as _INTEGRATED_SROS_TYPES } from "../../../core/types/editors";
+import type { NodeInheritance } from "../../../core/utilities/nodeInheritance";
 
 // Re-export types
 export type HealthCheckConfig = _HealthCheckConfig;
@@ -34,4 +35,6 @@ export interface TabProps {
   onPreview?: (updates: Partial<NodeEditorData>) => void;
   /** Array of property names that are inherited from defaults/kinds/groups */
   inheritedProps?: string[];
+  /** What the node inherits from defaults, its kind and its group */
+  inheritance?: NodeInheritance;
 }

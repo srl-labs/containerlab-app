@@ -4,6 +4,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 
 import { useContextPanelContent } from "../../../../hooks/ui/useContextPanelContent";
 import { useIsLocked } from "../../../../stores/topoViewerStore";
+import { useParsedTopology } from "../../../../hooks/editor/useParsedTopology";
 import { PanelEmptyState } from "../../../ui/form";
 
 import type { ContextPanelEditorState, EditorFooterRef, EditorBannerRef } from "./editorTypes";
@@ -58,6 +59,7 @@ export const EditorTabContent: React.FC<EditorTabContentProps> = ({
   const panelView = useContextPanelContent();
   const isLocked = useIsLocked();
   const isReadOnly = isLocked && panelView.isEditor;
+  const topology = useParsedTopology();
 
   // Render the appropriate editor based on current state
   switch (panelView.kind) {
@@ -69,6 +71,7 @@ export const EditorTabContent: React.FC<EditorTabContentProps> = ({
           onApply={nodeEditorHandlers.handleApply}
           onPreview={nodeEditorHandlers.previewVisuals}
           inheritedProps={editingNodeInheritedProps}
+          inheritanceTopology={topology}
           onFooterRef={onFooterRef}
           readOnly={isReadOnly}
         />

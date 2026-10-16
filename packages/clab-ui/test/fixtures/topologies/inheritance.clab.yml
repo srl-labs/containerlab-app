@@ -1,0 +1,40 @@
+name: inheritance
+
+topology:
+  defaults:
+    env:
+      TZ: UTC
+    labels:
+      owner: netops
+  kinds:
+    nokia_srlinux:
+      image: ghcr.io/nokia/srlinux:25.3
+      type: ixr-d2l
+      group: fabric
+    linux:
+      image: alpine:3.20
+      exec:
+        - ip link set eth1 up
+  groups:
+    fabric:
+      memory: 2G
+      env:
+        ROLE: fabric
+    clients:
+      cpu: 1
+  nodes:
+    spine1:
+      kind: nokia_srlinux
+    leaf1:
+      kind: nokia_srlinux
+      env:
+        ROLE: leaf
+    client1:
+      kind: linux
+      group: clients
+      exec:
+        - ip addr add 10.0.0.1/24 dev eth1
+
+  links:
+    - endpoints: ["spine1:e1-1", "leaf1:e1-49"]
+    - endpoints: ["leaf1:e1-1", "client1:eth1"]

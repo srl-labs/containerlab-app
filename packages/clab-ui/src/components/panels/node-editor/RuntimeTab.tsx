@@ -13,6 +13,7 @@ import {
 
 import type { TabProps } from "./types";
 import { withCurrentOption } from "./selectOptions";
+import { inheritedFieldHint, inheritedListItems } from "./inheritanceHints";
 
 const RESTART_POLICY_OPTIONS = [
   { value: "", label: "Default" },
@@ -22,7 +23,8 @@ const RESTART_POLICY_OPTIONS = [
   { value: "unless-stopped", label: "Unless Stopped" }
 ];
 
-export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
+export const RuntimeTab: React.FC<TabProps> = (props) => {
+  const { data, onChange } = props;
   const handleAddExec = () => {
     onChange({ exec: [...(data.exec ?? []), ""] });
   };
@@ -36,6 +38,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.user ?? ""}
           onChange={(value) => onChange({ user: value })}
           placeholder="Container user"
+          helperText={inheritedFieldHint(props, "user")}
         />
         <InputField
           id="node-entrypoint"
@@ -43,6 +46,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.entrypoint ?? ""}
           onChange={(value) => onChange({ entrypoint: value })}
           placeholder="Container entrypoint"
+          helperText={inheritedFieldHint(props, "entrypoint")}
         />
         <InputField
           id="node-cmd"
@@ -50,6 +54,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.cmd ?? ""}
           onChange={(value) => onChange({ cmd: value })}
           placeholder="Container command"
+          helperText={inheritedFieldHint(props, "cmd")}
         />
       </PanelSection>
 
@@ -59,6 +64,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           onChange={(items) => onChange({ exec: items })}
           placeholder="Command to execute"
           hideAddButton
+          inheritedItems={inheritedListItems(props, "exec")}
         />
       </PanelAddSection>
 
@@ -72,6 +78,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           placeholder="0"
           min={0}
           suffix="seconds"
+          helperText={inheritedFieldHint(props, "startupDelay")}
         />
         <SelectField
           id="node-restart-policy"
@@ -79,6 +86,7 @@ export const RuntimeTab: React.FC<TabProps> = ({ data, onChange }) => {
           value={data.restartPolicy ?? ""}
           onChange={(value) => onChange({ restartPolicy: value })}
           options={withCurrentOption(RESTART_POLICY_OPTIONS, data.restartPolicy ?? "")}
+          helperText={inheritedFieldHint(props, "restartPolicy")}
         />
         <CheckboxField
           id="node-auto-remove"

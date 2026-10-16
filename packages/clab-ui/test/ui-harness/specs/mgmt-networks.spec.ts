@@ -169,7 +169,7 @@ test.describe("Multiple management networks", () => {
     await page.locator('[data-testid="panel-tab-network"]').click();
     const select = page.locator("#node-mgmt-net");
     await expect(select).toContainText("lab");
-    await expect(page.getByText("Inherited from kind settings")).toBeVisible();
+    await expect(page.getByText("From kind linux")).toBeVisible();
 
     await select.click();
     await page.getByRole("option", { name: "oob (default)" }).click();

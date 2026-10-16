@@ -51,6 +51,14 @@ Double-click a node to open the **Node Editor**: kind, type, image, startup conf
 ![Node Editor](../images/app/node-editor-dark.webp#only-dark){ .shot }
 ![Node Editor](../images/app/node-editor-light.webp#only-light){ .shot }
 
+A value the node gets from `defaults`, its kind, or its group shows where it comes from under the field, for example *From kind nokia_srlinux*. Type a new value to override it for this node, or clear the field to go back to the inherited one. Inherited environment variables, labels, binds, and exec commands are locked: change them where they are set. **Settings Group** picks the containerlab `group` the node inherits from. It is not the same as a group drawn on the canvas.
+
+## Share settings between nodes
+
+**Lab Settings** → **Defaults & Groups** lists the lab's `defaults`, `kinds`, and `groups`, with the number of nodes each one reaches. Edit one to open the same tabs as the Node Editor, add a kind or a group, or remove one. These edits save right away.
+
+containerlab applies them in order: `defaults`, then the node's kind, then its group, then the node itself. Environment variables, labels, binds, exec commands, and similar lists add up across levels; other values come from the most specific level that sets them.
+
 ## Set the boot order
 
 The **Stages** tab of the Node Editor sets containerlab [stages](https://containerlab.dev/manual/nodes/#stages). Under each stage (**Create**, **Create Links**, **Configure**, **Healthy**, **Exit**):
@@ -69,7 +77,7 @@ To see the order on the canvas, open the **Links** menu and choose **Show Wait-f
 ![Canvas and YAML side by side](../images/app/split-view-dark.webp#only-dark){ .shot }
 ![Canvas and YAML side by side](../images/app/split-view-light.webp#only-light){ .shot }
 
-YAML is the faster way to change many nodes at once, for example through `defaults` or `kinds`.
+YAML is also a quick way to change many nodes at once.
 
 ## Add networks
 

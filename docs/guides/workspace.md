@@ -43,7 +43,7 @@ Along the top of the canvas:
 | Layout | Arrange the nodes automatically. |
 | Links | Show interface names always, on select, or never. |
 | Capture Viewport as SVG | Export what you see. |
-| Lab Settings | **General**, **Management**, **Appearance**, and **Grid** settings for this lab. |
+| Lab Settings | **General**, **Management**, **Defaults & Groups**, **Appearance**, and **Grid** settings for this lab. |
 | Toggle YAML Split View | Edit the file next to the canvas. |
 
 ## Panels

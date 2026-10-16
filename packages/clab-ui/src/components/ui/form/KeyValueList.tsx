@@ -5,7 +5,7 @@ import React, { useRef } from "react";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 
-import { AddItemButton, DeleteItemButton } from "./ListButtons";
+import { AddItemButton, DeleteItemButton, InheritedItemMarker } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
 
 type KeyValueScalar = string | number | boolean;
@@ -22,6 +22,11 @@ interface KeyValueListProps<V extends KeyValueScalar = string> {
   addLabel?: string;
   disabled?: boolean;
   hideAddButton?: boolean;
+  /**
+   * Keys inherited from defaults, a kind or a group: where each comes from and
+   * its inherited value. The key is locked; changing the value overrides it.
+   */
+  inheritedEntries?: Record<string, { source: string; value: KeyValueScalar }>;
 }
 
 export const KeyValueList = <V extends KeyValueScalar = string>({
@@ -31,7 +36,8 @@ export const KeyValueList = <V extends KeyValueScalar = string>({
   valuePlaceholder = "Value",
   addLabel = "Add",
   disabled,
-  hideAddButton
+  hideAddButton,
+  inheritedEntries
 }: KeyValueListProps<V>): React.ReactElement => {
   const entries = Object.entries(items);
 
@@ -86,6 +92,7 @@ export const KeyValueList = <V extends KeyValueScalar = string>({
           keyPlaceholder={keyPlaceholder}
           valuePlaceholder={valuePlaceholder}
           disabled={disabled}
+          inherited={Object.hasOwn(inheritedEntries ?? {}, key) ? inheritedEntries?.[key] : undefined}
         />
       ))}
       {hideAddButton !== true && (
@@ -107,6 +114,16 @@ interface KeyValueItemProps {
   keyPlaceholder: string;
   valuePlaceholder: string;
   disabled?: boolean;
+  inherited?: { source: string; value: KeyValueScalar };
+}
+
+function describeInheritedValue(
+  value: string,
+  inherited: { source: string; value: KeyValueScalar }
+): string {
+  return value === String(inherited.value)
+    ? `From ${inherited.source}`
+    : `Overrides ${inherited.source}`;
 }
 
 const KeyValueItem: React.FC<KeyValueItemProps> = ({
@@ -117,16 +134,21 @@ const KeyValueItem: React.FC<KeyValueItemProps> = ({
   onRemove,
   keyPlaceholder,
   valuePlaceholder,
-  disabled
+  disabled,
+  inherited
 }) => (
-  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+  <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}>
     <TextField
       value={itemKey}
       onChange={(e) => onKeyChange(e.target.value)}
       label={keyPlaceholder}
       disabled={disabled}
       size="small"
-      sx={{ width: "33%" }}
+      slotProps={{ htmlInput: { readOnly: inherited !== undefined } }}
+      sx={{
+        width: "33%",
+        ...(inherited !== undefined ? { "& input": { color: "text.secondary" } } : {})
+      }}
     />
     <TextField
       value={value}
@@ -134,8 +156,13 @@ const KeyValueItem: React.FC<KeyValueItemProps> = ({
       label={valuePlaceholder}
       disabled={disabled}
       size="small"
+      helperText={inherited !== undefined ? describeInheritedValue(value, inherited) : undefined}
       sx={{ flex: 1 }}
     />
-    <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+    {inherited !== undefined ? (
+      <InheritedItemMarker source={inherited.source} />
+    ) : (
+      <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+    )}
   </Box>
 );

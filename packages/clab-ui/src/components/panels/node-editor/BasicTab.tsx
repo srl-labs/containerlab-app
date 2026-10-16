@@ -24,6 +24,7 @@ import { useIconInk } from "../../../icons/iconInk";
 import { BUILTIN_ICONS, resolveBuiltInIcon } from "../../../core/types/icons";
 import { getRoleIcon } from "../../../core/types/graph";
 import { useSchema, useDockerImages } from "../../../hooks/editor";
+import { useParsedTopology } from "../../../hooks/editor/useParsedTopology";
 import { useCustomIcons, useNodeStyle } from "../../../stores/topoViewerStore";
 import { buildCustomIconMap, getCustomIconUrl } from "../../../utils/iconUtils";
 import { DEFAULT_ICON_COLOR } from "../../canvas/types";
@@ -31,6 +32,7 @@ import { DEFAULT_ICON_COLOR } from "../../canvas/types";
 import type { TabProps } from "./types";
 import { CustomNodeTemplateFields } from "./CustomNodeTemplateFields";
 import { BoxAppearanceFields } from "./BoxAppearanceFields";
+import { inheritedFieldHint } from "./inheritanceHints";
 
 // Icon options for dropdown (static, defined outside component)
 const ICON_OPTIONS = BUILTIN_ICONS.map((icon) => ({
@@ -58,11 +60,42 @@ const NODE_DIRECTION_OPTIONS = [
 const NodeNameField: React.FC<TabProps> = ({ data, onChange }) => (
   <InputField
     id="node-name"
-    label="Node Name"
+    label={data.section?.level === "group" ? "Group Name" : "Node Name"}
     value={data.name || ""}
     onChange={(value) => onChange({ name: value })}
   />
 );
+
+/**
+ * containerlab group the node inherits settings from (not a canvas group)
+ */
+const GroupField: React.FC<TabProps> = (props) => {
+  const { data, onChange } = props;
+  const topology = useParsedTopology();
+  const groups = topology?.topology?.groups;
+  const options = useMemo(
+    () => Object.keys(groups ?? {}).map((name) => ({ value: name, label: name })),
+    [groups]
+  );
+  const value = data.group ?? "";
+  const isUnknown = value !== "" && groups?.[value] === undefined;
+  const helperText = isUnknown
+    ? `No group named ${value} under topology groups`
+    : (inheritedFieldHint(props, "group") ?? "Inherits settings from a topology group");
+
+  return (
+    <FilterableDropdown
+      id="node-group"
+      label="Settings Group"
+      options={options}
+      value={value}
+      onChange={(next) => onChange({ group: next === "" ? undefined : next })}
+      placeholder="No group"
+      allowFreeText={true}
+      helperText={helperText}
+    />
+  );
+};
 
 /**
  * Kind field with filterable dropdown - options from schema
@@ -72,7 +105,8 @@ interface KindFieldProps extends TabProps {
   onKindChange: (kind: string) => void;
 }
 
-const KindField: React.FC<KindFieldProps> = ({ data, onChange, kinds, onKindChange }) => {
+const KindField: React.FC<KindFieldProps> = (props) => {
+  const { data, onChange, kinds, onKindChange } = props;
   const kindOptions = useMemo(() => kinds.map((kind) => ({ value: kind, label: kind })), [kinds]);
 
   const handleKindChange = useCallback(
@@ -92,6 +126,7 @@ const KindField: React.FC<KindFieldProps> = ({ data, onChange, kinds, onKindChan
       onChange={handleKindChange}
       placeholder="Search or type kind..."
       allowFreeText={true}
+      helperText={inheritedFieldHint(props, "kind")}
     />
   );
 };
@@ -103,7 +138,8 @@ interface TypeFieldProps extends TabProps {
   availableTypes: string[];
 }
 
-const TypeField: React.FC<TypeFieldProps> = ({ data, onChange, availableTypes }) => {
+const TypeField: React.FC<TypeFieldProps> = (props) => {
+  const { data, onChange, availableTypes } = props;
   const typeOptions = useMemo(
     () => availableTypes.map((type) => ({ value: type, label: type })),
     [availableTypes]
@@ -120,6 +156,7 @@ const TypeField: React.FC<TypeFieldProps> = ({ data, onChange, availableTypes })
         availableTypes.length > 0 ? "Search or type..." : "Type value (no predefined types)"
       }
       allowFreeText={true}
+      helperText={inheritedFieldHint(props, "type")}
     />
   );
 };
@@ -137,19 +174,24 @@ interface ImageVersionFieldsProps extends TabProps {
   combineImageVersion: (base: string, version: string) => string;
 }
 
-const ImageVersionFields: React.FC<ImageVersionFieldsProps> = ({
-  data,
-  onChange,
-  baseImages,
-  hasImages,
-  getVersionsForImage,
-  parseImageString,
-  combineImageVersion
-}) => {
+const ImageVersionFields: React.FC<ImageVersionFieldsProps> = (props) => {
+  const {
+    data,
+    onChange,
+    baseImages,
+    hasImages,
+    getVersionsForImage,
+    parseImageString,
+    combineImageVersion
+  } = props;
+  const imageHint = inheritedFieldHint(props, "image");
   // Parse the current image into base and version
-  const { base: currentBase, version: currentVersion } = useMemo(() => {
+  const { base: currentBase, version: parsedVersion } = useMemo(() => {
     return parseImageString(data.image ?? "");
   }, [data.image, parseImageString]);
+  // A section without an image leaves the image to nodes; do not suggest "latest".
+  const currentVersion =
+    data.section !== undefined && (data.image ?? "") === "" ? "" : parsedVersion;
 
   // Track version separately for better UX when changing base image
   const [localVersion, setLocalVersion] = useState(currentVersion);
@@ -209,6 +251,7 @@ const ImageVersionFields: React.FC<ImageVersionFieldsProps> = ({
           onChange={handleBaseChange}
           placeholder="Search for image..."
           allowFreeText={true}
+          helperText={imageHint}
         />
         <FilterableDropdown
           id="node-version"
@@ -232,6 +275,7 @@ const ImageVersionFields: React.FC<ImageVersionFieldsProps> = ({
         value={currentBase}
         onChange={handleBaseChange}
         placeholder="e.g., ghcr.io/nokia/srlinux"
+        helperText={imageHint}
       />
       <InputField
         id="node-version"
@@ -412,7 +456,11 @@ function isSameList(left: string[] | undefined, right: string[] | undefined): bo
 
 /** Equal when only the box look changed, which these fields do not show. */
 function areNodeFieldsPropsEqual(prev: TabProps, next: TabProps): boolean {
-  if (prev.onChange !== next.onChange || !isSameList(prev.inheritedProps, next.inheritedProps)) {
+  if (
+    prev.onChange !== next.onChange ||
+    prev.inheritance !== next.inheritance ||
+    !isSameList(prev.inheritedProps, next.inheritedProps)
+  ) {
     return false;
   }
   const keys = new Set([...Object.keys(prev.data), ...Object.keys(next.data)]);
@@ -423,8 +471,14 @@ function areNodeFieldsPropsEqual(prev: TabProps, next: TabProps): boolean {
 }
 
 /** Template, node parameters and icon: everything above the Box or Label section. */
-const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProps = [] }) => {
+const NodeFieldsComponent: React.FC<TabProps> = ({
+  data,
+  onChange,
+  inheritedProps = [],
+  inheritance
+}) => {
   const isCustomTemplate = data.isCustomTemplate === true;
+  const section = data.section?.level;
 
   // Get schema data (kinds and types)
   const { kinds, getTypesForKind, kindSupportsType, isLoaded } = useSchema();
@@ -462,16 +516,25 @@ const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProp
         </PanelSection>
       )}
 
-      <PanelSection title="Node Parameters">
-        {!isCustomTemplate && <NodeNameField data={data} onChange={onChange} />}
+      <PanelSection title={section === undefined ? "Node Parameters" : "Parameters"}>
+        {!isCustomTemplate && (section === undefined || section === "group") && (
+          <NodeNameField data={data} onChange={onChange} />
+        )}
 
-        <KindField
-          data={data}
-          onChange={onChange}
-          kinds={kinds}
-          onKindChange={handleKindChange}
-          inheritedProps={inheritedProps}
-        />
+        {section !== "kind" && (
+          <KindField
+            data={data}
+            onChange={onChange}
+            kinds={kinds}
+            onKindChange={handleKindChange}
+            inheritedProps={inheritedProps}
+            inheritance={inheritance}
+          />
+        )}
+
+        {!isCustomTemplate && section !== "group" && (
+          <GroupField data={data} onChange={onChange} inheritance={inheritance} />
+        )}
 
         {showTypeField && (
           <TypeField
@@ -479,6 +542,7 @@ const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProp
             onChange={onChange}
             availableTypes={availableTypes}
             inheritedProps={inheritedProps}
+            inheritance={inheritance}
           />
         )}
 
@@ -492,6 +556,7 @@ const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProp
             parseImageString={parseImageString}
             combineImageVersion={combineImageVersion}
             inheritedProps={inheritedProps}
+            inheritance={inheritance}
           />
         </Box>
 
@@ -507,9 +572,11 @@ const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProp
         )}
       </PanelSection>
 
-      <PanelSection title="Icon">
-        <IconField data={data} onChange={onChange} />
-      </PanelSection>
+      {section === undefined && (
+        <PanelSection title="Icon">
+          <IconField data={data} onChange={onChange} />
+        </PanelSection>
+      )}
     </>
   );
 };
@@ -517,18 +584,33 @@ const NodeFieldsComponent: React.FC<TabProps> = ({ data, onChange, inheritedProp
 // Box edits come many per second (colors, toggles), so they skip re-rendering these fields.
 const NodeFields = memo(NodeFieldsComponent, areNodeFieldsPropsEqual);
 
-export const BasicTab: React.FC<TabProps> = ({ data, onChange, onPreview, inheritedProps }) => {
+export const BasicTab: React.FC<TabProps> = ({
+  data,
+  onChange,
+  onPreview,
+  inheritedProps,
+  inheritance
+}) => {
   const isCustomTemplate = data.isCustomTemplate === true;
+  // Defaults, kinds and groups have no canvas look.
+  const isSection = data.section !== undefined;
   // Boxed nodes ignore label position, direction and background, so they get box options instead.
   const isBoxed = useNodeStyle() === "boxed";
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <NodeFields data={data} onChange={onChange} inheritedProps={inheritedProps} />
+      <NodeFields
+        data={data}
+        onChange={onChange}
+        inheritedProps={inheritedProps}
+        inheritance={inheritance}
+      />
 
-      {isBoxed && <BoxAppearanceFields data={data} onChange={onChange} onPreview={onPreview} />}
+      {isBoxed && !isSection && (
+        <BoxAppearanceFields data={data} onChange={onChange} onPreview={onPreview} />
+      )}
 
-      {!isBoxed && !isCustomTemplate && (
+      {!isBoxed && !isCustomTemplate && !isSection && (
         <PanelSection title="Label & Direction">
           <LabelAndDirectionFields data={data} onChange={onChange} />
         </PanelSection>

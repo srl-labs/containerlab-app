@@ -5,7 +5,7 @@ import React, { useRef } from "react";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 
-import { AddItemButton, DeleteItemButton } from "./ListButtons";
+import { AddItemButton, DeleteItemButton, InheritedItemMarker } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
 
 interface DynamicListProps {
@@ -15,6 +15,8 @@ interface DynamicListProps {
   addLabel?: string;
   disabled?: boolean;
   hideAddButton?: boolean;
+  /** Items inherited from defaults, a kind or a group, with where they come from; shown locked */
+  inheritedItems?: ReadonlyMap<string, string>;
 }
 
 export const DynamicList: React.FC<DynamicListProps> = ({
@@ -23,7 +25,8 @@ export const DynamicList: React.FC<DynamicListProps> = ({
   placeholder,
   addLabel = "Add",
   disabled,
-  hideAddButton
+  hideAddButton,
+  inheritedItems
 }) => {
   // Stable per-row identities so removing a row doesn't reassign focus/state to
   // its neighbor. Add/remove handlers keep the id list aligned with the items
@@ -60,6 +63,7 @@ export const DynamicList: React.FC<DynamicListProps> = ({
           onRemove={() => handleRemove(index)}
           placeholder={placeholder}
           disabled={disabled}
+          inheritedFrom={inheritedItems?.get(item)}
         />
       ))}
       {hideAddButton !== true && (
@@ -78,6 +82,7 @@ interface DynamicListItemProps {
   onRemove: () => void;
   placeholder?: string;
   disabled?: boolean;
+  inheritedFrom?: string;
 }
 
 const DynamicListItem: React.FC<DynamicListItemProps> = ({
@@ -85,7 +90,8 @@ const DynamicListItem: React.FC<DynamicListItemProps> = ({
   onChange,
   onRemove,
   placeholder,
-  disabled
+  disabled,
+  inheritedFrom
 }) => (
   <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
     <TextField
@@ -95,7 +101,13 @@ const DynamicListItem: React.FC<DynamicListItemProps> = ({
       disabled={disabled}
       size="small"
       fullWidth
+      slotProps={{ htmlInput: { readOnly: inheritedFrom !== undefined } }}
+      sx={inheritedFrom !== undefined ? { "& input": { color: "text.secondary" } } : undefined}
     />
-    <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+    {inheritedFrom !== undefined ? (
+      <InheritedItemMarker source={inheritedFrom} />
+    ) : (
+      <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+    )}
   </Box>
 );

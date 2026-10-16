@@ -151,6 +151,10 @@ export interface NodeEditorData extends SharedTemplateFields {
   type?: string;
   image?: string;
   version?: string;
+  /** containerlab group (`group`) the node inherits settings from */
+  group?: string;
+  /** Set when the editor edits topology defaults, a kind or a group instead of a node */
+  section?: { level: "defaults" | "kind" | "group"; name?: string };
   icon?: string;
   iconColor?: string;
   iconCornerRadius?: number;
