@@ -27,5 +27,4 @@ export interface AppConfigResponse {
   localEndpoint?: LocalEndpointStatus;
 }
 
-export * from "./runtime";
 export * from "./endpoints";

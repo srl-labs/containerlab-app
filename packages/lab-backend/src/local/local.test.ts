@@ -6,6 +6,7 @@ import test, { type TestContext } from "node:test";
 
 import type { LifecycleStreamEvent } from "../contract/backend.ts";
 import {
+  detectLocalUser,
   filterLifecycleLine,
   groupCaptureTargets,
   LocalLabBackend,
@@ -17,7 +18,7 @@ import {
   toApplyLabResponse
 } from "./index.ts";
 import { lifecycleLineStream } from "./lifecycle.ts";
-import { containerlabCommand } from "./process.ts";
+import { containerlabCommand, runChecked } from "./process.ts";
 
 async function temporaryDirectory(t: TestContext): Promise<string> {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "lab-backend-local-"));
@@ -245,4 +246,32 @@ test("a lab runs one lifecycle action at a time", async (t) => {
   );
   await collect(first);
   await collect(await backend.streamLifecycle("deploy", { labName: "lab3", path: "lab3.clab.yml" }));
+});
+
+test("repositories clone from any Git URL into the given folder", async (t) => {
+  const directory = await temporaryDirectory(t);
+  const source = path.join(directory, "source");
+  await fs.mkdir(source);
+  await fs.writeFile(path.join(source, "lab.clab.yml"), "name: lab\n");
+  const git = (...args: string[]) =>
+    runChecked("git", ["-c", "user.name=test", "-c", "user.email=test@example.com", ...args], { cwd: source });
+  await git("init", "-q");
+  await git("add", ".");
+  await git("commit", "-q", "-m", "lab");
+
+  const backend = new LocalLabBackend({ workspaceRoot: path.join(directory, "workspace") });
+  const destination = path.join(directory, "workspace", "nested", "lab");
+  await backend.cloneRepository(source, destination);
+  assert.equal(await fs.readFile(path.join(destination, "lab.clab.yml"), "utf8"), "name: lab\n");
+  await assert.rejects(backend.cloneRepository(path.join(directory, "missing"), path.join(directory, "x")), /git clone/);
+});
+
+test("the local user check reads the groups and needs no group for Podman", async () => {
+  const docker = await detectLocalUser({ runtime: "docker" });
+  assert.equal(docker.username.length > 0, true);
+  assert.equal(docker.inClabAdmins, docker.groups.includes("clab_admins"));
+  assert.equal(docker.inRuntimeGroup, docker.groups.includes("docker"));
+  assert.equal(docker.canRunLabs, docker.isRoot || (docker.inClabAdmins && docker.inRuntimeGroup));
+  const podman = await detectLocalUser({ runtime: "podman" });
+  assert.equal(podman.inRuntimeGroup, true);
 });

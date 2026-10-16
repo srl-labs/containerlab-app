@@ -5,7 +5,7 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 
 import { outputChannel } from "../globals";
-import { runCommand } from "../utils/utils";
+import { getLabBackend, getLocalBackend, isRemoteActive } from "../backend/labBackends";
 
 export async function cloneRepoFromUrl(repoUrl?: string) {
   if (repoUrl === undefined || repoUrl.length === 0) {
@@ -18,6 +18,11 @@ export async function cloneRepoFromUrl(repoUrl?: string) {
       return;
     }
     repoUrl = input;
+  }
+
+  if (isRemoteActive()) {
+    await importOnLabServer(repoUrl);
+    return;
   }
 
   const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -33,12 +38,30 @@ export async function cloneRepoFromUrl(repoUrl?: string) {
   outputChannel.info(`git clone ${repoUrl} ${dest}`);
 
   try {
-    const command = `git clone ${repoUrl} "${dest}"`;
-    await runCommand(command, "Clone repository", outputChannel, false, false);
+    await getLocalBackend().cloneRepository(repoUrl, dest);
     vscode.window.showInformationMessage(`Repository cloned to ${dest}`);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(`Git clone failed: ${message}`);
     outputChannel.error(`git clone failed: ${message}`);
+  }
+}
+
+/** The lab server clones the repository into its workspace. */
+async function importOnLabServer(repoUrl: string): Promise<void> {
+  try {
+    const result = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `Cloning ${repoUrl} on the lab server`
+      },
+      () => getLabBackend().importTopologyFromUrl({ url: repoUrl })
+    );
+    vscode.window.showInformationMessage(
+      `Repository cloned on the lab server: ${result.topology.yamlFileName}`
+    );
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(`Git clone failed: ${message}`);
   }
 }

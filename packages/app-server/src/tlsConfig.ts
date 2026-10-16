@@ -3,6 +3,8 @@ import fs from "node:fs";
 import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
+// The server's own TLS certificate comes from openssl; it is not lab work.
+// oxlint-disable-next-line no-restricted-imports
 import { spawnSync } from "node:child_process";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
 

@@ -100,9 +100,12 @@ async function ensureContainerlabBinary(
   return false;
 }
 
-function validateUserPermissions(e2eSmokeTest: boolean, hasLabServers: boolean): boolean {
+async function validateUserPermissions(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
   outputChannel.debug(`Starting user permissions check`);
-  const userInfo = utils.getUserInfo();
+  const userInfo = await utils.getUserInfo();
   setUsername(userInfo.username);
   if (userInfo.hasPermission) {
     outputChannel.debug(

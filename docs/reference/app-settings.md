@@ -33,3 +33,11 @@ Set these in the environment that starts the app.
 | `CLAB_API_TLS_VERIFY` | `false` | Verify the API server's certificate. |
 | `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local port for the app's built-in server. It only listens on loopback. |
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Log debug output from the built-in server. |
+| `CONTAINERLAB_DESKTOP_LOCAL` | `true` | Offer **This computer**, labs with the local containerlab. Linux only. |
+| `CONTAINERLAB_DESKTOP_CLAB_BINARY` | `containerlab` | containerlab binary for **This computer**, looked up in `PATH`. |
+| `CONTAINERLAB_DESKTOP_RUNTIME` | `docker` | Container runtime for **This computer**: `docker` or `podman`. |
+| `CONTAINERLAB_DESKTOP_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket for **This computer**. |
+| `CONTAINERLAB_DESKTOP_WORKSPACE` | `~/.clab` | Folder for the topologies of **This computer**. |
+| `CONTAINERLAB_DESKTOP_SUDO` | `false` | Run containerlab with `sudo -n`. Needs passwordless sudo. |
+
+The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer).

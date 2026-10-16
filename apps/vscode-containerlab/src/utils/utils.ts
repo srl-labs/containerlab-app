@@ -1,17 +1,14 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { exec, execSync } from "child_process";
 import * as net from "net";
-import { promisify } from "util";
 
 import * as vscode from "vscode";
+import { detectLocalUser } from "@srl-labs/containerlab-lab-backend/local";
 
 import { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
 import { getLocalBackend, isUriString, labPathOf } from "../backend/labBackends";
-
-const execAsync = promisify(exec);
 
 export function stripAnsi(input: string): string {
   const esc = String.fromCharCode(27);
@@ -85,79 +82,26 @@ export function titleCase(str: string) {
   return str[0].toLocaleUpperCase() + str.slice(1);
 }
 
-// Get relevant user information we need to validate permissions.
-export function getUserInfo(): {
+/**
+ * Who runs the extension, and whether they may run containerlab without sudo:
+ * root, or a member of clab_admins and (for Docker) the docker group.
+ */
+export async function getUserInfo(): Promise<{
   hasPermission: boolean;
   isRoot: boolean;
   userGroups: string[];
   username: string;
   uid: number;
-} {
+}> {
   try {
-    // Check if running as root
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const uidOut = execSync("id -u", { encoding: "utf-8" });
-    const uid = parseInt(uidOut.trim(), 10);
-    const isRoot = uid === 0;
-
-    // Get username
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const usernameOut = execSync("id -un", { encoding: "utf-8" });
-    const username = usernameOut.trim();
-
-    // Check group membership
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const groupsOut = execSync("id -nG", { encoding: "utf-8" });
-    const userGroups = groupsOut.trim().split(/\s+/);
-
-    if (isRoot) {
-      return {
-        hasPermission: true,
-        isRoot: true,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    const isMemberOfClabAdmins = userGroups.includes("clab_admins");
-
-    const runtime = getConfig<string>("runtime", "docker");
-    const isMemberOfDocker = userGroups.includes("docker");
-
-    const noPermission = {
-      hasPermission: false,
-      isRoot: false,
-      userGroups,
-      username,
-      uid
+    const access = await detectLocalUser({ runtime: getConfig<string>("runtime", "docker") });
+    return {
+      hasPermission: access.canRunLabs,
+      isRoot: access.isRoot,
+      userGroups: access.groups,
+      username: access.username,
+      uid: access.uid
     };
-
-    if (!isMemberOfClabAdmins) {
-      return noPermission;
-    }
-
-    if (runtime === "docker" && isMemberOfDocker) {
-      return {
-        hasPermission: true,
-        isRoot: false,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    if (runtime === "podman") {
-      return {
-        hasPermission: true,
-        isRoot: false,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    return noPermission;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     outputChannel.error(`User info check failed: ${errorMessage}`);
@@ -216,53 +160,18 @@ export function getConfig<T = unknown>(relCfgPath: string, defaultValue?: T): T 
 // Containerlab helper functions
 // ----------------------------------------------------------
 
-/**
- * Log info messages to the output channel.
- */
-function log(message: string, channel: vscode.LogOutputChannel) {
-  channel.info(message);
-}
-
-async function runAndLog(
-  cmd: string,
-  description: string,
-  outputChannel: vscode.LogOutputChannel,
-  returnOutput: boolean,
-  includeStderr: boolean
-): Promise<string | void> {
-  const { stdout: cmdOut, stderr: cmdErr } = await execAsync(cmd);
-  if (cmdOut) outputChannel.info(cmdOut);
-  if (cmdErr) outputChannel.warn(`[${description} stderr]: ${cmdErr}`);
-  const combined =
-    includeStderr && returnOutput ? [cmdOut, cmdErr].filter(Boolean).join("\n") : cmdOut;
-  return returnOutput ? combined : undefined;
-}
-
-/**
- * Runs a command and logs output to the channel.
- * If `returnOutput` is true, the function returns the command's stdout as a string.
- */
-export async function runCommand(
-  command: string,
-  description: string,
-  outputChannel: vscode.LogOutputChannel,
-  returnOutput: boolean = false,
-  includeStderr: boolean = false
-): Promise<string | void> {
-  log(`Running: ${command}`, outputChannel);
-  try {
-    return await runAndLog(command, description, outputChannel, returnOutput, includeStderr);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Command failed: ${command}\n${message}`);
-  }
-}
-
 // Launch clab install script in a terminal. Let the shell handle sudo passwords.
 export function installContainerlab(): void {
   const terminal = vscode.window.createTerminal("Containerlab Installation");
   terminal.show();
   terminal.sendText('curl -sL https://containerlab.dev/setup | sudo bash -s "all"');
+}
+
+/**
+ * Log info messages to the output channel.
+ */
+function log(message: string, channel: vscode.LogOutputChannel) {
+  channel.info(message);
 }
 
 /**

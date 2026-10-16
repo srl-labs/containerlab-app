@@ -8,8 +8,10 @@ export {
 export {
   defaultLocalWorkspaceRoot,
   detectLocalEnvironment,
+  detectLocalUser,
   findBinary,
-  type LocalEnvironmentStatus
+  type LocalEnvironmentStatus,
+  type LocalUserAccess
 } from "./detect.ts";
 export { filterLifecycleLine, lifecycleLineStream, toApplyLabResponse } from "./lifecycle.ts";
 export { packetflixUri, groupCaptureTargets, prepareEdgesharkCompose } from "./capture.ts";

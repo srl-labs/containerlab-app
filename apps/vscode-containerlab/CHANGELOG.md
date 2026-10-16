@@ -6,6 +6,9 @@
 - Restore the extension-specific Marketplace documentation.
 - Release VSIX, Marketplace, and Open VSX artifacts independently through GitHub Releases.
 - Fix Edgeshark capture on Podman by installing Edgeshark with the `gostwire` discovery hostname, which Podman can resolve.
+- Run containerlab through the shared lab backend: lifecycle actions, terminals, capture, and impairments use the same code as the desktop app.
+- Lab servers: manage labs on hosts running `clab-api-server` with **Containerlab: Add Lab Server…**, from any OS and without a local containerlab. Topologies open as `clab-api://` files; deploy, node shell, SSH, telnet, logs, and Wireshark capture work through the API server. New settings `containerlab.connections` and `containerlab.localConnection`.
+- The extension now activates without containerlab, Docker, or the `clab_admins` group, so lab servers work on machines that cannot run labs.
 
 ## [0.26.0] - 2026-07-07
 

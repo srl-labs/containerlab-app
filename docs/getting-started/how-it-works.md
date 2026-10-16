@@ -15,11 +15,40 @@ Labs always run on Linux, next to Docker. The apps differ only in how they get t
 <figcaption>VS Code runs containerlab itself. The desktop and web apps talk to <code>clab-api-server</code> on the lab host.</figcaption>
 </figure>
 
-**VS Code** runs containerlab directly, on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window.
+**VS Code** runs containerlab directly, on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window. It can also [work with lab servers](../install/vscode.md#work-with-labs-on-a-lab-server) through `clab-api-server`, like the desktop and web apps.
 
-**The desktop and web apps** never touch Docker. They sign in to [`clab-api-server`](../install/lab-host.md) on the lab host, and the API server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once.
+**The desktop and web apps** sign in to [`clab-api-server`](../install/lab-host.md) on the lab host, and the API server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once. On Linux, the desktop app can also [run labs on the computer itself](../install/desktop.md#run-labs-on-this-computer).
 
 **The browser sandbox** has no lab host. It is the same editor, saving to your browser.
+
+## What works where
+
+Every app reaches labs in one of two ways: containerlab on the machine the app runs on, or `clab-api-server` on a lab host.
+
+| | containerlab on this machine | `clab-api-server` |
+| --- | --- | --- |
+| VS Code | **Local**: Linux, WSL, Remote SSH | **Lab servers**, from any OS |
+| Desktop app | **This computer**: Linux | Endpoints, from any OS |
+| Web app | | Endpoints |
+
+Both ways run the same lab actions. A few depend on the API server:
+
+| Feature | containerlab on this machine | `clab-api-server` |
+| --- | :---: | :---: |
+| Deploy, destroy, redeploy, apply, start, stop, save | :lucide-check: | :lucide-check: |
+| Edit topologies and annotations | :lucide-check: | :lucide-check: |
+| Node shell, SSH, telnet, logs | :lucide-check: | :lucide-check: |
+| Packet capture, Wireshark in a tab or Edgeshark | :lucide-check: | :lucide-check: |
+| Link impairments | :lucide-check: | :lucide-check: |
+| Install Edgeshark, manage container images | :lucide-check: | :lucide-check: |
+| Draw.io diagrams | :lucide-check: | :lucide-check: |
+| Import or deploy a lab from GitHub or GitLab | :lucide-check: | :lucide-check: |
+| Host CPU, memory, and disk | :lucide-check: | :lucide-check: |
+| Several users on one lab host, each with their own labs | | :lucide-check: |
+| [Shared labs](../guides/shared-labs.md) in `@shared` | | :lucide-check: |
+| SSH to a node through a port the lab host forwards | | :lucide-check: |
+| Interactive Draw.io editing (VS Code) | :lucide-check: | |
+| Sign-in | none, runs as you | Linux account in `clab_api` or `clab_admins` |
 
 ## Two files per lab
 

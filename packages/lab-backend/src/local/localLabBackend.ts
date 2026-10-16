@@ -236,6 +236,18 @@ export class LocalLabBackend implements LabBackend {
     return [file, ...commandArgs].map(shellQuote).join(" ");
   }
 
+  /**
+   * `git clone <url> <destination>`, for any Git host the user can reach.
+   * importTopologyFromUrl only takes GitHub and GitLab, like clab-api-server.
+   */
+  async cloneRepository(url: string, destination: string): Promise<void> {
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await runChecked("git", ["clone", url, destination], {
+      env: this.options.env,
+      timeoutMs: 10 * 60_000
+    });
+  }
+
   shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: { port?: number } = {}) {
     return tools.shareTool(this.options, tool, labName, action, options.port);
   }

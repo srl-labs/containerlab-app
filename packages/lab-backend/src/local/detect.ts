@@ -50,6 +50,38 @@ async function userGroups(): Promise<string[]> {
   }
 }
 
+/** Who runs containerlab here, and whether the groups let them run it without sudo. */
+export interface LocalUserAccess {
+  username: string;
+  uid: number;
+  isRoot: boolean;
+  groups: string[];
+  inClabAdmins: boolean;
+  /** In the docker group; Podman needs no group. */
+  inRuntimeGroup: boolean;
+  /** Root, or in clab_admins and the runtime's group. */
+  canRunLabs: boolean;
+}
+
+/** The group check of detectLocalEnvironment, without running containerlab or the runtime. */
+export async function detectLocalUser(options: LocalLabBackendOptions = {}): Promise<LocalUserAccess> {
+  const resolved = resolveLocalOptions(options);
+  const uid = typeof process.getuid === "function" ? process.getuid() : -1;
+  const isRoot = uid === 0;
+  const groups = await userGroups();
+  const inClabAdmins = groups.includes("clab_admins");
+  const inRuntimeGroup = resolved.runtime === "podman" || groups.includes("docker");
+  return {
+    username: resolved.username,
+    uid,
+    isRoot,
+    groups,
+    inClabAdmins,
+    inRuntimeGroup,
+    canRunLabs: isRoot || (inClabAdmins && inRuntimeGroup)
+  };
+}
+
 /**
  * Checks what a local lab backend needs: Linux, the containerlab binary, the
  * container runtime and the group memberships that let the user run both
@@ -60,10 +92,7 @@ export async function detectLocalEnvironment(
 ): Promise<LocalEnvironmentStatus> {
   const resolved = resolveLocalOptions(options);
   const problems: string[] = [];
-  const isRoot = typeof process.getuid === "function" && process.getuid() === 0;
-  const groups = await userGroups();
-  const inClabAdmins = groups.includes("clab_admins");
-  const inRuntimeGroup = resolved.runtime === "podman" || groups.includes("docker");
+  const { isRoot, inClabAdmins, inRuntimeGroup } = await detectLocalUser(options);
   const status: LocalEnvironmentStatus = {
     available: false,
     problems,
