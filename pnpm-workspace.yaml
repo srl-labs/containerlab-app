@@ -23,6 +23,7 @@ catalog:
   "@types/react": 19.3.0
   "@types/react-dom": 19.3.0
   "@types/sinon": 22.0.0
+  "@types/ssh2": 1.15.6
   "@types/three": 0.186.0
   # Match the extension's minimum VS Code API to retain compatibility with forks.
   "@types/vscode": 1.105.0
@@ -68,6 +69,7 @@ catalog:
   react: 19.3.0
   react-dom: 19.3.0
   sinon: 22.1.0
+  ssh2: 1.17.0
   three: 0.186.0
   tsx: 4.23.13
   typescript: 7.0.2

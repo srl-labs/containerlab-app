@@ -76,6 +76,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   "packages/standalone-runtime": {
     entry: ["src/**/*.test.ts"]
   },
+  "packages/test-kit": {
+    entry: ["src/**/*.test.ts"]
+  },
   [uiDirectory]: {
     entry: [
       ...uiSources.map(([, source]) => path.posix.relative(uiDirectory, source)),
