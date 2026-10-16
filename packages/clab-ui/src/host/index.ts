@@ -38,6 +38,11 @@ export * from "./contracts";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
 export * from "./runtimeModel";
+export {
+  resolveNodeCredentialsFromYaml,
+  type CredentialsLevel,
+  type ResolvedNodeCredentials
+} from "../core/parsing/NodeCredentials";
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);

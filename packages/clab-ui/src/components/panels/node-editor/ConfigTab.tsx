@@ -12,6 +12,7 @@ import {
 } from "../../ui/form";
 
 import type { TabProps } from "./types";
+import { CredentialsSection } from "./CredentialsSection";
 
 type StartupConfigMode = "default" | "enforce" | "suppress";
 
@@ -34,7 +35,8 @@ function getStartupConfigMode(data: {
   return "default";
 }
 
-export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
+export const ConfigTab: React.FC<TabProps> = (props) => {
+  const { data, onChange } = props;
   const mode = getStartupConfigMode(data);
 
   const handleModeChange = (newMode: StartupConfigMode) => {
@@ -92,6 +94,8 @@ export const ConfigTab: React.FC<TabProps> = ({ data, onChange }) => {
           placeholder="Path to license file"
         />
       </PanelSection>
+
+      <CredentialsSection {...props} />
 
       <PanelAddSection title="Bind Mounts" onAdd={handleAddBind}>
         <DynamicList

@@ -180,7 +180,8 @@ const NODE_YAML_PROPERTIES = [
   "runtime",
   "components",
   "sfm",
-  "stages"
+  "stages",
+  "credentials"
 ] as const;
 
 /**

@@ -16,7 +16,7 @@ Right-click a node on the canvas:
 | Action | Does |
 | --- | --- |
 | **Shell** | Opens a shell in the container. In VS Code, `node.execCommandMapping` can drop you straight into a network OS's CLI. |
-| **SSH** | Opens an SSH session to the node's management address. |
+| **SSH** | Opens an SSH session to the node's management address. It logs in with the node's `credentials` from the topology (set them in the node editor under **Configuration** → **Login Credentials**), otherwise with the kind's default user. VS Code also uses the `identity-file`. |
 | **Logs** | Shows the container's log output. |
 | **Start**, **Stop**, **Restart** | Acts on this node's container only. |
 | **Info** | Shows the node's kind, image, state, and addresses. |
