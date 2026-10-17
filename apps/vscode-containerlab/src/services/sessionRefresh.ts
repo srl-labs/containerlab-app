@@ -2,7 +2,16 @@
  * Session refresh functions for SSHX and GoTTY.
  * Separated to avoid circular dependencies with extension.ts
  */
-import { getLocalBackend, isRemoteActive } from "../backend/labBackends";
+import { getConnections, getLocalBackend } from "../backend/labBackends";
+
+/** Share sessions are listed on this machine; on lab hosts, links come from attach. */
+function localShown(): boolean {
+  return (
+    getConnections()
+      ?.list()
+      .some((connection) => connection.kind === "local") ?? true
+  );
+}
 import { outputChannel, sshxSessions, gottySessions, runningLabsProvider } from "../globals";
 
 /**
@@ -69,8 +78,7 @@ function extractLabName(session: SshxSession | GottySession, prefix: string): st
 }
 
 export async function refreshSshxSessions() {
-  // A lab server does not list share sessions; links come from attach.
-  if (isRemoteActive()) return;
+  if (!localShown()) return;
   try {
     const parsed = await getLocalBackend().listShareSessions("sshx");
     sshxSessions.clear();
@@ -94,7 +102,7 @@ export async function refreshSshxSessions() {
 }
 
 export async function refreshGottySessions() {
-  if (isRemoteActive()) return;
+  if (!localShown()) return;
   try {
     const parsed = await getLocalBackend().listShareSessions("gotty");
     gottySessions.clear();

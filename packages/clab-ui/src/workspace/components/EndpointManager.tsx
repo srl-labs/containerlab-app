@@ -1,4 +1,4 @@
-import { useWorkspaceHost } from "../WorkspaceHost";
+import { useOptionalWorkspaceHost } from "../WorkspaceHost";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -21,6 +21,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
+import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import MemoryOutlinedIcon from "@mui/icons-material/MemoryOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
@@ -82,6 +83,10 @@ interface EndpointManagerProps {
   ) => void;
   /** Offered when the host can run labs on this machine. */
   localEndpoint?: LocalEndpointOffer;
+  /** Health stats of a signed-in lab host; the workspace host's when unset. */
+  fetchHealthMetrics?: HealthMetricsFetcher;
+  /** Signs out of a lab host but keeps it, so the user can sign in again later. */
+  onSignOutEndpoint?: (endpointId: string) => Promise<void>;
 }
 
 type EndpointHealthState =
@@ -237,7 +242,7 @@ function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: Endpoint
           display: "block"
         }}
       >
-        Reconnect to view health stats.
+        Sign in to see health stats.
       </Typography>
     );
   }
@@ -339,6 +344,7 @@ function ManagedEndpointList(props: {
   onEdit: (endpoint: EndpointConfig) => void;
   onReconnect: (endpoint: EndpointConfig) => void;
   onRemove: (endpoint: EndpointConfig) => void;
+  onSignOut?: (endpoint: EndpointConfig) => void;
   onSetEndpointSessionDuration?: (
     endpointId: string,
     sessionDuration: EndpointSessionDuration
@@ -441,6 +447,17 @@ function ManagedEndpointList(props: {
                   >
                     <RefreshIcon sx={{ fontSize: 18 }} />
                   </IconButton>
+                  {props.onSignOut && endpoint.kind !== "local" && endpoint.status === "connected" ? (
+                    <IconButton
+                      size="small"
+                      onClick={() => props.onSignOut?.(endpoint)}
+                      aria-label={`Sign out of ${endpoint.label}`}
+                      title="Sign out"
+                      disabled={props.busyKey !== null}
+                    >
+                      <LogoutOutlinedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  ) : null}
                   <IconButton
                     size="small"
                     onClick={() => props.onRemove(endpoint)}
@@ -574,7 +591,7 @@ function LocalEndpointCard(props: {
               sx={{ alignSelf: props.variant === "initial" ? "stretch" : "flex-start" }}
               data-testid="standalone-local-endpoint-add"
             >
-              Use This Computer
+              {offer.addLabel ?? "Use This Computer"}
             </Button>
           ) : null}
           {!offer.available && offer.onCheckAgain ? (
@@ -620,16 +637,20 @@ function useEndpointSessionDurationDrafts(sortedEndpoints: EndpointConfig[]) {
   return { drafts, handleDraftChange };
 }
 
+type HealthMetricsFetcher = (endpointId: string, signal?: AbortSignal) => Promise<EndpointHealthMetrics>;
+
 function useEndpointHealthState(
   connectedEndpointIds: string[],
   connectedEndpointKey: string,
-  healthStatsEnabled: boolean
+  healthStatsEnabled: boolean,
+  fetchHealthMetrics: HealthMetricsFetcher | undefined
 ): Record<string, EndpointHealthState> {
-  const { fetchEndpointHealthMetrics } = useWorkspaceHost().api;
+  const host = useOptionalWorkspaceHost();
+  const fetchEndpointHealthMetrics = fetchHealthMetrics ?? host?.api.fetchEndpointHealthMetrics;
   const [endpointHealth, setEndpointHealth] = useState<Record<string, EndpointHealthState>>({});
 
   useEffect(() => {
-    if (!healthStatsEnabled || connectedEndpointIds.length === 0) {
+    if (!healthStatsEnabled || connectedEndpointIds.length === 0 || !fetchEndpointHealthMetrics) {
       return;
     }
 
@@ -661,7 +682,7 @@ function useEndpointHealthState(
               message:
                 loadError instanceof Error
                   ? loadError.message
-                  : "Failed to load endpoint health stats"
+                  : "Failed to load health stats"
             }
           }));
         });
@@ -1031,14 +1052,22 @@ export function EndpointManager({
   onRequestedActionHandled,
   requestedAction,
   onSetEndpointSessionDuration,
-  localEndpoint
+  localEndpoint,
+  fetchHealthMetrics,
+  onSignOutEndpoint
 }: EndpointManagerProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // The app's own machine first, then the lab hosts by name.
   const sortedEndpoints = useMemo(
-    () => [...endpoints].sort((left, right) => left.label.localeCompare(right.label)),
+    () =>
+      [...endpoints].sort(
+        (left, right) =>
+          Number(right.kind === "local") - Number(left.kind === "local") ||
+          left.label.localeCompare(right.label)
+      ),
     [endpoints]
   );
   const connectedEndpointIds = useMemo(
@@ -1052,7 +1081,8 @@ export function EndpointManager({
   const endpointHealth = useEndpointHealthState(
     connectedEndpointIds,
     connectedEndpointKey,
-    healthStatsEnabled
+    healthStatsEnabled,
+    fetchHealthMetrics
   );
   const {
     drafts: endpointSessionDurationDrafts,
@@ -1095,7 +1125,7 @@ export function EndpointManager({
     },
     [busyKey, onReconnectEndpoint]
   );
-  const runLocalAction = useCallback(
+  const runAction = useCallback(
     (key: string, action: (() => Promise<void>) | undefined) => {
       if (!action || busyKey !== null) return;
       setBusyKey(key);
@@ -1216,6 +1246,11 @@ export function EndpointManager({
             endpoint.kind === "local" ? reconnectLocal(endpoint) : reconnectDialog.open(endpoint)
           }
           onRemove={removeDialog.open}
+          onSignOut={
+            onSignOutEndpoint
+              ? (endpoint) => runAction(`signout:${endpoint.id}`, () => onSignOutEndpoint(endpoint.id))
+              : undefined
+          }
           onSetEndpointSessionDuration={onSetEndpointSessionDuration}
           sessionDurationDrafts={endpointSessionDurationDrafts}
         />
@@ -1225,8 +1260,8 @@ export function EndpointManager({
         <LocalEndpointCard
           busy={busyKey !== null}
           offer={localEndpoint}
-          onAdd={() => runLocalAction("add-local", localEndpoint.onAdd)}
-          onCheckAgain={() => runLocalAction("check-local", localEndpoint.onCheckAgain)}
+          onAdd={() => runAction("add-local", localEndpoint.onAdd)}
+          onCheckAgain={() => runAction("check-local", localEndpoint.onCheckAgain)}
           variant={mode}
         />
       ) : null}
@@ -1488,12 +1523,15 @@ export function EndpointManager({
                 >
                   {`Sign in to clab-api-server at ${reconnectDialog.endpoint.url} with your Linux account on that host.`}
                 </Typography>
-                <Alert
-                  severity={endpointStatusSeverity(reconnectDialog.endpoint.status)}
-                  variant="outlined"
-                >
-                  {endpointStatusHint(reconnectDialog.endpoint.status)}
-                </Alert>
+                {reconnectDialog.endpoint.status === "session_expired" ||
+                reconnectDialog.endpoint.status === "offline" ? (
+                  <Alert
+                    severity={endpointStatusSeverity(reconnectDialog.endpoint.status)}
+                    variant="outlined"
+                  >
+                    {endpointStatusHint(reconnectDialog.endpoint.status)}
+                  </Alert>
+                ) : null}
                 <Typography
                   variant="body2"
                   sx={{
@@ -1554,7 +1592,9 @@ export function EndpointManager({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>{removeDialog.endpoint?.kind === "local" ? "Hide This Computer" : "Remove Lab Host"}</DialogTitle>
+        <DialogTitle>
+          {removeDialog.endpoint?.kind === "local" ? `Hide ${removeDialog.endpoint.label}` : "Remove Lab Host"}
+        </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2">
@@ -1564,7 +1604,7 @@ export function EndpointManager({
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {removeDialog.endpoint?.kind === "local"
-                ? "Running labs keep running. Use This Computer brings them back."
+                ? `Running labs keep running. ${localEndpoint?.addLabel ?? "Use This Computer"} brings them back.`
                 : "Its labs keep running on the host. Open topologies and terminals from it close."}
             </Typography>
           </Stack>

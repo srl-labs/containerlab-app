@@ -156,7 +156,7 @@ class IconService {
   async loadAllIcons(yamlFilePath: string): Promise<CustomIconInfo[]> {
     const globalDir = this.getGlobalIconDir();
 
-    // Load workspace icons first (they take priority); a lab server keeps its own.
+    // Load workspace icons first (they take priority); a lab host keeps its own.
     const workspaceIcons = isUriString(yamlFilePath)
       ? []
       : await this.listIconsFromDir(this.getWorkspaceIconDir(yamlFilePath), "workspace");

@@ -6,7 +6,7 @@ import { startVncProxy } from "../../../src/backend/vncProxy";
 
 type Listener<T extends unknown[]> = (...args: T) => void;
 
-/** A Wireshark VNC session on a lab server: one page, and a socket that echoes. */
+/** A Wireshark VNC session on a lab host: one page, and a socket that echoes. */
 function fakeBackend() {
   const requests: {
     sessionId: string;

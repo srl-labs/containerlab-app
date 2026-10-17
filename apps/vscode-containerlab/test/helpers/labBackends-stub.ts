@@ -48,24 +48,38 @@ const backend = {
   }
 };
 
-export function getLabBackend() {
-  return backend;
-}
+const LOCAL = { id: "local", label: "Local", kind: "local" as const };
 
 export function getLocalBackend() {
   return backend;
 }
 
-export function isRemoteActive(): boolean {
+export function backendFor() {
+  return backend;
+}
+
+export function backendOf() {
+  return backend;
+}
+
+export function connectionOf() {
+  return LOCAL;
+}
+
+export function connectionById() {
+  return LOCAL;
+}
+
+export function isRemote(): boolean {
   return false;
+}
+
+export async function pickConnection() {
+  return LOCAL;
 }
 
 export function getConnections(): undefined {
   return undefined;
-}
-
-export function activeConnection() {
-  return { id: "local", label: "Local", kind: "local" as const };
 }
 
 export function isUriString(value: string): boolean {
@@ -80,8 +94,8 @@ export function labPathOf(uri: { scheme: string; fsPath: string; toString(): str
   return uri.scheme === "file" ? uri.fsPath : uri.toString();
 }
 
-export async function resolveLab(labPath: string, labName?: string) {
-  record("resolveLab", [labPath, labName]);
+export async function resolveLab(labPath: string, labName?: string, connectionId?: string) {
+  record("resolveLab", [labPath, labName, connectionId]);
   return { backend, target: { labName: "", path: labPath } as LabTarget };
 }
 

@@ -1,7 +1,8 @@
 import * as vscode from "vscode";
 import { errorStatus } from "@srl-labs/containerlab-lab-backend";
 
-import { activeConnection, getConnections, getLabBackend } from "../backend/labBackends";
+import { backendFor, getConnections } from "../backend/labBackends";
+import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 import * as events from "../services/containerlabEvents";
 import * as fallback from "../services/containerlabInspectFallback";
 import { outputChannel } from "../globals";
@@ -9,112 +10,160 @@ import type { ClabInterfaceSnapshot } from "../types/containerlab";
 
 import type * as c from "./common";
 
-export let rawInspectData: Record<string, c.ClabDetailedJSON[]> | undefined;
+type LabsByName = Record<string, c.ClabDetailedJSON[]>;
 
-// Track if we've fallen back to polling due to events not being available
-let forcedPollingMode = false;
-
-/**
- * Check if we should use polling mode (fallback) instead of events
- */
-export function isPollingMode(): boolean {
-  if (forcedPollingMode) {
-    return true;
-  }
-  const config = vscode.workspace.getConfiguration("containerlab");
-  return config.get<string>("refreshMode", "events") === "polling";
-}
+/** The running labs of each connection, by connection id. */
+const labsByConnection = new Map<string, LabsByName>();
+/** Connections whose backend cannot stream events; they are polled instead. */
+const pollingConnections = new Set<string>();
+const pollers = new Map<string, fallback.LabPoller>();
 
 /**
- * Starts over after the active connection changed: the new backend may
- * stream events although the previous one could not.
+ * The connections whose labs the views show: Local unless it is hidden,
+ * and every lab host that is signed in.
  */
-export function resetForConnectionChange(): void {
-  forcedPollingMode = false;
-  events.stopEventStream();
-  fallback.stopPolling();
-  rawInspectData = undefined;
-}
-
-export async function update(): Promise<void> {
-  const active = activeConnection();
-  if (active.kind === "api" && !getConnections()?.activeBackend()) {
-    // Signed out: no labs to show until the user signs in.
-    rawInspectData = {};
-    return;
-  }
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const runtime = config.get<string>("runtime", "docker");
-  const preferPolling = config.get<string>("refreshMode", "events") === "polling";
-
-  // If user explicitly wants polling, or we've been forced into polling mode
-  if (preferPolling || forcedPollingMode) {
-    await updateWithPolling();
-    return;
-  }
-
-  // Try events first, fall back to polling if it fails
-  try {
-    outputChannel.debug("[inspector] Updating inspect data via events stream");
-    const start = Date.now();
-
-    const backend = getLabBackend();
-    await events.ensureEventStream(backend, `${backend.scope}|${runtime}`);
-    rawInspectData = events.getGroupedContainers();
-
-    const duration = (Date.now() - start) / 1000;
-    const labsCount = Object.keys(rawInspectData).length;
-    outputChannel.debug(
-      `[inspector] Updated inspect data for ${labsCount} labs in ${duration.toFixed(3)}s`
+function inspectedConnections(): LabConnection[] {
+  const manager = getConnections();
+  if (!manager) return [LOCAL_CONNECTION];
+  return manager
+    .list()
+    .filter(
+      (connection) => connection.kind === "local" || manager.status(connection) === "connected"
     );
+}
+
+/** The running labs of a connection, as the last update saw them. */
+export function labsOf(connectionId: string): LabsByName | undefined {
+  return labsByConnection.get(connectionId);
+}
+
+/** The running labs of every connection the views show, by connection id. */
+export function allLabs(): Map<string, LabsByName> {
+  return new Map(labsByConnection);
+}
+
+function preferPolling(): boolean {
+  return (
+    vscode.workspace.getConfiguration("containerlab").get<string>("refreshMode", "events") ===
+    "polling"
+  );
+}
+
+/** Whether a connection's labs come from polling instead of events. */
+export function isPollingMode(connectionId = LOCAL_CONNECTION.id): boolean {
+  return preferPolling() || pollingConnections.has(connectionId);
+}
+
+function pollerFor(connection: LabConnection): fallback.LabPoller {
+  let poller = pollers.get(connection.id);
+  if (!poller) {
+    poller = new fallback.LabPoller(() => backendFor(connection));
+    pollers.set(connection.id, poller);
+  }
+  return poller;
+}
+
+/** Stops watching a connection, e.g. after it signed out or was removed. */
+export function forgetConnection(connectionId: string): void {
+  events.stopEventStreams(connectionId);
+  pollers.get(connectionId)?.stop();
+  pollers.delete(connectionId);
+  pollingConnections.delete(connectionId);
+  labsByConnection.delete(connectionId);
+}
+
+/** Starts over for every connection: a new backend may stream events after all. */
+export function resetForConnectionChange(): void {
+  for (const connectionId of new Set([...labsByConnection.keys(), ...pollers.keys()])) {
+    forgetConnection(connectionId);
+  }
+  events.stopEventStreams();
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function updateConnection(connection: LabConnection): Promise<void> {
+  const manager = getConnections();
+  const runtime = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<string>("runtime", "docker");
+  if (isPollingMode(connection.id)) {
+    await updateWithPolling(connection);
+    return;
+  }
+  try {
+    outputChannel.debug(`[inspector] Updating ${connection.label} via events stream`);
+    const backend = backendFor(connection);
+    const stream = events.eventStreamFor(connection.id);
+    await stream.ensure(backend, `${backend.scope}|${runtime}`);
+    labsByConnection.set(connection.id, stream.getGroupedContainers());
+    if (connection.kind === "api") manager?.setProblem(connection, undefined);
   } catch (err) {
-    if (active.kind === "api" && errorStatus(err) === 401) {
+    if (connection.kind === "api" && errorStatus(err) === 401) {
       // The token expired: no labs until the user signs in again.
-      rawInspectData = {};
-      void getConnections()?.expire(active);
+      forgetConnection(connection.id);
+      void manager?.expire(connection);
       return;
     }
-    // Events failed - likely "Unknown command" error
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    outputChannel.warn(`[inspector] Events stream failed: ${errorMsg}, falling back to polling`);
-
-    // Mark that we've been forced into polling mode
-    forcedPollingMode = true;
-
-    // Use polling fallback
-    await updateWithPolling();
+    if (connection.kind === "api" && errorStatus(err) === undefined) {
+      // The host does not answer; keep the last labs until it is back.
+      manager?.setProblem(connection, messageOf(err));
+      events.stopEventStreams(connection.id);
+      return;
+    }
+    outputChannel.warn(
+      `[inspector] Events stream of ${connection.label} failed: ${messageOf(err)}, falling back to polling`
+    );
+    pollingConnections.add(connection.id);
+    await updateWithPolling(connection);
   }
 }
 
-async function updateWithPolling(): Promise<void> {
-  outputChannel.debug("[inspector] Updating inspect data via polling fallback");
+async function updateWithPolling(connection: LabConnection): Promise<void> {
+  const poller = pollerFor(connection);
+  await poller.ensure();
+  labsByConnection.set(connection.id, poller.getGroupedContainers());
+}
+
+/** Updates the running labs of every connection the views show. */
+export async function update(): Promise<void> {
+  const connections = inspectedConnections();
+  const shown = new Set(connections.map((connection) => connection.id));
+  for (const connectionId of labsByConnection.keys()) {
+    if (!shown.has(connectionId)) forgetConnection(connectionId);
+  }
   const start = Date.now();
-
-  await fallback.ensureFallback();
-  rawInspectData = fallback.getGroupedContainers();
-
-  const duration = (Date.now() - start) / 1000;
-  const labsCount = Object.keys(rawInspectData).length;
+  await Promise.all(connections.map((connection) => updateConnection(connection)));
   outputChannel.debug(
-    `[inspector] Updated inspect data for ${labsCount} labs in ${duration.toFixed(3)}s (polling)`
+    `[inspector] Updated ${connections.length} connections in ${((Date.now() - start) / 1000).toFixed(3)}s`
   );
 }
 
 export function getInterfacesSnapshot(
+  connectionId: string,
   containerShortId: string,
   containerName: string
 ): ClabInterfaceSnapshot[] {
-  if (isPollingMode()) {
-    // Use fallback's interface fetching via containerlab inspect interfaces
-    return fallback.getInterfaceSnapshot(containerShortId, containerName);
+  if (isPollingMode(connectionId)) {
+    // Interfaces come from `containerlab inspect interfaces` on this machine.
+    return pollers.get(connectionId)?.getInterfaceSnapshot(containerShortId, containerName) ?? [];
   }
-  return events.getInterfaceSnapshot(containerShortId, containerName);
+  return events.eventStreamFor(connectionId).getInterfaceSnapshot(containerShortId, containerName);
 }
 
+/** Takes the latest labs from the running streams and pollers, without asking the backends. */
 export function refreshFromEventStream(): void {
-  if (isPollingMode()) {
-    rawInspectData = fallback.getGroupedContainers();
-  } else {
-    rawInspectData = events.getGroupedContainers();
+  for (const connection of inspectedConnections()) {
+    if (isPollingMode(connection.id)) {
+      const poller = pollers.get(connection.id);
+      if (poller) labsByConnection.set(connection.id, poller.getGroupedContainers());
+    } else {
+      labsByConnection.set(
+        connection.id,
+        events.eventStreamFor(connection.id).getGroupedContainers()
+      );
+    }
   }
 }

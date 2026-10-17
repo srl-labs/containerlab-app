@@ -8,9 +8,41 @@ interface ExplorerContributedMenuItem {
 
 export interface ExplorerCommandMetadata {
   contributedContainerActions?: readonly ExplorerContributedMenuItem[];
+  contributedEndpointActions?: readonly ExplorerEndpointAction[];
   commandLabels?: ReadonlyMap<string, string>;
   commandIcons?: ReadonlyMap<string, string>;
 }
+
+interface ExplorerEndpointAction extends ExplorerContributedMenuItem {
+  endpointKinds?: readonly ("local" | "api")[];
+  whenConnected?: boolean;
+}
+
+/**
+ * What the extension adds to the lab host roots of the explorer, next to the
+ * explorer's own actions (new topology, clone, Edgeshark, sign in, remove).
+ */
+const ENDPOINT_ACTIONS: readonly ExplorerEndpointAction[] = [
+  {
+    commandId: "containerlab.lab.deploy.specificFile",
+    label: "Deploy Lab File…",
+    whenConnected: true
+  },
+  { commandId: "containerlab.images.manage", label: "Manage Images", whenConnected: true },
+  {
+    commandId: "containerlab.connection.openWorkspace",
+    label: "Open Files in Explorer",
+    endpointKinds: ["api"],
+    whenConnected: true
+  },
+  {
+    commandId: "containerlab.connection.signOut",
+    label: "Sign Out",
+    endpointKinds: ["api"],
+    whenConnected: true
+  },
+  { commandId: "containerlab.connection.manage", label: "Manage Lab Hosts…" }
+];
 
 interface ExtensionContributes {
   menus?: unknown;
@@ -278,6 +310,7 @@ async function computeExplorerCommandMetadata(): Promise<ExplorerCommandMetadata
 
   return {
     contributedContainerActions,
+    contributedEndpointActions: ENDPOINT_ACTIONS,
     commandLabels,
     commandIcons
   };

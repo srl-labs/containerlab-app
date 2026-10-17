@@ -4,6 +4,7 @@ import type { InspectContainerData } from "@containerlab/clab-ui/inspect";
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
 import * as inspector from "../treeView/inspector";
+import { connectionById, connectionOf } from "../backend/labBackends";
 import { INSPECT_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 // Store the current panel and context for refresh functionality
@@ -71,7 +72,15 @@ export async function inspectAllLabs(context: InspectCommandContext) {
     outputChannel.appendLine(`[Inspect Command]: Refreshing via containerlab events cache`);
 
     await inspector.update();
-    const parsed = inspector.rawInspectData;
+    // Labs of every connection; a lab host's lab names carry the host.
+    const parsed: InspectDataGrouped = {};
+    for (const [connectionId, labs] of inspector.allLabs()) {
+      const connection = connectionById(connectionId);
+      for (const [labName, containers] of Object.entries(labs)) {
+        const key = connection?.kind === "api" ? `${labName} (${connection.label})` : labName;
+        parsed[key] = toInspectContainers(containers);
+      }
+    }
 
     const normalizedContainers = normalizeInspectOutput(parsed);
 
@@ -102,7 +111,7 @@ export async function inspectOneLab(node: ClabLabTreeNode, context: InspectComma
 
     await inspector.update();
 
-    const parsed = inspector.rawInspectData ?? {};
+    const parsed = inspector.labsOf(connectionOf(node).id) ?? {};
     const filtered: InspectDataGrouped = {};
 
     for (const [labName, containers] of Object.entries(parsed)) {

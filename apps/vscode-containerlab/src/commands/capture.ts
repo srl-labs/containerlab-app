@@ -17,7 +17,7 @@ import {
 } from "../utils/packetflix";
 import type { ImagePullPolicy } from "../utils/consts";
 import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
-import { getLabBackend } from "../backend/labBackends";
+import { backendFor, backendOf, connectionOf, pickConnection } from "../backend/labBackends";
 import { isRemoteNode, remoteHostname, remoteLabNameOf } from "../backend/remoteNode";
 import { startVncProxy } from "../backend/vncProxy";
 import {
@@ -306,7 +306,7 @@ export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]
 ) {
-  if (isRemoteNode()) {
+  if (isRemoteNode(node)) {
     return captureRemote(node, allSelectedNodes, "packetflix");
   }
   const packetflixUri = await buildPacketflixUri(node, allSelectedNodes);
@@ -494,7 +494,7 @@ export async function captureEdgesharkVNC(
   >("capture.wireshark.pullPolicy", DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY);
   const wiresharkThemeSetting = wsConfig.get<string>("capture.wireshark.theme");
   const keepOpenInBackground = wsConfig.get<boolean>("capture.wireshark.stayOpenInBackground");
-  if (isRemoteNode()) {
+  if (isRemoteNode(node)) {
     return captureRemote(node, allSelectedNodes, "vnc");
   }
 
@@ -545,7 +545,7 @@ export async function captureEdgesharkVNC(
 }
 
 /**
- * Capture on a lab server: Edgeshark runs there, and so does the Wireshark
+ * Capture on a lab host: Edgeshark runs there, and so does the Wireshark
  * VNC container, whose page this window loads through a local proxy.
  */
 async function captureRemote(
@@ -560,12 +560,12 @@ async function captureRemote(
     nodeNamespace: !isHostNetnsInterface(iface.name)
   }));
   try {
-    const backend = getLabBackend();
+    const backend = backendOf(node);
     const labName = await remoteLabNameOf(backend, node.parentName, node.labName);
     if (mode === "packetflix") {
       const { captures } = await backend.capturePacketflix(labName, {
         targets,
-        remoteHostname: remoteHostname()
+        remoteHostname: remoteHostname(node)
       });
       for (const capture of captures) {
         await vscode.env.openExternal(vscode.Uri.parse(capture.packetflixUri));
@@ -751,10 +751,15 @@ async function runVncReadinessLoop(
   }
 }
 
-export async function killAllWiresharkVNCCtrs() {
-  if (isRemoteNode()) {
+export async function killAllWiresharkVNCCtrs(target?: unknown) {
+  const connection =
+    target !== undefined
+      ? connectionOf(target)
+      : await pickConnection("Close Wireshark VNC sessions");
+  if (!connection) return;
+  if (connection.kind === "api") {
     try {
-      const result = await getLabBackend().closeAllWiresharkVnc();
+      const result = await backendFor(connection).closeAllWiresharkVnc();
       outputChannel.info(result.message);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

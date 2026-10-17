@@ -30,6 +30,8 @@ interface ExplorerTreeItemLike {
   id?: string;
   contextValue?: string;
   endpointId?: string;
+  /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
+  endpointKind?: "local" | "api";
   hasChildren?: boolean;
   state?: string;
   status?: string;
@@ -55,6 +57,8 @@ export interface ExplorerSnapshotOptions {
   hiddenCommandIds?: readonly string[];
   sectionOrder?: readonly ExplorerSectionId[];
   expandedBySection?: ExplorerUiState["expandedBySection"];
+  /** Section titles that replace the defaults, e.g. once labs come from several hosts. */
+  sectionLabels?: Partial<Record<ExplorerSectionId, string>>;
 }
 
 export interface ExplorerActionInvocation {
@@ -66,6 +70,10 @@ export interface ExplorerActionInvocation {
 export interface ExplorerContributedMenuItem {
   commandId: string;
   contextValues?: readonly string[];
+  /** For lab host roots: only on these kinds of host. */
+  endpointKinds?: readonly ("local" | "api")[];
+  /** For lab host roots: only while the host is connected (or, with false, while it is not). */
+  whenConnected?: boolean;
   destructive?: boolean;
   label?: string;
   iconId?: string;
@@ -192,6 +200,7 @@ const DESTRUCTIVE_COMMANDS = new Set<string>([
 ]);
 const SECTION_BUILD_TIMEOUT_MS = 4000;
 const TREE_ITEM_COLLAPSIBLE_NONE = 0;
+const TREE_ITEM_COLLAPSIBLE_EXPANDED = 2;
 const LAB_LABEL_LINK_PREFIX_REGEX = /^🔗\s*/u;
 const BUILTIN_CONTAINER_ACTION_COMMANDS: readonly string[] = [
   "containerlab.node.showLogs",
@@ -511,6 +520,20 @@ function appendContributedActions(
     ) {
       continue;
     }
+    if (
+      item &&
+      contributedAction.endpointKinds &&
+      !contributedAction.endpointKinds.includes(item.endpointKind ?? "api")
+    ) {
+      continue;
+    }
+    if (
+      item &&
+      contributedAction.whenConnected !== undefined &&
+      contributedAction.whenConnected !== (String(item.state ?? "").toLowerCase() === "connected")
+    ) {
+      continue;
+    }
 
     pushAction(
       actions,
@@ -759,7 +782,9 @@ function appendEndpointActions(
   commandIcons: ReadonlyMap<string, string>
 ): void {
   const normalizedState = String(item.state ?? "").toLowerCase();
-  if (normalizedState === "connected") {
+  const connected = normalizedState === "connected";
+  const local = item.endpointKind === "local";
+  if (connected) {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.cloneRepo", [item]);
     pushAction(actions, seen, registry, "containerlab.install.edgeshark", [item]);
@@ -767,9 +792,14 @@ function appendEndpointActions(
     pushAction(actions, seen, registry, "containerlab.capture.killAllWiresharkVNC", [item], undefined, true);
     pushAction(actions, seen, registry, "containerlab.set.sessionHostname", [item]);
   }
-  pushAction(actions, seen, registry, "containerlab.endpoint.reconnect", [item]);
-  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], undefined, true);
-  pushAction(actions, seen, registry, "containerlab.endpoint.copyUrl", [item]);
+  // This machine needs no sign-in: it is checked again, and hidden instead of removed.
+  let reconnectLabel = connected ? "Sign In Again" : "Sign In";
+  if (local) reconnectLabel = "Check Again";
+  pushAction(actions, seen, registry, "containerlab.endpoint.reconnect", [item], reconnectLabel);
+  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], local ? "Hide" : "Remove", true);
+  if (!local) {
+    pushAction(actions, seen, registry, "containerlab.endpoint.copyUrl", [item]);
+  }
   appendContributedActions(actions, seen, registry, item, contributedActions, commandLabels, commandIcons);
 }
 
@@ -1068,12 +1098,16 @@ async function buildNode(
     tooltip,
     contextValue,
     endpointId: item.endpointId,
+    ...(item.endpointKind !== undefined ? { endpointKind: item.endpointKind } : {}),
     state: item.state,
     statusIndicator,
     statusDescription: description,
     primaryAction,
     shareAction,
     hasChildren,
+    ...(item.collapsibleState === TREE_ITEM_COLLAPSIBLE_EXPANDED && hasChildren
+      ? { defaultExpanded: true }
+      : {}),
     actions: nodeActions,
     children
   };
@@ -1184,7 +1218,7 @@ async function buildSectionSnapshot(
   const nodes = await buildSectionNodes(provider, sectionId, options, registry);
   return {
     id: sectionId,
-    label: EXPLORER_SECTION_LABELS[sectionId],
+    label: options.sectionLabels?.[sectionId] ?? EXPLORER_SECTION_LABELS[sectionId],
     count: countForSection(sectionId, nodes),
     nodes,
     toolbarActions: toolbarActionsForSection(sectionId, registry, options),
@@ -1231,7 +1265,7 @@ async function buildSectionSnapshotSafe(
     console.error(`[containerlab explorer] failed to build section '${sectionId}'`, error);
     return {
       id: sectionId,
-      label: EXPLORER_SECTION_LABELS[sectionId],
+      label: options.sectionLabels?.[sectionId] ?? EXPLORER_SECTION_LABELS[sectionId],
       count: 0,
       nodes: [],
       toolbarActions: toolbarActionsForSection(sectionId, registry, options),

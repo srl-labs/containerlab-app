@@ -1,12 +1,7 @@
 import * as vscode from "vscode";
 
-import { getConnections, remoteUri } from "../backend/labBackends";
+import { connectionOf, getConnections, remoteUri } from "../backend/labBackends";
 import type { ConnectionManager, LabConnection } from "../backend/connections";
-
-interface ConnectionItem extends vscode.QuickPickItem {
-  connection?: LabConnection;
-  add?: boolean;
-}
 
 function manager(): ConnectionManager | undefined {
   const connections = getConnections();
@@ -16,99 +11,113 @@ function manager(): ConnectionManager | undefined {
   return connections;
 }
 
-function describe(connections: ConnectionManager, connection: LabConnection): string {
-  if (connection.kind === "local") return "containerlab on this machine";
-  const signedIn = connections.apiBackend(connection) !== undefined;
-  return `${connection.url ?? ""}${signedIn ? "" : " · signed out"}`;
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
-/** Makes a connection active, signing in first when it needs a password. */
-async function activate(connections: ConnectionManager, connection: LabConnection): Promise<void> {
-  if (connection.kind === "api" && !(await connections.ensureBackend(connection))) {
-    return;
+/** The host name of a URL the user typed, for a default name. */
+function hostOf(url: string): string {
+  try {
+    return new URL(/^[a-z]+:\/\//i.test(url) ? url : `https://${url}`).hostname;
+  } catch {
+    return url;
   }
-  await connections.setActive(connection.id);
 }
 
-/** Asks for a clab-api-server and adds it to the settings. */
+/** Shows the Containerlab explorer, where the new lab host's labs appear. */
+function revealExplorer(): void {
+  void vscode.commands
+    .executeCommand("containerlabExplorerWebview.focus")
+    .then(undefined, () => {});
+}
+
+/**
+ * Asks for a lab host and signs in to it: URL, name, user and password,
+ * one step at a time. The host is saved even when the sign-in fails, so
+ * the user can sign in again later.
+ */
 export async function addConnection(): Promise<LabConnection | undefined> {
   const connections = manager();
   if (!connections) return undefined;
+  const title = "Add Lab Host";
   const url = await vscode.window.showInputBox({
-    title: "Add Lab Server (1/2)",
-    prompt: "URL of the clab-api-server, e.g. https://lab-host:8080",
-    placeHolder: "https://lab-host:8080",
+    title: `${title} (1/4)`,
+    prompt: "URL of clab-api-server on the lab host",
+    placeHolder: "https://lab-host:8090",
     ignoreFocusOut: true,
     validateInput: (value) =>
       value.trim().length === 0 || /^(https?:\/\/)?[^\s/]+/.test(value.trim())
         ? undefined
         : "Enter a host name or URL."
   });
-  if (url === undefined || url === "") return undefined;
-  let host = url.trim();
-  try {
-    host = new URL(/^[a-z]+:\/\//i.test(host) ? host : `https://${host}`).hostname;
-  } catch {
-    // Keep what the user typed as the label.
-  }
+  if (url === undefined || url.trim() === "") return undefined;
   const label = await vscode.window.showInputBox({
-    title: "Add Lab Server (2/2)",
-    prompt: "Name shown for this lab server",
-    value: host,
+    title: `${title} (2/4)`,
+    prompt: "Name shown in the Containerlab views",
+    value: hostOf(url.trim()),
     ignoreFocusOut: true
   });
   if (label === undefined) return undefined;
-  try {
-    const connection = await connections.addConnection(label.trim() || host, url);
-    await activate(connections, connection);
-    return connection;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    void vscode.window.showErrorMessage(`Adding the lab server failed: ${message}`);
-    return undefined;
-  }
-}
-
-/** Picks the connection whose labs the views show. */
-export async function switchConnection(): Promise<void> {
-  const connections = manager();
-  if (!connections) return;
-  const active = connections.active;
-  const items: ConnectionItem[] = connections.list().map((connection) => ({
-    label: `$(${connection.kind === "local" ? "vm" : "cloud"}) ${connection.label}`,
-    description: describe(connections, connection),
-    detail: connection.id === active.id ? "Active" : undefined,
-    connection
-  }));
-  items.push({ label: "$(add) Add Lab Server…", add: true });
-  const picked = await vscode.window.showQuickPick(items, {
-    title: "Containerlab: Lab Server",
-    placeHolder: "Where should the Containerlab views show labs from?"
+  const username = await vscode.window.showInputBox({
+    title: `${title} (3/4)`,
+    prompt: "Your Linux user on the lab host",
+    ignoreFocusOut: true
   });
-  if (!picked) return;
-  if (picked.add === true) {
-    await addConnection();
-    return;
-  }
-  if (picked.connection) await activate(connections, picked.connection);
-}
-
-async function pickApiConnection(
-  connections: ConnectionManager,
-  title: string
-): Promise<LabConnection | undefined> {
-  const active = connections.active;
-  if (active.kind === "api") return active;
-  const servers = connections.list().filter((connection) => connection.kind === "api");
-  if (servers.length === 0) {
-    void vscode.window.showInformationMessage("No lab server is configured. Add one first.");
+  if (username === undefined || username.trim() === "") return undefined;
+  const password = await vscode.window.showInputBox({
+    title: `${title} (4/4)`,
+    prompt: `Password of ${username.trim()}`,
+    password: true,
+    ignoreFocusOut: true
+  });
+  if (password === undefined) return undefined;
+  let connection: LabConnection;
+  try {
+    connection = await connections.addConnection(label.trim() || hostOf(url.trim()), url, {
+      username: username.trim()
+    });
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Adding the lab host failed: ${messageOf(error)}`);
     return undefined;
   }
-  if (servers.length === 1) return servers[0];
+  try {
+    await connections.signIn(connection, username.trim(), password);
+    revealExplorer();
+  } catch (error) {
+    const choice = await vscode.window.showErrorMessage(
+      `${connection.label} was added, but signing in failed: ${messageOf(error)}`,
+      "Sign In Again"
+    );
+    if (choice === "Sign In Again") await connections.promptSignIn(connection);
+  }
+  return connection;
+}
+
+/** The lab host a command is for: the explorer node it was run on, or the one the user picks. */
+async function pickLabHost(
+  connections: ConnectionManager,
+  title: string,
+  target: unknown
+): Promise<LabConnection | undefined> {
+  if (target !== undefined) {
+    const connection = connectionOf(target);
+    return connection.kind === "api" ? connections.get(connection.id) : undefined;
+  }
+  const hosts = connections.list().filter((connection) => connection.kind === "api");
+  if (hosts.length === 0) {
+    const choice = await vscode.window.showInformationMessage(
+      "No lab host is configured yet.",
+      "Add Lab Host"
+    );
+    if (choice === "Add Lab Host") await addConnection();
+    return undefined;
+  }
+  if (hosts.length === 1) return hosts[0];
   const picked = await vscode.window.showQuickPick(
-    servers.map((connection) => ({
+    hosts.map((connection) => ({
       label: connection.label,
-      description: describe(connections, connection),
+      description: connection.url,
+      detail: connections.status(connection) === "connected" ? "Signed in" : "Signed out",
       connection
     })),
     { title }
@@ -116,54 +125,75 @@ async function pickApiConnection(
   return picked?.connection;
 }
 
-export async function signIn(): Promise<void> {
+export async function signIn(target?: unknown): Promise<void> {
   const connections = manager();
   if (!connections) return;
-  const connection = await pickApiConnection(connections, "Sign in to lab server");
+  const connection = await pickLabHost(connections, "Sign in to lab host", target);
   if (!connection) return;
-  if (await connections.promptSignIn(connection)) {
-    await connections.setActive(connection.id);
-  }
+  if (await connections.promptSignIn(connection)) revealExplorer();
 }
 
-export async function signOut(): Promise<void> {
+export async function signOut(target?: unknown): Promise<void> {
   const connections = manager();
   if (!connections) return;
-  const connection = await pickApiConnection(connections, "Sign out of lab server");
+  const connection = await pickLabHost(connections, "Sign out of lab host", target);
   if (!connection) return;
   await connections.signOut(connection);
   void vscode.window.showInformationMessage(`Signed out of ${connection.label}.`);
-  if (connections.active.id === connection.id) {
-    await connections.setActive(connection.id);
-  }
 }
 
-export async function removeConnection(): Promise<void> {
+/** Removes a lab host, or hides Local, after asking. */
+export async function removeConnection(target?: unknown): Promise<void> {
   const connections = manager();
   if (!connections) return;
-  const servers = connections.list().filter((connection) => connection.kind === "api");
-  const picked = await vscode.window.showQuickPick(
-    servers.map((connection) => ({
-      label: connection.label,
-      description: connection.url,
-      connection
-    })),
-    { title: "Remove lab server" }
-  );
-  if (!picked) return;
+  if (target !== undefined && connectionOf(target).kind === "local") {
+    const confirm = await vscode.window.showWarningMessage(
+      "Hide the labs on this machine? Running labs keep running.",
+      {
+        modal: true,
+        detail:
+          'Turn "Labs on this machine" back on in the Containerlab settings to see them again.'
+      },
+      "Hide"
+    );
+    if (confirm === "Hide") await connections.setLocalEnabled(false);
+    return;
+  }
+  const connection = await pickLabHost(connections, "Remove lab host", target);
+  if (!connection) return;
   const confirm = await vscode.window.showWarningMessage(
-    `Remove ${picked.connection.label}? Its labs keep running on the server.`,
-    { modal: true },
+    `Remove ${connection.label}?`,
+    { modal: true, detail: "Its labs keep running on the host. You can add it again any time." },
     "Remove"
   );
-  if (confirm === "Remove") await connections.removeConnection(picked.connection);
+  if (confirm === "Remove") await connections.removeConnection(connection);
 }
 
-/** Adds the lab server's workspace to the Explorer, to browse and edit its files. */
-export async function openRemoteWorkspace(): Promise<void> {
+/**
+ * The explorer's primary action on a lab host that is signed out: sign in.
+ * On Local it checks containerlab again.
+ */
+export async function reconnect(target?: unknown): Promise<void> {
+  if (target !== undefined && connectionOf(target).kind === "local") {
+    await vscode.commands.executeCommand("containerlab.connection.checkLocal");
+    return;
+  }
+  await signIn(target);
+}
+
+export async function copyConnectionUrl(target?: unknown): Promise<void> {
+  const connection = target !== undefined ? connectionOf(target) : undefined;
+  const url = connection?.kind === "api" ? getConnections()?.get(connection.id)?.url : undefined;
+  if (url === undefined) return;
+  await vscode.env.clipboard.writeText(url);
+  void vscode.window.showInformationMessage(`Copied ${url}`);
+}
+
+/** Adds the lab host's workspace to the Explorer, to browse and edit its files. */
+export async function openRemoteWorkspace(target?: unknown): Promise<void> {
   const connections = manager();
   if (!connections) return;
-  const connection = await pickApiConnection(connections, "Open lab server workspace");
+  const connection = await pickLabHost(connections, "Open lab host files", target);
   if (!connection) return;
   if (!(await connections.ensureBackend(connection))) return;
   const uri = remoteUri(connection, "");
@@ -174,6 +204,11 @@ export async function openRemoteWorkspace(): Promise<void> {
   }
   vscode.workspace.updateWorkspaceFolders(folders.length, null, {
     uri,
-    name: `${connection.label} (lab server)`
+    name: `${connection.label} (lab host)`
   });
+}
+
+/** Opens the Lab Hosts page of the Containerlab settings. */
+export async function manageConnections(): Promise<void> {
+  await vscode.commands.executeCommand("containerlab.settings.open", "labHosts");
 }

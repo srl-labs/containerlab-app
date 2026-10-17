@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel, sshxSessions, runningLabsProvider } from "../globals";
-import { getLabBackend } from "../backend/labBackends";
+import { backendOf } from "../backend/labBackends";
 import { refreshSshxSessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
 
 async function sshxStart(action: "attach" | "reattach", node: ClabLabTreeNode) {
@@ -11,7 +11,7 @@ async function sshxStart(action: "attach" | "reattach", node: ClabLabTreeNode) {
     return;
   }
   try {
-    const result = await getLabBackend().shareTool("sshx", node.name, action);
+    const result = await backendOf(node).shareTool("sshx", node.name, action);
     if (result.output) outputChannel.info(result.output);
     const link = result.link;
     if (link !== undefined && link.length > 0) {
@@ -47,7 +47,7 @@ export async function sshxDetach(node: ClabLabTreeNode) {
     return;
   }
   try {
-    await getLabBackend().shareTool("sshx", node.name, "detach");
+    await backendOf(node).shareTool("sshx", node.name, "detach");
     sshxSessions.delete(node.name);
     vscode.window.showInformationMessage("SSHX session detached");
   } catch (err: unknown) {

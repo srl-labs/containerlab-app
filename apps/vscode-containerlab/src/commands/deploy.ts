@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
-import { ClabLabTreeNode } from "../treeView/common";
-import { activeConnection, labPathOf, remoteUri } from "../backend/labBackends";
+import { ClabLabTreeNode, onConnection } from "../treeView/common";
+import { connectionOf, labPathOf, pickConnection, remoteUri } from "../backend/labBackends";
 
 import { runClabAction } from "./runClabAction";
 
@@ -13,10 +13,21 @@ export async function deployCleanup(node?: ClabLabTreeNode) {
   await runClabAction("deploy", node, true);
 }
 
-export async function deploySpecificFile() {
+/** Deploys a topology file or URL; from a lab host's node in the explorer, on that host. */
+export async function deploySpecificFile(target?: unknown) {
+  const connection =
+    target !== undefined ? connectionOf(target) : await pickConnection("Deploy a lab on");
+  if (!connection) {
+    return;
+  }
+  const remote = connection.kind === "api";
   const mode = await vscode.window.showQuickPick(
-    ["Select local file", "Enter Git/HTTP URL", "Choose from popular labs"],
-    { title: "Deploy from" }
+    [
+      remote ? `Select a file on ${connection.label}` : "Select local file",
+      "Enter Git/HTTP URL",
+      "Choose from popular labs"
+    ],
+    { title: remote ? `Deploy on ${connection.label} from` : "Deploy from" }
   );
 
   if (mode === undefined) {
@@ -25,15 +36,14 @@ export async function deploySpecificFile() {
 
   let labRef: string | undefined;
 
-  if (mode === "Select local file") {
-    const active = activeConnection();
+  if (mode.startsWith("Select")) {
     const opts: vscode.OpenDialogOptions = {
       title: "Select containerlab topology file",
       filters: {
         yaml: ["yaml", "yml"]
       },
-      // A lab server deploys topologies from its own workspace.
-      ...(active.kind === "api" ? { defaultUri: remoteUri(active, "") } : {})
+      // A lab host deploys topologies from its own workspace.
+      ...(remote ? { defaultUri: remoteUri(connection, "") } : {})
     };
 
     const uri = await vscode.window.showOpenDialog(opts);
@@ -54,13 +64,16 @@ export async function deploySpecificFile() {
   } else {
     // Dynamic import to avoid circular dependency
     const { deployPopularLab } = await import("./deployPopular");
-    await deployPopularLab();
+    await deployPopularLab({ connectionId: connection.id });
     return;
   }
 
-  const tempNode = new ClabLabTreeNode("", vscode.TreeItemCollapsibleState.None, {
-    absolute: labRef,
-    relative: ""
-  });
+  const tempNode = onConnection(
+    new ClabLabTreeNode("", vscode.TreeItemCollapsibleState.None, {
+      absolute: labRef,
+      relative: ""
+    }),
+    connection.id
+  );
   void deploy(tempNode);
 }

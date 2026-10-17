@@ -50,7 +50,7 @@ export class RemoteLabFileSystem implements vscode.FileSystemProvider {
   private async backend(uri: vscode.Uri): Promise<LabBackend> {
     const connection = this.connections.get(uri.authority);
     if (!connection) {
-      throw vscode.FileSystemError.Unavailable(`No lab server connection ${uri.authority}`);
+      throw vscode.FileSystemError.Unavailable(`No lab host ${uri.authority} is configured`);
     }
     const backend = await this.connections.ensureBackend(connection);
     if (!backend) {

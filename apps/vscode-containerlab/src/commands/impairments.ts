@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import { ClabInterfaceTreeNode } from "../treeView/common";
-import { getLabBackend } from "../backend/labBackends";
+import { backendOf } from "../backend/labBackends";
 
 // Common validation messages and patterns
 const ERR_EMPTY = "Input should not be empty";
@@ -47,7 +47,7 @@ export async function setImpairment(
   const msg = `set link impairment to ${JSON.stringify(impairment)} for ${node.name} on ${node.parentName}.`;
   vscode.window.showInformationMessage(`Attempting to ${msg}`);
   try {
-    await getLabBackend().netemSet(request);
+    await backendOf(node).netemSet(request);
     vscode.window.showInformationMessage(`Successfully ${msg}`);
   } catch (err: unknown) {
     const detail = err instanceof Error ? err.message : String(err);

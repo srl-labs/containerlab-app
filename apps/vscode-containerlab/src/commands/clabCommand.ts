@@ -3,7 +3,7 @@ import type { LabLifecycleAction } from "@srl-labs/containerlab-lab-backend";
 import type { LabLifecycleOptions } from "@containerlab/clab-ui/host";
 
 import { ClabLabTreeNode } from "../treeView/common";
-import { isLabSourceUrl, labPathOf, resolveLab } from "../backend/labBackends";
+import { connectionOf, isLabSourceUrl, labPathOf, resolveLab } from "../backend/labBackends";
 
 import * as cmd from "./command";
 
@@ -68,10 +68,10 @@ export class ClabCommand {
     const labName = this.node?.name;
     await cmd.runWithProgress(
       async ({ output, signal }) => {
-        const { backend, target } = await resolveLab(labPath, labName);
+        const { backend, target } = await resolveLab(labPath, labName, this.node?.connectionId);
         if (action === "deploy" && backend.kind === "api" && isLabSourceUrl(labPath)) {
-          // The server clones or downloads the topology into the workspace and deploys it.
-          output(`Deploying ${labPath} on the lab server...`, "stdout");
+          // The host clones or downloads the topology into its workspace and deploys it.
+          output(`Deploying ${labPath} on ${connectionOf(this.node).label}...`, "stdout");
           const labs = await backend.deployFromUrl({ url: labPath });
           for (const deployed of Object.keys(labs)) output(`Deployed lab ${deployed}`, "stdout");
           return;

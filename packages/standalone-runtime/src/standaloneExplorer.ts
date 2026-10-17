@@ -594,6 +594,7 @@ function buildEndpointRootItem(
     tooltip: healthTooltip ? `${baseTooltip}\n\n${healthTooltip}` : baseTooltip,
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
+    endpointKind: endpoint.kind === "local" ? "local" : "api",
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,

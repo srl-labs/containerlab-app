@@ -68,7 +68,6 @@ describe("LocalLabTreeDataProvider", () => {
     globals.setExtensionContext({ globalState: { update: sinon.stub().resolves() } } as any);
     // Stub outputChannel with log methods
     globals.setOutputChannel({ debug: noop, info: noop, warn: noop, error: noop } as any);
-    (ins as any).rawInspectData = [];
   });
 
   afterEach(() => {
@@ -84,14 +83,16 @@ describe("LocalLabTreeDataProvider", () => {
   });
 
   it("hides dot-prefixed lab files while keeping visible labs in dot-prefixed folders", async () => {
-    sinon.stub(vscodeStub.workspace, "findFiles").resolves([
-      vscodeStub.Uri.file("/workspace/.state.clab.yaml"),
-      vscodeStub.Uri.file("/workspace/.hidden.clab.yml"),
-      vscodeStub.Uri.file("/workspace/nested/.state.clab.yaml"),
-      vscodeStub.Uri.file("/workspace/visible.clab.yaml"),
-      vscodeStub.Uri.file("/workspace/visible.clab.yml"),
-      vscodeStub.Uri.file("/workspace/.clab/visible.clab.yml")
-    ]);
+    sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([
+        vscodeStub.Uri.file("/workspace/.state.clab.yaml"),
+        vscodeStub.Uri.file("/workspace/.hidden.clab.yml"),
+        vscodeStub.Uri.file("/workspace/nested/.state.clab.yaml"),
+        vscodeStub.Uri.file("/workspace/visible.clab.yaml"),
+        vscodeStub.Uri.file("/workspace/visible.clab.yml"),
+        vscodeStub.Uri.file("/workspace/.clab/visible.clab.yml")
+      ]);
 
     const provider = new LocalLabTreeDataProvider();
     const nodes = await provider.getChildren(undefined);
@@ -138,7 +139,7 @@ describe("LocalLabTreeDataProvider", () => {
     sinon
       .stub(vscodeStub.workspace, "findFiles")
       .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
-    (ins as any).rawInspectData = [{ Labels: { "clab-topo-file": LAB_B } }];
+    sinon.stub(ins, "labsOf").returns({ b: [{ Labels: { "clab-topo-file": LAB_B } }] } as any);
 
     const provider = new LocalLabTreeDataProvider();
     const nodes = await provider.getChildren(undefined);

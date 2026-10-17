@@ -21,12 +21,16 @@ interface Connections {
   addConnection(label: string, url: string): Promise<Connection>;
   removeConnection(connection: Connection): Promise<void>;
   signIn(connection: Connection, username: string, password: string): Promise<unknown>;
-  setActive(id: string): Promise<void>;
-  activeBackend(): { inspectLab(labName: string): Promise<unknown[]> } | undefined;
+  apiBackend(
+    connection: Connection
+  ): { inspectLab(labName: string): Promise<unknown[]> } | undefined;
 }
 
 interface TreeNode {
   name?: string;
+  connectionId?: string;
+  endpointId?: string;
+  state?: string;
   labPath: { absolute: string };
   containers?: TreeNode[];
   interfaces?: TreeNode[];
@@ -37,6 +41,7 @@ interface ExtensionApi {
   getLocalLabsProvider(): { getChildren(element?: unknown): Promise<TreeNode[] | undefined> };
   getRunningLabsProvider(): {
     refresh(): Promise<void>;
+    getChildren(element?: unknown): Promise<TreeNode[] | undefined>;
     discoverInspectLabs(): Promise<Record<string, TreeNode> | undefined>;
   };
 }
@@ -91,9 +96,8 @@ function wiresharkTabs(): vscode.Tab[] {
     assert.ok(extension);
     api = await extension.activate();
     const connections = api.getConnections();
-    connection = await connections.addConnection("E2E lab server", apiUrl);
+    connection = await connections.addConnection("E2E lab host", apiUrl);
     await connections.signIn(connection, apiUser, apiPassword);
-    await connections.setActive(connection.id);
     folder = vscode.Uri.from({ scheme: "clab-api", authority: connection.id, path: `/${labName}` });
     topology = vscode.Uri.joinPath(folder, `${labName}.clab.yml`);
   });
@@ -142,12 +146,25 @@ function wiresharkTabs(): vscode.Tab[] {
     const saved = new TextDecoder().decode(await vscode.workspace.fs.readFile(topology));
     assert.match(saved, /n2: \{ kind: linux/);
 
-    // The explorer lists it with the server's undeployed labs.
+    // The explorer lists it under the lab host, next to the labs on this machine.
     const listed = await eventually("the topology in the labs list", async () => {
-      const labs = (await api.getLocalLabsProvider().getChildren()) ?? [];
-      return labs.find((lab) => lab.labPath.absolute === topology.toString());
+      const roots = (await api.getLocalLabsProvider().getChildren()) ?? [];
+      const host = roots.find((root) => root.endpointId === connection.id);
+      const labs = (await api.getLocalLabsProvider().getChildren(host)) ?? [];
+      return labs.find((lab) => lab.labPath?.absolute === topology.toString());
     });
     assert.equal(listed.name, labName);
+  });
+
+  test("shows the lab host next to Local, signed in", async () => {
+    const roots = (await api.getRunningLabsProvider().getChildren()) ?? [];
+    assert.deepEqual(
+      roots.map((root) => [root.endpointId, root.state]),
+      [
+        ["local", "connected"],
+        [connection.id, "connected"]
+      ]
+    );
   });
 
   test("opens the topology in the TopoViewer", async () => {
@@ -162,7 +179,7 @@ function wiresharkTabs(): vscode.Tab[] {
   test("deploys the lab on the server", async () => {
     await vscode.commands.executeCommand("containerlab.lab.deploy", topology);
     assert.deepEqual(labContainers(), [`clab-${labName}-n1`, `clab-${labName}-n2`]);
-    const nodes = await api.getConnections().activeBackend()?.inspectLab(labName);
+    const nodes = await api.getConnections().apiBackend(connection)?.inspectLab(labName);
     assert.equal(nodes?.length, 2);
   });
 
@@ -170,8 +187,11 @@ function wiresharkTabs(): vscode.Tab[] {
     const running = api.getRunningLabsProvider();
     const container = await eventually("the running lab in the tree", async () => {
       await running.refresh();
+      // The host runs on this machine too, so Local lists the lab as well: take the host's.
       const labs = Object.values((await running.discoverInspectLabs()) ?? {});
-      const lab = labs.find((entry) => entry.name === labName);
+      const lab = labs.find(
+        (entry) => entry.name === labName && entry.connectionId === connection.id
+      );
       return lab?.containers?.find((node) => node.name === `clab-${labName}-n1`);
     });
     await vscode.commands.executeCommand("containerlab.node.attachShell", container);
@@ -194,7 +214,7 @@ function wiresharkTabs(): vscode.Tab[] {
       await running.refresh();
       const labs = Object.values((await running.discoverInspectLabs()) ?? {});
       const node = labs
-        .find((entry) => entry.name === labName)
+        .find((entry) => entry.name === labName && entry.connectionId === connection.id)
         ?.containers?.find((entry) => entry.name === `clab-${labName}-n1`);
       return node?.interfaces?.find((entry) => entry.name === "eth1");
     });

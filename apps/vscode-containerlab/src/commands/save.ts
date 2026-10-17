@@ -9,12 +9,13 @@ import { runWithProgress } from "./command";
 async function saveConfiguration(
   labPath: string,
   labName: string,
+  connectionId: string | undefined,
   nodeFilter?: string
 ): Promise<void> {
   const target = nodeFilter ? `node ${nodeFilter}` : `lab ${labName}`;
   await runWithProgress(
     async ({ output }) => {
-      const lab = await resolveLab(labPath, labName);
+      const lab = await resolveLab(labPath, labName, connectionId);
       const result = await lab.backend.save(lab.target, nodeFilter ? { nodeFilter } : {});
       for (const line of result.output.split("\n")) output(line, "stdout");
     },
@@ -37,7 +38,7 @@ export async function saveLab(node: ClabLabTreeNode) {
     vscode.window.showErrorMessage("No labPath found for the lab.");
     return;
   }
-  void saveConfiguration(labPath, node.name ?? labNameForPath(labPath));
+  void saveConfiguration(labPath, node.name ?? labNameForPath(labPath), node.connectionId);
 }
 
 /**
@@ -51,5 +52,10 @@ export async function saveNode(node: ClabContainerTreeNode) {
   }
   // The short node name supports custom container name prefixes.
   const labPath = node.labPath.absolute;
-  void saveConfiguration(labPath, node.labName ?? labNameForPath(labPath), node.name_short);
+  void saveConfiguration(
+    labPath,
+    node.labName ?? labNameForPath(labPath),
+    node.connectionId,
+    node.name_short
+  );
 }

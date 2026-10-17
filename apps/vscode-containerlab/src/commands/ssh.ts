@@ -121,8 +121,8 @@ export function sshToNode(node: ClabContainerTreeNode | undefined): void {
   const defaultMapping = sshUserMapping as Partial<Record<string, string>>;
 
   // The topology's credentials come first, then the user setting, the default mapping and "admin"
-  if (isRemoteNode()) {
-    // The lab server starts SSH on the lab host, where the node is reachable.
+  if (isRemoteNode(node)) {
+    // clab-api-server starts SSH on the lab host, where the node is reachable.
     void openRemoteTerminal(node, "ssh", `SSH - ${node.name}`, {
       sshUsername: userSshMapping[node.kind] ?? defaultMapping[node.kind] ?? "admin"
     });

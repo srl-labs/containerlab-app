@@ -12,7 +12,12 @@ import YAML from "yaml";
 
 import { containerlabBinaryPath } from "../globals";
 
-import { ConnectionManager, REMOTE_SCHEME, type LabConnection } from "./connections";
+import {
+  ConnectionManager,
+  LOCAL_CONNECTION,
+  REMOTE_SCHEME,
+  type LabConnection
+} from "./connections";
 
 function nonEmpty(value: string | undefined): string | undefined {
   return value === undefined || value === "" ? undefined : value;
@@ -73,29 +78,112 @@ export function getConnections(): ConnectionManager | undefined {
   return connections;
 }
 
-/** The connection whose labs the views show. */
-export function activeConnection(): LabConnection {
-  return connections?.active ?? { id: "local", label: "Local", kind: "local" };
+/** A connection by id; Local for no id. */
+export function connectionById(id: string | undefined): LabConnection | undefined {
+  if (id === undefined || id === LOCAL_CONNECTION.id) return LOCAL_CONNECTION;
+  return connections?.get(id);
 }
 
-export function isRemoteActive(): boolean {
-  return activeConnection().kind === "api";
+function connectionOfAuthority(authority: string): LabConnection {
+  return connections?.get(authority) ?? { id: authority, label: authority, kind: "api" };
 }
 
 /**
- * The backend that runs the labs the extension shows: the local CLI, or the
- * signed-in clab-api-server of the active connection.
+ * The connection a tree node, topology path or file URI belongs to: nodes
+ * carry it, files on a lab host have it in their URI, everything else is
+ * on this machine.
  */
-export function getLabBackend(): LabBackend {
-  const active = activeConnection();
-  if (active.kind === "local") {
+export function connectionOf(target: unknown): LabConnection {
+  if (typeof target === "string") {
+    if (isUriString(target)) {
+      const uri = vscode.Uri.parse(target);
+      if (uri.scheme === REMOTE_SCHEME) {
+        return connectionOfAuthority(uri.authority);
+      }
+    }
+    return LOCAL_CONNECTION;
+  }
+  if (typeof target === "object" && target !== null) {
+    const scheme: unknown = Reflect.get(target, "scheme");
+    if (typeof scheme === "string") {
+      // A vscode.Uri: files on a lab host carry it as the authority.
+      return scheme === REMOTE_SCHEME
+        ? connectionOfAuthority(String(Reflect.get(target, "authority")))
+        : LOCAL_CONNECTION;
+    }
+    const connectionId: unknown = Reflect.get(target, "connectionId");
+    if (typeof connectionId === "string" && connectionId !== "") {
+      return connectionById(connectionId) ?? { id: connectionId, label: connectionId, kind: "api" };
+    }
+    const labPath: unknown = Reflect.get(target, "labPath");
+    const absolute: unknown =
+      typeof labPath === "object" && labPath !== null
+        ? Reflect.get(labPath, "absolute")
+        : undefined;
+    if (typeof absolute === "string") return connectionOf(absolute);
+  }
+  return LOCAL_CONNECTION;
+}
+
+/** Whether a node, path or URI is on a lab host rather than this machine. */
+export function isRemote(target: unknown): boolean {
+  return connectionOf(target).kind === "api";
+}
+
+/**
+ * The backend that runs a connection's labs: the local CLI, or the
+ * signed-in clab-api-server of a lab host.
+ */
+export function backendFor(connection: LabConnection): LabBackend {
+  if (connection.kind === "local") {
     return getLocalBackend();
   }
-  const backend = connections?.activeBackend();
+  const backend = connections?.apiBackend(connection);
   if (!backend) {
-    throw new Error(`Sign in to ${active.label} first (Containerlab: Sign In to Lab Server).`);
+    throw new Error(`Sign in to ${connection.label} first.`);
   }
   return backend;
+}
+
+/** The backend of a connection; asks for the password of a signed-out lab host. */
+async function ensureBackendFor(connection: LabConnection): Promise<LabBackend> {
+  if (connection.kind === "local") return getLocalBackend();
+  const backend = await connections?.ensureBackend(connection);
+  if (!backend) throw new Error(`Sign in to ${connection.label} first.`);
+  return backend;
+}
+
+/** The backend of the connection a node, path or URI belongs to. */
+export function backendOf(target: unknown): LabBackend {
+  return backendFor(connectionOf(target));
+}
+
+/**
+ * Where a command without a node or file runs. With one connection that is
+ * the one; otherwise the user picks, signed-out lab hosts included (they
+ * are asked to sign in).
+ */
+export async function pickConnection(title: string): Promise<LabConnection | undefined> {
+  const all = connections?.list() ?? [LOCAL_CONNECTION];
+  if (all.length <= 1) return all[0] ?? LOCAL_CONNECTION;
+  const picked = await vscode.window.showQuickPick(
+    all.map((connection) => ({
+      label: `$(${connection.kind === "local" ? "vm" : "cloud"}) ${connection.label}`,
+      description: connection.kind === "local" ? "this machine" : connection.url,
+      detail:
+        connection.kind === "api" && connections?.status(connection) !== "connected"
+          ? "Signed out: you are asked to sign in"
+          : undefined,
+      connection
+    })),
+    { title, placeHolder: "Where?" }
+  );
+  if (!picked) return undefined;
+  if (picked.connection.kind === "api") {
+    const backend = await connections?.ensureBackend(picked.connection);
+    if (!backend) return undefined;
+  }
+  return picked.connection;
 }
 
 /** A topology to fetch from Git or the web, e.g. `https://github.com/srl-labs/srlinux-getting-started`. */
@@ -175,7 +263,7 @@ async function resolveRemoteFile(labPath: string, labName?: string): Promise<Res
   }
   const connection = connections?.get(uri.authority);
   if (!connections || !connection) {
-    throw new Error("The lab server of this file is no longer configured.");
+    throw new Error("The lab host of this file is no longer configured.");
   }
   const backend = await connections.ensureBackend(connection);
   if (!backend) {
@@ -194,23 +282,30 @@ async function resolveRemoteFile(labPath: string, labName?: string): Promise<Res
 
 /**
  * Where a lab command goes. Local labs are addressed by their topology file
- * (containerlab finds the lab name in it); labs on a server by name, with the
- * workspace path of their topology when there is one.
+ * (containerlab finds the lab name in it); labs on a lab host by name, with
+ * the workspace path of their topology when there is one. A source URL runs
+ * where `connectionId` says, Local by default.
  */
-export async function resolveLab(labPath: string, labName?: string): Promise<ResolvedLab> {
+export async function resolveLab(
+  labPath: string,
+  labName?: string,
+  connectionId?: string
+): Promise<ResolvedLab> {
+  const connection = connectionById(connectionId) ?? LOCAL_CONNECTION;
   if (isLabSourceUrl(labPath)) {
     // containerlab and clab-api-server fetch the topology themselves.
-    const backend = isRemoteActive() ? getLabBackend() : getLocalBackend();
-    return { backend, target: { labName: labName ?? "", path: labPath } };
+    return {
+      backend: await ensureBackendFor(connection),
+      target: { labName: labName ?? "", path: labPath }
+    };
   }
   if (isUriString(labPath)) {
     return resolveRemoteFile(labPath, labName);
   }
-  const active = activeConnection();
-  if (active.kind === "api") {
-    // A running lab on the server whose topology is outside the workspace.
+  if (connection.kind === "api") {
+    // A running lab on the host whose topology is outside its workspace.
     return {
-      backend: getLabBackend(),
+      backend: await ensureBackendFor(connection),
       target: { labName: nonEmpty(labName) ?? labNameForPath(labPath) }
     };
   }
@@ -219,18 +314,17 @@ export async function resolveLab(labPath: string, labName?: string): Promise<Res
 }
 
 /**
- * The path the views use for a lab topology on the server: its workspace URI
- * when the server lists it, the server's own path otherwise.
+ * The path the views use for a lab topology on a lab host: its workspace URI
+ * when the host lists it, the host's own path otherwise.
  */
-export function viewLabPath(serverPath: string): string {
-  const active = activeConnection();
-  if (active.kind !== "api" || !serverPath || isUriString(serverPath)) {
+export function viewLabPath(connection: LabConnection, serverPath: string): string {
+  if (connection.kind !== "api" || !serverPath || isUriString(serverPath)) {
     return serverPath;
   }
   const entry = connections
-    ?.cachedTopologies(active)
+    ?.cachedTopologies(connection)
     .find((topology) => topology.absolutePath === serverPath);
-  return entry ? remoteUri(active, entry.yamlFileName).toString() : serverPath;
+  return entry ? remoteUri(connection, entry.yamlFileName).toString() : serverPath;
 }
 
 export async function disposeLabBackends(): Promise<void> {

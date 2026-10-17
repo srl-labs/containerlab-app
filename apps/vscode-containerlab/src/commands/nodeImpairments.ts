@@ -4,7 +4,7 @@ import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
-import { getLabBackend } from "../backend/labBackends";
+import { backendOf } from "../backend/labBackends";
 import { NODE_IMPAIRMENTS_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 
 /**
@@ -119,7 +119,7 @@ async function refreshNetemSettings(
   let netemMap: Record<string, NetemFields> = {};
 
   try {
-    const rawData = toNetemRawData(await getLabBackend().netemShow(node.name));
+    const rawData = toNetemRawData(await backendOf(node).netemShow(node.name));
     const interfacesData = rawData[node.name] ?? [];
     for (const item of interfacesData) {
       const parsed = parseNetemItem(item);
@@ -166,7 +166,7 @@ async function applyNetem(
   panel: vscode.WebviewPanel,
   netemData: Record<string, NetemFields>
 ) {
-  const backend = getLabBackend();
+  const backend = backendOf(node);
   const ops: Promise<unknown>[] = [];
   for (const [intfName, fields] of Object.entries(netemData)) {
     const request = buildNetemRequest(node.name, intfName, fields);
@@ -192,7 +192,7 @@ async function applyNetem(
 }
 
 async function clearNetem(node: ClabContainerTreeNode, panel: vscode.WebviewPanel) {
-  const backend = getLabBackend();
+  const backend = backendOf(node);
   const ops: Promise<unknown>[] = [];
   for (const ifNode of node.interfaces) {
     const norm = normalizeInterfaceName(ifNode.name);

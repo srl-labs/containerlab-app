@@ -1,16 +1,19 @@
 import * as vscode from "vscode";
 
 import { dockerClient, outputChannel } from "../../globals";
-import { getLabBackend, isRemoteActive } from "../../backend/labBackends";
+import { backendFor, getConnections } from "../../backend/labBackends";
+import { LOCAL_CONNECTION, type LabConnection } from "../../backend/connections";
 
-let dockerImagesCache: string[] = [];
+/** Image references by connection: the images on this machine and on each lab host. */
+const dockerImagesCache = new Map<string, string[]>();
 
-const dockerImagesEmitter = new vscode.EventEmitter<string[]>();
+const dockerImagesEmitter = new vscode.EventEmitter<{ connectionId: string; images: string[] }>();
 
 export const onDockerImagesUpdated = dockerImagesEmitter.event;
 
-export function getDockerImages(): string[] {
-  return [...dockerImagesCache];
+/** The images a connection's runtime has, for completions; this machine's by default. */
+export function getDockerImages(connectionId: string = LOCAL_CONNECTION.id): string[] {
+  return [...(dockerImagesCache.get(connectionId) ?? [])];
 }
 
 export interface DockerImageSummary {
@@ -38,9 +41,9 @@ function toNumber(value: number | string | undefined): number | undefined {
   return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/** Images on the lab server of the active connection. */
-async function listRemoteImageSummaries(): Promise<DockerImageSummary[]> {
-  const { images } = await getLabBackend().listImages();
+/** Images on a lab host. */
+async function listRemoteImageSummaries(connection: LabConnection): Promise<DockerImageSummary[]> {
+  const { images } = await backendFor(connection).listImages();
   return images
     .map((image) => ({
       id: image.id,
@@ -54,9 +57,11 @@ async function listRemoteImageSummaries(): Promise<DockerImageSummary[]> {
     .sort((a, b) => (b.created ?? 0) - (a.created ?? 0));
 }
 
-export async function listDockerImageSummaries(): Promise<DockerImageSummary[]> {
-  if (isRemoteActive()) {
-    return listRemoteImageSummaries();
+export async function listDockerImageSummaries(
+  connection: LabConnection = LOCAL_CONNECTION
+): Promise<DockerImageSummary[]> {
+  if (connection.kind === "api") {
+    return listRemoteImageSummaries(connection);
   }
   const images = await dockerClient.listImages({ all: true });
   return images
@@ -79,8 +84,8 @@ export async function listDockerImageSummaries(): Promise<DockerImageSummary[]> 
 }
 
 // Internal func to fetch all docker images
-async function fetchDockerImages(): Promise<string[]> {
-  const images = await listDockerImageSummaries();
+async function fetchDockerImages(connection: LabConnection): Promise<string[]> {
+  const images = await listDockerImageSummaries(connection);
   type TagEntry = { tag: string; created: number };
   const entries: TagEntry[] = [];
   const seen = new Set<string>();
@@ -98,37 +103,53 @@ async function fetchDockerImages(): Promise<string[]> {
   return entries.map((entry) => entry.tag);
 }
 
-function updateDockerImagesCache(images: string[]) {
+function updateDockerImagesCache(connectionId: string, images: string[]) {
+  const current = dockerImagesCache.get(connectionId) ?? [];
   const changed =
-    images.length !== dockerImagesCache.length ||
-    images.some((img, idx) => dockerImagesCache[idx] !== img);
+    images.length !== current.length || images.some((img, idx) => current[idx] !== img);
   if (!changed) {
     return;
   }
-  dockerImagesCache = images;
+  dockerImagesCache.set(connectionId, images);
   // fire an event to whom is listenting that the cache updated.
-  dockerImagesEmitter.fire([...dockerImagesCache]);
+  dockerImagesEmitter.fire({ connectionId, images: [...images] });
 }
 
-export async function refreshDockerImages() {
+/**
+ * Refreshes the image list of a connection, or of every connection that is
+ * shown and signed in.
+ */
+export async function refreshDockerImages(connection?: LabConnection) {
   outputChannel.debug("Refreshing docker image cache.");
-  try {
-    const images = await fetchDockerImages();
-    updateDockerImagesCache(images);
-    outputChannel.debug("SUCCESS! Refreshed docker image cache.");
-  } catch {
-    // Leave existing cache untouched.
-  }
+  const manager = getConnections();
+  const connections = connection
+    ? [connection]
+    : (manager?.list() ?? [LOCAL_CONNECTION]).filter(
+        (entry) => entry.kind === "local" || manager?.status(entry) === "connected"
+      );
+  await Promise.all(
+    connections.map(async (entry) => {
+      try {
+        updateDockerImagesCache(entry.id, await fetchDockerImages(entry));
+      } catch {
+        // Leave existing cache untouched.
+      }
+    })
+  );
 }
 
-export async function removeDockerImage(reference: string, force = false): Promise<void> {
-  if (isRemoteActive()) {
-    const result = await getLabBackend().removeImage(reference, force);
+export async function removeDockerImage(
+  reference: string,
+  force = false,
+  connection: LabConnection = LOCAL_CONNECTION
+): Promise<void> {
+  if (connection.kind === "api") {
+    const result = await backendFor(connection).removeImage(reference, force);
     if (!result.success) throw new Error(result.message ?? `Removing ${reference} failed`);
   } else {
     await dockerClient.getImage(reference).remove({ force });
   }
-  await refreshDockerImages();
+  await refreshDockerImages(connection);
 }
 
 // Create disposable handle to let the image monitor get cleaned up by VSC.

@@ -11,7 +11,7 @@ import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/c
 
 import {
   getLocalBackend,
-  isRemoteActive,
+  isRemote,
   isUriString,
   labNameForPath,
   labPathOf,
@@ -45,13 +45,13 @@ async function runGraphDrawIO(
   let drawioUri = labUri(labPath);
   await runWithProgress(
     async ({ output }) => {
-      const lab = await resolveLab(labPath, labName);
+      const lab = await resolveLab(labPath, labName, node.connectionId);
       const result = await lab.backend.graphDrawio(lab.target, { layout, theme: drawioTheme });
       for (const line of (result.output ?? "").split("\n")) output(line, "stdout");
       const topologyUri = labUri(labPath);
       drawioUri = vscode.Uri.joinPath(topologyUri, "..", result.fileName);
       if (topologyUri.scheme !== "file" || !fs.existsSync(drawioUri.fsPath)) {
-        // A lab server returns the file instead of writing it next to the topology.
+        // A lab host returns the file instead of writing it next to the topology.
         await vscode.workspace.fs.writeFile(drawioUri, Buffer.from(result.content, "utf8"));
       }
     },
@@ -84,9 +84,9 @@ export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
   if (!node) {
     return;
   }
-  if (isRemoteActive() || isUriString(node.labPath.absolute)) {
+  if (isRemote(node)) {
     vscode.window.showInformationMessage(
-      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab server."
+      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab host."
     );
     return;
   }

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import { getLabBackend, isRemoteActive, isUriString, labUri } from "../backend/labBackends";
+import { backendOf, isRemote, isUriString, labUri } from "../backend/labBackends";
 
 export function openLabFile(node?: ClabLabTreeNode) {
   if (node === undefined) {
@@ -15,17 +15,17 @@ export function openLabFile(node?: ClabLabTreeNode) {
     return;
   }
 
-  if (isRemoteActive() && !isUriString(labPath) && node.name !== undefined) {
-    // A running lab whose topology is outside the server workspace: show what it runs.
-    void openRunningTopology(node.name);
+  if (isRemote(node) && !isUriString(labPath) && node.name !== undefined) {
+    // A running lab whose topology is outside the host's workspace: show what it runs.
+    void openRunningTopology(node, node.name);
     return;
   }
   vscode.commands.executeCommand("vscode.open", labUri(labPath));
 }
 
-async function openRunningTopology(labName: string): Promise<void> {
+async function openRunningTopology(node: ClabLabTreeNode, labName: string): Promise<void> {
   try {
-    const content = await getLabBackend().runningTopologyYaml(labName);
+    const content = await backendOf(node).runningTopologyYaml(labName);
     const document = await vscode.workspace.openTextDocument({ content, language: "yaml" });
     await vscode.window.showTextDocument(document, { preview: false });
   } catch (err) {

@@ -7,11 +7,11 @@ export function endpointStatusLabel(status: EndpointStatus): string {
     case "connected":
       return "Connected";
     case "session_expired":
-      return "Signed Out";
+      return "Sign-In Expired";
     case "offline":
       return "Unreachable";
     case "saved":
-      return "Saved";
+      return "Signed Out";
     default:
       return "Unknown";
   }
@@ -41,7 +41,7 @@ export function endpointStatusHint(status: EndpointStatus): string {
     case "offline":
       return "The lab host does not answer. Check that clab-api-server runs there and the URL is right.";
     case "saved":
-      return "Saved. Sign in to see its labs.";
+      return "Signed out. Sign in to see its labs.";
     default:
       return "";
   }

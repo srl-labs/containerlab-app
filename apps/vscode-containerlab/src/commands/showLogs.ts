@@ -18,7 +18,7 @@ export function showLogs(node?: ClabContainerTreeNode) {
   }
 
   const container = node.name || containerId;
-  if (isRemoteNode()) {
+  if (isRemoteNode(node)) {
     void showRemoteLogs(node);
     return;
   }

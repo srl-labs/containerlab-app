@@ -5,7 +5,7 @@ import type {
   ExplorerSnapshotMessage
 } from "../../src/explorer/shared/explorer/types";
 
-export type ExplorerFixtureMode = "vscode" | "standalone" | "sandbox" | "files";
+export type ExplorerFixtureMode = "vscode" | "vscodeHosts" | "standalone" | "sandbox" | "files";
 
 let sequence = 0;
 
@@ -212,6 +212,56 @@ export function buildExplorerFixture(mode: ExplorerFixtureMode): ExplorerSnapsho
       sections: [
         section("runningLabs", "Running Labs", [runningLab(), stoppedLab()], { toolbarActions: toolbar }),
         section("localLabs", "Undeployed Local Labs", undeployedLabs(), { toolbarActions: toolbar }),
+        section("helpFeedback", "Help & Feedback", help())
+      ]
+    };
+  }
+  if (mode === "vscodeHosts") {
+    // VS Code with a lab host next to Local: each section lists both, expanded.
+    const host = (
+      id: string,
+      label: string,
+      url: string,
+      kind: "local" | "api",
+      section: string,
+      children: ExplorerNode[]
+    ) => ({
+      ...endpointRoot(`${section}:${id}`, label, url, "connected", "green", children),
+      endpointKind: kind,
+      defaultExpanded: true
+    });
+    const hostLabs = ["fabric.clab.yml", "wan-ring.clab.yml"].map((name) =>
+      node({
+        id: `lab1:${name}`,
+        label: name,
+        description: name.replace(/\.clab\.yml$/, ""),
+        contextValue: "containerlabLabUndeployed",
+        actions: LAB_ACTIONS,
+        primaryAction: LAB_ACTIONS[0]
+      })
+    );
+    return {
+      command: "snapshot",
+      filterText: "",
+      sections: [
+        section(
+          "runningLabs",
+          "Running Labs",
+          [
+            host("local", "Local", "this machine", "local", "running", [runningLab()]),
+            host("lab1", "lab1", "lab1.example.com:8090", "api", "running", [stoppedLab()])
+          ],
+          { toolbarActions: toolbar }
+        ),
+        section(
+          "localLabs",
+          "Undeployed Labs",
+          [
+            host("local", "Local", "this machine", "local", "undeployed", undeployedLabs()),
+            host("lab1", "lab1", "lab1.example.com:8090", "api", "undeployed", hostLabs)
+          ],
+          { toolbarActions: toolbar }
+        ),
         section("helpFeedback", "Help & Feedback", help())
       ]
     };

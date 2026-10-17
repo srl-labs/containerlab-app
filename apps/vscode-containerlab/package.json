@@ -487,34 +487,40 @@
         "icon": "$(settings-gear)"
       },
       {
-        "command": "containerlab.connection.switch",
-        "title": "Switch Lab Server",
-        "category": "Containerlab",
-        "icon": "$(cloud)"
-      },
-      {
         "command": "containerlab.connection.add",
-        "title": "Add Lab Server\u2026",
-        "category": "Containerlab"
+        "title": "Add Lab Host\u2026",
+        "category": "Containerlab",
+        "icon": "$(add)"
       },
       {
         "command": "containerlab.connection.signIn",
-        "title": "Sign In to Lab Server",
+        "title": "Sign In to Lab Host\u2026",
         "category": "Containerlab"
       },
       {
         "command": "containerlab.connection.signOut",
-        "title": "Sign Out of Lab Server",
+        "title": "Sign Out of Lab Host\u2026",
         "category": "Containerlab"
       },
       {
         "command": "containerlab.connection.remove",
-        "title": "Remove Lab Server\u2026",
+        "title": "Remove Lab Host\u2026",
         "category": "Containerlab"
       },
       {
         "command": "containerlab.connection.openWorkspace",
-        "title": "Open Lab Server Workspace",
+        "title": "Open Lab Host Files in Explorer",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.manage",
+        "title": "Manage Lab Hosts",
+        "category": "Containerlab",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "containerlab.connection.checkLocal",
+        "title": "Check Labs on This Machine",
         "category": "Containerlab"
       }
     ],
@@ -771,11 +777,11 @@
         },
         {
           "command": "containerlab.connection.signOut",
-          "when": "containerlab:remoteConnection"
+          "when": "containerlab:hasLabHosts"
         },
         {
           "command": "containerlab.connection.openWorkspace",
-          "when": "containerlab:remoteConnection"
+          "when": "containerlab:hasLabHosts"
         }
       ],
       "containerlab.submenu.lab.graph.drawio": [
@@ -794,7 +800,7 @@
       ],
       "view/title": [
         {
-          "command": "containerlab.connection.switch",
+          "command": "containerlab.connection.manage",
           "when": "view == containerlabExplorerWebview",
           "group": "navigation@90"
         },
@@ -917,12 +923,12 @@
         }
       },
       {
-        "title": "Lab Servers",
+        "title": "Lab Hosts",
         "properties": {
           "containerlab.connections": {
             "type": "array",
             "default": [],
-            "markdownDescription": "clab-api-servers to run labs on, each with a `url` (for example `https://lab-host:8080`), a `label` and optionally a `username`. Passwords are not stored here: sign in with **Containerlab: Sign In to Lab Server**, and the token is kept in VS Code's secret storage.",
+            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
             "items": {
               "type": "object",
               "required": [
@@ -931,15 +937,19 @@
               "properties": {
                 "label": {
                   "type": "string",
-                  "description": "Name shown in the lab server switcher."
+                  "description": "Name shown in the Containerlab views."
                 },
                 "url": {
                   "type": "string",
-                  "description": "URL of the clab-api-server."
+                  "description": "URL of clab-api-server on the lab host."
                 },
                 "username": {
                   "type": "string",
-                  "description": "User name to sign in with."
+                  "description": "Linux user to sign in with."
+                },
+                "sessionDuration": {
+                  "type": "string",
+                  "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
                 }
               },
               "additionalProperties": false
@@ -948,7 +958,7 @@
           "containerlab.localConnection": {
             "type": "boolean",
             "default": true,
-            "description": "Offer \"Local\", containerlab on this machine, next to the lab servers. Turn it off to work with lab servers only."
+            "description": "Show \"Local\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
           }
         }
       },

@@ -172,6 +172,8 @@ export interface LocalEndpointOffer {
   label?: string;
   /** Docs page that explains how to set this machine up. */
   setupUrl?: string;
+  /** The action that adds this machine; "Use This Computer" when unset. */
+  addLabel?: string;
   onAdd: () => Promise<void>;
   /** Looks for containerlab again, after the user fixed a problem. */
   onCheckAgain?: () => Promise<void>;

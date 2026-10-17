@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 
 import * as vscode from "vscode";
-import type { LabBackend, TopologyEntry } from "@srl-labs/containerlab-lab-backend";
+import type { TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 
 /** Where labs run: this machine, or a clab-api-server. */
@@ -13,19 +13,38 @@ export interface LabConnection {
   url?: string;
   /** User name to sign in with, from the settings or the last sign-in. */
   username?: string;
+  /** How long a sign-in lasts, e.g. "24h"; the host's default when unset. */
+  sessionDuration?: string;
 }
 
 interface ConnectionSetting {
   label?: unknown;
   url?: unknown;
   username?: unknown;
+  sessionDuration?: unknown;
 }
 
-const LOCAL_CONNECTION_ID = "local";
+/**
+ * How a connection is doing: signed in (or ready, for Local), signed out,
+ * its sign-in expired, or not answering.
+ */
+export type ConnectionStatus = "connected" | "saved" | "session_expired" | "offline";
+
+export const LOCAL_CONNECTION: LabConnection = { id: "local", label: "Local", kind: "local" };
+
+/** How long a sign-in lasts unless the lab host says otherwise, as in the desktop app. */
+export const DEFAULT_SESSION_DURATION = "24h";
+
+/** Whether containerlab can run labs on this machine, and what is missing if not. */
+export interface LocalStatus {
+  available: boolean;
+  problems: string[];
+  containerlabVersion?: string;
+  username?: string;
+}
 /** URI scheme of files in a clab-api-server workspace. */
 export const REMOTE_SCHEME = "clab-api";
 
-const ACTIVE_CONNECTION_KEY = "containerlab.activeConnection";
 const USERNAMES_KEY = "containerlab.connectionUsernames";
 
 function normalizeUrl(raw: string): string | undefined {
@@ -51,19 +70,24 @@ function tokenKey(url: string): string {
 }
 
 /**
- * The connections the extension can run labs through: "Local" (this machine)
- * and the clab-api-servers in the `containerlab.connections` setting. One
- * connection is active at a time; the views show its labs.
+ * The connections the extension runs labs through: "Local" (this machine)
+ * and the lab hosts (clab-api-servers) in the `containerlab.connections`
+ * setting. The views show the labs of all of them side by side.
  */
 export class ConnectionManager implements vscode.Disposable {
-  private readonly changeEmitter = new vscode.EventEmitter<LabConnection>();
-  readonly onDidChangeActive = this.changeEmitter.event;
-  private readonly signInEmitter = new vscode.EventEmitter<LabConnection>();
-  /** Fires after a sign-in, when the connection's backend has a new token. */
-  readonly onDidSignIn = this.signInEmitter.event;
+  private readonly changeEmitter = new vscode.EventEmitter<LabConnection | undefined>();
+  /**
+   * Fires when a connection signs in or out, its status changes, or the
+   * list changes (with no connection).
+   */
+  readonly onDidChange = this.changeEmitter.event;
   private readonly backends = new Map<string, ApiLabBackend>();
   private readonly topologies = new Map<string, { at: number; entries: TopologyEntry[] }>();
-  private readonly statusBar: vscode.StatusBarItem;
+  /** Why a connection does not answer: an unreachable host, or what Local is missing. */
+  private readonly problems = new Map<string, string>();
+  /** What the last check of this machine found. */
+  private localStatus: LocalStatus | undefined;
+  private readonly expired = new Set<string>();
   private readonly disposables: vscode.Disposable[] = [];
 
   private readonly localSupported: boolean;
@@ -73,24 +97,17 @@ export class ConnectionManager implements vscode.Disposable {
     options: { localSupported?: boolean } = {}
   ) {
     this.localSupported = options.localSupported ?? true;
-    this.statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
     this.disposables.push(
-      this.statusBar,
       this.changeEmitter,
-      this.signInEmitter,
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (
           event.affectsConfiguration("containerlab.connections") ||
           event.affectsConfiguration("containerlab.localConnection")
         ) {
-          this.updateStatusBar();
-          if (!this.list().some((connection) => connection.id === this.activeId())) {
-            void this.setActive(this.list()[0]?.id ?? LOCAL_CONNECTION_ID);
-          }
+          this.changeEmitter.fire(undefined);
         }
       })
     );
-    this.updateStatusBar();
   }
 
   dispose(): void {
@@ -108,11 +125,16 @@ export class ConnectionManager implements vscode.Disposable {
     return this.context.globalState.get<Record<string, string>>(USERNAMES_KEY, {});
   }
 
-  /** Local first (unless turned off), then the configured servers. */
+  /** Whether this machine can run labs at all (Linux, or WSL). */
+  get localAvailable(): boolean {
+    return this.localSupported;
+  }
+
+  /** Local first (unless turned off), then the configured lab hosts. */
   list(): LabConnection[] {
     const connections: LabConnection[] = [];
     if (this.localEnabled()) {
-      connections.push({ id: LOCAL_CONNECTION_ID, label: "Local", kind: "local" });
+      connections.push(LOCAL_CONNECTION);
     }
     const settings = vscode.workspace
       .getConfiguration("containerlab")
@@ -131,7 +153,18 @@ export class ConnectionManager implements vscode.Disposable {
         typeof setting.username === "string" && setting.username.trim()
           ? setting.username.trim()
           : usernames[url];
-      connections.push({ id, label, kind: "api", url, ...(username ? { username } : {}) });
+      const sessionDuration =
+        typeof setting.sessionDuration === "string" && setting.sessionDuration.trim()
+          ? setting.sessionDuration.trim()
+          : undefined;
+      connections.push({
+        id,
+        label,
+        kind: "api",
+        url,
+        ...(username ? { username } : {}),
+        ...(sessionDuration !== undefined ? { sessionDuration } : {})
+      });
     }
     return connections;
   }
@@ -140,69 +173,68 @@ export class ConnectionManager implements vscode.Disposable {
     return this.list().find((connection) => connection.id === id);
   }
 
-  private activeId(): string {
-    return this.context.globalState.get<string>(ACTIVE_CONNECTION_KEY, LOCAL_CONNECTION_ID);
-  }
-
-  get active(): LabConnection {
+  /** Whether the views group labs by connection: with lab hosts next to Local, or several hosts. */
+  get grouped(): boolean {
     const connections = this.list();
-    return (
-      connections.find((connection) => connection.id === this.activeId()) ??
-      connections.at(0) ?? { id: LOCAL_CONNECTION_ID, label: "Local", kind: "local" }
-    );
+    return connections.length > 1 || connections.some((connection) => connection.kind === "api");
   }
 
-  async setActive(id: string): Promise<void> {
-    await this.context.globalState.update(ACTIVE_CONNECTION_KEY, id);
-    this.updateStatusBar();
-    this.changeEmitter.fire(this.active);
+  status(connection: LabConnection): ConnectionStatus {
+    if (this.problems.has(connection.id)) return "offline";
+    if (connection.kind === "local") return "connected";
+    if (this.backends.has(connection.id)) return "connected";
+    return this.expired.has(connection.id) ? "session_expired" : "saved";
   }
 
-  private updateStatusBar(): void {
-    const active = this.active;
-    const multiple = this.list().length > 1;
-    const signedOut = active.kind === "api" && !this.backends.has(active.id);
-    this.statusBar.text = signedOut
-      ? `$(cloud) ${active.label}: Sign In`
-      : `$(${active.kind === "local" ? "vm" : "cloud"}) ${active.label}`;
-    this.statusBar.command = signedOut
-      ? "containerlab.connection.signIn"
-      : "containerlab.connection.switch";
-    if (active.kind === "local") {
-      this.statusBar.tooltip = "Containerlab: labs on this machine. Click to switch.";
-    } else if (signedOut) {
-      this.statusBar.tooltip = `Containerlab: sign in to ${active.url ?? active.label} to see its labs.`;
-    } else {
-      this.statusBar.tooltip = `Containerlab: labs on ${active.url ?? active.label}. Click to switch.`;
-    }
-    if (multiple || active.kind === "api") this.statusBar.show();
-    else this.statusBar.hide();
+  /** What is wrong with a connection that does not answer. */
+  problem(connection: LabConnection): string | undefined {
+    return this.problems.get(connection.id);
   }
 
-  /** Loads the stored tokens of all lab servers, e.g. after VS Code starts. */
+  /** Records that a connection answered, or why it did not. */
+  setProblem(connection: LabConnection, problem: string | undefined): void {
+    const previous = this.problems.get(connection.id);
+    if (previous === problem) return;
+    if (problem === undefined) this.problems.delete(connection.id);
+    else this.problems.set(connection.id, problem);
+    this.changeEmitter.fire(connection);
+  }
+
+  /** What the last check of this machine found; undefined before the first check. */
+  get local(): LocalStatus | undefined {
+    return this.localStatus;
+  }
+
+  /** Records a check of this machine; its problems show on Local's root. */
+  setLocalStatus(status: LocalStatus): void {
+    this.localStatus = status;
+    this.setProblem(LOCAL_CONNECTION, status.available ? undefined : status.problems.join(" "));
+    this.changeEmitter.fire(LOCAL_CONNECTION);
+  }
+
+  /** Loads the stored tokens of all lab hosts, e.g. after VS Code starts. */
   async restoreAll(): Promise<void> {
     await Promise.all(
       this.list()
         .filter((connection) => connection.kind === "api")
         .map((connection) => this.restore(connection))
     );
-    this.updateStatusBar();
   }
 
   /**
-   * The server rejected the token, e.g. because the session expired: forget
+   * The host rejected the token, e.g. because the session expired: forget
    * it and offer to sign in again.
    */
   async expire(connection: LabConnection): Promise<void> {
     if (!this.backends.has(connection.id)) return;
     await this.signOut(connection);
+    this.expired.add(connection.id);
+    this.changeEmitter.fire(connection);
     const choice = await vscode.window.showWarningMessage(
-      `Your session on ${connection.label} has ended.`,
+      `Your sign-in to ${connection.label} has expired.`,
       "Sign In"
     );
-    if (choice === "Sign In" && (await this.promptSignIn(connection))) {
-      await this.setActive(connection.id);
-    }
+    if (choice === "Sign In") await this.promptSignIn(connection);
   }
 
   /** The backend of an API connection, if it is signed in. */
@@ -237,12 +269,18 @@ export class ConnectionManager implements vscode.Disposable {
   async signIn(
     connection: LabConnection,
     username: string,
-    password: string
+    password: string,
+    sessionDuration = connection.sessionDuration ?? DEFAULT_SESSION_DURATION
   ): Promise<ApiLabBackend> {
     if (connection.kind !== "api" || connection.url === undefined) {
-      throw new Error("Only clab-api-server connections need a sign-in.");
+      throw new Error("Only lab hosts need a sign-in.");
     }
-    const backend = await ApiLabBackend.login({ baseUrl: connection.url, username, password });
+    const backend = await ApiLabBackend.login({
+      baseUrl: connection.url,
+      username,
+      password,
+      ...(sessionDuration !== "" ? { sessionDuration } : {})
+    });
     try {
       await this.context.secrets.store(tokenKey(connection.url), backend.token);
     } catch {
@@ -254,8 +292,9 @@ export class ConnectionManager implements vscode.Disposable {
     });
     this.backends.set(connection.id, backend);
     this.topologies.delete(connection.id);
-    this.updateStatusBar();
-    this.signInEmitter.fire(connection);
+    this.expired.delete(connection.id);
+    this.problems.delete(connection.id);
+    this.changeEmitter.fire(connection);
     return backend;
   }
 
@@ -263,8 +302,9 @@ export class ConnectionManager implements vscode.Disposable {
     if (connection.url === undefined) return;
     this.backends.delete(connection.id);
     this.topologies.delete(connection.id);
-    this.updateStatusBar();
+    this.problems.delete(connection.id);
     await Promise.resolve(this.context.secrets.delete(tokenKey(connection.url))).catch(() => {});
+    this.changeEmitter.fire(connection);
   }
 
   /** Asks for the password and signs in; undefined when the user cancels. */
@@ -308,8 +348,44 @@ export class ConnectionManager implements vscode.Disposable {
     return this.topologies.get(connection.id)?.entries ?? [];
   }
 
-  /** Adds a server to the user settings and makes it active. */
-  async addConnection(label: string, url: string): Promise<LabConnection> {
+  /**
+   * Signs in to a new lab host and saves it once the sign-in worked, so a
+   * typo in the URL or password does not leave a host behind.
+   */
+  async addAndSignIn(input: {
+    label?: string;
+    url: string;
+    username: string;
+    password: string;
+    sessionDuration?: string;
+  }): Promise<LabConnection> {
+    const normalized = normalizeUrl(input.url);
+    if (normalized === undefined) throw new Error(`"${input.url}" is not an http(s) URL.`);
+    const named = input.label?.trim() ?? "";
+    const label = named !== "" ? named : new URL(normalized).host;
+    const pending: LabConnection = {
+      id: apiConnectionId(normalized),
+      label,
+      kind: "api",
+      url: normalized,
+      username: input.username,
+      ...(input.sessionDuration !== undefined && input.sessionDuration !== ""
+        ? { sessionDuration: input.sessionDuration }
+        : {})
+    };
+    await this.signIn(pending, input.username, input.password, input.sessionDuration);
+    return this.addConnection(label, normalized, {
+      username: input.username,
+      sessionDuration: input.sessionDuration
+    });
+  }
+
+  /** Adds a lab host to the user settings, or updates the one with the same URL. */
+  async addConnection(
+    label: string,
+    url: string,
+    details: { username?: string; sessionDuration?: string } = {}
+  ): Promise<LabConnection> {
     const normalized = normalizeUrl(url);
     if (normalized === undefined) throw new Error(`"${url}" is not an http(s) URL.`);
     const config = vscode.workspace.getConfiguration("containerlab");
@@ -317,11 +393,53 @@ export class ConnectionManager implements vscode.Disposable {
     const next = (Array.isArray(current) ? current : []).filter(
       (entry) => typeof entry.url !== "string" || normalizeUrl(entry.url) !== normalized
     );
-    next.push({ label, url: normalized });
+    next.push({
+      label,
+      url: normalized,
+      ...(details.username !== undefined && details.username !== ""
+        ? { username: details.username }
+        : {}),
+      ...(details.sessionDuration !== undefined && details.sessionDuration !== ""
+        ? { sessionDuration: details.sessionDuration }
+        : {})
+    });
     await config.update("connections", next, vscode.ConfigurationTarget.Global);
     const connection = this.get(apiConnectionId(normalized));
-    if (!connection) throw new Error("The connection could not be saved.");
+    if (!connection) throw new Error("The lab host could not be saved.");
     return connection;
+  }
+
+  /**
+   * Changes a lab host's name, URL, user or sign-in length. A new URL or
+   * user needs a new sign-in.
+   */
+  async updateConnection(
+    connection: LabConnection,
+    changes: { label: string; url: string; username: string; sessionDuration?: string }
+  ): Promise<LabConnection> {
+    const normalized = normalizeUrl(changes.url);
+    if (normalized === undefined) throw new Error(`"${changes.url}" is not an http(s) URL.`);
+    if (normalized !== connection.url || changes.username !== (connection.username ?? "")) {
+      await this.signOut(connection);
+    }
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const current = config.get<ConnectionSetting[]>("connections", []);
+    const next = (Array.isArray(current) ? current : []).map((entry) =>
+      typeof entry.url === "string" && normalizeUrl(entry.url) === connection.url
+        ? {
+            label: changes.label,
+            url: normalized,
+            ...(changes.username !== "" ? { username: changes.username } : {}),
+            ...(changes.sessionDuration !== undefined && changes.sessionDuration !== ""
+              ? { sessionDuration: changes.sessionDuration }
+              : {})
+          }
+        : entry
+    );
+    await config.update("connections", next, vscode.ConfigurationTarget.Global);
+    const updated = this.get(apiConnectionId(normalized));
+    if (!updated) throw new Error("The lab host could not be saved.");
+    return updated;
   }
 
   async removeConnection(connection: LabConnection): Promise<void> {
@@ -336,14 +454,12 @@ export class ConnectionManager implements vscode.Disposable {
       ),
       vscode.ConfigurationTarget.Global
     );
-    if (this.activeId() === connection.id) {
-      await this.setActive(this.list()[0]?.id ?? LOCAL_CONNECTION_ID);
-    }
   }
 
-  /** The backend of the active connection; undefined while an API connection is signed out. */
-  activeBackend(): LabBackend | undefined {
-    const active = this.active;
-    return active.kind === "api" ? this.backends.get(active.id) : undefined;
+  /** Shows or hides Local, labs on this machine. */
+  async setLocalEnabled(enabled: boolean): Promise<void> {
+    await vscode.workspace
+      .getConfiguration("containerlab")
+      .update("localConnection", enabled, vscode.ConfigurationTarget.Global);
   }
 }

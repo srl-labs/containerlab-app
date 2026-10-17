@@ -181,9 +181,12 @@ export class WatcherManager {
   /**
    * Set up docker images subscription for real-time updates
    */
-  setupDockerImagesSubscription(panel: vscode.WebviewPanel): void {
+  setupDockerImagesSubscription(panel: vscode.WebviewPanel, connectionId: string): void {
     this.dockerImagesSubscription?.dispose();
-    this.dockerImagesSubscription = onDockerImagesUpdated((images) => {
+    this.dockerImagesSubscription = onDockerImagesUpdated((update) => {
+      // Only the images of the host the lab runs on.
+      if (update.connectionId !== connectionId) return;
+      const images = update.images;
       panel.webview.postMessage({
         type: "docker-images-updated",
         dockerImages: images

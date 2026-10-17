@@ -106,9 +106,11 @@ export {
 // Lab server connections
 export {
   addConnection,
-  switchConnection,
-  signIn as signInToLabServer,
-  signOut as signOutOfLabServer,
+  copyConnectionUrl,
+  manageConnections,
+  openRemoteWorkspace,
+  reconnect as reconnectConnection,
   removeConnection,
-  openRemoteWorkspace
+  signIn as signInToLabServer,
+  signOut as signOutOfLabServer
 } from "./connections";

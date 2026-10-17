@@ -13,6 +13,8 @@ import {
 import { IMAGE_MANAGER_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import { pullDockerImage } from "../utils/docker/docker";
 import { listDockerImageSummaries, removeDockerImage } from "../utils/docker/images";
+import { connectionOf, pickConnection } from "../backend/labBackends";
+import type { LabConnection } from "../backend/connections";
 import { getCustomNodesFromConfig } from "../reactTopoViewer/extension/services/schema";
 
 type ImageManagerRequestMessage = {
@@ -22,7 +24,8 @@ type ImageManagerRequestMessage = {
   payload?: unknown;
 };
 
-let currentPanel: vscode.WebviewPanel | undefined;
+/** One image manager per connection. */
+const panels = new Map<string, vscode.WebviewPanel>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -126,11 +129,12 @@ async function collectWorkspaceImageReferences(
 }
 
 async function handleImageManagerRequest(
+  connection: LabConnection,
   message: Required<ImageManagerRequestMessage>
 ): Promise<unknown> {
   switch (message.action) {
     case "listImages":
-      return listDockerImageSummaries();
+      return listDockerImageSummaries(connection);
     case "listImageReferences":
       return collectWorkspaceImageReferences(asTargetOptions(message.payload));
     case "pullImage": {
@@ -139,7 +143,7 @@ async function handleImageManagerRequest(
       if (image.length === 0) {
         throw new Error("Image reference is required.");
       }
-      const success = await pullDockerImage(image);
+      const success = await pullDockerImage(image, connection);
       return {
         success,
         image,
@@ -152,7 +156,7 @@ async function handleImageManagerRequest(
       if (reference.length === 0) {
         throw new Error("Image reference is required.");
       }
-      await removeDockerImage(reference, request.force === true);
+      await removeDockerImage(reference, request.force === true, connection);
       return {
         success: true,
         image: reference,
@@ -166,13 +170,14 @@ async function handleImageManagerRequest(
 
 async function respondToImageManagerRequest(
   panel: vscode.WebviewPanel,
+  connection: LabConnection,
   message: unknown
 ): Promise<void> {
   if (!isImageManagerRequest(message)) {
     return;
   }
   try {
-    const result = await handleImageManagerRequest(message);
+    const result = await handleImageManagerRequest(connection, message);
     await panel.webview.postMessage({
       type: "image-manager:response",
       requestId: message.requestId,
@@ -189,15 +194,25 @@ async function respondToImageManagerRequest(
   }
 }
 
-export async function manageImages(context: vscode.ExtensionContext): Promise<void> {
-  if (currentPanel) {
-    currentPanel.reveal(vscode.ViewColumn.One);
+/** Opens the images of a connection: this machine, or a lab host. */
+export async function manageImages(
+  context: vscode.ExtensionContext,
+  target?: unknown
+): Promise<void> {
+  const connection =
+    target !== undefined ? connectionOf(target) : await pickConnection("Manage images on");
+  if (!connection) {
+    return;
+  }
+  const existing = panels.get(connection.id);
+  if (existing) {
+    existing.reveal(vscode.ViewColumn.One);
     return;
   }
 
   const panel = vscode.window.createWebviewPanel(
     "containerlabImageManager",
-    "Containerlab Images",
+    connection.kind === "api" ? `Images on ${connection.label}` : "Containerlab Images",
     vscode.ViewColumn.One,
     {
       enableScripts: true,
@@ -208,9 +223,9 @@ export async function manageImages(context: vscode.ExtensionContext): Promise<vo
       ]
     }
   );
-  currentPanel = panel;
+  panels.set(connection.id, panel);
   panel.onDidDispose(() => {
-    currentPanel = undefined;
+    panels.delete(connection.id);
   });
 
   panel.webview.html = createPanelWebviewHtml(
@@ -220,6 +235,6 @@ export async function manageImages(context: vscode.ExtensionContext): Promise<vo
     {}
   );
   panel.webview.onDidReceiveMessage((message: unknown) => {
-    void respondToImageManagerRequest(panel, message);
+    void respondToImageManagerRequest(panel, connection, message);
   });
 }

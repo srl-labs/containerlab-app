@@ -27,7 +27,7 @@ import {
 } from "@containerlab/clab-ui/session";
 import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
 import { fsAdapterFor } from "./shared/io";
-import { isUriString, labUri } from "../../backend/labBackends";
+import { connectionOf, isUriString, labUri } from "../../backend/labBackends";
 
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
@@ -203,7 +203,10 @@ export class ReactTopoViewer {
       () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
       postSnapshot
     );
-    this.watcherManager.setupDockerImagesSubscription(panel);
+    this.watcherManager.setupDockerImagesSubscription(
+      panel,
+      connectionOf(this.lastYamlFilePath).id
+    );
   }
 
   /**
@@ -273,7 +276,7 @@ export class ReactTopoViewer {
    */
   private computeDirtyState(): boolean | undefined {
     if (this.deploymentState !== "deployed" || isUriString(this.lastYamlFilePath)) {
-      // The state file of a lab on a lab server is not readable here.
+      // The state file of a lab on a lab host is not readable here.
       return undefined;
     }
     return computeDeployedTopologyDirtyState(this.lastYamlFilePath, this.currentLabName);
@@ -290,7 +293,7 @@ export class ReactTopoViewer {
     this.currentLabName = labName;
 
     if (fileUri.scheme !== "file" && fileUri.path.length > 0) {
-      // A topology on a lab server, e.g. clab-api://<connection>/<path>
+      // A topology on a lab host, e.g. clab-api://<connection>/<path>
       this.lastYamlFilePath = fileUri.toString();
     } else if (fileUri.fsPath.length > 0) {
       this.lastYamlFilePath = fileUri.fsPath;

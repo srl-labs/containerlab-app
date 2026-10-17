@@ -5,9 +5,20 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 
 import { outputChannel } from "../globals";
-import { getLabBackend, getLocalBackend, isRemoteActive } from "../backend/labBackends";
+import { backendFor, connectionOf, getLocalBackend, pickConnection } from "../backend/labBackends";
+import type { LabConnection } from "../backend/connections";
 
-export async function cloneRepoFromUrl(repoUrl?: string) {
+/**
+ * Clones a repository with lab topologies: into this workspace, or into the
+ * workspace of a lab host. `target` is a tree node of the connection to use;
+ * without one the user picks.
+ */
+export async function cloneRepoFromUrl(repoUrl?: string, target?: unknown) {
+  const connection =
+    target !== undefined ? connectionOf(target) : await pickConnection("Clone repository to");
+  if (!connection) {
+    return;
+  }
   if (repoUrl === undefined || repoUrl.length === 0) {
     const input = await vscode.window.showInputBox({
       title: "Git repository URL",
@@ -20,8 +31,8 @@ export async function cloneRepoFromUrl(repoUrl?: string) {
     repoUrl = input;
   }
 
-  if (isRemoteActive()) {
-    await importOnLabServer(repoUrl);
+  if (connection.kind === "api") {
+    await importOnLabHost(connection, repoUrl);
     return;
   }
 
@@ -47,18 +58,18 @@ export async function cloneRepoFromUrl(repoUrl?: string) {
   }
 }
 
-/** The lab server clones the repository into its workspace. */
-async function importOnLabServer(repoUrl: string): Promise<void> {
+/** The lab host clones the repository into its workspace. */
+async function importOnLabHost(connection: LabConnection, repoUrl: string): Promise<void> {
   try {
     const result = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `Cloning ${repoUrl} on the lab server`
+        title: `Cloning ${repoUrl} on ${connection.label}`
       },
-      () => getLabBackend().importTopologyFromUrl({ url: repoUrl })
+      () => backendFor(connection).importTopologyFromUrl({ url: repoUrl })
     );
     vscode.window.showInformationMessage(
-      `Repository cloned on the lab server: ${result.topology.yamlFileName}`
+      `Repository cloned on ${connection.label}: ${result.topology.yamlFileName}`
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

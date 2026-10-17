@@ -5,8 +5,8 @@ import * as vscode from "vscode";
 import * as utils from "../utils/utils";
 import { favoriteLabs, outputChannel } from "../globals";
 import { FilterUtils } from "../helpers/filterUtils";
-import { activeConnection, getConnections, remoteUri } from "../backend/labBackends";
-import type { LabConnection } from "../backend/connections";
+import { getConnections, remoteUri } from "../backend/labBackends";
+import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 
 import * as c from "./common";
 import * as ins from "./inspector";
@@ -142,17 +142,55 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     if (element instanceof c.ClabFolderTreeNode) {
       return this.discoverLabs(element.fullPath);
     }
+    if (element instanceof c.ClabConnectionTreeNode) {
+      return element.children as (c.ClabFolderTreeNode | c.ClabLabTreeNode)[];
+    }
     if (element) {
       return undefined;
     }
-    const active = activeConnection();
-    if (active.kind === "api") {
-      return this.discoverRemoteLabs(active);
+    const manager = getConnections();
+    if (!manager?.grouped) {
+      return manager && manager.list().length === 0 ? undefined : this.discoverLabs();
     }
-    return this.discoverLabs();
+    // With lab hosts, each connection is a root with its own topologies.
+    const roots = await Promise.all(
+      manager.list().map(async (connection) => {
+        const status = manager.status(connection);
+        let children: vscode.TreeItem[];
+        if (connection.kind === "local") {
+          children = (await this.discoverLabs()) ?? [
+            new c.ClabConnectionMessageNode(
+              connection.id,
+              "undeployed",
+              "No topology files in this workspace"
+            )
+          ];
+        } else if (status === "connected") {
+          children = (await this.discoverRemoteLabs(connection)) ?? [
+            new c.ClabConnectionMessageNode(connection.id, "undeployed", "No undeployed labs")
+          ];
+        } else {
+          children = [
+            new c.ClabConnectionMessageNode(
+              connection.id,
+              "undeployed",
+              status === "offline" ? "Not reachable" : "Sign in to see its labs"
+            )
+          ];
+        }
+        return new c.ClabConnectionTreeNode(
+          connection,
+          "undeployed",
+          status,
+          children,
+          manager.problem(connection)
+        );
+      })
+    );
+    return roots as unknown as c.ClabLabTreeNode[];
   }
 
-  /** Topologies in the lab server's workspace that are not running. */
+  /** Topologies in the lab host's workspace that are not running. */
   private async discoverRemoteLabs(
     connection: LabConnection
   ): Promise<c.ClabLabTreeNode[] | undefined> {
@@ -170,7 +208,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
       );
       return undefined;
     }
-    const running = new Set(Object.keys(ins.rawInspectData ?? {}));
+    const running = new Set(Object.keys(ins.labsOf(connection.id) ?? {}));
     const filter = this.treeFilter ? FilterUtils.createFilter(this.treeFilter) : undefined;
     const nodes = entries
       .filter((entry) => !running.has(entry.labName))
@@ -188,7 +226,8 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
           undefined,
           "containerlabLabUndeployed"
         );
-        node.description = folder === "." ? connection.label : folder;
+        c.onConnection(node, connection.id);
+        node.description = folder === "." ? "" : folder;
         node.tooltip = `${entry.labName} on ${connection.label}\n${entry.absolutePath ?? entry.yamlFileName}`;
         return node;
       })
@@ -341,7 +380,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
   private getLabPaths() {
     const labPaths = new Set<string>();
 
-    const data = ins.rawInspectData;
+    const data = ins.labsOf(LOCAL_CONNECTION.id);
 
     if (Array.isArray(data)) {
       // Old format: flat array of containers (for backward compatibility)

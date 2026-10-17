@@ -7,12 +7,12 @@ import type {
 
 import type { ClabContainerTreeNode } from "../treeView/common";
 
-import { activeConnection, getLabBackend, isRemoteActive } from "./labBackends";
+import { backendOf, connectionOf, isRemote } from "./labBackends";
 
 const DEFAULT_COLUMNS = 120;
 const DEFAULT_ROWS = 32;
 
-/** The lab of a node on a lab server; the tree knows it from the server's records. */
+/** The lab of a node on a lab host; the tree knows it from the host's records. */
 async function labNameOf(
   backend: LabBackend,
   containerName: string,
@@ -23,12 +23,12 @@ async function labNameOf(
   for (const [labName, containers] of Object.entries(labs)) {
     if (containers.some((container) => container.name === containerName)) return labName;
   }
-  throw new Error(`Lab of ${containerName} not found on ${activeConnection().label}.`);
+  throw new Error(`Lab of ${containerName} not found.`);
 }
 
-/** The labs of the views run on a lab server, so node tools go through its API. */
-export function isRemoteNode(): boolean {
-  return isRemoteActive();
+/** Whether a node runs on a lab host, so its tools go through the host's API. */
+export function isRemoteNode(node: unknown): boolean {
+  return isRemote(node);
 }
 
 function messageOf(error: unknown): string {
@@ -36,7 +36,7 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * A VS Code terminal backed by a terminal session on the lab server: shell
+ * A VS Code terminal backed by a terminal session on the lab host: shell
  * and telnet run in the node's container, SSH starts on the lab host.
  */
 class RemoteNodeTerminal implements vscode.Pseudoterminal {
@@ -134,7 +134,7 @@ class RemoteNodeTerminal implements vscode.Pseudoterminal {
   }
 }
 
-/** Opens a node terminal through the lab server, or focuses the one already open. */
+/** Opens a node terminal through the lab host, or focuses the one already open. */
 export async function openRemoteTerminal(
   node: ClabContainerTreeNode,
   protocol: TerminalProtocol,
@@ -149,7 +149,7 @@ export async function openRemoteTerminal(
     return;
   }
   try {
-    const backend = getLabBackend();
+    const backend = backendOf(node);
     const labName = await labNameOf(backend, node.name, node.labName);
     const terminal = vscode.window.createTerminal({
       name: title,
@@ -164,10 +164,10 @@ export async function openRemoteTerminal(
   }
 }
 
-/** Shows the container log of a node on the lab server in an editor. */
+/** Shows the container log of a node on the lab host in an editor. */
 export async function showRemoteLogs(node: ClabContainerTreeNode): Promise<void> {
   try {
-    const backend = getLabBackend();
+    const backend = backendOf(node);
     const labName = await labNameOf(backend, node.name, node.labName);
     const { logs } = await backend.nodeLogs(labName, node.name, { tail: "all" });
     const document = await vscode.workspace.openTextDocument({ content: logs, language: "log" });
@@ -186,11 +186,11 @@ export interface RemotePortMapping {
   description: string;
 }
 
-/** Published ports of a node on the lab server. */
+/** Published ports of a node on the lab host. */
 export async function remoteBrowserPorts(
   node: ClabContainerTreeNode
 ): Promise<RemotePortMapping[]> {
-  const backend = getLabBackend();
+  const backend = backendOf(node);
   const labName = await labNameOf(backend, node.name, node.labName);
   const { ports } = await backend.nodeBrowserPorts(labName, node.name);
   return ports.map((port) => ({
@@ -201,9 +201,9 @@ export async function remoteBrowserPorts(
   }));
 }
 
-/** The host name of the lab server, for links to ports it publishes. */
-export function remoteHostname(): string | undefined {
-  const url = activeConnection().url;
+/** The host name of a node's lab host, for links to ports it publishes. */
+export function remoteHostname(node: unknown): string | undefined {
+  const url = connectionOf(node).url;
   if (url === undefined) return undefined;
   try {
     return new URL(url).hostname;

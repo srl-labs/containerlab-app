@@ -45,6 +45,8 @@ export const IntfStateIcons = {
  */
 export class ClabLabTreeNode extends vscode.TreeItem {
   public readonly labPath: LabPath;
+  /** The connection the lab runs on; unset for Local. */
+  public connectionId?: string;
   public readonly name?: string;
   public readonly owner?: string;
   public containers?: (ClabContainerTreeNode | ClabContainerGroupTreeNode)[];
@@ -112,6 +114,8 @@ export class ClabContainerTreeNode extends vscode.TreeItem {
   public nodeType?: string; // Added node type from clab-node-type
   public nodeGroup?: string; // Added node group from clab-node-group
   public rootNodeName?: string; // clab-root-node-name — set if this is a sub-container
+  /** The connection the node runs on; unset for Local. */
+  public connectionId?: string;
   /** The lab the container belongs to (the `containerlab` label). */
   public labName?: string;
   public status?: string;
@@ -173,6 +177,8 @@ export class ClabContainerGroupTreeNode extends vscode.TreeItem {
   public readonly rootNodeName: string;
   public readonly labPath: LabPath;
   public children: ClabContainerTreeNode[];
+  /** The connection the node runs on; unset for Local. */
+  public connectionId?: string;
 
   // Properties inherited from the primary (0th) sub-container
   public name: string = "";
@@ -223,6 +229,8 @@ export class ClabInterfaceTreeNode extends vscode.TreeItem {
   public netemState?: NetemState;
   /** The lab of the parent container. */
   public labName?: string;
+  /** The connection the node runs on; unset for Local. */
+  public connectionId?: string;
 
   // eslint-disable-next-line max-params -- TreeItem subclass with many interface properties
   constructor(
@@ -356,6 +364,8 @@ export interface ClabJSON {
   root_node_name?: string; // Root node short name (for sub-containers)
   network_name?: string; // Management network name
   startedAt?: number;
+  /** The connection the container runs on; "local" for this machine. */
+  connectionId?: string;
 }
 
 /**
@@ -374,4 +384,99 @@ export function flattenContainers(
     }
   }
   return result;
+}
+
+/**
+ * Marks a node as running on a lab host. Lab hosts can have labs with the
+ * same paths, so their tree ids carry the connection.
+ */
+export function onConnection<T extends vscode.TreeItem & { connectionId?: string }>(
+  node: T,
+  connectionId: string
+): T {
+  if (connectionId === "local") return node;
+  node.connectionId = connectionId;
+  if (node.id !== undefined && !node.id.startsWith(`${connectionId}|`)) {
+    node.id = `${connectionId}|${node.id}`;
+  }
+  return node;
+}
+
+/** How a connection is doing, in the words of the explorer's lab host roots. */
+export type ConnectionNodeState = "connected" | "saved" | "session_expired" | "offline";
+
+/**
+ * A connection at the root of a view once lab hosts are configured: Local
+ * or a lab host, with its labs below it.
+ */
+export class ClabConnectionTreeNode extends vscode.TreeItem {
+  public readonly connectionId: string;
+  /** Read by the explorer: the root's id, kind and status. */
+  public readonly endpointId: string;
+  public readonly endpointKind: "local" | "api";
+  public readonly state: ConnectionNodeState;
+
+  constructor(
+    connection: {
+      id: string;
+      label: string;
+      kind: "local" | "api";
+      url?: string;
+      username?: string;
+    },
+    section: "running" | "undeployed",
+    state: ConnectionNodeState,
+    public readonly children: vscode.TreeItem[],
+    problem?: string
+  ) {
+    super(
+      connection.label,
+      children.length > 0
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.None
+    );
+    this.connectionId = connection.id;
+    this.endpointId = connection.id;
+    this.endpointKind = connection.kind;
+    this.state = state;
+    this.contextValue = "containerlabEndpoint";
+    this.id = `connection:${section}:${connection.id}`;
+    let host = "this machine";
+    if (connection.url !== undefined) {
+      try {
+        host = new URL(connection.url).host;
+      } catch {
+        host = connection.url;
+      }
+    }
+    this.description = host;
+    const lines = [
+      connection.kind === "local" ? "Labs on this machine" : `Lab host ${connection.url ?? ""}`
+    ];
+    if (connection.kind === "api") {
+      const stateText: Record<ConnectionNodeState, string> = {
+        connected: `Signed in as ${connection.username ?? "you"}`,
+        saved: "Signed out",
+        session_expired: "Sign-in expired",
+        offline: "Not reachable"
+      };
+      lines.push(stateText[state]);
+    }
+    if (problem !== undefined && problem !== "") lines.push(problem);
+    this.tooltip = lines.join("\n");
+  }
+}
+
+/** A line below a connection that has no labs to show, e.g. while signed out. */
+export class ClabConnectionMessageNode extends vscode.TreeItem {
+  public readonly connectionId: string;
+  public readonly endpointId: string;
+
+  constructor(connectionId: string, section: string, message: string) {
+    super(message, vscode.TreeItemCollapsibleState.None);
+    this.connectionId = connectionId;
+    this.endpointId = connectionId;
+    this.contextValue = "containerlabEndpointDisconnected";
+    this.id = `connection-message:${section}:${connectionId}`;
+  }
 }

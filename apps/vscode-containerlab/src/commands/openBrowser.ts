@@ -21,7 +21,7 @@ export async function openBrowser(node: ClabContainerTreeNode) {
     return;
   }
 
-  const remote = isRemoteNode();
+  const remote = isRemoteNode(node);
   const portMappings = remote ? await getRemotePorts(node) : await getExposedPorts(containerId);
   if (portMappings.length === 0) {
     vscode.window.showInformationMessage(`No exposed ports found for container ${node.name}.`);
@@ -33,7 +33,7 @@ export async function openBrowser(node: ClabContainerTreeNode) {
     return;
   }
 
-  openPortInBrowser(mapping, node.name, remote ? remoteHostname() : undefined);
+  openPortInBrowser(mapping, node.name, remote ? remoteHostname(node) : undefined);
 }
 
 async function getRemotePorts(node: ClabContainerTreeNode): Promise<PortMapping[]> {

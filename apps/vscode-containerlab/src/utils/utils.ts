@@ -23,7 +23,7 @@ function stripFileName(p: string): string {
 
 export function getRelativeFolderPath(targetPath: string): string {
   if (isUriString(targetPath)) {
-    // A lab server file: its path in the server's workspace.
+    // A lab host file: its path in the server's workspace.
     return vscode.Uri.parse(targetPath).path.replace(/^\/+/, "");
   }
   const workspacePath = vscode.workspace.workspaceFolders

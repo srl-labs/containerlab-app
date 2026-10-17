@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import * as YAML from "yaml";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import { isRemoteActive, resolveLab } from "../backend/labBackends";
+import { isRemote, resolveLab } from "../backend/labBackends";
 
 import { execCommandInTerminal } from "./command";
 
@@ -45,7 +45,7 @@ function runFcli(node: ClabLabTreeNode | undefined, cmd: string) {
     return;
   }
 
-  if (isRemoteActive()) {
+  if (isRemote(node)) {
     void runRemoteFcli(node, cmd);
     return;
   }
@@ -61,10 +61,14 @@ function runFcli(node: ClabLabTreeNode | undefined, cmd: string) {
   execCommandInTerminal(command, `fcli - ${node.label}`);
 }
 
-/** fcli on the lab server; its report opens in an editor. */
+/** fcli on the lab host; its report opens in an editor. */
 async function runRemoteFcli(node: ClabLabTreeNode, cmd: string): Promise<void> {
   try {
-    const { backend, target } = await resolveLab(node.labPath.absolute, node.name);
+    const { backend, target } = await resolveLab(
+      node.labPath.absolute,
+      node.name,
+      node.connectionId
+    );
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `fcli ${cmd}` },
       () => backend.fcli(target, cmd)

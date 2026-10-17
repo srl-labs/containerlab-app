@@ -1,23 +1,30 @@
 import * as vscode from "vscode";
 
 import { dockerClient, outputChannel } from "../../globals";
-import { getLabBackend, isRemoteActive } from "../../backend/labBackends";
+import { backendFor } from "../../backend/labBackends";
+import { LOCAL_CONNECTION, type LabConnection } from "../../backend/connections";
 import { ImagePullPolicy } from "../consts";
 
 // Internal helper to pull the docker image using dockerode client
-export async function pullDockerImage(image: string): Promise<boolean> {
+export async function pullDockerImage(
+  image: string,
+  connection: LabConnection = LOCAL_CONNECTION
+): Promise<boolean> {
   return vscode.window.withProgress<boolean>(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Pulling Docker image ${image}`,
+      title:
+        connection.kind === "api"
+          ? `Pulling ${image} on ${connection.label}`
+          : `Pulling Docker image ${image}`,
       cancellable: false
     },
     async () => {
       outputChannel.info(`Pulling image ${image}`);
       try {
-        if (isRemoteActive()) {
-          // The lab server pulls the image for its own container runtime.
-          const result = await getLabBackend().pullImage(image);
+        if (connection.kind === "api") {
+          // The lab host pulls the image for its own container runtime.
+          const result = await backendFor(connection).pullImage(image);
           if (!result.success) throw new Error(result.message ?? result.output ?? "pull failed");
           vscode.window.showInformationMessage(`Successfully pulled image '${image}'`);
           return true;

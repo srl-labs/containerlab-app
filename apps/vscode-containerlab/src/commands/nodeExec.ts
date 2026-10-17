@@ -35,7 +35,7 @@ function getNodeContext(node: ClabContainerTreeNode | undefined): NodeContext | 
 export function attachShell(node: ClabContainerTreeNode | undefined): void {
   const ctx = getNodeContext(node);
   if (!ctx || !node) return;
-  if (isRemoteNode()) {
+  if (isRemoteNode(node)) {
     void openRemoteTerminal(node, "shell", `Shell - ${ctx.container}`);
     return;
   }
@@ -60,7 +60,7 @@ export function telnetToNode(node: ClabContainerTreeNode | undefined): void {
   if (!ctx || !node) return;
   const config = vscode.workspace.getConfiguration("containerlab");
   const port = config.get<number>("node.telnetPort", DEFAULT_ATTACH_TELNET_PORT);
-  if (isRemoteNode()) {
+  if (isRemoteNode(node)) {
     void openRemoteTerminal(node, "telnet", `Telnet - ${ctx.container}`, { telnetPort: port });
     return;
   }

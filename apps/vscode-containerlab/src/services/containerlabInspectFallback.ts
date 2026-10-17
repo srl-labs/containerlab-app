@@ -13,23 +13,18 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type {
   InspectAllLabsResponse,
-  InspectContainerInfo
+  InspectContainerInfo,
+  LabBackend
 } from "@srl-labs/containerlab-lab-backend";
 
-import { getLabBackend, getLocalBackend } from "../backend/labBackends";
+import { getLocalBackend } from "../backend/labBackends";
 import { outputChannel } from "../globals";
 import type { ClabDetailedJSON } from "../treeView/common";
 import type { ClabInterfaceSnapshot } from "../types/containerlab";
 
-// Internal state
-let rawInspectData: Record<string, ClabDetailedJSON[]> | undefined;
-let pollingInterval: ReturnType<typeof setInterval> | null = null;
-let isPolling = false;
-
-// Listeners for data changes
+// Listeners for data changes, of every connection
 type DataListener = () => void;
 const dataListeners = new Set<DataListener>();
-let dataChangedTimer: ReturnType<typeof setTimeout> | null = null;
 const DATA_NOTIFY_DELAY_MS = 50;
 
 // Default polling interval (ms)
@@ -99,27 +94,6 @@ function getArrayMetadataString<T>(items: T[], key: string): string | undefined 
   return typeof metadataValue === "string" && metadataValue.length > 0 ? metadataValue : undefined;
 }
 
-function scheduleDataChanged(): void {
-  if (dataListeners.size === 0) {
-    return;
-  }
-  if (dataChangedTimer) {
-    return;
-  }
-  dataChangedTimer = setTimeout(() => {
-    dataChangedTimer = null;
-    for (const listener of Array.from(dataListeners)) {
-      try {
-        listener();
-      } catch (err) {
-        console.error(
-          `[containerlabInspectFallback]: Failed to notify listener: ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
-    }
-  }, DATA_NOTIFY_DELAY_MS);
-}
-
 function inspectString(container: InspectContainerInfo, ...keys: string[]): string {
   const record = container as unknown as Record<string, unknown>;
   for (const key of keys) {
@@ -184,25 +158,6 @@ function toDetailedLabs(labs: InspectAllLabsResponse): Record<string, ClabDetail
 }
 
 /**
- * Fetch lab data: containerlab's detailed inspect on this machine, the
- * backend's inspect records otherwise.
- */
-async function fetchInspectData(): Promise<Record<string, ClabDetailedJSON[]> | undefined> {
-  try {
-    const backend = getLabBackend();
-    if (backend.kind === "local") {
-      return parseInspectData(await getLocalBackend().inspectDetails());
-    }
-    return toDetailedLabs(await backend.inspectAll());
-  } catch (err) {
-    console.error(
-      `[containerlabInspectFallback]: Failed to inspect labs: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return undefined;
-  }
-}
-
-/**
  * Check if containers in a lab have changed
  */
 function hasLabChanged(
@@ -258,103 +213,6 @@ function hasDataChanged(
 }
 
 /**
- * Poll for updates
- */
-async function pollOnce(): Promise<void> {
-  const newData = await fetchInspectData();
-
-  if (hasDataChanged(rawInspectData, newData)) {
-    rawInspectData = newData;
-    scheduleDataChanged();
-  }
-}
-
-/**
- * Start polling for lab data
- */
-function startPolling(intervalMs: number = DEFAULT_POLL_INTERVAL_MS): void {
-  if (isPolling) {
-    return;
-  }
-
-  isPolling = true;
-  outputChannel.debug(
-    `[containerlabInspectFallback] Starting polling with ${intervalMs}ms interval`
-  );
-
-  // Initial fetch
-  void pollOnce();
-
-  // Set up polling interval
-  pollingInterval = setInterval(() => {
-    void pollOnce();
-  }, intervalMs);
-}
-
-/**
- * Stop polling
- */
-export function stopPolling(): void {
-  if (pollingInterval) {
-    clearInterval(pollingInterval);
-    pollingInterval = null;
-  }
-  isPolling = false;
-  outputChannel.debug("[containerlabInspectFallback] Stopped polling");
-}
-
-/**
- * Get the current grouped containers data
- */
-export function getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
-  return rawInspectData ?? {};
-}
-
-/**
- * Force an immediate update
- */
-async function forceUpdate(): Promise<void> {
-  const newData = await fetchInspectData();
-  rawInspectData = newData;
-  scheduleDataChanged();
-}
-
-/**
- * Ensure the fallback is running (similar API to ensureEventStream)
- */
-export async function ensureFallback(): Promise<void> {
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const pollInterval = config.get<number>("pollInterval", DEFAULT_POLL_INTERVAL_MS);
-
-  if (!isPolling) {
-    startPolling(pollInterval);
-  }
-
-  // Do an initial fetch and wait for it
-  await forceUpdate();
-}
-
-/**
- * Register a listener for data changes
- */
-export function onDataChanged(listener: DataListener): () => void {
-  dataListeners.add(listener);
-  return () => {
-    dataListeners.delete(listener);
-  };
-}
-
-// Interface cache: key is `labPath::containerName`, value is cached interfaces
-const interfaceCache = new Map<
-  string,
-  {
-    timestamp: number;
-    interfaces: ClabInterfaceSnapshot[];
-  }
->();
-const INTERFACE_CACHE_TTL_MS = 5000;
-
-/**
  * Raw interface data from containerlab inspect interfaces
  */
 interface ClabInspectInterfaceJSON {
@@ -368,50 +226,6 @@ interface ClabInspectInterfaceJSON {
     mtu: number;
     ifindex: number;
   }>;
-}
-
-/**
- * Find the lab path for a container by looking through rawInspectData
- */
-function findLabPathForContainer(containerName: string): string | undefined {
-  if (!rawInspectData) {
-    return undefined;
-  }
-
-  for (const labContainers of Object.values(rawInspectData)) {
-    const container = labContainers.find((c) => c.Names[0] === containerName);
-    if (container) {
-      // The topo-file is stored as a property on the array
-      return (
-        getArrayMetadataString(labContainers, "topo-file") ?? container.Labels["clab-topo-file"]
-      );
-    }
-  }
-  return undefined;
-}
-
-const pendingInterfaceFetches = new Set<string>();
-
-/**
- * Fetch interface data for a container with `containerlab inspect interfaces`.
- * Only labs on this machine can be inspected this way.
- */
-async function fetchInterfaces(
-  labPath: string,
-  containerName: string
-): Promise<ClabInspectInterfaceJSON[]> {
-  if (getLabBackend().kind !== "local") {
-    return [];
-  }
-  try {
-    const parsed = await getLocalBackend().inspectInterfaces(labPath, containerName);
-    return parsed.filter((entry) => isClabInspectInterfaceJSON(entry));
-  } catch (err) {
-    console.error(
-      `[containerlabInspectFallback]: Failed to fetch interfaces for ${containerName}: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return [];
-  }
 }
 
 /**
@@ -436,40 +250,178 @@ function toInterfaceSnapshot(raw: ClabInspectInterfaceJSON[]): ClabInterfaceSnap
   }));
 }
 
+const INTERFACE_CACHE_TTL_MS = 5000;
+
 /**
- * Get interface snapshot for a container (fallback implementation)
+ * Polls the labs of one connection, for backends without an event stream:
+ * `containerlab inspect` on this machine, the API's inspect records on a lab
+ * server.
  */
-export function getInterfaceSnapshot(
-  _containerShortId: string,
-  containerName: string
-): ClabInterfaceSnapshot[] {
-  // Find the lab path for this container
-  const labPath = findLabPathForContainer(containerName);
-  if (labPath === undefined || labPath.length === 0) {
-    console.warn(
-      `[containerlabInspectFallback]: Could not find lab path for container ${containerName}`
+export class LabPoller {
+  private rawInspectData: Record<string, ClabDetailedJSON[]> | undefined;
+  private pollingInterval: ReturnType<typeof setInterval> | null = null;
+  private dataChangedTimer: ReturnType<typeof setTimeout> | null = null;
+  // Interface cache: key is `labPath::containerName`, value is cached interfaces
+  private readonly interfaceCache = new Map<
+    string,
+    { timestamp: number; interfaces: ClabInterfaceSnapshot[] }
+  >();
+  private readonly pendingInterfaceFetches = new Set<string>();
+
+  constructor(private readonly backend: () => LabBackend) {}
+
+  private scheduleDataChanged(): void {
+    if (dataListeners.size === 0 || this.dataChangedTimer) {
+      return;
+    }
+    this.dataChangedTimer = setTimeout(() => {
+      this.dataChangedTimer = null;
+      for (const listener of Array.from(dataListeners)) {
+        try {
+          listener();
+        } catch (err) {
+          console.error(
+            `[containerlabInspectFallback]: Failed to notify listener: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    }, DATA_NOTIFY_DELAY_MS);
+  }
+
+  /**
+   * Fetch lab data: containerlab's detailed inspect on this machine, the
+   * backend's inspect records otherwise.
+   */
+  private async fetchInspectData(): Promise<Record<string, ClabDetailedJSON[]> | undefined> {
+    try {
+      const backend = this.backend();
+      if (backend.kind === "local") {
+        return parseInspectData(await getLocalBackend().inspectDetails());
+      }
+      return toDetailedLabs(await backend.inspectAll());
+    } catch (err) {
+      console.error(
+        `[containerlabInspectFallback]: Failed to inspect labs: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return undefined;
+    }
+  }
+
+  private async pollOnce(): Promise<void> {
+    const newData = await this.fetchInspectData();
+    if (hasDataChanged(this.rawInspectData, newData)) {
+      this.rawInspectData = newData;
+      this.scheduleDataChanged();
+    }
+  }
+
+  private startPolling(intervalMs: number): void {
+    if (this.pollingInterval) {
+      return;
+    }
+    outputChannel.debug(
+      `[containerlabInspectFallback] Starting polling with ${intervalMs}ms interval`
     );
-    return [];
+    void this.pollOnce();
+    this.pollingInterval = setInterval(() => {
+      void this.pollOnce();
+    }, intervalMs);
   }
 
-  const cacheKey = `${labPath}::${containerName}`;
-  const cached = interfaceCache.get(cacheKey);
-
-  // Refresh stale data in the background; listeners hear about the update.
-  if (
-    (!cached || Date.now() - cached.timestamp >= INTERFACE_CACHE_TTL_MS) &&
-    !pendingInterfaceFetches.has(cacheKey)
-  ) {
-    pendingInterfaceFetches.add(cacheKey);
-    void fetchInterfaces(labPath, containerName)
-      .then((rawInterfaces) => {
-        const interfaces = toInterfaceSnapshot(rawInterfaces);
-        const changed = JSON.stringify(interfaces) !== JSON.stringify(cached?.interfaces ?? []);
-        interfaceCache.set(cacheKey, { timestamp: Date.now(), interfaces });
-        if (changed) scheduleDataChanged();
-      })
-      .finally(() => pendingInterfaceFetches.delete(cacheKey));
+  stop(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+    outputChannel.debug("[containerlabInspectFallback] Stopped polling");
   }
 
-  return cached?.interfaces ?? [];
+  getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
+    return this.rawInspectData ?? {};
+  }
+
+  /** Starts polling and waits for the first answer. */
+  async ensure(): Promise<void> {
+    const config = vscode.workspace.getConfiguration("containerlab");
+    this.startPolling(config.get<number>("pollInterval", DEFAULT_POLL_INTERVAL_MS));
+    this.rawInspectData = await this.fetchInspectData();
+    this.scheduleDataChanged();
+  }
+
+  /** The lab path of a container, from the polled records. */
+  private findLabPathForContainer(containerName: string): string | undefined {
+    for (const labContainers of Object.values(this.rawInspectData ?? {})) {
+      const container = labContainers.find((c) => c.Names[0] === containerName);
+      if (container) {
+        // The topo-file is stored as a property on the array
+        return (
+          getArrayMetadataString(labContainers, "topo-file") ?? container.Labels["clab-topo-file"]
+        );
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Interface data for a container with `containerlab inspect interfaces`.
+   * Only labs on this machine can be inspected this way.
+   */
+  private async fetchInterfaces(
+    labPath: string,
+    containerName: string
+  ): Promise<ClabInspectInterfaceJSON[]> {
+    if (this.backend().kind !== "local") {
+      return [];
+    }
+    try {
+      const parsed = await getLocalBackend().inspectInterfaces(labPath, containerName);
+      return parsed.filter((entry) => isClabInspectInterfaceJSON(entry));
+    } catch (err) {
+      console.error(
+        `[containerlabInspectFallback]: Failed to fetch interfaces for ${containerName}: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return [];
+    }
+  }
+
+  getInterfaceSnapshot(_containerShortId: string, containerName: string): ClabInterfaceSnapshot[] {
+    const labPath = this.findLabPathForContainer(containerName);
+    if (labPath === undefined || labPath.length === 0) {
+      console.warn(
+        `[containerlabInspectFallback]: Could not find lab path for container ${containerName}`
+      );
+      return [];
+    }
+
+    const cacheKey = `${labPath}::${containerName}`;
+    const cached = this.interfaceCache.get(cacheKey);
+
+    // Refresh stale data in the background; listeners hear about the update.
+    if (
+      (!cached || Date.now() - cached.timestamp >= INTERFACE_CACHE_TTL_MS) &&
+      !this.pendingInterfaceFetches.has(cacheKey)
+    ) {
+      this.pendingInterfaceFetches.add(cacheKey);
+      void this.fetchInterfaces(labPath, containerName)
+        .then((rawInterfaces) => {
+          const interfaces = toInterfaceSnapshot(rawInterfaces);
+          const changed = JSON.stringify(interfaces) !== JSON.stringify(cached?.interfaces ?? []);
+          this.interfaceCache.set(cacheKey, { timestamp: Date.now(), interfaces });
+          if (changed) this.scheduleDataChanged();
+        })
+        .finally(() => this.pendingInterfaceFetches.delete(cacheKey));
+    }
+
+    return cached?.interfaces ?? [];
+  }
+}
+
+/**
+ * Register a listener for data changes
+ */
+export function onDataChanged(listener: DataListener): () => void {
+  dataListeners.add(listener);
+  return () => {
+    dataListeners.delete(listener);
+  };
 }

@@ -44,7 +44,7 @@ export interface VncProxy {
 }
 
 /**
- * Serves one Wireshark VNC session of a lab server on a local port, so the
+ * Serves one Wireshark VNC session of a lab host on a local port, so the
  * webview loads noVNC from a plain local URL while the backend adds the
  * credentials. WebSocket upgrades are bridged the same way.
  */

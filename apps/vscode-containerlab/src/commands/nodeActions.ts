@@ -28,7 +28,7 @@ async function runNodeAction(
   }
 
   try {
-    const { backend } = await resolveLab(node.labPath.absolute, node.labName);
+    const { backend } = await resolveLab(node.labPath.absolute, node.labName, node.connectionId);
     await backend.nodeAction(
       node.labName ?? labNameForPath(node.labPath.absolute),
       node.name,
@@ -108,7 +108,7 @@ async function runTopologyNodeLifecycleAction(
   const containerName = node.name;
   await runWithProgress(
     async () => {
-      const { backend } = await resolveLab(labPath, labName);
+      const { backend } = await resolveLab(labPath, labName, node.connectionId);
       await backend.nodeAction(labName, containerName, action);
     },
     {
