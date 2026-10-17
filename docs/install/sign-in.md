@@ -1,41 +1,41 @@
 ---
-description: Connect the desktop or web app to one or more lab hosts running clab-api-server.
+description: Sign the desktop or web app in to one or more lab hosts running clab-api-server.
 ---
 
 # Sign in to a lab host
 
-The desktop and web apps work through endpoints: one per lab host. Sign in once per endpoint and the explorer shows all of them side by side.
+Sign in once per lab host and the explorer shows all of them side by side, next to the labs of the computer itself where the app runs them.
 { .lead }
 
-You need a lab host running [`clab-api-server`](lab-host.md), and a Linux account on it that is in the `clab_api` or `clab_admins` group.
+You need a lab host running [`clab-api-server`](lab-host.md), and a Linux account on it that is in the `clab_api` or `clab_admins` group. The [VS Code extension](vscode.md#work-with-labs-on-a-lab-host) signs in the same way.
 
-## Add your first endpoint
+## Sign in
 
-On first launch the app shows **Add Endpoint**:
+The web app, and the desktop app on macOS and Windows, start on **Sign in to a lab host**. On Linux the desktop app starts on the labs of [this computer](desktop.md#run-labs-on-this-computer); add lab hosts under **Settings** > **Lab hosts**.
 
-![Add Endpoint](../images/app/sign-in-dark.webp#only-dark){ .shot .narrow }
-![Add Endpoint](../images/app/sign-in-light.webp#only-light){ .shot .narrow }
+![Sign in to a lab host](../images/app/sign-in-dark.webp#only-dark){ .shot .narrow }
+![Sign in to a lab host](../images/app/sign-in-light.webp#only-light){ .shot .narrow }
 
 | Field | Fill in |
 | --- | --- |
-| **API Endpoint** | The API server URL, for example `https://lab1.example.com:8090` |
-| **Label** | A short name for the explorer, for example `lab1` |
+| **Lab host URL** | The API server URL, for example `https://lab1.example.com:8090` |
+| **Name** | A short name for the explorer, for example `lab1`. Defaults to the host name |
 | **Username**, **Password** | Your Linux account on the lab host |
-| **Keep me signed in** | How long the session lasts: `24h`, `7d`, `1h30m` |
+| **Stay signed in for** | How long the session lasts: `24h`, `7d`, `1h30m` |
 
 The password goes to the API server once, in exchange for a session token. The app keeps the token, not the password.
 
 ## Several lab hosts
 
-Add more endpoints from the endpoint settings. Each one keeps its own session, so you can, say, work on a shared lab server and your own VM at the same time.
+Add more under **Settings** > **Lab hosts**. Each one keeps its own session, so you can, say, work on a shared lab host and your own VM at the same time. The same page shows each host's status, CPU, memory, and disk, and lets you edit, sign in again, or remove it.
 
-- The explorer groups labs and files by endpoint.
-- An action runs on the endpoint that owns the lab or file. When that is unclear, the app asks.
-- Node templates are stored per endpoint and per user, under `~/.clab` on the lab host. Templates you create on `lab1` stay on `lab1`.
+- The explorer groups labs and files by lab host.
+- An action runs on the lab host that owns the lab or file. When that is unclear, the app asks.
+- Node templates are stored per lab host and per user, under `~/.clab` on the lab host. Templates you create on `lab1` stay on `lab1`.
 
-## Move endpoints to another machine
+## Move lab hosts to another machine
 
-Under **Endpoint profiles**, **Export** your endpoint list and **Import** it in another desktop app or browser. The export contains URLs, labels, usernames, and session durations. It never contains passwords or tokens, so you sign in to each endpoint again after importing.
+Under **Lab host profiles**, **Export** your list of lab hosts and **Import** it in another desktop app or browser. The export contains URLs, names, usernames, and session durations. It never contains passwords or tokens, so you sign in to each lab host again after importing.
 
 ## If sign-in fails
 

@@ -1,13 +1,13 @@
 ---
-description: Run the containerlab web app as a container and reach your lab hosts from any browser.
+description: Run the containerlab web app as a container and reach your lab hosts, or the labs on its own host, from any browser.
 ---
 
 # Web app
 
-One container serves the app to every browser on your network. Like the desktop app, it signs in to `clab-api-server` on your lab hosts.
+One container serves the app to every browser on your network. It signs in to `clab-api-server` on your lab hosts, or, when you turn it on, runs labs on its own host.
 { .lead }
 
-Set up a [lab host](lab-host.md) first.
+Set up a [lab host](lab-host.md) first, or read [Run labs on the web app's host](#run-labs-on-the-web-apps-host) for a setup without one.
 
 <figure class="diagram" markdown>
 
@@ -59,6 +59,34 @@ Your browser only talks to the web app. The web app talks to the API server, so 
 Open `https://<host>:3001` and accept the self-signed certificate. Then [sign in](sign-in.md). `CLAB_API_URL` only fills in the default on the sign-in screen; users can add other lab hosts.
 
 The image runs on amd64 and arm64.
+
+## Run labs on the web app's host
+
+On a Linux machine that only you, or people you trust, can reach, the web app can run labs itself, with the host's containerlab and Docker, like the [desktop app](desktop.md#run-labs-on-this-computer). There is no API server and no sign-in: every browser that opens the app starts on the host's labs.
+
+!!! warning "Anyone who can open the app runs labs as root on the host"
+    Without sign-in, the app cannot tell users apart. Keep it on `localhost` or a trusted network, or put an authenticating proxy in front of it. For several users, use a [lab host](lab-host.md) instead.
+
+Install containerlab on the host, then start the web app with the host's Docker socket and containerlab, and a topology folder at the same path inside and outside the container. containerlab passes that path to Docker for the nodes' files. Labs run as root, so the files in that folder belong to root.
+
+```bash
+sudo mkdir -p /srv/clab
+docker run -d --name containerlab-app \
+  --restart unless-stopped \
+  --user root --privileged \
+  --network host --pid host \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /var/run/netns:/var/run/netns \
+  -v /var/lib/docker/containers:/var/lib/docker/containers \
+  -v /etc/hosts:/etc/hosts \
+  -v "$(command -v containerlab)":/usr/local/bin/containerlab:ro \
+  -v /srv/clab:/srv/clab \
+  -e WEB_LOCAL_LABS=true \
+  -e WEB_LOCAL_WORKSPACE=/srv/clab \
+  ghcr.io/srl-labs/containerlab-web:latest
+```
+
+The explorer then shows the host under its host name, next to any lab hosts you sign in to. When containerlab or Docker is missing in the container, the start page lists what to fix, and `docker logs containerlab-app` says the same. All variables are in [web and desktop settings](../reference/app-settings.md#labs-on-the-web-apps-host).
 
 ## Use your own certificate
 

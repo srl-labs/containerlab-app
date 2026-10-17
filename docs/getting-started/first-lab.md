@@ -26,7 +26,7 @@ Click a node to see its definition. **Show in YAML** jumps to its lines in the f
 
     === "Desktop or web"
 
-        Open **Files** in the left rail and upload the file to your workspace on the lab host. Then open it.
+        Open **Files** in the left rail and upload the file to your workspace: on this computer, or on the lab host. Then open it.
 
     === "Sandbox"
 

@@ -12,24 +12,29 @@ Labs always run on Linux, next to Docker. The apps differ only in how they get t
 ```clab file="diagrams/architecture.clab.yml" annotations="diagrams/architecture.clab.yml.annotations.json" title="How the apps reach a lab host" height="390" borderless="true" zoom="false" fit-padding="0.1"
 ```
 
-<figcaption>VS Code runs containerlab itself. The desktop and web apps talk to <code>clab-api-server</code> on the lab host.</figcaption>
+<figcaption>VS Code and the desktop app run containerlab on the machine they run on. Every app can also sign in to <code>clab-api-server</code> on a lab host.</figcaption>
 </figure>
 
-**VS Code** runs containerlab directly, on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window. It can also [work with lab servers](../install/vscode.md#work-with-labs-on-a-lab-server) through `clab-api-server`, like the desktop and web apps.
+Every app reaches labs in one of two ways, and shows the labs of both side by side:
 
-**The desktop and web apps** sign in to [`clab-api-server`](../install/lab-host.md) on the lab host, and the API server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once. On Linux, the desktop app can also [run labs on the computer itself](../install/desktop.md#run-labs-on-this-computer).
+- **containerlab on the machine the app runs on.** No server and no sign-in: the app runs containerlab as you. VS Code calls it **Local**, the desktop app **This computer**.
+- **`clab-api-server` on a lab host.** You sign in with a Linux account on the [lab host](../install/lab-host.md), and the API server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once.
+
+**VS Code** runs containerlab on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window. [Lab hosts](../install/vscode.md#work-with-labs-on-a-lab-host) show up next to Local.
+
+**The desktop app** on Linux opens on [the labs of this computer](../install/desktop.md#run-labs-on-this-computer), like VS Code. On macOS and Windows, and for labs elsewhere, it signs in to lab hosts.
+
+**The web app** signs in to lab hosts. On a host you trust, it can also [run labs on its own host](../install/web.md#run-labs-on-the-web-apps-host).
 
 **The browser sandbox** has no lab host. It is the same editor, saving to your browser.
 
 ## What works where
 
-Every app reaches labs in one of two ways: containerlab on the machine the app runs on, or `clab-api-server` on a lab host.
-
-| | containerlab on this machine | `clab-api-server` |
+| | containerlab on this machine | `clab-api-server` on a lab host |
 | --- | --- | --- |
-| VS Code | **Local**: Linux, WSL, Remote SSH | **Lab servers**, from any OS |
-| Desktop app | **This computer**: Linux | Endpoints, from any OS |
-| Web app | | Endpoints |
+| VS Code | **Local**: Linux, WSL, Remote SSH | Lab hosts, from any OS |
+| Desktop app | **This computer**: Linux | Lab hosts, from any OS |
+| Web app | Its own host, when turned on | Lab hosts |
 
 Both ways run the same lab actions. A few depend on the API server:
 
