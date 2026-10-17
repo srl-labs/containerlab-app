@@ -399,7 +399,7 @@ function ManagedEndpointList(props: {
                     }}
                   >
                     {endpoint.kind === "local"
-                      ? `Labs run on this computer as ${endpoint.username}`
+                      ? `Runs labs as ${endpoint.username}, without signing in`
                       : endpoint.url}
                   </Typography>
                   <Typography
@@ -417,7 +417,7 @@ function ManagedEndpointList(props: {
                   endpoint.status !== "connected" &&
                   props.localEndpoint &&
                   props.localEndpoint.problems.length > 0 ? (
-                    <LocalProblems problems={props.localEndpoint.problems} />
+                    <LocalProblems problems={props.localEndpoint.problems} setupUrl={props.localEndpoint.setupUrl} />
                   ) : null}
                 </Box>
                 <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0, mt: -0.5, mr: -0.75 }}>
@@ -514,7 +514,7 @@ function localStatusHint(status: EndpointConfig["status"], offer: LocalEndpointO
   return "containerlab does not answer right now.";
 }
 
-function LocalProblems(props: { problems: string[] }) {
+function LocalProblems(props: { problems: string[]; setupUrl?: string }) {
   return (
     <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
       <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2 }}>
@@ -533,7 +533,7 @@ function LocalProblems(props: { problems: string[] }) {
           );
         })}
       </Stack>
-      <Link href={`${APP_DOCS_URL}install/desktop/#run-labs-on-this-computer`} target="_blank" rel="noreferrer" sx={{ display: "inline-block", mt: 1 }}>
+      <Link href={props.setupUrl ?? `${APP_DOCS_URL}install/desktop/#run-labs-on-this-computer`} target="_blank" rel="noreferrer" sx={{ display: "inline-block", mt: 1 }}>
         Setup guide
       </Link>
     </Alert>
@@ -557,14 +557,14 @@ function LocalEndpointCard(props: {
     >
       <Stack spacing={1.25}>
         <Box>
-          <Typography variant="subtitle1">This computer</Typography>
+          <Typography variant="subtitle1">{offer.label ?? "This computer"}</Typography>
           <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.25 }}>
             {offer.available
-              ? "Run labs with containerlab on this computer, next to your lab hosts. No sign-in needed."
-              : "Containerlab cannot run labs on this computer yet."}
+              ? "Run labs with containerlab on the machine this app runs on, next to your lab hosts. No sign-in needed."
+              : "Containerlab cannot run labs on the machine this app runs on yet."}
           </Typography>
         </Box>
-        {offer.available ? null : <LocalProblems problems={offer.problems} />}
+        {offer.available ? null : <LocalProblems problems={offer.problems} setupUrl={offer.setupUrl} />}
         <Stack direction="row" spacing={1}>
           {offer.available ? (
             <Button

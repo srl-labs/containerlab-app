@@ -19,11 +19,12 @@ import type { FastifyInstance } from "fastify";
 
 import {
   createContainerlabAppServer,
-  createLocalUiStore,
+  createLocalEndpoint,
   parseBooleanEnv,
+  resolveLocalBackendConfig,
   type LocalEndpointOptions
 } from "@srl-labs/containerlab-app-server";
-import { detectLocalEnvironment, LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
+import type { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
 
 import {
   TITLEBAR_HEIGHT,
@@ -39,7 +40,6 @@ import {
   type TitleBarOverlay,
   type WindowState
 } from "./desktopPolicy.ts";
-import { resolveLocalBackendConfig } from "./localBackendConfig.ts";
 
 const APP_NAME = "Containerlab";
 const DEFAULT_CLAB_API_URL = process.env.CLAB_API_URL ?? "https://localhost:8090";
@@ -136,52 +136,40 @@ function resolveSessionPersistenceFile(): string {
   return path.join(electronApp.getPath("userData"), "endpoint-sessions.json");
 }
 
-const LOCAL_ENDPOINT_LABEL = "This computer";
-const LOCAL_STATUS_TTL_MS = 15_000;
 let localBackend: LocalLabBackend | null = null;
 
 /**
- * The "This computer" endpoint, on Linux: labs run with the containerlab CLI
- * as the desktop user, configured by `local-backend.json` in the app's data
- * folder and CONTAINERLAB_DESKTOP_* variables.
+ * "This computer", on Linux: labs run with the containerlab CLI as the
+ * desktop user, configured by `local-backend.json` in the app's data folder
+ * and CONTAINERLAB_DESKTOP_* variables.
  */
-function createLocalEndpoint(): LocalEndpointOptions | undefined {
-  let configFile: string | undefined;
+function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
+  let fileContent: string | undefined;
   try {
-    configFile = fs.readFileSync(path.join(electronApp.getPath("userData"), "local-backend.json"), "utf8");
+    fileContent = fs.readFileSync(path.join(electronApp.getPath("userData"), "local-backend.json"), "utf8");
   } catch {
-    configFile = undefined;
+    fileContent = undefined;
   }
-  const config = resolveLocalBackendConfig(process.platform, process.env, configFile);
+  const config = resolveLocalBackendConfig({
+    platform: process.platform,
+    env: process.env,
+    fileContent,
+    envPrefix: "CONTAINERLAB_DESKTOP_",
+    enableVariable: "CONTAINERLAB_DESKTOP_LOCAL",
+    enabledByDefault: true
+  });
   if (!config.enabled) {
     return undefined;
   }
-  const backend = new LocalLabBackend(config.options);
-  localBackend = backend;
-  let cached: { at: number; status: ReturnType<LocalEndpointOptions["status"]> } | undefined;
-  return {
-    backend,
-    ui: createLocalUiStore({ workspaceRoot: backend.options.workspaceRoot }),
+  const endpoint = createLocalEndpoint({
+    options: config.options,
+    label: "This computer",
+    setupUrl: "https://srl-labs.github.io/containerlab-app/docs/install/desktop/#run-labs-on-this-computer",
     // Like Local in VS Code: labs on this computer are there from the start.
-    autoConnect: true,
-    status(request) {
-      if (!cached || request?.fresh === true || Date.now() - cached.at > LOCAL_STATUS_TTL_MS) {
-        cached = {
-          at: Date.now(),
-          status: detectLocalEnvironment(config.options).then((environment) => ({
-            available: environment.available,
-            problems: environment.problems,
-            label: LOCAL_ENDPOINT_LABEL,
-            username: environment.username,
-            ...(environment.containerlabVersion
-              ? { containerlabVersion: environment.containerlabVersion }
-              : {})
-          }))
-        };
-      }
-      return cached.status;
-    }
-  };
+    autoConnect: true
+  });
+  localBackend = endpoint.backend;
+  return endpoint;
 }
 
 let appServer: FastifyInstance | null = null;
@@ -500,7 +488,7 @@ async function startLocalAppServer(): Promise<string> {
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
-    localEndpoint: createLocalEndpoint(),
+    localEndpoint: createDesktopLocalEndpoint(),
     logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG, false),
     sessionPersistenceFile: resolveSessionPersistenceFile(),
     staticClientRoot: resolveStaticClientRoot()

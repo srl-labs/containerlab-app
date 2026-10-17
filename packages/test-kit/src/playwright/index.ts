@@ -18,3 +18,4 @@ export {
   type ConnectedEndpoint,
   type EndpointProfile
 } from "./standalone";
+export { localLabSteps, localTestTopology } from "./localLabs";

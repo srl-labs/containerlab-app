@@ -168,6 +168,10 @@ export interface LocalEndpointOffer {
   problems: string[];
   /** The containerlab version found on this machine. */
   containerlabVersion?: string;
+  /** How the app names this machine; "This computer" when unset. */
+  label?: string;
+  /** Docs page that explains how to set this machine up. */
+  setupUrl?: string;
   onAdd: () => Promise<void>;
   /** Looks for containerlab again, after the user fixed a problem. */
   onCheckAgain?: () => Promise<void>;

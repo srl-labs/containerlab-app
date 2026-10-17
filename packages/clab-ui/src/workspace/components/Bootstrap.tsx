@@ -167,6 +167,13 @@ function formatEndpointImportResult(result: EndpointImportResult): string {
   return `Imported ${result.total} lab host ${result.total === 1 ? "profile" : "profiles"}.`;
 }
 
+const LOCAL_LABEL = "This computer";
+
+function localLabel(offer: LocalEndpointOffer): string {
+  const label = offer.label?.trim() ?? "";
+  return label === "" ? LOCAL_LABEL : label;
+}
+
 function SetupProblem({ problem }: { problem: string }) {
   const { before, command, after } = splitSetupCommand(problem);
   return (
@@ -186,10 +193,11 @@ function LocalSetupCard(props: {
   onCheckAgain: () => void;
 }) {
   const { busy, offer, onCheckAgain, onUse } = props;
+  const label = localLabel(offer);
   return (
-    <section className="clab-login-local" aria-label="This computer" data-testid="standalone-local-endpoint">
+    <section className="clab-login-local" aria-label={label} data-testid="standalone-local-endpoint">
       <div className="clab-login-local-head">
-        <span className="clab-login-local-title">This computer</span>
+        <span className="clab-login-local-title">{label}</span>
         <span className="clab-login-local-state" data-ready={offer.available}>
           {offer.available
             ? `containerlab ${offer.containerlabVersion ?? ""}`.trim()
@@ -197,7 +205,11 @@ function LocalSetupCard(props: {
         </span>
       </div>
       {offer.available ? (
-        <p className="clab-login-local-copy">Run labs with containerlab on this computer. No sign-in needed.</p>
+        <p className="clab-login-local-copy">
+          {label === LOCAL_LABEL
+            ? "Run labs with containerlab on this computer. No sign-in needed."
+            : `Run labs with containerlab on ${label}, the machine this app runs on. No sign-in needed.`}
+        </p>
       ) : (
         <>
           <p className="clab-login-local-copy">Containerlab cannot run labs here yet:</p>
@@ -236,7 +248,7 @@ function LocalSetupCard(props: {
             ) : null}
             <a
               className="clab-login-link"
-              href={`${APP_DOCS_URL}install/desktop/#run-labs-on-this-computer`}
+              href={offer.setupUrl ?? `${APP_DOCS_URL}install/desktop/#run-labs-on-this-computer`}
               rel="noreferrer"
               target="_blank"
             >
@@ -376,7 +388,7 @@ export function BootstrapLoginPage(props: {
         <h1 className="clab-login-title">{localEndpoint ? "Welcome to Containerlab" : "Sign in to a lab host"}</h1>
         <p className="clab-login-copy">
           {localEndpoint
-            ? "Run labs on this computer, or sign in to clab-api-server on another machine."
+            ? `Run labs on ${localLabel(localEndpoint) === LOCAL_LABEL ? "this computer" : localLabel(localEndpoint)}, or sign in to clab-api-server on another machine.`
             : "Sign in to clab-api-server on the Linux machine that runs your labs."}
         </p>
 

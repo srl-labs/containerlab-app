@@ -1565,6 +1565,8 @@ function StandaloneApp() {
             ...(localEndpoint.containerlabVersion
               ? { containerlabVersion: localEndpoint.containerlabVersion }
               : {}),
+            label: localEndpoint.label,
+            ...(localEndpoint.setupUrl ? { setupUrl: localEndpoint.setupUrl } : {}),
             onAdd: async () => {
               await addLocalEndpoint();
               await refreshConfig().catch(() => {});

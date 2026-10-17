@@ -18,6 +18,8 @@ export interface LocalEndpointStatus {
   label: string;
   username: string;
   containerlabVersion?: string;
+  /** Docs page that explains how to set this machine up. */
+  setupUrl?: string;
 }
 
 export interface AppConfigResponse {
