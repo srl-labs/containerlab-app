@@ -49,6 +49,8 @@ export interface ExplorerTreeItem {
   v4Address?: string;
   v6Address?: string;
   endpointId?: string;
+  /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
+  endpointKind?: "local" | "api";
   topologyRef?: TopologyRef;
   resourceKind?: "file" | "directory";
   resourcePath?: string;

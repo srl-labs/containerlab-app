@@ -22,7 +22,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onFileSystem:clab-api"
   ],
   "categories": [
     "Programming Languages",
@@ -291,7 +292,7 @@
       },
       {
         "command": "containerlab.node.captureInterfaces",
-        "title": "Capture Interfaces…",
+        "title": "Capture Interfaces\u2026",
         "category": "Containerlab"
       },
       {
@@ -484,6 +485,43 @@
         "title": "Open Settings",
         "category": "Containerlab",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "containerlab.connection.add",
+        "title": "Add Lab Host\u2026",
+        "category": "Containerlab",
+        "icon": "$(add)"
+      },
+      {
+        "command": "containerlab.connection.signIn",
+        "title": "Sign In to Lab Host\u2026",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.signOut",
+        "title": "Sign Out of Lab Host\u2026",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.remove",
+        "title": "Remove Lab Host\u2026",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.openWorkspace",
+        "title": "Open Lab Host Files in Explorer",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.connection.manage",
+        "title": "Manage Lab Hosts",
+        "category": "Containerlab",
+        "icon": "$(server-environment)"
+      },
+      {
+        "command": "containerlab.connection.checkLocal",
+        "title": "Check Labs on This Machine",
+        "category": "Containerlab"
       }
     ],
     "submenus": [
@@ -736,6 +774,14 @@
         {
           "command": "containerlab.uninstall.edgeshark",
           "when": "true"
+        },
+        {
+          "command": "containerlab.connection.signOut",
+          "when": "containerlab:hasLabHosts"
+        },
+        {
+          "command": "containerlab.connection.openWorkspace",
+          "when": "containerlab:hasLabHosts"
         }
       ],
       "containerlab.submenu.lab.graph.drawio": [
@@ -753,6 +799,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "containerlab.connection.manage",
+          "when": "view == containerlabExplorerWebview",
+          "group": "navigation@90"
+        },
         {
           "command": "containerlab.settings.open",
           "when": "view == containerlabExplorerWebview",
@@ -868,6 +919,46 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "Enable interface statistics (RX/TX bytes, packets, etc.) in the explorer. Disable to reduce resource usage."
+          }
+        }
+      },
+      {
+        "title": "Lab Hosts",
+        "properties": {
+          "containerlab.connections": {
+            "type": "array",
+            "default": [],
+            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
+            "items": {
+              "type": "object",
+              "required": [
+                "url"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "Name shown in the Containerlab views."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "URL of clab-api-server on the lab host."
+                },
+                "username": {
+                  "type": "string",
+                  "description": "Linux user to sign in with."
+                },
+                "sessionDuration": {
+                  "type": "string",
+                  "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "containerlab.localConnection": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show \"Local\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
           }
         }
       },
@@ -1106,7 +1197,7 @@
     "lint:cpd": "jscpd src/",
     "lint:barrels": "node scripts/check-barrel-exports.js",
     "test": "pnpm run test:compile && mocha --exit --extension js --reporter mochawesome \"out/test/**/*.test.js\"",
-    "test:compile": "rm -rf out/test && tsc -p test/tsconfig.mocha.json && tsc -p test/tsconfig.mocha.json --noEmit false --noCheck --module NodeNext --moduleResolution NodeNext",
+    "test:compile": "rm -rf out/test && tsc -p test/tsconfig.mocha.json && tsc -p test/tsconfig.mocha.json --noEmit false --noCheck --allowImportingTsExtensions false --module NodeNext --moduleResolution NodeNext",
     "test:e2e": "pnpm run build && pnpm run test:e2e:compile && node ./out/e2e/run.js",
     "test:e2e:compile": "rm -rf out/e2e && tsc -p test/tsconfig.e2e.json",
     "test:unit": "pnpm test",
@@ -1142,13 +1233,16 @@
     "typescript": "catalog:",
     "yaml": "catalog:",
     "chokidar": "catalog:",
-    "ovsx": "catalog:"
+    "ovsx": "catalog:",
+    "ws": "catalog:",
+    "@types/ws": "catalog:"
   },
   "private": true,
   "bugs": {
     "url": "https://github.com/srl-labs/containerlab-app/issues"
   },
   "dependencies": {
-    "@containerlab/clab-ui": "workspace:*"
+    "@containerlab/clab-ui": "workspace:*",
+    "@srl-labs/containerlab-lab-backend": "workspace:*"
   }
 }

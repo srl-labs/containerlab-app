@@ -5,3 +5,9 @@ export {
   type TopologyHostContractFixture,
   type TopologyHostContractOptions
 } from "./topologyHost";
+export {
+  contractLabYaml,
+  describeLabBackendContract,
+  type LabBackendContractFixture,
+  type LabBackendContractOptions
+} from "./labBackend";

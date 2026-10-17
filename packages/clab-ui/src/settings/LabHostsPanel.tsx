@@ -1,0 +1,97 @@
+import React, { useCallback, useMemo } from "react";
+import Typography from "@mui/material/Typography";
+
+import { EndpointManager } from "../workspace/components/EndpointManager";
+import type { EndpointHealthMetrics } from "../workspace/types";
+import type { LocalEndpointOffer } from "../workspace/endpoints";
+import type { LabHostsSnapshot } from "./schema";
+
+type Request = (payload: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * Local and the lab hosts, managed the way the desktop and web apps manage
+ * them: sign in, edit, sign out, remove, add. Every action goes to the
+ * extension, which answers with the new state.
+ */
+export function LabHostsPanel({
+  labHosts,
+  request,
+}: {
+  labHosts: LabHostsSnapshot;
+  request: Request;
+}) {
+  const local = labHosts.local;
+  const localOffer = useMemo<LocalEndpointOffer | undefined>(
+    () =>
+      local
+        ? {
+            available: local.available,
+            problems: local.problems,
+            ...(local.containerlabVersion !== undefined
+              ? { containerlabVersion: local.containerlabVersion }
+              : {}),
+            label: "Local",
+            addLabel: "Show Local",
+            onAdd: async () => {
+              await request({ action: "labHosts.showLocal" });
+            },
+            onCheckAgain: async () => {
+              await request({ action: "labHosts.checkLocal" });
+            },
+          }
+        : undefined,
+    [local, request],
+  );
+  // Stable, so the health stats load once per sign-in and not on every render.
+  const fetchHealthMetrics = useCallback(
+    async (endpointId: string) =>
+      (await request({
+        action: "labHosts.metrics",
+        endpointId,
+      })) as EndpointHealthMetrics,
+    [request],
+  );
+  return (
+    <>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        The Containerlab explorer shows the labs of every host side by side.
+        Passwords are not saved: a sign-in keeps a token in VS Code&apos;s
+        secret storage.
+      </Typography>
+      <EndpointManager
+        mode="manage"
+        defaultApiUrl=""
+        endpoints={labHosts.hosts}
+        healthStatsEnabled
+        fetchHealthMetrics={fetchHealthMetrics}
+        localEndpoint={localOffer}
+        onAddEndpoint={async (input) => {
+          await request({ action: "labHosts.add", ...input });
+        }}
+        onReconnectEndpoint={async (input) => {
+          await request(
+            input.endpointId === "local"
+              ? { action: "labHosts.checkLocal" }
+              : { action: "labHosts.signIn", ...input },
+          );
+        }}
+        onRemoveEndpoint={async (endpointId) => {
+          await request({ action: "labHosts.remove", endpointId });
+        }}
+        onUpdateEndpoint={async (input) => {
+          await request({ action: "labHosts.update", ...input });
+        }}
+        onSetEndpointSessionDuration={(endpointId, sessionDuration) => {
+          void request({
+            action: "labHosts.update",
+            endpointId,
+            sessionDuration,
+          });
+        }}
+        onSignOutEndpoint={async (endpointId) => {
+          await request({ action: "labHosts.signOut", endpointId });
+        }}
+      />
+    </>
+  );
+}

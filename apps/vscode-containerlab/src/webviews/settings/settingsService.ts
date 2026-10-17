@@ -10,6 +10,8 @@ import {
   type SettingValue
 } from "@containerlab/clab-ui/settings/schema";
 
+import { labHostsSnapshot } from "./labHostsService";
+
 export class SettingsService {
   private readonly definitions;
   private readonly changed = new Set<string>();
@@ -62,7 +64,8 @@ export class SettingsService {
       vscodeVersion: vscode.version,
       reloadRequired: [...this.changed].some(
         (key) => JSON.stringify(config.get(key)) !== JSON.stringify(this.initialValues.get(key))
-      )
+      ),
+      labHosts: labHostsSnapshot()
     };
   }
 

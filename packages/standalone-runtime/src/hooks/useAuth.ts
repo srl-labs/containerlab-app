@@ -110,14 +110,19 @@ function useEndpointAuth() {
   const loading = useAuthStore((state) => state.loading);
   const clearError = useAuthStore((state) => state.clearError);
   const setDefaultApiUrl = useAuthStore((state) => state.setDefaultApiUrl);
+  const localEndpoint = useAuthStore((state) => state.localEndpoint);
+  const setLocalEndpoint = useAuthStore((state) => state.setLocalEndpoint);
   const setError = useAuthStore((state) => state.setError);
   const setInitialized = useAuthStore((state) => state.setInitialized);
   const setLoading = useAuthStore((state) => state.setLoading);
 
   const endpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
 
-  const refreshConfig = useCallback(async () => {
-    const response = await runtimeFetch(standaloneServerUrl("/api/config"), { credentials: "include" });
+  /** Reloads the app config; `fresh` asks the server to look for containerlab again. */
+  const refreshConfig = useCallback(async (fresh = false) => {
+    const response = await runtimeFetch(standaloneServerUrl(fresh ? "/api/config?fresh=1" : "/api/config"), {
+      credentials: "include"
+    });
     if (!response.ok) {
       return;
     }
@@ -125,7 +130,8 @@ function useEndpointAuth() {
     if (typeof payload.defaultClabApiUrl === "string") {
       setDefaultApiUrl(payload.defaultClabApiUrl);
     }
-  }, [setDefaultApiUrl]);
+    setLocalEndpoint(payload.localEndpoint ?? null);
+  }, [setDefaultApiUrl, setLocalEndpoint]);
 
   const refreshEndpoints = useCallback(async () => {
     const previousEndpoints = new Map(useEndpointStore.getState().endpoints);
@@ -222,6 +228,28 @@ function useEndpointAuth() {
     [addEndpointToStore, clearError, setError]
   );
 
+  /** Adds the "This computer" endpoint; it needs no URL or sign-in. */
+  const addLocalEndpoint = useCallback(async (): Promise<EndpointConfig> => {
+    clearError();
+    const response = await runtimeFetch(standaloneServerUrl("/auth/endpoints/add"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ kind: "local" })
+    });
+    if (!response.ok) {
+      const message = await readError(response, "Failed to use this computer");
+      setError(message);
+      throw new Error(message);
+    }
+    const endpoint = withStatus(await readJson<EndpointConfig>(response));
+    for (const existing of useEndpointStore.getState().endpoints.values()) {
+      if (existing.kind === "local" && existing.id !== endpoint.id) forgetEndpointFromStore(existing.id);
+    }
+    addEndpointToStore(endpoint);
+    return endpoint;
+  }, [addEndpointToStore, clearError, forgetEndpointFromStore, setError]);
+
   const removeEndpoint = useCallback(
     async (endpointId: string): Promise<void> => {
       clearError();
@@ -273,6 +301,7 @@ function useEndpointAuth() {
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
+            ...(existing.kind === "local" ? { kind: "local" } : {}),
             label: existing.label,
             sessionDuration: existing.sessionDuration,
             url: existing.url,
@@ -375,7 +404,12 @@ function useEndpointAuth() {
   );
 
   const exportEndpoints = useCallback((): string => {
-    return serializeEndpointProfiles(useEndpointStore.getState().endpoints.values());
+    // A local endpoint is this machine, not a profile to take elsewhere.
+    return serializeEndpointProfiles(
+      Array.from(useEndpointStore.getState().endpoints.values()).filter(
+        (endpoint) => endpoint.kind !== "local"
+      )
+    );
   }, []);
 
   const importEndpoints = useCallback(
@@ -403,7 +437,9 @@ function useEndpointAuth() {
 
   return {
     addEndpoint,
+    addLocalEndpoint,
     defaultApiUrl,
+    localEndpoint,
     endpointList,
     endpoints,
     error,

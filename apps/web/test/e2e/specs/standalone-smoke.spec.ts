@@ -5,15 +5,15 @@ test.describe("Standalone startup", () => {
     await page.goto("/");
 
     await expect(
-      page.getByText("Connect one or more `clab-api-server` endpoints", { exact: false })
+      page.getByText("Sign in to clab-api-server on the Linux machine that runs your labs.", { exact: false })
     ).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Add Endpoint" })).toBeVisible();
-    await expect(page.getByLabel("API Endpoint")).toHaveValue("https://localhost:8090");
-    await expect(page.getByLabel("Label")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sign in to a lab host" })).toBeVisible();
+    await expect(page.getByLabel("Lab host URL")).toHaveValue("https://localhost:8090");
+    await expect(page.getByLabel("Name", { exact: true })).toBeVisible();
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
-    await expect(page.getByLabel("Keep me signed in")).toHaveValue("24h");
-    await expect(page.getByRole("button", { name: "Add Endpoint" })).toBeDisabled();
+    await expect(page.getByLabel("Stay signed in for")).toHaveValue("24h");
+    await expect(page.getByRole("button", { name: "Sign In" })).toBeDisabled();
   });
 
   test("adds an endpoint and persists non-secret metadata", async ({ page }) => {
@@ -41,12 +41,12 @@ test.describe("Standalone startup", () => {
       });
     });
     await page.goto("/");
-    await page.getByLabel("Label").fill("Test Endpoint");
+    await page.getByLabel("Name", { exact: true }).fill("Test Endpoint");
     await page.getByLabel("Username").fill("admin");
     await page.getByLabel("Password").fill("secret");
-    await page.getByLabel("Keep me signed in").fill("36h");
+    await page.getByLabel("Stay signed in for").fill("36h");
 
-    const addButton = page.getByRole("button", { name: "Add Endpoint" });
+    const addButton = page.getByRole("button", { name: "Sign In" });
     await expect(addButton).toBeEnabled();
     await addButton.click();
 

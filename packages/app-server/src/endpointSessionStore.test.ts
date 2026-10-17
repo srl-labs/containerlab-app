@@ -14,6 +14,7 @@ import {
 function makeEntry(overrides: Partial<EndpointEntry> = {}): EndpointEntry {
   return {
     id: buildEndpointId(),
+    kind: "api",
     url: "https://localhost:8090",
     label: "server-a",
     token: "token-a",
@@ -99,4 +100,25 @@ test("session store can persist endpoint sessions across app server restarts", (
   const thirdStore = createEndpointSessionStore({ persistenceFile });
   assert.equal(thirdStore.getSession(sessionId), null);
   thirdStore.dispose();
+});
+
+test("endpoints saved before endpoint kinds existed load as clab-api-server endpoints", (t) => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "clab-endpoint-kinds-"));
+  t.after(() => fs.rmSync(tempDir, { force: true, recursive: true }));
+  const persistenceFile = path.join(tempDir, "endpoint-sessions.json");
+  const { kind: _kind, ...legacy } = makeEntry({ id: "endpoint-legacy" });
+  const local = makeEntry({ id: "endpoint-local", kind: "local", token: "" });
+  fs.writeFileSync(
+    persistenceFile,
+    JSON.stringify({
+      version: 1,
+      sessions: [{ sessionId: "s1", lastAccess: Date.now(), endpoints: [legacy, local] }]
+    })
+  );
+
+  const store = createEndpointSessionStore({ persistenceFile });
+  t.after(() => store.dispose());
+  const endpoints = store.getSession("s1")?.endpoints;
+  assert.equal(endpoints?.get("endpoint-legacy")?.kind, "api");
+  assert.equal(endpoints?.get("endpoint-local")?.kind, "local");
 });

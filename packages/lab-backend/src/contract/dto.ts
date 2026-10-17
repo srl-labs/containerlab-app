@@ -1,6 +1,7 @@
 import type { CustomIconInfo, CustomNodeTemplate } from "@containerlab/clab-ui/session";
 
-// DTOs exchanged unchanged between the API proxy and standalone renderer.
+// DTOs every lab backend returns, unchanged from clab-api-server JSON. They are
+// shared with the standalone renderer, which reads them through the app server.
 
 export interface SaveConfigResponse {
   message: string;
@@ -180,4 +181,114 @@ export interface DrawioGenerateResponse {
 export interface CaptureCloseAllResponse {
   message: string;
   closed: number;
+}
+
+export interface LoginResponse {
+  token: string;
+}
+
+/** A topology file in the lab workspace, as the explorer lists it. */
+export interface TopologyEntry {
+  labName: string;
+  absolutePath?: string;
+  yamlFileName: string;
+  annotationsFileName: string;
+  hasAnnotations: boolean;
+  deploymentState: string;
+}
+
+export interface WorkspaceFileEntry {
+  name: string;
+  path: string;
+  kind: "file" | "directory";
+  size?: number;
+  modifiedAt?: string;
+  hasChildren?: boolean;
+}
+
+export interface LifecycleActionResult {
+  result?: unknown;
+  message?: string;
+  logs?: string[];
+}
+
+/**
+ * One container of a running lab, as `containerlab inspect --format json`
+ * reports it. Some keys are snake_case on the wire (`container_id`,
+ * `ipv4_address`, `lab_name`), so callers that need them read both spellings.
+ */
+export interface InspectContainerInfo {
+  name: string;
+  containerId: string;
+  image: string;
+  kind: string;
+  state: string;
+  status: string;
+  ipv4Address: string;
+  ipv6Address: string;
+  labName: string;
+  labPath: string;
+  absLabPath: string;
+  group: string;
+  owner: string;
+}
+
+export type InspectAllLabsResponse = Record<string, InspectContainerInfo[]>;
+export type InspectLabResponse = InspectContainerInfo[];
+
+export interface HealthMetricsResponse {
+  serverInfo: {
+    version: string;
+    uptime: string;
+    startTime: string;
+  };
+  metrics: {
+    cpu?: {
+      usagePercent: number;
+      numCPU: number;
+      loadAvg1?: number;
+      loadAvg5?: number;
+      loadAvg15?: number;
+      processPercent?: number;
+    };
+    mem?: {
+      totalMem: number;
+      usedMem: number;
+      availableMem: number;
+      usagePercent: number;
+      processMemMB?: number;
+      processMemPct?: number;
+    };
+    disk?: {
+      path: string;
+      totalDisk: number;
+      usedDisk: number;
+      freeDisk: number;
+      usagePercent: number;
+    };
+  };
+}
+
+export interface NetemSetRequest {
+  containerName: string;
+  interface: string;
+  delay?: string;
+  jitter?: string;
+  loss?: number;
+  rate?: number;
+  corruption?: number;
+}
+
+export interface NetemResetRequest {
+  containerName: string;
+  interface: string;
+}
+
+export type NodeLifecycleAction = "start" | "stop" | "restart" | "pause" | "unpause";
+
+export interface ImportTopologyFromUrlResponse {
+  success: boolean;
+  labName: string;
+  fileName: string;
+  topology: TopologyEntry;
 }

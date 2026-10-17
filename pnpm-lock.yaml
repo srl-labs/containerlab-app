@@ -227,6 +227,9 @@ catalogs:
     '@types/sinon':
       specifier: 22.0.0
       version: 22.0.0
+    '@types/ssh2':
+      specifier: 1.15.6
+      version: 1.15.6
     '@types/three':
       specifier: 0.186.0
       version: 0.186.0
@@ -353,6 +356,9 @@ catalogs:
     sinon:
       specifier: 22.1.0
       version: 22.1.0
+    ssh2:
+      specifier: 1.17.0
+      version: 1.17.0
     three:
       specifier: 0.186.0
       version: 0.186.0
@@ -424,6 +430,9 @@ importers:
       '@srl-labs/containerlab-app-server':
         specifier: workspace:*
         version: link:../../packages/app-server
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../../packages/lab-backend
     devDependencies:
       '@playwright/test':
         specifier: 'catalog:'
@@ -464,6 +473,9 @@ importers:
       '@containerlab/clab-ui':
         specifier: workspace:*
         version: link:../../packages/clab-ui
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../../packages/lab-backend
     devDependencies:
       '@types/chai':
         specifier: 'catalog:'
@@ -489,6 +501,9 @@ importers:
       '@types/vscode':
         specifier: 'catalog:'
         version: 1.105.0
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.1
       '@vscode/test-electron':
         specifier: 'catalog:'
         version: 3.1.0(supports-color@8.1.1)
@@ -552,6 +567,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
       yaml:
         specifier: 'catalog:'
         version: 2.9.1
@@ -715,10 +733,6 @@ importers:
         version: 8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1)
 
   packages/app-contract:
-    dependencies:
-      '@containerlab/clab-ui':
-        specifier: workspace:*
-        version: link:../clab-ui
     devDependencies:
       oxlint:
         specifier: 'catalog:'
@@ -750,6 +764,9 @@ importers:
       '@srl-labs/containerlab-app-contract':
         specifier: workspace:*
         version: link:../app-contract
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../lab-backend
       fastify:
         specifier: 'catalog:'
         version: 5.12.5
@@ -930,6 +947,52 @@ importers:
         specifier: 'catalog:'
         version: 8.3.0(@types/node@24.13.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13)(yaml@2.9.1)
 
+  packages/lab-backend:
+    dependencies:
+      '@containerlab/clab-ui':
+        specifier: workspace:*
+        version: link:../clab-ui
+      dockerode:
+        specifier: 'catalog:'
+        version: 5.0.1(supports-color@10.2.2)
+      ssh2:
+        specifier: 'catalog:'
+        version: 1.17.0
+      undici:
+        specifier: 'catalog:'
+        version: 8.10.2
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
+    devDependencies:
+      '@types/dockerode':
+        specifier: 'catalog:'
+        version: 4.0.1
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.5
+      '@types/ssh2':
+        specifier: 'catalog:'
+        version: 1.15.6
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.1
+      oxlint:
+        specifier: 'catalog:'
+        version: 1.83.0(oxlint-tsgolint@7.0.2001)
+      oxlint-tsgolint:
+        specifier: 'catalog:'
+        version: 7.0.2001
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.13
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+
   packages/standalone-runtime:
     dependencies:
       '@containerlab/clab-ui':
@@ -938,6 +1001,9 @@ importers:
       '@srl-labs/containerlab-app-contract':
         specifier: workspace:*
         version: link:../app-contract
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../lab-backend
       react:
         specifier: 'catalog:'
         version: 19.3.0
@@ -981,6 +1047,9 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.63.0
+      '@srl-labs/containerlab-lab-backend':
+        specifier: workspace:*
+        version: link:../lab-backend
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -8130,6 +8199,12 @@ snapshots:
 
   dateformat@4.6.3: {}
 
+  debug@4.4.3(supports-color@10.2.2):
+    dependencies:
+      ms: 2.1.3
+    optionalDependencies:
+      supports-color: 10.2.2
+
   debug@4.4.3(supports-color@8.1.1):
     dependencies:
       ms: 2.1.3
@@ -8196,12 +8271,32 @@ snapshots:
       - electron-builder-squirrel-windows
       - supports-color
 
+  docker-modem@5.0.7(supports-color@10.2.2):
+    dependencies:
+      debug: 4.4.3(supports-color@10.2.2)
+      readable-stream: 3.6.2
+      split-ca: 1.0.1
+      ssh2: 1.17.0
+    transitivePeerDependencies:
+      - supports-color
+
   docker-modem@5.0.7(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
       readable-stream: 3.6.2
       split-ca: 1.0.1
       ssh2: 1.17.0
+    transitivePeerDependencies:
+      - supports-color
+
+  dockerode@5.0.1(supports-color@10.2.2):
+    dependencies:
+      '@balena/dockerignore': 1.0.2
+      '@grpc/grpc-js': 1.14.4
+      '@grpc/proto-loader': 0.7.15
+      docker-modem: 5.0.7(supports-color@10.2.2)
+      protobufjs: 7.6.6
+      tar-fs: 2.1.5
     transitivePeerDependencies:
       - supports-color
 

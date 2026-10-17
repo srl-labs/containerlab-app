@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import undici, { Response } from "undici";
 
-import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient";
+import { ClabApiClient, getHttpErrorStatus } from "./clabApiClient.ts";
 
 test("getHttpErrorStatus preserves explicit upstream HTTP status", () => {
   const error = new Error("upstream returned forbidden") as Error & { status?: number };

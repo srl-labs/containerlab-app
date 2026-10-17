@@ -58,11 +58,11 @@ Panels open on the side of the canvas and stay out of the way otherwise.
 
 | | VS Code | Desktop and web |
 | --- | --- | --- |
-| Labs run | Where the extension runs | On the lab host you signed in to |
+| Labs run | Where the extension runs, and on lab hosts | On this computer (desktop on Linux), and on lab hosts |
 | Terminals | VS Code terminals | Terminal windows in the app |
 | Exports | Saved through a VS Code dialog | Downloaded |
 | Node templates | VS Code settings | Per user, per lab host |
-| Extras | Draw.io, SSHX, GoTTY, fcli | Several lab hosts at once, shared labs |
+| Extras | Draw.io, SSHX, GoTTY, fcli | Shared labs, lab host profiles to export |
 
 <div class="next" markdown>
 [:lucide-arrow-right: Build a topology](topologies.md)

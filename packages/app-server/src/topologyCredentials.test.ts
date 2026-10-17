@@ -20,9 +20,9 @@ topology:
       kind: linux
 `;
 
-function clientReturning(yaml: string | Error) {
+function backendReturning(yaml: string | Error) {
   return {
-    getLabTopologyYaml: async () => {
+    runningTopologyYaml: async () => {
       if (yaml instanceof Error) throw yaml;
       return yaml;
     }
@@ -30,26 +30,26 @@ function clientReturning(yaml: string | Error) {
 }
 
 test("resolveTopologySshUsername uses the node's resolved credentials", async () => {
-  const client = clientReturning(YAML_TEXT);
-  assert.equal(await resolveTopologySshUsername(client, "t", "lab", ["srl1"]), "srl-admin");
-  assert.equal(await resolveTopologySshUsername(client, "t", "lab", ["srl2"]), "ops");
+  const backend = backendReturning(YAML_TEXT);
+  assert.equal(await resolveTopologySshUsername(backend, "lab", ["srl1"]), "srl-admin");
+  assert.equal(await resolveTopologySshUsername(backend, "lab", ["srl2"]), "ops");
 });
 
 test("resolveTopologySshUsername tries each node name in order", async () => {
-  const client = clientReturning(YAML_TEXT);
+  const backend = backendReturning(YAML_TEXT);
   assert.equal(
-    await resolveTopologySshUsername(client, "t", "lab", ["srl2-a", "srl2"]),
+    await resolveTopologySshUsername(backend, "lab", ["srl2-a", "srl2"]),
     "ops"
   );
 });
 
 test("resolveTopologySshUsername leaves the choice to the caller when nothing is set", async () => {
   assert.equal(
-    await resolveTopologySshUsername(clientReturning(YAML_TEXT), "t", "lab", ["linux1"]),
+    await resolveTopologySshUsername(backendReturning(YAML_TEXT), "lab", ["linux1"]),
     undefined
   );
   assert.equal(
-    await resolveTopologySshUsername(clientReturning(new Error("404")), "t", "lab", ["srl1"]),
+    await resolveTopologySshUsername(backendReturning(new Error("404")), "lab", ["srl1"]),
     undefined
   );
 });

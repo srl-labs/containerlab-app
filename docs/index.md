@@ -102,7 +102,7 @@ Labs run on Linux next to Docker. Pick the app that gets you there.
 
 ### VS Code
 
-Runs containerlab where VS Code runs: locally, in WSL, or over Remote SSH.
+Runs containerlab where VS Code runs: locally, in WSL, or over Remote SSH. Lab hosts show up next to it.
 
 [Install the extension :lucide-arrow-up-right:](install/vscode.md){ .card-link }
 </div>
@@ -111,7 +111,7 @@ Runs containerlab where VS Code runs: locally, in WSL, or over Remote SSH.
 
 ### Desktop
 
-A native app for Linux, macOS, and Windows that signs in to your lab hosts.
+A native app for Linux, macOS, and Windows. Runs labs on your Linux computer and on your lab hosts.
 
 [Get the desktop app :lucide-arrow-up-right:](install/desktop.md){ .card-link }
 </div>

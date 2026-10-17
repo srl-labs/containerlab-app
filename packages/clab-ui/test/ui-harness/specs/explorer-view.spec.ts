@@ -11,8 +11,8 @@ async function openExplorer(page: Page, query: string) {
 test("endpoints signal state with a dot and plain words instead of chips", async ({ page }) => {
   const errors = await openExplorer(page, "mode=standalone&theme=dark");
 
-  await expect(page.getByText("Session expired", { exact: true })).toBeVisible();
-  await expect(page.getByText("Offline", { exact: true })).toBeVisible();
+  await expect(page.getByText("Sign-in expired", { exact: true })).toBeVisible();
+  await expect(page.getByText("Unreachable", { exact: true })).toBeVisible();
   // Connected is the quiet default: no pill, no uppercase label.
   await expect(page.getByText(/^connected$/i)).toHaveCount(0);
   await expect(page.getByText("Shared", { exact: true })).toHaveCount(0);

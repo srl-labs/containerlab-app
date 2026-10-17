@@ -42,7 +42,8 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ignoreDependencies: ["tsx"]
   },
   "apps/desktop": {
-    entry: ["scripts/after-pack.cjs"],
+    // scripts/build.mjs bundles the main process and preload script.
+    entry: ["scripts/after-pack.cjs", "src/main.ts", "src/preload.ts"],
     // Provided by WSL for the native Windows development launcher.
     ignoreBinaries: ["wslpath"]
   },
@@ -62,6 +63,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ]
   },
   "packages/app-contract": {},
+  "packages/lab-backend": {
+    entry: ["src/**/*.test.ts"]
+  },
   "packages/clab-viewer": {
     entry: ["src/index.ts"]
   },
@@ -71,6 +75,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
     ignoreBinaries: ["openssl"]
   },
   "packages/standalone-runtime": {
+    entry: ["src/**/*.test.ts"]
+  },
+  "packages/test-kit": {
     entry: ["src/**/*.test.ts"]
   },
   [uiDirectory]: {

@@ -4,8 +4,7 @@ import {
   type TopologyRef
 } from "@containerlab/clab-ui/session";
 
-import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
-import type { ClabApiClient } from "./clabApiClient.ts";
+import type { LabBackend, TopologyFileSystem } from "@srl-labs/containerlab-lab-backend";
 
 type ContainerDataProvider = ReturnType<typeof createRuntimeContainerDataProvider>;
 type DeploymentState = "deployed" | "undeployed" | "unknown";
@@ -15,14 +14,14 @@ type DirtyContextHost = {
 };
 
 interface SessionRecord {
-  baseUrl: string;
   endpointId: string;
+  /** The topology files the session edits. */
+  files: TopologyFileSystem;
   host: TopologySessionCore;
   isInternalUpdate(): boolean;
   lastAccess: number;
   sessionId: string;
   sourcePreference: TopologySourcePreference;
-  token: string;
   topologyRef: TopologyRef;
   disposeInternalUpdateTracker(): void;
 }
@@ -37,13 +36,12 @@ interface TopologySessionLease {
 }
 
 interface CreateSessionOptions {
-  client: ClabApiClient;
+  backend: LabBackend;
   containerDataProvider: ContainerDataProvider;
   deploymentState: DeploymentState;
   endpointId: string;
   mode: "edit" | "view";
   sourcePreference?: TopologySourcePreference;
-  token: string;
   topologyRef: TopologyRef;
 }
 
@@ -63,7 +61,6 @@ export interface StandaloneTopologySessionManager {
   disposeAll(): void;
   disposeSessionsForEndpoint(endpointId: string): void;
   disposeSession(sessionId: string): boolean;
-  disposeSessionsForToken(token: string, baseUrl?: string): void;
   getSession(sessionId: string, endpointId?: string): SessionRecord | null;
   /**
    * Update the topology sync (dirty) state on every session that edits the
@@ -186,9 +183,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
     createSession(options) {
       const sessionId = globalThis.crypto.randomUUID();
-      const fs = new ClabApiFileSystemAdapter({
-        client: options.client,
-        token: options.token,
+      const fs = options.backend.topologyFiles({
         labName: options.topologyRef.labName,
         sourcePreference: options.sourcePreference ?? "api-file",
         yamlPath: options.topologyRef.yamlPath,
@@ -198,10 +193,7 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
       const host = new TopologySessionCore({
         fs,
-        documentKey: JSON.stringify([
-          options.client.getBaseUrl(),
-          options.topologyRef.yamlPath
-        ]),
+        documentKey: JSON.stringify([options.backend.scope, options.topologyRef.yamlPath]),
         yamlFilePath: options.topologyRef.yamlPath,
         mode: options.mode,
         deploymentState: options.deploymentState,
@@ -217,14 +209,13 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
 
       const record: ManagedSessionRecord = {
         activeLeaseCount: 0,
-        baseUrl: options.client.getBaseUrl(),
         endpointId: options.endpointId,
+        files: fs,
         host,
         isInternalUpdate: internalUpdateTracker.isActive,
         lastAccess: Date.now(),
         sessionId,
         sourcePreference: options.sourcePreference ?? "api-file",
-        token: options.token,
         topologyRef: options.topologyRef,
         disposeInternalUpdateTracker: internalUpdateTracker.dispose
       };
@@ -246,18 +237,6 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
     disposeSessionsForEndpoint(endpointId) {
       for (const [sessionId, session] of sessions.entries()) {
         if (session.endpointId !== endpointId) {
-          continue;
-        }
-        disposeSession(sessionId);
-      }
-    },
-
-    disposeSessionsForToken(token, baseUrl) {
-      for (const [sessionId, session] of sessions.entries()) {
-        if (session.token !== token) {
-          continue;
-        }
-        if (baseUrl && session.baseUrl !== baseUrl) {
           continue;
         }
         disposeSession(sessionId);

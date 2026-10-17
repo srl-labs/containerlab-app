@@ -26,7 +26,8 @@ import {
   type TopologySnapshot
 } from "@containerlab/clab-ui/session";
 import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
-import { nodeFsAdapter } from "./shared/io";
+import { fsAdapterFor } from "./shared/io";
+import { connectionOf, isUriString, labUri } from "../../backend/labBackends";
 
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
@@ -202,7 +203,10 @@ export class ReactTopoViewer {
       () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
       postSnapshot
     );
-    this.watcherManager.setupDockerImagesSubscription(panel);
+    this.watcherManager.setupDockerImagesSubscription(
+      panel,
+      connectionOf(this.lastYamlFilePath).id
+    );
   }
 
   /**
@@ -271,7 +275,8 @@ export class ReactTopoViewer {
    * unavailable.
    */
   private computeDirtyState(): boolean | undefined {
-    if (this.deploymentState !== "deployed") {
+    if (this.deploymentState !== "deployed" || isUriString(this.lastYamlFilePath)) {
+      // The state file of a lab on a lab host is not readable here.
       return undefined;
     }
     return computeDeployedTopologyDirtyState(this.lastYamlFilePath, this.currentLabName);
@@ -287,7 +292,10 @@ export class ReactTopoViewer {
   ): Promise<void> {
     this.currentLabName = labName;
 
-    if (fileUri.fsPath.length > 0) {
+    if (fileUri.scheme !== "file" && fileUri.path.length > 0) {
+      // A topology on a lab host, e.g. clab-api://<connection>/<path>
+      this.lastYamlFilePath = fileUri.toString();
+    } else if (fileUri.fsPath.length > 0) {
       this.lastYamlFilePath = fileUri.fsPath;
     }
 
@@ -322,7 +330,7 @@ export class ReactTopoViewer {
 
     // The topology is always editable; runtime data attaches when deployed.
     this.topologyHost = new TopologyHostCore({
-      fs: nodeFsAdapter,
+      fs: fsAdapterFor(this.lastYamlFilePath),
       yamlFilePath: this.lastYamlFilePath,
       mode: "edit",
       deploymentState: this.deploymentState,
@@ -575,7 +583,7 @@ export class ReactTopoViewerProvider {
     const viewer = new ReactTopoViewer(this.context);
     await viewer.createWebviewPanel(
       this.context,
-      labPath ? vscode.Uri.file(labPath) : vscode.Uri.parse(""),
+      labPath ? labUri(labPath) : vscode.Uri.parse(""),
       labName
     );
 

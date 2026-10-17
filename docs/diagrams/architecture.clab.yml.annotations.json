@@ -262,6 +262,22 @@
       "fontFamily": "sans-serif",
       "textAlign": "left",
       "roundedBackground": false
+    },
+    {
+      "id": "text-4",
+      "text": "on Linux",
+      "position": {
+        "x": 205,
+        "y": 58
+      },
+      "width": 90,
+      "height": 34,
+      "fontSize": 12,
+      "fontColor": "var(--vscode-descriptionForeground)",
+      "backgroundColor": "transparent",
+      "fontFamily": "sans-serif",
+      "textAlign": "left",
+      "roundedBackground": false
     }
   ],
   "freeShapeAnnotations": [
@@ -374,6 +390,25 @@
       "borderColor": "#7d8fa5",
       "borderWidth": 1.5,
       "borderStyle": "dashed",
+      "lineEndArrow": true,
+      "lineStartArrow": false,
+      "lineArrowSize": 8,
+      "zIndex": -2
+    },
+    {
+      "id": "arrow-6",
+      "shapeType": "line",
+      "position": {
+        "x": 45,
+        "y": 140
+      },
+      "endPosition": {
+        "x": 415,
+        "y": 32
+      },
+      "borderColor": "#7d8fa5",
+      "borderWidth": 1.5,
+      "borderStyle": "solid",
       "lineEndArrow": true,
       "lineStartArrow": false,
       "lineArrowSize": 8,

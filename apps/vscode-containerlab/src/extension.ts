@@ -1,9 +1,26 @@
 import * as path from "path";
-import * as fs from "fs";
-import { execSync } from "child_process";
+import * as os from "os";
 
 import * as vscode from "vscode";
 import Docker from "dockerode";
+import { detectLocalEnvironment, findBinary } from "@srl-labs/containerlab-lab-backend/local";
+
+import {
+  connectionOf,
+  disposeLabBackends,
+  getConnections,
+  getLocalBackend,
+  initConnections,
+  labPathOf,
+  pickConnection,
+  remoteUri
+} from "./backend/labBackends";
+import {
+  LOCAL_CONNECTION,
+  type ConnectionManager,
+  type LabConnection
+} from "./backend/connections";
+import { RemoteLabFileSystem } from "./backend/remoteFileSystem";
 
 import * as cmd from "./commands";
 import * as utils from "./utils";
@@ -38,13 +55,11 @@ import {
   refreshGottySessions,
   onEventsDataChanged,
   onContainerStateChanged,
-  onFallbackDataChanged,
-  stopFallbackPolling,
-  stopEventStream
+  onFallbackDataChanged
 } from "./services";
 import { ContainerlabExplorerViewProvider } from "./webviews/explorer/containerlabExplorerViewProvider";
 
-import { registerSettings } from "./webviews/settings/settingsPanel";
+import { refreshSettingsPanel, registerSettings } from "./webviews/settings/settingsPanel";
 import { registerAppearanceUpdates } from "./webviews/shared/appearance";
 
 let explorerViewProvider: ContainerlabExplorerViewProvider | undefined;
@@ -74,7 +89,10 @@ async function promptToInstallContainerlab(): Promise<void> {
   }
 }
 
-async function ensureContainerlabBinary(e2eSmokeTest: boolean): Promise<boolean> {
+async function ensureContainerlabBinary(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
   if (containerlabBinaryPath !== "containerlab") {
     return true;
   }
@@ -84,13 +102,20 @@ async function ensureContainerlabBinary(e2eSmokeTest: boolean): Promise<boolean>
     return true;
   }
 
-  await promptToInstallContainerlab();
+  if (hasLabServers) {
+    outputChannel.warn("Containerlab binary not found; only labs on lab hosts are available.");
+    return false;
+  }
+  void promptToInstallContainerlab();
   return false;
 }
 
-function validateUserPermissions(e2eSmokeTest: boolean): boolean {
+async function validateUserPermissions(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
   outputChannel.debug(`Starting user permissions check`);
-  const userInfo = utils.getUserInfo();
+  const userInfo = await utils.getUserInfo();
   setUsername(userInfo.username);
   if (userInfo.hasPermission) {
     outputChannel.debug(
@@ -107,6 +132,9 @@ function validateUserPermissions(e2eSmokeTest: boolean): boolean {
     outputChannel.warn("Continuing despite insufficient permissions in E2E smoke mode.");
     return true;
   }
+  if (hasLabServers) {
+    return false;
+  }
 
   const runtime = utils.getConfig<string>("runtime", "docker");
   const requiredGroups = runtime === "podman" ? "'clab_admins'" : "'clab_admins' and 'docker'";
@@ -116,7 +144,10 @@ function validateUserPermissions(e2eSmokeTest: boolean): boolean {
   return false;
 }
 
-async function connectDockerSocket(e2eSmokeTest: boolean): Promise<boolean | undefined> {
+async function connectDockerSocket(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean | undefined> {
   try {
     const socketPath = utils.getConfig<string>("dockerSocketPath", "/var/run/docker.sock");
     const docker = new Docker({ socketPath });
@@ -131,6 +162,9 @@ async function connectDockerSocket(e2eSmokeTest: boolean): Promise<boolean | und
       outputChannel.warn("Continuing without Docker in E2E smoke mode.");
       return false;
     }
+    if (hasLabServers) {
+      return undefined;
+    }
     vscode.window.showErrorMessage(
       `Failed to connect to Docker. Ensure Docker is running and you have proper permissions.`
     );
@@ -142,18 +176,20 @@ async function runFullStartupTasks(
   context: vscode.ExtensionContext,
   config: vscode.WorkspaceConfiguration,
   dockerAvailable: boolean,
-  e2eSmokeTest: boolean
+  e2eSmokeTest: boolean,
+  localReady: boolean
 ): Promise<void> {
   const skipUpdateCheck = config.get<boolean>("skipUpdateCheck", false);
-  if (!skipUpdateCheck && !e2eSmokeTest) {
+  if (!skipUpdateCheck && !e2eSmokeTest && localReady) {
     utils.checkAndUpdateClabIfNeeded(outputChannel, context).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       outputChannel.error(`Update check error: ${message}`);
     });
   }
 
+  // The image lists of this machine and the lab hosts, for the image pickers.
+  void utils.refreshDockerImages();
   if (dockerAvailable) {
-    void utils.refreshDockerImages();
     utils.startDockerImageEventMonitor(context);
   }
 
@@ -166,13 +202,8 @@ async function runFullStartupTasks(
   void ins.update();
 }
 
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 function stopRealtimeBackgroundWorkers(): void {
-  stopEventStream();
-  stopFallbackPolling();
+  ins.resetForConnectionChange();
 }
 
 function registerProcessShutdownHooks(context: vscode.ExtensionContext): void {
@@ -218,7 +249,8 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
   const unsupportedProvider: vscode.WebviewViewProvider = {
     resolveWebviewView(webviewView) {
       webviewView.webview.options = {
-        enableScripts: false
+        enableScripts: false,
+        enableCommandUris: ["containerlab.connection.add"]
       };
       webviewView.webview.html = `<!DOCTYPE html>
 <html lang="en">
@@ -244,9 +276,10 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
 </head>
 <body>
   <div class="wrap">
-    <h3>Containerlab Requires Linux or WSL</h3>
-    <p>Features are disabled on this platform.</p>
-    <p><a href="https://containerlab.dev/manual/vsc-extension/">Open documentation</a></p>
+    <h3>Work with labs on a lab host</h3>
+    <p>Containerlab runs labs on Linux. From this computer, you can work with the labs on a Linux lab host that runs clab-api-server.</p>
+    <p><a href="command:containerlab.connection.add">Add Lab Host…</a></p>
+    <p><a href="https://srl-labs.github.io/containerlab-app/docs/install/vscode/#work-with-labs-on-a-lab-host">How to set up a lab host</a></p>
   </div>
 </body>
 </html>`;
@@ -269,6 +302,50 @@ function registerUnsupportedViews(context: vscode.ExtensionContext) {
   );
 }
 
+/**
+ * Checks containerlab on this machine. Problems block activation no longer:
+ * the user may run labs on a lab host instead.
+ */
+async function prepareLocalContainerlab(
+  e2eSmokeTest: boolean,
+  hasLabServers: boolean
+): Promise<boolean> {
+  if (!(await setClabBinPath())) {
+    outputChannel.error("Error setting containerlab binary. Labs on this machine are unavailable.");
+    return false;
+  }
+  if (!(await ensureContainerlabBinary(e2eSmokeTest, hasLabServers))) {
+    return false;
+  }
+  outputChannel.info("Containerlab extension activated.");
+  return validateUserPermissions(e2eSmokeTest, hasLabServers);
+}
+
+/**
+ * Whether containerlab can run labs on this machine. What is missing shows on
+ * Local's root in the explorer, with the commands that fix it.
+ */
+async function checkLocalConnection(connections: ConnectionManager): Promise<boolean> {
+  if (!connections.localAvailable) return false;
+  const environment = await detectLocalEnvironment(getLocalBackend().options).catch(
+    (err: unknown) => ({
+      available: false,
+      problems: [err instanceof Error ? err.message : String(err)],
+      containerlabVersion: undefined,
+      username: undefined
+    })
+  );
+  connections.setLocalStatus({
+    available: environment.available,
+    problems: environment.problems,
+    ...(environment.containerlabVersion !== undefined
+      ? { containerlabVersion: environment.containerlabVersion }
+      : {}),
+    ...(environment.username !== undefined ? { username: environment.username } : {})
+  });
+  return environment.available;
+}
+
 // Session refresh functions are available from ./services/sessionRefresh directly
 
 function showOutputChannel() {
@@ -288,10 +365,30 @@ async function openTopoViewerEditorCommand(node?: c.ClabLabTreeNode) {
   return graphTopoViewer(node);
 }
 
-async function createTopoViewerTemplateFileCommand() {
+/**
+ * Creates a topology from a template and opens it in the TopoViewer: in this
+ * workspace, or in the workspace of a lab host (the explorer node it was run
+ * on, or the one the user picks).
+ */
+async function createTopoViewerTemplateFileCommand(target?: unknown) {
+  const connections = getConnections();
+  let connection: LabConnection | undefined = LOCAL_CONNECTION;
+  if (target !== undefined) {
+    connection = connectionOf(target);
+  } else if (connections?.grouped === true) {
+    connection = await pickConnection("New topology on");
+  }
+  if (!connection) {
+    return;
+  }
+  const remote = connection.kind === "api";
   const uri = await vscode.window.showSaveDialog({
-    title: "Enter containerlab topology template file name",
-    defaultUri: vscode.workspace.workspaceFolders?.[0]?.uri,
+    title: remote
+      ? `New topology on ${connection.label}`
+      : "Enter containerlab topology template file name",
+    defaultUri: remote
+      ? remoteUri(connection, "new-lab.clab.yml")
+      : vscode.workspace.workspaceFolders?.[0]?.uri,
     saveLabel: "Create Containerlab topology template file",
     filters: { "Containerlab YAML": ["clab.yml", "clab.yaml"], YAML: ["yaml", "yml"] }
   });
@@ -301,14 +398,15 @@ async function createTopoViewerTemplateFileCommand() {
   }
 
   // Ensure the file has .clab.yml extension
-  let filePath = uri.fsPath;
-  if (!/\.clab\.(yml|yaml)$/i.test(filePath)) {
+  let fileUri = uri;
+  if (!/\.clab\.(yml|yaml)$/i.test(uri.path)) {
     // Replace .yml/.yaml with .clab.yml, or append if no extension
-    filePath = filePath.replace(/\.(yml|yaml)$/i, "") + ".clab.yml";
+    fileUri = uri.with({ path: uri.path.replace(/\.(yml|yaml)$/i, "") + ".clab.yml" });
   }
+  const filePath = labPathOf(fileUri);
 
   // Create a starter template file with example nodes
-  const baseName = path.basename(filePath);
+  const baseName = path.posix.basename(fileUri.path);
   const labName = baseName.replace(/\.clab\.(yml|yaml)$/i, "").replace(/\.(yml|yaml)$/i, "");
   const template = `name: ${labName}
 
@@ -325,18 +423,22 @@ topology:
   links:
     - endpoints: [ "srl1:e1-1", "client1:eth1" ]
 `;
-  fs.writeFileSync(filePath, template);
+  // Files on a lab host are written through its workspace file system.
+  await vscode.workspace.fs.writeFile(fileUri, Buffer.from(template, "utf8"));
 
   // Open the file in the editor
-  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+  const doc = await vscode.workspace.openTextDocument(fileUri);
   await vscode.window.showTextDocument(doc);
 
   // Open the TopoViewer
-  const node = new c.ClabLabTreeNode(
-    labName,
-    vscode.TreeItemCollapsibleState.None,
-    { absolute: filePath, relative: path.basename(filePath) },
-    labName
+  const node = c.onConnection(
+    new c.ClabLabTreeNode(
+      labName,
+      vscode.TreeItemCollapsibleState.None,
+      { absolute: filePath, relative: baseName },
+      labName
+    ),
+    connection.id
   );
   return graphTopoViewer(node);
 }
@@ -439,7 +541,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.lab.fcli.subif", cmd.fcliSubif],
     ["containerlab.lab.fcli.sysInfo", cmd.fcliSysInfo],
     ["containerlab.lab.fcli.custom", cmd.fcliCustom],
-    ["containerlab.images.manage", () => cmd.manageImages(context)]
+    ["containerlab.images.manage", (target?: unknown) => cmd.manageImages(context, target)]
   ];
   commands.forEach(([name, handler]) => {
     context.subscriptions.push(vscode.commands.registerCommand(name, handler));
@@ -489,6 +591,132 @@ function registerCommands(context: vscode.ExtensionContext) {
   );
 }
 
+function registerConnectionCommands(context: vscode.ExtensionContext) {
+  const commands: Array<[string, (target?: unknown) => unknown]> = [
+    ["containerlab.connection.add", cmd.addConnection],
+    ["containerlab.connection.signIn", cmd.signInToLabServer],
+    ["containerlab.connection.signOut", cmd.signOutOfLabServer],
+    ["containerlab.connection.remove", cmd.removeConnection],
+    ["containerlab.connection.openWorkspace", cmd.openRemoteWorkspace],
+    ["containerlab.connection.manage", cmd.manageConnections],
+    // Actions of the lab host roots in the explorer.
+    ["containerlab.endpoint.reconnect", cmd.reconnectConnection],
+    ["containerlab.endpoint.remove", cmd.removeConnection],
+    ["containerlab.endpoint.copyUrl", cmd.copyConnectionUrl]
+  ];
+  for (const [name, handler] of commands) {
+    context.subscriptions.push(vscode.commands.registerCommand(name, handler));
+  }
+}
+
+/**
+ * Lab hosts report workspace changes; new and removed topologies show up in
+ * the explorer without polling. One watch per signed-in host.
+ */
+function watchRemoteWorkspaces(connections: ConnectionManager): vscode.Disposable {
+  const watches = new Map<string, AbortController>();
+  const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const scheduleRefresh = (connection: LabConnection) => {
+    const pending = refreshTimers.get(connection.id);
+    if (pending) clearTimeout(pending);
+    refreshTimers.set(
+      connection.id,
+      setTimeout(() => {
+        refreshTimers.delete(connection.id);
+        void connections
+          .remoteTopologies(connection, 0)
+          .catch(() => [])
+          .then(() => localLabsProvider.forceRefresh());
+      }, 300)
+    );
+  };
+  const watch = (connection: LabConnection) => {
+    const backend = connections.apiBackend(connection);
+    if (!backend) return;
+    const controller = new AbortController();
+    watches.set(connection.id, controller);
+    void (async () => {
+      try {
+        for await (const event of await backend.fs.watch(controller.signal)) {
+          if (event.kind !== "file" || /\.clab\.ya?ml$/i.test(event.path))
+            scheduleRefresh(connection);
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          outputChannel.debug(
+            `[connections] Workspace events of ${connection.label} stopped: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      } finally {
+        if (watches.get(connection.id) === controller) watches.delete(connection.id);
+      }
+    })();
+  };
+  const sync = () => {
+    const signedIn = new Map(
+      connections
+        .list()
+        .filter((connection) => connections.apiBackend(connection) !== undefined)
+        .map((connection) => [connection.id, connection])
+    );
+    for (const [id, controller] of watches) {
+      if (!signedIn.has(id)) {
+        controller.abort();
+        watches.delete(id);
+      }
+    }
+    for (const [id, connection] of signedIn) {
+      if (!watches.has(id)) watch(connection);
+    }
+  };
+  sync();
+  const subscription = connections.onDidChange(sync);
+  return new vscode.Disposable(() => {
+    subscription.dispose();
+    for (const controller of watches.values()) controller.abort();
+    for (const timer of refreshTimers.values()) clearTimeout(timer);
+  });
+}
+
+/** Updates the views when a lab host signs in or out, or the list of hosts changes. */
+function registerConnectionUpdates(
+  context: vscode.ExtensionContext,
+  connections: ConnectionManager
+) {
+  const setHostsContext = () =>
+    vscode.commands.executeCommand(
+      "setContext",
+      "containerlab:hasLabHosts",
+      connections.list().some((connection) => connection.kind === "api")
+    );
+  void setHostsContext();
+  let reloading: Promise<void> = Promise.resolve();
+  const reload = (connection: LabConnection | undefined) => {
+    reloading = reloading.then(async () => {
+      await setHostsContext();
+      if (connection && connections.status(connection) !== "connected") {
+        ins.forgetConnection(connection.id);
+      }
+      await runningLabsProvider.refresh().catch((err: unknown) => {
+        outputChannel.warn(
+          `[connections] Refreshing running labs failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+      localLabsProvider.forceRefresh();
+      if (connection?.kind === "api" && connections.status(connection) === "connected") {
+        void utils.refreshDockerImages(connection);
+      }
+    });
+  };
+  context.subscriptions.push(
+    connections.onDidChange((connection) => {
+      reload(connection);
+      refreshSettingsPanel();
+    }),
+    watchRemoteWorkspaces(connections)
+  );
+}
+
 function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   // Common handler for data changes (used by both events and fallback)
   const handleDataChanged = () => {
@@ -501,25 +729,15 @@ function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   // Register BOTH listeners - isPollingMode() will dynamically check which one applies
   // This handles the case where events fail and we fall back to polling mid-session
 
-  // Events listener (only fires if events mode is active)
-  const disposeEventsRealtime = onEventsDataChanged(() => {
-    if (!isPollingMode()) {
-      handleDataChanged();
-    }
-  });
+  // Events of any connection, and polls of connections without events
+  const disposeEventsRealtime = onEventsDataChanged(handleDataChanged);
   context.subscriptions.push({ dispose: disposeEventsRealtime });
-
-  // Fallback polling listener (only fires if polling mode is active)
-  const disposeFallbackRealtime = onFallbackDataChanged(() => {
-    if (isPollingMode()) {
-      handleDataChanged();
-    }
-  });
+  const disposeFallbackRealtime = onFallbackDataChanged(handleDataChanged);
   context.subscriptions.push({ dispose: disposeFallbackRealtime });
 
   // Register listener for container state changes (only relevant in events mode)
-  const disposeStateChange = onContainerStateChanged((containerShortId, newState) => {
-    if (!isPollingMode()) {
+  const disposeStateChange = onContainerStateChanged((containerShortId, newState, connectionId) => {
+    if (!isPollingMode(connectionId)) {
       runningLabsProvider.refreshContainer(containerShortId, newState).catch((err: unknown) => {
         outputChannel.debug(
           `Failed to refresh container ${containerShortId}: ${err instanceof Error ? err.message : String(err)}`
@@ -539,46 +757,34 @@ function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   ins.refreshFromEventStream();
 }
 
-function setClabBinPath(): boolean {
+async function setClabBinPath(): Promise<boolean> {
   const configPath = vscode.workspace
     .getConfiguration("containerlab")
     .get<string>("binaryPath", "");
 
   // if empty fall back to resolving from PATH
   if (!configPath || configPath.trim() === "") {
-    for (const lookup of ["which containerlab", "command -v containerlab"]) {
-      try {
-        // eslint-disable-next-line sonarjs/no-os-command-from-path
-        const stdout = execSync(lookup, { encoding: "utf-8" });
-        const resolvedPath = stdout.trim();
-        if (resolvedPath) {
-          setContainerlabBinaryPath(resolvedPath);
-          outputChannel.info(`Resolved containerlab binary from sys PATH as: ${resolvedPath}`);
-          return true;
-        }
-      } catch (err) {
-        const message = getErrorMessage(err);
-        outputChannel.warn(`Could not resolve containerlab bin path via '${lookup}': ${message}`);
-      }
+    const resolvedPath = await findBinary("containerlab");
+    if (resolvedPath !== undefined) {
+      setContainerlabBinaryPath(resolvedPath);
+      outputChannel.info(`Resolved containerlab binary from sys PATH as: ${resolvedPath}`);
+    } else {
+      outputChannel.warn("Could not resolve the containerlab binary from PATH");
+      setContainerlabBinaryPath("containerlab");
     }
-    setContainerlabBinaryPath("containerlab");
     return true;
   }
 
-  try {
-    // Check if file exists and is executable
-    fs.accessSync(configPath, fs.constants.X_OK);
+  if ((await findBinary(configPath)) !== undefined) {
     setContainerlabBinaryPath(configPath);
     outputChannel.info(`Using user configured containerlab binary: ${configPath}`);
     return true;
-  } catch (err) {
-    // Path is invalid or not executable - try to resolve from PATH as fallback
-    const message = getErrorMessage(err);
-    outputChannel.error(`Invalid containerlab.binaryPath "${configPath}": ${message}`);
-    vscode.window.showErrorMessage(
-      `Configured containerlab binary path "${configPath}" is invalid or not executable.`
-    );
   }
+
+  outputChannel.error(`Invalid containerlab.binaryPath "${configPath}": not an executable file`);
+  vscode.window.showErrorMessage(
+    `Configured containerlab binary path "${configPath}" is invalid or not executable.`
+  );
   return false;
 }
 
@@ -599,34 +805,59 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration("containerlab");
   const isSupportedPlatform = process.platform === "linux" || vscode.env.remoteName === "wsl";
 
-  // Allow activation only on Linux or when connected via WSL.
-  // If unsupported, stay silent until the user opens the Containerlab view, then show a warning.
-  if (!isSupportedPlatform) {
+  // Lab hosts work from any platform; labs on this machine need Linux or WSL.
+  const connections = initConnections(context, { localSupported: isSupportedPlatform });
+  context.subscriptions.push(connections, RemoteLabFileSystem.register(connections));
+  await connections.restoreAll();
+  registerConnectionCommands(context);
+  const hasLabServers = connections.list().some((connection) => connection.kind === "api");
+
+  // Without a lab host, activate only on Linux or when connected via WSL.
+  // Elsewhere the view offers to add a lab host; the window reloads once there is one.
+  if (!isSupportedPlatform && !hasLabServers) {
     registerUnsupportedViews(context);
+    context.subscriptions.push(
+      connections.onDidChange(() => {
+        if (connections.list().some((connection) => connection.kind === "api")) {
+          void vscode.commands.executeCommand("workbench.action.reloadWindow");
+        }
+      })
+    );
     return;
   }
 
-  if (!setClabBinPath()) {
-    // don't activate
-    outputChannel.error(`Error setting containerlab binary. Exiting activation.`);
-    return;
+  const localReady =
+    isSupportedPlatform && (await prepareLocalContainerlab(e2eSmokeTest, hasLabServers));
+  if (!localReady && !isSupportedPlatform) {
+    setUsername(os.userInfo().username);
   }
-
-  if (!(await ensureContainerlabBinary(e2eSmokeTest))) {
-    return;
+  if (isSupportedPlatform && !e2eSmokeTest) {
+    // What is missing shows on Local's root; the version on the Lab Hosts page.
+    void checkLocalConnection(connections);
   }
-
-  outputChannel.info("Containerlab extension activated.");
-
-  if (!validateUserPermissions(e2eSmokeTest)) {
-    return;
-  }
-
-  const dockerAvailable = await connectDockerSocket(e2eSmokeTest);
-  if (dockerAvailable === undefined) {
-    return;
-  }
-  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest);
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "containerlab.connection.checkLocal",
+      async (options?: unknown) => {
+        const ready = await checkLocalConnection(connections);
+        await runningLabsProvider.refresh();
+        localLabsProvider.forceRefresh();
+        const quiet =
+          typeof options === "object" && options !== null && Reflect.get(options, "quiet") === true;
+        if (quiet) return;
+        if (ready) {
+          void vscode.window.showInformationMessage("containerlab is ready on this machine.");
+        } else {
+          void vscode.window.showWarningMessage(
+            `Labs on this machine: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
+          );
+        }
+      }
+    )
+  );
+  const dockerAvailable =
+    localReady && (await connectDockerSocket(e2eSmokeTest, hasLabServers)) === true;
+  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest, localReady);
 
   // Explorer data providers (backing model for React explorer)
   setExtensionContext(context);
@@ -653,7 +884,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
   const updateActivityBadgeProxy = async () => {
     try {
-      const runningLabCount = await newRunningProvider.getRootChildrenCount();
+      const runningLabCount = await newRunningProvider.getRunningLabCount();
       activityBadgeProxyView.badge =
         runningLabCount > 0
           ? {
@@ -716,6 +947,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   registerRealtimeUpdates(context);
+  registerConnectionUpdates(context, connections);
   registerProcessShutdownHooks(context);
 
   // Language features (YAML completion)
@@ -728,12 +960,14 @@ export async function activate(context: vscode.ExtensionContext) {
   // Expose a stable API surface for other extensions to access providers safely.
   return {
     getLocalLabsProvider: () => localLabsProvider,
-    getRunningLabsProvider: () => runningLabsProvider
+    getRunningLabsProvider: () => runningLabsProvider,
+    getConnections: () => connections
   };
 }
 
 export function deactivate() {
   explorerViewProvider = undefined;
   stopRealtimeBackgroundWorkers();
+  void disposeLabBackends();
   outputChannel.info("Deactivating Containerlab extension.");
 }

@@ -14,6 +14,7 @@ import {
   flattenContainers
 } from "../treeView/common";
 import { sshUserMapping } from "../globals";
+import { isRemoteNode, openRemoteTerminal } from "../backend/remoteNode";
 
 import { execCommandInTerminal } from "./command";
 
@@ -120,6 +121,13 @@ export function sshToNode(node: ClabContainerTreeNode | undefined): void {
   const defaultMapping = sshUserMapping as Partial<Record<string, string>>;
 
   // The topology's credentials come first, then the user setting, the default mapping and "admin"
+  if (isRemoteNode(node)) {
+    // clab-api-server starts SSH on the lab host, where the node is reachable.
+    void openRemoteTerminal(node, "ssh", `SSH - ${node.name}`, {
+      sshUsername: userSshMapping[node.kind] ?? defaultMapping[node.kind] ?? "admin"
+    });
+    return;
+  }
   const credentials = readTopologyCredentials(node);
   const sshUser = shellQuote(
     credentials.username ?? userSshMapping[node.kind] ?? defaultMapping[node.kind] ?? "admin"

@@ -2,8 +2,11 @@ import { createApiClabUiHost } from "@containerlab/clab-ui/host";
 import { describeTopologyHostContract } from "@srl-labs/containerlab-test-kit/contracts";
 import Fastify from "fastify";
 
-import { ClabApiClient, type TopologyEntry } from "./clabApiClient";
+import type { TopologyEntry } from "@srl-labs/containerlab-lab-backend";
+import { ApiLabBackend, ClabApiClient } from "@srl-labs/containerlab-lab-backend/api";
+
 import type { EndpointEntry } from "./endpointSessionStore";
+import { apiUiStore } from "./uiStore";
 import { registerTopologyProxy } from "./topologyProxy";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager";
 
@@ -53,6 +56,7 @@ describeTopologyHostContract("Web and desktop app server", {
   async createFixture(yaml) {
     const endpoint: EndpointEntry = {
       id: "contract-endpoint",
+      kind: "api",
       url: "http://clab-api.test",
       label: "Contract",
       token: "token",
@@ -63,7 +67,8 @@ describeTopologyHostContract("Web and desktop app server", {
     client.files.set(YAML_PATH, yaml);
     const sessions = createStandaloneTopologySessionManager();
     const app = Fastify({ logger: false });
-    registerTopologyProxy(app, () => ({ client, endpoint }), sessions);
+    const backend = new ApiLabBackend({ baseUrl: endpoint.url, token: endpoint.token, client });
+    registerTopologyProxy(app, () => ({ backend, endpoint, ui: apiUiStore(backend) }), sessions);
 
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = new URL(String(input));

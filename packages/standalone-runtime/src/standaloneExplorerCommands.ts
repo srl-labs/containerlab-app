@@ -40,6 +40,7 @@ import {
   saveConfigsFlow,
   type CloneRepoDialogTarget
 } from "./runtimeActionFlows";
+import { endpointDisplayAddress, endpointHostname } from "./endpointAddress";
 import type { WiresharkCaptureRequest } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import type { LifecycleCommandEndpoint } from "./standaloneHostShared";
@@ -434,12 +435,9 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
 
       const endpoint = findEndpointConfig(endpoints, actionEndpointId);
-      if (endpoint) {
-        try {
-          return new URL(endpoint.url).hostname;
-        } catch {
-          // Ignore malformed endpoint URLs.
-        }
+      const hostname = endpoint ? endpointHostname(endpoint) : undefined;
+      if (hostname) {
+        return hostname;
       }
 
       return trimmed || "localhost";
@@ -732,7 +730,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         endpointOptions: connectedEndpoints.map((endpoint) => ({
           value: endpoint.id,
           label: endpoint.label,
-          description: endpoint.url
+          description: endpointDisplayAddress(endpoint)
         })),
         defaultEndpointId:
           preferredEndpoint?.status === "connected"
@@ -775,7 +773,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         endpointOptions: connectedEndpoints.map((endpoint) => ({
           value: endpoint.id,
           label: endpoint.label,
-          description: endpoint.url
+          description: endpointDisplayAddress(endpoint)
         })),
         popularOptions: popularRepos.map((repo) => ({
           value: repo.htmlUrl,
@@ -1205,7 +1203,9 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           );
           return;
         }
-        await navigator.clipboard.writeText(endpoint.url).catch(() => {});
+        await navigator.clipboard
+          .writeText(endpoint.kind === "local" ? (endpointHostname(endpoint) ?? "") : endpoint.url)
+          .catch(() => {});
         runtimeUiActions.notify(`Copied endpoint URL for ${endpoint.label}.`, "success");
       },
       "containerlab.file.open": openFileEditor,

@@ -10,7 +10,12 @@ test("covers the manifest, searches every category, saves and resets with scope 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/settings.html");
+  // Lab hosts have their own page; a search for them leads there.
   await expect(page.locator("[data-setting-key]")).toHaveCount(33);
+  await search(page, "lab host");
+  await expect(card(page, "connections")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open Lab Hosts" }).click();
+  await expect(page.getByRole("heading", { name: "Lab Hosts" })).toBeVisible();
   await search(page, "telnetPort");
   const setting = card(page, "node.telnetPort");
   await setting.getByRole("spinbutton").fill("65536");

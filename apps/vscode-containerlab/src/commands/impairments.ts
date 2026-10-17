@@ -1,10 +1,10 @@
 // ./src/commands/impairments.ts
 import * as vscode from "vscode";
 
-import { ClabInterfaceTreeNode } from "../treeView/common";
-import { containerlabBinaryPath } from "../globals";
+import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
-import { execCommandInOutput } from "./command";
+import { ClabInterfaceTreeNode } from "../treeView/common";
+import { backendOf } from "../backend/labBackends";
 
 // Common validation messages and patterns
 const ERR_EMPTY = "Input should not be empty";
@@ -30,33 +30,29 @@ export async function setImpairment(
     return;
   }
 
-  const impairmentFlag = Object.entries(impairment)
-    .filter(
-      (entry): entry is [string, string] =>
-        NETEM_FIELDS.includes(entry[0]) && typeof entry[1] === "string"
-    )
-    .map(([key, value]) => `--${key} ${value}`)
-    .join(" ");
-
-  if (impairmentFlag === "") {
+  const netemInterface = node.name.startsWith("clab-s-") && node.alias ? node.alias : node.name;
+  const request: NetemSetRequest = { containerName: node.parentName, interface: netemInterface };
+  for (const [key, value] of Object.entries(impairment)) {
+    if (!NETEM_FIELDS.includes(key) || typeof value !== "string" || value.trim() === "") continue;
+    if (key === "delay" || key === "jitter") {
+      request[key] = value.trim();
+    } else if (key === "loss" || key === "rate" || key === "corruption") {
+      request[key] = Number(value.trim().replace(/%$/, ""));
+    }
+  }
+  if (Object.keys(request).length === 2) {
     return;
   }
 
-  const netemInterface = node.name.startsWith("clab-s-") && node.alias ? node.alias : node.name;
-  const cmd = `${containerlabBinaryPath} tools netem set --node ${node.parentName} --interface ${netemInterface} ${impairmentFlag}`;
   const msg = `set link impairment to ${JSON.stringify(impairment)} for ${node.name} on ${node.parentName}.`;
   vscode.window.showInformationMessage(`Attempting to ${msg}`);
-
-  void execCommandInOutput(
-    cmd,
-    false,
-    () => {
-      vscode.window.showInformationMessage(`Successfully ${msg}`);
-    },
-    (_proc: unknown, stderr: string): void => {
-      vscode.window.showErrorMessage(`Failed to ${msg}\n\n${stderr}.`);
-    }
-  );
+  try {
+    await backendOf(node).netemSet(request);
+    vscode.window.showInformationMessage(`Successfully ${msg}`);
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(`Failed to ${msg}\n\n${detail}.`);
+  }
 }
 
 async function promptImpairment(

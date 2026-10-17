@@ -16,6 +16,7 @@ COPY apps/desktop/package.json apps/desktop/package.json
 COPY apps/vscode-containerlab/package.json apps/vscode-containerlab/package.json
 COPY packages/app-contract/package.json packages/app-contract/package.json
 COPY packages/app-server/package.json packages/app-server/package.json
+COPY packages/lab-backend/package.json packages/lab-backend/package.json
 COPY packages/clab-ui/package.json packages/clab-ui/package.json
 COPY packages/standalone-runtime/package.json packages/standalone-runtime/package.json
 COPY packages/test-kit/package.json packages/test-kit/package.json
@@ -28,6 +29,7 @@ COPY tsconfig.base.json ./
 COPY apps/web ./apps/web
 COPY packages/app-contract ./packages/app-contract
 COPY packages/app-server ./packages/app-server
+COPY packages/lab-backend ./packages/lab-backend
 COPY packages/clab-ui ./packages/clab-ui
 COPY packages/standalone-runtime ./packages/standalone-runtime
 
@@ -40,7 +42,9 @@ ENV PORT=3001
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+# openssl creates the self-signed certificate. The Docker CLI and git serve
+# labs on the app's own host (WEB_LOCAL_LABS), with containerlab mounted in.
+RUN apk add --no-cache openssl docker-cli docker-cli-compose git
 
 COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 

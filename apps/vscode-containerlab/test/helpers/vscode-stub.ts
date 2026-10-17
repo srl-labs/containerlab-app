@@ -21,8 +21,23 @@ export const window = {
   },
   showInformationMessage(message: string) {
     this.lastInfoMessage = message;
+  },
+  progressReports: [] as string[],
+  async withProgress<T>(
+    _options: unknown,
+    task: (
+      progress: { report(value: { message?: string }): void },
+      token: { onCancellationRequested(listener: () => void): void }
+    ) => Promise<T>
+  ): Promise<T> {
+    return task(
+      { report: (value) => this.progressReports.push(value.message ?? "") },
+      { onCancellationRequested: () => {} }
+    );
   }
 };
+
+export const ProgressLocation = { Notification: 15 };
 
 export const commands = {
   executed: [] as { command: string; args: any[] }[],

@@ -6,7 +6,9 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import type { ClabApiClient } from "./clabApiClient.ts";
+import type { TopologyFileSystem } from "@srl-labs/containerlab-lab-backend";
+
+import type { EndpointResolver } from "./endpointResolver.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
 import type {
   TopologyEdgeData,
@@ -300,8 +302,7 @@ function createEmptySnapshot(
 }
 
 async function attachDocumentRevision(
-  client: ClabApiClient,
-  token: string,
+  files: TopologyFileSystem,
   topologyRef: TopologyRef,
   snapshot: TopologySnapshot,
   options: { force?: boolean } = {}
@@ -313,22 +314,12 @@ async function attachDocumentRevision(
   ) {
     return snapshot;
   }
-  const documentRevision = await client.getTopologyDocumentRevision(
-    token,
-    topologyRef.labName,
-    topologyRef.yamlPath
-  );
+  const documentRevision = await files.revision(topologyRef.yamlPath);
   if (documentRevision) {
     snapshot.documentRevision = documentRevision;
   }
   return snapshot;
 }
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 function resolveRequestedMode(mode: "edit" | "view" | undefined): "edit" | "view" {
   // Topologies are editable regardless of deployment state; read-only mode is
@@ -346,7 +337,6 @@ function topologyErrorStatusCode(error: unknown): number {
 
 async function snapshotForRequest(
   body: SnapshotRequest,
-  client: ClabApiClient,
   endpoint: EndpointEntry,
   sessions: StandaloneTopologySessionManager
 ): Promise<TopologySnapshot> {
@@ -371,7 +361,7 @@ async function snapshotForRequest(
     ? await session.host.onExternalChange()
     : await session.host.getSnapshot();
   const snapshot = session.sourcePreference === "api-file"
-    ? await attachDocumentRevision(client, endpoint.token, session.topologyRef, rawSnapshot, {
+    ? await attachDocumentRevision(session.files, session.topologyRef, rawSnapshot, {
         force: body.externalChange === true
       })
     : rawSnapshot;
@@ -381,7 +371,6 @@ async function snapshotForRequest(
 
 async function responseForCommandRequest(
   body: CommandRequest,
-  client: ClabApiClient,
   endpoint: EndpointEntry,
   sessions: StandaloneTopologySessionManager
 ): Promise<TopologyHostResponseMessage> {
@@ -412,8 +401,7 @@ async function responseForCommandRequest(
     session.sourcePreference === "api-file"
   ) {
     response.snapshot = await attachDocumentRevision(
-      client,
-      endpoint.token,
+      session.files,
       session.topologyRef,
       response.snapshot,
       { force: true }
@@ -444,16 +432,11 @@ export function registerTopologyProxy(
         return reply.status(400).send({ error: "Missing topologyRef" });
       }
 
-      const { client, endpoint } = resolved;
+      const { backend, endpoint } = resolved;
       const sourcePreference = request.body.sourcePreference === "running-lab-doc" ? "running-lab-doc" : "api-file";
       const canonicalTopologyRef = sourcePreference === "running-lab-doc"
         ? normalizeStandaloneTopologyRef(topologyRef, endpoint.id)
-        : await resolveCanonicalStandaloneTopologyRef(
-            client,
-            endpoint.token,
-            topologyRef,
-            endpoint.id
-          );
+        : await resolveCanonicalStandaloneTopologyRef(backend, topologyRef, endpoint.id);
       const deploymentState = request.body.deploymentState ?? "undeployed";
       const mode =
         request.body.mode ?? (sourcePreference === "running-lab-doc" ? "view" : "edit");
@@ -462,8 +445,7 @@ export function registerTopologyProxy(
       );
 
       const session = sessions.createSession({
-        client,
-        token: endpoint.token,
+        backend,
         endpointId: endpoint.id,
         topologyRef: canonicalTopologyRef,
         mode,
@@ -508,10 +490,10 @@ export function registerTopologyProxy(
       if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
-      const { client, endpoint } = resolved;
+      const { endpoint } = resolved;
 
       try {
-        const snapshot = await snapshotForRequest(request.body, client, endpoint, sessions);
+        const snapshot = await snapshotForRequest(request.body, endpoint, sessions);
         return reply.send({ snapshot });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -532,10 +514,10 @@ export function registerTopologyProxy(
       if (!resolved) {
         return reply.status(401).send({ error: "Not authenticated" });
       }
-      const { client, endpoint } = resolved;
+      const { endpoint } = resolved;
 
       try {
-        const response = await responseForCommandRequest(request.body, client, endpoint, sessions);
+        const response = await responseForCommandRequest(request.body, endpoint, sessions);
         return reply.send(response);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

@@ -1,16 +1,14 @@
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
-import { exec, execSync } from "child_process";
 import * as net from "net";
-import { promisify } from "util";
 
 import * as vscode from "vscode";
+import { detectLocalUser } from "@srl-labs/containerlab-lab-backend/local";
 
 import { ClabLabTreeNode } from "../treeView/common";
-import { containerlabBinaryPath, outputChannel } from "../globals";
-
-const execAsync = promisify(exec);
+import { outputChannel } from "../globals";
+import { getLocalBackend, isUriString, labPathOf } from "../backend/labBackends";
 
 export function stripAnsi(input: string): string {
   const esc = String.fromCharCode(27);
@@ -24,6 +22,10 @@ function stripFileName(p: string): string {
 }
 
 export function getRelativeFolderPath(targetPath: string): string {
+  if (isUriString(targetPath)) {
+    // A lab host file: its path in the server's workspace.
+    return vscode.Uri.parse(targetPath).path.replace(/^\/+/, "");
+  }
   const workspacePath = vscode.workspace.workspaceFolders
     ? vscode.workspace.workspaceFolders[0].uri.path
     : "";
@@ -43,7 +45,7 @@ export function getRelLabFolderPath(labPath: string): string {
  *   5) Using realpathSync if exists
  */
 export function normalizeLabPath(labPath: string, singleFolderBase?: string): string {
-  if (!labPath) {
+  if (!labPath || isUriString(labPath)) {
     return labPath;
   }
   labPath = path.normalize(labPath);
@@ -80,79 +82,26 @@ export function titleCase(str: string) {
   return str[0].toLocaleUpperCase() + str.slice(1);
 }
 
-// Get relevant user information we need to validate permissions.
-export function getUserInfo(): {
+/**
+ * Who runs the extension, and whether they may run containerlab without sudo:
+ * root, or a member of clab_admins and (for Docker) the docker group.
+ */
+export async function getUserInfo(): Promise<{
   hasPermission: boolean;
   isRoot: boolean;
   userGroups: string[];
   username: string;
   uid: number;
-} {
+}> {
   try {
-    // Check if running as root
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const uidOut = execSync("id -u", { encoding: "utf-8" });
-    const uid = parseInt(uidOut.trim(), 10);
-    const isRoot = uid === 0;
-
-    // Get username
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const usernameOut = execSync("id -un", { encoding: "utf-8" });
-    const username = usernameOut.trim();
-
-    // Check group membership
-    // eslint-disable-next-line sonarjs/no-os-command-from-path
-    const groupsOut = execSync("id -nG", { encoding: "utf-8" });
-    const userGroups = groupsOut.trim().split(/\s+/);
-
-    if (isRoot) {
-      return {
-        hasPermission: true,
-        isRoot: true,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    const isMemberOfClabAdmins = userGroups.includes("clab_admins");
-
-    const runtime = getConfig<string>("runtime", "docker");
-    const isMemberOfDocker = userGroups.includes("docker");
-
-    const noPermission = {
-      hasPermission: false,
-      isRoot: false,
-      userGroups,
-      username,
-      uid
+    const access = await detectLocalUser({ runtime: getConfig<string>("runtime", "docker") });
+    return {
+      hasPermission: access.canRunLabs,
+      isRoot: access.isRoot,
+      userGroups: access.groups,
+      username: access.username,
+      uid: access.uid
     };
-
-    if (!isMemberOfClabAdmins) {
-      return noPermission;
-    }
-
-    if (runtime === "docker" && isMemberOfDocker) {
-      return {
-        hasPermission: true,
-        isRoot: false,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    if (runtime === "podman") {
-      return {
-        hasPermission: true,
-        isRoot: false,
-        userGroups,
-        username,
-        uid
-      };
-    }
-
-    return noPermission;
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     outputChannel.error(`User info check failed: ${errorMessage}`);
@@ -211,53 +160,18 @@ export function getConfig<T = unknown>(relCfgPath: string, defaultValue?: T): T 
 // Containerlab helper functions
 // ----------------------------------------------------------
 
-/**
- * Log info messages to the output channel.
- */
-function log(message: string, channel: vscode.LogOutputChannel) {
-  channel.info(message);
-}
-
-async function runAndLog(
-  cmd: string,
-  description: string,
-  outputChannel: vscode.LogOutputChannel,
-  returnOutput: boolean,
-  includeStderr: boolean
-): Promise<string | void> {
-  const { stdout: cmdOut, stderr: cmdErr } = await execAsync(cmd);
-  if (cmdOut) outputChannel.info(cmdOut);
-  if (cmdErr) outputChannel.warn(`[${description} stderr]: ${cmdErr}`);
-  const combined =
-    includeStderr && returnOutput ? [cmdOut, cmdErr].filter(Boolean).join("\n") : cmdOut;
-  return returnOutput ? combined : undefined;
-}
-
-/**
- * Runs a command and logs output to the channel.
- * If `returnOutput` is true, the function returns the command's stdout as a string.
- */
-export async function runCommand(
-  command: string,
-  description: string,
-  outputChannel: vscode.LogOutputChannel,
-  returnOutput: boolean = false,
-  includeStderr: boolean = false
-): Promise<string | void> {
-  log(`Running: ${command}`, outputChannel);
-  try {
-    return await runAndLog(command, description, outputChannel, returnOutput, includeStderr);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Error(`Command failed: ${command}\n${message}`);
-  }
-}
-
 // Launch clab install script in a terminal. Let the shell handle sudo passwords.
 export function installContainerlab(): void {
   const terminal = vscode.window.createTerminal("Containerlab Installation");
   terminal.show();
   terminal.sendText('curl -sL https://containerlab.dev/setup | sudo bash -s "all"');
+}
+
+/**
+ * Log info messages to the output channel.
+ */
+function log(message: string, channel: vscode.LogOutputChannel) {
+  channel.info(message);
 }
 
 /**
@@ -269,16 +183,9 @@ export async function checkAndUpdateClabIfNeeded(
   context: vscode.ExtensionContext
 ): Promise<void> {
   try {
-    const versionOutputRaw = await runCommand(
-      `${containerlabBinaryPath} version check`,
-      "containerlab version check",
-      outputChannel,
-      true,
-      true
-    );
-    const versionOutput = (typeof versionOutputRaw === "string" ? versionOutputRaw : "").trim();
-    if (!versionOutput) {
-      throw new Error("No output from containerlab version check command.");
+    const versionOutput = (await getLocalBackend().versionCheck()).checkResult.trim();
+    if (!versionOutput || versionOutput === "Failed fetching latest version information") {
+      throw new Error(versionOutput || "No output from containerlab version check.");
     }
 
     if (versionOutput.includes("Version check timed out")) {
@@ -297,7 +204,7 @@ export async function checkAndUpdateClabIfNeeded(
         vscode.commands.registerCommand(updateCommandId, () => {
           const terminal = vscode.window.createTerminal("Containerlab Update");
           terminal.show();
-          terminal.sendText(`${containerlabBinaryPath} version upgrade`);
+          terminal.sendText(getLocalBackend().commandLine(["version", "upgrade"]));
           vscode.window.showInformationMessage(
             `Containerlab update started in terminal 'Containerlab Update'. Please follow the prompts.`
           );
@@ -348,16 +255,19 @@ export async function getSelectedLabNode(
   // instead of a tree node. Fall back to the active editor when no Uri is given.
   let labPath: string | undefined;
   if (node instanceof vscode.Uri) {
-    labPath = node.fsPath;
+    labPath = labPathOf(node);
   } else {
-    labPath = vscode.window.activeTextEditor?.document.uri.fsPath;
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    labPath = activeUri ? labPathOf(activeUri) : undefined;
   }
 
   if (labPath === undefined || labPath === "" || !/\.clab\.(yml|yaml)$/i.test(labPath)) {
     return undefined;
   }
 
-  const fileName = path.basename(labPath);
+  const fileName = isUriString(labPath)
+    ? path.posix.basename(vscode.Uri.parse(labPath).path)
+    : path.basename(labPath);
   return new ClabLabTreeNode(fileName, vscode.TreeItemCollapsibleState.None, {
     absolute: labPath,
     relative: fileName

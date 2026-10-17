@@ -6,6 +6,7 @@ import type * as vscode from "vscode";
 
 import type { CustomIconInfo, CustomNodeTemplate } from "@containerlab/clab-ui/session";
 import { getDockerImages } from "../../../utils/docker/images";
+import { connectionOf } from "../../../backend/labBackends";
 import { getCustomNodesFromConfig } from "../services/schema";
 import { iconService } from "../services/IconService";
 
@@ -37,8 +38,8 @@ export async function buildBootstrapData(input: BootstrapDataInput): Promise<Boo
   const customNodes = getCustomNodesFromConfig();
   const defaultNode = customNodes.find((n) => n.setDefault === true)?.name ?? "";
 
-  // Get docker images for image dropdown
-  const dockerImages = getDockerImages();
+  // Images for the image dropdown, from where the lab runs
+  const dockerImages = getDockerImages(connectionOf(yamlFilePath).id);
 
   // Load custom icons from workspace and global directories
   const customIcons = await iconService.loadAllIcons(yamlFilePath);

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { isValidEndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
-import type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
+import type { EndpointKind, EndpointSessionDuration } from "@srl-labs/containerlab-app-contract";
 export {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   normalizeEndpointSessionDuration,
@@ -13,6 +13,8 @@ export type { EndpointSessionDuration } from "@srl-labs/containerlab-app-contrac
 
 export interface EndpointEntry {
   id: string;
+  /** A local endpoint has no URL to sign in to and no token. */
+  kind: EndpointKind;
   url: string;
   label: string;
   token: string;
@@ -24,9 +26,14 @@ export interface EndpointSession {
   sessionId: string;
   endpoints: Map<string, EndpointEntry>;
   lastAccess: number;
+  /** The user removed the local endpoint, so it is not connected again by itself. */
+  localHidden?: boolean;
 }
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** The address a local endpoint shows in place of an API URL. */
+export const LOCAL_ENDPOINT_URL = "local://this-computer";
 
 function cloneEntries(entries: Iterable<EndpointEntry>): Map<string, EndpointEntry> {
   return new Map(Array.from(entries, (entry) => [entry.id, { ...entry }]));
@@ -55,6 +62,7 @@ export interface EndpointSessionStoreOptions {
 interface PersistedEndpointSession {
   endpoints: EndpointEntry[];
   lastAccess: number;
+  localHidden?: boolean;
   sessionId: string;
 }
 
@@ -67,7 +75,14 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isEndpointEntry(value: unknown): value is EndpointEntry {
+/** A stored endpoint; entries saved before endpoint kinds existed are API endpoints. */
+function toEndpointEntry(value: unknown): EndpointEntry | null {
+  if (!isEndpointRecord(value)) return null;
+  const kind = value.kind === "local" ? "local" : "api";
+  return { ...value, kind } as EndpointEntry;
+}
+
+function isEndpointRecord(value: unknown): value is Omit<EndpointEntry, "kind"> & { kind?: unknown } {
   return (
     isObject(value) &&
     typeof value.id === "string" &&
@@ -90,6 +105,7 @@ function serializeSessions(sessions: Iterable<EndpointSession>): PersistedEndpoi
     sessions: Array.from(sessions, (session) => ({
       sessionId: session.sessionId,
       lastAccess: session.lastAccess,
+      ...(session.localHidden ? { localHidden: true } : {}),
       endpoints: Array.from(session.endpoints.values(), (entry) => ({
         ...entry
       }))
@@ -128,11 +144,14 @@ function readPersistedSessions(persistenceFile: string | undefined): Map<string,
       continue;
     }
 
-    const endpoints = persistedSession.endpoints.filter(isEndpointEntry);
+    const endpoints = persistedSession.endpoints
+      .map(toEndpointEntry)
+      .filter((entry): entry is EndpointEntry => entry !== null);
     const session: EndpointSession = {
       sessionId: persistedSession.sessionId,
       endpoints: cloneEntries(endpoints),
-      lastAccess: persistedSession.lastAccess
+      lastAccess: persistedSession.lastAccess,
+      ...(persistedSession.localHidden === true ? { localHidden: true } : {})
     };
     if (!sessionIsExpired(session)) {
       sessions.set(session.sessionId, session);
@@ -227,8 +246,12 @@ export function createEndpointSessionStore(
       if (removed) {
         session.endpoints.delete(endpointId);
       }
+      if (removed?.kind === "local") {
+        // Remember the choice: the session outlives its last endpoint for that.
+        session.localHidden = true;
+      }
 
-      if (session.endpoints.size === 0) {
+      if (session.endpoints.size === 0 && !session.localHidden) {
         sessions.delete(sessionId);
         persistSessions();
         return { removed, sessionEmpty: true };
@@ -259,6 +282,9 @@ export function createEndpointSessionStore(
       const nextEndpoints = new Map(existing.endpoints);
       nextEndpoints.set(entry.id, { ...entry });
       existing.endpoints = nextEndpoints;
+      if (entry.kind === "local") {
+        delete existing.localHidden;
+      }
       touch(existing);
       persistSessions();
       return existing;

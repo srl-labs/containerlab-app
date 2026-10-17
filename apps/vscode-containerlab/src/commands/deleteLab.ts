@@ -5,6 +5,7 @@ import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { favoriteLabs, extensionContext } from "../globals";
+import { isUriString, labUri } from "../backend/labBackends";
 
 export async function deleteLab(node: ClabLabTreeNode) {
   const filePath = node.labPath.absolute;
@@ -14,7 +15,7 @@ export async function deleteLab(node: ClabLabTreeNode) {
   }
 
   const confirm = await vscode.window.showWarningMessage(
-    `Delete lab "${path.basename(filePath)}"? This action cannot be undone.`,
+    `Delete lab "${isUriString(filePath) ? path.posix.basename(labUri(filePath).path) : path.basename(filePath)}"? This action cannot be undone.`,
     { modal: true },
     "Delete"
   );
@@ -23,7 +24,11 @@ export async function deleteLab(node: ClabLabTreeNode) {
   }
 
   try {
-    await fs.promises.unlink(filePath);
+    if (isUriString(filePath)) {
+      await vscode.workspace.fs.delete(labUri(filePath), { useTrash: false });
+    } else {
+      await fs.promises.unlink(filePath);
+    }
     favoriteLabs.delete(filePath);
     await extensionContext.globalState.update("favoriteLabs", Array.from(favoriteLabs));
     vscode.window.showInformationMessage(`Deleted lab file ${node.label}`);

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createRuntimeContainerDataProvider } from "@containerlab/clab-ui/session";
 
-import type { ClabApiClient } from "./clabApiClient";
+import { ApiLabBackend, type ClabApiClient } from "@srl-labs/containerlab-lab-backend/api";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager";
 
 function notFound(path: string): Error & { status: number } {
@@ -132,8 +132,7 @@ test("topology sessions expose an internal-update grace window after host writes
 
   try {
     const session = manager.createSession({
-      client,
-      token: "secret-token",
+      backend: apiBackend(client, "secret-token"),
       endpointId: "endpoint-remote",
       topologyRef: {
         topologyId: `standalone:endpoint-remote::${yamlPath}`,
@@ -175,8 +174,7 @@ test("active topology session leases prevent idle cleanup until released", (t) =
 
   try {
     const session = manager.createSession({
-      client,
-      token: "secret-token",
+      backend: apiBackend(client, "secret-token"),
       endpointId: "endpoint-remote",
       topologyRef: {
         topologyId: `standalone:endpoint-remote::${yamlPath}`,
@@ -229,8 +227,7 @@ test("running-lab-doc sessions create missing annotations and recover from a fai
 
   try {
     const session = manager.createSession({
-      client,
-      token: "secret-token",
+      backend: apiBackend(client, "secret-token"),
       endpointId: "endpoint-remote",
       topologyRef: {
         topologyId: `standalone:endpoint-remote::${yamlPath}`,
@@ -309,8 +306,7 @@ test("failed running-document batch restores YAML and annotations and allows ret
   const manager = createStandaloneTopologySessionManager();
   t.after(() => manager.disposeAll());
   const session = manager.createSession({
-    client: client as unknown as ClabApiClient,
-    token: "test-token",
+    backend: apiBackend(client, "test-token"),
     endpointId: "rollback-endpoint",
     topologyRef: {
       topologyId: yamlPath,
@@ -362,3 +358,8 @@ test("failed running-document batch restores YAML and annotations and allows ret
   assert.equal(retried.type, "topology-host:ack");
   assert.match(await client.getLabTopologyYaml("test-token", labName), /n1/);
 });
+
+function apiBackend(client: unknown, token: string): ApiLabBackend {
+  const apiClient = client as ClabApiClient;
+  return new ApiLabBackend({ baseUrl: apiClient.getBaseUrl(), token, client: apiClient });
+}

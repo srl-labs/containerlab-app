@@ -6,7 +6,8 @@ import * as vscode from "vscode";
 
 import { log } from "../services/logger";
 import { createTopologySyncController } from "@containerlab/clab-ui/host";
-import { nodeFsAdapter } from "../shared/io";
+import { fsAdapterFor } from "../shared/io";
+import { labUri } from "../../../backend/labBackends";
 import { onDockerImagesUpdated } from "../../../utils/docker/images";
 
 /**
@@ -87,8 +88,12 @@ export class WatcherManager {
         }
       }
     });
-    const fileUri = vscode.Uri.file(yamlFilePath);
-    this.fileWatcher = vscode.workspace.createFileSystemWatcher(fileUri.fsPath);
+    const fileUri = labUri(yamlFilePath);
+    this.fileWatcher = vscode.workspace.createFileSystemWatcher(
+      fileUri.scheme === "file"
+        ? fileUri.fsPath
+        : new vscode.RelativePattern(fileUri.with({ path: "/" }), fileUri.path.slice(1))
+    );
 
     // Initialize content caches to prevent false-positive external change detection
     void this.refreshContentCaches(yamlFilePath);
@@ -104,7 +109,15 @@ export class WatcherManager {
     });
 
     const annotationsPath = `${yamlFilePath}.annotations.json`;
-    this.annotationsWatcher = vscode.workspace.createFileSystemWatcher(annotationsPath);
+    const annotationsUri = labUri(annotationsPath);
+    this.annotationsWatcher = vscode.workspace.createFileSystemWatcher(
+      annotationsUri.scheme === "file"
+        ? annotationsPath
+        : new vscode.RelativePattern(
+            annotationsUri.with({ path: "/" }),
+            annotationsUri.path.slice(1)
+          )
+    );
     const handleAnnotations = (trigger: "change" | "create" | "delete") => {
       void this.handleExternalAnnotationsChange(
         trigger,
@@ -126,14 +139,14 @@ export class WatcherManager {
   async refreshContentCaches(yamlFilePath: string): Promise<void> {
     if (!yamlFilePath) return;
     try {
-      this.lastYamlContent = await nodeFsAdapter.readFile(yamlFilePath);
+      this.lastYamlContent = await fsAdapterFor(yamlFilePath).readFile(yamlFilePath);
     } catch {
       this.lastYamlContent = undefined;
     }
 
     const annotationsPath = `${yamlFilePath}.annotations.json`;
     try {
-      this.lastAnnotationsContent = await nodeFsAdapter.readFile(annotationsPath);
+      this.lastAnnotationsContent = await fsAdapterFor(annotationsPath).readFile(annotationsPath);
     } catch {
       // Use empty string to match handleExternalAnnotationsChange fallback
       this.lastAnnotationsContent = "";
@@ -153,7 +166,8 @@ export class WatcherManager {
 
     this.saveListener?.dispose();
     this.saveListener = vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.uri.fsPath !== yamlFilePath) return;
+      const docPath = doc.uri.scheme === "file" ? doc.uri.fsPath : doc.uri.toString();
+      if (docPath !== yamlFilePath) return;
       void this.handleExternalYamlChange(
         "save",
         yamlFilePath,
@@ -167,9 +181,12 @@ export class WatcherManager {
   /**
    * Set up docker images subscription for real-time updates
    */
-  setupDockerImagesSubscription(panel: vscode.WebviewPanel): void {
+  setupDockerImagesSubscription(panel: vscode.WebviewPanel, connectionId: string): void {
     this.dockerImagesSubscription?.dispose();
-    this.dockerImagesSubscription = onDockerImagesUpdated((images) => {
+    this.dockerImagesSubscription = onDockerImagesUpdated((update) => {
+      // Only the images of the host the lab runs on.
+      if (update.connectionId !== connectionId) return;
+      const images = update.images;
       panel.webview.postMessage({
         type: "docker-images-updated",
         dockerImages: images
@@ -196,7 +213,7 @@ export class WatcherManager {
     }
 
     try {
-      const currentContent = await nodeFsAdapter.readFile(yamlFilePath);
+      const currentContent = await fsAdapterFor(yamlFilePath).readFile(yamlFilePath);
       if (this.lastYamlContent === currentContent) {
         log.debug(
           `[ReactTopoViewer] YAML ${trigger} detected but content unchanged, skipping refresh`
@@ -233,7 +250,7 @@ export class WatcherManager {
     try {
       let currentContent = "";
       try {
-        currentContent = await nodeFsAdapter.readFile(annotationsPath);
+        currentContent = await fsAdapterFor(annotationsPath).readFile(annotationsPath);
       } catch {
         currentContent = "";
       }
