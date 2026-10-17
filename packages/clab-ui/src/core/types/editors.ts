@@ -17,6 +17,7 @@ import type { NodeCredentials, ResolvedNodeCredentials } from "../parsing/NodeCr
 export type NodeEditorTabId =
   | "basic"
   | "components"
+  | "kind"
   | "config"
   | "runtime"
   | "network"
@@ -137,6 +138,8 @@ interface SharedTemplateFields extends AdvancedNodeFields {
   components?: SrosComponent[];
   /** Node-level SFM type of a distributed SR-SIM chassis */
   sfm?: string;
+  /** Other kind-specific config keys (custom-prompt, daemons, ...), by YAML key */
+  kindConfig?: Record<string, unknown>;
 }
 
 /**
