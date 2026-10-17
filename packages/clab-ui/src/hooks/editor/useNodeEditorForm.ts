@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 import type { NodeEditorData } from "../../components/panels/node-editor/types";
 import { convertEditorDataToNodeSaveData } from "../../core/utilities";
+import { KIND_CONFIG_KEYS } from "../../core/utilities/nodeKindConfig";
 
 import { applyFormUpdates } from "./formState";
 
@@ -33,6 +34,12 @@ export function hasFieldChanged(
   formData: NodeEditorData,
   initialData: NodeEditorData
 ): boolean {
+  if (KIND_CONFIG_KEYS.includes(yamlKey)) {
+    return (
+      JSON.stringify(formData.kindConfig?.[yamlKey]) !==
+      JSON.stringify(initialData.kindConfig?.[yamlKey])
+    );
+  }
   const editorKey = YAML_TO_EDITOR_MAP[yamlKey] ?? yamlKey;
   const currentVal: unknown = Reflect.get(formData, editorKey);
   const initialVal: unknown = Reflect.get(initialData, editorKey);

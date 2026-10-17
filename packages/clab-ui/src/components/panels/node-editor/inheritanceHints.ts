@@ -59,3 +59,18 @@ export function inheritedListItems(
   }
   return items;
 }
+
+/** Hint for a kind-specific key (custom-prompt, daemons, ...), which is inherited whole. */
+export function inheritedKindConfigHint(
+  { data, inheritance }: Pick<TabProps, "data" | "inheritance">,
+  key: string
+): string | undefined {
+  const source = inheritance?.kindConfigSource(key);
+  if (!inheritance || !source) return undefined;
+  const label = describeInheritanceSource(source);
+  const current = data.kindConfig?.[key];
+  if (isEmpty(current)) return `Falls back to ${label}`;
+  return deepEqual(current, inheritance.values.kindConfig?.[key])
+    ? `From ${label}`
+    : `Overrides ${label}`;
+}

@@ -59,6 +59,24 @@ A value the node gets from `defaults`, its kind, or its group shows where it com
 
 containerlab applies them in order: `defaults`, then the node's kind, then its group, then the node itself. Environment variables, labels, binds, exec commands, and similar lists add up across levels; other values come from the most specific level that sets them.
 
+## Kind-specific settings
+
+Some kinds take [settings of their own](https://containerlab.dev/manual/nodes/#kind-specific-config). The **Kind** tab of the Node Editor shows the ones the node's kind accepts, for example:
+
+| Kind | Settings |
+| --- | --- |
+| `nokia_srlinux` | Custom prompt, EDA gRPC server, line cards (`components`) |
+| `nokia_sros`, `nokia_srsim` | Config mode, component config generation |
+| `cisco_iol` | PID offset, management interface, bootstrap config |
+| `arista_ceos` | Copy to flash |
+| `frr`, `frrouting` | Daemons |
+| `k8s-kind` | Kubeconfig path, wait time |
+| `nvidia_cumulusvx` | Port count, breakouts |
+
+The fields come from the containerlab schema, so new kinds and settings appear once the app ships the newer schema. Kinds without such settings have no **Kind** tab. If you change a node's kind, settings the new kind doesn't accept are removed, since containerlab won't deploy the node with them.
+
+`nokia_sros` and `nokia_srsim` nodes have a **Components** tab for cards, MDAs, XIOMs, and the SFM. For `nokia_sros`, each card can also set the vCPUs, RAM, and NICs of its VM. In **Defaults & Groups**, a section without a kind shows every kind-specific setting and the kinds it applies to.
+
 ## Set the boot order
 
 The **Stages** tab of the Node Editor sets containerlab [stages](https://containerlab.dev/manual/nodes/#stages). Under each stage (**Create**, **Create Links**, **Configure**, **Healthy**, **Exit**):

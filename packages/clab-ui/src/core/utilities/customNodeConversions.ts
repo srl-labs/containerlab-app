@@ -106,7 +106,8 @@ function buildCommonTemplateFields(data: TemplateFieldSource) {
     // Components tab fields (SROS)
     isDistributed: data.isDistributed,
     components: data.components,
-    sfm: data.sfm
+    sfm: data.sfm,
+    kindConfig: data.kindConfig
   };
 }
 
