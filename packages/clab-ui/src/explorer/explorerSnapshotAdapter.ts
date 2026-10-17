@@ -70,6 +70,8 @@ export interface ExplorerActionInvocation {
 export interface ExplorerContributedMenuItem {
   commandId: string;
   contextValues?: readonly string[];
+  /** Label in the explorer, instead of the command's title. */
+  labelOverride?: string;
   /** For lab host roots: only on these kinds of host. */
   endpointKinds?: readonly ("local" | "api")[];
   /** For lab host roots: only while the host is connected (or, with false, while it is not). */
@@ -541,7 +543,9 @@ function appendContributedActions(
       registry,
       contributedAction.commandId,
       item ? [item] : [],
-      commandLabels.get(contributedAction.commandId) ?? contributedAction.label,
+      contributedAction.labelOverride ??
+        commandLabels.get(contributedAction.commandId) ??
+        contributedAction.label,
       contributedAction.destructive,
       commandIcons.get(contributedAction.commandId) ?? contributedAction.iconId,
       item && disabledResolver ? disabledResolver(contributedAction.commandId, item) : undefined

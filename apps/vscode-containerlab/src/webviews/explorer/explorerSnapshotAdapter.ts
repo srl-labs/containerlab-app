@@ -14,6 +14,7 @@ export interface ExplorerCommandMetadata {
 }
 
 interface ExplorerEndpointAction extends ExplorerContributedMenuItem {
+  labelOverride?: string;
   endpointKinds?: readonly ("local" | "api")[];
   whenConnected?: boolean;
 }
@@ -25,23 +26,23 @@ interface ExplorerEndpointAction extends ExplorerContributedMenuItem {
 const ENDPOINT_ACTIONS: readonly ExplorerEndpointAction[] = [
   {
     commandId: "containerlab.lab.deploy.specificFile",
-    label: "Deploy Lab File…",
+    labelOverride: "Deploy Lab File…",
     whenConnected: true
   },
-  { commandId: "containerlab.images.manage", label: "Manage Images", whenConnected: true },
+  { commandId: "containerlab.images.manage", labelOverride: "Manage Images", whenConnected: true },
   {
     commandId: "containerlab.connection.openWorkspace",
-    label: "Open Files in Explorer",
+    labelOverride: "Open Files in Explorer",
     endpointKinds: ["api"],
     whenConnected: true
   },
   {
     commandId: "containerlab.connection.signOut",
-    label: "Sign Out",
+    labelOverride: "Sign Out",
     endpointKinds: ["api"],
     whenConnected: true
   },
-  { commandId: "containerlab.connection.manage", label: "Manage Lab Hosts…" }
+  { commandId: "containerlab.connection.manage", labelOverride: "Manage Lab Hosts…" }
 ];
 
 interface ExtensionContributes {
