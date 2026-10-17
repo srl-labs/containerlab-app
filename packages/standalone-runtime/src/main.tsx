@@ -16,6 +16,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { installDesktopChrome } from "./desktopChrome";
 import { publicAssetUrl } from "./publicAssetUrl";
 import { useAuth } from "./hooks/useAuth";
+import { useAuthStore } from "./stores/authStore";
 import { resolveStandaloneStartupScreen } from "./startupScreen";
 import {
   type EndpointSessionDuration
@@ -124,12 +125,22 @@ function BootstrapApp() {
         ? {
             available: localEndpoint.available,
             problems: localEndpoint.problems,
+            ...(localEndpoint.containerlabVersion
+              ? { containerlabVersion: localEndpoint.containerlabVersion }
+              : {}),
             onAdd: async () => {
               await addLocalEndpoint();
+            },
+            onCheckAgain: async () => {
+              // Once containerlab is ready, go straight to the labs.
+              await refreshConfig(true);
+              if (useAuthStore.getState().localEndpoint?.available === true) {
+                await addLocalEndpoint();
+              }
             }
           }
         : undefined,
-    [addLocalEndpoint, localEndpoint]
+    [addLocalEndpoint, localEndpoint, refreshConfig]
   );
 
   if (loading || startupScreen === "app") {

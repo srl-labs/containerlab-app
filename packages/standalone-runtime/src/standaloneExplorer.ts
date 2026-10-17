@@ -93,7 +93,7 @@ const STANDALONE_TRANSFER_COMMAND_LABELS = new Map<string, string>([
 ]);
 const STANDALONE_COMMAND_LABELS = new Map<string, string>([
   ...STANDALONE_TRANSFER_COMMAND_LABELS,
-  ["containerlab.endpoint.add", "Add Endpoint"],
+  ["containerlab.endpoint.add", "Add Lab Host"],
 ]);
 const STANDALONE_TRANSFER_COMMAND_ICONS = new Map<string, string>([
   ["containerlab.file.download", "download"],
@@ -355,12 +355,12 @@ function buildRunningLabItem(input: {
 
 function disconnectedEndpointLabel(status: EndpointConfig["status"]): string {
   if (status === "saved") {
-    return "Saved endpoint — reconnect to restore the session";
+    return "Signed out: sign in to see its labs";
   }
   if (status === "session_expired") {
-    return "Session expired — reconnect with your credentials";
+    return "Sign-in expired: sign in again to see its labs";
   }
-  return "Endpoint is offline — reconnect when it is reachable";
+  return "Not reachable: check the host and sign in again";
 }
 
 type ExplorerSnapshotMessage = Extract<
@@ -1279,7 +1279,7 @@ export function createStandaloneExplorerBridge(
         return [
           {
             ...section,
-            label: "Endpoints",
+            label: "Lab hosts",
             count: options.getEndpoints().length,
             appearance: "bareTree" as const,
             toolbarActions: dedupeExplorerActions([

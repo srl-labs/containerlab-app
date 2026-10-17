@@ -222,7 +222,7 @@ test("the sandbox lists its topology files without any running-lab concepts", as
   await page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true }).click();
   const sidebar = page.getByTestId("workspace-sidebar");
   await expect(sidebar.getByText("plain.clab.yml", { exact: true })).toBeVisible();
-  for (const text of ["Connected", "Undeployed Labs", "Running Labs", "Endpoints"]) {
+  for (const text of ["Connected", "Undeployed Labs", "Running Labs", "Lab hosts"]) {
     await expect(sidebar.getByText(text, { exact: false })).toHaveCount(0);
   }
   await sidebar.getByText("plain.clab.yml", { exact: true }).click();

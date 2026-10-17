@@ -266,6 +266,36 @@ test("repositories clone from any Git URL into the given folder", async (t) => {
   await assert.rejects(backend.cloneRepository(path.join(directory, "missing"), path.join(directory, "x")), /git clone/);
 });
 
+test("disposing the backend stops its event streams", async (t) => {
+  const root = await temporaryDirectory(t);
+  const binary = path.join(root, "containerlab");
+  // Prints one event, then waits like `containerlab events` does.
+  await fs.writeFile(
+    binary,
+    `#!/bin/sh\necho $$ > "${root}/pid"\necho '{"type":"container","action":"start"}'\nexec sleep 300\n`,
+    { mode: 0o755 }
+  );
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: binary });
+  const events = await backend.events({ initialState: true }, new AbortController().signal);
+  const iterator = events[Symbol.asyncIterator]();
+  assert.equal(((await iterator.next()).value as { action?: string }).action, "start");
+  const pid = Number((await fs.readFile(path.join(root, "pid"), "utf8")).trim());
+  assert.doesNotThrow(() => process.kill(pid, 0));
+
+  await backend.dispose();
+  const deadline = Date.now() + 5000;
+  let alive = true;
+  while (alive && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    try {
+      process.kill(pid, 0);
+    } catch {
+      alive = false;
+    }
+  }
+  assert.equal(alive, false, "the events command is gone");
+});
+
 test("the local user check reads the groups and needs no group for Podman", async () => {
   const docker = await detectLocalUser({ runtime: "docker" });
   assert.equal(docker.username.length > 0, true);

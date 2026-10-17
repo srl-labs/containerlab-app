@@ -85,8 +85,8 @@ for (const mode of ["production", "development"] as const) {
 
       test("login loads with an actual app server and no saved session", async ({ page }) => {
         await page.goto(appUrl);
-        await expect(page.getByRole("heading", { name: "Add Endpoint", exact: true })).toBeVisible();
-        await expect(page.getByLabel("API Endpoint", { exact: true })).toHaveValue("https://localhost:8090");
+        await expect(page.getByRole("heading", { name: "Sign in to a lab host", exact: true })).toBeVisible();
+        await expect(page.getByLabel("Lab host URL", { exact: true })).toHaveValue("https://localhost:8090");
       });
 
       test("saved endpoint reconnection uses the app prefix", async ({ page }) => {
@@ -99,11 +99,11 @@ for (const mode of ["production", "development"] as const) {
         await expect(page.locator("base")).toHaveAttribute("href", `${basePath}/`);
         await page.getByTestId("standalone-settings-button").click();
         await page.getByTestId("standalone-settings-nav-endpoints").click();
-        await page.getByRole("button", { name: "Reconnect Saved endpoint", exact: true }).click();
-        const dialog = page.getByRole("dialog", { name: "Reconnect Endpoint" });
+        await page.getByRole("button", { name: "Sign in to Saved endpoint again", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
         const requestPromise = page.waitForRequest((request) => request.url().includes("/reconnect"));
-        await dialog.getByRole("button", { name: "Reconnect", exact: true }).click();
+        await dialog.getByRole("button", { name: "Sign In", exact: true }).click();
         const request = await requestPromise;
         expect(new URL(request.url()).pathname).toBe(`${basePath}/auth/endpoints/${savedEndpoint.id}/reconnect`);
         await expect(dialog).not.toBeVisible();

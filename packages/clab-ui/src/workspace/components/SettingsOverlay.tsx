@@ -158,8 +158,8 @@ const SETTINGS_SECTIONS: Array<{
 }> = [
   {
     key: "endpoints",
-    label: "Endpoints",
-    description: "Connection management and credentials",
+    label: "Lab hosts",
+    description: "This computer and the clab-api-server hosts you sign in to",
     icon: <DnsOutlinedIcon fontSize="small" />
   },
   {

@@ -166,7 +166,11 @@ export interface LocalEndpointOffer {
   available: boolean;
   /** What is missing, each with how to fix it. */
   problems: string[];
+  /** The containerlab version found on this machine. */
+  containerlabVersion?: string;
   onAdd: () => Promise<void>;
+  /** Looks for containerlab again, after the user fixed a problem. */
+  onCheckAgain?: () => Promise<void>;
 }
 export type EndpointSessionDuration = string;
 export interface EndpointImportResult { added: number; duplicates: number; total: number; unchanged: number; updated: number; }

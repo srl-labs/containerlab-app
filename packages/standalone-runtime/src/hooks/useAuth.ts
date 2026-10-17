@@ -118,8 +118,11 @@ function useEndpointAuth() {
 
   const endpointList = useMemo(() => Array.from(endpoints.values()), [endpoints]);
 
-  const refreshConfig = useCallback(async () => {
-    const response = await runtimeFetch(standaloneServerUrl("/api/config"), { credentials: "include" });
+  /** Reloads the app config; `fresh` asks the server to look for containerlab again. */
+  const refreshConfig = useCallback(async (fresh = false) => {
+    const response = await runtimeFetch(standaloneServerUrl(fresh ? "/api/config?fresh=1" : "/api/config"), {
+      credentials: "include"
+    });
     if (!response.ok) {
       return;
     }

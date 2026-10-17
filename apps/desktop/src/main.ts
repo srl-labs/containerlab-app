@@ -162,8 +162,10 @@ function createLocalEndpoint(): LocalEndpointOptions | undefined {
   return {
     backend,
     ui: createLocalUiStore({ workspaceRoot: backend.options.workspaceRoot }),
-    status() {
-      if (!cached || Date.now() - cached.at > LOCAL_STATUS_TTL_MS) {
+    // Like Local in VS Code: labs on this computer are there from the start.
+    autoConnect: true,
+    status(request) {
+      if (!cached || request?.fresh === true || Date.now() - cached.at > LOCAL_STATUS_TTL_MS) {
         cached = {
           at: Date.now(),
           status: detectLocalEnvironment(config.options).then((environment) => ({

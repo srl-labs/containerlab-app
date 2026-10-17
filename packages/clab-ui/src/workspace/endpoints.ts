@@ -24,3 +24,16 @@ export function isValidEndpointSessionDuration(value: string): boolean {
 
 export const endpointSessionDurationLabel = normalizeEndpointSessionDuration;
 export const ENDPOINT_EXPORT_FILENAME = "containerlab-app-endpoints.json";
+
+/** The apps' documentation; setup help links into it. */
+export const APP_DOCS_URL = "https://srl-labs.github.io/containerlab-app/docs/";
+
+/**
+ * Splits a setup problem such as "… Run: sudo usermod -aG docker alice, then
+ * log in again." around its command, so the command can show as code.
+ */
+export function splitSetupCommand(problem: string): { before: string; command?: string; after: string } {
+  const match = /^(.*?(?:with|Run): )(.+?)((?:, then .*)?)$/.exec(problem);
+  if (!match) return { before: problem, after: "" };
+  return { before: match[1], command: match[2], after: match[3] };
+}

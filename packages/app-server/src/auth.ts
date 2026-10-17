@@ -64,7 +64,7 @@ interface UpdateEndpointBody {
 interface AuthRouteOptions {
   /** The backend of a signed-in endpoint; null for a local endpoint this app does not offer. */
   backendFor: (entry: EndpointEntry) => LabBackend | null;
-  localEndpoint?: { status(): Promise<LocalEndpointStatus> };
+  localEndpoint?: { autoConnect?: boolean; status(): Promise<LocalEndpointStatus> };
   defaultApiUrl: string;
   disposeEndpointSessions: (endpointId: string) => void;
   ensureSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
@@ -255,7 +255,7 @@ async function reconnectEndpoint(
 async function addLocalEndpoint(
   body: { label?: string },
   session: EndpointSession,
-  options: AuthRouteOptions,
+  options: Pick<AuthRouteOptions, "endpointSessions" | "localEndpoint">,
   endpointId?: string
 ): Promise<EndpointEntry> {
   if (!options.localEndpoint) {
@@ -279,6 +279,38 @@ async function addLocalEndpoint(
   };
   options.endpointSessions.upsertEndpoint(session.sessionId, entry);
   return entry;
+}
+
+const pendingLocalConnects = new WeakMap<EndpointSession, Promise<void>>();
+
+/**
+ * Connects the local endpoint the first time a session asks for its
+ * endpoints, when the app runs labs on its own machine by default and
+ * containerlab is ready. A session whose user removed it is left alone.
+ */
+export async function connectLocalEndpoint(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: Pick<AuthRouteOptions, "endpointSessions" | "ensureSession" | "localEndpoint" | "resolveSession">
+): Promise<void> {
+  if (!options.localEndpoint?.autoConnect) return;
+  const existing = options.resolveSession(request, reply);
+  if (existing?.localHidden) return;
+  if (existing && Array.from(existing.endpoints.values()).some((entry) => entry.kind === "local")) {
+    return;
+  }
+  const status = await options.localEndpoint.status();
+  if (!status.available) return;
+  const session = existing ?? options.ensureSession(request, reply);
+  let pending = pendingLocalConnects.get(session);
+  if (!pending) {
+    pending = addLocalEndpoint({}, session, options)
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => pendingLocalConnects.delete(session));
+    pendingLocalConnects.set(session, pending);
+  }
+  await pending;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptions): void {
@@ -321,6 +353,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
   });
 
   app.get("/auth/endpoints", async (request, reply) => {
+    await connectLocalEndpoint(request, reply, options);
     const session = options.resolveSession(request, reply);
     if (!session) {
       return reply.send({ endpoints: [] });
@@ -506,6 +539,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
   );
 
   app.get("/auth/me", async (request, reply) => {
+    await connectLocalEndpoint(request, reply, options);
     const session = options.resolveSession(request, reply);
     if (!session) {
       return reply.send({ authenticated: false, endpoints: [] });

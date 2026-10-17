@@ -238,7 +238,7 @@ export function buildExplorerFixture(mode: ExplorerFixtureMode): ExplorerSnapsho
     sections: [
       section(
         "runningLabs",
-        "Endpoints",
+        "Lab hosts",
         [
           endpointRoot("lab-a", "lab-host-a", "https://10.0.0.5:8080", "connected", "green", [
             endpointSection("a", "Running", [runningLab(), stoppedLab()]),

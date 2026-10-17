@@ -37,7 +37,11 @@ function fakeLocalBackend(calls: string[]): LabBackend {
   } as unknown as LabBackend;
 }
 
-async function createApp(t: TestContext, status: LocalEndpointStatus | null) {
+async function createApp(
+  t: TestContext,
+  status: LocalEndpointStatus | null,
+  extra: { autoConnect?: boolean; sessionPersistenceFile?: string } = {}
+) {
   const calls: string[] = [];
   const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-endpoint-"));
   t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
@@ -45,12 +49,14 @@ async function createApp(t: TestContext, status: LocalEndpointStatus | null) {
     isDev: true,
     logger: false,
     viteDevUrl: "http://vite.test",
+    ...(extra.sessionPersistenceFile ? { sessionPersistenceFile: extra.sessionPersistenceFile } : {}),
     ...(status
       ? {
           localEndpoint: {
             backend: fakeLocalBackend(calls),
             ui: createLocalUiStore({ clabDirectory: workspaceRoot, workspaceRoot }),
-            status: async () => status
+            status: async () => status,
+            autoConnect: extra.autoConnect
           }
         }
       : {})
@@ -129,6 +135,76 @@ test("the local endpoint is refused when the app does not offer it or containerl
   });
   assert.equal(blocked.statusCode, 409);
   assert.match(blocked.json<{ error: string }>().error, /clab_admins/);
+});
+
+test("an app that runs labs locally by default connects new sessions to its machine", async (t) => {
+  const { app } = await createApp(t, AVAILABLE, { autoConnect: true });
+  const first = await app.inject("/api/config");
+  const config = first.json<{ endpoints: Array<{ id: string; kind: string; label: string }> }>();
+  assert.deepEqual(
+    config.endpoints.map((entry) => [entry.kind, entry.label]),
+    [["local", "This computer"]]
+  );
+  const cookie = sessionCookie(first.headers["set-cookie"]);
+  assert.ok(cookie, "the first request starts a session");
+
+  // Later requests reuse the endpoint instead of adding another.
+  const me = (await app.inject({ url: "/auth/me", headers: { cookie } })).json<{
+    authenticated: boolean;
+    endpoints: Array<{ id: string; status: string }>;
+  }>();
+  assert.equal(me.authenticated, true);
+  assert.deepEqual(
+    me.endpoints.map((entry) => entry.id),
+    [config.endpoints[0].id]
+  );
+});
+
+test("a removed local endpoint stays removed until the user adds it again", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "local-sessions-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const sessionPersistenceFile = path.join(directory, "sessions.json");
+  const { app } = await createApp(t, AVAILABLE, { autoConnect: true, sessionPersistenceFile });
+  const first = await app.inject("/auth/endpoints");
+  const cookie = sessionCookie(first.headers["set-cookie"]);
+  const [local] = first.json<{ endpoints: Array<{ id: string }> }>().endpoints;
+
+  const removed = await app.inject({ method: "DELETE", url: `/auth/endpoints/${local.id}`, headers: { cookie } });
+  assert.equal(removed.statusCode, 200);
+  assert.doesNotMatch(String(removed.headers["set-cookie"]), /clab_session=;/, "the session keeps its cookie");
+  const listed = await app.inject({ url: "/auth/endpoints", headers: { cookie } });
+  assert.deepEqual(listed.json<{ endpoints: unknown[] }>().endpoints, []);
+
+  // The choice survives a restart of the app.
+  const restarted = await createApp(t, AVAILABLE, { autoConnect: true, sessionPersistenceFile });
+  const afterRestart = await restarted.app.inject({ url: "/api/config", headers: { cookie } });
+  assert.deepEqual(afterRestart.json<{ endpoints: unknown[] }>().endpoints, []);
+
+  const added = await restarted.app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    headers: { cookie },
+    payload: { kind: "local" }
+  });
+  assert.equal(added.statusCode, 200);
+  await restarted.app.inject({ method: "DELETE", url: `/auth/endpoints/${added.json<{ id: string }>().id}`, headers: { cookie } });
+  await restarted.app.inject({ method: "POST", url: "/auth/endpoints/add", headers: { cookie }, payload: { kind: "local" } });
+  const again = await restarted.app.inject({ url: "/auth/endpoints", headers: { cookie } });
+  assert.equal(again.json<{ endpoints: unknown[] }>().endpoints.length, 1);
+});
+
+test("sessions are not connected to a machine where containerlab cannot run", async (t) => {
+  const { app } = await createApp(
+    t,
+    { ...AVAILABLE, available: false, problems: ["containerlab is not installed."] },
+    { autoConnect: true }
+  );
+  const config = (await app.inject("/api/config")).json<{
+    endpoints: unknown[];
+    localEndpoint: LocalEndpointStatus;
+  }>();
+  assert.deepEqual(config.endpoints, []);
+  assert.deepEqual(config.localEndpoint.problems, ["containerlab is not installed."]);
 });
 
 test("the local UI store keeps custom nodes and icons like clab-api-server", async (t) => {

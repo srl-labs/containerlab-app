@@ -33,7 +33,13 @@ import { LocalCapture } from "./capture.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
-import { containerlabCommand, runChecked, runCommand, spawnLines } from "./process.ts";
+import {
+  containerlabCommand,
+  runChecked,
+  runCommand,
+  spawnLines,
+  type StreamingCommand
+} from "./process.ts";
 import { LocalTerminals } from "./terminals.ts";
 import * as tools from "./tools.ts";
 import {
@@ -76,6 +82,8 @@ export class LocalLabBackend implements LabBackend {
   private readonly lifecycle: LocalLifecycle;
   private readonly terminals: LocalTerminals;
   private readonly capture: LocalCapture;
+  /** Running `containerlab events` commands; they must not outlive the app. */
+  private readonly eventCommands = new Set<StreamingCommand>();
 
   constructor(options: LocalLabBackendOptions = {}) {
     this.options = resolveLocalOptions(options);
@@ -505,6 +513,9 @@ export class LocalLabBackend implements LabBackend {
     }
     const [file, commandArgs] = containerlabCommand(this.options, args);
     const command = await spawnLines(file, commandArgs, { env: this.options.env, signal });
+    const running = this.eventCommands;
+    running.add(command);
+    void command.exit.then(() => running.delete(command));
     async function* lines(): AsyncGenerator<string> {
       try {
         for await (const output of command.lines) {
@@ -518,6 +529,9 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async dispose(): Promise<void> {
+    // Child processes outlive their parent, so stop event streams explicitly.
+    for (const command of this.eventCommands) command.kill();
+    this.eventCommands.clear();
     this.terminals.dispose();
     await this.capture.dispose();
   }

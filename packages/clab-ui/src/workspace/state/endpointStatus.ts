@@ -7,9 +7,9 @@ export function endpointStatusLabel(status: EndpointStatus): string {
     case "connected":
       return "Connected";
     case "session_expired":
-      return "Session Expired";
+      return "Signed Out";
     case "offline":
-      return "Offline";
+      return "Unreachable";
     case "saved":
       return "Saved";
     default:
@@ -35,13 +35,13 @@ export function endpointStatusSeverity(status: EndpointStatus): AlertColor {
 export function endpointStatusHint(status: EndpointStatus): string {
   switch (status) {
     case "connected":
-      return "Authenticated and reachable.";
+      return "Signed in.";
     case "session_expired":
-      return "Reconnect with your credentials to continue using this endpoint.";
+      return "Your sign-in expired. Sign in again to see its labs.";
     case "offline":
-      return "The endpoint cannot be reached right now. Reconnect when it is available again.";
+      return "The lab host does not answer. Check that clab-api-server runs there and the URL is right.";
     case "saved":
-      return "Saved locally. Reconnect to restore the browser session for this endpoint.";
+      return "Saved. Sign in to see its labs.";
     default:
       return "";
   }

@@ -15,7 +15,7 @@ import type {
 } from "@srl-labs/containerlab-app-contract";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
-import { registerAuthRoutes } from "./auth.ts";
+import { connectLocalEndpoint, registerAuthRoutes } from "./auth.ts";
 import type { EndpointEntry, EndpointSession } from "./endpointSessionStore.ts";
 import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
@@ -40,8 +40,16 @@ export interface LocalEndpointOptions {
   backend: LabBackend;
   /** Custom node templates and icons of that user. */
   ui: EndpointUiStore;
-  /** Whether containerlab can run here, and what is missing if not. */
-  status(): Promise<LocalEndpointStatus>;
+  /**
+   * Whether containerlab can run here, and what is missing if not; `fresh`
+   * checks again instead of answering from a cache.
+   */
+  status(options?: { fresh?: boolean }): Promise<LocalEndpointStatus>;
+  /**
+   * Connect every session to the local endpoint once containerlab is ready,
+   * the way VS Code always offers Local. Users can still remove it.
+   */
+  autoConnect?: boolean;
 }
 
 export interface CreateStandaloneAppOptions {
@@ -260,11 +268,14 @@ export async function createStandaloneApp(
     return endpointSessions.replaceSession(sessionId, [migratedEntry]);
   };
 
+  // Sessions started while answering a request, before the browser has the cookie.
+  const startedSessions = new WeakMap<FastifyRequest, string>();
   const resolveSession = (
     request: FastifyRequest,
     reply: FastifyReply,
   ): EndpointSession | null => {
-    const sessionId = getSessionIdFromRequest(request);
+    const sessionId =
+      getSessionIdFromRequest(request) ?? startedSessions.get(request);
     if (sessionId) {
       const session = endpointSessions.getSession(sessionId);
       if (session) {
@@ -287,6 +298,7 @@ export async function createStandaloneApp(
       getSessionIdFromRequest(request) ?? globalThis.crypto.randomUUID();
     if (!getSessionIdFromRequest(request)) {
       maybeSetSessionCookie(request, reply, sessionId);
+      startedSessions.set(request, sessionId);
     }
     return endpointSessions.replaceSession(sessionId, []);
   };
@@ -350,7 +362,13 @@ export async function createStandaloneApp(
         topologySessions,
       );
 
-      scoped.get("/api/config", async (request, reply) => {
+      scoped.get<{ Querystring: { fresh?: string } }>("/api/config", async (request, reply) => {
+        await connectLocalEndpoint(request, reply, {
+          endpointSessions,
+          ensureSession,
+          localEndpoint: local,
+          resolveSession,
+        });
         const endpoints = listEndpoints(request, reply).map((entry) => ({
           id: entry.id,
           kind: entry.kind,
@@ -361,7 +379,9 @@ export async function createStandaloneApp(
         }));
         const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
         if (local) {
-          payload.localEndpoint = await local.status();
+          payload.localEndpoint = await local.status({
+            fresh: request.query.fresh === "1",
+          });
         }
         return reply.send(payload);
       });

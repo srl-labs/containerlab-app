@@ -50,12 +50,12 @@ async function connect(browser: Browser, username: string, password: string): Pr
     if (reason !== "net::ERR_ABORTED") console.warn("Browser request failed:", new URL(request.url()).pathname, reason);
   });
   await page.goto("https://localhost:5173/");
-  await page.getByLabel("API Endpoint", { exact: true }).fill(requiredEnv("API_URL"));
-  await page.getByLabel("Label", { exact: true }).fill("Lab server");
+  await page.getByLabel("Lab host URL", { exact: true }).fill(requiredEnv("API_URL"));
+  await page.getByLabel("Name", { exact: true }).fill("Lab server");
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Password", { exact: true }).fill(password);
   const added = page.waitForResponse((response) => response.url().endsWith("/auth/endpoints/add"));
-  await page.getByRole("button", { name: "Add Endpoint", exact: true }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
   const response = await added;
   expect(response.status()).toBe(200);
   const endpoint = await response.json() as { id: string };

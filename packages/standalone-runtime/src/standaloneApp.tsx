@@ -1562,10 +1562,16 @@ function StandaloneApp() {
         ? {
             available: localEndpoint.available,
             problems: localEndpoint.problems,
+            ...(localEndpoint.containerlabVersion
+              ? { containerlabVersion: localEndpoint.containerlabVersion }
+              : {}),
             onAdd: async () => {
               await addLocalEndpoint();
               await refreshConfig().catch(() => {});
               scheduleExplorerSnapshot(0);
+            },
+            onCheckAgain: async () => {
+              await refreshConfig(true);
             }
           }
         : undefined,

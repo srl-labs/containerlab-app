@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  Link,
   Paper,
   Stack,
   TextField,
@@ -25,10 +26,12 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 
-import { ENDPOINT_EXPORT_FILENAME,
+import { APP_DOCS_URL,
+  ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
   isValidEndpointSessionDuration,
+  splitSetupCommand,
   type EndpointConfig,
   type EndpointImportResult,
   type EndpointSessionDuration,
@@ -88,7 +91,7 @@ type EndpointHealthState =
 
 function formatEndpointImportResult(result: EndpointImportResult): string {
   if (result.total === 0) {
-    return "No endpoint profiles were found in the import file.";
+    return "No lab host profiles were found in the import file.";
   }
 
   const parts = [
@@ -100,16 +103,16 @@ function formatEndpointImportResult(result: EndpointImportResult): string {
       : null
   ].filter((value): value is string => value !== null);
 
-  return `Imported ${result.total} endpoint ${result.total === 1 ? "profile" : "profiles"}${
+  return `Imported ${result.total} lab host ${result.total === 1 ? "profile" : "profiles"}${
     parts.length > 0 ? `: ${parts.join(", ")}` : ""
   }.`;
 }
 
 function addEndpointButtonLabel(busyKey: string | null, mode: "initial" | "manage"): string {
   if (busyKey === "add") {
-    return "Adding...";
+    return "Signing in...";
   }
-  return mode === "initial" ? "Add Endpoint" : "Add";
+  return mode === "initial" ? "Sign In" : "Add Lab Host";
 }
 
 function endpointActionButtonLabel(
@@ -119,7 +122,7 @@ function endpointActionButtonLabel(
 ): string {
   const defaultLabels = {
     edit: "Save",
-    reconnect: "Reconnect",
+    reconnect: "Sign In",
     remove: "Remove"
   };
   if (!endpoint) {
@@ -128,7 +131,7 @@ function endpointActionButtonLabel(
 
   const busyLabels = {
     edit: "Saving...",
-    reconnect: "Reconnecting...",
+    reconnect: "Signing in...",
     remove: "Removing..."
   };
   return busyKey === `${action}:${endpoint.id}` ? busyLabels[action] : defaultLabels[action];
@@ -136,9 +139,9 @@ function endpointActionButtonLabel(
 
 function endpointAddDescription(mode: "initial" | "manage"): string {
   if (mode === "initial") {
-    return "Authenticate against a clab-api-server to start or restore the standalone session.";
+    return "Sign in to clab-api-server on the Linux machine that runs your labs.";
   }
-  return "Add another clab-api-server and it will appear as its own explorer root.";
+  return "Sign in to clab-api-server on another machine. Its labs appear next to the others.";
 }
 
 function showManagedEndpoints(mode: "initial" | "manage", endpointCount: number): boolean {
@@ -331,6 +334,7 @@ function ManagedEndpointList(props: {
   endpointHealth: Record<string, EndpointHealthState>;
   endpoints: EndpointConfig[];
   healthStatsEnabled: boolean;
+  localEndpoint?: LocalEndpointOffer;
   onDraftChange: (endpointId: string, nextValue: EndpointSessionDuration) => void;
   onEdit: (endpoint: EndpointConfig) => void;
   onReconnect: (endpoint: EndpointConfig) => void;
@@ -395,7 +399,7 @@ function ManagedEndpointList(props: {
                     }}
                   >
                     {endpoint.kind === "local"
-                      ? `containerlab on this computer as ${endpoint.username}`
+                      ? `Labs run on this computer as ${endpoint.username}`
                       : endpoint.url}
                   </Typography>
                   <Typography
@@ -405,8 +409,16 @@ function ManagedEndpointList(props: {
                       display: "block"
                     }}
                   >
-                    {endpointStatusHint(endpoint.status)}
+                    {endpoint.kind === "local"
+                      ? localStatusHint(endpoint.status, props.localEndpoint)
+                      : endpointStatusHint(endpoint.status)}
                   </Typography>
+                  {endpoint.kind === "local" &&
+                  endpoint.status !== "connected" &&
+                  props.localEndpoint &&
+                  props.localEndpoint.problems.length > 0 ? (
+                    <LocalProblems problems={props.localEndpoint.problems} />
+                  ) : null}
                 </Box>
                 <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0, mt: -0.5, mr: -0.75 }}>
                   {endpoint.kind === "local" ? null : (
@@ -414,6 +426,7 @@ function ManagedEndpointList(props: {
                       size="small"
                       onClick={() => props.onEdit(endpoint)}
                       aria-label={`Edit ${endpoint.label}`}
+                      title="Edit"
                       disabled={props.busyKey !== null}
                     >
                       <EditOutlinedIcon sx={{ fontSize: 18 }} />
@@ -422,7 +435,8 @@ function ManagedEndpointList(props: {
                   <IconButton
                     size="small"
                     onClick={() => props.onReconnect(endpoint)}
-                    aria-label={`Reconnect ${endpoint.label}`}
+                    aria-label={endpoint.kind === "local" ? `Check ${endpoint.label} again` : `Sign in to ${endpoint.label} again`}
+                    title={endpoint.kind === "local" ? "Check again" : "Sign in again"}
                     disabled={props.busyKey !== null}
                   >
                     <RefreshIcon sx={{ fontSize: 18 }} />
@@ -431,6 +445,7 @@ function ManagedEndpointList(props: {
                     size="small"
                     onClick={() => props.onRemove(endpoint)}
                     aria-label={`Remove ${endpoint.label}`}
+                    title="Remove"
                     disabled={props.busyKey !== null}
                     sx={{ "&:hover": { color: "error.main" } }}
                   >
@@ -453,7 +468,7 @@ function ManagedEndpointList(props: {
                   }}
                 >
                   <TextField
-                    label="Keep signed in"
+                    label="Stay signed in for"
                     size="small"
                     value={durationDraft}
                     onChange={(event) => props.onDraftChange(endpoint.id, event.target.value)}
@@ -491,13 +506,49 @@ function ManagedEndpointList(props: {
   );
 }
 
+function localStatusHint(status: EndpointConfig["status"], offer: LocalEndpointOffer | undefined): string {
+  if (status === "connected") {
+    const version = offer?.containerlabVersion ?? "";
+    return version === "" ? "containerlab is ready." : `containerlab ${version} is ready.`;
+  }
+  return "containerlab does not answer right now.";
+}
+
+function LocalProblems(props: { problems: string[] }) {
+  return (
+    <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+      <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2 }}>
+        {props.problems.map((problem) => {
+          const { before, command, after } = splitSetupCommand(problem);
+          return (
+            <li key={problem}>
+              {before}
+              {command !== undefined ? (
+                <Box component="code" sx={{ fontFamily: MONO_FONT_FAMILY, fontSize: 12, overflowWrap: "anywhere" }}>
+                  {command}
+                </Box>
+              ) : null}
+              {after}
+            </li>
+          );
+        })}
+      </Stack>
+      <Link href={`${APP_DOCS_URL}install/desktop/#run-labs-on-this-computer`} target="_blank" rel="noreferrer" sx={{ display: "inline-block", mt: 1 }}>
+        Setup guide
+      </Link>
+    </Alert>
+  );
+}
+
 /** Runs labs with containerlab on this machine instead of a clab-api-server. */
 function LocalEndpointCard(props: {
   busy: boolean;
   offer: LocalEndpointOffer;
   onAdd: () => void;
+  onCheckAgain: () => void;
   variant: "initial" | "manage";
 }) {
+  const { offer } = props;
   return (
     <Paper
       variant="outlined"
@@ -506,29 +557,38 @@ function LocalEndpointCard(props: {
     >
       <Stack spacing={1.25}>
         <Box>
-          <Typography variant="subtitle1">This Computer</Typography>
+          <Typography variant="subtitle1">This computer</Typography>
           <Typography variant="body2" sx={{ color: "text.secondary", mt: 0.25 }}>
-            Run labs with containerlab on this machine, without a clab-api-server.
+            {offer.available
+              ? "Run labs with containerlab on this computer, next to your lab hosts. No sign-in needed."
+              : "Containerlab cannot run labs on this computer yet."}
           </Typography>
         </Box>
-        {props.offer.available ? null : (
-          <Alert severity="warning" variant="outlined">
-            <Stack component="ul" spacing={0.5} sx={{ m: 0, pl: 2 }}>
-              {props.offer.problems.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </Stack>
-          </Alert>
-        )}
-        <Button
-          variant={props.variant === "initial" ? "contained" : "outlined"}
-          onClick={props.onAdd}
-          disabled={props.busy || !props.offer.available}
-          sx={{ alignSelf: props.variant === "initial" ? "stretch" : "flex-start" }}
-          data-testid="standalone-local-endpoint-add"
-        >
-          Use This Computer
-        </Button>
+        {offer.available ? null : <LocalProblems problems={offer.problems} />}
+        <Stack direction="row" spacing={1}>
+          {offer.available ? (
+            <Button
+              variant={props.variant === "initial" ? "contained" : "outlined"}
+              onClick={props.onAdd}
+              disabled={props.busy}
+              sx={{ alignSelf: props.variant === "initial" ? "stretch" : "flex-start" }}
+              data-testid="standalone-local-endpoint-add"
+            >
+              Use This Computer
+            </Button>
+          ) : null}
+          {!offer.available && offer.onCheckAgain ? (
+            <Button
+              variant="outlined"
+              onClick={props.onCheckAgain}
+              disabled={props.busy}
+              startIcon={<RefreshIcon />}
+              data-testid="standalone-local-endpoint-check"
+            >
+              Check Again
+            </Button>
+          ) : null}
+        </Stack>
       </Stack>
     </Paper>
   );
@@ -1035,17 +1095,19 @@ export function EndpointManager({
     },
     [busyKey, onReconnectEndpoint]
   );
-  const addLocalEndpoint = useCallback(() => {
-    if (!localEndpoint || busyKey !== null) return;
-    setBusyKey("add-local");
-    setError(null);
-    localEndpoint
-      .onAdd()
-      .catch((addError: unknown) => {
-        setError(addError instanceof Error ? addError.message : String(addError));
-      })
-      .finally(() => setBusyKey(null));
-  }, [busyKey, localEndpoint]);
+  const runLocalAction = useCallback(
+    (key: string, action: (() => Promise<void>) | undefined) => {
+      if (!action || busyKey !== null) return;
+      setBusyKey(key);
+      setError(null);
+      action()
+        .catch((actionError: unknown) => {
+          setError(actionError instanceof Error ? actionError.message : String(actionError));
+        })
+        .finally(() => setBusyKey(null));
+    },
+    [busyKey]
+  );
   const offerLocalEndpoint =
     localEndpoint !== undefined && !sortedEndpoints.some((endpoint) => endpoint.kind === "local");
 
@@ -1070,7 +1132,7 @@ export function EndpointManager({
     try {
       downloadJsonFile(ENDPOINT_EXPORT_FILENAME, onExportEndpoints());
       setNotice(
-        `Exported ${sortedEndpoints.length} endpoint ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`
+        `Exported ${sortedEndpoints.length} lab host ${sortedEndpoints.length === 1 ? "profile" : "profiles"}.`
       );
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : String(exportError));
@@ -1147,6 +1209,7 @@ export function EndpointManager({
           endpointHealth={endpointHealth}
           endpoints={sortedEndpoints}
           healthStatsEnabled={healthStatsEnabled}
+          localEndpoint={localEndpoint}
           onDraftChange={handleEndpointDurationDraftChange}
           onEdit={editDialog.open}
           onReconnect={(endpoint) =>
@@ -1162,7 +1225,8 @@ export function EndpointManager({
         <LocalEndpointCard
           busy={busyKey !== null}
           offer={localEndpoint}
-          onAdd={addLocalEndpoint}
+          onAdd={() => runLocalAction("add-local", localEndpoint.onAdd)}
+          onCheckAgain={() => runLocalAction("check-local", localEndpoint.onCheckAgain)}
           variant={mode}
         />
       ) : null}
@@ -1186,7 +1250,7 @@ export function EndpointManager({
               variant="subtitle1"
               sx={mode === "initial" ? { fontSize: 18, letterSpacing: "-0.01em" } : undefined}
             >
-              Add Endpoint
+              {mode === "initial" ? "Sign in to a lab host" : "Add a lab host"}
             </Typography>
             <Typography
               variant="body2"
@@ -1212,7 +1276,7 @@ export function EndpointManager({
 
           <Stack spacing={2}>
             <TextField
-              label="API Endpoint"
+              label="Lab host URL"
               value={addForm.url}
               onChange={(event) => addForm.setUrl(event.target.value)}
               onKeyDown={(event) => {
@@ -1227,7 +1291,7 @@ export function EndpointManager({
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
-              label="Label"
+              label="Name"
               value={addForm.label}
               onChange={(event) => addForm.setLabel(event.target.value)}
               onKeyDown={(event) => {
@@ -1238,7 +1302,7 @@ export function EndpointManager({
                 void addForm.submit();
               }}
               fullWidth
-              placeholder="Optional friendly name"
+              placeholder="Optional, defaults to the host name"
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
@@ -1271,7 +1335,7 @@ export function EndpointManager({
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <TextField
-              label="Keep me signed in"
+              label="Stay signed in for"
               value={addForm.sessionDuration}
               onChange={(event) => addForm.setSessionDuration(event.target.value)}
               onKeyDown={(event) => {
@@ -1315,7 +1379,7 @@ export function EndpointManager({
           sx={{ alignItems: "center", pt: 1.5, borderTop: 1, borderColor: "divider" }}
         >
           <Typography variant="body2" sx={{ flex: 1, color: "text.secondary" }}>
-            Endpoint profiles
+            Lab host profiles
           </Typography>
           {transferActions}
         </Stack>
@@ -1327,11 +1391,11 @@ export function EndpointManager({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Edit Endpoint</DialogTitle>
+        <DialogTitle>Edit Lab Host</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <TextField
-              label="Label"
+              label="Name"
               value={editDialog.label}
               onChange={(event) => editDialog.setLabel(event.target.value)}
               onKeyDown={(event) => {
@@ -1344,7 +1408,7 @@ export function EndpointManager({
               fullWidth
             />
             <TextField
-              label="API Endpoint"
+              label="Lab host URL"
               value={editDialog.url}
               onChange={(event) => editDialog.setUrl(event.target.value)}
               onKeyDown={(event) => {
@@ -1370,7 +1434,7 @@ export function EndpointManager({
               fullWidth
             />
             <TextField
-              label="Keep signed in"
+              label="Stay signed in for"
               value={editDialog.sessionDuration}
               onChange={(event) => editDialog.setSessionDuration(event.target.value)}
               onKeyDown={(event) => {
@@ -1411,7 +1475,7 @@ export function EndpointManager({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Reconnect Endpoint</DialogTitle>
+        <DialogTitle>{reconnectDialog.endpoint ? `Sign in to ${reconnectDialog.endpoint.label}` : "Sign In"}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             {reconnectDialog.endpoint ? (
@@ -1422,7 +1486,7 @@ export function EndpointManager({
                     color: "text.secondary"
                   }}
                 >
-                  {`Reconnect "${reconnectDialog.endpoint.label}" to restore access for this endpoint.`}
+                  {`Sign in to clab-api-server at ${reconnectDialog.endpoint.url} with your Linux account on that host.`}
                 </Typography>
                 <Alert
                   severity={endpointStatusSeverity(reconnectDialog.endpoint.status)}
@@ -1436,7 +1500,7 @@ export function EndpointManager({
                     color: "text.secondary"
                   }}
                 >
-                  Keep signed in:{" "}
+                  Stay signed in for:{" "}
                   {endpointSessionDurationLabel(reconnectDialog.endpoint.sessionDuration)}
                 </Typography>
               </>
@@ -1490,14 +1554,18 @@ export function EndpointManager({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Remove Endpoint</DialogTitle>
+        <DialogTitle>{removeDialog.endpoint?.kind === "local" ? "Hide This Computer" : "Remove Lab Host"}</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2">
-              {`Remove "${removeDialog.endpoint?.label ?? "endpoint"}" from this standalone session?`}
+              {removeDialog.endpoint?.kind === "local"
+                ? "Stop showing labs on this computer?"
+                : `Remove "${removeDialog.endpoint?.label ?? "lab host"}"?`}
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              Labs, topology sessions, and event streams for this endpoint will be closed.
+              {removeDialog.endpoint?.kind === "local"
+                ? "Running labs keep running. Use This Computer brings them back."
+                : "Its labs keep running on the host. Open topologies and terminals from it close."}
             </Typography>
           </Stack>
         </DialogContent>

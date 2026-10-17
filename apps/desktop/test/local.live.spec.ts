@@ -83,10 +83,12 @@ test.afterAll(async () => {
 test("runs a lab on this computer without clab-api-server", async () => {
   test.setTimeout(300_000);
   const testInfo = test.info();
-  const useLocal = page.getByRole("button", { name: "Use This Computer" });
-  await expect(useLocal).toBeEnabled({ timeout: 30_000 });
-  await page.screenshot({ path: testInfo.outputPath("1-add-endpoint.png") });
-  await useLocal.click();
+  // Like Local in VS Code, this computer is connected from the start: no sign-in page.
+  await expect(page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true })).toBeVisible({
+    timeout: 30_000
+  });
+  await expect(page.getByRole("button", { name: "Sign In", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("1-start.png") });
   await expect
     .poll(
       () =>
@@ -98,12 +100,16 @@ test("runs a lab on this computer without clab-api-server", async () => {
       { timeout: 30_000 }
     )
     .toBe("connected");
-  // The labs explorer shows the local endpoint as its own root.
+  // The labs explorer shows this computer as its own root.
   const localRoot = page.getByText("This computer", { exact: true }).first();
-  if (!(await localRoot.isVisible())) {
-    await page.getByRole("button", { name: "Labs" }).click();
-  }
-  await expect(localRoot).toBeVisible({ timeout: 30_000 });
+  const openLabs = async () => {
+    // A closed panel keeps its tree in the page, so ask the rail button instead.
+    const labsButton = page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true });
+    if ((await labsButton.getAttribute("aria-expanded")) !== "true") await labsButton.click();
+    await expect(labsButton).toHaveAttribute("aria-expanded", "true");
+    await expect(localRoot).toBeVisible({ timeout: 30_000 });
+  };
+  await openLabs();
 
   // Each step runs in the app's page, with its session cookie.
   const api = <T>(step: string, args: Record<string, unknown> = {}) =>
@@ -218,6 +224,7 @@ test("runs a lab on this computer without clab-api-server", async () => {
   expect(deploy.logLines).toBeGreaterThan(0);
   expect(await api<string[]>("nodes")).toEqual(["n1", "n2"]);
   // Expand the endpoint and its running labs.
+  await openLabs();
   const expandEndpoint = page.getByRole("button", { name: "Expand This computer" });
   if (await expandEndpoint.isVisible()) await expandEndpoint.click();
   const expandRunning = page.getByRole("button", { name: "Expand Running Labs" });
