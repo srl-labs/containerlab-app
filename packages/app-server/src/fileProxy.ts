@@ -4,13 +4,10 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { runDocumentOperation } from "@containerlab/clab-ui/session";
-import type { Response } from "undici";
-import {
-  getHttpErrorStatus,
-  type ClabApiClient,
-  type WorkspaceFileEntry,
-} from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
+import { errorStatus, type LabBackend, type WorkspaceFileEntry } from "@srl-labs/containerlab-lab-backend";
+import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
+
+import type { EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
 import { getEndpointIdFromRequest } from "./middleware.ts";
 import {
   disableStreamTimeouts,
@@ -18,12 +15,6 @@ import {
   streamResponseHeaders,
 } from "./streamResponseHeaders.ts";
 import { buildStandaloneTopologyRef } from "./topologyIdentity.ts";
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string,
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 interface WorkspaceFileExplorerEntry extends WorkspaceFileEntry {
   endpointId: string;
@@ -33,14 +24,6 @@ interface WorkspaceFileExplorerEntry extends WorkspaceFileEntry {
 }
 
 const MAX_TEXT_FILE_BYTES = 1024 * 1024;
-
-class ResponseBodyTooLargeError extends Error {
-  readonly status = 413;
-
-  constructor() {
-    super("File is too large to edit in the browser.");
-  }
-}
 
 function queryString(request: FastifyRequest, key: string): string {
   const query = request.query as Record<string, unknown> | undefined;
@@ -64,98 +47,17 @@ function sendProxyError(reply: FastifyReply, error: unknown): FastifyReply {
   return reply.status(getHttpErrorStatus(error) ?? 500).send({ error: message });
 }
 
-async function readTextResponseWithLimit(
-  response: Response,
-  maxBytes: number,
-): Promise<string> {
-  const contentLength = Number(response.headers.get("content-length") ?? "");
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    await response.body?.cancel().catch(() => {});
-    throw new ResponseBodyTooLargeError();
-  }
-
-  if (!response.body) {
-    const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > maxBytes) {
-      throw new ResponseBodyTooLargeError();
-    }
-    return text;
-  }
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
-        throw new ResponseBodyTooLargeError();
-      }
-      chunks.push(value);
-    }
-  } catch (error) {
-    await reader.cancel().catch(() => {});
-    throw error;
-  }
-
-  const content = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    content.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(content);
+async function readTextFile(backend: LabBackend, pathValue: string): Promise<string> {
+  const { data } = await backend.fs.read(pathValue, { maxBytes: MAX_TEXT_FILE_BYTES });
+  return new TextDecoder().decode(data);
 }
 
 function resolveFileEndpoint(
   request: FastifyRequest,
   reply: FastifyReply,
   resolveEndpoint: EndpointResolver,
-): { client: ClabApiClient; endpoint: EndpointEntry } | null {
+): ResolvedEndpoint | null {
   return resolveEndpoint(request, reply, getEndpointIdFromRequest(request));
-}
-
-async function forwardNdjsonAsSse(
-  body: NonNullable<Response["body"]>,
-  reply: FastifyReply,
-  isAborted: () => boolean,
-): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let eventId = 0;
-
-  try {
-    while (!isAborted()) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (isAborted()) {
-          break;
-        }
-        const trimmed = line.trim();
-        if (!trimmed) {
-          continue;
-        }
-        eventId += 1;
-        reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
-      }
-    }
-  } finally {
-    reader.cancel().catch(() => {});
-  }
 }
 
 export function registerFileProxy(
@@ -169,8 +71,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      const topologies = await client.listTopologies(endpoint.token);
+      const { backend, endpoint } = resolved;
+      const topologies = await backend.listTopologies();
       // Transform to the format expected by the Explorer bridge.
       return reply.send(
         topologies.map((topo) => {
@@ -198,11 +100,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      const entries = await client.listWorkspaceTree(
-        endpoint.token,
-        queryString(request, "path"),
-      );
+      const { backend, endpoint } = resolved;
+      const entries = await backend.fs.list(queryString(request, "path"));
       return reply.send(
         entries.map((entry): WorkspaceFileExplorerEntry => {
           const visibleEntry: WorkspaceFileEntry = { ...entry };
@@ -225,7 +124,7 @@ export function registerFileProxy(
       return reply.status(401).send({ error: "Not authenticated" });
     }
 
-    const { client, endpoint } = resolved;
+    const { backend } = resolved;
     disableStreamTimeouts(request, reply);
 
     reply.raw.writeHead(
@@ -249,18 +148,15 @@ export function registerFileProxy(
     reply.raw.on("close", abort);
 
     try {
-      const response = await client.openWorkspaceEventStream(endpoint.token, {
-        signal: abortController.signal,
-      });
-      if (!response.body) {
-        reply.raw.write(
-          "event: error\ndata: No workspace event stream body\n\n",
-        );
-        reply.raw.end();
-        return;
+      const events = await backend.fs.watch(abortController.signal);
+      let eventId = 0;
+      for await (const event of events) {
+        if (aborted) {
+          break;
+        }
+        eventId += 1;
+        reply.raw.write(`id: ${eventId}\ndata: ${JSON.stringify(event)}\n\n`);
       }
-
-      await forwardNdjsonAsSse(response.body, reply, () => aborted);
     } catch (error) {
       if (!aborted) {
         const message =
@@ -292,12 +188,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      const response = await client.openWorkspaceFile(endpoint.token, pathValue);
-      const content = await readTextResponseWithLimit(
-        response,
-        MAX_TEXT_FILE_BYTES,
-      );
+      const { backend, endpoint } = resolved;
+      const content = await readTextFile(backend, pathValue);
       if (content.includes("\u0000")) {
         return reply
           .status(415)
@@ -328,25 +220,23 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
+      const { backend, endpoint } = resolved;
       const originalContent = bodyRecord(request).originalContent;
       const documentPath = pathValue.replace(/\.clab\.(ya?ml)\.annotations\.json$/, ".clab.$1");
-      await runDocumentOperation(JSON.stringify([client.getBaseUrl(), documentPath]), async () => {
+      await runDocumentOperation(JSON.stringify([backend.scope, documentPath]), async () => {
         if (typeof originalContent === "string") {
           let currentContent: string;
           try {
-            currentContent = await readTextResponseWithLimit(
-              await client.openWorkspaceFile(endpoint.token, pathValue), MAX_TEXT_FILE_BYTES,
-            );
+            currentContent = await readTextFile(backend, pathValue);
           } catch (error) {
-            if (getHttpErrorStatus(error) !== 404) throw error;
+            if (errorStatus(error) !== 404) throw error;
             throw Object.assign(new Error("This file was deleted on the server. Your edits have been kept."), { status: 409 });
           }
           if (currentContent !== originalContent) {
             throw Object.assign(new Error("This file changed on the server. Your edits have been kept. Copy them before closing and reopening the file."), { status: 409 });
           }
         }
-        await client.putWorkspaceFile(endpoint.token, pathValue, content);
+        await backend.fs.write(pathValue, content);
       });
       return reply.send({
         endpointId: endpoint.id,
@@ -370,8 +260,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      await client.deleteWorkspaceFile(endpoint.token, pathValue, {
+      const { backend, endpoint } = resolved;
+      await backend.fs.delete(pathValue, {
         recursive: queryString(request, "recursive") === "true",
       });
       return reply.send({
@@ -397,8 +287,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      await client.renameWorkspaceFile(endpoint.token, oldPath, newPath);
+      const { backend, endpoint } = resolved;
+      await backend.fs.rename(oldPath, newPath);
       return reply.send({
         endpointId: endpoint.id,
         oldPath,
@@ -422,8 +312,8 @@ export function registerFileProxy(
     }
 
     try {
-      const { client, endpoint } = resolved;
-      await client.createWorkspaceDirectory(endpoint.token, pathValue);
+      const { backend, endpoint } = resolved;
+      await backend.fs.mkdir(pathValue);
       return reply.send({
         endpointId: endpoint.id,
         path: pathValue,

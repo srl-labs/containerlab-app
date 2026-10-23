@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+import { connectionOf } from "../backend/labBackends";
+import { REMOTE_SCHEME } from "../backend/connections";
 import * as utils from "../utils";
 
 function lineContainsInlineImage(line: string, cursor: number): boolean {
@@ -120,7 +122,7 @@ function shouldProvideImageCompletion(
   position: vscode.Position
 ): boolean {
   return (
-    utils.isClabYamlFile(document.uri.fsPath) &&
+    utils.isClabYamlFile(document.uri.path) &&
     isCompletingImageValue(document, position) &&
     isAllowedImageSection(document, position)
   );
@@ -172,7 +174,7 @@ async function provideImageCompletions(
     return undefined;
   }
 
-  const images = utils.getDockerImages();
+  const images = utils.getDockerImages(connectionOf(document.uri).id);
   if (images.length === 0) {
     return undefined;
   }
@@ -189,7 +191,11 @@ function registerCompletionProvider(context: vscode.ExtensionContext): void {
   };
 
   const disposable = vscode.languages.registerCompletionItemProvider(
-    { language: "yaml", scheme: "file" },
+    [
+      { language: "yaml", scheme: "file" },
+      // Topologies on a lab host complete with the host's images.
+      { language: "yaml", scheme: REMOTE_SCHEME }
+    ],
     provider,
     ":",
     " ",
@@ -224,7 +230,7 @@ function registerAutoTrigger(context: vscode.ExtensionContext): void {
     const lastChar = inserted[inserted.length - 1];
     const lineText = event.document.lineAt(position.line).text;
     const currentFilter = getInlineImageFilter(event.document, position);
-    const images = utils.getDockerImages();
+    const images = utils.getDockerImages(connectionOf(event.document.uri).id);
     const isExactMatch = images.some(
       (img) => img.toLowerCase() === currentFilter && lineText.trimEnd().endsWith(img)
     );

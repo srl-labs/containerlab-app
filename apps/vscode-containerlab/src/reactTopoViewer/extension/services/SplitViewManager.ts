@@ -5,6 +5,8 @@
 
 import * as vscode from "vscode";
 
+import { labUri } from "../../../backend/labBackends";
+
 import { formatErrorMessage, log } from "./logger";
 
 /**
@@ -29,7 +31,7 @@ export class SplitViewManager {
    */
   async openTemplateFile(filePath: string, panel?: vscode.WebviewPanel): Promise<void> {
     try {
-      const document = await vscode.workspace.openTextDocument(filePath);
+      const document = await vscode.workspace.openTextDocument(labUri(filePath));
 
       await vscode.window.showTextDocument(document, {
         preview: false,
@@ -86,12 +88,12 @@ export class SplitViewManager {
    * Closes the split view.
    */
   private async closeSplitView(yamlFilePath: string, panel?: vscode.WebviewPanel): Promise<void> {
-    const yamlUri = vscode.Uri.file(yamlFilePath);
+    const yamlUri = labUri(yamlFilePath);
     const editors = vscode.window.visibleTextEditors;
     let yamlEditor: vscode.TextEditor | undefined;
 
     for (const editor of editors) {
-      if (editor.document.uri.fsPath === yamlUri.fsPath) {
+      if (editor.document.uri.toString() === yamlUri.toString()) {
         yamlEditor = editor;
         break;
       }

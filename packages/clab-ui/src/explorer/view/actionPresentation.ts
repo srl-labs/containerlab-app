@@ -2,6 +2,8 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ArticleOutlinedIcon from "@mui/icons-material/ArticleOutlined";
 import BuildOutlinedIcon from "@mui/icons-material/BuildOutlined";
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
+import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
@@ -188,7 +190,11 @@ const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.set.sessionhostname": SettingsEthernetRoundedIcon,
   "containerlab.endpoint.reconnect": RefreshRoundedIcon,
   "containerlab.endpoint.remove": DeleteOutlineIcon,
-  "containerlab.endpoint.copyurl": ContentCopyOutlinedIcon
+  "containerlab.endpoint.copyurl": ContentCopyOutlinedIcon,
+  "containerlab.connection.signout": LogoutOutlinedIcon,
+  "containerlab.connection.manage": DnsOutlinedIcon,
+  "containerlab.connection.openworkspace": FolderOpenOutlinedIcon,
+  "containerlab.lab.deploy.specificfile": PlayArrowRoundedIcon
 };
 
 const ACTION_ICON_RULES: ReadonlyArray<CommandIconRule> = [

@@ -2,8 +2,6 @@
  * MessageRouter - Handles webview message routing for ReactTopoViewer
  */
 
-import * as path from "path";
-
 import * as vscode from "vscode";
 
 import { formatErrorMessage, formatUnknownForLog, log, logWithLocation } from "../services/logger";
@@ -40,7 +38,8 @@ import {
   type TopologyHostResponseMessage,
   type TopologySnapshot
 } from "@containerlab/clab-ui/session";
-import { nodeFsAdapter } from "../shared/io";
+import { fsAdapterFor } from "../shared/io";
+import { labUri } from "../../../backend/labBackends";
 import { cancelActiveCommand } from "../../../commands/command";
 
 type WebviewMessage = Record<string, unknown> & {
@@ -400,12 +399,10 @@ export class MessageRouter {
       return;
     }
 
-    const yamlDir = this.context.yamlFilePath ? path.dirname(this.context.yamlFilePath) : undefined;
     const defaultFile = `${payload.baseName}.svg`;
-    const defaultUri =
-      yamlDir != null && yamlDir.length > 0
-        ? vscode.Uri.file(path.join(yamlDir, defaultFile))
-        : undefined;
+    const defaultUri = this.context.yamlFilePath
+      ? vscode.Uri.joinPath(labUri(this.context.yamlFilePath), "..", defaultFile)
+      : undefined;
 
     try {
       const selectedUri = await vscode.window.showSaveDialog({
@@ -424,7 +421,8 @@ export class MessageRouter {
         return;
       }
 
-      const selectedPath = selectedUri.fsPath;
+      const selectedPath =
+        selectedUri.scheme === "file" ? selectedUri.fsPath : selectedUri.toString();
       const basePath = selectedPath.toLowerCase().endsWith(".svg")
         ? selectedPath.slice(0, -4)
         : selectedPath;
@@ -433,9 +431,10 @@ export class MessageRouter {
       const dashboardPath = `${basePath}.grafana.json`;
       const panelPath = `${basePath}.flow_panel.yaml`;
 
-      await nodeFsAdapter.writeFile(svgPath, payload.svgContent);
-      await nodeFsAdapter.writeFile(dashboardPath, payload.dashboardJson);
-      await nodeFsAdapter.writeFile(panelPath, payload.panelYaml);
+      const exportFs = fsAdapterFor(selectedPath);
+      await exportFs.writeFile(svgPath, payload.svgContent);
+      await exportFs.writeFile(dashboardPath, payload.dashboardJson);
+      await exportFs.writeFile(panelPath, payload.panelYaml);
 
       this.postSvgExportResult(panel, {
         requestId: payload.requestId,
@@ -661,8 +660,9 @@ export class MessageRouter {
       log.warn("[MessageRouter] dump-css-vars: yamlFilePath is unavailable");
       return;
     }
-    const outPath = path.join(path.dirname(yamlFilePath), "vscode-css-vars.json");
-    await nodeFsAdapter.writeFile(outPath, JSON.stringify(vars, null, 2));
+    const fs = fsAdapterFor(yamlFilePath);
+    const outPath = fs.join(fs.dirname(yamlFilePath), "vscode-css-vars.json");
+    await fs.writeFile(outPath, JSON.stringify(vars, null, 2));
     log.info(`[MessageRouter] Wrote CSS vars to ${outPath}`);
   }
 

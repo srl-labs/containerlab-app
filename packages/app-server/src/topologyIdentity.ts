@@ -1,11 +1,11 @@
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
 import type {
-  ClabApiClient,
   InspectAllLabsResponse,
   InspectContainerInfo,
+  LabBackend,
   TopologyEntry
-} from "./clabApiClient.ts";
+} from "@srl-labs/containerlab-lab-backend";
 
 const ENDPOINT_TOPOLOGY_ID_SEPARATOR = "::";
 
@@ -128,15 +128,14 @@ export function findRunningLabNameForTopology(
 }
 
 export async function resolveRunningLabNameForTopology(
-  client: ClabApiClient,
-  token: string,
+  backend: Pick<LabBackend, "inspectAll">,
   topologyRef: Pick<TopologyRef, "labName" | "yamlPath" | "absoluteYamlPath">,
   fallbackLabName: string
 ): Promise<string> {
   const requiresSourceMatch = Boolean(topologyRef.absoluteYamlPath) || normalizeTopologyPath(topologyRef.yamlPath).startsWith("@shared/");
   let labs: InspectAllLabsResponse;
   try {
-    labs = await client.listLabs(token);
+    labs = await backend.inspectAll();
   } catch (error) {
     if (requiresSourceMatch) throw error;
     return fallbackLabName;
@@ -243,13 +242,12 @@ export function buildStandaloneTopologyRefFromPath(
 }
 
 export async function resolveCanonicalStandaloneTopologyRef(
-  client: ClabApiClient,
-  token: string,
+  backend: Pick<LabBackend, "listTopologies">,
   topologyRef: TopologyRef,
   endpointId?: string
 ): Promise<TopologyRef> {
   const normalizedRef = normalizeStandaloneTopologyRef(topologyRef, endpointId);
-  const topologies = await client.listTopologies(token);
+  const topologies = await backend.listTopologies();
   const exactMatch = topologies.find(
     (entry) => normalizeTopologyPath(entry.yamlFileName) === normalizedRef.yamlPath
   );

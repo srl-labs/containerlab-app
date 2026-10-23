@@ -7,7 +7,7 @@
  * desktop app opens its own window for every request, so it gets the final
  * page directly.
  */
-import type { CaptureTarget, CaptureWiresharkVncSession } from "@srl-labs/containerlab-app-contract";
+import type { CaptureTarget, CaptureWiresharkVncSession } from "@srl-labs/containerlab-lab-backend";
 
 /** One capture the user asked for; the API may split it into several sessions. */
 export interface WiresharkCaptureRequest {

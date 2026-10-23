@@ -4,6 +4,8 @@
  */
 
 import * as inspector from "../../../treeView/inspector";
+import { connectionOf, viewLabPath } from "../../../backend/labBackends";
+import type { LabConnection } from "../../../backend/connections";
 import type { DeploymentState } from "@containerlab/clab-ui/session";
 
 import { formatErrorMessage, log } from "./logger";
@@ -43,16 +45,19 @@ class DeploymentStateChecker {
     topoFilePath: string | undefined,
     updateLabName?: (newLabName: string) => void
   ): DeploymentState {
-    if (!inspector.rawInspectData) {
+    // The lab runs where its topology is: this machine, or the lab host of its URI.
+    const connection = connectionOf(topoFilePath ?? "");
+    const inspectData = inspector.labsOf(connection.id);
+    if (!inspectData) {
       return "unknown";
     }
 
-    if (this.labExistsByName(labName)) {
+    if (labName in inspectData) {
       return "deployed";
     }
 
     if (topoFilePath !== undefined && topoFilePath.length > 0) {
-      const matchedLabName = this.findLabByTopoFile(topoFilePath);
+      const matchedLabName = this.findLabByTopoFile(connection, inspectData, topoFilePath);
       if (matchedLabName !== null && matchedLabName.length > 0) {
         if (updateLabName !== undefined && matchedLabName !== labName) {
           log.info(
@@ -68,25 +73,13 @@ class DeploymentStateChecker {
   }
 
   /**
-   * Check if a lab with the given name exists in inspect data.
-   */
-  private labExistsByName(labName: string): boolean {
-    const inspectData = inspector.rawInspectData;
-    if (inspectData === undefined) {
-      return false;
-    }
-    return labName in inspectData;
-  }
-
-  /**
    * Find a lab by its topo-file path and return the lab name if found.
    */
-  private findLabByTopoFile(topoFilePath: string): string | null {
-    const inspectData = inspector.rawInspectData;
-    if (inspectData === undefined) {
-      return null;
-    }
-
+  private findLabByTopoFile(
+    connection: LabConnection,
+    inspectData: Record<string, unknown[]>,
+    topoFilePath: string
+  ): string | null {
     const normalizedYamlPath = topoFilePath.replace(/\\/g, "/");
 
     for (const [deployedLabName, labData] of Object.entries(inspectData)) {
@@ -94,7 +87,8 @@ class DeploymentStateChecker {
       if (!hasNonEmptyString(topo)) {
         continue;
       }
-      const normalizedTopoFile = topo.replace(/\\/g, "/");
+      // On a lab host, the topology's workspace URI when the host lists it
+      const normalizedTopoFile = viewLabPath(connection, topo).replace(/\\/g, "/");
       if (normalizedTopoFile === normalizedYamlPath) {
         return deployedLabName;
       }

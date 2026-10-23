@@ -1,0 +1,299 @@
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { describe, test } from "node:test";
+
+import type {
+  LabBackend,
+  LabEvent,
+  LifecycleStreamEvent,
+  TerminalServerMessage,
+  WorkspaceFileEvent
+} from "@srl-labs/containerlab-lab-backend";
+
+/** One lab backend under test, on a fake or on a real lab host. */
+export interface LabBackendContractFixture {
+  backend: LabBackend;
+  /**
+   * Whether the backend can deploy labs: a real containerlab with a container
+   * runtime behind it. File behaviour is checked either way.
+   */
+  runsLabs: boolean;
+  /** Image of the contract lab's nodes; it must have a shell. */
+  nodeImage?: string;
+  dispose?(): Promise<void> | void;
+}
+
+export interface LabBackendContractOptions {
+  createFixture(): Promise<LabBackendContractFixture>;
+  /** Time for the lab test: deploy, terminal, destroy. */
+  labTimeoutMs?: number;
+}
+
+function statusOf(error: unknown): number | undefined {
+  const status = (error as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+async function rejectsWithStatus(promise: Promise<unknown>, status: number): Promise<void> {
+  await assert.rejects(promise, (error: unknown) => {
+    assert.equal(statusOf(error), status, `expected HTTP ${status}, got ${String(error)}`);
+    return true;
+  });
+}
+
+function text(data: Uint8Array): string {
+  return new TextDecoder().decode(data);
+}
+
+async function nextMatching<T>(
+  iterable: AsyncIterable<T>,
+  matches: (value: T) => boolean,
+  timeoutMs: number
+): Promise<T> {
+  const iterator = iterable[Symbol.asyncIterator]();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await Promise.race([
+      iterator.next(),
+      new Promise<IteratorResult<T>>((resolve) =>
+        setTimeout(() => resolve({ done: true, value: undefined }), Math.max(0, deadline - Date.now()))
+      )
+    ]);
+    if (result.done) break;
+    if (matches(result.value)) return result.value;
+  }
+  throw new Error("No matching value before the timeout");
+}
+
+async function collectLifecycle(
+  events: AsyncIterable<LifecycleStreamEvent>
+): Promise<{ logs: string[]; last?: LifecycleStreamEvent }> {
+  const logs: string[] = [];
+  let last: LifecycleStreamEvent | undefined;
+  for await (const event of events) {
+    if (event.type === "log") logs.push(event.line);
+    else last = event;
+  }
+  return { logs, last };
+}
+
+export function contractLabYaml(labName: string, image: string): string {
+  return `name: ${labName}
+topology:
+  nodes:
+    n1:
+      kind: linux
+      image: ${image}
+    n2:
+      kind: linux
+      image: ${image}
+  links:
+    - endpoints: ["n1:eth1", "n2:eth1"]
+`;
+}
+
+/**
+ * What every lab backend must agree on, so hosts can switch between the
+ * local containerlab and clab-api-server without noticing.
+ */
+export function describeLabBackendContract(name: string, options: LabBackendContractOptions): void {
+  async function withFixture(run: (fixture: LabBackendContractFixture, folder: string) => Promise<void>) {
+    const fixture = await options.createFixture();
+    const folder = `contract-${randomBytes(4).toString("hex")}`;
+    try {
+      await run(fixture, folder);
+    } finally {
+      await fixture.backend.fs.delete(folder, { recursive: true }).catch(() => {});
+      await fixture.dispose?.();
+    }
+  }
+
+  describe(`${name} lab backend contract`, () => {
+    test("writes, lists, renames and deletes workspace files", () =>
+      withFixture(async ({ backend }, folder) => {
+        await backend.fs.mkdir(folder);
+        await backend.fs.write(`${folder}/notes.txt`, "hello");
+        assert.equal(text((await backend.fs.read(`${folder}/notes.txt`)).data), "hello");
+
+        await backend.fs.mkdir(`${folder}/configs`);
+        const entries = await backend.fs.list(folder);
+        assert.deepEqual(
+          entries.map((entry) => [entry.name, entry.kind, entry.path]),
+          [
+            ["configs", "directory", `${folder}/configs`],
+            ["notes.txt", "file", `${folder}/notes.txt`]
+          ]
+        );
+
+        await backend.fs.rename(`${folder}/notes.txt`, `${folder}/configs/notes.txt`);
+        assert.equal(text((await backend.fs.read(`${folder}/configs/notes.txt`)).data), "hello");
+        await rejectsWithStatus(backend.fs.read(`${folder}/notes.txt`), 404);
+
+        await rejectsWithStatus(backend.fs.delete(`${folder}/configs`), 400);
+        await backend.fs.delete(`${folder}/configs`, { recursive: true });
+        assert.deepEqual(await backend.fs.list(folder), []);
+      }));
+
+    test("keeps files inside the workspace and limits reads", () =>
+      withFixture(async ({ backend }, folder) => {
+        await rejectsWithStatus(backend.fs.read("../outside.txt"), 400);
+        await rejectsWithStatus(backend.fs.list(`${folder}/missing`), 404);
+        await backend.fs.mkdir(folder);
+        await backend.fs.write(`${folder}/big.txt`, "x".repeat(64));
+        await rejectsWithStatus(backend.fs.read(`${folder}/big.txt`, { maxBytes: 16 }), 413);
+        await rejectsWithStatus(backend.fs.write(`${folder}/no/such/dir.txt`, "x"), 400);
+      }));
+
+    test("finds a lab folder's topology under the folder name", () =>
+      withFixture(async ({ backend }, folder) => {
+        await backend.fs.mkdir(folder);
+        await backend.fs.write(`${folder}/${folder}.clab.yml`, contractLabYaml("declared-name", "alpine:3"));
+        const entry = (await backend.listTopologies()).find(
+          (topology) => topology.yamlFileName === `${folder}/${folder}.clab.yml`
+        );
+        assert.ok(entry, "topology is listed");
+        assert.equal(entry.labName, folder);
+        assert.equal(entry.annotationsFileName, `${folder}/${folder}.clab.yml.annotations.json`);
+        assert.equal(entry.hasAnnotations, false);
+
+        await backend.fs.write(entry.annotationsFileName, "{}\n");
+        const withAnnotations = (await backend.listTopologies()).find(
+          (topology) => topology.yamlFileName === entry.yamlFileName
+        );
+        assert.equal(withAnnotations?.hasAnnotations, true);
+      }));
+
+    test("topology files track a document revision", () =>
+      withFixture(async ({ backend }, folder) => {
+        const yamlPath = `${folder}/${folder}.clab.yml`;
+        await backend.fs.mkdir(folder);
+        await backend.fs.write(yamlPath, contractLabYaml(folder, "alpine:3"));
+        const files = backend.topologyFiles({ labName: folder, yamlPath });
+        assert.equal(await files.exists(yamlPath), true);
+        assert.match(await files.readFile(yamlPath), new RegExp(`name: ${folder}`));
+        const before = await files.revision(yamlPath);
+        assert.match(before ?? "", /^yaml=\d+-\d+;annotations=missing$/);
+
+        await files.writeFile(`${yamlPath}.annotations.json`, "{}\n");
+        const after = await files.revision(yamlPath);
+        assert.notEqual(after, before);
+        assert.match(after ?? "", /^yaml=\d+-\d+;annotations=\d+-\d+$/);
+
+        await files.unlink(`${yamlPath}.annotations.json`);
+        assert.equal(await files.exists(`${yamlPath}.annotations.json`), false);
+      }));
+
+    test("reports workspace changes", () =>
+      withFixture(async ({ backend }, folder) => {
+        await backend.fs.mkdir(folder);
+        const controller = new AbortController();
+        try {
+          const events = await backend.fs.watch(controller.signal);
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          await backend.fs.write(`${folder}/watched.txt`, "1");
+          const event = await nextMatching<WorkspaceFileEvent>(
+            events,
+            (candidate) => candidate.path === `${folder}/watched.txt`,
+            10_000
+          );
+          assert.equal(event.type, "workspace-file");
+          assert.equal(event.parentPath, folder);
+        } finally {
+          controller.abort();
+        }
+      }));
+
+    test(
+      "deploys, inspects, streams, opens a terminal and destroys a lab",
+      { timeout: options.labTimeoutMs ?? 300_000 },
+      async (t) => {
+        const fixture = await options.createFixture();
+        if (!fixture.runsLabs) {
+          await fixture.dispose?.();
+          t.skip("the fixture does not run labs");
+          return;
+        }
+        const { backend } = fixture;
+        const labName = `contract-${randomBytes(3).toString("hex")}`;
+        const yamlPath = `${labName}/${labName}.clab.yml`;
+        const events = new AbortController();
+        try {
+          await backend.fs.mkdir(labName);
+          await backend.fs.write(yamlPath, contractLabYaml(labName, fixture.nodeImage ?? "alpine:3"));
+
+          const labEvents = await backend.events({ initialState: true }, events.signal);
+          const deploy = await collectLifecycle(
+            await backend.streamLifecycle("deploy", { labName, path: yamlPath })
+          );
+          assert.equal(deploy.last?.type, "done", JSON.stringify(deploy.last));
+          assert.ok(deploy.logs.length > 0, "deploy streams containerlab logs");
+
+          const started = await nextMatching<LabEvent>(
+            labEvents,
+            (event) => event.type === "container" && event.attributes?.containerlab === labName,
+            30_000
+          );
+          assert.match(String(started.actor_name), new RegExp(`${labName}-n[12]$`));
+
+          assert.equal(await backend.isLabRunning(labName), true);
+          const containers = await backend.inspectLab(labName);
+          assert.deepEqual(
+            containers.map((container) => (container as unknown as { nodeName: string }).nodeName).sort(),
+            ["n1", "n2"]
+          );
+          assert.ok((await backend.inspectAll())[labName]);
+
+          const plan = await backend.runLifecycle("apply", { labName, path: yamlPath }, { dryRun: true });
+          assert.equal((plan.result as { dryRun?: unknown }).dryRun, true);
+          assert.deepEqual((plan.result as { addedNodes?: unknown }).addedNodes, []);
+
+          const n1 = containers.find((container) => container.name.endsWith("-n1"));
+          assert.ok(n1);
+          const session = await backend.createTerminal(labName, n1.name, {
+            protocol: "shell",
+            cols: 100,
+            rows: 30
+          });
+          assert.equal(session.protocol, "shell");
+          const terminal = await backend.attachTerminal(session.sessionId);
+          const output = await new Promise<string>((resolve, reject) => {
+            let received = "";
+            const timer = setTimeout(() => reject(new Error(`no terminal output: ${received}`)), 30_000);
+            terminal.onMessage((message: TerminalServerMessage) => {
+              if (message.type === "ready") {
+                terminal.send({ type: "resize", cols: 120, rows: 40 });
+                terminal.send({ type: "input", data: "echo contract-$((20+22))\r" });
+              }
+              if (message.type === "output") {
+                received += Buffer.from(message.data, "base64").toString("utf8");
+                if (received.includes("contract-42")) {
+                  clearTimeout(timer);
+                  resolve(received);
+                }
+              }
+            });
+          });
+          assert.match(output, /contract-42/);
+          terminal.send({ type: "input", data: "exit\r" });
+          terminal.close();
+
+          const logs = await backend.nodeLogs(labName, n1.name, { tail: "10" });
+          assert.equal(logs.containerName, n1.name);
+
+          const destroy = await collectLifecycle(
+            await backend.streamLifecycle("destroy", { labName }, { cleanup: true })
+          );
+          assert.equal(destroy.last?.type, "done", JSON.stringify(destroy.last));
+          assert.equal(await backend.isLabRunning(labName), false);
+        } finally {
+          events.abort();
+          if (await backend.isLabRunning(labName).catch(() => false)) {
+            await backend.runLifecycle("destroy", { labName }, { cleanup: true }).catch(() => {});
+          }
+          await backend.fs.delete(labName, { recursive: true }).catch(() => {});
+          await fixture.dispose?.();
+        }
+      }
+    );
+  });
+}

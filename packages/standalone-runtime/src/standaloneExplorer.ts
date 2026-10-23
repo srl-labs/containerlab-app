@@ -16,6 +16,7 @@ import {
   listFileExplorerDirectory,
   type FileExplorerEntry,
 } from "./runtimeApi";
+import { endpointDisplayAddress } from "./endpointAddress";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type {
   ContainerState,
@@ -92,7 +93,7 @@ const STANDALONE_TRANSFER_COMMAND_LABELS = new Map<string, string>([
 ]);
 const STANDALONE_COMMAND_LABELS = new Map<string, string>([
   ...STANDALONE_TRANSFER_COMMAND_LABELS,
-  ["containerlab.endpoint.add", "Add Endpoint"],
+  ["containerlab.endpoint.add", "Add Lab Host"],
 ]);
 const STANDALONE_TRANSFER_COMMAND_ICONS = new Map<string, string>([
   ["containerlab.file.download", "download"],
@@ -354,12 +355,12 @@ function buildRunningLabItem(input: {
 
 function disconnectedEndpointLabel(status: EndpointConfig["status"]): string {
   if (status === "saved") {
-    return "Saved endpoint — reconnect to restore the session";
+    return "Signed out: sign in to see its labs";
   }
   if (status === "session_expired") {
-    return "Session expired — reconnect with your credentials";
+    return "Sign-in expired: sign in again to see its labs";
   }
-  return "Endpoint is offline — reconnect when it is reachable";
+  return "Not reachable: check the host and sign in again";
 }
 
 type ExplorerSnapshotMessage = Extract<
@@ -582,8 +583,9 @@ function buildEndpointRootItem(
   children: ExplorerTreeItem[],
   healthState?: EndpointHealthCacheEntry,
 ): ExplorerTreeItem {
-  const endpointUrl = endpoint.url.replace(/^https?:\/\//i, "");
-  const baseTooltip = `${endpoint.url}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
+  const address = endpointDisplayAddress(endpoint);
+  const endpointUrl = address.replace(/^https?:\/\//i, "");
+  const baseTooltip = `${address}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
   const healthTooltip = endpointHealthTooltip(healthState);
   return {
     id: `${idPrefix}:${endpoint.id}`,
@@ -592,6 +594,7 @@ function buildEndpointRootItem(
     tooltip: healthTooltip ? `${baseTooltip}\n\n${healthTooltip}` : baseTooltip,
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
+    endpointKind: endpoint.kind === "local" ? "local" : "api",
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
@@ -1066,7 +1069,7 @@ export function createStandaloneExplorerBridge(
             .map((endpoint) => ({
               id: `file-root:${endpoint.id}`,
               label: endpoint.label,
-              tooltip: `${endpoint.label} (${endpoint.url}): lab workspace`,
+              tooltip: `${endpoint.label} (${endpointDisplayAddress(endpoint)}): lab workspace`,
               contextValue: "containerlabFileExplorerRoot",
               endpointId: endpoint.id,
               resourceKind: "directory",
@@ -1277,7 +1280,7 @@ export function createStandaloneExplorerBridge(
         return [
           {
             ...section,
-            label: "Endpoints",
+            label: "Lab hosts",
             count: options.getEndpoints().length,
             appearance: "bareTree" as const,
             toolbarActions: dedupeExplorerActions([

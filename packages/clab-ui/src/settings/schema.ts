@@ -1,4 +1,21 @@
 /** Host-neutral settings schema and validation, shared by the form and extension host. */
+import type { EndpointConfig } from "../workspace/types";
+
+/**
+ * Where labs run: Local (this machine) and the lab hosts, as the Lab Hosts
+ * page shows them. The extension manages them; the page asks it to.
+ */
+export interface LabHostsSnapshot {
+  /** Local first when it is shown, then the lab hosts with their sign-in status. */
+  hosts: EndpointConfig[];
+  /** This machine; missing where containerlab cannot run (macOS, Windows). */
+  local?: {
+    shown: boolean;
+    available: boolean;
+    problems: string[];
+    containerlabVersion?: string;
+  };
+}
 export interface SettingSchema {
   type: string;
   default?: unknown;
@@ -14,7 +31,13 @@ export interface SettingSchema {
   additionalProperties?: boolean | SettingSchema;
 }
 export type SettingsCategory =
-  "general" | "appearance" | "labs" | "topology" | "terminal" | "capture";
+  | "labHosts"
+  | "general"
+  | "appearance"
+  | "labs"
+  | "topology"
+  | "terminal"
+  | "capture";
 export interface SettingDefinition extends SettingSchema {
   key: string;
   title: string;
@@ -39,6 +62,10 @@ export interface SettingsSnapshot {
   version: string;
   vscodeVersion: string;
   reloadRequired?: boolean;
+  /** Local and the lab hosts, for the Lab Hosts page. */
+  labHosts?: LabHostsSnapshot;
+  /** The page to open on, e.g. "labHosts". */
+  category?: string;
 }
 export interface SettingsChange {
   key: string;
@@ -61,6 +88,8 @@ const TITLES: Record<string, string> = {
   refreshMode: "Refresh mode",
   pollInterval: "Polling interval",
   enableInterfaceStats: "Interface statistics",
+  connections: "Lab hosts",
+  localConnection: "Labs on this machine",
   "editor.customNodes": "Custom node templates",
   "editor.updateLinkEndpointsOnKindChange": "Update link endpoints",
   "editor.lockLabByDefault": "Lock canvas by default",
@@ -91,6 +120,7 @@ const RELOAD_KEYS = new Set([
   "enableInterfaceStats",
 ]);
 function categoryFor(key: string): SettingsCategory {
+  if (key === "connections" || key === "localConnection") return "labHosts";
   if (key.startsWith("appearance.")) return "appearance";
   if (key.startsWith("capture.")) return "capture";
   if (key.startsWith("editor.") || key === "drawioDefaultTheme")

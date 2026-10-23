@@ -25,6 +25,8 @@ import {
   buildExplorerUiState,
   flattenNodeIds,
   nextExpandedBySectionForSnapshot,
+  takeDefaultExpandedIds,
+  withExpandedIds,
   shouldPersistExpandedSectionImmediately,
   withExpandedSectionItems
 } from "./explorerUiState";
@@ -90,6 +92,7 @@ export function ContainerlabExplorerView({
   const filterTimeoutRef = useRef<number | null>(null);
   const uiStateTimeoutRef = useRef<number | null>(null);
   const expandedBeforeFilterRef = useRef<Partial<Record<ExplorerSectionId, string[]>> | null>(null);
+  const defaultExpandedSeenRef = useRef(new Set<string>());
   const latestUiStateRef = useRef<ExplorerUiState>(
     buildExplorerUiState({
       sectionOrder,
@@ -124,6 +127,11 @@ export function ContainerlabExplorerView({
       return next;
     });
 
+    // Outside the state updater: StrictMode runs updaters twice.
+    const defaultExpanded =
+      message.filterText.length > 0
+        ? {}
+        : takeDefaultExpandedIds(message.sections, defaultExpandedSeenRef.current);
     setExpandedBySection((current) => {
       const next = nextExpandedBySectionForSnapshot({
         current,
@@ -132,7 +140,8 @@ export function ContainerlabExplorerView({
         sections: message.sections
       });
       expandedBeforeFilterRef.current = next.expandedBeforeFilter ?? null;
-      return next.expandedBySection ?? current;
+      const expanded = next.expandedBySection ?? current;
+      return withExpandedIds(expanded, defaultExpanded) ?? expanded;
     });
 
     setFilterText(message.filterText);

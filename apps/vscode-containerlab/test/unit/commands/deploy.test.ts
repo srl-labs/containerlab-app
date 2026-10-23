@@ -3,7 +3,7 @@
  * Tests for the `deploy` command.
  *
  * The suite verifies that a {@link ClabCommand} instance receives the
- * correct arguments when deploying a topology. By stubbing the `vscode`
+ * correct action, lab and options when deploying a topology. By stubbing the `vscode`
  * module and the command implementation we can exercise the logic in a
  * plain Node environment without invoking containerlab.
  */
@@ -90,8 +90,7 @@ describe("deploy command", () => {
     await deploy(node);
 
     expect(clabStub.instances).to.have.lengthOf(1);
-    const [action, commandNode, , , , onSuccess, onFailure, onOutputLine] =
-      clabStub.instances[0].args;
+    const [action, commandNode, , onSuccess, onFailure, onOutputLine] = clabStub.instances[0].args;
     expect(action).to.equal("deploy");
     expect(commandNode).to.equal(node);
 
@@ -106,12 +105,14 @@ describe("deploy command", () => {
     expect(spy.calledOnceWithExactly()).to.be.true;
   });
 
-  it("adds lifecycle options as containerlab flags", async () => {
+  it("passes lifecycle options to the backend", async () => {
     const node = { labPath: { absolute: "/home/user/lab.yml" } } as any;
     await runClabAction("deploy", node, false, { nodeFilter: ["r1", "r2"], maxWorkers: 2 });
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
-    expect(spy.calledOnceWithExactly(["--node-filter", "r1,r2", "--max-workers", "2"])).to.be.true;
+    expect(spy.firstCall.args).to.deep.equal([
+      { lifecycleOptions: { nodeFilter: ["r1", "r2"], maxWorkers: 2 } }
+    ]);
     expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: false });
   });
 
@@ -120,7 +121,9 @@ describe("deploy command", () => {
     await runClabAction("destroy", node, false, { nodeFilter: ["r1"], graceful: true });
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
-    expect(spy.calledOnceWithExactly(["--node-filter", "r1", "--graceful"])).to.be.true;
+    expect(spy.firstCall.args).to.deep.equal([
+      { lifecycleOptions: { nodeFilter: ["r1"], graceful: true } }
+    ]);
     expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: true });
   });
 });

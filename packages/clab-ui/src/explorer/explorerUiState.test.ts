@@ -5,6 +5,8 @@ import {
   nextExpandedBySectionForSnapshot,
   nextExpandedItemsForNodeToggle,
   shouldPersistExpandedSectionImmediately,
+  takeDefaultExpandedIds,
+  withExpandedIds,
   withExpandedSectionItems
 } from "./explorerUiState";
 import type { ExplorerNode, ExplorerSectionSnapshot } from "./shared/explorer/types";
@@ -131,4 +133,24 @@ test("withExpandedSectionItems replaces only the requested section", () => {
     runningLabs: ["running"],
     fileExplorer: ["file-root:endpoint-1", "file:endpoint-1:configs"]
   });
+});
+
+test("nodes that start expanded are expanded once, so a collapse sticks", () => {
+  const sections = [
+    {
+      id: "runningLabs" as const,
+      label: "Running Labs",
+      count: 0,
+      toolbarActions: [],
+      nodes: [
+        { id: "host-a", label: "A", actions: [], children: [], defaultExpanded: true },
+        { id: "lab-1", label: "lab", actions: [], children: [] }
+      ]
+    }
+  ];
+  const seen = new Set<string>();
+  const first = takeDefaultExpandedIds(sections, seen);
+  assert.deepEqual(withExpandedIds({ runningLabs: [] }, first)?.runningLabs, ["host-a"]);
+  // The user collapses the host; the next snapshot keeps it collapsed.
+  assert.deepEqual(takeDefaultExpandedIds(sections, seen), {});
 });

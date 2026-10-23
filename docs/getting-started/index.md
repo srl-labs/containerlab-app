@@ -13,9 +13,9 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 
     ---
 
-    Your labs sit next to your code. The extension runs containerlab on the machine where VS Code runs: your Linux box, WSL, or a server over Remote SSH.
+    Your labs sit next to your code. The extension runs containerlab on the machine where VS Code runs: your Linux box, WSL, or a server over Remote SSH. It can show the labs of lab hosts next to them.
 
-    **Needs:** containerlab and Docker on that machine.
+    **Needs:** containerlab and Docker on that machine, or a lab host.
 
     [Install the extension :lucide-arrow-right:](../install/vscode.md)
 
@@ -23,9 +23,9 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 
     ---
 
-    A standalone window for Linux, macOS, and Windows. It signs in to one or more lab hosts.
+    A standalone window for Linux, macOS, and Windows. On Linux it runs labs on the computer itself, like VS Code; it can also sign in to lab hosts.
 
-    **Needs:** `clab-api-server` on each lab host.
+    **Needs:** containerlab and Docker on Linux, or a lab host.
 
     [Install the desktop app :lucide-arrow-right:](../install/desktop.md)
 
@@ -33,9 +33,9 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 
     ---
 
-    One container that serves the app to every browser on your team. Same sign-in as the desktop app.
+    One container that serves the app to every browser on your team. It signs in to lab hosts, or runs labs on its own host when you turn that on.
 
-    **Needs:** `clab-api-server` on each lab host, and Docker to run the web app.
+    **Needs:** Docker to run the web app, and a lab host or containerlab on the web app's host.
 
     [Run the web app :lucide-arrow-right:](../install/web.md)
 
@@ -56,10 +56,11 @@ The editor, the explorer, and the lab tools are the same in every app. What diff
 | | Your topology files | Your running labs |
 | --- | --- | --- |
 | VS Code | The folder you opened | The machine running the extension |
-| Desktop and web | Your home directory on the lab host | The lab host running `clab-api-server` |
+| Desktop app on Linux | `~/.clab` on your computer | Your computer |
+| Any app with a lab host | Your home directory on the lab host | The lab host running `clab-api-server` |
 | Sandbox | Browser storage | Nowhere: design only |
 
-Not sure? Start in the [sandbox](https://srl-labs.github.io/containerlab-app/) to get a feel for the editor. If you already use VS Code on Linux, the extension is the fastest way to a running lab. If several people share one lab server, run the web app.
+Not sure? Start in the [sandbox](https://srl-labs.github.io/containerlab-app/) to get a feel for the editor. On a Linux machine with containerlab, the VS Code extension and the desktop app run labs right away, with nothing else to set up. To work with labs on another machine, from macOS or Windows, or with several people on one server, set up a [lab host](../install/lab-host.md).
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run your first lab](first-lab.md)

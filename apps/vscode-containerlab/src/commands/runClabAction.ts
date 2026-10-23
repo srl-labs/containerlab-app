@@ -1,9 +1,5 @@
 import * as vscode from "vscode";
-import {
-  isPartialDestroy,
-  labLifecycleCliFlags,
-  type LabLifecycleOptions
-} from "@containerlab/clab-ui/host";
+import { isPartialDestroy, type LabLifecycleOptions } from "@containerlab/clab-ui/host";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { getSelectedLabNode } from "../utils/utils";
@@ -38,15 +34,15 @@ export async function runClabAction(
       action,
       node,
       undefined,
-      undefined,
-      undefined,
       handlers.onSuccess,
       handlers.onFailure,
       handlers.onOutputLine
     );
-    const flags = [...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(lifecycleOptions)];
-    if (flags.length > 0) {
-      await cmd.run(flags);
+    if (cleanup || lifecycleOptions) {
+      await cmd.run({
+        ...(cleanup ? { cleanup } : {}),
+        ...(lifecycleOptions ? { lifecycleOptions } : {})
+      });
     } else {
       await cmd.run();
     }

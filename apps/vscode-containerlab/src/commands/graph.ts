@@ -9,7 +9,17 @@ import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
 
-import { ClabCommand } from "./clabCommand";
+import {
+  getLocalBackend,
+  isRemote,
+  isUriString,
+  labNameForPath,
+  labPathOf,
+  labUri,
+  resolveLab
+} from "../backend/labBackends";
+
+import { execCommandInTerminal, runWithProgress } from "./command";
 
 /**
  * Core routine for generating draw.io graphs.
@@ -22,36 +32,40 @@ async function runGraphDrawIO(
   if (!node) {
     return;
   }
-
-  const graphCmd = new ClabCommand("graph", node);
-
-  // Figure out the .drawio filename
   if (!node.labPath.absolute) {
     vscode.window.showErrorMessage("No lab path found. Cannot open .drawio file.");
     return;
   }
   const labPath = node.labPath.absolute;
-  const drawioPath = labPath.replace(/\.(ya?ml)$/i, ".drawio");
-  const drawioUri = vscode.Uri.file(drawioPath);
+  const labName = node.name ?? labNameForPath(labPath);
+  const drawioTheme = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<string>("drawioDefaultTheme", "nokia_modern");
 
-  // Read the default theme from configuration.
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const drawioTheme = config.get<string>("drawioDefaultTheme", "nokia_modern");
-
-  // Wait for containerlab to finish generating the .drawio file,
-  // passing the theme argument.
-  await graphCmd
-    .run(["--drawio", "--drawio-args", `--theme ${drawioTheme} --layout ${layout}`])
-    .then(() => {
-      // Verify the file exists.
-      if (!fs.existsSync(drawioPath)) {
-        vscode.window.showErrorMessage(
-          `Containerlab failed to generate .drawio file for lab: ${node.name}.`
-        );
-        return;
+  let drawioUri = labUri(labPath);
+  await runWithProgress(
+    async ({ output }) => {
+      const lab = await resolveLab(labPath, labName, node.connectionId);
+      const result = await lab.backend.graphDrawio(lab.target, { layout, theme: drawioTheme });
+      for (const line of (result.output ?? "").split("\n")) output(line, "stdout");
+      const topologyUri = labUri(labPath);
+      drawioUri = vscode.Uri.joinPath(topologyUri, "..", result.fileName);
+      if (topologyUri.scheme !== "file" || !fs.existsSync(drawioUri.fsPath)) {
+        // A lab host returns the file instead of writing it next to the topology.
+        await vscode.workspace.fs.writeFile(drawioUri, Buffer.from(result.content, "utf8"));
       }
-      vscode.commands.executeCommand("vscode.open", drawioUri);
-    });
+    },
+    {
+      spinnerMsg: {
+        progressMsg: `Generating the draw.io graph of ${labName}...`,
+        successMsg: ""
+      },
+      actionName: "graph",
+      onSuccess: async () => {
+        await vscode.commands.executeCommand("vscode.open", drawioUri);
+      }
+    }
+  );
 }
 
 export async function graphDrawIOHorizontal(node?: ClabLabTreeNode) {
@@ -70,10 +84,27 @@ export async function graphDrawIOInteractive(node?: ClabLabTreeNode) {
   if (!node) {
     return;
   }
+  if (isRemote(node)) {
+    vscode.window.showInformationMessage(
+      "The interactive draw.io graph runs on this machine only. Use the horizontal or vertical layout for labs on a lab host."
+    );
+    return;
+  }
 
-  const graphCmd = new ClabCommand("graph", node, undefined, true, "Containerlab Graph");
-
-  void graphCmd.run(["--drawio", "--drawio-args", `"-I"`]);
+  const backend = getLocalBackend();
+  execCommandInTerminal(
+    backend.commandLine([
+      "graph",
+      "-r",
+      backend.options.runtime,
+      "--drawio",
+      "--drawio-args",
+      "-I",
+      "-t",
+      node.labPath.absolute
+    ]),
+    "Containerlab Graph"
+  );
 }
 
 /**
@@ -98,8 +129,8 @@ function resolveLabPath(node?: ClabLabTreeNode): string | undefined {
 
   const editor = vscode.window.activeTextEditor;
   const topoFileRegex = /\.clab\.(yaml|yml)$/;
-  if (editor && topoFileRegex.test(editor.document.uri.fsPath)) {
-    return editor.document.uri.fsPath;
+  if (editor && topoFileRegex.test(editor.document.uri.path)) {
+    return labPathOf(editor.document.uri);
   }
 
   vscode.window.showErrorMessage("No lab node or topology file selected");
@@ -123,7 +154,9 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
   // Derive the lab name
   const labName =
     node?.name ??
-    (labPath ? path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, "") : "Unknown Lab");
+    (isUriString(labPath)
+      ? labNameForPath(labPath)
+      : path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, ""));
 
   // Use the provider to create/get the viewer. The viewer is always editable;
   // it attaches runtime data on its own when the lab is deployed.

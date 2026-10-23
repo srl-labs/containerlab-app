@@ -1,16 +1,36 @@
 // src/commands/save.ts
-import * as path from "path";
-
 import * as vscode from "vscode";
 
-import type { ClabContainerTreeNode } from "../treeView/common";
-import { ClabLabTreeNode } from "../treeView/common";
+import type { ClabContainerTreeNode, ClabLabTreeNode } from "../treeView/common";
+import { labNameForPath, resolveLab } from "../backend/labBackends";
 
-import { ClabCommand } from "./clabCommand";
+import { runWithProgress } from "./command";
+
+async function saveConfiguration(
+  labPath: string,
+  labName: string,
+  connectionId: string | undefined,
+  nodeFilter?: string
+): Promise<void> {
+  const target = nodeFilter ? `node ${nodeFilter}` : `lab ${labName}`;
+  await runWithProgress(
+    async ({ output }) => {
+      const lab = await resolveLab(labPath, labName, connectionId);
+      const result = await lab.backend.save(lab.target, nodeFilter ? { nodeFilter } : {});
+      for (const line of result.output.split("\n")) output(line, "stdout");
+    },
+    {
+      spinnerMsg: {
+        progressMsg: `Saving the configuration of ${target}...`,
+        successMsg: `Saved the configuration of ${target}`
+      },
+      actionName: "save"
+    }
+  );
+}
 
 /**
- * Save the entire lab configuration.
- * Executes: containerlab -t <labPath> save
+ * Save the entire lab configuration (containerlab save).
  */
 export async function saveLab(node: ClabLabTreeNode) {
   const labPath = node.labPath.absolute;
@@ -18,37 +38,24 @@ export async function saveLab(node: ClabLabTreeNode) {
     vscode.window.showErrorMessage("No labPath found for the lab.");
     return;
   }
-
-  // Create a ClabCommand for "save" using the lab node.
-  const saveCmd = new ClabCommand("save", node);
-  // ClabCommand automatically appends "-t <labPath>".
-  void saveCmd.run();
+  void saveConfiguration(labPath, node.name ?? labNameForPath(labPath), node.connectionId);
 }
 
 /**
- * Save the configuration for a specific container node.
- * Executes: containerlab -t <labPath> save --node-filter <shortNodeName>
+ * Save the configuration for a specific container node
+ * (containerlab save --node-filter <shortNodeName>).
  */
 export async function saveNode(node: ClabContainerTreeNode) {
   if (node.labPath.absolute.length === 0) {
     vscode.window.showErrorMessage("Error: Could not determine lab path for this node.");
     return;
   }
-
-  // Use the short node name if available to support custom prefixes
-  const shortNodeName = node.name_short;
-
-  const tempLabNode = new ClabLabTreeNode(
-    path.basename(node.labPath.absolute),
-    vscode.TreeItemCollapsibleState.None,
-    node.labPath,
-    undefined,
-    undefined,
-    undefined,
-    "containerlabLabDeployed"
+  // The short node name supports custom container name prefixes.
+  const labPath = node.labPath.absolute;
+  void saveConfiguration(
+    labPath,
+    node.labName ?? labNameForPath(labPath),
+    node.connectionId,
+    node.name_short
   );
-
-  const saveCmd = new ClabCommand("save", tempLabNode);
-  // Use --node-filter instead of -n and use the short name
-  void saveCmd.run(["--node-filter", shortNodeName]);
 }

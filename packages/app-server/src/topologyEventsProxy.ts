@@ -1,20 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import type { Response } from "undici";
 
-import type { ClabApiClient } from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
+import type { EndpointResolver } from "./endpointResolver.ts";
 import {
   disableStreamTimeouts,
   startSseHeartbeat,
   streamResponseHeaders,
 } from "./streamResponseHeaders.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string,
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 interface ForwardTopologyEventsOptions {
   shouldSuppressLine?: (line: string) => boolean;
@@ -40,40 +32,20 @@ function isTopologyDocumentEventLine(line: string): boolean {
 }
 
 async function forwardTopologyEvents(
-  body: NonNullable<Response["body"]>,
+  lines: AsyncIterable<string>,
   reply: FastifyReply,
   isAborted: () => boolean,
   options: ForwardTopologyEventsOptions = {},
 ): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
   let eventId = 0;
-
-  try {
-    while (!isAborted()) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-
-      for (const line of lines) {
-        if (isAborted()) {
-          break;
-        }
-        const trimmed = line.trim();
-        if (trimmed && options.shouldSuppressLine?.(trimmed) !== true) {
-          eventId += 1;
-          reply.raw.write(`id: ${eventId}\ndata: ${trimmed}\n\n`);
-        }
-      }
+  for await (const line of lines) {
+    if (isAborted()) {
+      break;
     }
-  } finally {
-    reader.cancel().catch(() => {});
+    if (options.shouldSuppressLine?.(line) !== true) {
+      eventId += 1;
+      reply.raw.write(`id: ${eventId}\ndata: ${line}\n\n`);
+    }
   }
 }
 
@@ -104,7 +76,7 @@ export function registerTopologyEventsProxy(
         return reply.status(400).send({ error: "Missing sessionId" });
       }
 
-      const { client, endpoint } = resolved;
+      const { backend, endpoint } = resolved;
       const sessionLease = sessions.acquireSession(sessionId, endpoint.id);
       if (!sessionLease) {
         return reply.status(404).send({ error: "Topology session not found" });
@@ -137,21 +109,13 @@ export function registerTopologyEventsProxy(
         reply.raw.on("close", abort);
         closeListenerAttached = true;
 
-        const response = await client.openTopologyEventStream(
-          endpoint.token,
+        const lines = await backend.watchTopology(
           session.topologyRef.labName,
           session.topologyRef.yamlPath,
-          { signal: abortController.signal },
+          abortController.signal,
         );
-        if (!response.body) {
-          reply.raw.write(
-            "event: error\ndata: No topology event stream body\n\n",
-          );
-          reply.raw.end();
-          return;
-        }
 
-        await forwardTopologyEvents(response.body, reply, () => aborted, {
+        await forwardTopologyEvents(lines, reply, () => aborted, {
           shouldSuppressLine: (line) =>
             session.isInternalUpdate() && isTopologyDocumentEventLine(line),
         });

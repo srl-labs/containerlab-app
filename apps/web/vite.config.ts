@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseBooleanEnv } from "../../packages/app-server/src/env.ts";
+import { parseBooleanEnv } from "../../packages/lab-backend/src/env.ts";
 import { resolveWebTlsConfig } from "../../packages/app-server/src/tlsConfig.ts";
 import { normalizeBasePath } from "../../packages/app-server/src/basePath.ts";
 import { standalonePublicDir, standaloneStartupShell } from "@srl-labs/containerlab-standalone-runtime/vite";

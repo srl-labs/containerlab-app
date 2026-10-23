@@ -341,6 +341,48 @@
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn"
       }
+    },
+    {
+      "files": [
+        "**/src/**/*.ts",
+        "**/src/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "child_process",
+                "message": "Only packages/lab-backend runs processes: go through a LabBackend (LocalLabBackend for this machine)."
+              },
+              {
+                "name": "node:child_process",
+                "message": "Only packages/lab-backend runs processes: go through a LabBackend (LocalLabBackend for this machine)."
+              },
+              {
+                "name": "@srl-labs/containerlab-lab-backend/api",
+                "importNames": [
+                  "ClabApiClient"
+                ],
+                "message": "Talk to clab-api-server through ApiLabBackend from @srl-labs/containerlab-lab-backend/api."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/lab-backend/src/**/*.ts",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/test/**/*.ts",
+        "**/test/**/*.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }

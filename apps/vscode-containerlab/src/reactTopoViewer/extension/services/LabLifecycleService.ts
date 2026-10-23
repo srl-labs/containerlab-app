@@ -3,9 +3,6 @@
  * Handles deploy, destroy, and redeploy operations via VS Code commands.
  */
 
-import { execFile } from "child_process";
-import { promisify } from "util";
-
 import * as vscode from "vscode";
 
 import type { EndpointResult } from "@containerlab/clab-ui/session";
@@ -15,30 +12,9 @@ import {
   normalizeLabLifecycleOptions
 } from "@containerlab/clab-ui/host";
 
+import { resolveLab } from "../../../backend/labBackends";
+
 import { log } from "./logger";
-
-const execFileAsync = promisify(execFile);
-
-/** A dry run reads the whole lab from the runtime, which can take a while on big labs. */
-const APPLY_PLAN_TIMEOUT_MS = 120_000;
-
-/**
- * containerlab prints errors as a box: an "ERROR" header followed by the
- * message, wrapped over several lines. Fall back to the last stderr line.
- */
-function clabErrorMessage(error: unknown, stripAnsi: (input: string) => string): string {
-  const stderr =
-    typeof error === "object" && error !== null && "stderr" in error
-      ? String((error as { stderr: unknown }).stderr)
-      : "";
-  const lines = stripAnsi(stderr)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const errorAt = lines.lastIndexOf("ERROR");
-  const message = errorAt >= 0 ? lines.slice(errorAt + 1).join(" ") : lines.at(-1);
-  return message || (error instanceof Error ? error.message : String(error));
-}
 
 /**
  * Action configuration for lab lifecycle commands.
@@ -183,28 +159,11 @@ class LabLifecycleService {
     );
   }
 
-  /** Run `containerlab apply --dry-run` and return the JSON plan it prints. */
+  /** Plan `containerlab apply` without changing the lab; the plan's JSON. */
   async planApply(labPath: string): Promise<unknown> {
-    const runtime = vscode.workspace
-      .getConfiguration("containerlab")
-      .get<string>("runtime", "docker");
-    const args = ["apply", "-r", runtime, "--dry-run", "--format", "json", "-t", labPath];
-    const { containerlabBinaryPath } = await import("../../../globals");
-    let stdout: string;
-    try {
-      ({ stdout } = await execFileAsync(containerlabBinaryPath || "containerlab", args, {
-        timeout: APPLY_PLAN_TIMEOUT_MS,
-        maxBuffer: 16 * 1024 * 1024
-      }));
-    } catch (error) {
-      const { stripAnsi } = await import("../../../utils/utils");
-      throw new Error(clabErrorMessage(error, stripAnsi));
-    }
-    try {
-      return JSON.parse(stdout) as unknown;
-    } catch {
-      throw new Error("containerlab did not print a JSON plan");
-    }
+    const { backend, target } = await resolveLab(labPath);
+    const plan = await backend.runLifecycle("apply", target, { dryRun: true });
+    return plan.result;
   }
 }
 

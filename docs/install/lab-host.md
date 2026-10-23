@@ -1,13 +1,13 @@
 ---
-description: Install clab-api-server on the Linux machine that runs your labs, so the desktop and web apps can sign in to it.
+description: Install clab-api-server on a Linux machine, so every app can work with its labs from anywhere.
 ---
 
 # Set up a lab host
 
-The desktop and web apps need `clab-api-server` on the Linux machine that runs your labs. It ships containerlab built in, so there is nothing else to install.
+A lab host is a Linux machine that runs `clab-api-server`. The VS Code extension, the desktop app, and the web app sign in to it and work with its labs from anywhere. The API server ships containerlab built in, so there is nothing else to install.
 { .lead }
 
-VS Code users can skip this page; the extension runs containerlab itself.
+You need one to work with labs on another machine, from macOS or Windows, or with several people on one server. To run labs on the Linux machine in front of you, skip this page: the [VS Code extension](vscode.md) and the [desktop app](desktop.md#run-labs-on-this-computer) run containerlab themselves.
 
 <div class="facts" markdown>
 <div markdown>

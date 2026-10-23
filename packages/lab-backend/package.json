@@ -1,0 +1,36 @@
+{
+  "name": "@srl-labs/containerlab-lab-backend",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Node-only lab backends for Containerlab apps: the local containerlab CLI and clab-api-server.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./api": "./src/api/index.ts",
+    "./local": "./src/local/index.ts"
+  },
+  "dependencies": {
+    "@containerlab/clab-ui": "workspace:*",
+    "dockerode": "catalog:",
+    "ssh2": "catalog:",
+    "undici": "catalog:",
+    "ws": "catalog:",
+    "yaml": "catalog:"
+  },
+  "devDependencies": {
+    "@types/dockerode": "catalog:",
+    "@types/node": "catalog:",
+    "@types/ssh2": "catalog:",
+    "@types/ws": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "node --import tsx --test 'src/**/*.test.ts'",
+    "lint": "oxlint --type-aware --import-plugin src"
+  }
+}

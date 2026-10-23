@@ -21,12 +21,15 @@ import {
   endpointSessionDurationLabel,
   type EndpointConfig,
   type EndpointImportResult,
-  type EndpointSessionDuration
+  type EndpointSessionDuration,
+  type LocalEndpointOffer
 } from "../endpoints";
 import { EndpointManager } from "./EndpointManager";
 
 interface LoginPageProps {
   defaultApiUrl: string;
+  /** Offered when the host can run labs on this machine. */
+  localEndpoint?: LocalEndpointOffer;
   endpoints: EndpointConfig[];
   error: string | null;
   onAddEndpoint: (input: {
@@ -192,6 +195,7 @@ function ReconnectCard({
 
 export function LoginPage({
   defaultApiUrl,
+  localEndpoint,
   endpoints,
   error,
   onAddEndpoint,
@@ -296,6 +300,7 @@ export function LoginPage({
               onReconnectEndpoint={onReconnectEndpoint}
               onRemoveEndpoint={onRemoveEndpoint}
               onUpdateEndpoint={onUpdateEndpoint}
+              localEndpoint={localEndpoint}
             />
             {hasPersistedEndpoints && (
               <Button

@@ -25,8 +25,12 @@ export function endpointSessionDurationLabel(duration: EndpointSessionDuration):
   return normalizeEndpointSessionDuration(duration);
 }
 
+/** `api` is a clab-api-server; `local` runs labs on the desktop app's machine. */
+export type EndpointKind = "api" | "local";
+
 export interface EndpointConfig {
   id: string;
+  kind?: EndpointKind;
   url: string;
   label: string;
   username: string;
@@ -37,6 +41,7 @@ export interface EndpointConfig {
 
 interface PersistedEndpointConfig {
   id: string;
+  kind?: EndpointKind;
   url: string;
   label: string;
   username: string;
@@ -73,6 +78,7 @@ function persistEndpoints(endpoints: Map<string, EndpointConfig>): void {
       .filter((endpoint) => endpoint.id !== LEGACY_PAGES_SANDBOX_ENDPOINT_ID)
       .map((endpoint) => ({
         id: endpoint.id,
+        ...(endpoint.kind === "local" ? { kind: "local" as const } : {}),
         url: endpoint.url,
         label: endpoint.label,
         username: endpoint.username,
@@ -105,6 +111,7 @@ function loadPersistedEndpoints(): EndpointConfig[] {
       )
       .map((entry) => ({
         ...entry,
+        kind: entry.kind === "local" ? ("local" as const) : ("api" as const),
         sessionDuration: normalizeEndpointSessionDuration(entry.sessionDuration),
         status: "saved" as const,
         connected: false
@@ -165,6 +172,8 @@ function importEndpointProfiles(
   const endpoints = new Map(currentEndpoints);
   const existingByProfileKey = new Map<string, EndpointConfig>();
   for (const endpoint of endpoints.values()) {
+    // A local endpoint has no API profile to match.
+    if (endpoint.kind === "local") continue;
     const key = endpointProfileKey(endpoint);
     if (!existingByProfileKey.has(key)) {
       existingByProfileKey.set(key, endpoint);

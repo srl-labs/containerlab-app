@@ -1,7 +1,6 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 
-import type { ClabApiClient } from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
+import type { EndpointListResolver, EndpointResolver } from "./endpointResolver.ts";
 import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.ts";
 import { registerEventsProxy } from "./eventsProxy.ts";
 import { registerFileProxy } from "./fileProxy.ts";
@@ -13,16 +12,10 @@ import { registerTopologyEventsProxy } from "./topologyEventsProxy.ts";
 import { registerTopologyProxy } from "./topologyProxy.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
-
 export function registerStandaloneProxies(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
-  listEndpoints: (request: FastifyRequest, reply: FastifyReply) => EndpointEntry[],
+  listEndpoints: EndpointListResolver,
   topologySessions: StandaloneTopologySessionManager
 ): void {
   registerEventsProxy(app, resolveEndpoint);

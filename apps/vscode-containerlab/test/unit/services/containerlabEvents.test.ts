@@ -19,10 +19,15 @@ const originalResolve = (Module as any)._resolveFilename;
 
 import {
   estimateStartedAtFromStatusForTests,
-  getInterfaceSnapshot,
+  eventStreamFor,
   handleEventLineForTests,
   resetForTests
 } from "../../../src/services/containerlabEvents";
+
+/** Events of Local, as the extension streams them for this machine. */
+function getInterfaceSnapshot(containerShortId: string, containerName: string) {
+  return eventStreamFor("local").getInterfaceSnapshot(containerShortId, containerName);
+}
 
 describe("containerlabEvents uptime parsing", () => {
   beforeEach(() => {
@@ -132,5 +137,31 @@ describe("containerlabEvents uptime parsing", () => {
     iface = snapshot[0]?.interfaces.find((entry) => entry.name === "eth2");
 
     expect(iface?.netemDelay).to.equal("0ms");
+  });
+});
+
+describe("containerlabEvents per connection", () => {
+  beforeEach(() => {
+    resetForTests();
+  });
+
+  it("keeps the labs of each connection apart", () => {
+    const container = (id: string, lab: string) =>
+      JSON.stringify({
+        type: "container",
+        action: "start",
+        actor_id: id,
+        actor_name: `clab-${lab}-n1`,
+        attributes: { containerlab: lab, "clab-node-name": "n1", state: "running" }
+      });
+    handleEventLineForTests(container("aaaaaaaaaaaa", "local-lab"), "local");
+    handleEventLineForTests(container("bbbbbbbbbbbb", "remote-lab"), "api-1");
+
+    expect(Object.keys(eventStreamFor("local").getGroupedContainers())).to.deep.equal([
+      "local-lab"
+    ]);
+    expect(Object.keys(eventStreamFor("api-1").getGroupedContainers())).to.deep.equal([
+      "remote-lab"
+    ]);
   });
 });

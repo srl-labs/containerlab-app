@@ -131,11 +131,11 @@ test.describe("Standalone Settings Dialog", () => {
 
     const dialog = await openSettings(page);
     await dialog.getByTestId("standalone-settings-nav-endpoints").click();
-    await expect(dialog.getByRole("heading", { name: "Endpoints", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Lab hosts", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Edit Test Endpoint", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Reconnect Test Endpoint", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Sign in to Test Endpoint again", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Remove Test Endpoint", exact: true })).toBeVisible();
-    await expect(dialog.getByRole("heading", { name: "Add Endpoint", exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "Add a lab host", exact: true })).toBeVisible();
   });
 
   test("opens documentation from the Help & Feedback rail button", async ({ page }) => {
@@ -234,7 +234,7 @@ test.describe("Standalone Settings Dialog", () => {
       )
     });
 
-    await expect(dialog.getByText("Imported 1 endpoint profile", { exact: false })).toBeVisible();
+    await expect(dialog.getByText("Imported 1 lab host profile", { exact: false })).toBeVisible();
     await expect(dialog.getByText("Imported Endpoint")).toBeVisible();
     await expect
       .poll(() => page.evaluate(() => localStorage.getItem("clab-standalone-endpoints")))
