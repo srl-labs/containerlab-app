@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
+import { DEFAULT_EXEC_COMMANDS_BY_KIND } from "@containerlab/clab-ui/host";
 
-import { execCmdMapping } from "../globals";
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { DEFAULT_ATTACH_SHELL_CMD, DEFAULT_ATTACH_TELNET_PORT } from "../utils";
 import { isRemoteNode, openRemoteTerminal } from "../backend/remoteNode";
@@ -40,7 +40,7 @@ export function attachShell(node: ClabContainerTreeNode | undefined): void {
     return;
   }
 
-  const defaultMapping = execCmdMapping as Record<string, string>;
+  const defaultMapping: Partial<Record<string, string>> = DEFAULT_EXEC_COMMANDS_BY_KIND;
   let execCmd = defaultMapping[ctx.containerKind] ?? DEFAULT_ATTACH_SHELL_CMD;
   const config = vscode.workspace.getConfiguration("containerlab");
   const userExecMapping = config.get<Record<string, string>>("node.execCommandMapping", {});

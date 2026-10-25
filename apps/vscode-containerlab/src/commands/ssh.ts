@@ -4,6 +4,7 @@ import * as path from "path";
 
 import * as vscode from "vscode";
 import {
+  DEFAULT_SSH_USERS_BY_KIND,
   resolveNodeCredentialsFromYaml,
   type ResolvedNodeCredentials
 } from "@containerlab/clab-ui/host";
@@ -13,7 +14,6 @@ import {
   type ClabLabTreeNode,
   flattenContainers
 } from "../treeView/common";
-import { sshUserMapping } from "../globals";
 import { isRemoteNode, openRemoteTerminal } from "../backend/remoteNode";
 
 import { execCommandInTerminal } from "./command";
@@ -118,7 +118,7 @@ export function sshToNode(node: ClabContainerTreeNode | undefined): void {
   // Get the SSH user mapping from user settings
   const config = vscode.workspace.getConfiguration("containerlab");
   const userSshMapping = config.get<Partial<Record<string, string>>>("node.sshUserMapping", {});
-  const defaultMapping = sshUserMapping as Partial<Record<string, string>>;
+  const defaultMapping: Partial<Record<string, string>> = DEFAULT_SSH_USERS_BY_KIND;
 
   // The topology's credentials come first, then the user setting, the default mapping and "admin"
   if (isRemoteNode(node)) {

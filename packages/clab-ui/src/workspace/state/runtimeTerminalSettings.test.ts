@@ -66,3 +66,28 @@ test("resolveTerminalSshUsername prefers configured mapping for known kinds", ()
   assert.equal(resolveTerminalSshUsername("cisco_xrd", preferences), "clab");
   assert.equal(resolveTerminalSshUsername("", preferences), undefined);
 });
+
+test("default SSH users follow containerlab's default credentials", () => {
+  const preferences = normalizeTerminalPreferences(undefined);
+
+  assert.equal(resolveTerminalSshUsername("cisco_xrv9k", preferences), "clab");
+  assert.equal(resolveTerminalSshUsername("cisco_c8000", preferences), "cisco");
+  assert.equal(resolveTerminalSshUsername("ciena_saos", preferences), "diag");
+  assert.equal(resolveTerminalSshUsername("arrcus_arcos", preferences), "clab");
+  assert.equal(resolveTerminalSshUsername("nvidia_cumulusvx", preferences), "cumulus");
+  assert.equal(resolveTerminalSshUsername("fdio_vpp", preferences), "root");
+  assert.equal(resolveTerminalSshUsername("juniper_csrx", preferences), "root");
+  assert.equal(resolveTerminalSshUsername("generic_vm", preferences), "clab");
+  assert.equal(Object.hasOwn(preferences.sshUserMapping, "cisco_xr9vk"), false);
+});
+
+test("saved settings with the misspelled cisco_xr9vk key apply to cisco_xrv9k", () => {
+  const migrated = normalizeTerminalPreferences({ sshUserMapping: { cisco_xr9vk: "ops" } });
+  assert.equal(migrated.sshUserMapping.cisco_xrv9k, "ops");
+  assert.equal(Object.hasOwn(migrated.sshUserMapping, "cisco_xr9vk"), false);
+
+  const corrected = normalizeTerminalPreferences({
+    sshUserMapping: { cisco_xr9vk: "clab", cisco_xrv9k: "admin" }
+  });
+  assert.equal(corrected.sshUserMapping.cisco_xrv9k, "admin");
+});
