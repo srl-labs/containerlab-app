@@ -91,7 +91,7 @@ async function runTopologyNodeLifecycleAction(
   if (!nodeName) {
     const error = new Error("No topology node name found.");
     vscode.window.showErrorMessage(error.message);
-    await notifyCurrentTopoViewerOfCommandFailure(action, error);
+    await notifyCurrentTopoViewerOfCommandFailure(action, error, node.labPath.absolute);
     return;
   }
 
@@ -102,8 +102,8 @@ async function runTopologyNodeLifecycleAction(
     return;
   }
 
-  const handlers = createTopoViewerLifecycleHandlers(action);
   const labPath = node.labPath.absolute;
+  const handlers = createTopoViewerLifecycleHandlers(action, { labPath });
   const labName = node.labName ?? labNameForPath(labPath);
   const containerName = node.name;
   await runWithProgress(

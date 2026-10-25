@@ -76,6 +76,7 @@ import {
   createStandaloneExplorerBridge,
   deleteUiCustomNode,
   deleteUiIcon,
+  fetchLabTailscaleStatus,
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
@@ -96,12 +97,14 @@ import {
   runtimeUiActions,
   useRuntimeUiStore,
   saveUiCustomNode,
+  resetNetem,
   setNetem,
   setDefaultUiCustomNode,
   uploadUiIcon,
   useLabTabsStore,
   type TerminalPreferences,
 } from "./mainApiDependencies";
+import { isNetemCleared } from "@srl-labs/containerlab-lab-backend";
 import type * as ImageManagerExports from "@containerlab/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
@@ -119,7 +122,12 @@ import {
   type WiresharkCaptureRequest,
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
+import {
+  controlNodesLifecycle,
+  createStandaloneLabOperations,
+} from "./standaloneLabOperations";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -670,7 +678,7 @@ const explorerBridge = createStandaloneExplorerBridge({
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
 
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
-  return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
+  return /\.clab\.(?:ya?ml|gotmpl)(?:\.annotations\.json)?$/i.test(pathValue ?? "");
 }
 
 type VscodeMessage = {
@@ -690,6 +698,7 @@ type VscodeMessage = {
   message?: string;
   name?: string;
   nodeName?: string;
+  nodeNames?: unknown;
   options?: unknown;
   panelYaml?: string;
   requestId?: string;
@@ -975,6 +984,29 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
     return;
   }
 
+  const nodeNames = Array.isArray(msg.nodeNames)
+    ? msg.nodeNames.filter(
+        (name): name is string => typeof name === "string" && name.trim().length > 0,
+      )
+    : [];
+  if (nodeNames.length > 1) {
+    const nodesAction = action;
+    void controlNodesLifecycle(target, nodesAction, nodeNames)
+      .then((message) => {
+        runtimeUiActions.notify(
+          message ?? `${nodesAction} requested for ${nodeNames.length} nodes.`,
+          "success",
+        );
+      })
+      .catch((error: unknown) => {
+        runtimeUiActions.notify(
+          error instanceof Error ? error.message : String(error),
+          "error",
+        );
+      });
+    return;
+  }
+
   void controlNodeLifecycle({
     ...target,
     nodeName,
@@ -1007,21 +1039,26 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
       );
       return;
     }
-    const delay = optionalStringField(msg.data, "delay");
-    const jitter = optionalStringField(msg.data, "jitter");
-    const loss = optionalNumberField(msg.data, "loss");
-    const rate = optionalNumberField(msg.data, "rate");
-    const corruption = optionalNumberField(msg.data, "corruption");
-    void setNetem({
-      ...target,
-      nodeName,
-      interfaceName,
-      delay,
-      jitter,
-      loss,
-      rate,
-      corruption,
-    })
+    // Clearing every value resets netem rather than setting zeros.
+    const cleared = isNetemCleared(msg.data);
+    const delay = cleared ? undefined : optionalStringField(msg.data, "delay");
+    const jitter = cleared ? undefined : optionalStringField(msg.data, "jitter");
+    const loss = cleared ? undefined : optionalNumberField(msg.data, "loss");
+    const rate = cleared ? undefined : optionalNumberField(msg.data, "rate");
+    const corruption = cleared ? undefined : optionalNumberField(msg.data, "corruption");
+    const request = cleared
+      ? resetNetem({ ...target, nodeName, interfaceName })
+      : setNetem({
+          ...target,
+          nodeName,
+          interfaceName,
+          delay,
+          jitter,
+          loss,
+          rate,
+          corruption,
+        });
+    void request
       .then(() => {
         useLabStore.getState().updateInterfaceNetemState({
           endpointId: target.endpointId,
@@ -1038,7 +1075,9 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
           }),
         });
         runtimeUiActions.notify(
-          `Updated impairments for ${nodeName}:${interfaceName}.`,
+          cleared
+            ? `Cleared impairments for ${nodeName}:${interfaceName}.`
+            : `Updated impairments for ${nodeName}:${interfaceName}.`,
           "success",
         );
       })
@@ -1228,6 +1267,10 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
     });
   },
   "clab-link-impairment": handleLinkImpairmentCommand,
+  "topo-validate": () => {
+    const target = getActiveTopologyTarget();
+    if (target) void validateTopologyFlow(target);
+  },
   "topo-toggle-split-view": () =>
     runtimeUiActions.notify(
       "Split view is not available in standalone mode yet.",
@@ -1357,10 +1400,40 @@ function setupStandaloneUiHost(): void {
     });
   };
 
+  const tailscaleStatus = async () => {
+    const topologyRef = topologyManager.getCurrentTopologyRef();
+    if (!topologyRef) {
+      throw new Error("No active topology session is available.");
+    }
+    return fetchLabTailscaleStatus({
+      sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+      topologyRef,
+    });
+  };
+
+  // Lab operations also skip postMessage and go to the app server.
+  const labOperations = createStandaloneLabOperations(() => {
+    const topologyRef = topologyManager.getCurrentTopologyRef();
+    if (!topologyRef) return null;
+    return {
+      endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
+      sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+      topologyRef,
+    };
+  });
+
   standaloneRuntime = createClabUiRuntime({
     host: {
       ...apiHost,
-      topoViewer: { ...apiHost.topoViewer, planApply },
+      topoViewer: {
+        ...apiHost.topoViewer,
+        planApply,
+        // Without lab lifecycle (the browser sandbox) no lab runs.
+        tailscaleStatus: getStandaloneBackend().capabilities.lifecycle
+          ? tailscaleStatus
+          : undefined,
+        ...(getStandaloneBackend().capabilities.lifecycle ? { labOperations } : { labOperations: undefined }),
+      },
       topology: {
         ...apiHost.topology,
         dispatchCommand,

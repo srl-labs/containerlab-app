@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type { NodeEditorData } from "../../components/panels/node-editor/types";
 import { convertEditorDataToNodeSaveData } from "../../core/utilities";
 import { KIND_CONFIG_KEYS } from "../../core/utilities/nodeKindConfig";
+import { OTHER_CONFIG_KEYS } from "../../core/utilities/nodeOtherConfig";
 
 import { applyFormUpdates } from "./formState";
 
@@ -38,6 +39,12 @@ export function hasFieldChanged(
     return (
       JSON.stringify(formData.kindConfig?.[yamlKey]) !==
       JSON.stringify(initialData.kindConfig?.[yamlKey])
+    );
+  }
+  if (OTHER_CONFIG_KEYS.includes(yamlKey)) {
+    return (
+      JSON.stringify(formData.otherConfig?.[yamlKey]) !==
+      JSON.stringify(initialData.otherConfig?.[yamlKey])
     );
   }
   const editorKey = YAML_TO_EDITOR_MAP[yamlKey] ?? yamlKey;

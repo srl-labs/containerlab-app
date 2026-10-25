@@ -1,6 +1,12 @@
 export * from "@containerlab/clab-ui/workspace/state";
 import { confirmRuntimeAction, runtimeUiActions } from "@containerlab/clab-ui/workspace/state";
-import { deleteTopologyFile, saveLabConfigs, type RuntimeTargetRequest } from "./runtimeApi";
+import {
+  deleteTopologyFile,
+  requestLabOperation,
+  saveLabConfigs,
+  type RuntimeTargetRequest,
+  type SaveConfigResponse
+} from "./runtimeApi";
 
 export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Promise<boolean> {
   const fileLabel = target.topologyRef?.yamlPath ?? "this topology file";
@@ -30,11 +36,16 @@ export async function saveConfigsFlow(
     sessionId?: string;
     topologyRef?: RuntimeTargetRequest["topologyRef"];
     nodeName?: string;
+    /** `save --copy`: goes through the lab operations route, which takes it. */
+    copyDir?: string;
   },
   successLabel: string
 ): Promise<void> {
   try {
-    const response = await saveLabConfigs(target);
+    const { copyDir, ...rest } = target;
+    const response = copyDir
+      ? ((await requestLabOperation("save", { ...rest, copyDir })) as SaveConfigResponse)
+      : await saveLabConfigs(rest);
     runtimeUiActions.notify(response.message || successLabel, "success");
   } catch (error) {
     runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");

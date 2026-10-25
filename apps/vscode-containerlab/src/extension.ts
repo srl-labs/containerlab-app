@@ -61,6 +61,7 @@ import { ContainerlabExplorerViewProvider } from "./webviews/explorer/containerl
 
 import { refreshSettingsPanel, registerSettings } from "./webviews/settings/settingsPanel";
 import { registerAppearanceUpdates } from "./webviews/shared/appearance";
+import { registerRenderedTopologyProvider } from "./commands/renderedTopology";
 
 let explorerViewProvider: ContainerlabExplorerViewProvider | undefined;
 
@@ -487,6 +488,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.lab.stop", cmd.stopLab],
     ["containerlab.lab.restart", cmd.restartLab],
     ["containerlab.lab.save", cmd.saveLab],
+    ["containerlab.lab.saveCopy", cmd.saveLabCopy],
     ["containerlab.lab.sshx.attach", cmd.sshxAttach],
     ["containerlab.lab.sshx.detach", cmd.sshxDetach],
     ["containerlab.lab.sshx.reattach", cmd.sshxReattach],
@@ -499,6 +501,10 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.lab.graph.drawio.horizontal", cmd.graphDrawIOHorizontal],
     ["containerlab.lab.graph.drawio.vertical", cmd.graphDrawIOVertical],
     ["containerlab.lab.graph.drawio.interactive", cmd.graphDrawIOInteractive],
+    ["containerlab.lab.graph.mermaid", cmd.graphMermaid],
+    ["containerlab.lab.graph.dot", cmd.graphDot],
+    ["containerlab.lab.validate", cmd.validateLab],
+    ["containerlab.lab.generate", (target?: unknown) => cmd.generateClosTopology(context, target)],
     ["containerlab.node.start", cmd.startNode],
     ["containerlab.node.stop", cmd.stopNode],
     ["containerlab.node.restart", cmd.restartNode],
@@ -747,6 +753,10 @@ function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push({ dispose: disposeStateChange });
 
+  // Event streams that stop: lab hosts show as not reachable, Local starts again
+  const disposeStreamLoss = ins.watchStreamLoss(handleDataChanged);
+  context.subscriptions.push({ dispose: disposeStreamLoss });
+
   // Stop realtime background workers on deactivate
   context.subscriptions.push({
     dispose: () => {
@@ -952,6 +962,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Language features (YAML completion)
   registerClabImageCompletion(context);
+  registerRenderedTopologyProvider(context);
 
   // Register commands
   registerCommands(context);

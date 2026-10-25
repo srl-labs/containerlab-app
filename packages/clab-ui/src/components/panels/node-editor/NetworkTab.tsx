@@ -28,6 +28,7 @@ import {
 import type { TabProps } from "./types";
 import { withCurrentOption } from "./selectOptions";
 import { inheritedFieldHint } from "./inheritanceHints";
+import { PortMappingList } from "./PortMappingList";
 
 const CONTAINER_MODE = "container";
 
@@ -296,12 +297,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
       </PanelSection>
 
       <PanelAddSection title="Port Mappings" onAdd={handleAddPort}>
-        <DynamicList
-          items={data.ports ?? []}
-          onChange={(items) => onChange({ ports: items })}
-          placeholder="host:container[/protocol]"
-          hideAddButton
-        />
+        <PortMappingList items={data.ports ?? []} onChange={(items) => onChange({ ports: items })} />
         <InheritedListHint hint={inheritedFieldHint(props, "ports")} />
       </PanelAddSection>
 

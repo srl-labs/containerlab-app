@@ -22,6 +22,19 @@ export const MSG_CANCEL_LAB_LIFECYCLE = "cancelLabLifecycle" as const;
 /** Dry-run apply; the host answers with `MSG_APPLY_PLAN_RESULT` and the same `requestId`. */
 export const MSG_PLAN_APPLY_LAB = "planApplyLab" as const;
 
+/** Tailscale status of the running lab; the host answers with `MSG_TAILSCALE_STATUS_RESULT`. */
+export const MSG_TAILSCALE_STATUS = "tailscaleStatus" as const;
+
+/**
+ * Exec, snapshots, config save and inspect details of the open lab:
+ * `{ requestId, operation, request }`. The host answers with
+ * `MSG_LAB_OPERATION_RESULT` and the same `requestId`.
+ */
+export const MSG_LAB_OPERATION = "labOperation" as const;
+
+/** Run `containerlab validate` on the topology; the host shows the result. */
+export const MSG_VALIDATE_TOPOLOGY = "topo-validate" as const;
+
 const LIFECYCLE_COMMANDS_SET: ReadonlySet<string> = new Set(Object.values(LIFECYCLE_COMMANDS));
 
 export type LifecycleCommand = (typeof LIFECYCLE_COMMANDS)[keyof typeof LIFECYCLE_COMMANDS];
@@ -118,4 +131,7 @@ export type ExtensionCommandType =
   | ExportCommand
   | typeof MSG_TOGGLE_SPLIT_VIEW
   | typeof MSG_CANCEL_LAB_LIFECYCLE
-  | typeof MSG_PLAN_APPLY_LAB;
+  | typeof MSG_PLAN_APPLY_LAB
+  | typeof MSG_TAILSCALE_STATUS
+  | typeof MSG_LAB_OPERATION
+  | typeof MSG_VALIDATE_TOPOLOGY;

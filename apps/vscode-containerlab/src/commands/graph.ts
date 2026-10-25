@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 
 import * as vscode from "vscode";
 
@@ -8,6 +7,11 @@ import type { ReactTopoViewer } from "../reactTopoViewer";
 import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
+import {
+  isTopologyFileName,
+  isTopologyTemplateFileName,
+  topologyFileStem
+} from "@containerlab/clab-ui/host";
 
 import {
   getLocalBackend,
@@ -20,6 +24,7 @@ import {
 } from "../backend/labBackends";
 
 import { execCommandInTerminal, runWithProgress } from "./command";
+import { showRenderedTopology } from "./renderedTopology";
 
 /**
  * Core routine for generating draw.io graphs.
@@ -128,8 +133,7 @@ function resolveLabPath(node?: ClabLabTreeNode): string | undefined {
   }
 
   const editor = vscode.window.activeTextEditor;
-  const topoFileRegex = /\.clab\.(yaml|yml)$/;
-  if (editor && topoFileRegex.test(editor.document.uri.path)) {
+  if (editor && isTopologyFileName(editor.document.uri.path)) {
     return labPathOf(editor.document.uri);
   }
 
@@ -151,12 +155,15 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
     return;
   }
 
+  // Only containerlab can turn a template into a topology: show its rendered result instead.
+  if (isTopologyTemplateFileName(labPath)) {
+    await showRenderedTopology(labPath, node?.connectionId);
+    return;
+  }
+
   // Derive the lab name
   const labName =
-    node?.name ??
-    (isUriString(labPath)
-      ? labNameForPath(labPath)
-      : path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, ""));
+    node?.name ?? (isUriString(labPath) ? labNameForPath(labPath) : topologyFileStem(labPath));
 
   // Use the provider to create/get the viewer. The viewer is always editable;
   // it attaches runtime data on its own when the lab is deployed.
@@ -172,6 +179,8 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
   // Handle disposal
   if (viewer.currentPanel) {
     viewer.currentPanel.onDidDispose(() => {
+      // Closing another lab's viewer leaves the last opened one current.
+      if (currentTopoViewer !== viewer) return;
       currentTopoViewer = undefined;
       vscode.commands.executeCommand("setContext", "isTopoviewerActive", false);
     });
@@ -182,17 +191,27 @@ export function getCurrentTopoViewer(): ReactTopoViewer | undefined {
   return currentTopoViewer;
 }
 
+/**
+ * The viewer a lifecycle command reports to: the one of its lab, or the last
+ * opened viewer when the lab is unknown. A lab without an open viewer gets none.
+ */
+function lifecycleViewer(labPath?: string): ReactTopoViewer | undefined {
+  if (labPath !== undefined && labPath !== "") return ReactTopoViewerProvider.findViewer(labPath);
+  return currentTopoViewer;
+}
+
 async function postLifecycleStatus(
+  viewer: ReactTopoViewer | undefined,
   commandType: LifecycleCommandType,
   status: "success" | "error",
   errorMessage?: string
 ): Promise<void> {
-  if (!currentTopoViewer?.currentPanel) {
+  if (!viewer?.currentPanel) {
     return;
   }
 
   try {
-    await currentTopoViewer.currentPanel.webview.postMessage({
+    await viewer.currentPanel.webview.postMessage({
       type: MSG_LAB_LIFECYCLE_STATUS,
       data: { commandType, status, errorMessage }
     });
@@ -202,16 +221,17 @@ async function postLifecycleStatus(
 }
 
 async function postLifecycleLog(
+  viewer: ReactTopoViewer | undefined,
   commandType: LifecycleCommandType,
   line: string,
   stream: LifecycleCommandStream
 ): Promise<void> {
-  if (!currentTopoViewer?.currentPanel || !line) {
+  if (!viewer?.currentPanel || !line) {
     return;
   }
 
   try {
-    await currentTopoViewer.currentPanel.webview.postMessage({
+    await viewer.currentPanel.webview.postMessage({
       type: MSG_LAB_LIFECYCLE_LOG,
       data: { commandType, line, stream }
     });
@@ -221,14 +241,16 @@ async function postLifecycleLog(
 }
 
 /**
- * Notifies the current active topoviewer about successful command completion
+ * Updates the lab's viewer after a containerlab command completed successfully.
  * This should ONLY be called after a containerlab command has successfully completed
  */
-async function notifyCurrentTopoViewerOfCommandSuccess(
+async function notifyTopoViewerOfCommandSuccess(
   commandType: LifecycleCommandType,
+  labPath: string | undefined,
   labKeepsRunning = false
 ) {
-  if (!currentTopoViewer?.currentPanel) {
+  const viewer = lifecycleViewer(labPath);
+  if (!viewer?.currentPanel) {
     return;
   }
 
@@ -237,45 +259,40 @@ async function notifyCurrentTopoViewerOfCommandSuccess(
     commandType === "destroy" && !labKeepsRunning ? "undeployed" : "deployed";
 
   try {
-    if (typeof currentTopoViewer.refreshAfterExternalCommand === "function") {
-      await currentTopoViewer.refreshAfterExternalCommand(newDeploymentState);
+    if (typeof viewer.refreshAfterExternalCommand === "function") {
+      await viewer.refreshAfterExternalCommand(newDeploymentState);
     }
   } catch (error) {
     console.error(`Failed to update TopoViewer after ${commandType}:`, error);
   } finally {
-    await postLifecycleStatus(commandType, "success");
+    await postLifecycleStatus(viewer, commandType, "success");
   }
 }
 
+/** Tells the lab's viewer, or the last opened one when the lab is unknown, that a command failed. */
 export async function notifyCurrentTopoViewerOfCommandFailure(
   commandType: LifecycleCommandType,
-  error: unknown
+  error: unknown,
+  labPath?: string
 ): Promise<void> {
   const errorMessage = error instanceof Error ? error.message : String(error);
-  await postLifecycleStatus(commandType, "error", errorMessage);
+  await postLifecycleStatus(lifecycleViewer(labPath), commandType, "error", errorMessage);
 }
 
-async function notifyCurrentTopoViewerOfCommandLog(
-  commandType: LifecycleCommandType,
-  line: string,
-  stream: LifecycleCommandStream
-): Promise<void> {
-  await postLifecycleLog(commandType, line, stream);
-}
-
+/** Output, status and refresh of a lifecycle command go to the viewer of `labPath`. */
 export function createTopoViewerLifecycleHandlers(
   commandType: LifecycleCommandType,
-  options: { labKeepsRunning?: boolean } = {}
+  options: { labKeepsRunning?: boolean; labPath?: string } = {}
 ): TopoViewerLifecycleHandlers {
   return {
     onSuccess: async () => {
-      await notifyCurrentTopoViewerOfCommandSuccess(commandType, options.labKeepsRunning);
+      await notifyTopoViewerOfCommandSuccess(commandType, options.labPath, options.labKeepsRunning);
     },
     onFailure: async (error) => {
-      await notifyCurrentTopoViewerOfCommandFailure(commandType, error);
+      await notifyCurrentTopoViewerOfCommandFailure(commandType, error, options.labPath);
     },
     onOutputLine: (line, stream) => {
-      void notifyCurrentTopoViewerOfCommandLog(commandType, line, stream);
+      void postLifecycleLog(lifecycleViewer(options.labPath), commandType, line, stream);
     }
   };
 }

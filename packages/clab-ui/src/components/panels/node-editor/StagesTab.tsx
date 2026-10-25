@@ -202,6 +202,7 @@ const ExecRow: React.FC<ExecRowProps> = ({ id, entry, onChange, onRemove }) => (
           value={entry.command}
           onChange={(command) => onChange({ ...entry, command })}
           placeholder="e.g. ip link show"
+          magicVariables
         />
       </Box>
       <Box sx={{ pt: 0.5 }}>

@@ -117,6 +117,23 @@ test.describe("Run with options", () => {
     ]);
   });
 
+  test("passes a template variables file to the lifecycle action", async ({ page }) => {
+    await setDeploymentState(page, "deployed");
+    await openOptionsDialog(page);
+
+    await page.locator("#lifecycle-options-vars-file").fill("/etc/vars.yml");
+    await expect(page.getByTestId("lifecycle-options-run")).toBeDisabled();
+    await page.locator("#lifecycle-options-vars-file").fill("vars/prod.yml");
+    await expect(page.getByTestId("lifecycle-options-command")).toHaveText(
+      "containerlab redeploy --vars vars/prod.yml"
+    );
+
+    await page.getByTestId("lifecycle-options-run").click();
+    expect(await lifecycleMessages(page)).toEqual([
+      { command: "redeployLab", options: { varsFile: "vars/prod.yml" } }
+    ]);
+  });
+
   test("rejects an invalid worker count", async ({ page }) => {
     await setDeploymentState(page, "deployed");
     await openOptionsDialog(page);

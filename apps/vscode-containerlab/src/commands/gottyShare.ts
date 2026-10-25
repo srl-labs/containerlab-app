@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 
+import { gottyOptionsError, type ShareToolOptions } from "@srl-labs/containerlab-lab-backend";
+
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel, gottySessions, runningLabsProvider } from "../globals";
 import { backendOf } from "../backend/labBackends";
@@ -70,22 +72,76 @@ async function getBracketedHostname(node: ClabLabTreeNode): Promise<string | und
   return hostname.includes(":") ? `[${hostname}]` : hostname;
 }
 
+/**
+ * GoTTY sign-in and shell; containerlab's admin/admin and bash unless the
+ * user sets them. Undefined when cancelled.
+ */
+async function askForGottyOptions(node: ClabLabTreeNode): Promise<ShareToolOptions | undefined> {
+  const features = await backendOf(node)
+    .features()
+    .catch(() => undefined);
+  if (features?.gottyOptions !== true) return {};
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: "Default sign-in", description: "admin / admin, bash", custom: false },
+      {
+        label: "Custom sign-in and shell…",
+        description: "Set username, password and shell",
+        custom: true
+      }
+    ],
+    { title: "Share the lab with GoTTY" }
+  );
+  if (!picked) return undefined;
+  if (!picked.custom) return {};
+  const username = await vscode.window.showInputBox({
+    title: "GoTTY username",
+    value: "admin",
+    validateInput: (value) => gottyOptionsError({ username: value, password: "x" })
+  });
+  if (username === undefined) return undefined;
+  const password = await vscode.window.showInputBox({
+    title: "GoTTY password",
+    password: true,
+    validateInput: (value) => gottyOptionsError({ username, password: value })
+  });
+  if (password === undefined) return undefined;
+  const shell = await vscode.window.showInputBox({
+    title: "GoTTY shell",
+    value: "bash",
+    validateInput: (value) => gottyOptionsError({ shell: value.trim() || "bash" })
+  });
+  if (shell === undefined) return undefined;
+  const chosenShell = shell.trim();
+  return {
+    username,
+    password,
+    ...(chosenShell && chosenShell !== "bash" ? { shell: chosenShell } : {})
+  };
+}
+
 async function gottyStart(action: "attach" | "reattach", node: ClabLabTreeNode | undefined) {
   if (node === undefined || !isNonEmptyString(node.name)) {
     vscode.window.showErrorMessage(`No lab selected for GoTTY ${action}.`);
     return;
   }
   const labName = node.name;
+  const options = await askForGottyOptions(node);
+  if (options === undefined) return;
   try {
     const port = vscode.workspace.getConfiguration("containerlab").get<number>("gotty.port", 8080);
-    const result = await backendOf(node).shareTool("gotty", labName, action, { port });
+    const result = await backendOf(node).shareTool("gotty", labName, action, { ...options, port });
     if (result.output) outputChannel.info(result.output);
     const link = await parseGottyLink(result.link ?? result.output ?? "", node);
     if (link !== undefined && link.length > 0) {
       gottySessions.set(labName, link);
       await vscode.env.clipboard.writeText(link);
+      const signIn =
+        options.username !== undefined
+          ? `Sign in as ${options.username} with the password you set.`
+          : `Default credentials: ${result.username ?? "admin"}/admin`;
       const choice = await vscode.window.showInformationMessage(
-        "GoTTY link copied to clipboard. Default credentials: admin/admin",
+        `GoTTY link copied to clipboard. ${signIn}`,
         "Open Link"
       );
       if (choice === "Open Link") {

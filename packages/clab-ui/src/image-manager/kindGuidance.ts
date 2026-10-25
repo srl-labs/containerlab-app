@@ -12,6 +12,15 @@ type GuidanceInput = Partial<
   repositoryHints?: string[];
 };
 
+const FRR_GUIDANCE: GuidanceInput = {
+  title: "FRRouting",
+  docsSlug: "frr",
+  recommendedImages: ["quay.io/frrouting/frr:containerlab-<version>"],
+  repositoryHints: ["quay.io/frrouting/frr", "frrouting/frr", "frr"],
+  guidance: "Pull an FRR containerlab image (containerlab-<version> tags, from FRR 10.7.1) from quay.io. It adds SSH with an admin user whose shell is vtysh; plain release tags have no SSH server.",
+  pullable: true
+};
+
 const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
   nokia_srlinux: {
     title: "Nokia SR Linux",
@@ -104,14 +113,6 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     guidance: "No container image is required. This kind represents the containerlab host itself.",
     pullable: false
   },
-  border0: {
-    title: "Border0",
-    recommendedImages: [],
-    repositoryHints: [],
-    imageRequired: false,
-    guidance: "No standalone image is required for this special connectivity kind.",
-    pullable: false
-  },
   "k8s-kind": {
     title: "Kubernetes in Docker",
     docsSlug: "k8s-kind",
@@ -126,6 +127,14 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     recommendedImages: ["crpd:<version>"],
     repositoryHints: ["crpd", "juniper/crpd"],
     guidance: "Download cRPD from Juniper's support portal (active service contract required) and `docker load` the resulting tarball — it is tagged crpd:<version>.",
+    pullable: false
+  },
+  juniper_csrx: {
+    title: "Juniper cSRX",
+    docsSlug: "csrx",
+    recommendedImages: ["csrx:<version>"],
+    repositoryHints: ["csrx", "junos-csrx"],
+    guidance: "Get the cSRX tarball from Juniper and load it with `docker load -i junos-csrx-docker-<version>.tgz`, then reference the loaded image, e.g. csrx:<version>.",
     pullable: false
   },
   juniper_vmx: {
@@ -190,6 +199,14 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     recommendedImages: ["xrd-control-plane:<version>", "xrd-vrouter:<version>"],
     repositoryHints: ["xrd-control-plane", "xrd-vrouter", "xrd"],
     guidance: "Download XRd Control Plane or XRd vRouter from Cisco (active service account required) and load it locally — set type: xrd-control-plane or type: xrd-vrouter to pick the form factor.",
+    pullable: false
+  },
+  cisco_xrd_vrouter: {
+    title: "Cisco XRd vRouter",
+    docsSlug: "cisco_xrd_vrouter",
+    recommendedImages: ["vrnetlab/cisco_xrd-vrouter:<version>"],
+    repositoryHints: ["vrnetlab/cisco_xrd-vrouter", "cisco_xrd-vrouter", "xrd-vrouter"],
+    guidance: "Build the XRd vRouter container release into a micro-VM image with vrnetlab — the resulting image is named vrnetlab/cisco_xrd-vrouter:<version>. The build and run host need /dev/kvm and hugepages.",
     pullable: false
   },
   cisco_xrv: {
@@ -329,13 +346,21 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     guidance: "Build a Dell Enterprise SONiC container with vrnetlab from the Dell SONiC qcow2 — the resulting image is named vrnetlab/dell_sonic:<version>.",
     pullable: false
   },
-  cumulus_cvx: {
-    title: "Cumulus VX",
-    docsSlug: "cvx",
-    recommendedImages: ["networkop/cx:<version>"],
-    repositoryHints: ["networkop/cx", "cumulusvx", "cumulus-cvx", "cvx"],
-    guidance: "NVIDIA discontinued Cumulus VX after v5.12.1. Use the community networkop/cx image (or NVIDIA AIR for new work). Default mode launches a Firecracker micro-VM via the ignite runtime.",
-    pullable: true
+  plvision_sonic: {
+    title: "PLVision SONiC",
+    docsSlug: "plvision_sonic",
+    recommendedImages: ["vrnetlab/plvision_sonic:<version>"],
+    repositoryHints: ["vrnetlab/plvision_sonic", "plvision_sonic"],
+    guidance: "Download the image from the PLVision ServiceDesk and build it with vrnetlab — the resulting image is named vrnetlab/plvision_sonic:<version>.",
+    pullable: false
+  },
+  nvidia_cumulusvx: {
+    title: "NVIDIA Cumulus VX",
+    docsSlug: "nvidia_cumulusvx",
+    recommendedImages: ["vrnetlab/nvidia_cumulus-vx:<version>"],
+    repositoryHints: ["vrnetlab/nvidia_cumulus-vx", "nvidia_cumulus-vx", "cumulus-vx", "cumulusvx"],
+    guidance: "NVIDIA no longer distributes Cumulus VX. If you have the qcow2, build a container with vrnetlab (or boxen-v2) — the resulting image is named vrnetlab/nvidia_cumulus-vx:<version>.",
+    pullable: false
   },
   aruba_aoscx: {
     title: "Aruba AOS-CX",
@@ -385,12 +410,28 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     guidance: "Build a Fortinet Fortigate container with vrnetlab from the Fortigate qcow2 — the resulting image is named vrnetlab/fortinet_fortigate:<version>.",
     pullable: false
   },
+  fortinet_fortiproxy: {
+    title: "Fortinet FortiProxy",
+    docsSlug: "fortinet_fortigate",
+    recommendedImages: [],
+    repositoryHints: ["fortiproxy"],
+    guidance: "fortinet_fortiproxy is an alias of the fortinet_fortigate kind. Build the FortiProxy VM into a container with vrnetlab, then reference the image you built.",
+    pullable: false
+  },
   "f5_bigip-ve": {
     title: "F5 BIG-IP VE",
-    docsSlug: "f5-bigip-ve",
-    recommendedImages: ["vrnetlab/f5_bigip:<version>"],
-    repositoryHints: ["vrnetlab/f5_bigip", "vr-f5-bigip", "bigip", "f5"],
-    guidance: "Build an F5 BIG-IP VE container with vrnetlab from the BIG-IP qcow2 — the resulting image is named vrnetlab/f5_bigip:<version>.",
+    docsSlug: "f5_bigipve",
+    recommendedImages: ["vrnetlab/f5_bigip-ve:<version>"],
+    repositoryHints: ["vrnetlab/f5_bigip-ve", "vrnetlab/f5_bigip", "vr-f5-bigip", "bigip", "f5"],
+    guidance: "Build an F5 BIG-IP VE container with vrnetlab from the BIG-IP KVM qcow2 — the resulting image is named vrnetlab/f5_bigip-ve:<version>.",
+    pullable: false
+  },
+  ciena_saos: {
+    title: "Ciena SAOS 10",
+    docsSlug: "ciena_saos",
+    recommendedImages: ["ciena/saos10:<version>"],
+    repositoryHints: ["ciena/saos10", "saos10", "ciena_saos"],
+    guidance: "Ciena provides the SAOS 10 image prebuilt; it cannot be built locally from a qcow2. Get it from your Ciena representative, load it (e.g. `docker load`), then reference the provided tag.",
     pullable: false
   },
   paloalto_panos: {
@@ -407,6 +448,22 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     recommendedImages: ["ghcr.io/open-traffic-generator/ixia-c-one:latest"],
     repositoryHints: ["ghcr.io/open-traffic-generator/ixia-c-one", "ixia-c-one"],
     guidance: "Pull the public ixia-c-one traffic generator image directly from GHCR.",
+    pullable: true
+  },
+  spirent_stc: {
+    title: "Spirent TestCenter",
+    docsSlug: "spirent_stc",
+    recommendedImages: ["stc:<version>"],
+    repositoryHints: ["stc", "spirent"],
+    guidance: "Load the Spirent TestCenter container image locally and reference its tag, e.g. stc:<version>.",
+    pullable: false
+  },
+  veesix_osvbng: {
+    title: "v::n osvbng",
+    docsSlug: "veesix_osvbng",
+    recommendedImages: ["veesixnetworks/osvbng:latest"],
+    repositoryHints: ["veesixnetworks/osvbng", "osvbng"],
+    guidance: "Pull the public veesixnetworks/osvbng image from Docker Hub. Use a release tag when you want repeatable labs.",
     pullable: true
   },
   rare: {
@@ -494,14 +551,8 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     guidance: "Ostinato for containerlab is a paid offering from ostinato.org. After purchase, follow the install instructions to load the image and reference ostinato/ostinato:<tag>.",
     pullable: false
   },
-  frr: {
-    title: "FRRouting",
-    docsSlug: "linux",
-    recommendedImages: ["frrouting/frr:latest"],
-    repositoryHints: ["frrouting/frr", "frr"],
-    guidance: "FRRouting is run via the linux kind. Pull frrouting/frr from Docker Hub directly.",
-    pullable: true
-  }
+  frr: FRR_GUIDANCE,
+  frrouting: FRR_GUIDANCE
 };
 
 function titleFromKind(kind: string): string {

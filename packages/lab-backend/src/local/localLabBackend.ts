@@ -1,16 +1,26 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  isTopologyFileName,
+  type LabExecRequest,
+  type LabOperationSupport,
+  type LabSnapshotSaveRequest,
+  type TailscaleStatus,
+  type TopoViewerNodesAction
+} from "@containerlab/clab-ui/host";
 import Docker from "dockerode";
 
 import type {
   LabBackend,
   LabBackendCapabilities,
+  LabBackendFeatures,
   LabEvent,
   LabEventStreamOptions,
   LabLifecycleAction,
   LabTarget,
   LifecycleRunOptions,
+  RenderedTopology,
   TerminalCreateOptions,
   TopologyFileSystem,
   TopologyFilesOptions,
@@ -18,19 +28,31 @@ import type {
 } from "../contract/backend.ts";
 import type {
   CaptureTarget,
+  GenerateTopologyRequest,
+  GraphExportFormat,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
   InspectContainerInfo,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
   ShareToolAction,
+  ShareToolOptions,
   SSHAccessResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { LocalCapture } from "./capture.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
+import {
+  localExec,
+  localInspectDetails,
+  localNodesAction,
+  localOperationSupport,
+  localSaveSnapshots,
+  type LocalLabRef
+} from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import {
@@ -41,6 +63,7 @@ import {
   type StreamingCommand
 } from "./process.ts";
 import { LocalTerminals } from "./terminals.ts";
+import { localTopologyVariables, renderTopologyFile } from "./topologyTemplates.ts";
 import * as tools from "./tools.ts";
 import {
   createLocalTopologyFiles,
@@ -58,7 +81,17 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   edgesharkManagement: true,
   wiresharkVnc: true,
   healthMetrics: true,
-  sharedWorkspace: false
+  sharedWorkspace: false,
+  // containerlab has no command that reports it.
+  tailscaleStatus: false
+};
+
+const LOCAL_FEATURES: LabBackendFeatures = {
+  validate: true,
+  graphMermaid: true,
+  graphDot: true,
+  sshxReaders: true,
+  gottyOptions: true
 };
 
 function shellQuote(value: string): string {
@@ -82,6 +115,7 @@ export class LocalLabBackend implements LabBackend {
   private readonly lifecycle: LocalLifecycle;
   private readonly terminals: LocalTerminals;
   private readonly capture: LocalCapture;
+  private support: Promise<LabOperationSupport> | undefined;
   /** Running `containerlab events` commands; they must not outlive the app. */
   private readonly eventCommands = new Set<StreamingCommand>();
 
@@ -214,19 +248,79 @@ export class LocalLabBackend implements LabBackend {
     return this.requireRunningTopology(lab.labName);
   }
 
-  async save(lab: LabTarget, options: { nodeFilter?: string } = {}) {
-    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter);
+  async save(lab: LabTarget, options: { nodeFilter?: string; copyDir?: string } = {}) {
+    const copyDir = options.copyDir?.trim();
+    if (copyDir && !(await this.labOperationSupport()).saveCopy) {
+      throw new LabBackendError("This containerlab cannot copy saved configs; update it to 0.73 or later.", 501);
+    }
+    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter, copyDir);
+  }
+
+  labOperationSupport(): Promise<LabOperationSupport> {
+    this.support ??= this.version().then(
+      (response) => localOperationSupport(/version: (\S+)/.exec(response.versionInfo)?.[1]),
+      () => localOperationSupport(undefined)
+    );
+    return this.support;
+  }
+
+  /** The running lab's topology file, or its name when containerlab has none. */
+  private async labRef(lab: LabTarget): Promise<LocalLabRef> {
+    try {
+      return { topology: await this.labTopology(lab), labName: lab.labName };
+    } catch (error) {
+      if (lab.labName) return { labName: lab.labName };
+      throw error;
+    }
+  }
+
+  async exec(lab: LabTarget, request: LabExecRequest) {
+    return localExec(this.options, await this.labRef(lab), request);
+  }
+
+  async nodesAction(lab: LabTarget, nodeNames: string[], action: TopoViewerNodesAction) {
+    return localNodesAction(this.options, await this.labRef(lab), nodeNames, action);
+  }
+
+  async saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest) {
+    if (!(await this.labOperationSupport()).snapshotSave) {
+      throw new LabBackendError("This containerlab cannot save VM snapshots; update it to 0.72 or later.", 501);
+    }
+    return localSaveSnapshots(this.options, await this.labTopology(lab), request);
+  }
+
+  async inspectLabDetails(lab: LabTarget) {
+    return localInspectDetails(this.options, await this.labRef(lab));
+  }
+
+  /** The topology file of a lab that need not be running, like clab-api-server finds it. */
+  private async topologyFile(lab: LabTarget): Promise<string> {
+    return lab.path || (await this.runningTopologyFile(lab.labName))
+      ? this.labTopology(lab)
+      : this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
   }
 
   async graphDrawio(
     lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ) {
-    const topology =
-      lab.path || (await this.runningTopologyFile(lab.labName))
-        ? await this.labTopology(lab)
-        : await this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
-    return tools.drawioGraph(this.options, topology, options.layout, options.theme);
+    return tools.drawioGraph(this.options, await this.topologyFile(lab), options.layout, options.theme);
+  }
+
+  async graphExport(lab: LabTarget, format: GraphExportFormat, options: { direction?: MermaidDirection } = {}) {
+    return tools.graphExport(this.options, await this.topologyFile(lab), format, options.direction);
+  }
+
+  async validate(lab: LabTarget) {
+    return tools.validateTopology(this.options, await this.topologyFile(lab));
+  }
+
+  generateTopology(request: GenerateTopologyRequest) {
+    return tools.generateTopology(this.options, request);
+  }
+
+  async features(): Promise<LabBackendFeatures> {
+    return LOCAL_FEATURES;
   }
 
   async fcli(lab: LabTarget, command: string) {
@@ -256,8 +350,8 @@ export class LocalLabBackend implements LabBackend {
     });
   }
 
-  shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: { port?: number } = {}) {
-    return tools.shareTool(this.options, tool, labName, action, options.port);
+  shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: ShareToolOptions = {}) {
+    return tools.shareTool(this.options, tool, labName, action, options);
   }
 
   /**
@@ -342,6 +436,12 @@ export class LocalLabBackend implements LabBackend {
       containerName: container.name,
       ports: await tools.browserPorts(this.docker, container.name)
     };
+  }
+
+  tailscaleStatus(): Promise<TailscaleStatus> {
+    return Promise.reject(
+      new LabBackendError("Tailscale status is only available through clab-api-server.", 501)
+    );
   }
 
   requestSshAccess(): Promise<SSHAccessResponse> {
@@ -443,7 +543,7 @@ export class LocalLabBackend implements LabBackend {
   }
 
   listTopologies() {
-    return discoverTopologies(this.fs.paths);
+    return discoverTopologies(this.fs.paths, this.options.env);
   }
 
   async importTopologyFromUrl(source: { url: string; labName?: string }): Promise<ImportTopologyFromUrlResponse> {
@@ -470,7 +570,7 @@ export class LocalLabBackend implements LabBackend {
     }
     const prefix = repository.subPath ? `${labName}/${repository.subPath}` : `${labName}/`;
     const topologies = (await this.listTopologies()).filter((entry) =>
-      repository.subPath?.match(/\.clab\.ya?ml$/i)
+      repository.subPath && isTopologyFileName(repository.subPath)
         ? entry.yamlFileName === prefix
         : entry.yamlFileName.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`)
     );
@@ -498,6 +598,20 @@ export class LocalLabBackend implements LabBackend {
       sourcePreference: "running-lab-doc",
       yamlPath: `${labName}.clab.yml`
     }).readFile(`${labName}.clab.yml`);
+  }
+
+  /** The topology file of a lab target: its workspace or absolute path, else the running lab's. */
+  private async targetTopologyFile(lab: LabTarget): Promise<string> {
+    if (lab.path) return this.resolveTopology(lab.labName, lab.path);
+    return this.requireRunningTopology(lab.labName);
+  }
+
+  async renderTopology(lab: LabTarget, options: { varsFile?: string } = {}): Promise<RenderedTopology> {
+    return renderTopologyFile(this.options, await this.targetTopologyFile(lab), options.varsFile);
+  }
+
+  async topologyVariables(lab: LabTarget, request: { labName: string; envNames: string[] }) {
+    return localTopologyVariables(this.options, await this.targetTopologyFile(lab), request);
   }
 
   watchTopology(labName: string, filePath: string, signal: AbortSignal) {

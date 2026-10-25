@@ -13,11 +13,12 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import { SettingsField } from "../../../settings/SettingsField";
-import { DEFAULT_MGMT_NETWORK_NAME } from "../../../core/types/labSettings";
+import { DEFAULT_MGMT_NETWORK_NAME, getMgmtNetworks } from "../../../core/types/labSettings";
 import { getMgmtNetworkColor } from "../../../core/utilities/mgmtNetworks";
 import type { MgmtNetworkListActions } from "../../../hooks/editor/useLabSettings";
 
 import { MgmtNetworkForm } from "./MgmtNetworkForm";
+import { TailscaleStatusSection } from "./TailscaleStatusSection";
 import { useMgmtNetworkUsage, type MgmtNetworkUsage } from "./mgmtNetworkUsage";
 import type {
   DriverOptionsActions,
@@ -58,6 +59,7 @@ function describeNetwork(network: MgmtNetworkFormState, nodeCount: number): stri
   const details = [
     describeDriver(network),
     describeSubnet(network),
+    network.tailscaleMode !== "off" ? "Tailscale" : undefined,
     nodeCount === 1 ? "1 node" : `${nodeCount} nodes`
   ];
   return details.filter((detail) => detail !== undefined && detail !== "").join(" · ");
@@ -316,6 +318,10 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({
   );
   const usage = useMgmtNetworkUsage(labSettings, form);
   const several = networks.networks.length > 1;
+  // The running lab was deployed from the file, so the saved settings decide.
+  const joinsTailscale = getMgmtNetworks(labSettings).some(
+    (network) => network.tailscale !== undefined
+  );
   return (
     <>
       <NetworkList
@@ -338,6 +344,7 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({
         <DefaultNetworkField actions={networks} isViewMode={isViewMode} />
       ) : null}
       <UsageWarnings usage={usage} several={several} />
+      {joinsTailscale ? <TailscaleStatusSection /> : null}
     </>
   );
 };

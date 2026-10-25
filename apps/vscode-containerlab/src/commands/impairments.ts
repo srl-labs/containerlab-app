@@ -1,7 +1,7 @@
 // ./src/commands/impairments.ts
 import * as vscode from "vscode";
 
-import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
+import { isNetemCleared, type NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import { ClabInterfaceTreeNode } from "../treeView/common";
 import { backendOf } from "../backend/labBackends";
@@ -31,15 +31,12 @@ export async function setImpairment(
   }
 
   const netemInterface = node.name.startsWith("clab-s-") && node.alias ? node.alias : node.name;
-  const request: NetemSetRequest = { containerName: node.parentName, interface: netemInterface };
-  for (const [key, value] of Object.entries(impairment)) {
-    if (!NETEM_FIELDS.includes(key) || typeof value !== "string" || value.trim() === "") continue;
-    if (key === "delay" || key === "jitter") {
-      request[key] = value.trim();
-    } else if (key === "loss" || key === "rate" || key === "corruption") {
-      request[key] = Number(value.trim().replace(/%$/, ""));
-    }
+  if (isNetemCleared(impairment)) {
+    // Clearing every value removes netem, like `containerlab tools netem reset`.
+    await resetImpairment(node, netemInterface);
+    return;
   }
+  const request = netemSetRequest(node.parentName, netemInterface, impairment);
   if (Object.keys(request).length === 2) {
     return;
   }
@@ -52,6 +49,37 @@ export async function setImpairment(
   } catch (err: unknown) {
     const detail = err instanceof Error ? err.message : String(err);
     vscode.window.showErrorMessage(`Failed to ${msg}\n\n${detail}.`);
+  }
+}
+
+function netemSetRequest(
+  containerName: string,
+  netemInterface: string,
+  impairment: Record<string, unknown>
+): NetemSetRequest {
+  const request: NetemSetRequest = { containerName, interface: netemInterface };
+  for (const [key, value] of Object.entries(impairment)) {
+    if (!NETEM_FIELDS.includes(key) || typeof value !== "string" || value.trim() === "") continue;
+    if (key === "delay" || key === "jitter") {
+      request[key] = value.trim();
+    } else if (key === "loss" || key === "rate" || key === "corruption") {
+      request[key] = Number(value.trim().replace(/%$/, ""));
+    }
+  }
+  return request;
+}
+
+async function resetImpairment(node: ClabInterfaceTreeNode, netemInterface: string): Promise<void> {
+  try {
+    await backendOf(node).netemReset({ containerName: node.parentName, interface: netemInterface });
+    vscode.window.showInformationMessage(
+      `Cleared link impairments for ${node.name} on ${node.parentName}.`
+    );
+  } catch (err: unknown) {
+    const detail = err instanceof Error ? err.message : String(err);
+    vscode.window.showErrorMessage(
+      `Failed to clear link impairments for ${node.name} on ${node.parentName}\n\n${detail}.`
+    );
   }
 }
 
@@ -70,6 +98,9 @@ async function promptImpairment(
     return;
   }
   const val = await vscode.window.showInputBox({ title, placeHolder, validateInput: validator });
+  if (val === undefined) {
+    return;
+  }
   const netemData: Record<string, string | undefined> = {};
   netemData[impairment] = val;
   void setImpairment(node, netemData);

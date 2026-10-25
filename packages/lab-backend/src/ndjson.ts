@@ -35,6 +35,47 @@ async function* readableStreamChunks(stream: ReadableStream<Uint8Array>): AsyncG
   }
 }
 
+/** The part of a web stream `withIdleTimeout` reads, so DOM and Node streams both fit. */
+interface ByteStream {
+  getReader(): {
+    read(): Promise<{ done: boolean; value?: Uint8Array }>;
+    cancel(): Promise<void>;
+  };
+}
+
+/**
+ * Reads a stream that the lab host keeps alive with heartbeats, and fails
+ * when nothing arrives for `idleMs`: the host went away without closing
+ * the connection.
+ */
+export async function* withIdleTimeout(
+  stream: ByteStream,
+  idleMs: number
+): AsyncGenerator<Uint8Array> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const idle = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`No data from the lab host for ${Math.round(idleMs / 1000)} s`)),
+          idleMs
+        );
+      });
+      let result: { done: boolean; value?: Uint8Array };
+      try {
+        result = await Promise.race([reader.read(), idle]);
+      } finally {
+        clearTimeout(timer);
+      }
+      if (result.done) return;
+      if (result.value) yield result.value;
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+}
+
 /** Parses NDJSON records, skipping lines that are not JSON objects. */
 export async function* readJsonLines<T>(
   body: AsyncIterable<Uint8Array | string> | ReadableStream<Uint8Array>

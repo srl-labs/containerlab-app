@@ -89,7 +89,7 @@ test.describe("Node Editor Panel", () => {
     const nodeIds = await topoViewerPage.getNodeIds();
     await clickNode(page, nodeIds[0]);
 
-    const tabs = ["basic", "config", "runtime", "network", "advanced"];
+    const tabs = ["basic", "config", "runtime", "network", "advanced", "other"];
     for (const tabId of tabs) {
       const tab = page.locator(`[data-testid="panel-tab-${tabId}"]`);
       await expect(tab).toBeVisible();

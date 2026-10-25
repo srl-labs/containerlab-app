@@ -20,7 +20,9 @@ import type {
 } from "../image-manager/types";
 
 import type { ApplyPlan } from "./applyPlan";
+import type { ClabUiLabOperationsHost } from "./labOperations";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
+import type { TailscaleStatus } from "./tailscaleStatus";
 
 export type TopoViewerLifecycleAction =
   | "deployLab"
@@ -47,6 +49,9 @@ export const LIFECYCLE_ACTION_OPTION_KIND: Partial<
 };
 
 export type TopoViewerNodeAction = "ssh" | "shell" | "logs" | "start" | "stop" | "restart";
+
+/** Node actions that act on several nodes in one containerlab call. */
+export type TopoViewerNodesAction = Extract<TopoViewerNodeAction, "start" | "stop" | "restart">;
 
 export interface TopoViewerSvgExportPayload {
   requestId: string;
@@ -196,9 +201,26 @@ export interface ClabUiTopoViewerHost {
    * omit it apply without showing a plan first.
    */
   planApply?(): Promise<ApplyPlan>;
+  /**
+   * Tailscale devices of the running lab. Resolves undefined when the lab host
+   * cannot report them; hosts that omit it never can.
+   */
+  tailscaleStatus?(): Promise<TailscaleStatus | undefined>;
   cancelLifecycle(): void;
+  /**
+   * Run `containerlab validate` on the topology file and show the result.
+   * Hosts that omit it have no Validate action.
+   */
+  validateTopology?(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
+  /**
+   * Start, stop or restart several nodes at once (`--node a,b`). Hosts that
+   * omit it get one `runNodeAction` per node.
+   */
+  runNodesAction?(action: TopoViewerNodesAction, nodeNames: string[]): void;
+  /** Exec, snapshots, config save and inspect details; hosts that omit it hide them. */
+  labOperations?: ClabUiLabOperationsHost;
   captureInterface(
     nodeName: string,
     interfaceName: string,

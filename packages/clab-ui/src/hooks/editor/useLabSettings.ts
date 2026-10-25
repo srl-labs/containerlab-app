@@ -9,24 +9,29 @@ import type {
   IpType,
   DriverOption,
   BasicSettingsState,
+  CertificateAuthorityState,
   IpamProvider,
   MacvlanMode,
   MgmtDriver,
   MgmtFormState,
   MgmtNetworkFormState,
   MgmtSettingsSetters,
-  MgmtSettingsState
+  MgmtSettingsState,
+  TailscaleMode
 } from "../../components/panels/lab-settings/types";
 import { useTopologySessionClient } from "../../host";
 import { executeTopologyCommand } from "../../services";
 
 import {
   buildInitialBasic,
+  buildInitialCertificateAuthority,
   buildInitialMgmt,
   buildLabSettingsUpdate,
   createMgmtNetworkForm,
   hasMgmtNetworkIssues,
+  validateCertificateAuthority,
   validateMgmtNetworks,
+  type CertificateAuthorityIssues,
   type MgmtNetworkIssues
 } from "./labSettingsForm";
 
@@ -59,8 +64,11 @@ export interface UseLabSettingsStateResult {
     update: (index: number, field: "key" | "value", value: string) => void;
     setAll: (options: DriverOption[]) => void;
   };
-  /** False while the management networks have problems containerlab would reject */
-  isValid: boolean;
+  ca: CertificateAuthorityState;
+  setCa: (patch: Partial<CertificateAuthorityState>) => void;
+  caIssues: CertificateAuthorityIssues;
+  /** The first section with problems containerlab would reject, if any */
+  invalidSection: "mgmt" | "certificates" | undefined;
   handleSave: () => Promise<void>;
 }
 
@@ -76,11 +84,15 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
   const sessionClient = useTopologySessionClient();
   const [basic, setBasicState] = useState<BasicSettingsState>(() => buildInitialBasic(labSettings));
   const [mgmtForm, setMgmtForm] = useState<MgmtFormState>(() => buildInitialMgmt(labSettings));
+  const [ca, setCaState] = useState<CertificateAuthorityState>(() =>
+    buildInitialCertificateAuthority(labSettings)
+  );
   const [selected, setSelected] = useState(0);
 
   useEffect(() => {
     setBasicState(buildInitialBasic(labSettings));
     setMgmtForm(buildInitialMgmt(labSettings));
+    setCaState(buildInitialCertificateAuthority(labSettings));
     setSelected(0);
   }, [labSettings]);
 
@@ -145,7 +157,9 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
     setExternalAccess: (v: boolean) => setField("externalAccess", v),
     setIpamProvider: (v: IpamProvider) => setField("ipamProvider", v),
     setIpamDad: (v: boolean) => setField("ipamDad", v),
-    setSkipWhenUnused: (v: boolean) => setField("skipWhenUnused", v)
+    setSkipWhenUnused: (v: boolean) => setField("skipWhenUnused", v),
+    setTailscaleMode: (v: TailscaleMode) => setField("tailscaleMode", v),
+    setTailscaleAuthKey: (v: string) => setField("tailscaleAuthKey", v)
   };
 
   const driverOpts = {
@@ -208,13 +222,19 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
     issues
   };
 
-  const isValid = !hasMgmtNetworkIssues(issues);
+  const caIssues = useMemo(() => validateCertificateAuthority(ca), [ca]);
+  const setCa = (patch: Partial<CertificateAuthorityState>) =>
+    setCaState((prev) => ({ ...prev, ...patch }));
+
+  let invalidSection: UseLabSettingsStateResult["invalidSection"];
+  if (hasMgmtNetworkIssues(issues)) invalidSection = "mgmt";
+  else if (Object.keys(caIssues).length > 0) invalidSection = "certificates";
 
   const handleSave = useCallback(async () => {
-    const payload = buildLabSettingsUpdate(labSettings, basic, mgmtForm);
+    const payload = buildLabSettingsUpdate(labSettings, basic, mgmtForm, ca);
     if (!payload) return;
     await executeTopologyCommand({ command: "setLabSettings", payload }, {}, sessionClient);
-  }, [labSettings, basic, mgmtForm, sessionClient]);
+  }, [labSettings, basic, mgmtForm, ca, sessionClient]);
 
   return {
     basic,
@@ -223,7 +243,10 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
     setBasic,
     setMgmt,
     driverOpts,
-    isValid,
+    ca,
+    setCa,
+    caIssues,
+    invalidSection,
     handleSave
   };
 }

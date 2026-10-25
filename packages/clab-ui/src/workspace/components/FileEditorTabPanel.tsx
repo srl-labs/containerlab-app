@@ -6,6 +6,7 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 
+import { isTopologyTemplateFileName } from "../../host/topologyVariables";
 import { headerBarHeight } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 
@@ -20,6 +21,7 @@ import {
   createContainerlabYamlModel,
   isContainerlabTopologyFile,
 } from "./containerlabYamlFileEditorSupport";
+import { TopologyTemplatePreview } from "./TopologyTemplatePreview";
 
 interface FileEditorTabPanelProps {
   onClose: (tabId: string) => void;
@@ -30,6 +32,8 @@ const LANGUAGE_PATTERNS: Array<[RegExp, string]> = [
   [/\.drawio$/, "xml"],
   [/\.(svg|xhtml|xaml|plist|gml|kml|wsdl)$/, "xml"],
   [/\.(ya?ml)$/, "yaml"],
+  // Topology templates are YAML with Go template actions.
+  [/\.clab\.gotmpl$/, "yaml"],
   [/\.json$/, "json"],
   [/\.jsonc$/, "json"],
   [/\.mdx$/, "mdx"],
@@ -234,7 +238,7 @@ function installPlainSpaceKeyHandler(
 }
 
 export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
-  const { writeFileExplorerFile } = useWorkspaceHost().api;
+  const { writeFileExplorerFile, renderTopologyFile } = useWorkspaceHost().api;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const currentModelPathRef = useRef<string | null>(null);
@@ -437,11 +441,23 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
           {tab.error}
         </Alert>
       ) : null}
-      <div
-        ref={containerRef}
-        data-testid="file-editor-tab-monaco"
-        style={{ flex: 1, minHeight: 0 }}
-      />
+      <Box sx={{ display: "flex", flex: 1, minHeight: 0 }}>
+        <div
+          ref={containerRef}
+          data-testid="file-editor-tab-monaco"
+          style={{ flex: 1, minHeight: 0, minWidth: 0 }}
+        />
+        {renderTopologyFile && isTopologyTemplateFileName(tab.path) ? (
+          <Box sx={{ display: "flex", flex: 1, minWidth: 0, borderLeft: 1, borderColor: "divider" }}>
+            <TopologyTemplatePreview
+              endpointId={tab.endpointId}
+              path={tab.path}
+              savedContent={tab.originalContent}
+              render={renderTopologyFile}
+            />
+          </Box>
+        ) : null}
+      </Box>
     </Box>
   );
 }

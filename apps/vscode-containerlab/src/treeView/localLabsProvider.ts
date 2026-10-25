@@ -11,8 +11,8 @@ import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 import * as c from "./common";
 import * as ins from "./inspector";
 
-const WATCHER_GLOB_PATTERN = "**/*.clab.{yaml,yml}";
-const CLAB_GLOB_PATTERN = "{**/*.clab.yml,**/*.clab.yaml}";
+const WATCHER_GLOB_PATTERN = "**/*.clab.{yaml,yml,gotmpl}";
+const CLAB_GLOB_PATTERN = "{**/*.clab.yml,**/*.clab.yaml,**/*.clab.gotmpl}";
 const IGNORE_GLOB_PATTERN = "**/node_modules/**";
 const SCAN_TIMEOUT_MS = 120_000;
 

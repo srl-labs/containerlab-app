@@ -665,6 +665,7 @@ function buildInitialTopoViewerData(
     // track sync state elsewhere (e.g. via dry-run apply) omit it from snapshots.
     ...(snapshot.dirty !== undefined ? { isDirty: snapshot.dirty } : {}),
     labSettings: snapshot.labSettings,
+    topologyVariables: snapshot.variables,
     yamlFileName: snapshot.yamlFileName,
     annotationsFileName: snapshot.annotationsFileName,
     yamlContent: snapshot.yamlContent,

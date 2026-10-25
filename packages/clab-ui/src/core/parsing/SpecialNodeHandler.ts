@@ -213,7 +213,7 @@ function mergeSpecialNodeProps(
   specialNodeProps: Map<string, Record<string, unknown>>
 ): void {
   const linkType = typeof linkObj.type === "string" ? String(linkObj.type) : "";
-  if (linkType === "" || linkType === "veth") return;
+  if (linkType === "" || linkType === "veth" || linkType === "veth-stitch") return;
 
   const ids = [getSpecialId(endA), getSpecialId(endB)];
   const baseProps = buildBaseProps(linkObj, linkType);

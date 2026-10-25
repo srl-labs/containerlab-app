@@ -1,4 +1,4 @@
-// Form of one management network: driver, addressing and driver-specific options.
+// Form of one management network: driver, addressing, driver-specific options and Tailscale.
 import React from "react";
 import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
@@ -17,7 +17,8 @@ import type {
   MacvlanMode,
   MgmtDriver,
   MgmtSettingsSetters,
-  MgmtSettingsState
+  MgmtSettingsState,
+  TailscaleMode
 } from "./types";
 
 interface MgmtNetworkFormProps {
@@ -366,6 +367,57 @@ const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) =
   </>
 );
 
+const TAILSCALE_MODE_LABELS: Record<TailscaleMode, string> = {
+  off: "Off (default)",
+  sidecar: "Sidecar per node (auth key)",
+  proxy: "Lab proxy (SSO login)"
+};
+
+const TailscaleFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues }) => (
+  <>
+    <SettingsField
+      title="Tailscale"
+      description="Join the network to a Tailscale tailnet. With sidecars every node is a device of its own; the lab proxy is one device that forwards the node ports marked /ts."
+    >
+      <TextField
+        slotProps={{ select: { inputProps: { "aria-label": "Tailscale" } } }}
+        id="lab-mgmt-tailscale"
+        select
+        size="small"
+        value={mgmt.tailscaleMode}
+        onChange={(event) => setMgmt.setTailscaleMode(event.target.value as TailscaleMode)}
+        disabled={isViewMode}
+        error={issues.tailscale !== undefined}
+        helperText={issues.tailscale}
+      >
+        {Object.entries(TAILSCALE_MODE_LABELS).map(([mode, label]) => (
+          <MenuItem key={mode} value={mode}>
+            {label}
+          </MenuItem>
+        ))}
+      </TextField>
+    </SettingsField>
+    {mgmt.tailscaleMode === "sidecar" ? (
+      <SettingsField
+        title="Auth Key"
+        description="Reusable, ideally ephemeral key from the Tailscale admin console. Reference an environment variable such as ${TS_AUTHKEY} to keep the key out of the file."
+      >
+        <TextField
+          slotProps={{ htmlInput: { "aria-label": "Auth Key" } }}
+          id="lab-mgmt-tailscale-auth-key"
+          size="small"
+          placeholder="${TS_AUTHKEY}"
+          value={mgmt.tailscaleAuthKey}
+          onChange={(event) => setMgmt.setTailscaleAuthKey(event.target.value)}
+          disabled={isViewMode}
+          error={issues.tailscaleAuthKey !== undefined}
+          helperText={issues.tailscaleAuthKey}
+        />
+      </SettingsField>
+    ) : null}
+  </>
+);
+
 export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
   mgmt,
   setMgmt,
@@ -394,6 +446,7 @@ export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
       <AddressFields {...fieldProps} isDefaultNetwork={isDefaultNetwork} />
       {mgmt.driver === "bridge" ? <BridgeFields {...fieldProps} /> : null}
       <AllocationFields {...fieldProps} />
+      <TailscaleFields {...fieldProps} />
       <SettingsField
         title="Driver Options"
         description={`Key/value options passed to the Docker ${mgmt.driver} driver.`}

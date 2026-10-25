@@ -36,7 +36,7 @@ export interface ClabLinkEndpointMap {
 export interface ClabLink {
   endpoints?: (string | ClabLinkEndpointMap)[];
   endpoint?: ClabLinkEndpointMap;
-  type?: "veth" | "host" | "mgmt-net" | "macvlan" | "dummy" | "vxlan" | "vxlan-stitch" | string;
+  type?: "veth" | "veth-stitch" | "host" | "mgmt-net" | "macvlan" | "dummy" | "vxlan" | "vxlan-stitch" | string;
   mtu?: number | string;
   vars?: unknown;
   labels?: unknown;

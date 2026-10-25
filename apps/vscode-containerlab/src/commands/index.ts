@@ -16,6 +16,7 @@ export {
   redeploy,
   redeployCleanup,
   saveLab,
+  saveLabCopy,
   saveNode
 } from "./lifecycle";
 
@@ -85,6 +86,10 @@ export {
   graphDrawIOVertical,
   graphDrawIOInteractive,
   graphTopoviewer,
+  graphMermaid,
+  graphDot,
+  validateLab,
+  generateClosTopology,
   inspectAllLabs,
   inspectOneLab,
   openBrowser,

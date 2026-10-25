@@ -17,3 +17,4 @@ export { filterLifecycleLine, lifecycleLineStream, toApplyLabResponse } from "./
 export { packetflixUri, groupCaptureTargets, prepareEdgesharkCompose } from "./capture.ts";
 export { terminalShellCommand, terminalSshUsername } from "./terminals.ts";
 export { stripAnsi } from "./process.ts";
+export { declaredTopologyName } from "./topologyFiles.ts";

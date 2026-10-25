@@ -5,6 +5,7 @@ import path from "node:path";
 import type { Duplex } from "node:stream";
 
 import type Docker from "dockerode";
+import { DEFAULT_EXEC_COMMANDS_BY_KIND, DEFAULT_SSH_USERS_BY_KIND } from "@containerlab/clab-ui/host";
 import type { AnyAuthMethod, ClientChannel, ConnectConfig } from "ssh2";
 
 import type {
@@ -20,31 +21,20 @@ const SESSION_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_TELNET_PORT = 5000;
 const SSH_USERNAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_-]{0,31}$/;
 
-/** Login shells by node kind, as clab-api-server opens them. */
-const SHELL_COMMANDS: Record<string, string[]> = {
-  nokia_srlinux: ["sr_cli"],
-  cisco_xrd: ["/pkg/bin/xr_cli.sh"],
-  frr: ["vtysh"],
-  frrouting: ["vtysh"]
-};
+function kindDefault(defaults: Readonly<Record<string, string>>, kind: string): string | undefined {
+  const key = kind.trim();
+  return Object.hasOwn(defaults, key) ? defaults[key] : undefined;
+}
 
-/** Default SSH users of node kinds whose login is not `admin`. */
-const SSH_USERS: Record<string, string> = {
-  cisco_xrd: "clab",
-  cisco_xrv9k: "clab",
-  cisco_xrd_vrouter: "clab",
-  cisco_xrv: "clab",
-  juniper_crpd: "root"
-};
-
+/** The login shell of a node kind, as clab-api-server opens it. */
 export function terminalShellCommand(kind: string): string[] {
-  return SHELL_COMMANDS[kind.trim()] ?? ["sh"];
+  return kindDefault(DEFAULT_EXEC_COMMANDS_BY_KIND, kind)?.split(/\s+/) ?? ["sh"];
 }
 
 export function terminalSshUsername(kind: string, requested?: string): string {
   const trimmed = requested?.trim() ?? "";
   if (SSH_USERNAME_PATTERN.test(trimmed)) return trimmed;
-  return SSH_USERS[kind.trim()] ?? "admin";
+  return kindDefault(DEFAULT_SSH_USERS_BY_KIND, kind) ?? "admin";
 }
 
 function clampSize(cols: number, rows: number): { cols: number; rows: number } {

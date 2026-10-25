@@ -320,3 +320,75 @@ test("buildExplorerSnapshot applies host-contributed endpoint, lab, file, and to
     true
   );
 });
+
+test("buildExplorerSnapshot keeps a section's last content when it fails to build", async () => {
+  const lab = {
+    label: "demo",
+    contextValue: "containerlabLabDeployed",
+    collapsibleState: 0
+  };
+  const options = { hideNonOwnedLabs: false, isLocalCaptureAllowed: true };
+  const first = await buildExplorerSnapshot(
+    {
+      runningProvider: provider([lab]),
+      localProvider: provider([]),
+      helpProvider: provider([])
+    } as ExplorerSnapshotProviders,
+    "",
+    options
+  );
+  const failing = {
+    getTreeItem: (element: unknown) => element,
+    getChildren: () => Promise.reject(new Error("lab host did not answer"))
+  };
+  const providers = {
+    runningProvider: failing,
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as unknown as ExplorerSnapshotProviders;
+
+  const running = (result: typeof first) =>
+    result.snapshot.sections.find((section) => section.id === "runningLabs");
+  const second = await buildExplorerSnapshot(providers, "", options, first);
+  assert.deepEqual(running(second), running(first));
+  for (const actionRef of first.actionBindings.keys()) {
+    assert.ok(second.actionBindings.has(actionRef));
+  }
+
+  const filtered = await buildExplorerSnapshot(providers, "other", options, first);
+  assert.equal(running(filtered)?.nodes.length, 0);
+});
+
+test("buildExplorerSnapshot offers validate, text graph exports and the Clos generator", async () => {
+  const endpoint = {
+    label: "Endpoint",
+    contextValue: "containerlabEndpoint",
+    state: "connected",
+    collapsibleState: TREE_ITEM_COLLAPSED,
+    children: [
+      { label: "demo.clab.yml", contextValue: "containerlabLabUndeployed", collapsibleState: 0 }
+    ]
+  };
+  const providers = {
+    runningProvider: provider([endpoint]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+
+  const { snapshot } = await buildExplorerSnapshot(providers, "", {
+    hideNonOwnedLabs: false,
+    isLocalCaptureAllowed: true
+  });
+
+  const endpointNode = snapshot.sections.find((section) => section.id === "runningLabs")?.nodes[0];
+  assert.ok(endpointNode);
+  assert.ok(endpointNode.actions.some((action) => action.commandId === "containerlab.lab.generate"));
+  const labCommands = endpointNode.children[0].actions.map((action) => action.commandId);
+  for (const commandId of [
+    "containerlab.lab.validate",
+    "containerlab.lab.graph.mermaid",
+    "containerlab.lab.graph.dot"
+  ]) {
+    assert.ok(labCommands.includes(commandId), commandId);
+  }
+});

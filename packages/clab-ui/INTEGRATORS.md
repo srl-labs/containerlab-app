@@ -41,6 +41,7 @@ Supported imports:
 - `@containerlab/clab-ui/inspect`
 - `@containerlab/clab-ui/welcome`
 - `@containerlab/clab-ui/node-impairments`
+- `@containerlab/clab-ui/clos-generator`
 - `@containerlab/clab-ui/wireshark-vnc`
 - `@containerlab/clab-ui/styles/global.css`
 
@@ -647,6 +648,31 @@ user confirms; without it, Apply runs straight away. It resolves to an `ApplyPla
 CLI's `--format json` kebab-case output) and rejects with a message the dialog shows.
 The window host posts `{ command: "planApplyLab", requestId }` and expects
 `{ type: "apply-plan-result", requestId, success, plan?, error? }` back.
+
+`tailscaleStatus()` is optional too. While a lab that joins Tailscale (`mgmt.tailscale`)
+is deployed, the Management tab of Lab Settings lists the lab's Tailscale devices from
+it: the SSO proxy and its login link, auth-key sidecars, and forwarded `/ts` ports. It
+resolves to a `TailscaleStatus` (see `parseTailscaleStatus` in `/host`), or to
+`undefined` when the lab host cannot report it, which hides the list. The window host
+posts `{ command: "tailscaleStatus", requestId }` and expects
+`{ type: "tailscale-status-result", requestId, success, status?, error? }` back; a
+success without `status` means the lab host has no such report.
+
+The deploy options also carry `restoreAll` and `restore` (VM snapshots, `--restore-all`
+and `--restore`); `restoresSnapshots(options)` tells whether a deploy uses them.
+
+`runNodesAction(action, nodeNames)` is optional: start, stop or restart several selected
+nodes in one call. Without it, the canvas calls `runNodeAction` once per node. The window
+host posts `{ command: "clab-node-<action>", nodeName, nodeNames }`.
+
+`labOperations` is optional (`ClabUiLabOperationsHost` in `/host`): `support()`, `exec`,
+`saveSnapshots`, `saveConfigs` (with an optional copy directory) and `inspectDetails` for
+the open lab. Without it, those menu entries and dialogs stay hidden; `support()` hides
+the ones the lab host cannot do. The window host posts
+`{ command: "labOperation", requestId, operation, request? }` and expects
+`{ type: "lab-operation-result", requestId, success, result?, error? }` with the raw
+`clab-api-server` result; `parseExecResponse`, `parseSnapshotSaveResponse`,
+`parseSaveConfigsResponse` and `parseInspectDetails` read it.
 
 Important node action names:
 

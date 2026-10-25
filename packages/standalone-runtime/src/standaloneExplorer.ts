@@ -1,4 +1,4 @@
-import { createExplorerController } from "@containerlab/clab-ui/host";
+import { createExplorerController, isTopologyFileName } from "@containerlab/clab-ui/host";
 import type {
   ExplorerAction,
   ExplorerIncomingMessage,
@@ -77,6 +77,7 @@ const LIFECYCLE_COMMAND_IDS = [
   "containerlab.lab.stop",
   "containerlab.lab.restart",
   "containerlab.lab.save",
+  "containerlab.lab.saveCopy",
   "containerlab.lab.sshToAllNodes",
   "containerlab.node.save",
   "containerlab.node.start",
@@ -662,7 +663,7 @@ function stringArraysEqual(
 }
 
 function isTopologyExplorerEntry(entry: FileExplorerEntry): boolean {
-  return Boolean(entry.topologyRef) || /\.clab\.ya?ml$/i.test(entry.path);
+  return Boolean(entry.topologyRef) || isTopologyFileName(entry.path);
 }
 
 function buildFileExplorerEntryItem(

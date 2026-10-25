@@ -1,3 +1,5 @@
+import { DEFAULT_SSH_USERS_BY_KIND } from "../../core/constants/nodeKindDefaults";
+
 export interface TerminalPreferences {
   sshUserMapping: Record<string, string>;
   telnetPort: number;
@@ -5,13 +7,12 @@ export interface TerminalPreferences {
 }
 
 export const DEFAULT_TERMINAL_SSH_USER_MAPPING: Record<string, string> = {
-  nokia_srlinux: "admin",
-  nokia_sros: "admin",
-  cisco_xrd: "clab",
-  cisco_xr9vk: "clab",
-  arista_ceos: "admin",
-  juniper_crpd: "root"
+  ...DEFAULT_SSH_USERS_BY_KIND
 };
+
+// Earlier defaults misspelled cisco_xrv9k; saved settings may still carry that key.
+const MISSPELLED_XRV9K_KIND = "cisco_xr9vk";
+const XRV9K_KIND = "cisco_xrv9k";
 
 export const DEFAULT_TERMINAL_TELNET_PORT = 5000;
 export const DEFAULT_TERMINAL_FONT_SIZE = 13;
@@ -35,12 +36,19 @@ function normalizeSshUserMapping(value: unknown): Record<string, string> {
     if (typeof key !== "string" || typeof entry !== "string") {
       continue;
     }
-    const normalizedKey = key.trim();
+    const trimmedKey = key.trim();
     const normalizedValue = entry.trim();
-    if (!normalizedKey || !normalizedValue) {
+    if (!trimmedKey || !normalizedValue) {
       continue;
     }
-    result[normalizedKey] = normalizedValue;
+    if (trimmedKey === MISSPELLED_XRV9K_KIND) {
+      // A saved entry under the correct name wins over the misspelled one.
+      if (!Object.hasOwn(value, XRV9K_KIND)) {
+        result[XRV9K_KIND] = normalizedValue;
+      }
+      continue;
+    }
+    result[trimmedKey] = normalizedValue;
   }
   return result;
 }

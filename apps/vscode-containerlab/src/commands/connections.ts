@@ -178,6 +178,18 @@ export async function reconnect(target?: unknown): Promise<void> {
     await vscode.commands.executeCommand("containerlab.connection.checkLocal");
     return;
   }
+  const connections = manager();
+  const connection = target !== undefined ? connectionOf(target) : undefined;
+  if (connections && connection && connections.apiBackend(connection) !== undefined) {
+    // Still signed in: the host only has to answer again.
+    if (connections.status(connection) !== "offline" || (await connections.retry(connection))) {
+      return;
+    }
+    void vscode.window.showWarningMessage(
+      `${connection.label} is still not reachable. It is checked again automatically.`
+    );
+    return;
+  }
   await signIn(target);
 }
 

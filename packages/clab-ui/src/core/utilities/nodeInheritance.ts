@@ -65,6 +65,9 @@ const LIST_FIELDS = {
 } as const;
 const LIST_FIELD_NAMES = ["binds", "envFiles", "exec", "capAdd", "devices"] as const;
 
+/** Lists merged by mount destination */
+const MOUNT_KEYS = new Set(["binds", "volumes"]);
+
 export type InheritedScalarField = keyof typeof SCALAR_FIELDS;
 export type InheritedMapField = keyof typeof MAP_FIELDS;
 export type InheritedListField = keyof typeof LIST_FIELDS;
@@ -86,6 +89,12 @@ export interface NodeInheritance {
   listItems: (field: InheritedListField) => Map<string, InheritanceSource>;
   /** Level an inherited kind-specific key (custom-prompt, daemons, ...) comes from */
   kindConfigSource: (key: string) => InheritanceSource | undefined;
+  /** Level an inherited value at a YAML path (hostname, config.vars, ...) comes from */
+  pathSource: (path: readonly string[]) => InheritanceSource | undefined;
+  /** Inherited entries of a merged map at a YAML path (tmpfs, config.vars), by key */
+  pathEntries: (path: readonly string[]) => Record<string, InheritanceSource>;
+  /** Inherited items of a merged list under a YAML key (volumes, security-opts) */
+  keyItems: (key: string) => Map<string, InheritanceSource>;
 }
 
 export function describeInheritanceSource(source: InheritanceSource): string {
@@ -138,6 +147,40 @@ export function computeNodeInheritance(
     name: ""
   };
 
+  /** Inherited map entries with the most specific level that sets each */
+  const entrySources = (path: readonly string[]): Record<string, InheritanceSource> => {
+    const entries: Record<string, InheritanceSource> = {};
+    for (const layer of layers) {
+      const map = readPath(layer.config, path);
+      if (!isRecord(map)) continue;
+      for (const key of Object.keys(map)) entries[key] = sourceOf(layer);
+    }
+    return entries;
+  };
+
+  /** Inherited list items with the most specific level that adds each */
+  const itemSources = (key: string): Map<string, InheritanceSource> => {
+    const items = new Map<string, InheritanceSource>();
+    const inherited = inheritedConfig[key];
+    if (!Array.isArray(inherited)) return items;
+    for (const item of inherited) {
+      if (typeof item !== "string") continue;
+      const layer = [...layers].reverse().find((entry) => {
+        const list = entry.config[key];
+        if (!Array.isArray(list)) return false;
+        return MOUNT_KEYS.has(key)
+          ? list.some(
+              (candidate) =>
+                typeof candidate === "string" &&
+                getMountDestination(candidate) === getMountDestination(item)
+            )
+          : list.includes(item);
+      });
+      if (layer) items.set(item, sourceOf(layer));
+    }
+    return items;
+  };
+
   return {
     values,
     fieldSource: (field) => {
@@ -155,39 +198,13 @@ export function computeNodeInheritance(
       }
       return findSource(layers, SCALAR_FIELDS[field]);
     },
-    mapEntries: (field) => {
-      const entries: Record<string, InheritanceSource> = {};
-      for (const layer of layers) {
-        const map = layer.config[MAP_FIELDS[field]];
-        if (!isRecord(map)) continue;
-        for (const key of Object.keys(map)) entries[key] = sourceOf(layer);
-      }
-      return entries;
-    },
-    listItems: (field) => {
-      const key = LIST_FIELDS[field];
-      const items = new Map<string, InheritanceSource>();
-      const inherited = inheritedConfig[key];
-      if (!Array.isArray(inherited)) return items;
-      for (const item of inherited) {
-        if (typeof item !== "string") continue;
-        const layer = [...layers].reverse().find((entry) => {
-          const list = entry.config[key];
-          if (!Array.isArray(list)) return false;
-          return key === "binds"
-            ? list.some(
-                (candidate) =>
-                  typeof candidate === "string" &&
-                  getMountDestination(candidate) === getMountDestination(item)
-              )
-            : list.includes(item);
-        });
-        if (layer) items.set(item, sourceOf(layer));
-      }
-      return items;
-    },
+    mapEntries: (field) => entrySources([MAP_FIELDS[field]]),
+    listItems: (field) => itemSources(LIST_FIELDS[field]),
     // containerlab takes a kind-specific value whole from the most specific level
-    kindConfigSource: (key) => findSource(layers, [key])
+    kindConfigSource: (key) => findSource(layers, [key]),
+    pathSource: (path) => findSource(layers, path),
+    pathEntries: entrySources,
+    keyItems: itemSources
   };
 }
 
@@ -211,6 +228,43 @@ function rebaseList(
   const own = (current ?? []).filter((item) => !(before ?? []).includes(item));
   const merged = [...(after ?? []).filter((item) => !own.includes(item)), ...own];
   return merged.length > 0 ? merged : undefined;
+}
+
+/**
+ * Rebase a value of the Other tab: maps entry by entry (nested ones too, like
+ * config.vars), lists item by item, anything else whole.
+ */
+function rebaseValue(current: unknown, before: unknown, after: unknown): unknown {
+  if (!hasValue(current) || deepEqual(current, before)) return after;
+  if (Array.isArray(current)) {
+    const inherited: unknown[] = Array.isArray(before) ? before : [];
+    const own: unknown[] = current.filter(
+      (item) => !inherited.some((entry) => deepEqual(entry, item))
+    );
+    const base: unknown[] = Array.isArray(after) ? after : [];
+    const merged = [...base.filter((item) => !own.some((entry) => deepEqual(entry, item))), ...own];
+    return merged.length > 0 ? merged : undefined;
+  }
+  if (isRecord(current) && (isRecord(before) || isRecord(after))) {
+    return rebaseRecord(current, before, after);
+  }
+  return current;
+}
+
+function rebaseRecord(
+  current: Record<string, unknown> | undefined,
+  before: unknown,
+  after: unknown
+): Record<string, unknown> | undefined {
+  const inherited = isRecord(before) ? before : {};
+  const next = isRecord(after) ? after : {};
+  const merged: Record<string, unknown> = { ...next };
+  for (const [key, value] of Object.entries(current ?? {})) {
+    const rebased = rebaseValue(value, inherited[key], next[key]);
+    if (rebased === undefined) delete merged[key];
+    else merged[key] = rebased;
+  }
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 /**
@@ -242,6 +296,7 @@ export function rebaseInheritedValues(
     updates[field] = rebaseList(data[field], before[field], after[field]);
   }
   updates.kindConfig = rebaseMap(data.kindConfig, before.kindConfig, after.kindConfig);
+  updates.otherConfig = rebaseRecord(data.otherConfig, before.otherConfig, after.otherConfig);
   return Object.fromEntries(
     Object.entries(updates).filter(([field, value]) => !deepEqual(read(data, field), value))
   );

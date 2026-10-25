@@ -32,6 +32,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
 import VerticalSplitOutlinedIcon from "@mui/icons-material/VerticalSplitOutlined";
@@ -51,7 +52,16 @@ import {
 import { useDeploymentCommands } from "../../hooks/ui";
 import type { LayoutOption } from "../../hooks/ui";
 import { FindNodeSearchWidget } from "../panels/find-node/FindNodeSearchWidget";
-import type { ApplyPlan, LabLifecycleOptions, TopoViewerLifecycleAction } from "../../host";
+import {
+  useClabUiHost,
+  type ApplyPlan,
+  type LabLifecycleOptions,
+  type TopoViewerLifecycleAction
+} from "../../host";
+import { useLabOperationsStore } from "../../stores/labOperationsStore";
+import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDialogs";
+
+import { labOperationMenuItems } from "./LabOperationMenuItems";
 
 import { useLockShake } from "./useLockShake";
 
@@ -260,6 +270,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isDirty = useIsDirty();
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
+  const hasLabOperations = useClabUiHost().topoViewer.labOperations !== undefined;
+  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const lockButtonRef = React.useRef<HTMLButtonElement>(null);
   useLockShake(lockButtonRef);
 
@@ -414,6 +427,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     setProcessing(true, "restart");
     deploymentCommands.onRestartLab();
   }, [setProcessing, deploymentCommands]);
+
+  const topoViewerHost = useClabUiHost().topoViewer;
+  const validateTopology = topoViewerHost.validateTopology?.bind(topoViewerHost);
+  const handleValidate = React.useCallback(() => {
+    setDeployMenuPosition(null);
+    validateTopology?.();
+  }, [validateTopology]);
 
   const [lifecycleOptionsOpen, setLifecycleOptionsOpen] = React.useState(false);
 
@@ -698,7 +718,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </ListItemIcon>
                 <ListItemText>Restart Nodes</ListItemText>
               </MenuItem>
+              {hasLabOperations &&
+                labOperationMenuItems({
+                  support: labOperationSupport,
+                  disabled: isRunningActionDisabled,
+                  onOpen: (kind) => {
+                    setDeployMenuPosition(null);
+                    openLabOperation(kind);
+                  }
+                })}
               <Divider />
+              {validateTopology ? (
+                <MenuItem
+                  onClick={handleValidate}
+                  disabled={isProcessing || !isTopologyActive}
+                  data-testid="navbar-deploy-item-validate"
+                >
+                  <ListItemIcon>
+                    <FactCheckOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText>Validate</ListItemText>
+                </MenuItem>
+              ) : null}
               <MenuItem
                 onClick={handleOpenLifecycleOptions}
                 disabled={isProcessing || !isTopologyActive}
@@ -717,11 +758,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <LazyLifecycleOptionsDialog
                   open
                   deploymentState={deploymentState}
+                  canRestoreSnapshots={labOperationSupport.deployRestore}
                   onClose={handleCloseLifecycleOptions}
                   onRun={handleRunWithOptions}
                 />
               </React.Suspense>
             )}
+            {hasLabOperations && <LabOperationsDialogs />}
             {applyPlanRequest && (
               <React.Suspense fallback={null}>
                 <LazyApplyPlanDialog

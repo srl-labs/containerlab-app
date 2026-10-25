@@ -21,6 +21,7 @@ import {
   estimateStartedAtFromStatusForTests,
   eventStreamFor,
   handleEventLineForTests,
+  onStreamLost,
   resetForTests
 } from "../../../src/services/containerlabEvents";
 
@@ -163,5 +164,106 @@ describe("containerlabEvents per connection", () => {
     expect(Object.keys(eventStreamFor("api-1").getGroupedContainers())).to.deep.equal([
       "remote-lab"
     ]);
+  });
+
+  describe("published ports", () => {
+    const containerEvent = (action: string, attributes: Record<string, unknown>) =>
+      JSON.stringify({
+        type: "container",
+        action,
+        actor_id: "cccccccccccc",
+        actor_name: "clab-ports-n1",
+        attributes: { containerlab: "ports", "clab-node-name": "n1", ...attributes }
+      });
+    const ports = () => eventStreamFor("local").getGroupedContainers().ports?.[0]?.Ports;
+
+    it("lists the host ports of the ports attribute once per port and protocol", () => {
+      handleEventLineForTests(
+        containerEvent("start", {
+          state: "running",
+          ports: "0.0.0.0:8080/tcp->80;[::]:8080/tcp->80;0.0.0.0:5353/udp->53;443/tcp;127.0.0.1:9000"
+        })
+      );
+
+      expect(ports()).to.deep.equal([
+        { port: 8080, protocol: "tcp" },
+        { port: 5353, protocol: "udp" },
+        { port: 9000, protocol: "tcp" }
+      ]);
+    });
+
+    it("keeps the ports of a running container and drops them once it stops", () => {
+      handleEventLineForTests(
+        containerEvent("start", { state: "running", ports: "0.0.0.0:8080/tcp->80" })
+      );
+      handleEventLineForTests(containerEvent("health_status: healthy", { state: "running" }));
+      expect(ports()).to.deep.equal([{ port: 8080, protocol: "tcp" }]);
+
+      handleEventLineForTests(containerEvent("die", { state: "exited" }));
+      expect(ports()).to.deep.equal([]);
+    });
+  });
+});
+
+describe("containerlabEvents stream loss", () => {
+  beforeEach(() => {
+    resetForTests();
+  });
+
+  /** A backend whose event stream sends one container, then fails when `drop` is called. */
+  function droppingBackend() {
+    let drop: (error: Error) => void = () => {};
+    const dropped = new Promise<never>((_, reject) => {
+      drop = reject;
+    });
+    const backend = {
+      scope: "api-1",
+      async events() {
+        return (async function* () {
+          yield {
+            type: "container",
+            action: "start",
+            actor_id: "aaaaaaaaaaaa",
+            actor_name: "clab-lab-n1",
+            attributes: { containerlab: "lab", "clab-node-name": "n1", state: "running" }
+          };
+          await dropped;
+        })();
+      }
+    };
+    return { backend: backend as any, drop: (error: Error) => drop(error) };
+  }
+
+  it("tells the listeners when a loaded stream stops", async () => {
+    const lost: Array<[string, string]> = [];
+    const stopListening = onStreamLost((connectionId, error) =>
+      lost.push([connectionId, error.message])
+    );
+    try {
+      const { backend, drop } = droppingBackend();
+      await eventStreamFor("api-1").ensure(backend, "api-1|docker");
+      expect(lost).to.deep.equal([]);
+
+      drop(new Error("socket closed"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(lost).to.deep.equal([["api-1", "socket closed"]]);
+    } finally {
+      stopListening();
+    }
+  });
+
+  it("does not report a stream that is stopped on purpose", async () => {
+    const lost: string[] = [];
+    const stopListening = onStreamLost((connectionId) => lost.push(connectionId));
+    try {
+      const { backend, drop } = droppingBackend();
+      await eventStreamFor("api-1").ensure(backend, "api-1|docker");
+      eventStreamFor("api-1").stop();
+      drop(new Error("aborted"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(lost).to.deep.equal([]);
+    } finally {
+      stopListening();
+    }
   });
 });

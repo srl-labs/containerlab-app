@@ -253,9 +253,11 @@ type ContainerStateChangedListener = (
   newState: string,
   connectionId: string
 ) => void;
+type StreamLostListener = (connectionId: string, error: Error) => void;
 type RejectInitialLoad = (error: Error) => void;
 const dataListeners = new Set<DataListener>();
 const containerStateChangedListeners = new Set<ContainerStateChangedListener>();
+const streamLostListeners = new Set<StreamLostListener>();
 const DATA_NOTIFY_DELAY_MS = 50;
 
 function isString(value: unknown): value is string {
@@ -399,6 +401,37 @@ function resolveNetworkName(attributes: Record<string, unknown>): string | undef
   return network ?? bridge;
 }
 
+// A published port as containerlab events report it: `<host-ip>:<host-port>[/<proto>][-><port>]`,
+// where an IPv6 host IP is bracketed.
+const PUBLISHED_PORT_PATTERN = /^(?:\[[^\]]*\]|[^:]*):(\d+)(?:\/([a-z]+))?$/i;
+
+/** The host ports a container publishes, from the `ports` event attribute. */
+function parsePublishedPorts(value: unknown): ClabDetailedJSON["Ports"] {
+  if (!isString(value)) {
+    return [];
+  }
+  const ports: ClabDetailedJSON["Ports"] = [];
+  const seen = new Set<string>();
+  for (const entry of value.split(";")) {
+    const published = entry.trim().split("->")[0] ?? "";
+    const match = PUBLISHED_PORT_PATTERN.exec(published);
+    if (!match) {
+      // Exposed but unpublished ports have no host port to open.
+      continue;
+    }
+    const port = Number(match[1]);
+    const protocol = (match[2] ?? "tcp").toLowerCase();
+    const key = `${port}/${protocol}`;
+    // IPv4 and IPv6 bindings of one host port open the same port.
+    if (port <= 0 || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    ports.push({ port, protocol });
+  }
+  return ports;
+}
+
 function toOptionalNumber(value: unknown): number | undefined {
   if (value === undefined || value === null) {
     return undefined;
@@ -434,7 +467,7 @@ function toClabDetailed(event: ContainerlabEvent): ContainerRecord | undefined {
     Labels: labels,
     NetworkSettings: networkSettings,
     Mounts: [],
-    Ports: [],
+    Ports: parsePublishedPorts(attributes.ports),
     Pid: toOptionalNumber(attributes.pid),
     NetworkName: networkName
   };
@@ -529,6 +562,11 @@ function mergeContainerData(
     Image: pickNonEmpty(nextData.Image, previousData.Image),
     State: resolveStateValue(nextData.State, previousData.State, action)
   };
+
+  // Keep the ports of a running container when an event did not resolve them.
+  if (nextData.Ports.length === 0 && merged.State === "running") {
+    merged.Ports = previousData.Ports;
+  }
 
   if (nextData.StartedAt !== undefined || previousData.StartedAt !== undefined) {
     merged.StartedAt = nextData.StartedAt ?? previousData.StartedAt;
@@ -1274,12 +1312,12 @@ export class LabEventStream {
             );
           }
         }
-        if (!controller.signal.aborted && !this.initialLoadComplete) {
-          this.finalizeInitialLoad(new Error("containerlab events ended prematurely"));
+        if (!controller.signal.aborted) {
+          this.endStream(new Error("containerlab events ended prematurely"));
         }
       } catch (err) {
         if (!controller.signal.aborted) {
-          this.finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
+          this.endStream(err instanceof Error ? err : new Error(String(err)));
         }
       } finally {
         if (this.streamController === controller) {
@@ -1292,6 +1330,20 @@ export class LabEventStream {
       clearTimeout(this.fallbackTimer);
     }
     this.fallbackTimer = setTimeout(() => this.finalizeInitialLoad(), INITIAL_FALLBACK_TIMEOUT_MS);
+  }
+
+  /**
+   * The stream stopped on its own: before the first load the load fails,
+   * after it the labs are stale and the listeners hear about it.
+   */
+  private endStream(error: Error): void {
+    if (!this.initialLoadComplete) {
+      this.finalizeInitialLoad(error);
+      return;
+    }
+    for (const listener of Array.from(streamLostListeners)) {
+      listener(this.connectionId, error);
+    }
   }
 
   stop(): void {
@@ -1421,6 +1473,14 @@ export function onDataChanged(listener: DataListener): () => void {
   dataListeners.add(listener);
   return () => {
     dataListeners.delete(listener);
+  };
+}
+
+/** Fires when a running event stream stops, e.g. because the lab host went away. */
+export function onStreamLost(listener: StreamLostListener): () => void {
+  streamLostListeners.add(listener);
+  return () => {
+    streamLostListeners.delete(listener);
   };
 }
 

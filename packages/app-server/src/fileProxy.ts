@@ -3,6 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { topologyFileStem } from "@containerlab/clab-ui/host";
 import { runDocumentOperation } from "@containerlab/clab-ui/session";
 import { errorStatus, type LabBackend, type WorkspaceFileEntry } from "@srl-labs/containerlab-lab-backend";
 import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
@@ -196,6 +197,36 @@ export function registerFileProxy(
           .send({ error: "Binary files cannot be edited in the browser." });
       }
       return reply.send({ endpointId: endpoint.id, path: pathValue, content });
+    } catch (error) {
+      return sendProxyError(reply, error);
+    }
+  });
+
+  // A topology rendered like a deploy would render it, for the read-only template preview.
+  app.get("/api/runtime/file-explorer/rendered", async (request, reply) => {
+    const resolved = resolveFileEndpoint(request, reply, resolveEndpoint);
+    if (!resolved) {
+      return reply.status(401).send({ error: "Not authenticated" });
+    }
+
+    const pathValue = queryString(request, "path");
+    if (!pathValue) {
+      return reply.status(400).send({ error: "Missing file path" });
+    }
+    const varsFile = queryString(request, "varsFile").trim();
+
+    try {
+      const { backend, endpoint } = resolved;
+      // The lab host resolves flat workspace files by the lab name it lists them under.
+      const listed = await backend.listTopologies().catch(() => []);
+      const labName =
+        listed.find((entry) => entry.yamlFileName === pathValue)?.labName ??
+        topologyFileStem(pathValue);
+      const rendered = await backend.renderTopology(
+        { labName, path: pathValue },
+        varsFile ? { varsFile } : {},
+      );
+      return reply.send({ endpointId: endpoint.id, path: pathValue, ...rendered });
     } catch (error) {
       return sendProxyError(reply, error);
     }

@@ -8,6 +8,8 @@
  * - Topology data loading (via TopologyHost)
  */
 
+import * as path from "path";
+
 import * as vscode from "vscode";
 
 import { runningLabsProvider } from "../../globals";
@@ -27,7 +29,7 @@ import {
 } from "@containerlab/clab-ui/session";
 import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
 import { fsAdapterFor } from "./shared/io";
-import { connectionOf, isUriString, labUri } from "../../backend/labBackends";
+import { connectionOf, isUriString, labUri, resolveLab } from "../../backend/labBackends";
 
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
@@ -329,6 +331,7 @@ export class ReactTopoViewer {
     this.runtimeContainers = [];
 
     // The topology is always editable; runtime data attaches when deployed.
+    const yamlFilePath = this.lastYamlFilePath;
     this.topologyHost = new TopologyHostCore({
       fs: fsAdapterFor(this.lastYamlFilePath),
       yamlFilePath: this.lastYamlFilePath,
@@ -339,7 +342,12 @@ export class ReactTopoViewer {
         ? createRuntimeContainerDataProvider(this.runtimeContainers)
         : undefined,
       setInternalUpdate: (updating: boolean) => this.setInternalUpdate(updating),
-      logger: log
+      logger: log,
+      // The lab name containerlab runs the lab under and the environment it deploys with.
+      resolveVariables: async (request) => {
+        const { backend, target } = await resolveLab(yamlFilePath);
+        return backend.topologyVariables(target, request);
+      }
     });
 
     this.messageRouter = new MessageRouter({
@@ -551,6 +559,11 @@ export class ReactTopoViewer {
   }
 }
 
+/** Compares lab paths: URIs in one encoding, file paths resolved. */
+function viewerKey(labPath: string): string {
+  return isUriString(labPath) ? vscode.Uri.parse(labPath).toString() : path.resolve(labPath);
+}
+
 /**
  * Provider class for React TopoViewer (singleton pattern)
  */
@@ -566,6 +579,17 @@ export class ReactTopoViewerProvider {
   public static getInstance(context: vscode.ExtensionContext): ReactTopoViewerProvider {
     ReactTopoViewerProvider.instance ??= new ReactTopoViewerProvider(context);
     return ReactTopoViewerProvider.instance;
+  }
+
+  /** The open viewer of a lab, by its topology path or URI. */
+  public static findViewer(labPath: string): ReactTopoViewer | undefined {
+    const viewers = ReactTopoViewerProvider.instance?.viewers;
+    if (!viewers) return undefined;
+    const key = viewerKey(labPath);
+    for (const [path, viewer] of viewers) {
+      if (viewer.currentPanel && viewerKey(path) === key) return viewer;
+    }
+    return undefined;
   }
 
   /**

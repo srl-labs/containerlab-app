@@ -2,11 +2,13 @@
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
 import {
   LAB_LIFECYCLE_OPTION_FIELDS,
+  isValidVarsFile,
   labLifecycleCliFlags,
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
   type LabLifecycleOptionKind,
-  type LabLifecycleOptions
+  type LabLifecycleOptions,
+  type LabSnapshotRestore
 } from "../../../host/lifecycleOptions";
 
 export interface LifecycleOptionsForm {
@@ -19,6 +21,12 @@ export interface LifecycleOptionsForm {
   exportTemplate: string;
   graceful: boolean;
   keepMgmtNet: boolean;
+  varsFile: string;
+  /** Deploy only: boot VM nodes from saved snapshots. */
+  restoreSnapshots: boolean;
+  /** Directory with `<node>.tar` files; empty restores only the nodes listed in `restore`. */
+  restoreAll: string;
+  restore: LabSnapshotRestore[];
 }
 
 export interface LifecycleOptionsRequest {
@@ -38,7 +46,11 @@ export function createLifecycleOptionsForm(kind: LabLifecycleOptionKind): Lifecy
     skipLabdirAcl: false,
     exportTemplate: "",
     graceful: false,
-    keepMgmtNet: false
+    keepMgmtNet: false,
+    varsFile: "",
+    restoreSnapshots: false,
+    restoreAll: "snapshots",
+    restore: []
   };
 }
 
@@ -62,6 +74,13 @@ export function maxWorkersError(value: string): string | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? undefined : "Enter a whole number above 0";
 }
 
+/** Problem with the variables file field, if any. Empty means the default file. */
+export function varsFileError(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "" || isValidVarsFile(trimmed)) return undefined;
+  return "Enter a path relative to the topology file";
+}
+
 const ACTIONS: Record<LabLifecycleOptionKind, [TopoViewerLifecycleAction, TopoViewerLifecycleAction]> =
   {
     deploy: ["deployLab", "deployLabCleanup"],
@@ -79,7 +98,9 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     skipLabdirAcl: form.skipLabdirAcl,
     exportTemplate: form.exportTemplate,
     graceful: form.graceful,
-    keepMgmtNet: form.keepMgmtNet
+    keepMgmtNet: form.keepMgmtNet,
+    varsFile: form.varsFile,
+    ...(form.restoreSnapshots ? { restoreAll: form.restoreAll, restore: form.restore } : {})
   });
   const [plainAction, cleanupAction] = ACTIONS[form.kind];
   const command = ["containerlab", form.kind, ...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(options)]
@@ -89,4 +110,23 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     ...(options ? { options } : {}),
     command
   };
+}
+
+/** A restore that is switched on but names neither a directory nor a node file. */
+export function restoreError(form: LifecycleOptionsForm): string | undefined {
+  if (form.kind !== "deploy" || !form.restoreSnapshots) return undefined;
+  const hasNodeFiles = form.restore.some((entry) => entry.node.trim() && entry.path.trim());
+  return form.restoreAll.trim() || hasNodeFiles ? undefined : "Enter a directory or add a node";
+}
+
+/**
+ * The request of the form and what keeps it from running, with snapshot
+ * restore left out on lab hosts that cannot do it.
+ */
+export function buildLifecycleRun(
+  form: LifecycleOptionsForm,
+  canRestoreSnapshots: boolean
+): { request: LifecycleOptionsRequest; snapshotError: string | undefined } {
+  const effective = canRestoreSnapshots ? form : { ...form, restoreSnapshots: false };
+  return { request: buildLifecycleOptionsRequest(effective), snapshotError: restoreError(effective) };
 }

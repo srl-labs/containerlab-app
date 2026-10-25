@@ -1,12 +1,15 @@
 /**
  * Reads and writes the lab-level keys the Lab Settings form edits: `name`,
- * `prefix`, `mgmt` (one map or a list of networks) and `topology.defaults.mgmt-net`.
+ * `prefix`, `mgmt` (one map or a list of networks), `topology.defaults.mgmt-net`
+ * and `settings.certificate-authority`.
  * Writes merge into the existing nodes, so keys the form does not own, comments
  * and key order are kept.
  */
 import * as YAML from "yaml";
 
 import type {
+  CertificateAuthoritySettings,
+  CertificateAuthorityUpdate,
   LabSettings,
   LabSettingsUpdate,
   MgmtNetworkUpdate,
@@ -15,6 +18,8 @@ import type {
 } from "../types/labSettings";
 
 const MGMT_NET_KEY = "mgmt-net";
+const SETTINGS_KEY = "settings";
+const CA_KEY = "certificate-authority";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -24,6 +29,12 @@ function mapToSettings(node: unknown): MgmtSettings {
   if (!YAML.isMap(node)) return {};
   const json: unknown = node.toJSON();
   return isRecord(json) ? json : {};
+}
+
+function readCertificateAuthority(node: unknown): CertificateAuthoritySettings | undefined {
+  if (!YAML.isMap(node)) return undefined;
+  const json: unknown = node.toJSON();
+  return isRecord(json) ? json : undefined;
 }
 
 export function extractLabSettings(doc: YAML.Document.Parsed): LabSettings {
@@ -44,6 +55,9 @@ export function extractLabSettings(doc: YAML.Document.Parsed): LabSettings {
   if (typeof defaultMgmtNet === "string" && defaultMgmtNet !== "") {
     settings.defaultMgmtNet = defaultMgmtNet;
   }
+
+  const ca = readCertificateAuthority(doc.getIn([SETTINGS_KEY, CA_KEY], true));
+  if (ca) settings.certificateAuthority = ca;
 
   return settings;
 }
@@ -76,6 +90,10 @@ export function applyLabSettingsUpdate(doc: YAML.Document, update: LabSettingsUp
 
   if (update.defaultMgmtNet !== undefined) {
     applyDefaultMgmtNet(doc, rootMap, update.defaultMgmtNet);
+  }
+
+  if (update.certificateAuthority !== undefined) {
+    applyCertificateAuthority(doc, rootMap, update.certificateAuthority);
   }
 }
 
@@ -280,4 +298,21 @@ function applyDefaultMgmtNet(
     topology.items.unshift(new YAML.Pair(new YAML.Scalar("defaults"), defaults));
   }
   setScalarKey(doc, defaults, MGMT_NET_KEY, value);
+}
+
+/** Merges into `settings.certificate-authority`, dropping maps that end up empty. */
+function applyCertificateAuthority(
+  doc: YAML.Document,
+  rootMap: YAML.YAMLMap,
+  update: CertificateAuthorityUpdate
+): void {
+  let settings = getMap(rootMap, SETTINGS_KEY);
+  if (!settings) {
+    if (!Object.values(update).some((value) => value !== null)) return;
+    settings = new YAML.YAMLMap();
+    const after = ["mgmt", "prefix", "name"].find((key) => findPair(rootMap, key));
+    setKeyAfter(rootMap, SETTINGS_KEY, settings, after ?? "name");
+  }
+  mergeScalarMap(doc, settings, CA_KEY, update);
+  if (settings.items.length === 0) deleteKey(rootMap, SETTINGS_KEY);
 }

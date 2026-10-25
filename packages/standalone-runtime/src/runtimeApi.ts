@@ -22,7 +22,16 @@ import type {
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse
+  CaptureCloseAllResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
+  LabBackendFeatures,
+  MermaidDirection,
+  RenderedTopology,
+  ShareToolOptions,
+  ValidateTopologyResponse
 } from "@srl-labs/containerlab-lab-backend";
 export type {
   SaveConfigResponse,
@@ -46,9 +55,13 @@ export type {
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse
+  CaptureCloseAllResponse,
+  GraphExportFormat,
+  MermaidDirection,
+  ShareToolOptions
 } from "@srl-labs/containerlab-lab-backend";
 
+import { parseTailscaleStatus, type TailscaleStatus } from "@containerlab/clab-ui/host";
 import type {
   CustomNodeTemplate,
   CustomNodeTemplateExportIcon,
@@ -478,6 +491,29 @@ export async function controlNodeLifecycle(
   );
 }
 
+/** App server routes for exec, VM snapshots, config save, inspect details and multi-node start/stop. */
+export type LabOperationRoute =
+  | "support"
+  | "exec"
+  | "snapshots"
+  | "save"
+  | "inspect-details"
+  | "nodes/start"
+  | "nodes/stop"
+  | "nodes/restart";
+
+export async function requestLabOperation(
+  route: LabOperationRoute,
+  input: RuntimeTargetRequest & Record<string, unknown>
+): Promise<unknown> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<unknown>(
+    `/api/runtime/lab-operations/${route}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
 export async function fetchNodeBrowserPorts(
   input: RuntimeTargetRequest & {
     nodeName: string;
@@ -491,9 +527,26 @@ export async function fetchNodeBrowserPorts(
   );
 }
 
+/** The Tailscale devices of a running lab; undefined when its lab host cannot report them. */
+export async function fetchLabTailscaleStatus(
+  input: RuntimeTargetRequest
+): Promise<TailscaleStatus | undefined> {
+  const endpointId = resolveTargetEndpointId(input);
+  const payload = await requestJson<{ supported?: unknown; status?: unknown }>(
+    "/api/runtime/tailscale",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+  if (payload.supported !== true) return undefined;
+  const status = parseTailscaleStatus(payload.status);
+  if (!status) throw new Error("The lab host returned no Tailscale status");
+  return status;
+}
+
 export async function runSshxShareAction(
   input: RuntimeTargetRequest & {
     action: ShareToolAction;
+    enableReaders?: boolean;
   }
 ): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
@@ -505,10 +558,10 @@ export async function runSshxShareAction(
 }
 
 export async function runGottyShareAction(
-  input: RuntimeTargetRequest & {
-    action: ShareToolAction;
-    port?: number;
-  }
+  input: RuntimeTargetRequest &
+    Omit<ShareToolOptions, "enableReaders"> & {
+      action: ShareToolAction;
+    }
 ): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<ShareToolResponse>(
@@ -541,6 +594,49 @@ export async function generateDrawioGraph(
   return await requestJson<DrawioGenerateResponse>(
     "/api/runtime/labs/graph/drawio",
     asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function generateGraphExport(
+  input: RuntimeTargetRequest & {
+    format: GraphExportFormat;
+    direction?: MermaidDirection;
+  }
+): Promise<GraphExportResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<GraphExportResponse>(
+    `/api/runtime/labs/graph/export/${encodeURIComponent(input.format)}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function validateTopology(input: RuntimeTargetRequest): Promise<ValidateTopologyResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<ValidateTopologyResponse>(
+    "/api/runtime/labs/validate",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function generateTopology(input: {
+  endpointId: string;
+  request: GenerateTopologyRequest;
+}): Promise<GenerateTopologyResponse> {
+  return await requestJson<GenerateTopologyResponse>(
+    "/api/runtime/generate",
+    asJsonBody(input, input.endpointId),
+    input.endpointId
+  );
+}
+
+/** What the lab host offers beyond the basics; older clab-api-servers lack some. */
+export async function fetchBackendFeatures(endpointId?: string): Promise<LabBackendFeatures> {
+  return await requestJson<LabBackendFeatures>(
+    "/api/runtime/features",
+    withEndpointHeaders({}, endpointId),
     endpointId
   );
 }
@@ -712,6 +808,23 @@ export async function writeFileExplorerFile(input: {
       },
       input.endpointId
     ),
+    input.endpointId
+  );
+}
+
+/** Renders a topology template like containerlab does before a deploy, without deploying. */
+export async function renderFileExplorerTopology(input: {
+  endpointId: string;
+  path: string;
+  varsFile?: string;
+}): Promise<RenderedTopology> {
+  const params = new URLSearchParams({ path: input.path });
+  if (input.varsFile) {
+    params.set("varsFile", input.varsFile);
+  }
+  return requestJson<RenderedTopology>(
+    `/api/runtime/file-explorer/rendered?${params.toString()}`,
+    withEndpointHeaders({ method: "GET" }, input.endpointId),
     input.endpointId
   );
 }

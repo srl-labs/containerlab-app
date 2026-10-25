@@ -134,7 +134,7 @@ The Containerlab Explorer listens to the containerlab event stream, so running l
 | `editor.lockLabByDefault`                | boolean | `true`         | Lock the lab canvas by default to prevent accidental edits |
 | `drawioDefaultTheme`                     | string  | `nokia_modern` | Draw.io theme (`nokia_modern`, `nokia`, `grafana`)         |
 
-\*Default custom nodes include SRLinux and Network Multitool templates. They ship with sensible interface naming patterns (for example `nokia_srlinux: "e1-{n}"`, `cisco_xrd: "Gi0-0-0-{n}"`). Patterns accept optional start indices (`{n:0}`), finite ranges (`{n:1-6}`), and comma-separated fallbacks (`1/1/c{n:1-6}/1, 2/1/c{n:1-12}/1`). Existing custom nodes without an Interface Pattern are automatically upgraded to use the defaults.
+\*Default custom nodes include SRLinux and Network Multitool templates. They ship with sensible interface naming patterns (for example `nokia_srlinux: "e1-{n}"`, `cisco_xrd: "Gi0-0-0-{n:0}"`). Patterns accept optional start indices (`{n:0}`), finite ranges (`{n:1-6}`), and comma-separated fallbacks (`1/1/c{n:1-6}/1, 2/1/c{n:1-12}/1`). Existing custom nodes without an Interface Pattern are automatically upgraded to use the defaults.
 
 ### 📦 Packet Capture
 

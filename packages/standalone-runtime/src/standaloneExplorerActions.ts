@@ -5,10 +5,10 @@ import {
   runGottyShareAction,
   runSshxShareAction,
   type FileExplorerDocument,
-  type LabArchiveFormat
+  type LabArchiveFormat,
+  type ShareToolOptions
 } from "./runtimeApi";
 import {
-  confirmRuntimeAction,
   promptForEndpointSelection,
   promptForOptionSelection
 } from "./runtimeActionFlows";
@@ -145,7 +145,7 @@ export async function resolveEndpointForExplorerAction(input: {
   const selectedEndpointId = await promptForEndpointSelection({
     title: "Select Endpoint",
     message: `Select endpoint for ${actionDescription}.`,
-    confirmLabel: "Use endpoint",
+    confirmLabel: "Use Endpoint",
     options: connectedEndpoints.map((endpoint) => ({
       value: endpoint.id,
       label: endpoint.label,
@@ -195,12 +195,14 @@ export async function runLabShareAction(input: {
   endpointId?: string;
   kind: ShareActionKind;
   topologyRef: TopologyRef;
+  options?: ShareToolOptions;
 }) {
-  const { action, endpointId, kind, topologyRef } = input;
+  const { action, endpointId, kind, topologyRef, options = {} } = input;
   if (kind === "sshx") {
-    return runSshxShareAction({ endpointId, topologyRef, action });
+    return runSshxShareAction({ endpointId, topologyRef, action, enableReaders: options.enableReaders });
   }
-  return runGottyShareAction({ endpointId, topologyRef, action });
+  const { enableReaders: _readers, ...gottyOptions } = options;
+  return runGottyShareAction({ endpointId, topologyRef, action, ...gottyOptions });
 }
 
 export function persistShareLink(input: {
@@ -219,37 +221,6 @@ export function persistShareLink(input: {
   }
   if (link) {
     bucket.set(labKey, link);
-  }
-}
-
-function shareActionCanOpenLink(action: ShareLifecycleAction): boolean {
-  return action === "attach" || action === "reattach";
-}
-
-export async function handleShareActionLink(
-  kind: ShareActionKind,
-  action: ShareLifecycleAction,
-  link: string
-): Promise<void> {
-  if (!shareActionCanOpenLink(action)) {
-    return;
-  }
-  if (!link) {
-    runtimeUiActions.notify(
-      `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
-      "warning"
-    );
-    return;
-  }
-
-  await navigator.clipboard.writeText(link).catch(() => {});
-  const shouldOpen = await confirmRuntimeAction({
-    title: `${kind.toUpperCase()} Link Copied`,
-    message: "Link copied.\n\nOpen it now?",
-    confirmLabel: "Open link"
-  });
-  if (shouldOpen) {
-    window.open(link, "_blank", "noopener,noreferrer");
   }
 }
 
@@ -399,7 +370,7 @@ export async function pickPopularRepo(promptTitle: string): Promise<string | und
     title: promptTitle,
     message: "Choose a popular lab repository.",
     label: "Popular lab",
-    confirmLabel: "Use repository",
+    confirmLabel: "Use Repository",
     options: repos.map((repo) => ({
       label: repo.name,
       description: `${repo.stars} stars` + (repo.description ? ` - ${repo.description}` : ""),

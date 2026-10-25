@@ -132,3 +132,58 @@ test("lifecycle options become clab-api-server query parameters", async (t) => {
   assert.equal(redeploy.searchParams.get("exportTemplate"), "__full");
   assert.equal(redeploy.searchParams.get("skipLabdirAcl"), "true");
 });
+
+test("tailscale status reads the lab's tailscale endpoint", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.getLabTailscaleStatus("token", "my lab");
+
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].pathname, "/api/v1/labs/my%20lab/tailscale");
+});
+
+test("rendering asks the server for the template and its vars file", async (t) => {
+  const urls: URL[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    urls.push(new URL(String(input)));
+    return Promise.resolve(
+      new Response(
+        JSON.stringify({ path: "dc/dc.clab.gotmpl", content: "name: dc\n", labName: "dc", varsFiles: ["prod.yml"] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    );
+  });
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+  assert.deepEqual(await client.renderTopology("token", "dc", "dc/dc.clab.gotmpl", "prod.yml"), {
+    content: "name: dc\n",
+    labName: "dc",
+    varsFiles: ["prod.yml"]
+  });
+  assert.equal(urls[0].pathname, "/api/v1/labs/dc/topology/rendered");
+  assert.equal(urls[0].searchParams.get("path"), "dc/dc.clab.gotmpl");
+  assert.equal(urls[0].searchParams.get("varsPath"), "prod.yml");
+});
+
+test("a server without the render endpoint reports that it cannot render", async (t) => {
+  const mock = t.mock.method(undici, "fetch", () =>
+    Promise.resolve(new Response("404 page not found", { status: 404 }))
+  );
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+  await assert.rejects(client.renderTopology("token", "dc", "dc.clab.gotmpl"), { status: 501 });
+  // A missing file on a server that renders stays a 404 with the server's message.
+  mock.mock.mockImplementation(() =>
+    Promise.resolve(new Response(JSON.stringify({ error: "file not found: dc.clab.gotmpl" }), { status: 404 }))
+  );
+  await assert.rejects(client.renderTopology("token", "dc", "dc.clab.gotmpl"), {
+    status: 404,
+    message: "file not found: dc.clab.gotmpl"
+  });
+});
+
+test("the vars file of a lifecycle action goes to the server as varsPath", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+  await client.destroyLab("token", "demo", { lifecycleOptions: { varsFile: "vars/prod.yml" } });
+  assert.equal(urls[0].searchParams.get("varsPath"), "vars/prod.yml");
+});

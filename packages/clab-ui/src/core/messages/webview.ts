@@ -39,6 +39,15 @@ export const MSG_SVG_EXPORT_RESULT = "svg-export-result";
 /** Answer to `MSG_PLAN_APPLY_LAB`: `{ requestId, success, plan?, error? }`. */
 export const MSG_APPLY_PLAN_RESULT = "apply-plan-result";
 
+/**
+ * Answer to `MSG_TAILSCALE_STATUS`: `{ requestId, success, status?, error? }`.
+ * A success without `status` means the lab host cannot report it.
+ */
+export const MSG_TAILSCALE_STATUS_RESULT = "tailscale-status-result";
+
+/** Answer to `MSG_LAB_OPERATION`: `{ requestId, success, result?, error? }`. */
+export const MSG_LAB_OPERATION_RESULT = "lab-operation-result";
+
 export type WebviewMessageType =
   | typeof MSG_TOPOLOGY_DATA
   | typeof MSG_EDGE_STATS_UPDATE
@@ -54,4 +63,6 @@ export type WebviewMessageType =
   | typeof MSG_LAB_LIFECYCLE_STATUS
   | typeof MSG_LAB_LIFECYCLE_LOG
   | typeof MSG_SVG_EXPORT_RESULT
-  | typeof MSG_APPLY_PLAN_RESULT;
+  | typeof MSG_APPLY_PLAN_RESULT
+  | typeof MSG_TAILSCALE_STATUS_RESULT
+  | typeof MSG_LAB_OPERATION_RESULT;

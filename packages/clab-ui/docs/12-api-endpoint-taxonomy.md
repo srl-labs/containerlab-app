@@ -81,6 +81,7 @@ Everything under `/api/v1/*` is authenticated.
 | `GET` | `/api/v1/labs/{labName}/interfaces` |
 | `POST` | `/api/v1/labs/{labName}/save` |
 | `POST` | `/api/v1/labs/{labName}/exec` |
+| `GET` | `/api/v1/labs/{labName}/tailscale` |
 | `GET` | `/api/v1/labs/{labName}/topology/yaml` |
 | `PUT` | `/api/v1/labs/{labName}/topology/yaml` |
 | `GET` | `/api/v1/labs/{labName}/topology/annotations` |

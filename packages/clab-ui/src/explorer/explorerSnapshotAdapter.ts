@@ -115,6 +115,7 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.lab.stop": "Stop Nodes",
   "containerlab.lab.restart": "Restart Nodes",
   "containerlab.lab.save": "Save Configs",
+  "containerlab.lab.saveCopy": "Save Configs To…",
   "containerlab.lab.delete": "Delete Lab File",
   "containerlab.lab.sshToAllNodes": "SSH To All Nodes",
   "containerlab.inspectOneLab": "Inspect",
@@ -130,6 +131,10 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.lab.graph.drawio.horizontal": "Graph (draw.io, Horizontal)",
   "containerlab.lab.graph.drawio.vertical": "Graph (draw.io, Vertical)",
   "containerlab.lab.graph.drawio.interactive": "Graph (draw.io, Interactive)",
+  "containerlab.lab.graph.mermaid": "Export Graph (Mermaid)",
+  "containerlab.lab.graph.dot": "Export Graph (Graphviz)",
+  "containerlab.lab.validate": "Validate Topology",
+  "containerlab.lab.generate": "Generate Clos Topology",
   "containerlab.node.start": "Start Node",
   "containerlab.node.stop": "Stop Node",
   "containerlab.node.restart": "Restart Node",
@@ -663,6 +668,7 @@ function appendLabActions(
     pushAction(actions, seen, registry, "containerlab.lab.stop", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.restart", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.save", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.saveCopy", [item]);
     pushAction(actions, seen, registry, "containerlab.inspectOneLab", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.sshToAllNodes", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.sshx.attach", [item]);
@@ -685,7 +691,10 @@ function appendLabActions(
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.horizontal", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.vertical", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.interactive", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.graph.mermaid", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.graph.dot", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.topoViewer", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.validate", [item]);
 
   if (sectionId === "localLabs" && !isDeployed && !isUndeployed) {
     // Keep local section behavior consistent for edge nodes without known lab context.
@@ -790,6 +799,7 @@ function appendEndpointActions(
   const local = item.endpointKind === "local";
   if (connected) {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.generate", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.cloneRepo", [item]);
     pushAction(actions, seen, registry, "containerlab.install.edgeshark", [item]);
     pushAction(actions, seen, registry, "containerlab.uninstall.edgeshark", [item], undefined, true);
@@ -1173,6 +1183,7 @@ function toolbarActionsForSection(
 
   if (sectionId === "localLabs") {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor");
+    pushAction(actions, seen, registry, "containerlab.lab.generate");
     pushAction(actions, seen, registry, "containerlab.lab.cloneRepo");
     pushAction(actions, seen, registry, "containerlab.images.manage");
   }
@@ -1257,7 +1268,8 @@ async function buildSectionSnapshotSafe(
   sectionId: ExplorerSectionId,
   provider: ExplorerTreeProvider,
   options: ExplorerSnapshotOptions,
-  registry: ExplorerActionRegistry
+  registry: ExplorerActionRegistry,
+  previous: ExplorerSectionSnapshot | undefined
 ): Promise<ExplorerSectionSnapshot> {
   try {
     return await withTimeout(
@@ -1267,6 +1279,8 @@ async function buildSectionSnapshotSafe(
     );
   } catch (error: unknown) {
     console.error(`[containerlab explorer] failed to build section '${sectionId}'`, error);
+    // Keep showing what the section had, e.g. while a lab host is slow to answer.
+    if (previous) return previous;
     return {
       id: sectionId,
       label: options.sectionLabels?.[sectionId] ?? EXPLORER_SECTION_LABELS[sectionId],
@@ -1278,10 +1292,15 @@ async function buildSectionSnapshotSafe(
   }
 }
 
+/**
+ * Builds the explorer's sections. A section that fails or takes too long
+ * keeps its content from `previous`, the last snapshot with the same filter.
+ */
 export async function buildExplorerSnapshot(
   providers: ExplorerSnapshotProviders,
   filterText: string,
-  options: ExplorerSnapshotOptions
+  options: ExplorerSnapshotOptions,
+  previous?: ExplorerSnapshotBuildResult
 ): Promise<ExplorerSnapshotBuildResult> {
   const registry = new ExplorerActionRegistry();
   const providersBySection: Record<ExplorerSectionId, ExplorerTreeProvider> = {
@@ -1292,11 +1311,27 @@ export async function buildExplorerSnapshot(
   };
   const sectionOrder = options.sectionOrder ?? EXPLORER_SECTION_ORDER;
 
+  const previousSections =
+    previous?.snapshot.filterText === filterText ? previous.snapshot.sections : [];
   const sections = await Promise.all(
     sectionOrder.map((sectionId) =>
-      buildSectionSnapshotSafe(sectionId, providersBySection[sectionId], options, registry)
+      buildSectionSnapshotSafe(
+        sectionId,
+        providersBySection[sectionId],
+        options,
+        registry,
+        previousSections.find((section) => section.id === sectionId)
+      )
     )
   );
+
+  const actionBindings = registry.getBindings();
+  if (previous && sections.some((section) => previousSections.includes(section))) {
+    // Reused sections still point at the actions of the previous snapshot.
+    for (const [actionRef, binding] of previous.actionBindings) {
+      if (!actionBindings.has(actionRef)) actionBindings.set(actionRef, binding);
+    }
+  }
 
   return {
     snapshot: {
@@ -1304,6 +1339,6 @@ export async function buildExplorerSnapshot(
       filterText,
       sections
     },
-    actionBindings: registry.getBindings()
+    actionBindings
   };
 }

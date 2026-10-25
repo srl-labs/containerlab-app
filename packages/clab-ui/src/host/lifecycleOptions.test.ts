@@ -5,7 +5,8 @@ import {
   isPartialDestroy,
   labLifecycleCliFlags,
   labLifecycleQueryParams,
-  normalizeLabLifecycleOptions
+  normalizeLabLifecycleOptions,
+  restoresSnapshots
 } from "./lifecycleOptions";
 
 const EVERYTHING = {
@@ -98,4 +99,57 @@ test("a destroy with a node filter is partial", () => {
   assert.equal(isPartialDestroy(undefined), false);
   assert.equal(isPartialDestroy({ graceful: true }), false);
   assert.equal(isPartialDestroy({ nodeFilter: ["r1"] }), true);
+});
+
+test("a vars file applies to every action and maps to --vars and varsPath", () => {
+  for (const kind of ["deploy", "redeploy", "destroy"] as const) {
+    assert.deepEqual(normalizeLabLifecycleOptions(kind, { varsFile: " lab.clab_vars.prod.yml " }), {
+      varsFile: "lab.clab_vars.prod.yml"
+    });
+  }
+  assert.equal(normalizeLabLifecycleOptions("deploy", { varsFile: "/etc/passwd" }), undefined);
+  assert.deepEqual(labLifecycleCliFlags({ varsFile: "vars.yml" }), ["--vars", "vars.yml"]);
+  assert.deepEqual(labLifecycleQueryParams({ varsFile: "vars.yml" }), [["varsPath", "vars.yml"]]);
+});
+
+test("snapshot restore is a deploy option", () => {
+  const restore = {
+    restoreAll: " snapshots ",
+    restore: [
+      { node: "r1", path: "snaps/r1.tar" },
+      { node: "r1", path: "other/r1.tar" },
+      { node: "bad name", path: "x.tar" },
+      { node: "r2", path: "" },
+      { node: "r3", path: "line\nbreak.tar" }
+    ]
+  };
+  assert.deepEqual(normalizeLabLifecycleOptions("deploy", restore), {
+    restoreAll: "snapshots",
+    restore: [{ node: "r1", path: "other/r1.tar" }]
+  });
+  assert.equal(normalizeLabLifecycleOptions("redeploy", restore), undefined);
+  assert.equal(normalizeLabLifecycleOptions("destroy", restore), undefined);
+});
+
+test("snapshot restore turns into flags and query parameters", () => {
+  const options = {
+    restoreAll: "snapshots",
+    restore: [
+      { node: "r1", path: "a b/r1.tar" },
+      { node: "r2", path: "r2.tar" }
+    ]
+  };
+  assert.deepEqual(labLifecycleCliFlags(options), [
+    "--restore-all=snapshots",
+    "--restore=r1=a b/r1.tar",
+    "--restore=r2=r2.tar"
+  ]);
+  assert.deepEqual(labLifecycleQueryParams(options), [
+    ["restoreAll", "snapshots"],
+    ["restore", "r1=a b/r1.tar"],
+    ["restore", "r2=r2.tar"]
+  ]);
+  assert.equal(restoresSnapshots(options), true);
+  assert.equal(restoresSnapshots({ restore: [] }), false);
+  assert.equal(restoresSnapshots(undefined), false);
 });

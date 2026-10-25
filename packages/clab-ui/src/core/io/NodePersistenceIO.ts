@@ -11,6 +11,7 @@ import type { ClabNode, ClabTopology, NodeBoxAppearance } from "../types/topolog
 import { resolveInheritedConfig, subtractInherited } from "../parsing/NodeConfigResolver";
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 import { KIND_CONFIG_KEYS, KIND_SPECIFIC_KEYS } from "../utilities/nodeKindConfig";
+import { NODE_FORM_KEYS, OTHER_CONFIG_KEYS } from "../utilities/nodeOtherConfig";
 
 import type { SaveResult, IOLogger } from "./types";
 import { ERROR_NODES_NOT_MAP, noopLogger } from "./types";
@@ -143,50 +144,15 @@ export interface NodeAnnotationData {
 
 /** Node properties that can be saved to YAML */
 const NODE_YAML_PROPERTIES = [
-  "kind",
-  "type",
-  "image",
-  "group",
-  "startup-config",
-  "enforce-startup-config",
-  "suppress-startup-config",
-  "license",
-  "binds",
-  "env",
-  "env-files",
-  "labels",
-  "user",
-  "entrypoint",
-  "cmd",
-  "exec",
-  "restart-policy",
-  "auto-remove",
-  "startup-delay",
-  "mgmt-ipv4",
-  "mgmt-ipv6",
-  "mgmt-net",
-  "network-mode",
-  "ports",
-  "dns",
-  "aliases",
-  "memory",
-  "cpu",
-  "cpu-set",
-  "shm-size",
-  "cap-add",
-  "sysctls",
-  "devices",
-  "certificate",
-  "healthcheck",
-  "image-pull-policy",
-  "runtime",
-  "components",
-  "sfm",
-  "stages",
-  "credentials",
+  ...NODE_FORM_KEYS,
   // Kind-specific config keys from the schema (custom-prompt, daemons, ...)
-  ...KIND_CONFIG_KEYS
+  ...KIND_CONFIG_KEYS,
+  // Other node keys from the schema (hostname, privileged, tmpfs, ...)
+  ...OTHER_CONFIG_KEYS
 ];
+
+/** Keys whose default may be true, so `false` is written even when nothing is inherited */
+const FALSE_KEPT_KEYS: ReadonlySet<string> = new Set([...KIND_SPECIFIC_KEYS, ...OTHER_CONFIG_KEYS]);
 
 /**
  * Sets a single property on a node map if the value is valid.
@@ -301,8 +267,9 @@ function updateNodeYaml(
     }
 
     // containerlab flags default to false, so false only needs writing when it
-    // overrides an inherited value. Kind-specific flags often default to true.
-    if (value === false && inherited === undefined && !KIND_SPECIFIC_KEYS.has(prop)) {
+    // overrides an inherited value. Kind-specific flags and `privileged` often
+    // default to true.
+    if (value === false && inherited === undefined && !FALSE_KEPT_KEYS.has(prop)) {
       if (nodeMap.has(prop)) nodeMap.delete(prop);
       continue;
     }

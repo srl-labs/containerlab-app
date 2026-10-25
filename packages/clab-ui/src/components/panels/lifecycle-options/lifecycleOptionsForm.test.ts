@@ -5,7 +5,9 @@ import {
   buildLifecycleOptionsRequest,
   createLifecycleOptionsForm,
   isCleanupBlocked,
-  maxWorkersError
+  maxWorkersError,
+  varsFileError,
+  restoreError
 } from "./lifecycleOptionsForm";
 
 test("an untouched form runs the plain action without options", () => {
@@ -64,4 +66,38 @@ test("max workers must be a whole number above 0 when set", () => {
   assert.notEqual(maxWorkersError("0"), undefined);
   assert.notEqual(maxWorkersError("1.5"), undefined);
   assert.notEqual(maxWorkersError("many"), undefined);
+});
+
+test("a template variables file is passed with --vars, relative to the topology", () => {
+  const form = { ...createLifecycleOptionsForm("destroy"), varsFile: " vars/prod.yml " };
+  assert.deepEqual(buildLifecycleOptionsRequest(form), {
+    action: "destroyLab",
+    options: { varsFile: "vars/prod.yml" },
+    command: "containerlab destroy --vars vars/prod.yml"
+  });
+  assert.equal(varsFileError(""), undefined);
+  assert.equal(varsFileError("../common/vars.yml"), undefined);
+  assert.notEqual(varsFileError("/etc/vars.yml"), undefined);
+  assert.notEqual(varsFileError("vars file.yml"), undefined);
+});
+
+test("a deploy can restore VM snapshots", () => {
+  const form = {
+    ...createLifecycleOptionsForm("deploy"),
+    restoreSnapshots: true,
+    restore: [
+      { node: "vm1", path: "golden/vm1.tar" },
+      { node: "", path: "" }
+    ]
+  };
+  assert.equal(restoreError(form), undefined);
+  assert.deepEqual(buildLifecycleOptionsRequest(form), {
+    action: "deployLab",
+    options: { restoreAll: "snapshots", restore: [{ node: "vm1", path: "golden/vm1.tar" }] },
+    command: "containerlab deploy --restore-all=snapshots --restore=vm1=golden/vm1.tar"
+  });
+  assert.notEqual(restoreError({ ...form, restoreAll: " ", restore: [] }), undefined);
+  assert.equal(restoreError({ ...form, restoreSnapshots: false, restoreAll: "" }), undefined);
+  // Switched off, the defaults stay out of the request.
+  assert.equal(buildLifecycleOptionsRequest({ ...form, restoreSnapshots: false }).options, undefined);
 });

@@ -1,6 +1,7 @@
 import {
   labLifecycleQueryParams,
   type LabLifecycleOptions,
+  type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
 import type { Response } from "undici";
 
@@ -13,17 +14,24 @@ import type {
   CustomNodesResponse,
   DrawioGenerateResponse,
   EdgeSharkStatusResponse,
+  ExecResponse,
   FcliCommandResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
   HealthMetricsResponse,
   IconListResponse,
   IconUploadRequest,
   IconUploadResponse,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
+  InspectDetailsResponse,
   InspectLabResponse,
   LifecycleActionResult,
   LoginResponse,
   LogsResponse,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NetemShowResponse,
@@ -33,16 +41,20 @@ import type {
   RuntimeImagesResponse,
   SaveConfigResponse,
   ShareToolAction,
+  ShareToolOptions,
   ShareToolResponse,
+  SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   TopologyEntry,
+  ValidateTopologyResponse,
   VersionCheckResponse,
   VersionResponse,
   WorkspaceFileEntry
 } from "../contract/dto.ts";
-import { isNotFoundError } from "../contract/errors.ts";
+import type { RenderedTopology } from "../contract/backend.ts";
+import { isNotFoundError, LabBackendError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
 
@@ -527,9 +539,12 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: Extract<LifecycleEndpoint, "start" | "stop" | "restart">,
-    options: { includeLogs?: boolean } = {},
+    options: { includeLogs?: boolean; nodeFilter?: string[] } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
+    if (options.nodeFilter && options.nodeFilter.length > 0) {
+      params.set("nodeFilter", options.nodeFilter.join(","));
+    }
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
@@ -602,6 +617,52 @@ export class ClabApiClient {
     return res;
   }
 
+  /**
+   * Renders a workspace topology without deploying it. A server without the
+   * endpoint answers with gin's plain-text 404, which becomes 501.
+   */
+  async renderTopology(
+    token: string,
+    labName: string,
+    topologyPath: string,
+    varsFile?: string,
+  ): Promise<RenderedTopology> {
+    const params = new URLSearchParams({ path: topologyPath });
+    if (varsFile) {
+      params.set("varsPath", varsFile);
+    }
+    const path = `/api/v1/labs/${enc(labName)}/topology/rendered?${params.toString()}`;
+    let res: Response;
+    try {
+      res = await apiFetch(`${this.baseUrl}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
+    }
+    const text = await res.text().catch(() => "");
+    let body: unknown;
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = undefined;
+    }
+    if (!res.ok) {
+      if (!isRecord(body) && (res.status === 404 || res.status === 405)) {
+        throw new LabBackendError(
+          "This clab-api-server cannot render topology templates. Update it to preview them.",
+          501,
+        );
+      }
+      const message =
+        isRecord(body) && typeof body.error === "string"
+          ? body.error
+          : text || res.statusText;
+      throw new LabBackendError(message, res.status);
+    }
+    return normalizeRenderedTopology(body);
+  }
+
   async isLabRunning(token: string, labName: string): Promise<boolean> {
     try {
       await this.get(`/api/v1/labs/${enc(labName)}`, token);
@@ -630,11 +691,14 @@ export class ClabApiClient {
   async saveLab(
     token: string,
     labName: string,
-    options: { nodeFilter?: string } = {},
+    options: { nodeFilter?: string; copyDir?: string } = {},
   ): Promise<SaveConfigResponse> {
     const params = new URLSearchParams();
     if (options.nodeFilter) {
       params.set("nodeFilter", options.nodeFilter);
+    }
+    if (options.copyDir) {
+      params.set("copy", options.copyDir);
     }
     const query = params.toString();
     const res = await this.request(
@@ -645,6 +709,59 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as SaveConfigResponse;
+  }
+
+  /**
+   * `containerlab exec` in a lab. `nodes` and `labels` need a server that
+   * advertises `exec-filters`; `containerName` works with every server.
+   */
+  async execLab(
+    token: string,
+    labName: string,
+    request: { command: string; nodes?: string[]; labels?: string[]; containerName?: string },
+  ): Promise<ExecResponse> {
+    const params = new URLSearchParams();
+    if (request.containerName) {
+      params.set("nodeFilter", request.containerName);
+    }
+    if (request.nodes && request.nodes.length > 0) {
+      params.set("nodes", request.nodes.join(","));
+    }
+    for (const label of request.labels ?? []) {
+      params.append("label", label);
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/exec${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({ command: request.command }),
+      "application/json",
+    );
+    return (await res.json()) as ExecResponse;
+  }
+
+  async saveLabSnapshots(
+    token: string,
+    labName: string,
+    request: { nodes?: string[]; outputDir?: string; timeout?: string },
+  ): Promise<SnapshotSaveResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/snapshots`,
+      token,
+      JSON.stringify(request),
+      "application/json",
+    );
+    return (await res.json()) as SnapshotSaveResponse;
+  }
+
+  async inspectLabDetails(
+    token: string,
+    labName: string,
+  ): Promise<InspectDetailsResponse> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}?details=true`, token);
+    return (await res.json()) as InspectDetailsResponse;
   }
 
   async requestSshAccess(
@@ -751,6 +868,11 @@ export class ClabApiClient {
     );
   }
 
+  async getLabTailscaleStatus(token: string, labName: string): Promise<TailscaleStatus> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/tailscale`, token);
+    return (await res.json()) as TailscaleStatus;
+  }
+
   async getNodeBrowserPorts(
     token: string,
     labName: string,
@@ -767,12 +889,14 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: ShareToolAction,
+    options: Pick<ShareToolOptions, "enableReaders"> = {},
   ): Promise<ShareToolResponse> {
+    const body = action !== "detach" && options.enableReaders === true ? { enableReaders: true } : {};
     const res = await this.request(
       "POST",
       `/api/v1/labs/${enc(labName)}/sshx/${enc(action)}`,
       token,
-      JSON.stringify({}),
+      JSON.stringify(body),
       "application/json",
     );
     return (await res.json()) as ShareToolResponse;
@@ -782,18 +906,27 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: ShareToolAction,
-    options: { port?: number } = {},
+    options: Omit<ShareToolOptions, "enableReaders"> = {},
   ): Promise<ShareToolResponse> {
     const params = new URLSearchParams();
     if (typeof options.port === "number" && Number.isFinite(options.port)) {
       params.set("port", String(options.port));
     }
     const query = params.toString();
+    // Older servers read only the port query and ignore the body.
+    const body =
+      action === "detach"
+        ? {}
+        : {
+            ...(options.username !== undefined ? { username: options.username } : {}),
+            ...(options.password !== undefined ? { password: options.password } : {}),
+            ...(options.shell !== undefined ? { shell: options.shell } : {}),
+          };
     const res = await this.request(
       "POST",
       `/api/v1/labs/${enc(labName)}/gotty/${enc(action)}${query ? `?${query}` : ""}`,
       token,
-      JSON.stringify({}),
+      JSON.stringify(body),
       "application/json",
     );
     return (await res.json()) as ShareToolResponse;
@@ -830,6 +963,68 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as DrawioGenerateResponse;
+  }
+
+  async validateTopology(
+    token: string,
+    labName: string,
+    path?: string,
+  ): Promise<ValidateTopologyResponse> {
+    const query = path ? `?${new URLSearchParams({ path }).toString()}` : "";
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/validate${query}`,
+      token,
+    );
+    return (await res.json()) as ValidateTopologyResponse;
+  }
+
+  async generateGraphExport(
+    token: string,
+    labName: string,
+    format: GraphExportFormat,
+    input: { path?: string; direction?: MermaidDirection } = {},
+  ): Promise<GraphExportResponse> {
+    const query = input.path ? `?${new URLSearchParams({ path: input.path }).toString()}` : "";
+    const body = format === "mermaid" && input.direction ? { direction: input.direction } : {};
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/graph/${format}${query}`,
+      token,
+      JSON.stringify(body),
+      "application/json",
+    );
+    return (await res.json()) as GraphExportResponse;
+  }
+
+  /** `containerlab generate` without deploying or writing a file on the server. */
+  async generateTopology(
+    token: string,
+    request: GenerateTopologyRequest,
+  ): Promise<GenerateTopologyResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/generate",
+      token,
+      JSON.stringify({ ...request, deploy: false }),
+      "application/json",
+    );
+    return (await res.json()) as GenerateTopologyResponse;
+  }
+
+  /** The optional features the server lists on its public health endpoint. */
+  async getServerFeatures(timeoutMs = 10_000): Promise<string[]> {
+    const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs });
+    if (!res.ok) {
+      const err: HttpError = new Error(`GET /health failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    const features = isRecord(payload) ? payload.features : undefined;
+    return Array.isArray(features)
+      ? features.filter((feature): feature is string => typeof feature === "string")
+      : [];
   }
 
   async getVersion(
@@ -1233,6 +1428,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function normalizeRenderedTopology(payload: unknown): RenderedTopology {
+  if (!isRecord(payload) || typeof payload.content !== "string") {
+    throw new LabBackendError("clab-api-server returned no rendered topology", 502);
+  }
+  const labName =
+    typeof payload.labName === "string" && payload.labName ? payload.labName : undefined;
+  const error =
+    typeof payload.error === "string" && payload.error ? payload.error : undefined;
+  return {
+    content: payload.content,
+    ...(labName ? { labName } : {}),
+    varsFiles: toStringArray(payload.varsFiles) ?? [],
+    ...(error ? { error } : {}),
+  };
+}
+
 function toStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1259,8 +1470,9 @@ function appendLifecycleOptionParams(
   params: URLSearchParams,
   lifecycleOptions: LabLifecycleOptions | undefined,
 ): void {
+  // `restore` repeats, once per node.
   for (const [key, value] of labLifecycleQueryParams(lifecycleOptions)) {
-    params.set(key, value);
+    params.append(key, value);
   }
 }
 

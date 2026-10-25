@@ -1,4 +1,12 @@
-import type { LabLifecycleOptions } from "@containerlab/clab-ui/host";
+import type {
+  LabExecRequest,
+  LabLifecycleOptions,
+  LabOperationSupport,
+  LabSnapshotSaveRequest,
+  TailscaleStatus,
+  TopologyVariables,
+  TopoViewerNodesAction
+} from "@containerlab/clab-ui/host";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 import type {
@@ -9,13 +17,20 @@ import type {
   CaptureWiresharkVncReadyResponse,
   DrawioGenerateResponse,
   EdgeSharkStatusResponse,
+  ExecResponse,
   FcliCommandResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
   HealthMetricsResponse,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
+  InspectDetailsResponse,
   InspectLabResponse,
   LifecycleActionResult,
   LogsResponse,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NetemShowResponse,
@@ -25,11 +40,14 @@ import type {
   RuntimeImagesResponse,
   SaveConfigResponse,
   ShareToolAction,
+  ShareToolOptions,
   ShareToolResponse,
+  SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   TopologyEntry,
+  ValidateTopologyResponse,
   VersionCheckResponse,
   VersionResponse,
   WorkspaceFileEntry
@@ -53,6 +71,25 @@ export interface LabBackendCapabilities {
   healthMetrics: boolean;
   /** The `@shared/` workspace folder for labs that several users edit. */
   sharedWorkspace: boolean;
+  /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
+  tailscaleStatus: boolean;
+}
+
+/**
+ * Operations a lab host may lack although the backend kind has them, e.g. an
+ * older clab-api-server. Hosts ask before offering them.
+ */
+export interface LabBackendFeatures {
+  /** `containerlab validate`. */
+  validate: boolean;
+  /** `containerlab graph --mermaid`. */
+  graphMermaid: boolean;
+  /** `containerlab graph --dot`. */
+  graphDot: boolean;
+  /** Read-only sshx links. */
+  sshxReaders: boolean;
+  /** GoTTY credentials and shell. */
+  gottyOptions: boolean;
 }
 
 export type LabLifecycleAction =
@@ -157,6 +194,18 @@ export interface TopologyFilesOptions {
   sourcePreference?: "api-file" | "running-lab-doc";
 }
 
+/** A topology as containerlab renders it before deploying. */
+export interface RenderedTopology {
+  /** Topology YAML after the template and environment variables are expanded. */
+  content: string;
+  /** The lab name in the rendered topology, with Git tokens expanded. */
+  labName?: string;
+  /** Template variable files containerlab used, relative to the topology directory. */
+  varsFiles?: string[];
+  /** Why containerlab rejects the rendered topology, when it does. */
+  error?: string;
+}
+
 /** File access for one topology, as the shared topology core expects it. */
 export interface TopologyFileSystem extends FileSystemAdapter {
   /** An opaque version of the topology document, if the backend tracks one. */
@@ -236,6 +285,7 @@ export interface LabBackend {
   version(options?: { timeoutMs?: number }): Promise<VersionResponse>;
   versionCheck(): Promise<VersionCheckResponse>;
   healthMetrics(): Promise<HealthMetricsResponse>;
+  features(): Promise<LabBackendFeatures>;
 
   // Labs
 
@@ -257,18 +307,51 @@ export interface LabBackend {
     options?: LifecycleRunOptions
   ): Promise<AsyncIterable<LifecycleStreamEvent>>;
   deployFromUrl(source: { url: string; labName?: string }): Promise<InspectAllLabsResponse>;
-  save(lab: LabTarget, options?: { nodeFilter?: string }): Promise<SaveConfigResponse>;
+  /** `copyDir` copies the saved configs there (`save --copy`), relative to the topology directory. */
+  save(
+    lab: LabTarget,
+    options?: { nodeFilter?: string; copyDir?: string }
+  ): Promise<SaveConfigResponse>;
   graphDrawio(
     lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ): Promise<DrawioGenerateResponse>;
   fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
+  /** The Tailscale proxy, sidecars and tailscale nodes of a running lab. */
+  tailscaleStatus(labName: string): Promise<TailscaleStatus>;
   shareTool(
     tool: "sshx" | "gotty",
     labName: string,
     action: ShareToolAction,
-    options?: { port?: number }
+    options?: ShareToolOptions
   ): Promise<ShareToolResponse>;
+  /** `containerlab validate` on the topology file. */
+  validate(lab: LabTarget): Promise<ValidateTopologyResponse>;
+  /** `containerlab graph --mermaid|--dot`, from the topology file alone. */
+  graphExport(
+    lab: LabTarget,
+    format: GraphExportFormat,
+    options?: { direction?: MermaidDirection }
+  ): Promise<GraphExportResponse>;
+  /** `containerlab generate`: a Clos topology, returned and not written anywhere. */
+  generateTopology(request: GenerateTopologyRequest): Promise<GenerateTopologyResponse>;
+
+  // Lab operations. Hosts check labOperationSupport() before exec by label,
+  // snapshots, save --copy, inspect details and deploy restore.
+
+  labOperationSupport(): Promise<LabOperationSupport>;
+  /** `containerlab exec` on the lab's nodes, restricted to the lab. */
+  exec(lab: LabTarget, request: LabExecRequest): Promise<ExecResponse>;
+  /** Start, stop or restart some nodes of a running lab, by topology node name, at once. */
+  nodesAction(
+    lab: LabTarget,
+    nodeNames: string[],
+    action: TopoViewerNodesAction
+  ): Promise<LifecycleActionResult>;
+  /** `containerlab tools snapshot save` for the lab's VM nodes. */
+  saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest): Promise<SnapshotSaveResponse>;
+  /** `containerlab inspect --details` for one lab. */
+  inspectLabDetails(lab: LabTarget): Promise<InspectDetailsResponse>;
 
   // Nodes (by container name)
 
@@ -339,6 +422,21 @@ export interface LabBackend {
   topologyFiles(options: TopologyFilesOptions): TopologyFileSystem;
   /** The topology YAML a running lab was deployed from. */
   runningTopologyYaml(labName: string): Promise<string>;
+  /**
+   * Renders the topology at `lab.path` like a deploy would, without
+   * deploying. `varsFile` is relative to the topology file. Rejects with
+   * 422 when the template does not render and 501 when the lab host cannot
+   * render topologies.
+   */
+  renderTopology(lab: LabTarget, options?: { varsFile?: string }): Promise<RenderedTopology>;
+  /**
+   * The lab name, topology directory and the named environment variables
+   * containerlab would expand in the topology at `lab.path`.
+   */
+  topologyVariables(
+    lab: LabTarget,
+    request: { labName: string; envNames: string[] }
+  ): Promise<TopologyVariables>;
   /**
    * Watches one topology document. Lines are NDJSON records such as
    * `{"type":"topology-doc",...}`; resolves once watching has started.

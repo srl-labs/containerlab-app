@@ -12,6 +12,7 @@ const iifeWebviewEntries = {
   inspectWebview: path.join(__dirname, "src/webviews/inspect/entry.tsx"),
   imageManagerWebview: path.join(__dirname, "src/webviews/imageManager/entry.tsx"),
   nodeImpairmentsWebview: path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx"),
+  closGeneratorWebview: path.join(__dirname, "src/webviews/closGenerator/entry.tsx"),
   wiresharkVncWebview: path.join(__dirname, "src/webviews/wiresharkVnc/entry.tsx")
 };
 const clabUiGlobalCss = require.resolve("@containerlab/clab-ui/styles/global.css");

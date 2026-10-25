@@ -1,4 +1,4 @@
-// Lab settings with Basic, Management, Appearance, and Grid sections.
+// Lab settings with Basic, Management, Certificates, Appearance, and Grid sections.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTopologySessionClient } from "../../../host";
@@ -12,6 +12,7 @@ import type { GridSettingsControlsProps } from "../GridSettingsPopover";
 import {
   BasicTab,
   MgmtTab,
+  CertificatesTab,
   InheritanceTab,
   AppearanceTab,
   GridTab,
@@ -25,9 +26,9 @@ export interface LabSettingsSectionProps extends GridSettingsControlsProps {
   isLocked: boolean;
   labSettings?: LabSettings;
   saveRef?: React.RefObject<(() => Promise<void>) | null>;
-  activeTab: "basic" | "mgmt" | "inheritance" | "appearance" | "grid";
+  activeTab: "basic" | "mgmt" | "certificates" | "inheritance" | "appearance" | "grid";
   /** Called instead of saving when a section has errors, with the section to show */
-  onInvalid?: (tab: "mgmt") => void;
+  onInvalid?: (tab: "mgmt" | "certificates") => void;
 }
 
 export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
@@ -67,8 +68,8 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   }, []);
 
   const handleSave = async () => {
-    if (!areTopologySettingsReadOnly && !state.isValid) {
-      onInvalid?.("mgmt");
+    if (!areTopologySettingsReadOnly && state.invalidSection !== undefined) {
+      onInvalid?.(state.invalidSection);
       return;
     }
     // Save appearance before lab settings: every save pushes a host snapshot into the
@@ -133,6 +134,16 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
         isViewMode={areTopologySettingsReadOnly}
         networks={state.mgmtNetworks}
         labSettings={labSettings}
+      />
+    );
+  }
+  if (activeTab === "certificates") {
+    return (
+      <CertificatesTab
+        ca={state.ca}
+        setCa={state.setCa}
+        issues={state.caIssues}
+        isViewMode={areTopologySettingsReadOnly}
       />
     );
   }

@@ -1,4 +1,8 @@
-export { ApiLabBackend, type ApiLabBackendOptions } from "./apiLabBackend.ts";
+export {
+  ApiLabBackend,
+  clearServerFeatureCache,
+  type ApiLabBackendOptions
+} from "./apiLabBackend.ts";
 export { isValidCloseCode } from "../webSocket.ts";
 export {
   ClabApiClient,

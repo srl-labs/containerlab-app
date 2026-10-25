@@ -15,8 +15,11 @@ import {
 } from "../../src/session";
 import type { HostRuntimeContainer } from "../../src/host";
 import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
+import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tailscaleStatus";
+import { expandLabNameGitTokens } from "../../src/host/topologyVariables";
 
 import { fakeRuntimeContainers } from "./fakeLab";
+import { createFakeLabOperations } from "./fakeLabOperations";
 import { createFakeLifecycle } from "./fakeLifecycle";
 import { createFakeTemplates, type TemplateState } from "./fakeTemplates";
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
@@ -28,6 +31,11 @@ import {
 } from "./harnessExplorer";
 
 type SnapshotFixtureName = "basic" | "empty";
+
+// What a local host would report for the variables containerlab expands.
+const HARNESS_GIT = { branch: "main", hash: "abc1234" };
+const HARNESS_TOPOLOGY_DIR = "/home/clab/labs";
+const HARNESS_ENV: Record<string, string> = { SRL_IMAGE: "ghcr.io/nokia/srlinux:25.3.1" };
 
 function normalizePath(filePath: string): string {
   if (filePath.startsWith(`${TOPOLOGY_ROOT}/`)) return filePath;
@@ -76,6 +84,23 @@ function stubbedApplyPlan(): Promise<ApplyPlan> | undefined {
   }
   const plan = parseApplyPlan(stub);
   return plan ? Promise.resolve(plan) : Promise.reject(new Error("The dry run returned no plan"));
+}
+
+/**
+ * Tailscale status forced by a spec: `window.__CLAB_UI_HARNESS_TAILSCALE__` set to a
+ * status, to `{ error }` to fail, or to `null` for a host that cannot report it.
+ * Without a stub the fake lab runs no Tailscale devices.
+ */
+function stubbedTailscaleStatus(labName: string): Promise<TailscaleStatus | undefined> {
+  const stub = (window as unknown as { __CLAB_UI_HARNESS_TAILSCALE__?: unknown })
+    .__CLAB_UI_HARNESS_TAILSCALE__;
+  if (stub === undefined) return Promise.resolve({ labName, devices: [] });
+  if (stub === null) return Promise.resolve(undefined);
+  if (typeof stub === "object" && "error" in stub) {
+    return Promise.reject(new Error(String(stub.error)));
+  }
+  const status = parseTailscaleStatus(stub);
+  return status ? Promise.resolve(status) : Promise.reject(new Error("No Tailscale status"));
 }
 
 function toFixtureName(value: string | null): SnapshotFixtureName {
@@ -237,6 +262,13 @@ export function createFakeClabUiHost(
       yamlFilePath,
       mode: "edit",
       deploymentState: "undeployed",
+      resolveVariables: async ({ labName, envNames }) => ({
+        labName: expandLabNameGitTokens(labName, HARNESS_GIT),
+        topologyDir: HARNESS_TOPOLOGY_DIR,
+        env: Object.fromEntries(
+          envNames.filter((name) => name in HARNESS_ENV).map((name) => [name, HARNESS_ENV[name]] as const)
+        )
+      }),
       logger: {
         debug: () => {},
         info: () => {},
@@ -450,13 +482,30 @@ export function createFakeClabUiHost(
         await new Promise((resolve) => setTimeout(resolve, FAKE_DRY_RUN_MS));
         return fakeLifecycle.planFor(currentYamlPath);
       },
+      tailscaleStatus() {
+        recordHarnessMessage({ command: "tailscaleStatus" });
+        return stubbedTailscaleStatus(fakeLifecycle.labFor(currentYamlPath)?.labName ?? "");
+      },
       cancelLifecycle() {
         fakeLifecycle.cancel();
+      },
+      validateTopology() {
+        recordHarnessMessage({ command: "topo-validate" });
       },
       toggleSplitView() {},
       runNodeAction(action, nodeName) {
         void fakeLifecycle.nodeAction(action, nodeName);
       },
+      runNodesAction(action, nodeNames) {
+        recordHarnessMessage({ command: `clab-node-${action}`, nodeName: nodeNames[0], nodeNames });
+        void (async () => {
+          for (const nodeName of nodeNames) await fakeLifecycle.nodeAction(action, nodeName);
+        })();
+      },
+      labOperations: createFakeLabOperations({
+        readYaml: () => files.get(currentYamlPath),
+        record: recordHarnessMessage
+      }),
       captureInterface(nodeName, interfaceName, options = {}) {
         recordHarnessMessage({
           command: "clab-interface-capture",

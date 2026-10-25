@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 
 import * as vscode from "vscode";
-import type { TopologyEntry } from "@srl-labs/containerlab-lab-backend";
+import { errorStatus, type TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 
 /** Where labs run: this machine, or a clab-api-server. */
@@ -47,6 +47,11 @@ export const REMOTE_SCHEME = "clab-api";
 
 const USERNAMES_KEY = "containerlab.connectionUsernames";
 
+/** How often a lab host that does not answer is asked again: first after 5 s, at most every 60 s. */
+const RETRY_FIRST_MS = 5000;
+const RETRY_MAX_MS = 60_000;
+const RETRY_TIMEOUT_MS = 5000;
+
 function normalizeUrl(raw: string): string | undefined {
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
@@ -88,6 +93,8 @@ export class ConnectionManager implements vscode.Disposable {
   /** What the last check of this machine found. */
   private localStatus: LocalStatus | undefined;
   private readonly expired = new Set<string>();
+  /** Pending checks of lab hosts that do not answer, by connection id. */
+  private readonly retries = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly disposables: vscode.Disposable[] = [];
 
   private readonly localSupported: boolean;
@@ -112,6 +119,8 @@ export class ConnectionManager implements vscode.Disposable {
 
   dispose(): void {
     for (const disposable of this.disposables) disposable.dispose();
+    for (const timer of this.retries.values()) clearTimeout(timer);
+    this.retries.clear();
   }
 
   private localEnabled(): boolean {
@@ -197,7 +206,52 @@ export class ConnectionManager implements vscode.Disposable {
     if (previous === problem) return;
     if (problem === undefined) this.problems.delete(connection.id);
     else this.problems.set(connection.id, problem);
+    if (connection.kind === "api") {
+      if (problem === undefined) this.cancelRetry(connection.id);
+      else this.scheduleRetry(connection, RETRY_FIRST_MS);
+    }
     this.changeEmitter.fire(connection);
+  }
+
+  /**
+   * Asks a signed-in lab host that did not answer whether it is back.
+   * True when it answers; otherwise it is asked again later.
+   */
+  async retry(connection: LabConnection, delayMs = RETRY_FIRST_MS): Promise<boolean> {
+    this.cancelRetry(connection.id);
+    const backend = this.backends.get(connection.id);
+    if (!backend || !this.problems.has(connection.id)) return false;
+    try {
+      await backend.version({ timeoutMs: RETRY_TIMEOUT_MS });
+    } catch (error) {
+      if (errorStatus(error) === 401) {
+        await this.expire(connection);
+        return false;
+      }
+      // Still not answering, unless it signed out in the meantime.
+      if (this.backends.get(connection.id) === backend && this.problems.has(connection.id)) {
+        this.scheduleRetry(connection, Math.min(delayMs * 2, RETRY_MAX_MS));
+      }
+      return false;
+    }
+    if (this.backends.get(connection.id) !== backend) return false;
+    this.setProblem(connection, undefined);
+    return true;
+  }
+
+  private scheduleRetry(connection: LabConnection, delayMs: number): void {
+    if (this.retries.has(connection.id) || !this.backends.has(connection.id)) return;
+    this.retries.set(
+      connection.id,
+      setTimeout(() => void this.retry(connection, delayMs), delayMs)
+    );
+  }
+
+  private cancelRetry(connectionId: string): void {
+    const timer = this.retries.get(connectionId);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.retries.delete(connectionId);
   }
 
   /** What the last check of this machine found; undefined before the first check. */
@@ -303,6 +357,7 @@ export class ConnectionManager implements vscode.Disposable {
     this.backends.delete(connection.id);
     this.topologies.delete(connection.id);
     this.problems.delete(connection.id);
+    this.cancelRetry(connection.id);
     await Promise.resolve(this.context.secrets.delete(tokenKey(connection.url))).catch(() => {});
     this.changeEmitter.fire(connection);
   }
@@ -338,7 +393,17 @@ export class ConnectionManager implements vscode.Disposable {
     if (!backend) return [];
     const cached = this.topologies.get(connection.id);
     if (cached && Date.now() - cached.at < maxAgeMs) return cached.entries;
-    const entries = await backend.listTopologies();
+    // A host that does not answer is asked again by `retry`, not on every refresh.
+    if (this.problems.has(connection.id)) return cached?.entries ?? [];
+    let entries: TopologyEntry[];
+    try {
+      entries = await backend.listTopologies();
+    } catch (error) {
+      if (errorStatus(error) === undefined && this.backends.get(connection.id) === backend) {
+        this.setProblem(connection, error instanceof Error ? error.message : String(error));
+      }
+      throw error;
+    }
     this.topologies.set(connection.id, { at: Date.now(), entries });
     return entries;
   }
