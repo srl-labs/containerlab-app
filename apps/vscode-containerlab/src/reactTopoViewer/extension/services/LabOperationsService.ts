@@ -1,10 +1,13 @@
 /**
- * Exec, VM snapshots, config save, inspect details and multi-node
- * start/stop/restart for the lab open in the topology view.
+ * Exec, VM snapshots, config save, inspect details, script buttons and
+ * multi-node start/stop/restart for the lab open in the topology view.
  */
 
+import * as vscode from "vscode";
 import type {
   LabExecRequest,
+  LabHostScriptRequest,
+  LabHostScriptResult,
   LabOperationName,
   LabSaveConfigsRequest,
   LabSnapshotSaveRequest,
@@ -34,8 +37,28 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "exec" ||
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
-    value === "inspectDetails"
+    value === "inspectDetails" ||
+    value === "runHostScript"
   );
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+let scriptOutput: vscode.OutputChannel | undefined;
+
+/** A script button's output in the "Containerlab Scripts" output channel. */
+function showScriptOutput(title: string, result: LabHostScriptResult): void {
+  scriptOutput ??= vscode.window.createOutputChannel("Containerlab Scripts");
+  const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
+  scriptOutput.appendLine(`=== ${title} (${new Date().toLocaleTimeString()}) ===`);
+  for (const text of [result.stdout, result.stderr]) {
+    if (text.trim() !== "") scriptOutput.appendLine(text.trimEnd());
+  }
+  scriptOutput.appendLine(`[${status} after ${Math.round(result.durationMs / 100) / 10}s]`);
+  scriptOutput.appendLine("");
+  scriptOutput.show(true);
 }
 
 class LabOperationsService {
@@ -78,6 +101,19 @@ class LabOperationsService {
       }
       case "inspectDetails":
         return backend.inspectLabDetails(target);
+      case "runHostScript": {
+        const scriptPath = optionalString(request.scriptPath);
+        const script: LabHostScriptRequest = {
+          ...(scriptPath !== undefined
+            ? { scriptPath }
+            : { script: typeof request.script === "string" ? request.script : "" }),
+          timeoutSeconds: positiveNumber(request.timeoutSeconds)
+        };
+        const result = await backend.runHostScript(target, script);
+        const outputTitle = optionalString(request.outputTitle);
+        if (outputTitle !== undefined) showScriptOutput(outputTitle, result);
+        return result;
+      }
     }
   }
 

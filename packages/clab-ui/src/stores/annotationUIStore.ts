@@ -46,6 +46,9 @@ export interface AnnotationUIState {
   // Traffic-rate annotation UI state
   selectedTrafficRateIds: Set<string>;
   editingTrafficRateAnnotation: TrafficRateAnnotation | null;
+
+  /** Script button whose editor is open; the editor reads it from the graph. */
+  editingScriptButtonId: string | null;
 }
 
 export interface AnnotationUIActions {
@@ -95,6 +98,10 @@ export interface AnnotationUIActions {
   setEditingTrafficRateAnnotation: (annotation: TrafficRateAnnotation | null) => void;
   closeTrafficRateEditor: () => void;
 
+  // Script button editing
+  setEditingScriptButtonId: (id: string | null) => void;
+  closeScriptButtonEditor: () => void;
+
   // Utility
   clearAllSelections: () => void;
 
@@ -123,7 +130,8 @@ const initialState: AnnotationUIState = {
   isAddShapeMode: false,
   pendingShapeType: "rectangle",
   selectedTrafficRateIds: new Set(),
-  editingTrafficRateAnnotation: null
+  editingTrafficRateAnnotation: null,
+  editingScriptButtonId: null
 };
 
 // ============================================================================
@@ -182,14 +190,16 @@ type EditorKey =
   | "editingGroup"
   | "editingTextAnnotation"
   | "editingShapeAnnotation"
-  | "editingTrafficRateAnnotation";
+  | "editingTrafficRateAnnotation"
+  | "editingScriptButtonId";
 
 /** Patch that closes every annotation editor. */
 const ALL_EDITORS_CLOSED: Pick<AnnotationUIState, EditorKey> = {
   editingGroup: null,
   editingTextAnnotation: null,
   editingShapeAnnotation: null,
-  editingTrafficRateAnnotation: null
+  editingTrafficRateAnnotation: null,
+  editingScriptButtonId: null
 };
 
 /** Editor open/close actions for one annotation kind. */
@@ -197,7 +207,7 @@ function createEditorActions<K extends EditorKey>(set: SetState, key: K) {
   const setEditing = (value: AnnotationUIState[K] | null) => {
     // Ensure only one annotation editor is active at a time: opening an editor
     // closes all others. Closing (value === null) only clears this editor.
-    const patch: Partial<AnnotationUIState> = value ? { ...ALL_EDITORS_CLOSED } : {};
+    const patch: Partial<AnnotationUIState> = value !== null ? { ...ALL_EDITORS_CLOSED } : {};
     patch[key] = value as AnnotationUIState[K];
     set(patch);
   };
@@ -223,6 +233,7 @@ export const useAnnotationUIStore = createWithEqualityFn<AnnotationUIStore>((set
   const textEditor = createEditorActions(set, "editingTextAnnotation");
   const shapeEditor = createEditorActions(set, "editingShapeAnnotation");
   const trafficRateEditor = createEditorActions(set, "editingTrafficRateAnnotation");
+  const scriptButtonEditor = createEditorActions(set, "editingScriptButtonId");
 
   return {
     ...initialState,
@@ -281,6 +292,8 @@ export const useAnnotationUIStore = createWithEqualityFn<AnnotationUIStore>((set
     clearTrafficRateAnnotationSelection: trafficRateSelection.clear,
     setEditingTrafficRateAnnotation: trafficRateEditor.setEditing,
     closeTrafficRateEditor: trafficRateEditor.close,
+    setEditingScriptButtonId: scriptButtonEditor.setEditing,
+    closeScriptButtonEditor: scriptButtonEditor.close,
 
     // Utility
     clearAllSelections: () => {
@@ -319,7 +332,8 @@ export const useAnnotationUIState = () =>
       isAddShapeMode: state.isAddShapeMode,
       pendingShapeType: state.pendingShapeType,
       selectedTrafficRateIds: state.selectedTrafficRateIds,
-      editingTrafficRateAnnotation: state.editingTrafficRateAnnotation
+      editingTrafficRateAnnotation: state.editingTrafficRateAnnotation,
+      editingScriptButtonId: state.editingScriptButtonId
     }),
     shallow
   );
@@ -358,6 +372,8 @@ export const useAnnotationUIActions = () =>
       clearTrafficRateAnnotationSelection: state.clearTrafficRateAnnotationSelection,
       setEditingTrafficRateAnnotation: state.setEditingTrafficRateAnnotation,
       closeTrafficRateEditor: state.closeTrafficRateEditor,
+      setEditingScriptButtonId: state.setEditingScriptButtonId,
+      closeScriptButtonEditor: state.closeScriptButtonEditor,
       clearAllSelections: state.clearAllSelections,
       removeFromGroupSelection: state.removeFromGroupSelection,
       removeFromTextSelection: state.removeFromTextSelection,

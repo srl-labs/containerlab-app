@@ -159,7 +159,8 @@ function isTopoNode(node: Node): node is TopoNode {
     node.type === "group-node" ||
     node.type === "free-text-node" ||
     node.type === "free-shape-node" ||
-    node.type === "traffic-rate-node"
+    node.type === "traffic-rate-node" ||
+    node.type === "script-button-node"
   );
 }
 

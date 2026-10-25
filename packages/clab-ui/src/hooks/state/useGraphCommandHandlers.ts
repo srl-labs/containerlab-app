@@ -79,7 +79,8 @@ function isTopoNode(node: Node): node is TopoNode {
     node.type === "group-node" ||
     node.type === "free-text-node" ||
     node.type === "free-shape-node" ||
-    node.type === "traffic-rate-node"
+    node.type === "traffic-rate-node" ||
+    node.type === "script-button-node"
   );
 }
 
@@ -315,13 +316,19 @@ export function useGraphHandlersWithContext(
       }
 
       const graphNodes = useGraphStore.getState().nodes;
-      const { freeTextAnnotations, freeShapeAnnotations, trafficRateAnnotations, groups } =
-        nodesToAnnotations(graphNodes);
+      const {
+        freeTextAnnotations,
+        freeShapeAnnotations,
+        trafficRateAnnotations,
+        scriptButtonAnnotations,
+        groups
+      } = nodesToAnnotations(graphNodes);
       const networkNodeAnnotations = buildNetworkNodeAnnotations(graphNodes);
       const shouldSaveAnnotations =
         freeTextAnnotations.length > 0 ||
         freeShapeAnnotations.length > 0 ||
         trafficRateAnnotations.length > 0 ||
+        scriptButtonAnnotations.length > 0 ||
         groups.length > 0 ||
         networkNodeAnnotations.length > 0;
 
@@ -332,6 +339,7 @@ export function useGraphHandlersWithContext(
             freeTextAnnotations,
             freeShapeAnnotations,
             trafficRateAnnotations,
+            scriptButtonAnnotations,
             groupStyleAnnotations: groups,
             networkNodeAnnotations
           }

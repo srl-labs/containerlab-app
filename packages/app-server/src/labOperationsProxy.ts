@@ -35,6 +35,16 @@ interface SaveBody extends NodesBody {
   copyDir?: unknown;
 }
 
+interface HostScriptBody extends RuntimeTargetBody {
+  scriptPath?: unknown;
+  script?: unknown;
+  timeoutSeconds?: unknown;
+}
+
+/** One day; a script that needs longer can run without a limit. */
+const MAX_SCRIPT_TIMEOUT_SECONDS = 24 * 60 * 60;
+const MAX_SCRIPT_CHARS = 256 * 1024;
+
 const MAX_NODES = 512;
 const DURATION_PATTERN = /^(?:\d+(?:\.\d+)?(?:ns|us|µs|ms|s|m|h))+$/;
 
@@ -81,14 +91,23 @@ export function registerLabOperationsProxy(
   async function withLab<Body extends RuntimeTargetBody>(
     request: FastifyRequest<{ Body: Body }>,
     reply: FastifyReply,
-    run: (backend: LabBackend, labName: string, body: Partial<Body>) => Promise<unknown>
+    run: (
+      backend: LabBackend,
+      labName: string,
+      body: Partial<Body>,
+      target: { labName: string; path?: string }
+    ) => Promise<unknown>
   ): Promise<FastifyReply> {
     const body: Partial<Body> = request.body ?? {};
     const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(body));
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
     try {
       const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, body);
-      return reply.send(await run(resolved.backend, target.labName, body));
+      const labTarget = {
+        labName: target.labName,
+        ...(target.yamlPath ? { path: target.yamlPath } : {})
+      };
+      return reply.send(await run(resolved.backend, target.labName, body, labTarget));
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -113,6 +132,27 @@ export function registerLabOperationsProxy(
       if (invalid !== undefined) throw new RequestError(`Invalid label filter '${invalid}'`, 400);
       const nodeNames = await resolveNodeNames(backend, labName, body.nodeNames);
       return backend.exec({ labName }, { command, nodeNames, labels });
+    })
+  );
+
+  app.post<{ Body: HostScriptBody }>("/api/runtime/lab-operations/host-script", (request, reply) =>
+    withLab(request, reply, async (backend, _labName, body, target) => {
+      const scriptPath = typeof body.scriptPath === "string" ? body.scriptPath.trim() : "";
+      const script = typeof body.script === "string" ? body.script : "";
+      if (!scriptPath && !script.trim()) throw new RequestError("Script or scriptPath is required", 400);
+      if (script.length > MAX_SCRIPT_CHARS) throw new RequestError("Script is too long", 400);
+      let timeoutSeconds: number | undefined;
+      if (body.timeoutSeconds !== undefined && body.timeoutSeconds !== null) {
+        const value = body.timeoutSeconds;
+        if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > MAX_SCRIPT_TIMEOUT_SECONDS) {
+          throw new RequestError("Invalid timeoutSeconds", 400);
+        }
+        timeoutSeconds = value;
+      }
+      return backend.runHostScript(target, {
+        ...(scriptPath ? { scriptPath } : { script }),
+        ...(timeoutSeconds !== undefined ? { timeoutSeconds } : {})
+      });
     })
   );
 

@@ -31,6 +31,7 @@ import {
   FREE_SHAPE_NODE_TYPE,
   FREE_TEXT_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE,
   isAnnotationNodeType
 } from "../../annotations/annotationNodeConverters";
@@ -96,6 +97,8 @@ function resolveAltDeleteHandler(
       return annotationHandlers.onDeleteGroup;
     case TRAFFIC_RATE_NODE_TYPE:
       return annotationHandlers.onDeleteTrafficRate;
+    case SCRIPT_BUTTON_NODE_TYPE:
+      return annotationHandlers.onDeleteScriptButton;
     default:
       return undefined;
   }
@@ -134,6 +137,11 @@ function handleLinkCreationClick(
   completeLinkCreation: (nodeId: string) => void
 ): boolean {
   if (linkSourceNode == null || linkSourceNode.length === 0) return false;
+  // Links end on topology and network nodes only; a click on an annotation keeps the link pending.
+  if (!isLinkCreationNode(node)) {
+    event.stopPropagation();
+    return true;
+  }
   const isLoopLink = linkSourceNode === node.id;
   const isNetworkNode = node.type === "network-node";
   if (isLoopLink && isNetworkNode) {
@@ -216,6 +224,11 @@ function openAnnotationEditor(
   if (node.type === TRAFFIC_RATE_NODE_TYPE && annotationHandlers.onEditTrafficRate) {
     clearContextForAnnotationEdit();
     annotationHandlers.onEditTrafficRate(node.id);
+    return true;
+  }
+  if (node.type === SCRIPT_BUTTON_NODE_TYPE && annotationHandlers.onEditScriptButton) {
+    clearContextForAnnotationEdit();
+    annotationHandlers.onEditScriptButton(node.id);
     return true;
   }
 
@@ -528,7 +541,8 @@ function isCanvasDropData(value: unknown): value is CanvasDropData {
     value.annotationType !== "text" &&
     value.annotationType !== "shape" &&
     value.annotationType !== "group" &&
-    value.annotationType !== "traffic-rate"
+    value.annotationType !== "traffic-rate" &&
+    value.annotationType !== "script-button"
   ) {
     return false;
   }
@@ -620,6 +634,10 @@ function handleAnnotationDrop(
   }
   if (data.annotationType === "traffic-rate") {
     handlers.onAddTrafficRateAtPosition?.(snappedPosition);
+    return;
+  }
+  if (data.annotationType === "script-button") {
+    handlers.onAddScriptButtonAtPosition?.(snappedPosition);
   }
 }
 
@@ -1182,6 +1200,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       onAddGroupAtPosition,
       onAddShapeAtPosition,
       onAddTrafficRateAtPosition,
+      onAddScriptButtonAtPosition,
       onDropCreateNode,
       onDropCreateNetwork,
       onTopologyNodePositionCommit,
@@ -1683,7 +1702,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
       onAddTextAtPosition,
       onAddShapes,
       onAddShapeAtPosition,
-      onAddTrafficRateAtPosition
+      onAddTrafficRateAtPosition,
+      onAddScriptButtonAtPosition
     });
 
     const {
@@ -1788,7 +1808,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
             onAddTextAtPosition,
             onAddShapeAtPosition,
             onAddGroupAtPosition,
-            onAddTrafficRateAtPosition
+            onAddTrafficRateAtPosition,
+            onAddScriptButtonAtPosition
           },
           onLockedAction
         });
@@ -1803,7 +1824,8 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         onAddTextAtPosition,
         onAddShapeAtPosition,
         onAddGroupAtPosition,
-        onAddTrafficRateAtPosition
+        onAddTrafficRateAtPosition,
+        onAddScriptButtonAtPosition
       ]
     );
 

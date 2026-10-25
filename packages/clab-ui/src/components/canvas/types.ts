@@ -7,6 +7,7 @@ import type {
   FreeShapeNodeData,
   FreeTextNodeData,
   TrafficRateNodeData,
+  ScriptButtonNodeData,
   GroupNodeData,
   TopoEdge,
   TopoNode,
@@ -26,6 +27,7 @@ export type {
   FreeTextNodeData,
   FreeShapeNodeData,
   TrafficRateNodeData,
+  ScriptButtonNodeData,
   GroupNodeData
 };
 
@@ -52,7 +54,7 @@ export type CanvasDropData = {
   type: "node" | "network" | "annotation";
   templateName?: string;
   networkType?: string;
-  annotationType?: "text" | "shape" | "group" | "traffic-rate";
+  annotationType?: "text" | "shape" | "group" | "traffic-rate" | "script-button";
   shapeType?: string;
 };
 
@@ -63,6 +65,7 @@ export type CanvasDropHandlers = {
   onAddShapeAtPosition?: (position: { x: number; y: number }, shapeType?: string) => void;
   onAddGroupAtPosition?: (position: { x: number; y: number }) => void;
   onAddTrafficRateAtPosition?: (position: { x: number; y: number }) => void;
+  onAddScriptButtonAtPosition?: (position: { x: number; y: number }) => void;
 };
 
 /**
@@ -142,6 +145,12 @@ export interface AnnotationHandlers {
   onEditTrafficRate?: (id: string) => void;
   /** Delete a traffic-rate annotation */
   onDeleteTrafficRate?: (id: string) => void;
+  /** Run a script button's script; allowed while locked and in view mode */
+  onRunScriptButton?: (id: string) => void;
+  /** Edit a script button */
+  onEditScriptButton?: (id: string) => void;
+  /** Delete a script button */
+  onDeleteScriptButton?: (id: string) => void;
   /** Get members of a group (for group dragging) */
   getGroupMembers?: (groupId: string, options?: { includeNested?: boolean }) => string[];
 }
@@ -228,6 +237,8 @@ export interface ReactFlowCanvasProps {
   onAddShapeAtPosition?: (position: { x: number; y: number }, shapeType?: string) => void;
   /** Callback to add a traffic-rate annotation directly at a position */
   onAddTrafficRateAtPosition?: (position: { x: number; y: number }) => void;
+  /** Callback to add a script button directly at a position */
+  onAddScriptButtonAtPosition?: (position: { x: number; y: number }) => void;
 
   /** Callback for drag-drop node creation from palette */
   onDropCreateNode?: (position: { x: number; y: number }, templateName: string) => void;

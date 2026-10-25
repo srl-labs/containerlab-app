@@ -1,5 +1,7 @@
 import type {
   LabExecRequest,
+  LabHostScriptRequest,
+  LabHostScriptResult,
   LabLifecycleOptions,
   LabOperationSupport,
   LabSnapshotSaveRequest,
@@ -352,6 +354,8 @@ export interface LabBackend {
   saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest): Promise<SnapshotSaveResponse>;
   /** `containerlab inspect --details` for one lab. */
   inspectLabDetails(lab: LabTarget): Promise<InspectDetailsResponse>;
+  /** Runs a script button's script on the lab host, from the topology folder. */
+  runHostScript(lab: LabTarget, request: LabHostScriptRequest): Promise<LabHostScriptResult>;
 
   // Nodes (by container name)
 

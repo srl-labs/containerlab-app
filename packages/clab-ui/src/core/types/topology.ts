@@ -147,6 +147,32 @@ export interface TrafficRateAnnotation extends TrafficRateStyle {
   [key: string]: unknown;
 }
 
+/** Where a script button shows the output of its script. */
+export type ScriptButtonOutputMode = "terminal" | "dialog" | "toast";
+
+/**
+ * Canvas button that runs a shell script on the lab host when clicked.
+ * Exactly one of `scriptPath` and `script` is used; `scriptPath` wins when both are set.
+ */
+export interface ScriptButtonAnnotation {
+  id: string;
+  label: string;
+  position: { x: number; y: number };
+  geoCoordinates?: { lat: number; lng: number };
+  groupId?: string; // Parent group ID for hierarchy membership
+  /** Path to a script file, relative to the topology folder unless absolute. */
+  scriptPath?: string;
+  /** Script body run with bash when no path is set. */
+  script?: string;
+  output?: ScriptButtonOutputMode;
+  /** Seconds before the script is stopped; unset means no limit. */
+  timeoutSeconds?: number;
+  color?: string;
+  /** Icon key, e.g. "play" or "refresh"; unknown keys show the play icon. */
+  icon?: string;
+  [key: string]: unknown;
+}
+
 /**
  * Group annotation for overlay groups (rendered as HTML/SVG overlays).
  * Members are tracked via NodeAnnotation.groupId (preferred) and group/level for legacy display.
@@ -268,6 +294,7 @@ export interface TopologyAnnotations {
   freeTextAnnotations?: FreeTextAnnotation[];
   freeShapeAnnotations?: FreeShapeAnnotation[];
   trafficRateAnnotations?: TrafficRateAnnotation[];
+  scriptButtonAnnotations?: ScriptButtonAnnotation[];
   groupStyleAnnotations?: GroupStyleAnnotation[];
   networkNodeAnnotations?: NetworkNodeAnnotation[];
   nodeAnnotations?: NodeAnnotation[];

@@ -1,5 +1,6 @@
 import {
   parseExecResponse,
+  parseHostScriptResponse,
   parseInspectDetails,
   parseLabOperationSupport,
   parseSaveConfigsResponse,
@@ -7,6 +8,7 @@ import {
   type ClabUiLabOperationsHost,
   type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
+import { runtimeUiActions } from "@containerlab/clab-ui/workspace/state";
 
 import { requestLabOperation, type RuntimeTargetRequest } from "./runtimeApi";
 
@@ -28,7 +30,27 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
       parseExecResponse(await run("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await run("snapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await run("save", request)),
-    inspectDetails: async () => parseInspectDetails(await run("inspect-details"))
+    inspectDetails: async () => parseInspectDetails(await run("inspect-details")),
+    runHostScript: async ({ outputTitle, ...request }) => {
+      const target = requireTarget(getTarget);
+      const result = parseHostScriptResponse(
+        await requestLabOperation("host-script", { ...target, ...request })
+      );
+      if (outputTitle !== undefined) {
+        const output = [result.stdout, result.stderr].filter((text) => text.trim() !== "").join("\n");
+        const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
+        runtimeUiActions.openTerminal({
+          endpointId: target.endpointId,
+          sessionId: `script-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          topologyRef: target.topologyRef,
+          nodeName: outputTitle,
+          protocol: "output",
+          title: outputTitle,
+          initialOutput: `${output.trim() || "(no output)"}\n\n[${status}]`
+        });
+      }
+      return result;
+    }
   };
 }
 

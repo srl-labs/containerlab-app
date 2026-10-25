@@ -66,6 +66,12 @@ import {
   type StandaloneAppearance,
   type TabOrientation
 } from "../state/themePreferences";
+import {
+  isScriptButtonConfirm,
+  persistScriptButtonConfirm,
+  readPersistedScriptButtonConfirm,
+  SCRIPT_BUTTON_CONFIRM_OPTIONS
+} from "../../scriptButtons/scriptButtonPolicy";
 
 type SettingsSectionKey = "endpoints" | "general" | "appearance" | "terminal" | "capture" | "about";
 
@@ -522,6 +528,7 @@ export function SettingsOverlay({
   const [autoOpenPalette, setAutoOpenPalette] = useState(readPersistedAutoOpenPalette);
   const [autoOpenPaletteOnSelect, setAutoOpenPaletteOnSelect] = useState(readPersistedAutoOpenPaletteOnSelect);
   const [defaultLabLocked, setDefaultLabLocked] = useState(readPersistedDefaultLabLocked);
+  const [scriptButtonConfirm, setScriptButtonConfirm] = useState(readPersistedScriptButtonConfirm);
   const { fetchEdgeSharkStatus, fetchVersionCheck, fetchVersionInfo } = useWorkspaceHost().api;
   const { capabilities } = useWorkspaceHost();
   const dialogOpen = open;
@@ -792,6 +799,30 @@ export function SettingsOverlay({
                 }}
                 slotProps={{ input: { "aria-label": "Lock labs by default" } }}
               />
+            </SectionCard>
+            <SectionCard
+              title="Confirm script buttons"
+              description="When script buttons on the canvas ask before running their script on the lab host."
+              wide={false}
+            >
+              <TextField
+                select
+                size="small"
+                value={scriptButtonConfirm}
+                slotProps={{ select: { inputProps: { "aria-label": "Confirm script buttons" } } }}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (!isScriptButtonConfirm(next)) return;
+                  setScriptButtonConfirm(next);
+                  persistScriptButtonConfirm(next);
+                }}
+              >
+                {SCRIPT_BUTTON_CONFIRM_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
             </SectionCard>
           </>
         );

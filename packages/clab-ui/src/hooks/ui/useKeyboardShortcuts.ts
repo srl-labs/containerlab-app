@@ -15,6 +15,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 } from "../../annotations/annotationNodeConverters";
 
@@ -564,7 +565,8 @@ function isAnnotationType(type: string | undefined): boolean {
     type === FREE_TEXT_NODE_TYPE ||
     type === FREE_SHAPE_NODE_TYPE ||
     type === GROUP_NODE_TYPE ||
-    type === TRAFFIC_RATE_NODE_TYPE
+    type === TRAFFIC_RATE_NODE_TYPE ||
+    type === SCRIPT_BUTTON_NODE_TYPE
   );
 }
 

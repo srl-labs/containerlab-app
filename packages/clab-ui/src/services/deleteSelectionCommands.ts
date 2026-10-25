@@ -8,6 +8,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE,
   nodesToAnnotations,
   collectNodeGroupMemberships
@@ -48,12 +49,14 @@ export function splitNodeIdsByType(
   textIds: string[];
   shapeIds: string[];
   trafficRateIds: string[];
+  scriptButtonIds: string[];
 } {
   const graphNodeIds: string[] = [];
   const groupIds: string[] = [];
   const textIds: string[] = [];
   const shapeIds: string[] = [];
   const trafficRateIds: string[] = [];
+  const scriptButtonIds: string[] = [];
 
   for (const nodeId of nodeIds) {
     const node = nodesById.get(nodeId);
@@ -71,12 +74,15 @@ export function splitNodeIdsByType(
       case TRAFFIC_RATE_NODE_TYPE:
         trafficRateIds.push(nodeId);
         break;
+      case SCRIPT_BUTTON_NODE_TYPE:
+        scriptButtonIds.push(nodeId);
+        break;
       default:
         graphNodeIds.push(nodeId);
     }
   }
 
-  return { graphNodeIds, groupIds, textIds, shapeIds, trafficRateIds };
+  return { graphNodeIds, groupIds, textIds, shapeIds, trafficRateIds, scriptButtonIds };
 }
 
 export function applyGraphDeletions(
@@ -117,8 +123,13 @@ export function buildDeleteCommands(
 }
 
 export function buildAnnotationSaveCommand(graphNodesForSave: TopoNode[]): TopologyHostCommand {
-  const { freeTextAnnotations, freeShapeAnnotations, trafficRateAnnotations, groups } =
-    nodesToAnnotations(graphNodesForSave);
+  const {
+    freeTextAnnotations,
+    freeShapeAnnotations,
+    trafficRateAnnotations,
+    scriptButtonAnnotations,
+    groups
+  } = nodesToAnnotations(graphNodesForSave);
   const memberships = collectNodeGroupMemberships(graphNodesForSave);
 
   return {
@@ -128,6 +139,7 @@ export function buildAnnotationSaveCommand(graphNodesForSave: TopoNode[]): Topol
         freeTextAnnotations,
         freeShapeAnnotations,
         trafficRateAnnotations,
+        scriptButtonAnnotations,
         groupStyleAnnotations: groups
       },
       memberships: memberships.map((entry) => ({

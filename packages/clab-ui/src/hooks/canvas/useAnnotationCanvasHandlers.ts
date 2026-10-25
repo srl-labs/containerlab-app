@@ -12,6 +12,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE,
   isAnnotationNodeType
 } from "../../annotations/annotationNodeConverters";
@@ -196,6 +197,10 @@ function useWrappedNodeDoubleClick(
       if (node.type === TRAFFIC_RATE_NODE_TYPE) {
         log.info(`[ReactFlowCanvas] Editing traffic-rate annotation: ${node.id}`);
         annotationHandlers.onEditTrafficRate?.(node.id);
+        return;
+      }
+      if (node.type === SCRIPT_BUTTON_NODE_TYPE) {
+        annotationHandlers.onEditScriptButton?.(node.id);
         return;
       }
 

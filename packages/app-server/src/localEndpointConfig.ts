@@ -23,13 +23,15 @@ export interface LocalBackendConfigSource {
   fileContent?: string;
   /**
    * Prefix of the variables that override the file: `<prefix>CLAB_BINARY`,
-   * `<prefix>RUNTIME`, `<prefix>DOCKER_SOCKET`, `<prefix>WORKSPACE` and
-   * `<prefix>SUDO`.
+   * `<prefix>RUNTIME`, `<prefix>DOCKER_SOCKET`, `<prefix>WORKSPACE`,
+   * `<prefix>SUDO` and `<prefix>HOST_SCRIPTS`.
    */
   envPrefix: string;
   /** The variable that turns labs on this machine on or off. */
   enableVariable: string;
   enabledByDefault: boolean;
+  /** Whether script buttons may run shell scripts on this machine unless configured. */
+  hostScriptsByDefault: boolean;
 }
 
 const OPTION_KEYS = [
@@ -91,6 +93,8 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
   if (sudo !== undefined) {
     options.sudo = parseBooleanEnv(sudo, options.sudo ?? false);
   }
+  const hostScriptsByFile = typeof file.hostScripts === "boolean" ? file.hostScripts : source.hostScriptsByDefault;
+  options.hostScripts = parseBooleanEnv(env[`${envPrefix}HOST_SCRIPTS`], hostScriptsByFile);
 
   const enabledByFile = typeof file.enabled === "boolean" ? file.enabled : source.enabledByDefault;
   return {

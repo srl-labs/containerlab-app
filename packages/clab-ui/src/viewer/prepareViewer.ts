@@ -11,7 +11,7 @@ import { DEFAULT_ENDPOINT_LABEL_OFFSET, parseEndpointLabelOffset } from "../anno
 
 function isAnnotations(value: unknown): value is TopologyAnnotations {
   if (!isRecord(value)) return false;
-  const arrays = ["nodeAnnotations", "networkNodeAnnotations", "edgeAnnotations", "aliasEndpointAnnotations", "groupStyleAnnotations", "freeTextAnnotations", "freeShapeAnnotations", "trafficRateAnnotations"];
+  const arrays = ["nodeAnnotations", "networkNodeAnnotations", "edgeAnnotations", "aliasEndpointAnnotations", "groupStyleAnnotations", "freeTextAnnotations", "freeShapeAnnotations", "trafficRateAnnotations", "scriptButtonAnnotations"];
   return arrays.every(key => value[key] === undefined || (Array.isArray(value[key]) && value[key].every(isRecord))) &&
     (value.viewerSettings === undefined || isRecord(value.viewerSettings));
 }

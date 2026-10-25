@@ -218,6 +218,7 @@ export class AnnotationsIO {
     if (this.hasContent(annotations.freeTextAnnotations)) return true;
     if (this.hasContent(annotations.freeShapeAnnotations)) return true;
     if (this.hasContent(annotations.trafficRateAnnotations)) return true;
+    if (this.hasContent(annotations.scriptButtonAnnotations)) return true;
     if (this.hasContent(annotations.groupStyleAnnotations)) return true;
     if (this.hasContent(annotations.networkNodeAnnotations)) return true;
     if (this.hasContent(annotations.nodeAnnotations)) return true;

@@ -338,7 +338,7 @@ function buildSelectionMenu(selectedNodeIds: string[], withNodesAction = true) {
       ? { onNodesAction: (action: string, nodeNames: string[]) => several.push({ action, nodeNames }) }
       : {}),
     labOperations: {
-      support: { execByLabel: true, snapshotSave: true, deployRestore: true, saveCopy: true, inspectDetails: false },
+      support: { execByLabel: true, snapshotSave: true, deployRestore: true, saveCopy: true, inspectDetails: false, hostScript: false },
       open: (kind, nodeNames) => opened.push({ kind, nodeNames })
     },
     closeContextMenu: () => {},

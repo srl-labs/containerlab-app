@@ -5,6 +5,7 @@ import { LinkEditorView } from "./LinkEditorView";
 import { LinkImpairmentView } from "./LinkImpairmentView";
 import { NetworkEditorView } from "./NetworkEditorView";
 import { NodeEditorView } from "./NodeEditorView";
+import { ScriptButtonEditorView } from "./ScriptButtonEditorView";
 import { TrafficRateEditorView } from "./TrafficRateEditorView";
 
 export const editorViews = {
@@ -15,5 +16,6 @@ export const editorViews = {
   LinkImpairmentView,
   NetworkEditorView,
   NodeEditorView,
+  ScriptButtonEditorView,
   TrafficRateEditorView
 } as const;

@@ -3,6 +3,9 @@ import {
   hasLabNameGitTokens,
   restoresSnapshots,
   type LabExecRequest,
+  parseHostScriptResponse,
+  type LabHostScriptRequest,
+  type LabHostScriptResult,
   type LabOperationSupport,
   type LabSnapshotSaveRequest,
   type TopologyVariables,
@@ -85,7 +88,8 @@ const SERVER_FEATURES = {
   saveCopy: "save-copy",
   inspectDetails: "inspect-details",
   snapshotSave: "snapshot-save",
-  deployRestore: "deploy-restore"
+  deployRestore: "deploy-restore",
+  hostScripts: "host-scripts"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -227,7 +231,8 @@ export class ApiLabBackend implements LabBackend {
       snapshotSave: features.has(SERVER_FEATURES.snapshotSave),
       deployRestore: features.has(SERVER_FEATURES.deployRestore),
       saveCopy: features.has(SERVER_FEATURES.saveCopy),
-      inspectDetails: features.has(SERVER_FEATURES.inspectDetails)
+      inspectDetails: features.has(SERVER_FEATURES.inspectDetails),
+      hostScript: features.has(SERVER_FEATURES.hostScripts)
     };
   }
 
@@ -296,6 +301,15 @@ export class ApiLabBackend implements LabBackend {
       throw unsupported("show inspect details");
     }
     return this.client.inspectLabDetails(this.token, lab.labName);
+  }
+
+  async runHostScript(lab: LabTarget, request: LabHostScriptRequest): Promise<LabHostScriptResult> {
+    if (!(await this.hasFeature(SERVER_FEATURES.hostScripts))) {
+      throw unsupported("run script buttons");
+    }
+    // The output title is for the UI host; the server only needs the script.
+    const { outputTitle: _outputTitle, ...body } = request;
+    return parseHostScriptResponse(await this.client.runHostScript(this.token, lab.labName, body));
   }
 
   /** A deploy that restores snapshots must not run as a plain deploy on an older server. */

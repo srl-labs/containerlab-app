@@ -66,6 +66,7 @@ interface ContextMenuItemsParams {
   onAddShapes?: (shapeType?: string) => void;
   onAddShapeAtPosition?: (position: { x: number; y: number }, shapeType?: string) => void;
   onAddTrafficRateAtPosition?: (position: { x: number; y: number }) => void;
+  onAddScriptButtonAtPosition?: (position: { x: number; y: number }) => void;
 }
 
 interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
@@ -147,7 +148,10 @@ function buildNodeItems(
     editGroup: params.annotationHandlers?.onEditGroup,
     deleteGroup: params.annotationHandlers?.onDeleteGroup,
     editTrafficRate: params.annotationHandlers?.onEditTrafficRate,
-    deleteTrafficRate: params.annotationHandlers?.onDeleteTrafficRate
+    deleteTrafficRate: params.annotationHandlers?.onDeleteTrafficRate,
+    runScriptButton: params.annotationHandlers?.onRunScriptButton,
+    editScriptButton: params.annotationHandlers?.onEditScriptButton,
+    deleteScriptButton: params.annotationHandlers?.onDeleteScriptButton
   });
 }
 
@@ -192,7 +196,8 @@ function buildPaneItems(params: ResolveContextMenuItemsParams): ContextMenuItem[
     onAddTextAtPosition: params.onAddTextAtPosition,
     onAddShapes: params.onAddShapes,
     onAddShapeAtPosition: params.onAddShapeAtPosition,
-    onAddTrafficRateAtPosition: params.onAddTrafficRateAtPosition
+    onAddTrafficRateAtPosition: params.onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition: params.onAddScriptButtonAtPosition
   });
 }
 
@@ -252,7 +257,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     onAddTextAtPosition,
     onAddShapes,
     onAddShapeAtPosition,
-    onAddTrafficRateAtPosition
+    onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition
   } = params;
   const { type, targetId, position: menuPosition } = handlers.contextMenu;
 
@@ -308,6 +314,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     onAddTextAtPosition,
     onAddShapes,
     onAddShapeAtPosition,
-    onAddTrafficRateAtPosition
+    onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition
   ]);
 }

@@ -1988,7 +1988,17 @@ test("/api/runtime/lab-operations run exec, save with copy and details", async (
     deployRestore: false,
     saveCopy: true,
     inspectDetails: true,
+    hostScript: false,
   });
+
+  // clab-api-server cannot run scripts on its host; script buttons are for local labs.
+  const script = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/host-script",
+    headers: { cookie },
+    payload: { script: "echo hi", topologyRef },
+  });
+  assert.equal(script.statusCode, 501, script.body);
 });
 
 test("/api/runtime/lab-operations reject bad input before reaching the lab host", async (t) => {
@@ -2006,6 +2016,8 @@ test("/api/runtime/lab-operations reject bad input before reaching the lab host"
     ["/api/runtime/lab-operations/snapshots", { timeout: "soon", topologyRef }],
     ["/api/runtime/lab-operations/save", { copyDir: "a\u0000b", topologyRef }],
     ["/api/runtime/lab-operations/nodes/pause", { nodeNames: ["leaf1"], topologyRef }],
+    ["/api/runtime/lab-operations/host-script", { script: "  ", topologyRef }],
+    ["/api/runtime/lab-operations/host-script", { script: "echo hi", timeoutSeconds: -1, topologyRef }],
   ] as const) {
     const response = await context.app.inject({ method: "POST", url, headers: { cookie }, payload });
     assert.equal(response.statusCode, 400, `${url}: ${response.body}`);

@@ -46,6 +46,9 @@ function fakeServer(t: test.TestContext, features: string[] | undefined): {
     if (method === "GET" && url.pathname === "/api/v1/labs/demo" && !url.searchParams.has("details")) {
       return json(CONTAINERS);
     }
+    if (url.pathname.endsWith("/host-script")) {
+      return json({ exitCode: 0, stdout: "hi\n", stderr: "", timedOut: false, durationMs: 40 });
+    }
     if (url.pathname.endsWith("/exec")) {
       const container = url.searchParams.get("nodeFilter") ?? "clab-demo-r1";
       return json({ [container]: [{ cmd: ["ls"], "return-code": 0, stdout: "ok", stderr: "" }] });
@@ -78,7 +81,8 @@ test("a server's /health features decide what is supported", async (t) => {
     snapshotSave: true,
     deployRestore: true,
     saveCopy: true,
-    inspectDetails: true
+    inspectDetails: true,
+    hostScript: false
   });
   await backend.labOperationSupport();
   assert.equal(requests.filter((request) => request.url.pathname === "/health").length, 1);
@@ -86,7 +90,25 @@ test("a server's /health features decide what is supported", async (t) => {
 
 test("servers without a feature list support none of the new operations", async (t) => {
   const { backend } = fakeServer(t, undefined);
-  assert.deepEqual(Object.values(await backend.labOperationSupport()), [false, false, false, false, false]);
+  assert.deepEqual(Object.values(await backend.labOperationSupport()), [false, false, false, false, false, false]);
+});
+
+test("servers that list host-scripts run script buttons; others refuse before calling", async (t) => {
+  const { backend, requests } = fakeServer(t, [...ALL_FEATURES, "host-scripts"]);
+  assert.equal((await backend.labOperationSupport()).hostScript, true);
+  const result = await backend.runHostScript(
+    { labName: "demo" },
+    { script: "echo hi", timeoutSeconds: 5, outputTitle: "Greet" }
+  );
+  assert.deepEqual(result, { exitCode: 0, stdout: "hi\n", stderr: "", timedOut: false, durationMs: 40 });
+  const call = requests.find((request) => request.url.pathname === "/api/v1/labs/demo/host-script");
+  assert.equal(call?.method, "POST");
+  // The output title only matters to the UI host.
+  assert.deepEqual(JSON.parse(call?.body ?? "{}"), { script: "echo hi", timeoutSeconds: 5 });
+
+  const old = fakeServer(t, ALL_FEATURES);
+  await assert.rejects(old.backend.runHostScript({ labName: "demo" }, { script: "echo hi" }), { status: 501 });
+  assert.equal(old.requests.some((request) => request.url.pathname.endsWith("/host-script")), false);
 });
 
 test("exec by node and label goes in one call on new servers", async (t) => {

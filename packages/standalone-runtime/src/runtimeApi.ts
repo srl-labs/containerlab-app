@@ -498,6 +498,7 @@ export type LabOperationRoute =
   | "snapshots"
   | "save"
   | "inspect-details"
+  | "host-script"
   | "nodes/start"
   | "nodes/stop"
   | "nodes/restart";
