@@ -22,7 +22,8 @@ export type NodeEditorTabId =
   | "runtime"
   | "network"
   | "stages"
-  | "advanced";
+  | "advanced"
+  | "other";
 
 /**
  * Integrated SROS types (simpler chassis with just MDA slots)
@@ -140,6 +141,8 @@ interface SharedTemplateFields extends AdvancedNodeFields {
   sfm?: string;
   /** Other kind-specific config keys (custom-prompt, daemons, ...), by YAML key */
   kindConfig?: Record<string, unknown>;
+  /** Node keys of the Other tab (hostname, privileged, volumes, config, ...), by YAML key */
+  otherConfig?: Record<string, unknown>;
 }
 
 /**

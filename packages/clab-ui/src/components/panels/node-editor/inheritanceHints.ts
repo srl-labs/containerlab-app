@@ -7,6 +7,8 @@ import {
   type InheritedScalarField
 } from "../../../core/utilities/nodeInheritance";
 import type { NodeScalarValue } from "../../../core/types/editors";
+import { readConfigPath } from "../../../core/utilities/nodeOtherConfig";
+import { isRecord } from "../../../core/utilities/typeHelpers";
 
 import type { TabProps } from "./types";
 
@@ -73,4 +75,53 @@ export function inheritedKindConfigHint(
   return deepEqual(current, inheritance.values.kindConfig?.[key])
     ? `From ${label}`
     : `Overrides ${label}`;
+}
+
+/** Hint for a value of the Other tab at a YAML path (hostname, privileged, ...). */
+export function inheritedPathHint(
+  { data, inheritance }: Pick<TabProps, "data" | "inheritance">,
+  path: readonly string[]
+): string | undefined {
+  const source = inheritance?.pathSource(path);
+  if (!inheritance || !source) return undefined;
+  const label = describeInheritanceSource(source);
+  const current = readConfigPath(data.otherConfig, path);
+  if (isEmpty(current)) return `Falls back to ${label}`;
+  return deepEqual(current, readConfigPath(inheritance.values.otherConfig, path))
+    ? `From ${label}`
+    : `Overrides ${label}`;
+}
+
+/**
+ * Inherited entries of a map of the Other tab (tmpfs, config.vars), for
+ * KeyValueList, with each value as the text the list shows.
+ */
+export function inheritedPathEntries(
+  { inheritance }: Pick<TabProps, "inheritance">,
+  path: readonly string[],
+  format: (value: unknown) => string
+): Record<string, { source: string; value: string }> | undefined {
+  if (!inheritance) return undefined;
+  const values = readConfigPath(inheritance.values.otherConfig, path);
+  const entries: Record<string, { source: string; value: string }> = {};
+  if (!isRecord(values)) return entries;
+  for (const [key, source] of Object.entries(inheritance.pathEntries(path))) {
+    if (Object.hasOwn(values, key)) {
+      entries[key] = { source: describeInheritanceSource(source), value: format(values[key]) };
+    }
+  }
+  return entries;
+}
+
+/** Inherited items of a list of the Other tab (volumes, security-opts) */
+export function inheritedKeyItems(
+  { inheritance }: Pick<TabProps, "inheritance">,
+  key: string
+): Map<string, string> | undefined {
+  if (!inheritance) return undefined;
+  const items = new Map<string, string>();
+  for (const [item, source] of inheritance.keyItems(key)) {
+    items.set(item, describeInheritanceSource(source));
+  }
+  return items;
 }

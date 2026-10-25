@@ -77,6 +77,12 @@ The fields come from the containerlab schema, so new kinds and settings appear o
 
 `nokia_sros` and `nokia_srsim` nodes have a **Components** tab for cards, MDAs, XIOMs, and the SFM. For `nokia_sros`, each card can also set the vCPUs, RAM, and NICs of its VM. In **Defaults & Groups**, a section without a kind shows every kind-specific setting and the kinds it applies to.
 
+## Other settings
+
+The **Other** tab of the Node Editor holds the node settings no other tab covers: `hostname`, `privileged`, `link-apply-mode`, `cgroupns-mode`, `cgroup-parent`, `pid-mode`, `volumes`, `security-opts`, `tmpfs`, and `config.vars`, the variables of [startup-config templates](https://containerlab.dev/manual/config-mgmt/#templating). These fields also come from the containerlab schema, so node settings added upstream show up here once the app ships the newer schema.
+
+Variable values are YAML: `65001` is a number, `[2, 4]` a list, and `"65001"` a string. Volumes, security options, tmpfs mounts, and variables add up across `defaults`, kinds, and groups, so the node writes only the entries it adds. **Privileged** set to **Disabled** is written as `privileged: false`, since most kinds run privileged by default.
+
 ## Set the boot order
 
 The **Stages** tab of the Node Editor sets containerlab [stages](https://containerlab.dev/manual/nodes/#stages). Under each stage (**Create**, **Create Links**, **Configure**, **Healthy**, **Exit**):

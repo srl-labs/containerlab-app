@@ -71,9 +71,9 @@ export interface KindSpecificConfigSchema {
   componentKeys: (kind: string) => Set<string>;
 }
 
-type JsonSchema = Record<string, unknown>;
+export type JsonSchema = Record<string, unknown>;
 
-function asSchema(value: unknown): JsonSchema | undefined {
+export function asSchema(value: unknown): JsonSchema | undefined {
   return isRecord(value) ? value : undefined;
 }
 
@@ -88,7 +88,7 @@ function resolveRef(root: JsonSchema, value: unknown, depth = 0): JsonSchema | u
 }
 
 /** Merge `allOf` parts into one schema; later parts win per key. */
-function flatten(root: JsonSchema, value: unknown, depth = 0): JsonSchema | undefined {
+export function flatten(root: JsonSchema, value: unknown, depth = 0): JsonSchema | undefined {
   const schema = resolveRef(root, value, depth);
   if (!schema || depth > MAX_DEPTH || !Array.isArray(schema.allOf)) return schema;
   const { allOf, ...rest } = schema;
@@ -165,6 +165,10 @@ const WORD_LABELS: Partial<Record<string, string>> = {
   intf: "Interface",
   gen: "Generate",
   mgmt: "Management",
+  cgroupns: "Cgroup Namespace",
+  opts: "Options",
+  vars: "Variables",
+  tmpfs: "tmpfs",
   to: "to"
 };
 
@@ -181,7 +185,7 @@ export function kindConfigLabel(key: string): string {
 }
 
 /** Drop the "(nokia_srlinux kind)" note: the form already shows the key for its kind. */
-function cleanDescription(description: unknown): string | undefined {
+export function cleanDescription(description: unknown): string | undefined {
   if (typeof description !== "string") return undefined;
   const text = description.replace(/\s*\([^()]*\bkinds?\)\s*\.?\s*$/, "").trim();
   if (text === "") return undefined;
@@ -203,7 +207,7 @@ function enumValues(schema: JsonSchema): Array<string | number> | undefined {
   return values.length > 0 ? values : undefined;
 }
 
-function typesOf(schema: JsonSchema): string[] {
+export function typesOf(schema: JsonSchema): string[] {
   if (typeof schema.type === "string") return [schema.type];
   if (Array.isArray(schema.type)) return schema.type.filter((t): t is string => typeof t === "string");
   if (!Array.isArray(schema.anyOf)) return [];
@@ -270,7 +274,7 @@ function itemFields(root: JsonSchema, item: JsonSchema): KindConfigItemField[] |
   return fields;
 }
 
-function fieldControl(
+export function fieldControl(
   root: JsonSchema,
   schema: JsonSchema,
   description: string | undefined

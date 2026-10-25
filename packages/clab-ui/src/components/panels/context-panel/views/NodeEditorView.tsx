@@ -19,6 +19,7 @@ import { NetworkTab } from "../../node-editor/NetworkTab";
 import { StagesTab } from "../../node-editor/StagesTab";
 import { KindConfigTab, getKindConfigFields } from "../../node-editor/KindConfigTab";
 import { AdvancedTab } from "../../node-editor/AdvancedTab";
+import { OtherConfigTab } from "../../node-editor/OtherConfigTab";
 import type { ClabTopology } from "../../../../core/types/topology";
 import {
   computeNodeInheritance,
@@ -53,7 +54,8 @@ const BASE_TABS: Array<TabConfig<NodeEditorTabProps>> = [
   { id: "runtime", label: "Runtime", component: RuntimeTab },
   { id: "stages", label: "Stages", component: StagesTab },
   { id: "network", label: "Network", component: NetworkTab },
-  { id: "advanced", label: "Advanced", component: AdvancedTab }
+  { id: "advanced", label: "Advanced", component: AdvancedTab },
+  { id: "other", label: "Other", component: OtherConfigTab }
 ];
 
 const COMPONENTS_TAB: TabConfig<NodeEditorTabProps> = {

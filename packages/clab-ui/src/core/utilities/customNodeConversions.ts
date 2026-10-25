@@ -107,7 +107,10 @@ function buildCommonTemplateFields(data: TemplateFieldSource) {
     isDistributed: data.isDistributed,
     components: data.components,
     sfm: data.sfm,
-    kindConfig: data.kindConfig
+    kindConfig: data.kindConfig,
+
+    // Other tab fields
+    otherConfig: data.otherConfig
   };
 }
 
