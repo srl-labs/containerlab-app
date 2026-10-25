@@ -309,6 +309,75 @@ test("renaming a node keeps the endpoint entries", () => {
 });
 
 // ----------------------------------------------------------------------------
+// veth-stitch links
+// ----------------------------------------------------------------------------
+
+const VETH_STITCH = `${NODES}    - type: veth-stitch # capture on the host
+      endpoints:
+        - node: srl1
+          interface: e1-1
+          mac: 02:00:00:00:00:01
+        - node: srl2
+          interface: e1-1
+      mtu: 1500
+      labels:
+        role: core
+`;
+
+test("veth-stitch links load into the link editor with their fields", () => {
+  const edge = findEdge(VETH_STITCH, "srl1", "e1-1");
+  const data = convertToLinkEditorData({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    ...edge.data
+  });
+  assert.ok(data);
+  assert.equal(data.type, "veth-stitch");
+  assert.equal(data.sourceMac, "02:00:00:00:00:01");
+  assert.equal(data.mtu, 1500);
+  assert.deepEqual(data.labels, { role: "core" });
+  assert.deepEqual(edge.data?.extraData?.extValidationErrors, undefined);
+});
+
+test("veth-stitch link is unchanged when saved without edits", () => {
+  assert.equal(saveLinkEditor(VETH_STITCH, "srl1", "e1-1"), VETH_STITCH);
+});
+
+test("veth-stitch link edits keep the link type", () => {
+  assert.equal(
+    saveLinkEditor(VETH_STITCH, "srl1", "e1-1", { mtu: 9000, targetIpv4: "10.0.0.1/31" }),
+    replaceOnce(
+      replaceOnce(VETH_STITCH, "mtu: 1500", "mtu: 9000"),
+      "        - node: srl2\n          interface: e1-1\n",
+      "        - node: srl2\n          interface: e1-1\n          ipv4: 10.0.0.1/31\n"
+    )
+  );
+});
+
+test("a brief veth link switches to veth-stitch and back", () => {
+  const stitched = saveLinkEditor(VETH_BRIEF, "srl1", "e1-2", { type: "veth-stitch" });
+  assert.equal(
+    stitched,
+    replaceOnce(
+      VETH_BRIEF,
+      "    - endpoints: [ 'srl1:e1-2', 'srl2:e1-2' ]\n",
+      `    - type: veth-stitch
+      endpoints:
+        - node: "srl1"
+          interface: "e1-2"
+        - node: "srl2"
+          interface: "e1-2"
+`
+    )
+  );
+  assert.equal(findEdge(stitched, "srl1", "e1-2").data?.extraData?.extType, "veth-stitch");
+
+  const back = saveLinkEditor(stitched, "srl1", "e1-2", { type: "veth" });
+  assert.equal(back, stitched.replace("type: veth-stitch", "type: veth"));
+});
+
+// ----------------------------------------------------------------------------
 // Network node links (host, mgmt-net, macvlan, vxlan, vxlan-stitch, dummy)
 // ----------------------------------------------------------------------------
 

@@ -29,15 +29,17 @@ import type {
 import type { ClabUiExtensions, ClabUiRuntime } from "./runtimeContext";
 import type { LabLifecycleOptions } from "./lifecycleOptions";
 import { parseApplyPlan, type ApplyPlan } from "./applyPlan";
+import { parseTailscaleStatus, type TailscaleStatus } from "./tailscaleStatus";
 import { isRecord } from "../core/utilities/typeHelpers";
-import { MSG_PLAN_APPLY_LAB } from "../core/messages/extension";
-import { MSG_APPLY_PLAN_RESULT } from "../core/messages/webview";
+import { MSG_PLAN_APPLY_LAB, MSG_TAILSCALE_STATUS } from "../core/messages/extension";
+import { MSG_APPLY_PLAN_RESULT, MSG_TAILSCALE_STATUS_RESULT } from "../core/messages/webview";
 export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
 export * from "./runtimeModel";
+export * from "./tailscaleStatus";
 export {
   resolveNodeCredentialsFromYaml,
   type CredentialsLevel,
@@ -393,37 +395,50 @@ function createMessageSubscription(targetWindow: Window) {
 
 /** A dry run reads the whole lab from the runtime, which can take a while on big labs. */
 const APPLY_PLAN_TIMEOUT_MS = 120_000;
+/** The status runs `tailscale status` in every Tailscale container of the lab. */
+const TAILSCALE_STATUS_TIMEOUT_MS = 60_000;
 
-interface PendingApplyPlanRequest {
-  resolve: (plan: ApplyPlan) => void;
+interface PendingHostRequest<T> {
+  resolve: (value: T) => void;
   reject: (err: Error) => void;
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
-function createApplyPlanRequester(
+interface HostRequestSpec<T> {
+  /** Command posted to the host, with a `requestId` */
+  command: string;
+  /** `type` of the answer, which carries the same `requestId` */
+  resultType: string;
+  timeoutMs: number;
+  timeoutMessage: string;
+  /** Reads the answer; throws to reject the request. */
+  read: (message: Record<string, unknown>) => T;
+}
+
+/** A request answered by one message from the host, matched by `requestId`. */
+function createHostRequester<T>(
   postMessage: (message: unknown) => void,
-  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void
-): () => Promise<ApplyPlan> {
-  const pending = new Map<string, PendingApplyPlanRequest>();
+  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void,
+  spec: HostRequestSpec<T>
+): () => Promise<T> {
+  const pending = new Map<string, PendingHostRequest<T>>();
   let listenerStarted = false;
 
   const ensureListener = (): void => {
     if (listenerStarted) return;
     subscribe((event) => {
       const message = event.data;
-      if (!isRecord(message) || message.type !== MSG_APPLY_PLAN_RESULT) return;
+      if (!isRecord(message) || message.type !== spec.resultType) return;
       const requestId = typeof message.requestId === "string" ? message.requestId : "";
       const request = pending.get(requestId);
       if (!request) return;
       clearTimeout(request.timeoutId);
       pending.delete(requestId);
-      const plan = message.success === true ? parseApplyPlan(message.plan) : undefined;
-      if (plan) {
-        request.resolve(plan);
-        return;
+      try {
+        request.resolve(spec.read(message));
+      } catch (error) {
+        request.reject(error instanceof Error ? error : new Error(String(error)));
       }
-      const error = typeof message.error === "string" && message.error ? message.error : "";
-      request.reject(new Error(error || "The dry run returned no plan"));
     });
     listenerStarted = true;
   };
@@ -431,15 +446,56 @@ function createApplyPlanRequester(
   return () => {
     ensureListener();
     const requestId = newId();
-    return new Promise<ApplyPlan>((resolve, reject) => {
+    return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
         if (!pending.delete(requestId)) return;
-        reject(new Error("The dry run timed out"));
-      }, APPLY_PLAN_TIMEOUT_MS);
+        reject(new Error(spec.timeoutMessage));
+      }, spec.timeoutMs);
       pending.set(requestId, { resolve, reject, timeoutId });
-      postMessage({ command: MSG_PLAN_APPLY_LAB, requestId });
+      postMessage({ command: spec.command, requestId });
     });
   };
+}
+
+function messageError(message: Record<string, unknown>, fallback: string): Error {
+  const error = typeof message.error === "string" && message.error ? message.error : "";
+  return new Error(error || fallback);
+}
+
+function createApplyPlanRequester(
+  postMessage: (message: unknown) => void,
+  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void
+): () => Promise<ApplyPlan> {
+  return createHostRequester(postMessage, subscribe, {
+    command: MSG_PLAN_APPLY_LAB,
+    resultType: MSG_APPLY_PLAN_RESULT,
+    timeoutMs: APPLY_PLAN_TIMEOUT_MS,
+    timeoutMessage: "The dry run timed out",
+    read: (message) => {
+      const plan = message.success === true ? parseApplyPlan(message.plan) : undefined;
+      if (!plan) throw messageError(message, "The dry run returned no plan");
+      return plan;
+    }
+  });
+}
+
+function createTailscaleStatusRequester(
+  postMessage: (message: unknown) => void,
+  subscribe: (handler: (event: MessageEvent<unknown>) => void) => () => void
+): () => Promise<TailscaleStatus | undefined> {
+  return createHostRequester(postMessage, subscribe, {
+    command: MSG_TAILSCALE_STATUS,
+    resultType: MSG_TAILSCALE_STATUS_RESULT,
+    timeoutMs: TAILSCALE_STATUS_TIMEOUT_MS,
+    timeoutMessage: "The Tailscale status timed out",
+    read: (message) => {
+      if (message.success !== true) throw messageError(message, "Tailscale status failed");
+      if (message.status === undefined || message.status === null) return undefined;
+      const status = parseTailscaleStatus(message.status);
+      if (!status) throw new Error("The lab host returned no Tailscale status");
+      return status;
+    }
+  });
 }
 
 function lifecycleMessage(
@@ -487,6 +543,7 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         postMessage(lifecycleMessage(action, lifecycleOptions));
       },
       planApply: createApplyPlanRequester(postMessage, subscribe),
+      tailscaleStatus: createTailscaleStatusRequester(postMessage, subscribe),
       cancelLifecycle(): void {
         postMessage({ command: "cancelLabLifecycle" });
       },

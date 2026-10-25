@@ -2284,3 +2284,42 @@ test("prefixed terminal WebSockets forward authenticated upstream output", async
   socket.close();
   await once(socket, "close");
 });
+
+test("/api/runtime/tailscale returns the Tailscale devices of the lab", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const status = {
+    labName: "demo",
+    devices: [
+      {
+        role: "proxy",
+        containerName: "clab-demo-tailscale",
+        state: "running",
+        backendState: "NeedsLogin",
+        authUrl: "https://login.tailscale.com/a/1",
+        online: false,
+      },
+    ],
+  };
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo/tailscale",
+    (call) => {
+      assert.equal(call.headers.get("authorization"), "Bearer secret-token");
+      return jsonResponse(status);
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/tailscale",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), { supported: true, status });
+});

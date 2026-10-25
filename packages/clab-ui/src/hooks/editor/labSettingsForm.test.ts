@@ -7,15 +7,18 @@ import type { FileSystemAdapter } from "../../core/io/types";
 import type { LabSettings, LabSettingsUpdate } from "../../core/types/labSettings";
 import type {
   BasicSettingsState,
+  CertificateAuthorityState,
   MgmtFormState,
   MgmtSettingsState
 } from "../../components/panels/lab-settings/types";
 
 import {
   buildInitialBasic,
+  buildInitialCertificateAuthority,
   buildInitialMgmt,
   buildLabSettingsUpdate,
   createMgmtNetworkForm,
+  validateCertificateAuthority,
   validateMgmtNetworks
 } from "./labSettingsForm";
 
@@ -69,6 +72,7 @@ interface FormEdits {
   mgmt?: Partial<MgmtSettingsState>;
   /** Structural edits of the network list, applied after `mgmt` */
   networks?: (form: MgmtFormState) => MgmtFormState;
+  ca?: Partial<CertificateAuthorityState>;
 }
 
 interface RoundTrip {
@@ -98,7 +102,8 @@ async function roundTrip(yaml: string, edits: FormEdits = {}): Promise<RoundTrip
     )
   };
   const mgmt = edits.networks ? edits.networks(edited) : edited;
-  const update = buildLabSettingsUpdate(labSettings, basic, mgmt);
+  const ca = { ...buildInitialCertificateAuthority(labSettings), ...edits.ca };
+  const update = buildLabSettingsUpdate(labSettings, basic, mgmt, ca);
   if (update) {
     const response = await host.applyCommand(
       { command: "setLabSettings", payload: update },
@@ -611,4 +616,154 @@ test("a hidden bridge name on a macvlan network does not clash", () => {
     ]
   };
   assert.deepEqual(validateMgmtNetworks(form), [{}, {}]);
+});
+
+test("tailscale modes are read from the network", async () => {
+  const proxy = buildInitialMgmt({ mgmt: { tailscale: { "auth-mode": "sso" } } });
+  assert.equal(proxy.networks[0].tailscaleMode, "proxy");
+  const sidecar = buildInitialMgmt({ mgmt: { tailscale: { "auth-key": "${TS_AUTHKEY}" } } });
+  assert.equal(sidecar.networks[0].tailscaleMode, "sidecar");
+  assert.equal(sidecar.networks[0].tailscaleAuthKey, "${TS_AUTHKEY}");
+  assert.equal(buildInitialMgmt({ mgmt: {} }).networks[0].tailscaleMode, "off");
+
+  const empty = `name: lab\nmgmt:\n  tailscale: {}\n${TOPOLOGY}`;
+  const unchanged = await roundTrip(empty);
+  assert.equal(unchanged.update, null);
+  assert.equal(unchanged.yaml, empty);
+});
+
+test("switching tailscale to sidecar mode swaps auth-mode for the auth key", async () => {
+  const result = await roundTrip(FULL_MGMT, {
+    mgmt: { tailscaleMode: "sidecar", tailscaleAuthKey: "${TS_AUTHKEY}" }
+  });
+  assert.deepEqual(result.update, {
+    mgmt: [
+      { source: 0, changes: { tailscale: { "auth-key": "${TS_AUTHKEY}", "auth-mode": null } } }
+    ]
+  });
+  assert.equal(
+    result.yaml,
+    FULL_MGMT.replace("    auth-mode: sso\n", "    auth-key: ${TS_AUTHKEY}\n")
+  );
+});
+
+test("turning tailscale off removes the whole map", async () => {
+  const result = await roundTrip(FULL_MGMT, { mgmt: { tailscaleMode: "off" } });
+  assert.deepEqual(result.update, { mgmt: [{ source: 0, changes: { tailscale: null } }] });
+  assert.equal(result.yaml, FULL_MGMT.replace("  tailscale:\n    auth-mode: sso\n", ""));
+
+  const empty = await roundTrip(`name: lab\nmgmt:\n  network: m\n  tailscale: {}\n${TOPOLOGY}`, {
+    mgmt: { tailscaleMode: "off" }
+  });
+  assert.equal(empty.yaml, `name: lab\nmgmt:\n  network: m\n${TOPOLOGY}`);
+});
+
+test("turning on the tailscale proxy adds it to the network", async () => {
+  const yaml = `name: lab\n${TOPOLOGY}`;
+  const result = await roundTrip(yaml, { mgmt: { tailscaleMode: "proxy" } });
+  assert.equal(result.yaml, `name: lab\nmgmt:\n  tailscale:\n    auth-mode: sso\n${TOPOLOGY}`);
+});
+
+test("only one network joins tailscale, with a key in sidecar mode", () => {
+  const form: MgmtFormState = {
+    defaultMgmtNet: "",
+    networks: [
+      { ...createMgmtNetworkForm("a"), tailscaleMode: "proxy" },
+      { ...createMgmtNetworkForm("b"), tailscaleMode: "sidecar" }
+    ]
+  };
+  const tooMany = "Only one management network can join Tailscale";
+  assert.deepEqual(validateMgmtNetworks(form), [
+    { tailscale: tooMany },
+    { tailscale: tooMany, tailscaleAuthKey: "Required in sidecar mode" }
+  ]);
+});
+
+const WITH_CA = `name: lab
+mgmt:
+  network: m
+settings:
+  # lab CA
+  certificate-authority:
+    key-size: 4096 # bits
+    validity-duration: 1000h
+${TOPOLOGY}`;
+
+test("the certificate authority is read and left alone when unchanged", async () => {
+  const result = await roundTrip(WITH_CA);
+  assert.equal(result.update, null);
+  assert.equal(result.yaml, WITH_CA);
+  assert.deepEqual(buildInitialCertificateAuthority(result.labSettings), {
+    mode: "generated",
+    cert: "",
+    key: "",
+    keySize: "4096",
+    validityDuration: "1000h"
+  });
+});
+
+test("editing one CA field only touches that key", async () => {
+  const result = await roundTrip(WITH_CA, { ca: { validityDuration: "8760h" } });
+  assert.deepEqual(result.update, { certificateAuthority: { "validity-duration": "8760h" } });
+  assert.equal(result.yaml, WITH_CA.replace("1000h", "8760h"));
+});
+
+test("switching to an existing CA replaces the generator settings", async () => {
+  const result = await roundTrip(WITH_CA, {
+    ca: { mode: "external", cert: "ca/root.pem", key: "ca/root.key" }
+  });
+  assert.deepEqual(result.update, {
+    certificateAuthority: {
+      cert: "ca/root.pem",
+      key: "ca/root.key",
+      "key-size": null,
+      "validity-duration": null
+    }
+  });
+  assert.equal(
+    result.yaml,
+    WITH_CA.replace(
+      "    key-size: 4096 # bits\n    validity-duration: 1000h\n",
+      "    cert: ca/root.pem\n    key: ca/root.key\n"
+    )
+  );
+});
+
+test("a CA setting creates settings after mgmt, and clearing it removes settings", async () => {
+  const yaml = `name: lab\nmgmt:\n  network: m\n${TOPOLOGY}`;
+  const created = await roundTrip(yaml, { ca: { keySize: "4096" } });
+  assert.deepEqual(created.update, { certificateAuthority: { "key-size": 4096 } });
+  assert.equal(
+    created.yaml,
+    `name: lab\nmgmt:\n  network: m\nsettings:\n  certificate-authority:\n    key-size: 4096\n${TOPOLOGY}`
+  );
+
+  const cleared = await roundTrip(created.yaml, { ca: { keySize: "" } });
+  assert.deepEqual(cleared.update, { certificateAuthority: { "key-size": null } });
+  assert.equal(cleared.yaml, yaml);
+});
+
+test("clearing the CA keeps other settings keys", async () => {
+  const yaml = `name: lab\nsettings:\n  certificate-authority:\n    key-size: 2048\n  other: 1\n${TOPOLOGY}`;
+  const result = await roundTrip(yaml, { ca: { keySize: "" } });
+  assert.equal(result.yaml, `name: lab\nsettings:\n  other: 1\n${TOPOLOGY}`);
+});
+
+test("an existing CA needs both files; generator values must parse", () => {
+  const base = buildInitialCertificateAuthority(undefined);
+  assert.deepEqual(validateCertificateAuthority(base), {});
+  assert.deepEqual(validateCertificateAuthority({ ...base, mode: "external", cert: "ca.pem" }), {
+    key: "Required with an existing CA"
+  });
+  assert.deepEqual(
+    validateCertificateAuthority({ ...base, keySize: "2k", validityDuration: "1y" }),
+    {
+      keySize: "Not a whole number of bits",
+      validityDuration: "Use a duration such as 8760h or 90m"
+    }
+  );
+  assert.deepEqual(
+    validateCertificateAuthority({ ...base, keySize: "4096", validityDuration: "87600h30m" }),
+    {}
+  );
 });

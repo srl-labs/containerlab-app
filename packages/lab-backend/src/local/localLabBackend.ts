@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import type { TailscaleStatus } from "@containerlab/clab-ui/host";
 import Docker from "dockerode";
 
 import type {
@@ -58,7 +59,9 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   edgesharkManagement: true,
   wiresharkVnc: true,
   healthMetrics: true,
-  sharedWorkspace: false
+  sharedWorkspace: false,
+  // containerlab has no command that reports it.
+  tailscaleStatus: false
 };
 
 function shellQuote(value: string): string {
@@ -342,6 +345,12 @@ export class LocalLabBackend implements LabBackend {
       containerName: container.name,
       ports: await tools.browserPorts(this.docker, container.name)
     };
+  }
+
+  tailscaleStatus(): Promise<TailscaleStatus> {
+    return Promise.reject(
+      new LabBackendError("Tailscale status is only available through clab-api-server.", 501)
+    );
   }
 
   requestSshAccess(): Promise<SSHAccessResponse> {

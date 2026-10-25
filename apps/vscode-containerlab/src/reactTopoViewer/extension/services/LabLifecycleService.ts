@@ -9,7 +9,8 @@ import type { EndpointResult } from "@containerlab/clab-ui/session";
 import {
   createLifecycleCommandController,
   LIFECYCLE_ACTION_OPTION_KIND,
-  normalizeLabLifecycleOptions
+  normalizeLabLifecycleOptions,
+  type TailscaleStatus
 } from "@containerlab/clab-ui/host";
 
 import { resolveLab } from "../../../backend/labBackends";
@@ -164,6 +165,13 @@ class LabLifecycleService {
     const { backend, target } = await resolveLab(labPath);
     const plan = await backend.runLifecycle("apply", target, { dryRun: true });
     return plan.result;
+  }
+
+  /** Tailscale devices of the running lab; undefined when its lab host cannot report them. */
+  async tailscaleStatus(labPath: string): Promise<TailscaleStatus | undefined> {
+    const { backend, target } = await resolveLab(labPath);
+    if (!backend.capabilities.tailscaleStatus) return undefined;
+    return backend.tailscaleStatus(target.labName);
   }
 }
 

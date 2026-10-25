@@ -1,4 +1,4 @@
-import type { LabLifecycleOptions } from "@containerlab/clab-ui/host";
+import type { LabLifecycleOptions, TailscaleStatus } from "@containerlab/clab-ui/host";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 import type {
@@ -53,6 +53,8 @@ export interface LabBackendCapabilities {
   healthMetrics: boolean;
   /** The `@shared/` workspace folder for labs that several users edit. */
   sharedWorkspace: boolean;
+  /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
+  tailscaleStatus: boolean;
 }
 
 export type LabLifecycleAction =
@@ -263,6 +265,8 @@ export interface LabBackend {
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ): Promise<DrawioGenerateResponse>;
   fcli(lab: LabTarget, command: string): Promise<FcliCommandResponse>;
+  /** The Tailscale proxy, sidecars and tailscale nodes of a running lab. */
+  tailscaleStatus(labName: string): Promise<TailscaleStatus>;
   shareTool(
     tool: "sshx" | "gotty",
     labName: string,

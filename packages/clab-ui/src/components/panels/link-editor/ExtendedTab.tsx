@@ -4,9 +4,64 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Paper from "@mui/material/Paper";
 
-import { KeyValueList, PanelAddSection, InputField, PanelSection } from "../../ui/form";
+import {
+  KeyValueList,
+  PanelAddSection,
+  InputField,
+  PanelSection,
+  SelectField
+} from "../../ui/form";
+import { useGraphStore } from "../../../stores/graphStore";
 
 import type { LinkTabProps, LinkEditorData } from "./types";
+
+/** Link types that join two node interfaces (containerlab links/link_veth*.go) */
+const DUAL_ENDPOINT_LINK_TYPES = [
+  { value: "veth", label: "veth" },
+  { value: "veth-stitch", label: "veth-stitch" }
+];
+
+/** True for links between two node interfaces; other types end on a network node. */
+function isDualEndpointLinkType(type: string | undefined): boolean {
+  return type === undefined || DUAL_ENDPOINT_LINK_TYPES.some((option) => option.value === type);
+}
+
+/** True when either end of the link is an SR-SIM node. */
+function useConnectsSrsim(data: LinkEditorData): boolean {
+  return useGraphStore((state) =>
+    state.nodes.some(
+      (node) =>
+        (node.id === data.source || node.id === data.target) &&
+        (node.data as { kind?: unknown }).kind === "nokia_srsim"
+    )
+  );
+}
+
+function linkTypeHelp(type: string, connectsSrsim: boolean): string | undefined {
+  if (type === "veth-stitch") {
+    return "Joins the nodes through veth pairs on the host, so the link can be captured and impaired there even when a node cannot be impaired itself.";
+  }
+  return connectsSrsim
+    ? "containerlab deploys brief links to SR-SIM nodes as veth-stitch."
+    : undefined;
+}
+
+const LinkTypeField: React.FC<LinkTabProps> = ({ data, onChange }) => {
+  const type = data.type ?? "veth";
+  const connectsSrsim = useConnectsSrsim(data);
+  return (
+    <PanelSection title="Link Type">
+      <SelectField
+        id="link-type"
+        label="Type"
+        value={type}
+        onChange={(next) => onChange({ type: next })}
+        options={DUAL_ENDPOINT_LINK_TYPES}
+        helperText={linkTypeHelp(type, connectsSrsim)}
+      />
+    </PanelSection>
+  );
+};
 
 /**
  * Veth link properties (MAC, MTU, endpoint IPs, vars, labels)
@@ -27,6 +82,7 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
+      <LinkTypeField data={data} onChange={onChange} />
       <PanelSection title="Endpoint Properties">
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
@@ -125,7 +181,7 @@ const NonVethInfo: React.FC = () => (
 );
 
 export const ExtendedTab: React.FC<LinkTabProps> = ({ data, onChange }) => {
-  const isVethLink = data.type === undefined || data.type === "veth";
+  const isVethLink = isDualEndpointLinkType(data.type);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>

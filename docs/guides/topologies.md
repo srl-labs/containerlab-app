@@ -29,7 +29,7 @@ Names count up from the template's base name: `srl1`, `srl2`, `srl3`. To make yo
 
 **++shift++ + click** the first node, then click the second. The editor picks the next free interface on each side, following the node kind's naming, for example `e1-1` on SR Linux and `eth1` on Linux.
 
-Double-click a link to change its interfaces or properties in the **Link Editor**.
+Double-click a link to change its interfaces or properties in the **Link Editor**. On the **Extended** tab, **Type** switches a link between `veth` and `veth-stitch`. A [`veth-stitch`](https://containerlab.dev/manual/topo-def-file/#veth-stitch) link joins the two nodes through veth pairs on the host, so you can capture and impair it there even when a node can't be impaired itself. containerlab already deploys brief links to SR-SIM nodes this way.
 
 ## Connect many at once
 
@@ -58,6 +58,19 @@ A value the node gets from `defaults`, its kind, or its group shows where it com
 **Lab Settings** → **Defaults & Groups** lists the lab's `defaults`, `kinds`, and `groups`, with the number of nodes each one reaches. Edit one to open the same tabs as the Node Editor, add a kind or a group, or remove one. These edits save right away.
 
 containerlab applies them in order: `defaults`, then the node's kind, then its group, then the node itself. Environment variables, labels, binds, exec commands, and similar lists add up across levels; other values come from the most specific level that sets them.
+
+## Lab-wide settings
+
+**Lab Settings** → **Management** sets the [management network](https://containerlab.dev/manual/network/#management-network): its name, driver, subnets, and options. Add networks to give nodes separate ones; the first is the default.
+
+**Tailscale** joins a management network to a [Tailscale](https://containerlab.dev/manual/network/#tailscale) tailnet, on one network per lab:
+
+- **Sidecar per node** adds every node as a device of its own. It needs an auth key; write it as an environment variable such as `${TS_AUTHKEY}` to keep it out of the file.
+- **Lab proxy** adds the lab as one device that you log in to with SSO. It forwards the node ports set to **Tailscale** in the Node Editor's **Port Mappings**, written as `8022:22/ts`.
+
+While the lab runs on a clab-api-server, the tab lists its Tailscale devices, their tailnet addresses and forwarded ports, and the login link the proxy waits on. Labs on the local containerlab don't show this list.
+
+**Lab Settings** → **Certificates** sets the [certificate authority](https://containerlab.dev/manual/cert/) that signs node certificates: the key size and validity of the CA containerlab generates, or the certificate and key files of your own CA.
 
 ## Kind-specific settings
 

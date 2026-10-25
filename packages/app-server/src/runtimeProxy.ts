@@ -620,6 +620,25 @@ export function registerRuntimeProxy(
     }
   );
 
+  // { supported: false } when the lab host cannot report it (the local containerlab).
+  app.post<{ Body: RuntimeTargetBody }>(
+    "/api/runtime/tailscale",
+    async (request: FastifyRequest<{ Body: RuntimeTargetBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { backend, endpoint } = resolved;
+        if (!backend.capabilities.tailscaleStatus) return reply.send({ supported: false });
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const status = await backend.tailscaleStatus(target.labName);
+        return reply.send({ supported: true, status });
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
   app.get("/api/runtime/popular-repos", async (request, reply) => {
     const endpoints = listEndpoints(request, reply);
     if (endpoints.length === 0) {

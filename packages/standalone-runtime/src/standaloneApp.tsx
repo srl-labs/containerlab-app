@@ -76,6 +76,7 @@ import {
   createStandaloneExplorerBridge,
   deleteUiCustomNode,
   deleteUiIcon,
+  fetchLabTailscaleStatus,
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,
@@ -1357,10 +1358,28 @@ function setupStandaloneUiHost(): void {
     });
   };
 
+  const tailscaleStatus = async () => {
+    const topologyRef = topologyManager.getCurrentTopologyRef();
+    if (!topologyRef) {
+      throw new Error("No active topology session is available.");
+    }
+    return fetchLabTailscaleStatus({
+      sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+      topologyRef,
+    });
+  };
+
   standaloneRuntime = createClabUiRuntime({
     host: {
       ...apiHost,
-      topoViewer: { ...apiHost.topoViewer, planApply },
+      topoViewer: {
+        ...apiHost.topoViewer,
+        planApply,
+        // Without lab lifecycle (the browser sandbox) no lab runs.
+        tailscaleStatus: getStandaloneBackend().capabilities.lifecycle
+          ? tailscaleStatus
+          : undefined,
+      },
       topology: {
         ...apiHost.topology,
         dispatchCommand,

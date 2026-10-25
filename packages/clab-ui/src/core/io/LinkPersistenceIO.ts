@@ -588,6 +588,7 @@ const VXLAN_KEYS = ["remote", "vni", "udp-port", "dst-port", "parent-interface",
 /** Link-level keys that only exist on some link types (containerlab links/link_*.go) */
 const TYPE_SPECIFIC_KEYS: Record<string, readonly string[]> = {
   veth: ["endpoints"],
+  "veth-stitch": ["endpoints"],
   host: ["host-interface", "endpoint"],
   "mgmt-net": ["host-interface", "endpoint"],
   macvlan: ["host-interface", "endpoint", "mode"],

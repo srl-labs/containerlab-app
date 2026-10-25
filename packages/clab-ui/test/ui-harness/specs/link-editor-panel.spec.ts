@@ -194,4 +194,68 @@ topology:
       .poll(() => topoViewerPage.getYamlFromFile(file), { timeout: 15000 })
       .toBe(expected);
   });
+
+  test("a veth-stitch link shows its type and saves its fields", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const file = "simple.clab.yml";
+    const yaml = `name: simple
+
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    srl2:
+      kind: nokia_srlinux
+
+  links:
+    - type: veth-stitch # capture on the host
+      endpoints:
+        - node: srl1
+          interface: e1-3
+        - node: srl2
+          interface: e1-3
+      mtu: 1500
+`;
+    await topoViewerPage.writeYamlFile(file, yaml);
+    await expect
+      .poll(() => topoViewerPage.findEdgeByEndpoints("srl1", "srl2", "e1-3", "e1-3"), {
+        timeout: 10000
+      })
+      .not.toBeNull();
+    const edge = await topoViewerPage.findEdgeByEndpoints("srl1", "srl2", "e1-3", "e1-3");
+    await openLinkEditor(page, edge!.id);
+
+    await page.locator('[data-testid="panel-tab-extended"]').click();
+    await expect(page.locator("#link-type")).toHaveText("veth-stitch");
+    await expect(page.locator("#link-mtu")).toHaveValue("1500");
+    await page.locator("#link-mtu").fill("9000");
+    await page.locator(SEL_PANEL_APPLY_BTN).click();
+
+    await expect
+      .poll(() => topoViewerPage.getYamlFromFile(file), { timeout: 15000 })
+      .toBe(yaml.replace("mtu: 1500", "mtu: 9000"));
+  });
+
+  test("a veth link can be switched to veth-stitch", async ({ page, topoViewerPage }) => {
+    const edgeIds = await topoViewerPage.getEdgeIds();
+    await openLinkEditor(page, edgeIds[0]);
+
+    await page.locator('[data-testid="panel-tab-extended"]').click();
+    await expect(page.locator("#link-type")).toHaveText("veth");
+    await page.locator("#link-type").click();
+    await page.getByRole("option", { name: "veth-stitch" }).click();
+    await page.locator(SEL_PANEL_APPLY_BTN).click();
+
+    await expect
+      .poll(() => topoViewerPage.getYamlFromFile("simple.clab.yml"), { timeout: 15000 })
+      .toContain(`    - type: veth-stitch
+      endpoints:
+        - node: "srl1"
+          interface: "e1-1"
+        - node: "srl2"
+          interface: "e1-1"
+`);
+  });
 });

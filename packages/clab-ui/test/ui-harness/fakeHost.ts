@@ -15,6 +15,7 @@ import {
 } from "../../src/session";
 import type { HostRuntimeContainer } from "../../src/host";
 import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
+import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tailscaleStatus";
 
 import { fakeRuntimeContainers } from "./fakeLab";
 import { createFakeLifecycle } from "./fakeLifecycle";
@@ -76,6 +77,23 @@ function stubbedApplyPlan(): Promise<ApplyPlan> | undefined {
   }
   const plan = parseApplyPlan(stub);
   return plan ? Promise.resolve(plan) : Promise.reject(new Error("The dry run returned no plan"));
+}
+
+/**
+ * Tailscale status forced by a spec: `window.__CLAB_UI_HARNESS_TAILSCALE__` set to a
+ * status, to `{ error }` to fail, or to `null` for a host that cannot report it.
+ * Without a stub the fake lab runs no Tailscale devices.
+ */
+function stubbedTailscaleStatus(labName: string): Promise<TailscaleStatus | undefined> {
+  const stub = (window as unknown as { __CLAB_UI_HARNESS_TAILSCALE__?: unknown })
+    .__CLAB_UI_HARNESS_TAILSCALE__;
+  if (stub === undefined) return Promise.resolve({ labName, devices: [] });
+  if (stub === null) return Promise.resolve(undefined);
+  if (typeof stub === "object" && "error" in stub) {
+    return Promise.reject(new Error(String(stub.error)));
+  }
+  const status = parseTailscaleStatus(stub);
+  return status ? Promise.resolve(status) : Promise.reject(new Error("No Tailscale status"));
 }
 
 function toFixtureName(value: string | null): SnapshotFixtureName {
@@ -449,6 +467,10 @@ export function createFakeClabUiHost(
         if (stubbed) return stubbed;
         await new Promise((resolve) => setTimeout(resolve, FAKE_DRY_RUN_MS));
         return fakeLifecycle.planFor(currentYamlPath);
+      },
+      tailscaleStatus() {
+        recordHarnessMessage({ command: "tailscaleStatus" });
+        return stubbedTailscaleStatus(fakeLifecycle.labFor(currentYamlPath)?.labName ?? "");
       },
       cancelLifecycle() {
         fakeLifecycle.cancel();

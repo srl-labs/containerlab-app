@@ -1,6 +1,7 @@
 import {
   labLifecycleQueryParams,
   type LabLifecycleOptions,
+  type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
 import type { Response } from "undici";
 
@@ -749,6 +750,11 @@ export class ClabApiClient {
       JSON.stringify({}),
       "application/json",
     );
+  }
+
+  async getLabTailscaleStatus(token: string, labName: string): Promise<TailscaleStatus> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/tailscale`, token);
+    return (await res.json()) as TailscaleStatus;
   }
 
   async getNodeBrowserPorts(

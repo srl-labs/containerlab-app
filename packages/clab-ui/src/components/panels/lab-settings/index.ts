@@ -3,6 +3,7 @@
  */
 export { BasicTab } from "./BasicTab";
 export { MgmtTab } from "./MgmtTab";
+export { CertificatesTab } from "./CertificatesTab";
 export { InheritanceTab } from "./InheritanceTab";
 export { AppearanceTab } from "./AppearanceTab";
 export { GridTab } from "./GridTab";

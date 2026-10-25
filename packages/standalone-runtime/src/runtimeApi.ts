@@ -49,6 +49,7 @@ export type {
   CaptureCloseAllResponse
 } from "@srl-labs/containerlab-lab-backend";
 
+import { parseTailscaleStatus, type TailscaleStatus } from "@containerlab/clab-ui/host";
 import type {
   CustomNodeTemplate,
   CustomNodeTemplateExportIcon,
@@ -489,6 +490,22 @@ export async function fetchNodeBrowserPorts(
     asJsonBody(input, endpointId),
     endpointId
   );
+}
+
+/** The Tailscale devices of a running lab; undefined when its lab host cannot report them. */
+export async function fetchLabTailscaleStatus(
+  input: RuntimeTargetRequest
+): Promise<TailscaleStatus | undefined> {
+  const endpointId = resolveTargetEndpointId(input);
+  const payload = await requestJson<{ supported?: unknown; status?: unknown }>(
+    "/api/runtime/tailscale",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+  if (payload.supported !== true) return undefined;
+  const status = parseTailscaleStatus(payload.status);
+  if (!status) throw new Error("The lab host returned no Tailscale status");
+  return status;
 }
 
 export async function runSshxShareAction(

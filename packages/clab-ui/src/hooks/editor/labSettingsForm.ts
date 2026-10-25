@@ -3,6 +3,7 @@
  * minimal update, so Apply only touches the keys the user actually changed.
  */
 import type {
+  CertificateAuthorityUpdate,
   LabSettings,
   LabSettingsUpdate,
   MgmtNetworkUpdate,
@@ -15,10 +16,12 @@ import type {
   IpType,
   DriverOption,
   BasicSettingsState,
+  CertificateAuthorityState,
   MacvlanMode,
   MgmtFormState,
   MgmtNetworkFormState,
-  MgmtSettingsState
+  MgmtSettingsState,
+  TailscaleMode
 } from "../../components/panels/lab-settings/types";
 
 /** Parses prefix settings from lab settings */
@@ -116,6 +119,11 @@ function parseAllocationSettings(
   };
 }
 
+function parseTailscaleMode(mgmt?: MgmtSettings): TailscaleMode {
+  if (mgmt?.tailscale === undefined) return "off";
+  return mgmt.tailscale["auth-mode"] === "sso" ? "proxy" : "sidecar";
+}
+
 function parseMgmtNetwork(mgmt?: MgmtSettings): MgmtSettingsState {
   const ipv4 = parseIpv4Settings(mgmt);
   const ipv6 = parseIpv6Settings(mgmt);
@@ -135,6 +143,8 @@ function parseMgmtNetwork(mgmt?: MgmtSettings): MgmtSettingsState {
     bridge: mgmt?.bridge ?? "",
     externalAccess: mgmt?.["external-access"] !== false,
     ...parseAllocationSettings(mgmt),
+    tailscaleMode: parseTailscaleMode(mgmt),
+    tailscaleAuthKey: mgmt?.tailscale?.["auth-key"] ?? "",
     driverOptions: parseDriverOptions(mgmt)
   };
 }
@@ -225,6 +235,12 @@ function gatherIpam(mgmtState: MgmtSettingsState): GatheredMap | undefined {
   return Object.keys(ipam).length > 0 ? ipam : undefined;
 }
 
+function gatherTailscale(mgmtState: MgmtSettingsState): GatheredMap | undefined {
+  if (mgmtState.tailscaleMode === "proxy") return { "auth-mode": "sso" };
+  if (mgmtState.tailscaleMode === "off") return undefined;
+  return mgmtState.tailscaleAuthKey !== "" ? { "auth-key": mgmtState.tailscaleAuthKey } : {};
+}
+
 /** mgmt keys the form owns, in the order new keys are written. */
 const MGMT_FORM_KEYS = [
   "network",
@@ -243,8 +259,12 @@ const MGMT_FORM_KEYS = [
   "external-access",
   "ipam",
   "skip-when-unused",
+  "tailscale",
   "driver-opts"
 ] as const;
+
+/** Nested maps the form removes as a whole when it turns them off. */
+const WHOLE_MAP_KEYS: ReadonlySet<string> = new Set(["tailscale"]);
 
 /** The mgmt values the form currently represents, without defaults. */
 function gatherMgmtSettings(mgmtState: MgmtSettingsState): GatheredMgmt {
@@ -261,6 +281,8 @@ function gatherMgmtSettings(mgmtState: MgmtSettingsState): GatheredMgmt {
   const ipam = gatherIpam(mgmtState);
   if (ipam) mgmt.ipam = ipam;
   if (mgmtState.skipWhenUnused) mgmt["skip-when-unused"] = true;
+  const tailscale = gatherTailscale(mgmtState);
+  if (tailscale) mgmt.tailscale = tailscale;
 
   const driverOpts: Record<string, string> = {};
   mgmtState.driverOptions.forEach((opt) => {
@@ -290,7 +312,9 @@ function diffMgmtSettings(before: GatheredMgmt, after: GatheredMgmt): MgmtSettin
   for (const key of MGMT_FORM_KEYS) {
     const prev = before[key] as GatheredMgmt[string] | undefined;
     const next = after[key] as GatheredMgmt[string] | undefined;
-    if (typeof prev === "object" || typeof next === "object") {
+    if (typeof prev === "object" && next === undefined && WHOLE_MAP_KEYS.has(key)) {
+      changes[key] = null;
+    } else if (typeof prev === "object" || typeof next === "object") {
       // Nested maps change key by key, so keys the form does not own stay.
       const nextMap = typeof next === "object" ? next : {};
       const mapChanges = diffScalarMap(typeof prev === "object" ? prev : {}, nextMap);
@@ -377,6 +401,56 @@ function collectMgmtNetRenames(
   return renames;
 }
 
+export function buildInitialCertificateAuthority(settings?: LabSettings): CertificateAuthorityState {
+  const ca = settings?.certificateAuthority;
+  const cert = ca?.cert ?? "";
+  const key = ca?.key ?? "";
+  const keySize = ca?.["key-size"];
+  return {
+    mode: cert !== "" || key !== "" ? "external" : "generated",
+    cert,
+    key,
+    keySize: keySize !== undefined ? String(keySize) : "",
+    validityDuration: ca?.["validity-duration"] ?? ""
+  };
+}
+
+const CA_KEYS = ["cert", "key", "key-size", "validity-duration"] as const;
+type GatheredCa = Partial<Record<(typeof CA_KEYS)[number], string | number>>;
+
+/**
+ * The CA values the form represents. containerlab takes either existing cert
+ * and key files or the parameters of the CA it generates, never both.
+ */
+function gatherCertificateAuthority(ca: CertificateAuthorityState): GatheredCa {
+  const gathered: GatheredCa = {};
+  if (ca.mode === "external") {
+    if (ca.cert.trim() !== "") gathered.cert = ca.cert.trim();
+    if (ca.key.trim() !== "") gathered.key = ca.key.trim();
+    return gathered;
+  }
+  const keySize = ca.keySize.trim();
+  if (keySize !== "") gathered["key-size"] = /^\d+$/.test(keySize) ? Number(keySize) : keySize;
+  if (ca.validityDuration.trim() !== "") {
+    gathered["validity-duration"] = ca.validityDuration.trim();
+  }
+  return gathered;
+}
+
+function buildCertificateAuthorityUpdate(
+  settings: LabSettings | undefined,
+  ca: CertificateAuthorityState
+): CertificateAuthorityUpdate | undefined {
+  const before = gatherCertificateAuthority(buildInitialCertificateAuthority(settings));
+  const after = gatherCertificateAuthority(ca);
+  const changes: Record<string, string | number | null> = {};
+  for (const key of CA_KEYS) {
+    if (before[key] === after[key]) continue;
+    changes[key] = after[key] ?? null;
+  }
+  return Object.keys(changes).length > 0 ? changes : undefined;
+}
+
 /**
  * Compares the form against the settings it was loaded from and returns only the
  * changes, or null when nothing changed.
@@ -384,7 +458,8 @@ function collectMgmtNetRenames(
 export function buildLabSettingsUpdate(
   settings: LabSettings | undefined,
   basic: BasicSettingsState,
-  mgmt: MgmtFormState
+  mgmt: MgmtFormState,
+  ca: CertificateAuthorityState = buildInitialCertificateAuthority(settings)
 ): LabSettingsUpdate | null {
   const initialBasic = buildInitialBasic(settings);
   const update: LabSettingsUpdate = {};
@@ -414,6 +489,9 @@ export function buildLabSettingsUpdate(
     update.defaultMgmtNet = nextDefault === "" ? null : nextDefault;
   }
 
+  const certificateAuthority = buildCertificateAuthorityUpdate(settings, ca);
+  if (certificateAuthority) update.certificateAuthority = certificateAuthority;
+
   return Object.keys(update).length > 0 ? update : null;
 }
 
@@ -423,6 +501,8 @@ export interface MgmtNetworkIssues {
   macvlanParent?: string;
   ipv4Type?: string;
   ipv6Type?: string;
+  tailscale?: string;
+  tailscaleAuthKey?: string;
   driverOptions?: string;
 }
 
@@ -474,7 +554,8 @@ function macvlanIssues(
 /**
  * Problems containerlab rejects at deploy time: with several networks each
  * needs a unique name, two networks cannot share a bridge or a macvlan parent,
- * and a macvlan network needs a valid parent and no auto subnet.
+ * a macvlan network needs a valid parent and no auto subnet, and only one
+ * network joins Tailscale, with an auth key in sidecar mode.
  */
 export function validateMgmtNetworks(form: MgmtFormState): MgmtNetworkIssues[] {
   const several = form.networks.length > 1;
@@ -483,6 +564,7 @@ export function validateMgmtNetworks(form: MgmtFormState): MgmtNetworkIssues[] {
   const nameCounts = countValues(form.networks.map((network) => network.networkName.trim()));
   const bridgeCounts = countValues(bridges.map((network) => network.bridge.trim()));
   const parentCounts = countValues(macvlans.map((network) => network.macvlanParent));
+  const tailscaleCount = form.networks.filter((network) => network.tailscaleMode !== "off").length;
   return form.networks.map((network) => {
     const issues: MgmtNetworkIssues =
       network.driver === "macvlan" ? macvlanIssues(network, parentCounts) : {};
@@ -495,10 +577,45 @@ export function validateMgmtNetworks(form: MgmtFormState): MgmtNetworkIssues[] {
     if (network.driver === "bridge" && (bridgeCounts.get(network.bridge.trim()) ?? 0) > 1) {
       issues.bridge = "Another management network uses this bridge";
     }
+    if (network.tailscaleMode !== "off" && tailscaleCount > 1) {
+      issues.tailscale = "Only one management network can join Tailscale";
+    }
+    if (network.tailscaleMode === "sidecar" && network.tailscaleAuthKey.trim() === "") {
+      issues.tailscaleAuthKey = "Required in sidecar mode";
+    }
     return issues;
   });
 }
 
 export function hasMgmtNetworkIssues(issues: MgmtNetworkIssues[]): boolean {
   return issues.some((issue) => Object.keys(issue).length > 0);
+}
+
+export interface CertificateAuthorityIssues {
+  cert?: string;
+  key?: string;
+  keySize?: string;
+  validityDuration?: string;
+}
+
+/** Go durations with units up to hours, e.g. `8760h` or `90m`. */
+const GO_DURATION = /^(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$/;
+
+/** Values containerlab cannot use: an external CA needs both files. */
+export function validateCertificateAuthority(ca: CertificateAuthorityState): CertificateAuthorityIssues {
+  const issues: CertificateAuthorityIssues = {};
+  if (ca.mode === "external") {
+    if (ca.cert.trim() === "") issues.cert = "Required with an existing CA";
+    if (ca.key.trim() === "") issues.key = "Required with an existing CA";
+    return issues;
+  }
+  const keySize = ca.keySize.trim();
+  if (keySize !== "" && !(/^\d+$/.test(keySize) && Number(keySize) > 0)) {
+    issues.keySize = "Not a whole number of bits";
+  }
+  const validity = ca.validityDuration.trim();
+  if (validity !== "" && !GO_DURATION.test(validity)) {
+    issues.validityDuration = "Use a duration such as 8760h or 90m";
+  }
+  return issues;
 }

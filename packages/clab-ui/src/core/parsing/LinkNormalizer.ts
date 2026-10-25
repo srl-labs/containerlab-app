@@ -159,7 +159,7 @@ export function normalizeLinkToTwoEndpoints(
   ctx: DummyContext
 ): NormalizedLink | null {
   const t = typeof linkObj.type === "string" ? linkObj.type : undefined;
-  if (t === "veth") {
+  if (t === "veth" || t === "veth-stitch") {
     const endpoints: unknown[] = Array.isArray(linkObj.endpoints) ? linkObj.endpoints : [];
     const pair = toEndpointPair(endpoints);
     return pair ? { ...pair, type: t } : null;
