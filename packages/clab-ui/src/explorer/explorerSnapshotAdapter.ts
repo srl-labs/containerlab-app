@@ -1257,7 +1257,8 @@ async function buildSectionSnapshotSafe(
   sectionId: ExplorerSectionId,
   provider: ExplorerTreeProvider,
   options: ExplorerSnapshotOptions,
-  registry: ExplorerActionRegistry
+  registry: ExplorerActionRegistry,
+  previous: ExplorerSectionSnapshot | undefined
 ): Promise<ExplorerSectionSnapshot> {
   try {
     return await withTimeout(
@@ -1267,6 +1268,8 @@ async function buildSectionSnapshotSafe(
     );
   } catch (error: unknown) {
     console.error(`[containerlab explorer] failed to build section '${sectionId}'`, error);
+    // Keep showing what the section had, e.g. while a lab host is slow to answer.
+    if (previous) return previous;
     return {
       id: sectionId,
       label: options.sectionLabels?.[sectionId] ?? EXPLORER_SECTION_LABELS[sectionId],
@@ -1278,10 +1281,15 @@ async function buildSectionSnapshotSafe(
   }
 }
 
+/**
+ * Builds the explorer's sections. A section that fails or takes too long
+ * keeps its content from `previous`, the last snapshot with the same filter.
+ */
 export async function buildExplorerSnapshot(
   providers: ExplorerSnapshotProviders,
   filterText: string,
-  options: ExplorerSnapshotOptions
+  options: ExplorerSnapshotOptions,
+  previous?: ExplorerSnapshotBuildResult
 ): Promise<ExplorerSnapshotBuildResult> {
   const registry = new ExplorerActionRegistry();
   const providersBySection: Record<ExplorerSectionId, ExplorerTreeProvider> = {
@@ -1292,11 +1300,27 @@ export async function buildExplorerSnapshot(
   };
   const sectionOrder = options.sectionOrder ?? EXPLORER_SECTION_ORDER;
 
+  const previousSections =
+    previous?.snapshot.filterText === filterText ? previous.snapshot.sections : [];
   const sections = await Promise.all(
     sectionOrder.map((sectionId) =>
-      buildSectionSnapshotSafe(sectionId, providersBySection[sectionId], options, registry)
+      buildSectionSnapshotSafe(
+        sectionId,
+        providersBySection[sectionId],
+        options,
+        registry,
+        previousSections.find((section) => section.id === sectionId)
+      )
     )
   );
+
+  const actionBindings = registry.getBindings();
+  if (previous && sections.some((section) => previousSections.includes(section))) {
+    // Reused sections still point at the actions of the previous snapshot.
+    for (const [actionRef, binding] of previous.actionBindings) {
+      if (!actionBindings.has(actionRef)) actionBindings.set(actionRef, binding);
+    }
+  }
 
   return {
     snapshot: {
@@ -1304,6 +1328,6 @@ export async function buildExplorerSnapshot(
       filterText,
       sections
     },
-    actionBindings: registry.getBindings()
+    actionBindings
   };
 }

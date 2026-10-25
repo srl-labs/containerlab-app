@@ -253,9 +253,11 @@ type ContainerStateChangedListener = (
   newState: string,
   connectionId: string
 ) => void;
+type StreamLostListener = (connectionId: string, error: Error) => void;
 type RejectInitialLoad = (error: Error) => void;
 const dataListeners = new Set<DataListener>();
 const containerStateChangedListeners = new Set<ContainerStateChangedListener>();
+const streamLostListeners = new Set<StreamLostListener>();
 const DATA_NOTIFY_DELAY_MS = 50;
 
 function isString(value: unknown): value is string {
@@ -1310,12 +1312,12 @@ export class LabEventStream {
             );
           }
         }
-        if (!controller.signal.aborted && !this.initialLoadComplete) {
-          this.finalizeInitialLoad(new Error("containerlab events ended prematurely"));
+        if (!controller.signal.aborted) {
+          this.endStream(new Error("containerlab events ended prematurely"));
         }
       } catch (err) {
         if (!controller.signal.aborted) {
-          this.finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
+          this.endStream(err instanceof Error ? err : new Error(String(err)));
         }
       } finally {
         if (this.streamController === controller) {
@@ -1328,6 +1330,20 @@ export class LabEventStream {
       clearTimeout(this.fallbackTimer);
     }
     this.fallbackTimer = setTimeout(() => this.finalizeInitialLoad(), INITIAL_FALLBACK_TIMEOUT_MS);
+  }
+
+  /**
+   * The stream stopped on its own: before the first load the load fails,
+   * after it the labs are stale and the listeners hear about it.
+   */
+  private endStream(error: Error): void {
+    if (!this.initialLoadComplete) {
+      this.finalizeInitialLoad(error);
+      return;
+    }
+    for (const listener of Array.from(streamLostListeners)) {
+      listener(this.connectionId, error);
+    }
   }
 
   stop(): void {
@@ -1457,6 +1473,14 @@ export function onDataChanged(listener: DataListener): () => void {
   dataListeners.add(listener);
   return () => {
     dataListeners.delete(listener);
+  };
+}
+
+/** Fires when a running event stream stops, e.g. because the lab host went away. */
+export function onStreamLost(listener: StreamLostListener): () => void {
+  streamLostListeners.add(listener);
+  return () => {
+    streamLostListeners.delete(listener);
   };
 }
 

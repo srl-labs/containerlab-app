@@ -31,7 +31,7 @@ import type {
   ShareToolAction
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
-import { readJsonLines, readLines } from "../ndjson.ts";
+import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { buildWebSocketUrl, ClabApiClient } from "./clabApiClient.ts";
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import { apiFetch } from "./upstreamRequest.ts";
@@ -44,6 +44,9 @@ export interface ApiLabBackendOptions {
   /** A client to use instead of one for `baseUrl`, e.g. a test double. */
   client?: ClabApiClient;
 }
+
+/** Lab hosts send a heartbeat every 25 s on event streams; silence for longer means it is gone. */
+const STREAM_IDLE_TIMEOUT_MS = 60_000;
 
 const API_CAPABILITIES: LabBackendCapabilities = {
   sshAccess: true,
@@ -382,7 +385,7 @@ export class ApiLabBackend implements LabBackend {
     if (!response.body) {
       throw new Error("No event stream body");
     }
-    return readJsonLines<LabEvent>(response.body);
+    return readJsonLines<LabEvent>(withIdleTimeout(response.body, STREAM_IDLE_TIMEOUT_MS));
   }
 
   dispose(): void {}
@@ -414,7 +417,9 @@ function createApiFileSystem(client: ClabApiClient, token: string): LabFileSyste
       if (!response.body) {
         throw new Error("No workspace event stream body");
       }
-      return readJsonLines<WorkspaceFileEvent>(response.body);
+      return readJsonLines<WorkspaceFileEvent>(
+        withIdleTimeout(response.body, STREAM_IDLE_TIMEOUT_MS)
+      );
     }
   };
 }
