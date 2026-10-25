@@ -32,12 +32,11 @@ import {
 
 export interface MgmtNetworkListActions {
   networks: MgmtNetworkFormState[];
-  /** Index of the network the form below the list edits */
+  /** Index of the network whose form is open */
   selected: number;
   select: (index: number) => void;
   add: () => void;
   remove: (index: number) => void;
-  move: (index: number, offset: -1 | 1) => void;
   defaultMgmtNet: string;
   setDefaultMgmtNet: (value: string) => void;
   issues: MgmtNetworkIssues[];
@@ -202,16 +201,6 @@ export function useLabSettingsState(labSettings?: LabSettings): UseLabSettingsSt
         };
       });
       setSelected((prev) => (prev > index || prev === mgmtForm.networks.length - 1 ? prev - 1 : prev));
-    },
-    move: (index: number, offset: -1 | 1) => {
-      const target = index + offset;
-      if (target < 0 || target >= mgmtForm.networks.length) return;
-      setMgmtForm((prev) => {
-        const networks = [...prev.networks];
-        [networks[index], networks[target]] = [networks[target], networks[index]];
-        return { ...prev, networks };
-      });
-      setSelected(target);
     },
     defaultMgmtNet: mgmtForm.defaultMgmtNet,
     setDefaultMgmtNet: (value: string) =>

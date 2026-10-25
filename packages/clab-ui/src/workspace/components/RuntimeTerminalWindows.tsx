@@ -969,8 +969,7 @@ export function RuntimeTerminalPaneView({
                 mt: 0.75
               }}
             >
-              Applies to all open/new terminals. Use Alt+Up, Alt+Down, Alt+0 for reliable
-              zoom/reset. Ctrl/Cmd shortcuts are best effort in browsers.
+              Applies to all terminals. Alt+Up, Alt+Down and Alt+0 zoom and reset. Ctrl/Cmd shortcuts may not work in browsers.
             </Typography>
           </Box>
           <Divider />
@@ -1290,7 +1289,7 @@ function TerminalShell({
               </Button>
             </span>
           </Tooltip>
-          <Tooltip title="Open Active Terminal in New Window">
+          <Tooltip title="Open terminal in new window">
             <span>
               <IconButton
                 size="small"

@@ -165,7 +165,7 @@ export function NodeImpairmentsApp(): React.JSX.Element {
                 postMessage({ command: "clearAll" });
               }}
             >
-              Clear All
+              Clear all
             </Button>
             <Button
               variant="outlined"
@@ -248,7 +248,7 @@ export function NodeImpairmentsApp(): React.JSX.Element {
                                 error={isErrorField}
                                 helperText={
                                   showDelayMessage
-                                    ? "A positive delay is required if jitter is set."
+                                    ? "Jitter needs a positive delay."
                                     : undefined
                                 }
                                 onChange={(event) => {

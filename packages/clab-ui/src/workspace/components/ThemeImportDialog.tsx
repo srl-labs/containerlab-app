@@ -68,8 +68,7 @@ export function ThemeImportDialog({
       <DialogTitleWithClose title="Import themes" onClose={close} />
       <DialogContent sx={{ display: "grid", gap: 2 }}>
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          Use a theme exported from this app, or a VS Code color theme. Theme extensions keep those as
-          JSON files in their <code>themes</code> folder. Colors a VS Code theme leaves out are derived
+          Import a theme exported from this app, or a VS Code color theme. Theme extensions keep those as JSON files in their <code>themes</code> folder. Colors a VS Code theme leaves out are derived
           from the ones it sets.
         </Typography>
         <Box>

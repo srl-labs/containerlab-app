@@ -55,7 +55,7 @@ async function connect(browser: Browser, username: string, password: string): Pr
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Password", { exact: true }).fill(password);
   const added = page.waitForResponse((response) => response.url().endsWith("/auth/endpoints/add"));
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const response = await added;
   expect(response.status()).toBe(200);
   const endpoint = await response.json() as { id: string };
@@ -199,8 +199,8 @@ test("two users share the complete lab lifecycle and keep private files isolated
     await page.getByRole("button", { name: "New Topology File", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
     await dialog.getByRole("button", { name: "Shared", exact: true }).click();
-    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
-    await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft.clab.yml`);
+    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab");
+    await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft`);
     await expect(dialog).toContainText("Everyone signed in to this API server can edit, deploy, and destroy this lab.");
     await page.screenshot({ path: testInfo.outputPath("shared-create-lab.png"), fullPage: true });
     await dialog.screenshot({ path: testInfo.outputPath("shared-create-dialog.png") });
@@ -215,9 +215,9 @@ test("two users share the complete lab lifecycle and keep private files isolated
     await page.getByRole("button", { name: "New Topology File", exact: true }).click();
     await expect(dialog.getByRole("button", { name: "Shared", exact: true })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Personal", exact: true })).toHaveAttribute("aria-pressed", "true");
-    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab.clab.yml");
+    await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab");
     const personalDraftPath = `${lab}/personal-draft.clab.yml`;
-    await dialog.getByLabel("Topology file name", { exact: true }).fill(personalDraftPath);
+    await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/personal-draft`);
     await expect(dialog).toContainText("Saved in your personal workspace.");
     await page.screenshot({ path: testInfo.outputPath("personal-create-lab.png"), fullPage: true });
     await dialog.screenshot({ path: testInfo.outputPath("personal-create-dialog.png") });

@@ -166,13 +166,12 @@ export const AddSection: React.FC<AddSectionProps> = ({ level, existing, onAdd }
         )}
       </Box>
       <Button
-        size="small"
         variant="outlined"
         startIcon={<AddIcon />}
         onClick={add}
         disabled={trimmed === "" || isTaken}
         data-testid={`lab-inheritance-add-${level}`}
-        sx={{ mt: 0.25, flexShrink: 0 }}
+        sx={{ flexShrink: 0 }}
       >
         Add {level}
       </Button>

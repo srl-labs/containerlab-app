@@ -31,7 +31,7 @@ export function LabHostsPanel({
               ? { containerlabVersion: local.containerlabVersion }
               : {}),
             label: "Local",
-            addLabel: "Show Local",
+            addLabel: "Show local",
             onAdd: async () => {
               await request({ action: "labHosts.showLocal" });
             },
@@ -54,9 +54,7 @@ export function LabHostsPanel({
   return (
     <>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        The Containerlab explorer shows the labs of every host side by side.
-        Passwords are not saved: a sign-in keeps a token in VS Code&apos;s
-        secret storage.
+        The explorer lists the labs of every host. Passwords are never saved; signing in keeps a token in VS Code&apos;s secret storage.
       </Typography>
       <EndpointManager
         mode="manage"

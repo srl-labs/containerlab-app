@@ -336,7 +336,7 @@ function CaptureSettingsSection(props: {
     <>
       <SectionCard
         title="Edgeshark"
-        description="Install or uninstall Edgeshark on the selected endpoint host."
+        description="Install or uninstall Edgeshark on the selected endpoint."
         tone={props.captureEndpoint && props.captureStatus?.running ? "success" : "warning"}
       >
         {props.captureError ? (
@@ -351,7 +351,7 @@ function CaptureSettingsSection(props: {
           onChange={(event) => props.setCaptureEndpointId(event.target.value)}
           fullWidth
           disabled={props.endpoints.length === 0}
-          helperText="Capture status/actions and defaults are scoped to this endpoint."
+          helperText="Capture status, actions and defaults apply to this endpoint only."
           data-testid="standalone-settings-capture-endpoint"
         >
           {props.endpoints.length === 0 ? (
@@ -432,13 +432,12 @@ function CaptureSettingsSection(props: {
             color: "text.secondary"
           }}
         >
-          Capture defaults (image, pull policy, packetflix host/port) are controlled on the API
-          server via environment variables.
+          The API server sets capture defaults (image, pull policy, packetflix host and port) in its environment.
         </Typography>
       </SectionCard>
       <SectionCard
         title="Capture defaults"
-        description="Set per-endpoint defaults for generic capture commands and optional session hostname override."
+        description="Capture defaults per endpoint, and an optional session hostname override."
         tone="info"
       >
         <ToggleButtonGroup
@@ -465,7 +464,7 @@ function CaptureSettingsSection(props: {
           onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
           fullWidth
           placeholder="IPv4, IPv6, or DNS hostname"
-          helperText="Used for packetflix URI generation on the selected endpoint in this browser session only."
+          helperText="Used in packetflix URIs for this endpoint, in this browser session only."
           data-testid="standalone-settings-capture-session-hostname"
         />
         <Stack
@@ -481,7 +480,7 @@ function CaptureSettingsSection(props: {
             disabled={!props.captureEndpoint}
             data-testid="standalone-settings-capture-session-hostname-apply"
           >
-            Apply Session Hostname
+            Apply session hostname
           </Button>
           <Button
             variant="outlined"
@@ -489,7 +488,7 @@ function CaptureSettingsSection(props: {
             disabled={!props.captureEndpoint}
             data-testid="standalone-settings-capture-session-hostname-clear"
           >
-            Clear Override
+            Clear override
           </Button>
         </Stack>
       </SectionCard>
@@ -779,7 +778,7 @@ export function SettingsOverlay({
             </SectionCard>
             <SectionCard
               title="Lock labs by default"
-              description="Opened labs start locked until you unlock them."
+              description="Labs open locked until you unlock them."
               wide={false}
               compactControl
             >
@@ -808,7 +807,7 @@ export function SettingsOverlay({
         return (
             <SectionCard
               title="Terminal defaults"
-              description="Configure standalone defaults for SSH username resolution, telnet access, and font sizing."
+              description="Defaults for SSH usernames, telnet and font size."
               tone="info"
             >
               <TextField
@@ -822,7 +821,7 @@ export function SettingsOverlay({
                 helperText={
                   terminalDraft.field === "ssh"
                     ? terminalDraft.error
-                    : "JSON object mapping container kinds to default SSH usernames."
+                    : "JSON object mapping kinds to default SSH usernames."
                 }
                 data-testid="standalone-settings-ssh-mapping"
                 sx={{ "& textarea": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}
@@ -836,7 +835,7 @@ export function SettingsOverlay({
                 helperText={
                   terminalDraft.field === "telnet"
                     ? terminalDraft.error
-                    : "Default telnet port used by standalone terminal actions."
+                    : "Telnet port for terminal actions."
                 }
                 slotProps={{
                   htmlInput: { inputMode: "numeric", pattern: "[0-9]*" }
@@ -852,7 +851,7 @@ export function SettingsOverlay({
                 helperText={
                   terminalDraft.field === "fontSize"
                     ? terminalDraft.error
-                    : `Global xterm font size applied to open/new windows (${MIN_TERMINAL_FONT_SIZE}-${MAX_TERMINAL_FONT_SIZE}).`
+                    : `Font size for all terminal windows (${MIN_TERMINAL_FONT_SIZE}-${MAX_TERMINAL_FONT_SIZE}).`
                 }
                 slotProps={{
                   htmlInput: {
@@ -890,8 +889,7 @@ export function SettingsOverlay({
                   color: "text.secondary"
                 }}
               >
-                Font size is global for all terminals. In terminal windows, use Actions or Alt+Up,
-                Alt+Down, Alt+0 for quick adjustment.
+                Applies to all terminals. In a terminal window, use Actions or Alt+Up, Alt+Down and Alt+0 to adjust it.
               </Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
                 <Button
@@ -899,7 +897,7 @@ export function SettingsOverlay({
                   disabled={terminalDraft.error !== null}
                   data-testid="standalone-settings-save-terminal"
                 >
-                  Save Terminal Settings
+                  Save terminal settings
                 </Button>
                 {terminalDraft.error === null ? (
                   <Typography variant="caption" sx={{ color: "text.secondary" }}>
@@ -999,7 +997,7 @@ export function SettingsOverlay({
                 startIcon={<LogoutIcon />}
                 onClick={handleLogoutClick}
               >
-                Disconnect Sessions
+                Disconnect sessions
               </Button>
             ) : (
               <span />

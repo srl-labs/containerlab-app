@@ -196,9 +196,7 @@ export function WelcomePageApp(): React.JSX.Element {
                       color: "text.secondary"
                     }}
                   >
-                    The Containerlab extension integrates containerlab directly into VS Code,
-                    providing an explorer for managing labs and containers. Create, deploy, and
-                    manage network topologies with just a few clicks.
+                    Manage labs and containers from the explorer. Create, deploy and run network topologies in VS Code.
                   </Typography>
                   <Stack
                     spacing={1}
@@ -213,7 +211,7 @@ export function WelcomePageApp(): React.JSX.Element {
                         postMessage({ command: "createExample" });
                       }}
                     >
-                      Create Example Topology
+                      Create example topology
                     </Button>
                     <Typography
                       variant="caption"
@@ -275,7 +273,7 @@ export function WelcomePageApp(): React.JSX.Element {
                     }}
                   >
                     <InfoOutlinedIcon />
-                    Using cached repository data due to GitHub API limits or temporary failures.
+                    Showing cached repositories because GitHub is rate-limited or unavailable.
                   </Typography>
                 ) : null}
 

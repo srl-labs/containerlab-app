@@ -19,7 +19,7 @@ test("runs a lab on the web app's host without signing in", async ({ page }) => 
   await page.goto("./");
   const labsButton = page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true });
   await expect(labsButton).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign In", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toHaveCount(0);
 
   const label = await page.evaluate(async () => {
     const config: unknown = await (await fetch("api/config")).json();

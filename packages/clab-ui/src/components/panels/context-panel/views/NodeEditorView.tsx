@@ -71,14 +71,18 @@ const KIND_CONFIG_TAB: TabConfig<NodeEditorTabProps> = {
 function getTabsForNode(
   kind: string | undefined,
   isCustomTemplate: boolean,
-  hasKindConfig: boolean
+  hasKindConfig: boolean,
+  isDefaults: boolean
 ): Array<TabConfig<NodeEditorTabProps>> {
   // Stages refer to other nodes of the lab, so a node template has none
   const tabs = isCustomTemplate ? BASE_TABS.filter((tab) => tab.id !== "stages") : BASE_TABS;
-  const kindTabs = [
-    ...(hasSrosComponents(kind) ? [COMPONENTS_TAB] : []),
-    ...(hasKindConfig ? [KIND_CONFIG_TAB] : [])
-  ];
+  // Topology defaults apply to nodes of every kind, so they get no kind-specific tabs.
+  const kindTabs = isDefaults
+    ? []
+    : [
+        ...(hasSrosComponents(kind) ? [COMPONENTS_TAB] : []),
+        ...(hasKindConfig ? [KIND_CONFIG_TAB] : [])
+      ];
   return [tabs[0], ...kindTabs, ...tabs.slice(1)];
 }
 
@@ -135,13 +139,14 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   } = useNodeEditorForm(nodeData, readOnly);
 
   const hasKindConfig = formData ? getKindConfigFields(formData).length > 0 : false;
+  const isDefaults = formData?.section?.level === "defaults";
   const tabs = useMemo(
     () =>
       mergeNodeEditorTabs(
-        getTabsForNode(formData?.kind, formData?.isCustomTemplate === true, hasKindConfig),
+        getTabsForNode(formData?.kind, formData?.isCustomTemplate === true, hasKindConfig, isDefaults),
         nodeEditorTabs
       ),
-    [formData?.kind, formData?.isCustomTemplate, hasKindConfig, nodeEditorTabs]
+    [formData?.kind, formData?.isCustomTemplate, hasKindConfig, isDefaults, nodeEditorTabs]
   );
 
   const formKind = formData?.kind;

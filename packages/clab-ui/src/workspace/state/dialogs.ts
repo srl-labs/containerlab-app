@@ -448,7 +448,7 @@ async function promptForCloneRepoSourceUrl(
   ].filter((option) => option.value !== "popular" || request.popularOptions.length > 0);
   const mode = await promptForOptionSelection({
     title: "Repository Source",
-    message: "Choose how to select the repository source.",
+    message: "Pick a repository source.",
     label: "Source",
     confirmLabel: "Continue",
     options: sourceOptions,
@@ -471,7 +471,7 @@ async function promptForCloneRepoSourceUrl(
     title: "Popular Lab",
     message: "Choose a popular lab repository.",
     label: "Popular lab",
-    confirmLabel: "Use Repository",
+    confirmLabel: "Use repository",
     options: request.popularOptions,
     preferredValue: request.popularOptions[0]?.value
   });
@@ -529,7 +529,7 @@ export async function promptForCloneRepo(
   const endpointId = await promptForEndpointSelection({
     title: "Select Endpoint",
     message: normalizedRequest.message,
-    confirmLabel: "Use Endpoint",
+    confirmLabel: "Use endpoint",
     options: normalizedRequest.endpointOptions,
     preferredValue: normalizedRequest.defaultEndpointId
   });

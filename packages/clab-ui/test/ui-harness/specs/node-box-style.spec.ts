@@ -95,7 +95,7 @@ test.describe("Boxed node style", () => {
     await expect(page.locator(SEL_NODE_BOX)).toHaveCount(2);
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => {
@@ -145,7 +145,7 @@ test.describe("Boxed node style", () => {
     await expect.poll(async () => (await box.boundingBox())?.width ?? 0).toBeLessThan(defaultWidth);
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
     await expect
       .poll(async () => {
         const annotations = await topoViewerPage.getAnnotationsFromFile(SIMPLE_FILE);

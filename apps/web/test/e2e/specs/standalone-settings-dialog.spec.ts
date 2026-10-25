@@ -43,7 +43,7 @@ test.describe("Standalone Settings Dialog", () => {
 
   test("settings opens directly from the shared rail and exposes disconnect", async ({ page }) => {
     const dialog = await openSettings(page);
-    await expect(dialog.getByRole("button", { name: "Disconnect Sessions" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Disconnect sessions" })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
     await expect(page.getByTestId("standalone-settings-button")).toBeFocused();

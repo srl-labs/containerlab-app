@@ -135,6 +135,7 @@ export function StructuredSettingEditor({
                 }
               />
               <IconButton
+                size="small"
                 aria-label={`Remove mapping ${index + 1}`}
                 disabled={disabled}
                 onClick={() =>
@@ -275,9 +276,7 @@ export function StructuredSettingEditor({
                   color="text.secondary"
                   sx={{ display: "block" }}
                 >
-                  Additional configuration is preserved. Use Edit JSON to change
-                  startup configs, binds, environment variables, and other
-                  fields.
+                  Other fields are kept. Use Edit JSON to change startup configs, binds, environment variables and more.
                 </Typography>
               )}
             </Box>

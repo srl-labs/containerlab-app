@@ -907,7 +907,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       const currentHostname = getSessionHostnameOverride(actionEndpointId) ?? "";
       const rawValue = await promptForTextInput({
         title: "Session Hostname Override",
-        message: `Set the session hostname override for packet capture on "${actionEndpointLabel}". Leave empty to clear it.`,
+        message: `Session hostname override for packet capture on "${actionEndpointLabel}". Leave empty to clear.`,
         label: "Hostname override",
         defaultValue: currentHostname,
         confirmLabel: "Save",
@@ -1253,7 +1253,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         const confirmed = await confirmRuntimeAction({
           title: "Deploy With Cleanup",
           message:
-            "Deploy (cleanup) may remove existing lab artifacts before deployment. Continue?",
+            "Deploy (cleanup) may remove existing lab artifacts first. Continue?",
           confirmLabel: "Deploy",
           severity: "warning"
         });
@@ -1321,7 +1321,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           (await confirmRuntimeAction({
             title: "Close Wireshark VNC Sessions",
             message: "Close all active Wireshark VNC sessions for this endpoint?",
-            confirmLabel: "Close Sessions",
+            confirmLabel: "Close sessions",
             severity: "warning"
           }))
         ) {

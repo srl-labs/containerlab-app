@@ -22,7 +22,7 @@ export const CustomNodeTemplateFields: React.FC<TabProps> = ({ data, onChange })
       label="Base Name (for canvas)"
       value={data.baseName ?? ""}
       onChange={(value) => onChange({ baseName: value })}
-      placeholder="e.g., srl (will become srl1, srl2, etc.)"
+      placeholder="e.g. srl (becomes srl1, srl2, …)"
     />
     <InputField
       id="node-interface-pattern"

@@ -67,8 +67,7 @@ const MgmtNetLinkNote: React.FC = () => {
       data-testid="network-mgmt-net-note"
       sx={{ color: "text.secondary", display: "block" }}
     >
-      Connects to the bridge of the default management network ({getMgmtNetworkName(networks[0])}),
-      not to the other networks of this lab.
+      Connects only to the bridge of the default management network ({getMgmtNetworkName(networks[0])}).
     </Typography>
   );
 };
@@ -129,7 +128,7 @@ const NetworkEditorContent: React.FC<{
             label="Label / Alias"
             value={formData.label}
             onChange={(v) => onChange({ label: v })}
-            placeholder="Display label for the network node"
+            placeholder="Label shown on the canvas"
           />
         )}
 
@@ -214,7 +213,7 @@ const NetworkEditorContent: React.FC<{
               onChange={(items) => onChange({ vars: items })}
               keyPlaceholder="Variable name"
               valuePlaceholder="Value"
-              addLabel="Add Variable"
+              addLabel="Add variable"
             />
           </PanelSection>
           <PanelSection title="Labels">
@@ -223,7 +222,7 @@ const NetworkEditorContent: React.FC<{
               onChange={(items) => onChange({ labels: items })}
               keyPlaceholder="Label name"
               valuePlaceholder="Value"
-              addLabel="Add Label"
+              addLabel="Add label"
             />
           </PanelSection>
         </>

@@ -145,7 +145,7 @@ export async function resolveEndpointForExplorerAction(input: {
   const selectedEndpointId = await promptForEndpointSelection({
     title: "Select Endpoint",
     message: `Select endpoint for ${actionDescription}.`,
-    confirmLabel: "Use Endpoint",
+    confirmLabel: "Use endpoint",
     options: connectedEndpoints.map((endpoint) => ({
       value: endpoint.id,
       label: endpoint.label,
@@ -245,8 +245,8 @@ export async function handleShareActionLink(
   await navigator.clipboard.writeText(link).catch(() => {});
   const shouldOpen = await confirmRuntimeAction({
     title: `${kind.toUpperCase()} Link Copied`,
-    message: "The link was copied to clipboard.\n\nOpen link now?",
-    confirmLabel: "Open Link"
+    message: "Link copied.\n\nOpen it now?",
+    confirmLabel: "Open link"
   });
   if (shouldOpen) {
     window.open(link, "_blank", "noopener,noreferrer");
@@ -399,7 +399,7 @@ export async function pickPopularRepo(promptTitle: string): Promise<string | und
     title: promptTitle,
     message: "Choose a popular lab repository.",
     label: "Popular lab",
-    confirmLabel: "Use Repository",
+    confirmLabel: "Use repository",
     options: repos.map((repo) => ({
       label: repo.name,
       description: `${repo.stars} stars` + (repo.description ? ` - ${repo.description}` : ""),

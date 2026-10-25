@@ -231,7 +231,7 @@ function LocalSetupCard(props: {
             onClick={onUse}
             type="button"
           >
-            Use This Computer
+            Use this computer
           </button>
         ) : (
           <>
@@ -243,7 +243,7 @@ function LocalSetupCard(props: {
                 onClick={onCheckAgain}
                 type="button"
               >
-                {busy ? "Checking..." : "Check Again"}
+                {busy ? "Checking..." : "Check again"}
               </button>
             ) : null}
             <a
@@ -476,7 +476,7 @@ export function BootstrapLoginPage(props: {
             </span>
           </label>
           <button className="clab-login-button" disabled={submitDisabled} type="submit">
-            {busy ? "Signing in..." : "Sign In"}
+            {busy ? "Signing in..." : "Sign in"}
           </button>
         </form>
 

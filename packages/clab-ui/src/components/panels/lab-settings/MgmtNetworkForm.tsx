@@ -55,7 +55,7 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
   <>
     <SettingsField
       title="Driver"
-      description="Bridge connects nodes through a Linux bridge on the host. Macvlan puts them directly on the Layer 2 network of a host interface."
+      description="Bridge uses a Linux bridge on the host. Macvlan puts nodes on the Layer 2 network of a host interface."
     >
       <TextField
         slotProps={{ select: { inputProps: { "aria-label": "Driver" } } }}
@@ -74,7 +74,7 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
       <>
         <SettingsField
           title="Parent Interface"
-          description="Existing host interface the nodes attach to. For a VLAN, create the VLAN interface first, for example eth1.100."
+          description="Host interface the nodes attach to. For a VLAN, create its interface first, for example eth1.100."
         >
           <TextField
             slotProps={{ htmlInput: { "aria-label": "Parent Interface" } }}
@@ -111,7 +111,7 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
         {mgmt.macvlanMode === "bridge" ? (
           <SettingsField
             title="Host Access"
-            description="Add a macvlan interface on the host so the host can reach the nodes. Linux blocks traffic between a parent and its macvlan interfaces otherwise."
+            description="Adds a macvlan interface on the host so it can reach the nodes. Without it, Linux blocks traffic between a parent and its macvlan interfaces."
           >
             <Switch
               size="small"
@@ -201,7 +201,7 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv4 Gateway" description="Gateway address for the custom IPv4 subnet.">
+        <SettingsField title="IPv4 Gateway" description="Gateway of the custom IPv4 subnet.">
           <TextField
             slotProps={{ htmlInput: { "aria-label": "IPv4 Gateway" } }}
             id="lab-mgmt-ipv4-gateway"
@@ -247,7 +247,7 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv6 Gateway" description="Gateway address for the custom IPv6 subnet.">
+        <SettingsField title="IPv6 Gateway" description="Gateway of the custom IPv6 subnet.">
           <TextField
             slotProps={{ htmlInput: { "aria-label": "IPv6 Gateway" } }}
             id="lab-mgmt-ipv6-gateway"
@@ -302,7 +302,7 @@ const BridgeFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
         helperText={issues.bridge}
       />
     </SettingsField>
-    <SettingsField title="Enable External Access" description="Allow access to the management network from outside the lab.">
+    <SettingsField title="Enable External Access" description="Allow access from outside the lab.">
       <Switch
         size="small"
         checked={mgmt.externalAccess}
@@ -338,7 +338,7 @@ const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) =
         title="Duplicate Address Detection"
         description={
           mgmt.driver === "macvlan"
-            ? "Check that an address is free before using it, with ARP and neighbour solicitations on the parent interface. Slows down very large labs."
+            ? "Check that an address is free before using it, with ARP and neighbour solicitation on the parent interface. Slows very large labs."
             : "Check that an address is free before using it."
         }
       >

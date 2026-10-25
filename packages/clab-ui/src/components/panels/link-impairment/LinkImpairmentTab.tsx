@@ -19,35 +19,35 @@ export const LinkImpairmentTab: React.FC<LinkImpairmentTabProps> = ({ data, onCh
           label="Delay"
           value={data.delay ?? ""}
           onChange={(value) => onChange({ delay: value })}
-          placeholder="Delay (with units). i.e. 50ms, 5s"
+          placeholder="Delay with unit, e.g. 50ms, 5s"
         />
         <InputField
           id="jitter"
           label="Jitter"
           value={data.jitter ?? ""}
           onChange={(value) => onChange({ jitter: value })}
-          placeholder="Jitter (with units). i.e. 10ms, 500ms"
+          placeholder="Jitter with unit, e.g. 10ms, 500ms"
         />
         <InputField
           id="loss"
           label="Loss"
           value={data.loss ?? ""}
           onChange={(value) => onChange({ loss: value })}
-          placeholder="Loss in percent. i.e. 5, 0.1"
+          placeholder="Loss in percent, e.g. 5, 0.1"
         />
         <InputField
           id="rate"
           label="Rate Limit"
           value={data.rate ?? ""}
           onChange={(value) => onChange({ rate: value })}
-          placeholder="Rate in kbps. i.e. 1000, 10000"
+          placeholder="Rate in kbps, e.g. 1000, 10000"
         />
         <InputField
           id="corruption"
           label="Corruption"
           value={data.corruption ?? ""}
           onChange={(value) => onChange({ corruption: value })}
-          placeholder="Corruption in percent. i.e. 5, 0.1"
+          placeholder="Corruption in percent, e.g. 5, 0.1"
         />
       </PanelSection>
     </Box>

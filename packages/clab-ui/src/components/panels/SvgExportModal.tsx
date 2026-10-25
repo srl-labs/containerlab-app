@@ -745,7 +745,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
   if (isExporting) {
     exportButtonLabel = "Exporting...";
   } else if (exportGrafanaBundle) {
-    exportButtonLabel = "Export Grafana Bundle";
+    exportButtonLabel = "Export Grafana bundle";
   }
 
   return (
@@ -906,7 +906,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                 onClick={() => setIsGrafanaSettingsOpen(true)}
                 data-testid="svg-export-grafana-advanced-btn"
               >
-                Advanced Grafana Settings
+                Advanced Grafana settings
               </Button>
             </Box>
           </Box>
@@ -1059,7 +1059,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   color: "text.secondary"
                 }}
               >
-                Configure thresholds and topology sizing used in the exported Grafana panel.
+                Thresholds and sizing for the exported Grafana panel.
               </Typography>
               <Box
                 sx={{
@@ -1114,7 +1114,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   color: "text.secondary"
                 }}
               >
-                Use larger values for dense topologies with many interfaces.
+                Use larger values for dense topologies.
               </Typography>
               <Divider />
               <TextField
@@ -1194,8 +1194,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   color: "text.secondary"
                 }}
               >
-                Values must be strictly ascending: green &lt; yellow &lt; orange &lt; red (within
-                selected unit).
+                Must ascend: green &lt; yellow &lt; orange &lt; red, in the selected unit.
               </Typography>
               <FormControlLabel
                 control={
@@ -1248,7 +1247,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   color: "text.secondary"
                 }}
               >
-                Filter links and choose which interface segment should be shown in endpoint bubbles.
+                Filter links and pick the interface segment shown in endpoint bubbles.
               </Typography>
               <TextField
                 select
@@ -1276,7 +1275,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   color: "text.secondary"
                 }}
               >
-                Default for every interface; per-link overrides below take precedence.
+                Default for every interface. Per-link overrides below win.
               </Typography>
               <TextField
                 size="small"

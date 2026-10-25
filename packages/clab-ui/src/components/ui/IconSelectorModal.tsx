@@ -404,7 +404,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                     onClick={handleUploadIcon}
                     sx={{ alignSelf: "flex-start" }}
                   >
-                    Add Icon
+                    Add icon
                   </Button>
                 </Box>
               ) : (
@@ -426,7 +426,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                     startIcon={<AddIcon />}
                     onClick={handleUploadIcon}
                   >
-                    Add Icon
+                    Add icon
                   </Button>
                 </Box>
               )}
@@ -440,7 +440,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
           <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, px: 2.5, pt: 1.5, pb: 2.5 }}>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, flex: 1, minWidth: 0 }}>
               <Tooltip
-                title={!canEditColor ? "Color can only be modified for built-in and SVG icons" : ""}
+                title={!canEditColor ? "Only built-in and SVG icons can be recolored" : ""}
                 placement="top"
               >
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
