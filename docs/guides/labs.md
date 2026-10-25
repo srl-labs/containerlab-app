@@ -42,6 +42,7 @@ The arrow next to the play button opens the rest:
 | **Destroy** | Remove the containers and links. Your files stay. |
 | **Destroy (cleanup)** | Also remove the lab directory with generated configs and certificates. |
 | **Start Nodes**, **Stop Nodes**, **Restart Nodes** | Start, stop, or restart the containers without redeploying. |
+| **Run Command…**, **Save Configs…**, **Save VM Snapshots…**, **Inspect Details** | Work with the running lab; see [Lab operations](#lab-operations). |
 | **Run with options…** | Any of the above with extra containerlab flags. |
 
 In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanupWarning` is on.
@@ -64,10 +65,30 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 | Max workers | ✓ | ✓ | | `--max-workers` |
 | Export template | ✓ | ✓ | | `--export-template` |
 | Template variables file | ✓ | ✓ | ✓ | `--vars` |
+| Restore VM snapshots | ✓ | | | `--restore-all`, `--restore` |
 
 The template variables file is relative to the topology file. Leave it empty to use `<topology>_vars.yml` next to the topology, as containerlab does. Destroy and redeploy need the same file as the deploy when the template depends on it. On a lab host, `--vars` needs a clab-api-server with template support; older servers ignore it.
 
 Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
+
+**Restore VM snapshots** boots vrnetlab nodes from snapshots saved with **Save VM Snapshots…**: every node with a `<node>.tar` in the snapshot directory starts from it, and a node snapshot file you add wins for its node. Relative paths start at the topology file's folder. containerlab 0.72 or later is needed.
+
+## Lab operations
+
+These entries of the lifecycle menu, and of a node's right-click menu, work on a running lab. Select several nodes with Shift-click first to act on all of them at once: **Start**, **Stop**, and **Restart** then make one `containerlab start|stop|restart --node a,b` call.
+
+| Action | containerlab | What happens |
+| --- | --- | --- |
+| **Run Command…** | `exec` | Runs one command on the chosen nodes, on all nodes, or on the nodes that carry every given `key=value` label, and shows each node's output and exit code. |
+| **Save Configs…** | `save` | Saves the running configs. **Copy the saved configs to a directory** also keeps timestamped copies under `<directory>/clab-<lab>/<node>/`, with the newest linked under the original name. |
+| **Save VM Snapshots…** | `tools snapshot save` | Saves the VM state of vrnetlab nodes as `<node>.tar`; other nodes are skipped. |
+| **Inspect Details** | `inspect --details` | Shows everything the container runtime reports for each node. |
+
+Paths are relative to the topology file's folder. On a lab host they must stay in your lab workspace.
+
+The explorer's **Save Configs To…** saves a deployed lab's configs with a copy, too.
+
+A lab host hides what it cannot do. Copying saved configs needs containerlab 0.73 and VM snapshots 0.72; on a lab host, running by label, snapshots, copies, details, snapshot restore and one-call multi-node actions need a clab-api-server that lists them in `/health`. Older lab hosts still run commands and start, stop, or restart several nodes, one node at a time.
 
 ## Images
 

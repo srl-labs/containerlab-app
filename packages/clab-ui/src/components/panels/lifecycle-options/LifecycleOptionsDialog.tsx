@@ -24,7 +24,7 @@ import { DialogTitleWithClose } from "../../ui/dialog/DialogChrome";
 import { InputField } from "../../ui/form/InputField";
 
 import {
-  buildLifecycleOptionsRequest,
+  buildLifecycleRun,
   createLifecycleOptionsForm,
   isCleanupBlocked,
   lifecycleKindTakes,
@@ -32,10 +32,13 @@ import {
   varsFileError,
   type LifecycleOptionsForm
 } from "./lifecycleOptionsForm";
+import { SnapshotRestoreFields } from "./SnapshotRestoreFields";
 
 export interface LifecycleOptionsDialogProps {
   open: boolean;
   deploymentState: DeploymentState;
+  /** The lab host can restore VM snapshots on deploy. */
+  canRestoreSnapshots?: boolean;
   onClose: () => void;
   onRun: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
@@ -113,9 +116,47 @@ const OptionCheckbox: React.FC<{
   />
 );
 
+type FormUpdate = <K extends keyof LifecycleOptionsForm>(
+  key: K,
+  value: LifecycleOptionsForm[K]
+) => void;
+
+/** Deploy only, on lab hosts that can restore VM snapshots. */
+const SnapshotRestoreSection: React.FC<{
+  canRestore: boolean | undefined;
+  form: LifecycleOptionsForm;
+  nodeNames: string[];
+  error: string | undefined;
+  update: FormUpdate;
+}> = ({ canRestore, form, nodeNames, error, update }) => {
+  if (canRestore !== true || !lifecycleKindTakes(form.kind, "restoreAll")) return null;
+  return (
+    <>
+      <OptionCheckbox
+        testId="lifecycle-options-restore"
+        label="Restore VM snapshots"
+        description="Boot vrnetlab nodes from saved snapshots instead of a fresh image."
+        checked={form.restoreSnapshots}
+        onChange={(checked) => update("restoreSnapshots", checked)}
+      />
+      {form.restoreSnapshots && (
+        <SnapshotRestoreFields
+          nodeNames={nodeNames}
+          restoreAll={form.restoreAll}
+          restore={form.restore}
+          error={error}
+          onRestoreAllChange={(value) => update("restoreAll", value)}
+          onRestoreChange={(value) => update("restore", value)}
+        />
+      )}
+    </>
+  );
+};
+
 export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   open,
   deploymentState,
+  canRestoreSnapshots,
   onClose,
   onRun
 }) => {
@@ -134,13 +175,20 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   const cleanupBlocked = isCleanupBlocked(form);
   const workersError = maxWorkersError(form.maxWorkers);
   const varsError = varsFileError(form.varsFile);
-  const blocked = workersError !== undefined || varsError !== undefined;
-  const request = buildLifecycleOptionsRequest(form);
+  const { request, snapshotError } = buildLifecycleRun(form, canRestoreSnapshots === true);
+
   const kindAvailable = isKindAvailable(form.kind, deploymentState);
   const runLabel = KIND_LABELS[form.kind];
 
+  const blocked = [
+    !kindAvailable,
+    workersError !== undefined,
+    varsError !== undefined,
+    snapshotError !== undefined
+  ].some(Boolean);
+
   const handleRun = () => {
-    if (!kindAvailable || blocked) return;
+    if (blocked) return;
     onRun(request.action, request.options);
   };
 
@@ -255,6 +303,13 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
               onChange={(checked) => update("skipLabdirAcl", checked)}
             />
           )}
+          <SnapshotRestoreSection
+            canRestore={canRestoreSnapshots}
+            form={form}
+            nodeNames={nodeNames}
+            error={snapshotError}
+            update={update}
+          />
         </Box>
 
         {(takes("maxWorkers") || takes("exportTemplate")) && (
@@ -325,7 +380,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           size="small"
           color={form.kind === "destroy" ? "error" : "primary"}
           onClick={handleRun}
-          disabled={!kindAvailable || blocked}
+          disabled={blocked}
           data-testid="lifecycle-options-run"
         >
           {runLabel}

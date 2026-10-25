@@ -2,7 +2,13 @@ import React, { useMemo, type RefObject } from "react";
 import type { Edge, Node } from "@xyflow/react";
 
 import type { useCanvasHandlers } from "../../hooks/canvas";
-import { useClabUiHost, type TopoViewerNodeAction } from "../../host";
+import {
+  useClabUiHost,
+  type ClabUiTopoViewerHost,
+  type TopoViewerNodeAction,
+  type TopoViewerNodesAction
+} from "../../host";
+import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { useDeploymentState, type DeploymentState } from "../../stores/topoViewerStore";
 import { CanvasCapturePanel } from "../panels/capture/CanvasCapturePanel";
 import {
@@ -64,6 +70,8 @@ interface ContextMenuItemsParams {
 
 interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
+  onNodesAction?: (action: TopoViewerNodesAction, nodeNames: string[]) => void;
+  labOperations?: Parameters<typeof buildNodeContextMenu>[0]["labOperations"];
   renderCapturePanel: typeof renderCapturePanel;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
@@ -116,6 +124,11 @@ function buildNodeItems(
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
     onNodeAction: params.onNodeAction,
+    selectedNodeIds: params.nodes
+      .filter((node) => node.selected === true && node.type === "topology-node")
+      .map((node) => node.id),
+    onNodesAction: params.onNodesAction,
+    labOperations: params.labOperations,
     renderCapturePanel: params.renderCapturePanel,
     closeContextMenu: params.handlers.closeContextMenu,
     editNode: params.editNode,
@@ -202,9 +215,19 @@ function resolveContextMenuItems(params: ResolveContextMenuItemsParams): Context
 /**
  * Hook for building context menu items.
  */
+function nodesActionHandler(
+  topoViewer: ClabUiTopoViewerHost
+): ResolveContextMenuItemsParams["onNodesAction"] {
+  const { runNodesAction } = topoViewer;
+  return runNodesAction ? (action, nodeNames) => runNodesAction.call(topoViewer, action, nodeNames) : undefined;
+}
+
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
+  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  const openLabOperation = useLabOperationsStore((state) => state.openDialog);
+  const hasLabOperations = topoViewer.labOperations !== undefined;
   const {
     handlers,
     state,
@@ -237,6 +260,10 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     return resolveContextMenuItems({
       ...params,
       onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
+      onNodesAction: nodesActionHandler(topoViewer),
+      labOperations: hasLabOperations
+        ? { support: labOperationSupport, open: openLabOperation }
+        : undefined,
       renderCapturePanel,
       type,
       targetId,
@@ -270,6 +297,9 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     startLinkCreation,
     cancelLinkCreation,
     topoViewer,
+    hasLabOperations,
+    labOperationSupport,
+    openLabOperation,
     annotationHandlers,
     onOpenNodePalette,
     onAddDefaultNode,

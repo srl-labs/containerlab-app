@@ -20,6 +20,7 @@ import type {
 } from "../image-manager/types";
 
 import type { ApplyPlan } from "./applyPlan";
+import type { ClabUiLabOperationsHost } from "./labOperations";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
 import type { TailscaleStatus } from "./tailscaleStatus";
 
@@ -48,6 +49,9 @@ export const LIFECYCLE_ACTION_OPTION_KIND: Partial<
 };
 
 export type TopoViewerNodeAction = "ssh" | "shell" | "logs" | "start" | "stop" | "restart";
+
+/** Node actions that act on several nodes in one containerlab call. */
+export type TopoViewerNodesAction = Extract<TopoViewerNodeAction, "start" | "stop" | "restart">;
 
 export interface TopoViewerSvgExportPayload {
   requestId: string;
@@ -205,6 +209,13 @@ export interface ClabUiTopoViewerHost {
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
+  /**
+   * Start, stop or restart several nodes at once (`--node a,b`). Hosts that
+   * omit it get one `runNodeAction` per node.
+   */
+  runNodesAction?(action: TopoViewerNodesAction, nodeNames: string[]): void;
+  /** Exec, snapshots, config save and inspect details; hosts that omit it hide them. */
+  labOperations?: ClabUiLabOperationsHost;
   captureInterface(
     nodeName: string,
     interfaceName: string,

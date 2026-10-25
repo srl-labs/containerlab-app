@@ -115,6 +115,7 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.lab.stop": "Stop Nodes",
   "containerlab.lab.restart": "Restart Nodes",
   "containerlab.lab.save": "Save Configs",
+  "containerlab.lab.saveCopy": "Save Configs To…",
   "containerlab.lab.delete": "Delete Lab File",
   "containerlab.lab.sshToAllNodes": "SSH To All Nodes",
   "containerlab.inspectOneLab": "Inspect",
@@ -663,6 +664,7 @@ function appendLabActions(
     pushAction(actions, seen, registry, "containerlab.lab.stop", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.restart", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.save", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.saveCopy", [item]);
     pushAction(actions, seen, registry, "containerlab.inspectOneLab", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.sshToAllNodes", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.sshx.attach", [item]);

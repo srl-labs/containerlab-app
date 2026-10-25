@@ -24,6 +24,7 @@ import type {
   TopologyUiRequestOptions,
   TopoViewerLifecycleAction,
   TopoViewerNodeAction,
+  TopoViewerNodesAction,
   TopoViewerSvgExportPayload
 } from "./contracts";
 import type { ClabUiExtensions, ClabUiRuntime } from "./runtimeContext";
@@ -31,11 +32,21 @@ import type { LabLifecycleOptions } from "./lifecycleOptions";
 import { parseApplyPlan, type ApplyPlan } from "./applyPlan";
 import { parseTailscaleStatus, type TailscaleStatus } from "./tailscaleStatus";
 import { isRecord } from "../core/utilities/typeHelpers";
-import { MSG_PLAN_APPLY_LAB, MSG_TAILSCALE_STATUS } from "../core/messages/extension";
-import { MSG_APPLY_PLAN_RESULT, MSG_TAILSCALE_STATUS_RESULT } from "../core/messages/webview";
+import {
+  MSG_LAB_OPERATION,
+  MSG_PLAN_APPLY_LAB,
+  MSG_TAILSCALE_STATUS
+} from "../core/messages/extension";
+import {
+  MSG_APPLY_PLAN_RESULT,
+  MSG_LAB_OPERATION_RESULT,
+  MSG_TAILSCALE_STATUS_RESULT
+} from "../core/messages/webview";
+import { createLabOperationsRequester } from "./labOperations";
 export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
+export * from "./labOperations";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
 export * from "./runtimeModel";
@@ -499,6 +510,17 @@ function createTailscaleStatusRequester(
   });
 }
 
+function postNodesAction(
+  postMessage: (message: unknown) => void,
+  action: TopoViewerNodesAction,
+  nodeNames: string[]
+): void {
+  const first = nodeNames.at(0);
+  if (first === undefined) return;
+  // Hosts that predate `nodeNames` act on the first node.
+  postMessage({ command: `clab-node-${action}`, nodeName: first, nodeNames });
+}
+
 function lifecycleMessage(
   action: TopoViewerLifecycleAction,
   options: LabLifecycleOptions | undefined
@@ -566,6 +588,16 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
         }
         postMessage({ command, nodeName });
       },
+      runNodesAction(action: TopoViewerNodesAction, nodeNames: string[]): void {
+        postNodesAction(postMessage, action, nodeNames);
+      },
+      labOperations: createLabOperationsRequester({
+        postMessage,
+        subscribe,
+        requestMessage: MSG_LAB_OPERATION,
+        resultMessage: MSG_LAB_OPERATION_RESULT,
+        newId
+      }),
       captureInterface(
         nodeName: string,
         interfaceName: string,

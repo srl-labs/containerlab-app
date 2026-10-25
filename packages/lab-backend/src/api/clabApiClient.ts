@@ -14,6 +14,7 @@ import type {
   CustomNodesResponse,
   DrawioGenerateResponse,
   EdgeSharkStatusResponse,
+  ExecResponse,
   FcliCommandResponse,
   HealthMetricsResponse,
   IconListResponse,
@@ -21,6 +22,7 @@ import type {
   IconUploadResponse,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
+  InspectDetailsResponse,
   InspectLabResponse,
   LifecycleActionResult,
   LoginResponse,
@@ -35,6 +37,7 @@ import type {
   SaveConfigResponse,
   ShareToolAction,
   ShareToolResponse,
+  SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
@@ -529,9 +532,12 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: Extract<LifecycleEndpoint, "start" | "stop" | "restart">,
-    options: { includeLogs?: boolean } = {},
+    options: { includeLogs?: boolean; nodeFilter?: string[] } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
+    if (options.nodeFilter && options.nodeFilter.length > 0) {
+      params.set("nodeFilter", options.nodeFilter.join(","));
+    }
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
@@ -678,11 +684,14 @@ export class ClabApiClient {
   async saveLab(
     token: string,
     labName: string,
-    options: { nodeFilter?: string } = {},
+    options: { nodeFilter?: string; copyDir?: string } = {},
   ): Promise<SaveConfigResponse> {
     const params = new URLSearchParams();
     if (options.nodeFilter) {
       params.set("nodeFilter", options.nodeFilter);
+    }
+    if (options.copyDir) {
+      params.set("copy", options.copyDir);
     }
     const query = params.toString();
     const res = await this.request(
@@ -693,6 +702,72 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as SaveConfigResponse;
+  }
+
+  /** Optional features this server advertises in `/health`; empty for servers that predate the list. */
+  async getServerFeatures(): Promise<string[]> {
+    const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs: 10_000 });
+    if (!res.ok) {
+      const err: HttpError = new Error(`GET /health failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    const features = isRecord(payload) ? toStringArray(payload.features) : undefined;
+    return features ?? [];
+  }
+
+  /**
+   * `containerlab exec` in a lab. `nodes` and `labels` need a server that
+   * advertises `exec-filters`; `containerName` works with every server.
+   */
+  async execLab(
+    token: string,
+    labName: string,
+    request: { command: string; nodes?: string[]; labels?: string[]; containerName?: string },
+  ): Promise<ExecResponse> {
+    const params = new URLSearchParams();
+    if (request.containerName) {
+      params.set("nodeFilter", request.containerName);
+    }
+    if (request.nodes && request.nodes.length > 0) {
+      params.set("nodes", request.nodes.join(","));
+    }
+    for (const label of request.labels ?? []) {
+      params.append("label", label);
+    }
+    const query = params.toString();
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/exec${query ? `?${query}` : ""}`,
+      token,
+      JSON.stringify({ command: request.command }),
+      "application/json",
+    );
+    return (await res.json()) as ExecResponse;
+  }
+
+  async saveLabSnapshots(
+    token: string,
+    labName: string,
+    request: { nodes?: string[]; outputDir?: string; timeout?: string },
+  ): Promise<SnapshotSaveResponse> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/snapshots`,
+      token,
+      JSON.stringify(request),
+      "application/json",
+    );
+    return (await res.json()) as SnapshotSaveResponse;
+  }
+
+  async inspectLabDetails(
+    token: string,
+    labName: string,
+  ): Promise<InspectDetailsResponse> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}?details=true`, token);
+    return (await res.json()) as InspectDetailsResponse;
   }
 
   async requestSshAccess(
@@ -1328,8 +1403,9 @@ function appendLifecycleOptionParams(
   params: URLSearchParams,
   lifecycleOptions: LabLifecycleOptions | undefined,
 ): void {
+  // `restore` repeats, once per node.
   for (const [key, value] of labLifecycleQueryParams(lifecycleOptions)) {
-    params.set(key, value);
+    params.append(key, value);
   }
 }
 

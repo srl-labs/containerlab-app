@@ -1,7 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { isTopologyFileName, type TailscaleStatus } from "@containerlab/clab-ui/host";
+import {
+  isTopologyFileName,
+  type LabExecRequest,
+  type LabOperationSupport,
+  type LabSnapshotSaveRequest,
+  type TailscaleStatus,
+  type TopoViewerNodesAction
+} from "@containerlab/clab-ui/host";
 import Docker from "dockerode";
 
 import type {
@@ -33,6 +40,14 @@ import { LabBackendError } from "../contract/errors.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { LocalCapture } from "./capture.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
+import {
+  localExec,
+  localInspectDetails,
+  localNodesAction,
+  localOperationSupport,
+  localSaveSnapshots,
+  type LocalLabRef
+} from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import {
@@ -87,6 +102,7 @@ export class LocalLabBackend implements LabBackend {
   private readonly lifecycle: LocalLifecycle;
   private readonly terminals: LocalTerminals;
   private readonly capture: LocalCapture;
+  private support: Promise<LabOperationSupport> | undefined;
   /** Running `containerlab events` commands; they must not outlive the app. */
   private readonly eventCommands = new Set<StreamingCommand>();
 
@@ -219,8 +235,49 @@ export class LocalLabBackend implements LabBackend {
     return this.requireRunningTopology(lab.labName);
   }
 
-  async save(lab: LabTarget, options: { nodeFilter?: string } = {}) {
-    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter);
+  async save(lab: LabTarget, options: { nodeFilter?: string; copyDir?: string } = {}) {
+    const copyDir = options.copyDir?.trim();
+    if (copyDir && !(await this.labOperationSupport()).saveCopy) {
+      throw new LabBackendError("This containerlab cannot copy saved configs; update it to 0.73 or later.", 501);
+    }
+    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter, copyDir);
+  }
+
+  labOperationSupport(): Promise<LabOperationSupport> {
+    this.support ??= this.version().then(
+      (response) => localOperationSupport(/version: (\S+)/.exec(response.versionInfo)?.[1]),
+      () => localOperationSupport(undefined)
+    );
+    return this.support;
+  }
+
+  /** The running lab's topology file, or its name when containerlab has none. */
+  private async labRef(lab: LabTarget): Promise<LocalLabRef> {
+    try {
+      return { topology: await this.labTopology(lab), labName: lab.labName };
+    } catch (error) {
+      if (lab.labName) return { labName: lab.labName };
+      throw error;
+    }
+  }
+
+  async exec(lab: LabTarget, request: LabExecRequest) {
+    return localExec(this.options, await this.labRef(lab), request);
+  }
+
+  async nodesAction(lab: LabTarget, nodeNames: string[], action: TopoViewerNodesAction) {
+    return localNodesAction(this.options, await this.labRef(lab), nodeNames, action);
+  }
+
+  async saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest) {
+    if (!(await this.labOperationSupport()).snapshotSave) {
+      throw new LabBackendError("This containerlab cannot save VM snapshots; update it to 0.72 or later.", 501);
+    }
+    return localSaveSnapshots(this.options, await this.labTopology(lab), request);
+  }
+
+  async inspectLabDetails(lab: LabTarget) {
+    return localInspectDetails(this.options, await this.labRef(lab));
   }
 
   async graphDrawio(

@@ -7,7 +7,8 @@ import {
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
   type LabLifecycleOptionKind,
-  type LabLifecycleOptions
+  type LabLifecycleOptions,
+  type LabSnapshotRestore
 } from "../../../host/lifecycleOptions";
 
 export interface LifecycleOptionsForm {
@@ -21,6 +22,11 @@ export interface LifecycleOptionsForm {
   graceful: boolean;
   keepMgmtNet: boolean;
   varsFile: string;
+  /** Deploy only: boot VM nodes from saved snapshots. */
+  restoreSnapshots: boolean;
+  /** Directory with `<node>.tar` files; empty restores only the nodes listed in `restore`. */
+  restoreAll: string;
+  restore: LabSnapshotRestore[];
 }
 
 export interface LifecycleOptionsRequest {
@@ -41,7 +47,10 @@ export function createLifecycleOptionsForm(kind: LabLifecycleOptionKind): Lifecy
     exportTemplate: "",
     graceful: false,
     keepMgmtNet: false,
-    varsFile: ""
+    varsFile: "",
+    restoreSnapshots: false,
+    restoreAll: "snapshots",
+    restore: []
   };
 }
 
@@ -90,7 +99,8 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     exportTemplate: form.exportTemplate,
     graceful: form.graceful,
     keepMgmtNet: form.keepMgmtNet,
-    varsFile: form.varsFile
+    varsFile: form.varsFile,
+    ...(form.restoreSnapshots ? { restoreAll: form.restoreAll, restore: form.restore } : {})
   });
   const [plainAction, cleanupAction] = ACTIONS[form.kind];
   const command = ["containerlab", form.kind, ...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(options)]
@@ -100,4 +110,23 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     ...(options ? { options } : {}),
     command
   };
+}
+
+/** A restore that is switched on but names neither a directory nor a node file. */
+export function restoreError(form: LifecycleOptionsForm): string | undefined {
+  if (form.kind !== "deploy" || !form.restoreSnapshots) return undefined;
+  const hasNodeFiles = form.restore.some((entry) => entry.node.trim() && entry.path.trim());
+  return form.restoreAll.trim() || hasNodeFiles ? undefined : "Enter a directory or add a node";
+}
+
+/**
+ * The request of the form and what keeps it from running, with snapshot
+ * restore left out on lab hosts that cannot do it.
+ */
+export function buildLifecycleRun(
+  form: LifecycleOptionsForm,
+  canRestoreSnapshots: boolean
+): { request: LifecycleOptionsRequest; snapshotError: string | undefined } {
+  const effective = canRestoreSnapshots ? form : { ...form, restoreSnapshots: false };
+  return { request: buildLifecycleOptionsRequest(effective), snapshotError: restoreError(effective) };
 }

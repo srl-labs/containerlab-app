@@ -16,6 +16,7 @@ export {
   redeploy,
   redeployCleanup,
   saveLab,
+  saveLabCopy,
   saveNode
 } from "./lifecycle";
 

@@ -1871,6 +1871,151 @@ test("/api/runtime/nodes/restart forwards node lifecycle request", async (t) => 
   assert.deepEqual(response.json(), { success: true });
 });
 
+function mockLabOperationsServer(context: TestAppContext): void {
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({
+      status: "healthy",
+      features: ["exec-filters", "lab-lifecycle-node-filter", "save-copy", "inspect-details"],
+    }),
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([
+      { name: "clab-demo-leaf1", state: "running" },
+      { name: "clab-demo-leaf2", state: "running" },
+    ]),
+  );
+}
+
+test("/api/runtime/lab-operations stop several nodes in one call", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  mockLabOperationsServer(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/stop\?/,
+    (call) => {
+      assert.equal(call.url.searchParams.get("nodeFilter"), "leaf1,leaf2");
+      return jsonResponse({ message: "stopped", logs: [] });
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/nodes/stop",
+    headers: { cookie },
+    payload: {
+      nodeNames: ["clab-demo-leaf1", "leaf2"],
+      topologyRef: demoTopologyRef(endpointId),
+    },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().message, "stopped");
+});
+
+test("/api/runtime/lab-operations run exec, save with copy and details", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  mockLabOperationsServer(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/exec\?/,
+    (call) => {
+      assert.equal(call.url.searchParams.get("nodes"), "leaf1");
+      assert.deepEqual(call.url.searchParams.getAll("label"), ["role=leaf"]);
+      assert.deepEqual(JSON.parse(call.body ?? "{}"), { command: "uptime" });
+      return jsonResponse({
+        "clab-demo-leaf1": [{ cmd: ["uptime"], "return-code": 0, stdout: "up", stderr: "" }],
+      });
+    },
+  );
+  context.fetchMock.on(
+    "POST",
+    "http://api.example.test/api/v1/labs/demo/save?copy=configs",
+    () => jsonResponse({ message: "saved", output: "ok", copyDir: "labs/configs" }),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo?details=true",
+    () => jsonResponse({ demo: [{ Names: ["clab-demo-leaf1"] }] }),
+  );
+  const topologyRef = demoTopologyRef(endpointId);
+
+  const exec = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/exec",
+    headers: { cookie },
+    payload: { command: "uptime", nodeNames: ["leaf1"], labels: ["role=leaf"], topologyRef },
+  });
+  assert.equal(exec.statusCode, 200, exec.body);
+  assert.deepEqual(Object.keys(exec.json()), ["clab-demo-leaf1"]);
+
+  const save = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/save",
+    headers: { cookie },
+    payload: { copyDir: "configs", topologyRef },
+  });
+  assert.equal(save.statusCode, 200, save.body);
+  assert.equal(save.json().copyDir, "labs/configs");
+
+  const details = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/inspect-details",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(details.statusCode, 200, details.body);
+  assert.deepEqual(details.json(), { demo: [{ Names: ["clab-demo-leaf1"] }] });
+
+  const support = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/support",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.deepEqual(support.json(), {
+    execByLabel: true,
+    snapshotSave: false,
+    deployRestore: false,
+    saveCopy: true,
+    inspectDetails: true,
+  });
+});
+
+test("/api/runtime/lab-operations reject bad input before reaching the lab host", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const topologyRef = demoTopologyRef(endpointId);
+  const calls = context.fetchMock.calls.length;
+
+  for (const [url, payload] of [
+    ["/api/runtime/lab-operations/exec", { command: " ", topologyRef }],
+    ["/api/runtime/lab-operations/exec", { command: "ls", labels: ["role"], topologyRef }],
+    ["/api/runtime/lab-operations/snapshots", { timeout: "soon", topologyRef }],
+    ["/api/runtime/lab-operations/save", { copyDir: "a\u0000b", topologyRef }],
+    ["/api/runtime/lab-operations/nodes/pause", { nodeNames: ["leaf1"], topologyRef }],
+  ] as const) {
+    const response = await context.app.inject({ method: "POST", url, headers: { cookie }, payload });
+    assert.equal(response.statusCode, 400, `${url}: ${response.body}`);
+  }
+  assert.equal(
+    context.fetchMock.calls
+      .slice(calls)
+      .some((call) => call.url.pathname.startsWith("/api/v1/labs/demo")),
+    false,
+  );
+});
+
 test("/api/runtime/capture resolves unresolved topology prefix to runtime container name", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);

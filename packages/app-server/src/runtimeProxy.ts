@@ -32,7 +32,7 @@ import {
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { resolveTopologySshUsername } from "./topologyCredentials.ts";
 
-interface RuntimeTargetBody {
+export interface RuntimeTargetBody {
   endpointId?: string;
   sessionId?: string;
   topologyRef?: TopologyRef;
@@ -155,7 +155,7 @@ interface ResolvedLabTarget {
   yamlPath?: string;
 }
 
-class RequestError extends Error {
+export class RequestError extends Error {
   constructor(
     message: string,
     public readonly statusCode: number
@@ -164,7 +164,7 @@ class RequestError extends Error {
   }
 }
 
-function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
+export function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof RequestError) {
     return reply.status(error.statusCode).send({ error: message });
@@ -172,7 +172,7 @@ function handleRouteError(reply: FastifyReply, error: unknown): FastifyReply {
   return reply.status(getHttpErrorStatus(error) ?? 500).send({ error: message });
 }
 
-function resolveRequestedEndpointId(target?: RuntimeTargetBody): string | undefined {
+export function resolveRequestedEndpointId(target?: RuntimeTargetBody): string | undefined {
   return target?.endpointId ?? extractEndpointIdFromTopologyId(target?.topologyRef?.topologyId);
 }
 
@@ -202,7 +202,7 @@ function resolveEndpointForCaptureSession(
   return resolveEndpoint(request, reply);
 }
 
-async function resolveLabTarget(
+export async function resolveLabTarget(
   endpoint: EndpointEntry,
   backend: LabBackend,
   sessions: StandaloneTopologySessionManager,
@@ -311,7 +311,7 @@ function scoreNodeMatch(labName: string, containerName: string, requestedNodeNam
   return 0;
 }
 
-async function resolveNodeTarget(
+export async function resolveNodeTarget(
   backend: LabBackend,
   labName: string,
   requestedNodeName: string

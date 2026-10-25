@@ -121,6 +121,10 @@ import {
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import type { CaptureTarget } from "./runtimeApi";
+import {
+  controlNodesLifecycle,
+  createStandaloneLabOperations,
+} from "./standaloneLabOperations";
 
 type ImageManagerModule = typeof ImageManagerExports;
 
@@ -691,6 +695,7 @@ type VscodeMessage = {
   message?: string;
   name?: string;
   nodeName?: string;
+  nodeNames?: unknown;
   options?: unknown;
   panelYaml?: string;
   requestId?: string;
@@ -973,6 +978,29 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
   }
 
   if (!target || !nodeName || action === null) {
+    return;
+  }
+
+  const nodeNames = Array.isArray(msg.nodeNames)
+    ? msg.nodeNames.filter(
+        (name): name is string => typeof name === "string" && name.trim().length > 0,
+      )
+    : [];
+  if (nodeNames.length > 1) {
+    const nodesAction = action;
+    void controlNodesLifecycle(target, nodesAction, nodeNames)
+      .then((message) => {
+        runtimeUiActions.notify(
+          message ?? `${nodesAction} requested for ${nodeNames.length} nodes.`,
+          "success",
+        );
+      })
+      .catch((error: unknown) => {
+        runtimeUiActions.notify(
+          error instanceof Error ? error.message : String(error),
+          "error",
+        );
+      });
     return;
   }
 
@@ -1369,6 +1397,17 @@ function setupStandaloneUiHost(): void {
     });
   };
 
+  // Lab operations also skip postMessage and go to the app server.
+  const labOperations = createStandaloneLabOperations(() => {
+    const topologyRef = topologyManager.getCurrentTopologyRef();
+    if (!topologyRef) return null;
+    return {
+      endpointId: topologyManager.getCurrentEndpointId() ?? undefined,
+      sessionId: topologyManager.getCurrentSessionId() ?? undefined,
+      topologyRef,
+    };
+  });
+
   standaloneRuntime = createClabUiRuntime({
     host: {
       ...apiHost,
@@ -1379,6 +1418,7 @@ function setupStandaloneUiHost(): void {
         tailscaleStatus: getStandaloneBackend().capabilities.lifecycle
           ? tailscaleStatus
           : undefined,
+        ...(getStandaloneBackend().capabilities.lifecycle ? { labOperations } : { labOperations: undefined }),
       },
       topology: {
         ...apiHost.topology,

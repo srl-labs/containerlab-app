@@ -177,14 +177,27 @@ export async function netemReset(options: ResolvedLocalOptions, request: NetemRe
   await clab(options, ["tools", "-r", options.runtime, "netem", "reset", "-n", request.containerName, "-i", request.interface]);
 }
 
-export async function saveLab(options: ResolvedLocalOptions, topology: string, nodeFilter?: string) {
+export async function saveLab(
+  options: ResolvedLocalOptions,
+  topology: string,
+  nodeFilter?: string,
+  copyDir?: string
+) {
   const args = ["save", "-r", options.runtime, "-t", topology];
   if (nodeFilter) args.push("--node-filter", nodeFilter);
-  const result = await clab(options, args, 10 * 60_000);
+  if (copyDir) args.push(`--copy=${copyDir}`);
+  // `--copy` resolves relative paths against the working directory.
+  const [file, commandArgs] = containerlabCommand(options, args);
+  const result = await runChecked(file, commandArgs, {
+    env: options.env,
+    timeoutMs: 10 * 60_000,
+    cwd: path.dirname(topology)
+  });
   const labName = path.basename(topology).replace(/\.clab\.ya?ml$/i, "");
   return {
     message: `Configuration save command executed successfully for lab '${labName}'.`,
-    output: stripAnsi(`${result.stderr}${result.stdout}`).trim() || "Configuration saved"
+    output: stripAnsi(`${result.stderr}${result.stdout}`).trim() || "Configuration saved",
+    ...(copyDir ? { copyDir: path.resolve(path.dirname(topology), copyDir) } : {})
   };
 }
 

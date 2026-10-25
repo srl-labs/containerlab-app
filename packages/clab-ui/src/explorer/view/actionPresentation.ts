@@ -153,6 +153,7 @@ const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.lab.togglefavorite": StarBorderRoundedIcon,
   "containerlab.lab.addtoworkspace": FolderOpenOutlinedIcon,
   "containerlab.lab.save": SaveOutlinedIcon,
+  "containerlab.lab.savecopy": SaveOutlinedIcon,
   "containerlab.lab.start": PlayArrowRoundedIcon,
   "containerlab.lab.stop": StopRoundedIcon,
   "containerlab.lab.restart": RefreshRoundedIcon,

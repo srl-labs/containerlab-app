@@ -480,6 +480,29 @@ export async function controlNodeLifecycle(
   );
 }
 
+/** App server routes for exec, VM snapshots, config save, inspect details and multi-node start/stop. */
+export type LabOperationRoute =
+  | "support"
+  | "exec"
+  | "snapshots"
+  | "save"
+  | "inspect-details"
+  | "nodes/start"
+  | "nodes/stop"
+  | "nodes/restart";
+
+export async function requestLabOperation(
+  route: LabOperationRoute,
+  input: RuntimeTargetRequest & Record<string, unknown>
+): Promise<unknown> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<unknown>(
+    `/api/runtime/lab-operations/${route}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
 export async function fetchNodeBrowserPorts(
   input: RuntimeTargetRequest & {
     nodeName: string;

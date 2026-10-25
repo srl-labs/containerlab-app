@@ -29,6 +29,7 @@ import type * as LifecycleModule from "../../../src/reactTopoViewer/extension/se
 import type * as NodeModule from "../../../src/reactTopoViewer/extension/services/NodeCommandService";
 import type * as CustomModule from "../../../src/reactTopoViewer/extension/services/CustomNodeConfigManager";
 import type * as IconModule from "../../../src/reactTopoViewer/extension/services/IconService";
+import type * as LabOperationsModule from "../../../src/reactTopoViewer/extension/services/LabOperationsService";
 import type { SplitViewManager } from "../../../src/reactTopoViewer/extension/services/SplitViewManager";
 
 type ModuleWithResolve = typeof Module & { _resolveFilename: Function };
@@ -81,6 +82,7 @@ let labLifecycleService: typeof LifecycleModule.labLifecycleService;
 let nodeCommandService: typeof NodeModule.nodeCommandService;
 let customNodeConfigManager: typeof CustomModule.customNodeConfigManager;
 let iconService: typeof IconModule.iconService;
+let labOperationsService: typeof LabOperationsModule.labOperationsService;
 
 interface WebviewHarness {
   host: ClabUiHost;
@@ -173,6 +175,9 @@ describe("MessageRouter with the clab-ui webview host", () => {
     ({ nodeCommandService } = load("services/NodeCommandService") as typeof NodeModule);
     ({ customNodeConfigManager } = load("services/CustomNodeConfigManager") as typeof CustomModule);
     ({ iconService } = load("services/IconService") as typeof IconModule);
+    ({ labOperationsService } = load(
+      "services/LabOperationsService"
+    ) as typeof LabOperationsModule);
   });
 
   after(() => {
@@ -300,6 +305,47 @@ describe("MessageRouter with the clab-ui webview host", () => {
     expect(planApply.args).to.deep.equal([[YAML_PATH], [YAML_PATH]]);
     expect(plan.addedNodes).to.deep.equal(["r3"]);
     expect(String(failure)).to.contain("lab not found");
+  });
+
+  it("answers lab operations with the lab host's result or its error", async () => {
+    const run = sinon.stub(labOperationsService, "run");
+    run.onFirstCall().resolves({
+      "clab-demo-r1": [{ cmd: ["uptime"], "return-code": 0, stdout: "up", stderr: "" }]
+    });
+    run.onSecondCall().rejects(new Error("This clab-api-server cannot show inspect details."));
+    const webview = connectWebview();
+    const operations = webview.host.topoViewer.labOperations;
+    expect(operations).to.not.equal(undefined);
+
+    const exec = await operations!.exec({ command: "uptime", nodeNames: ["r1"] });
+    let failure: unknown;
+    await operations!.inspectDetails().catch((err: unknown) => {
+      failure = err;
+    });
+
+    expect(run.args).to.deep.equal([
+      [YAML_PATH, "exec", { command: "uptime", nodeNames: ["r1"] }],
+      [YAML_PATH, "inspectDetails", undefined]
+    ]);
+    expect(exec.results.map((result) => [result.node, result.stdout])).to.deep.equal([
+      ["r1", "up"]
+    ]);
+    expect(String(failure)).to.contain("cannot show inspect details");
+  });
+
+  it("starts several nodes in one call and a single node through its endpoint", async () => {
+    const nodesAction = sinon.stub(labOperationsService, "nodesAction").resolves();
+    const nodeEndpoint = sinon
+      .stub(nodeCommandService, "handleNodeEndpoint")
+      .resolves({ result: null, error: null });
+    const webview = connectWebview();
+
+    webview.host.topoViewer.runNodesAction?.("restart", ["r1", "r2"]);
+    webview.host.topoViewer.runNodesAction?.("stop", ["r3"]);
+    await webview.settle();
+
+    expect(nodesAction.args).to.deep.equal([[YAML_PATH, "restart", ["r1", "r2"]]]);
+    expect(nodeEndpoint.args).to.deep.equal([[NODE_COMMANDS.NODE_STOP, "r3", YAML_PATH]]);
   });
 
   it("forwards a multi-interface capture to the capture endpoint", async () => {
