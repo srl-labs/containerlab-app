@@ -195,7 +195,7 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       disableInteractive
       leaveDelay={0}
       placement="right"
-      title="TopoViewer"
+      title="Containerlab"
       open={props.showTooltip === true && tooltipOpen}
       onOpen={() => setTooltipOpen(true)}
       onClose={() => setTooltipOpen(false)}
@@ -203,7 +203,7 @@ export function RailLogo(props: { showTooltip?: boolean }) {
       <IconButton
         size="small"
         onClick={() => kickRef.current(Math.random() < 0.4)}
-        aria-label="TopoViewer"
+        aria-label="Containerlab"
         data-testid="workspace-logo"
         sx={{ width: 36, height: 36, borderRadius: 1, overflow: "hidden", color: "text.secondary" }}
       >
