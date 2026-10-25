@@ -24,18 +24,29 @@ import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import { type SettingsNavigationItem } from "./SettingsNavigation";
 import { floatingRadius } from "../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../theme/typography";
 import { SettingCard } from "./SettingCard";
+import { LabHostsPanel } from "./LabHostsPanel";
 import type {
   SettingsChange,
   SettingsSnapshot,
   SettingsTarget,
 } from "./schema";
 
+const LAB_HOSTS_CATEGORY: SettingsNavigationItem = {
+  key: "labHosts",
+  label: "Lab Hosts",
+  description: "Labs on this machine and on the hosts that run clab-api-server",
+  icon: <DnsOutlinedIcon fontSize="small" />,
+};
+/** Searches that should lead to the Lab Hosts page instead of raw settings. */
+const LAB_HOSTS_SEARCH =
+  /\b(lab ?hosts?|hosts?|servers?|connections?|clab-api|sign|local)\b/i;
 const CATEGORIES: SettingsNavigationItem[] = [
   {
     key: "general",
@@ -90,7 +101,7 @@ export function SettingsApp({
   subscribe: (listener: (snapshot: SettingsSnapshot) => void) => () => void;
 }) {
   const [snapshot, setSnapshot] = useState(initial);
-  const [category, setCategory] = useState("general");
+  const [category, setCategory] = useState(initial.category ?? "general");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<SettingsFilter>("all");
   const [dirtyKeys, setDirtyKeys] = useState<Set<string>>(() => new Set());
@@ -99,12 +110,32 @@ export function SettingsApp({
   const [error, setError] = useState("");
   useEffect(
     () =>
-      subscribe((next) =>
+      subscribe((next) => {
+        // The extension opens a page, e.g. Lab Hosts from the explorer.
+        if (next.category !== undefined) {
+          setCategory(next.category);
+          setSearch("");
+        }
         setSnapshot((current) =>
           next.target === current.target ? next : current,
-        ),
-      ),
+        );
+      }),
     [subscribe],
+  );
+  /** Lab host actions answer with the new settings; health stats with metrics. */
+  const labHostsRequest = useCallback(
+    async (payload: Record<string, unknown>): Promise<unknown> => {
+      const result: unknown = await request(payload);
+      if (
+        typeof result === "object" &&
+        result !== null &&
+        "definitions" in result
+      ) {
+        setSnapshot(result as SettingsSnapshot);
+      }
+      return result;
+    },
+    [request],
   );
   const onDirty = useCallback(
     (key: string, dirty: boolean) =>
@@ -145,7 +176,21 @@ export function SettingsApp({
     }
   };
   const query = search.trim().toLowerCase();
-  const definitions = snapshot.definitions;
+  const labHosts = snapshot.labHosts;
+  // Lab hosts have their own page; their raw settings stay out of the lists.
+  const definitions = labHosts
+    ? snapshot.definitions.filter(
+        (definition) => definition.category !== "labHosts",
+      )
+    : snapshot.definitions;
+  const navigation = labHosts
+    ? [LAB_HOSTS_CATEGORY, ...CATEGORIES]
+    : CATEGORIES;
+  const showLabHosts =
+    labHosts !== undefined &&
+    category === "labHosts" &&
+    query.length === 0 &&
+    filter === "all";
   const { visible, currentModified, allModified } = filterSettings(
     definitions,
     snapshot.values,
@@ -154,7 +199,7 @@ export function SettingsApp({
     filter,
   );
   const active =
-    CATEGORIES.find((item) => item.key === category) ?? CATEGORIES[0];
+    navigation.find((item) => item.key === category) ?? CATEGORIES[0];
   const showAllCategories =
     filter === "modified-all" || (query.length > 0 && filter === "all");
   let title = active.label;
@@ -167,14 +212,14 @@ export function SettingsApp({
     title = "All modified settings";
     description = `${visible.length} overrides across all categories · ${snapshot.target === "user" ? "User" : "Workspace"}`;
   }
-  const categories = CATEGORIES.map((item) => ({
-    ...item,
-    count:
-      item.key === "about"
-        ? undefined
-        : definitions.filter((definition) => definition.category === item.key)
-            .length,
-  }));
+  const categories = navigation.map((item) => {
+    let count: number | undefined = definitions.filter(
+      (definition) => definition.category === item.key,
+    ).length;
+    if (item.key === "about") count = undefined;
+    if (item.key === "labHosts") count = labHosts?.hosts.length;
+    return { ...item, count };
+  });
   return (
     <>
       <SettingsLayout
@@ -195,7 +240,10 @@ export function SettingsApp({
             onClick={() => {
               void action("native");
             }}
-            sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }}
+            sx={{
+              color: "text.secondary",
+              "&:hover": { color: "text.primary" },
+            }}
           >
             VS Code Settings
           </Button>
@@ -220,72 +268,78 @@ export function SettingsApp({
                   },
                 }}
               />
-              <TextField
-                select
-                size="small"
-                value={snapshot.target}
-                disabled={busy}
-                slotProps={{
-                  select: { inputProps: { "aria-label": "Save settings to" } },
-                }}
-                onChange={(event) => {
-                  const target = event.target.value as SettingsTarget;
-                  if (dirtyKeys.size) setPendingTarget(target);
-                  else void changeTarget(target);
-                }}
-                sx={{ minWidth: 128 }}
-              >
-                <MenuItem value="user">User</MenuItem>
-                <MenuItem
-                  value="workspace"
-                  disabled={!snapshot.workspaceAvailable}
+              {showLabHosts ? null : (
+                <TextField
+                  select
+                  size="small"
+                  value={snapshot.target}
+                  disabled={busy}
+                  slotProps={{
+                    select: {
+                      inputProps: { "aria-label": "Save settings to" },
+                    },
+                  }}
+                  onChange={(event) => {
+                    const target = event.target.value as SettingsTarget;
+                    if (dirtyKeys.size) setPendingTarget(target);
+                    else void changeTarget(target);
+                  }}
+                  sx={{ minWidth: 128 }}
                 >
-                  Workspace
-                </MenuItem>
-              </TextField>
+                  <MenuItem value="user">User</MenuItem>
+                  <MenuItem
+                    value="workspace"
+                    disabled={!snapshot.workspaceAvailable}
+                  >
+                    Workspace
+                  </MenuItem>
+                </TextField>
+              )}
             </Stack>
-            <ToggleButtonGroup
-              value={filter}
-              exclusive
-              size="small"
-              aria-label="Filter settings"
-              onChange={(_, next: SettingsFilter | null) => {
-                if (next !== null) setFilter(next);
-              }}
-              sx={{ alignSelf: "flex-start", maxWidth: "100%" }}
-            >
-              <ToggleButton value="all">All in view</ToggleButton>
-              <ToggleButton
-                value="modified-view"
-                aria-label={`Modified in this view: ${currentModified}`}
+            {showLabHosts ? null : (
+              <ToggleButtonGroup
+                value={filter}
+                exclusive
+                size="small"
+                aria-label="Filter settings"
+                onChange={(_, next: SettingsFilter | null) => {
+                  if (next !== null) setFilter(next);
+                }}
+                sx={{ alignSelf: "flex-start", maxWidth: "100%" }}
               >
-                Modified in view{" "}
-                <Box
-                  component="span"
-                  sx={{
-                    color: "text.secondary",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
+                <ToggleButton value="all">All in view</ToggleButton>
+                <ToggleButton
+                  value="modified-view"
+                  aria-label={`Modified in this view: ${currentModified}`}
                 >
-                  {currentModified}
-                </Box>
-              </ToggleButton>
-              <ToggleButton
-                value="modified-all"
-                aria-label={`Modified across all settings: ${allModified}`}
-              >
-                All modified{" "}
-                <Box
-                  component="span"
-                  sx={{
-                    color: "text.secondary",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
+                  Modified in view{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      color: "text.secondary",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {currentModified}
+                  </Box>
+                </ToggleButton>
+                <ToggleButton
+                  value="modified-all"
+                  aria-label={`Modified across all settings: ${allModified}`}
                 >
-                  {allModified}
-                </Box>
-              </ToggleButton>
-            </ToggleButtonGroup>
+                  All modified{" "}
+                  <Box
+                    component="span"
+                    sx={{
+                      color: "text.secondary",
+                      fontVariantNumeric: "tabular-nums",
+                    }}
+                  >
+                    {allModified}
+                  </Box>
+                </ToggleButton>
+              </ToggleButtonGroup>
+            )}
           </Stack>
         }
         sectionActions={
@@ -420,7 +474,32 @@ export function SettingsApp({
             );
           })}
         </Box>
+        {query.length > 0 && labHosts && LAB_HOSTS_SEARCH.test(query) && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  setCategory("labHosts");
+                  setSearch("");
+                  setFilter("all");
+                }}
+              >
+                Open Lab Hosts
+              </Button>
+            }
+          >
+            Local and the lab hosts are managed on the Lab Hosts page.
+          </Alert>
+        )}
+        {showLabHosts && labHosts && (
+          <LabHostsPanel labHosts={labHosts} request={labHostsRequest} />
+        )}
         {!visible.length &&
+          !showLabHosts &&
           (query || category !== "about" || filter !== "all") && (
             <Box
               sx={{

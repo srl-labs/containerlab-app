@@ -1,12 +1,8 @@
-import type { ChildProcess } from "child_process";
-import { spawn } from "child_process";
-import * as readline from "readline";
-
 import * as vscode from "vscode";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabDetailedJSON } from "../treeView/common";
 import type { ClabInterfaceSnapshot, ClabInterfaceSnapshotEntry } from "../types/containerlab";
-import { containerlabBinaryPath } from "../globals";
 
 interface ContainerlabEvent {
   timestamp?: string;
@@ -251,149 +247,16 @@ interface LabRecord {
 const INITIAL_IDLE_TIMEOUT_MS = 250;
 const INITIAL_FALLBACK_TIMEOUT_MS = 2000;
 
-let currentRuntime: string | undefined;
-let receivedInitialEvent = false;
-let child: ChildProcess | null = null;
-let stdoutInterface: readline.Interface | null = null;
-let initialLoadComplete = false;
-let initialLoadPromise: Promise<void> | null = null;
-let resolveInitialLoad: (() => void) | null = null;
-let idleTimer: ReturnType<typeof setTimeout> | null = null;
-let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-
-type RejectInitialLoad = (error: Error) => void;
-let rejectInitialLoad: RejectInitialLoad | null = null;
-
-const containersById = new Map<string, ContainerRecord>();
-const labsByName = new Map<string, LabRecord>();
-const interfacesByContainer = new Map<string, Map<string, InterfaceRecord>>();
-const interfaceVersions = new Map<string, number>();
-const nodeSnapshots = new Map<string, NodeSnapshot>();
 type DataListener = () => void;
-type ContainerStateChangedListener = (containerShortId: string, newState: string) => void;
+type ContainerStateChangedListener = (
+  containerShortId: string,
+  newState: string,
+  connectionId: string
+) => void;
+type RejectInitialLoad = (error: Error) => void;
 const dataListeners = new Set<DataListener>();
 const containerStateChangedListeners = new Set<ContainerStateChangedListener>();
-let dataChangedTimer: ReturnType<typeof setTimeout> | null = null;
 const DATA_NOTIFY_DELAY_MS = 50;
-
-function scheduleDataChanged(): void {
-  if (dataListeners.size === 0) {
-    return;
-  }
-  if (dataChangedTimer) {
-    return;
-  }
-  dataChangedTimer = setTimeout(() => {
-    dataChangedTimer = null;
-    for (const listener of Array.from(dataListeners)) {
-      try {
-        listener();
-      } catch (err) {
-        console.error(
-          `[containerlabEvents]: Failed to notify listener: ${err instanceof Error ? err.message : String(err)}`
-        );
-      }
-    }
-  }, DATA_NOTIFY_DELAY_MS);
-}
-
-function notifyContainerStateChanged(containerShortId: string, newState: string): void {
-  if (containerStateChangedListeners.size === 0) {
-    return;
-  }
-  for (const listener of Array.from(containerStateChangedListeners)) {
-    try {
-      listener(containerShortId, newState);
-    } catch (err) {
-      console.error(
-        `[containerlabEvents]: Failed to notify state change listener: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }
-}
-
-function scheduleInitialResolution(): void {
-  if (initialLoadComplete) {
-    return;
-  }
-
-  // Once we receive the first event, cancel the fallback timer.
-  // We'll rely on the idle timer to finalize after events stop arriving.
-  if (!receivedInitialEvent) {
-    receivedInitialEvent = true;
-    if (fallbackTimer) {
-      clearTimeout(fallbackTimer);
-      fallbackTimer = null;
-    }
-  }
-
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-  }
-
-  idleTimer = setTimeout(() => finalizeInitialLoad(), INITIAL_IDLE_TIMEOUT_MS);
-}
-
-function finalizeInitialLoad(error?: Error): void {
-  if (initialLoadComplete) {
-    return;
-  }
-
-  initialLoadComplete = true;
-
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
-  if (fallbackTimer) {
-    clearTimeout(fallbackTimer);
-    fallbackTimer = null;
-  }
-
-  if (error) {
-    if (rejectInitialLoad) {
-      rejectInitialLoad(error);
-    }
-    return;
-  }
-
-  if (resolveInitialLoad) {
-    resolveInitialLoad();
-  }
-}
-
-function stopProcess(): void {
-  if (stdoutInterface) {
-    stdoutInterface.removeAllListeners();
-    stdoutInterface.close();
-    stdoutInterface = null;
-  }
-
-  if (child) {
-    child.removeAllListeners();
-    try {
-      child.kill();
-    } catch {
-      // ignore errors during shutdown
-    }
-    child = null;
-  }
-
-  initialLoadComplete = false;
-  initialLoadPromise = null;
-  resolveInitialLoad = null;
-  rejectInitialLoad = null;
-  receivedInitialEvent = false;
-
-  if (idleTimer) {
-    clearTimeout(idleTimer);
-    idleTimer = null;
-  }
-  if (fallbackTimer) {
-    clearTimeout(fallbackTimer);
-    fallbackTimer = null;
-  }
-}
 
 function isString(value: unknown): value is string {
   return typeof value === "string";
@@ -793,28 +656,6 @@ function resolveStateValue(current: string, fallback: string | undefined, action
   return current;
 }
 
-function updateLabMappings(previous: ContainerRecord | undefined, next: ContainerRecord): void {
-  if (previous && previous.labName !== next.labName) {
-    const previousLab = labsByName.get(previous.labName);
-    if (previousLab) {
-      previousLab.containers.delete(next.data.ShortID);
-      if (previousLab.containers.size === 0) {
-        labsByName.delete(previous.labName);
-      }
-    }
-  }
-
-  let lab = labsByName.get(next.labName);
-  if (!lab) {
-    lab = { topoFile: next.topoFile, containers: new Map() };
-    labsByName.set(next.labName, lab);
-  }
-  if (isNonEmptyString(next.topoFile)) {
-    lab.topoFile = next.topoFile;
-  }
-  lab.containers.set(next.data.ShortID, next.data);
-}
-
 function makeNodeSnapshotKey(record: ContainerRecord): string | undefined {
   const labels = record.data.Labels;
   const nodeName = labels["clab-node-name"] || labels["clab-node-longname"] || record.data.Names[0];
@@ -824,49 +665,6 @@ function makeNodeSnapshotKey(record: ContainerRecord): string | undefined {
   const labCandidate = pickNonEmpty(record.labName, labels.containerlab);
   const lab = labCandidate === "" ? "unknown" : labCandidate;
   return `${lab}::${nodeName}`.toLowerCase();
-}
-
-function applyNodeSnapshot(record: ContainerRecord): ContainerRecord {
-  const key = makeNodeSnapshotKey(record);
-  if (key === undefined || key === "") {
-    return record;
-  }
-  const snapshot = nodeSnapshots.get(key);
-  if (!snapshot) {
-    return record;
-  }
-
-  const settings = record.data.NetworkSettings;
-  if (
-    (settings.IPv4addr === undefined || settings.IPv4addr === "") &&
-    snapshot.ipv4 !== undefined &&
-    snapshot.ipv4 !== ""
-  ) {
-    settings.IPv4addr = snapshot.ipv4;
-    settings.IPv4pLen = snapshot.ipv4Prefix;
-  }
-  if (
-    (settings.IPv6addr === undefined || settings.IPv6addr === "") &&
-    snapshot.ipv6 !== undefined &&
-    snapshot.ipv6 !== ""
-  ) {
-    settings.IPv6addr = snapshot.ipv6;
-    settings.IPv6pLen = snapshot.ipv6Prefix;
-  }
-
-  if (record.data.State === "running") {
-    record.data.StartedAt = snapshot.startedAt;
-    if (!hasNonEmptyStatus(record.data.Status)) {
-      record.data.Status = "Running";
-    }
-  } else {
-    record.data.StartedAt = undefined;
-    if (!hasNonEmptyStatus(record.data.Status)) {
-      record.data.Status = formatStateLabel(record.data.State);
-    }
-  }
-
-  return record;
 }
 
 function estimateStartedAtFromStatus(
@@ -957,51 +755,6 @@ function toDurationSeconds(unit: string): number {
   }
 }
 
-function updateNodeSnapshot(
-  record: ContainerRecord,
-  eventTimestamp?: number,
-  action?: string
-): void {
-  const key = makeNodeSnapshotKey(record);
-  if (key === undefined || key === "") {
-    return;
-  }
-
-  const settings = record.data.NetworkSettings;
-  const snapshot = nodeSnapshots.get(key) ?? {};
-
-  if (settings.IPv4addr !== undefined && settings.IPv4addr !== "") {
-    snapshot.ipv4 = settings.IPv4addr;
-    snapshot.ipv4Prefix = settings.IPv4pLen;
-  }
-
-  if (settings.IPv6addr !== undefined && settings.IPv6addr !== "") {
-    snapshot.ipv6 = settings.IPv6addr;
-    snapshot.ipv6Prefix = settings.IPv6pLen;
-  }
-
-  if (record.data.State === "running") {
-    const estimatedStart = estimateStartedAtFromStatus(record.data.Status, eventTimestamp);
-    if (estimatedStart !== undefined) {
-      snapshot.startedAt = estimatedStart;
-    } else if (shouldResetLifecycleStatus(action ?? "") || snapshot.startedAt === undefined) {
-      snapshot.startedAt = resolveStartTimestamp(eventTimestamp, snapshot.startedAt);
-    }
-  } else {
-    snapshot.startedAt = undefined;
-  }
-
-  nodeSnapshots.set(key, snapshot);
-}
-
-function clearNodeSnapshot(record: ContainerRecord): void {
-  const key = makeNodeSnapshotKey(record);
-  if (key === undefined || key === "") {
-    return;
-  }
-  nodeSnapshots.delete(key);
-}
-
 function parseEventTimestamp(timestamp?: string): number | undefined {
   if (timestamp === undefined || timestamp === "") {
     return undefined;
@@ -1041,137 +794,6 @@ function shouldMarkInterfacesDown(state: string | undefined): boolean {
   return normalized !== "running" && normalized !== "paused";
 }
 
-function applyContainerEvent(event: ContainerlabEvent): void {
-  const action = event.action;
-
-  if (isExecAction(action)) {
-    return;
-  }
-
-  if (shouldRemoveContainer(action)) {
-    removeContainer(event.actor_id);
-    scheduleInitialResolution();
-    return;
-  }
-
-  const record = toClabDetailed(event);
-  if (!record) {
-    return;
-  }
-
-  const eventTimestamp = parseEventTimestamp(event.timestamp);
-  const existing = containersById.get(record.data.ShortID);
-  const oldState = existing?.data.State;
-  const mergedRecord = mergeContainerRecord(existing, record, action);
-  updateNodeSnapshot(mergedRecord, eventTimestamp, action);
-  const enrichedRecord = applyNodeSnapshot(mergedRecord);
-  const newState = enrichedRecord.data.State;
-
-  containersById.set(enrichedRecord.data.ShortID, enrichedRecord);
-  updateLabMappings(existing, enrichedRecord);
-
-  if (oldState !== undefined && oldState !== "" && oldState !== newState) {
-    notifyContainerStateChanged(enrichedRecord.data.ShortID, newState);
-  }
-
-  if (shouldMarkInterfacesDown(enrichedRecord.data.State)) {
-    if (markInterfacesDown(enrichedRecord.data.ShortID)) {
-      scheduleInitialResolution();
-      scheduleDataChanged();
-      return;
-    }
-  }
-
-  scheduleInitialResolution();
-  scheduleDataChanged();
-}
-
-function removeContainer(containerShortId: string): void {
-  const record = containersById.get(containerShortId);
-  if (!record) {
-    return;
-  }
-
-  const lab = labsByName.get(record.labName);
-  if (lab) {
-    lab.containers.delete(containerShortId);
-    if (lab.containers.size === 0) {
-      labsByName.delete(record.labName);
-    }
-  }
-
-  clearNodeSnapshot(record);
-  containersById.delete(containerShortId);
-  interfacesByContainer.delete(containerShortId);
-  interfaceVersions.delete(containerShortId);
-  scheduleDataChanged();
-}
-
-function applyInterfaceEvent(event: ContainerlabEvent): void {
-  const attributes = event.attributes ?? {};
-  const containerId = event.actor_id;
-  if (!containerId) {
-    return;
-  }
-
-  const ifaceName = attributes.ifname;
-  if (typeof ifaceName !== "string" || ifaceName === "") {
-    return;
-  }
-
-  if (event.action === "delete") {
-    if (removeInterfaceRecord(containerId, ifaceName)) {
-      bumpInterfaceVersion(containerId);
-      scheduleInitialResolution();
-      scheduleDataChanged();
-    }
-    return;
-  }
-
-  // allow the veth-stitch interfaces to live
-  if (ifaceName.startsWith("clab-") && !ifaceName.startsWith("clab-s-")) {
-    removeInterfaceRecord(containerId, ifaceName);
-    return;
-  }
-
-  let ifaceMap = interfacesByContainer.get(containerId);
-  if (!ifaceMap) {
-    ifaceMap = new Map();
-    interfacesByContainer.set(containerId, ifaceMap);
-  }
-  const existing = ifaceMap.get(ifaceName);
-  const updated = buildUpdatedInterfaceRecord(ifaceName, attributes, existing);
-  const removedRenamedEntries = removeInterfaceRecordsWithSameIndex(
-    ifaceMap,
-    ifaceName,
-    updated.ifindex
-  );
-
-  const changed = removedRenamedEntries || !interfaceRecordsEqual(existing, updated);
-
-  // Check if this event contains traffic stats - we always want to notify
-  // for stats updates to ensure real-time traffic monitoring works
-  const hasStats = attributes.rx_bps !== undefined || attributes.tx_bps !== undefined;
-
-  // No changes and no stats - nothing to do
-  if (!changed && !hasStats) {
-    return;
-  }
-
-  // Always update the record if we have new data
-  ifaceMap.set(ifaceName, updated);
-
-  // For structural changes, bump version
-  if (changed) {
-    bumpInterfaceVersion(containerId);
-  }
-
-  // Always notify for stats updates (real-time traffic monitoring)
-  // or when structural data changed
-  scheduleInitialResolution();
-  scheduleDataChanged();
-}
-
 function removeInterfaceRecordsWithSameIndex(
   ifaceMap: Map<string, InterfaceRecord>,
   incomingName: string,
@@ -1195,188 +817,597 @@ function removeInterfaceRecordsWithSameIndex(
   return removed;
 }
 
-function removeInterfaceRecord(containerId: string, ifaceName: string): boolean {
-  const ifaceMap = interfacesByContainer.get(containerId);
-  if (!ifaceMap) {
-    return false;
+/**
+ * The labs of one connection, kept current from its `containerlab events`
+ * stream: containers, interfaces and their statistics.
+ */
+export class LabEventStream {
+  private currentStreamKey: string | undefined;
+  private receivedInitialEvent = false;
+  private streamController: AbortController | null = null;
+  private initialLoadComplete = false;
+  private initialLoadPromise: Promise<void> | null = null;
+  private resolveInitialLoad: (() => void) | null = null;
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  private rejectInitialLoad: RejectInitialLoad | null = null;
+  private readonly containersById = new Map<string, ContainerRecord>();
+  private readonly labsByName = new Map<string, LabRecord>();
+  private readonly interfacesByContainer = new Map<string, Map<string, InterfaceRecord>>();
+  private readonly interfaceVersions = new Map<string, number>();
+  private readonly nodeSnapshots = new Map<string, NodeSnapshot>();
+  private dataChangedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(readonly connectionId: string) {}
+
+  private applyContainerEvent(event: ContainerlabEvent): void {
+    const action = event.action;
+
+    if (isExecAction(action)) {
+      return;
+    }
+
+    if (shouldRemoveContainer(action)) {
+      this.removeContainer(event.actor_id);
+      this.scheduleInitialResolution();
+      return;
+    }
+
+    const record = toClabDetailed(event);
+    if (!record) {
+      return;
+    }
+
+    const eventTimestamp = parseEventTimestamp(event.timestamp);
+    const existing = this.containersById.get(record.data.ShortID);
+    const oldState = existing?.data.State;
+    const mergedRecord = mergeContainerRecord(existing, record, action);
+    this.updateNodeSnapshot(mergedRecord, eventTimestamp, action);
+    const enrichedRecord = this.applyNodeSnapshot(mergedRecord);
+    const newState = enrichedRecord.data.State;
+
+    this.containersById.set(enrichedRecord.data.ShortID, enrichedRecord);
+    this.updateLabMappings(existing, enrichedRecord);
+
+    if (oldState !== undefined && oldState !== "" && oldState !== newState) {
+      this.notifyContainerStateChanged(enrichedRecord.data.ShortID, newState);
+    }
+
+    if (shouldMarkInterfacesDown(enrichedRecord.data.State)) {
+      if (this.markInterfacesDown(enrichedRecord.data.ShortID)) {
+        this.scheduleInitialResolution();
+        this.scheduleDataChanged();
+        return;
+      }
+    }
+
+    this.scheduleInitialResolution();
+    this.scheduleDataChanged();
   }
 
-  const removed = ifaceMap.delete(ifaceName);
-  if (ifaceMap.size === 0) {
-    interfacesByContainer.delete(containerId);
+  private applyInterfaceEvent(event: ContainerlabEvent): void {
+    const attributes = event.attributes ?? {};
+    const containerId = event.actor_id;
+    if (!containerId) {
+      return;
+    }
+
+    const ifaceName = attributes.ifname;
+    if (typeof ifaceName !== "string" || ifaceName === "") {
+      return;
+    }
+
+    if (event.action === "delete") {
+      if (this.removeInterfaceRecord(containerId, ifaceName)) {
+        this.bumpInterfaceVersion(containerId);
+        this.scheduleInitialResolution();
+        this.scheduleDataChanged();
+      }
+      return;
+    }
+
+    // allow the veth-stitch interfaces to live
+    if (ifaceName.startsWith("clab-") && !ifaceName.startsWith("clab-s-")) {
+      this.removeInterfaceRecord(containerId, ifaceName);
+      return;
+    }
+
+    let ifaceMap = this.interfacesByContainer.get(containerId);
+    if (!ifaceMap) {
+      ifaceMap = new Map();
+      this.interfacesByContainer.set(containerId, ifaceMap);
+    }
+    const existing = ifaceMap.get(ifaceName);
+    const updated = buildUpdatedInterfaceRecord(ifaceName, attributes, existing);
+    const removedRenamedEntries = removeInterfaceRecordsWithSameIndex(
+      ifaceMap,
+      ifaceName,
+      updated.ifindex
+    );
+
+    const changed = removedRenamedEntries || !interfaceRecordsEqual(existing, updated);
+
+    // Check if this event contains traffic stats - we always want to notify
+    // for stats updates to ensure real-time traffic monitoring works
+    const hasStats = attributes.rx_bps !== undefined || attributes.tx_bps !== undefined;
+
+    // No changes and no stats - nothing to do
+    if (!changed && !hasStats) {
+      return;
+    }
+
+    // Always update the record if we have new data
+    ifaceMap.set(ifaceName, updated);
+
+    // For structural changes, bump version
+    if (changed) {
+      this.bumpInterfaceVersion(containerId);
+    }
+
+    // Always notify for stats updates (real-time traffic monitoring)
+    // or when structural data changed
+    this.scheduleInitialResolution();
+    this.scheduleDataChanged();
   }
-  return removed;
-}
 
-function bumpInterfaceVersion(containerId: string): void {
-  const next = (interfaceVersions.get(containerId) ?? 0) + 1;
-  interfaceVersions.set(containerId, next);
-}
+  private applyNodeSnapshot(record: ContainerRecord): ContainerRecord {
+    const key = makeNodeSnapshotKey(record);
+    if (key === undefined || key === "") {
+      return record;
+    }
+    const snapshot = this.nodeSnapshots.get(key);
+    if (!snapshot) {
+      return record;
+    }
 
-function markInterfacesDown(containerId: string): boolean {
-  const ifaceMap = interfacesByContainer.get(containerId);
-  if (!ifaceMap || ifaceMap.size === 0) {
-    return false;
+    const settings = record.data.NetworkSettings;
+    if (
+      (settings.IPv4addr === undefined || settings.IPv4addr === "") &&
+      snapshot.ipv4 !== undefined &&
+      snapshot.ipv4 !== ""
+    ) {
+      settings.IPv4addr = snapshot.ipv4;
+      settings.IPv4pLen = snapshot.ipv4Prefix;
+    }
+    if (
+      (settings.IPv6addr === undefined || settings.IPv6addr === "") &&
+      snapshot.ipv6 !== undefined &&
+      snapshot.ipv6 !== ""
+    ) {
+      settings.IPv6addr = snapshot.ipv6;
+      settings.IPv6pLen = snapshot.ipv6Prefix;
+    }
+
+    if (record.data.State === "running") {
+      record.data.StartedAt = snapshot.startedAt;
+      if (!hasNonEmptyStatus(record.data.Status)) {
+        record.data.Status = "Running";
+      }
+    } else {
+      record.data.StartedAt = undefined;
+      if (!hasNonEmptyStatus(record.data.Status)) {
+        record.data.Status = formatStateLabel(record.data.State);
+      }
+    }
+
+    return record;
   }
 
-  // When a container goes down, clear all interfaces
-  interfacesByContainer.delete(containerId);
-  bumpInterfaceVersion(containerId);
-
-  return true;
-}
-
-function handleEventLine(line: string): void {
-  const trimmed = line.trim();
-  if (!trimmed) {
-    return;
+  private bumpInterfaceVersion(containerId: string): void {
+    const next = (this.interfaceVersions.get(containerId) ?? 0) + 1;
+    this.interfaceVersions.set(containerId, next);
   }
 
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
+  private clearNodeSnapshot(record: ContainerRecord): void {
+    const key = makeNodeSnapshotKey(record);
+    if (key === undefined || key === "") {
+      return;
+    }
+    this.nodeSnapshots.delete(key);
+  }
+
+  /**
+   * Starts streaming lab events from the backend, or keeps the running stream
+   * when `streamKey` (backend and runtime) is unchanged.
+   */
+  async ensure(backend: LabBackend, streamKey: string): Promise<void> {
+    if (this.streamController !== null && this.currentStreamKey === streamKey) {
+      if (this.initialLoadComplete) {
+        return;
+      }
+      if (this.initialLoadPromise) {
+        return this.initialLoadPromise;
+      }
+    }
+
+    this.stopProcess();
+    this.reset();
+    this.startProcess(backend, streamKey);
+
+    if (!this.initialLoadPromise) {
+      throw new Error("Failed to initialize containerlab events stream");
+    }
+    return this.initialLoadPromise;
+  }
+
+  private finalizeInitialLoad(error?: Error): void {
+    if (this.initialLoadComplete) {
+      return;
+    }
+
+    this.initialLoadComplete = true;
+
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+    if (this.fallbackTimer) {
+      clearTimeout(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+
+    if (error) {
+      if (this.rejectInitialLoad) {
+        this.rejectInitialLoad(error);
+      }
+      return;
+    }
+
+    if (this.resolveInitialLoad) {
+      this.resolveInitialLoad();
+    }
+  }
+
+  getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
+    const result: Record<string, ClabDetailedJSON[]> = {};
+
+    for (const [labName, lab] of this.labsByName.entries()) {
+      const containers = Array.from(lab.containers.values()).map((container) => ({
+        ...container,
+        Names: [...container.Names],
+        Labels: { ...container.Labels },
+        NetworkSettings: { ...container.NetworkSettings },
+        Mounts: container.Mounts.map((mount) => ({ ...mount })),
+        Ports: container.Ports.map((port) => ({ ...port }))
+      }));
+
+      if (isNonEmptyString(lab.topoFile)) {
+        Reflect.set(containers, "topo-file", lab.topoFile);
+      }
+      result[labName] = containers;
+    }
+
+    return result;
+  }
+
+  getInterfaceSnapshot(containerShortId: string, containerName: string): ClabInterfaceSnapshot[] {
+    const ifaceMap = this.interfacesByContainer.get(containerShortId);
+    if (!ifaceMap || ifaceMap.size === 0) {
+      return [];
+    }
+
+    const interfaces = Array.from(ifaceMap.values()).map(toInterfaceSnapshotEntry);
+
+    interfaces.sort((a, b) => a.name.localeCompare(b.name));
+
+    return [
+      {
+        name: containerName,
+        interfaces
+      }
+    ];
+  }
+
+  private handleEvent(parsed: unknown): void {
     if (!isContainerlabEvent(parsed)) {
       return;
     }
-    const event = parsed;
-    if (event.type === "container") {
-      applyContainerEvent(event);
-    } else if (event.type === "interface") {
-      applyInterfaceEvent(event);
+    if (parsed.type === "container") {
+      this.applyContainerEvent(parsed);
+    } else if (parsed.type === "interface") {
+      this.applyInterfaceEvent(parsed);
     }
-  } catch (err) {
-    console.error(
-      `[containerlabEvents]: Failed to parse event line: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-}
-
-function startProcess(runtime: string): void {
-  currentRuntime = runtime;
-  initialLoadComplete = false;
-
-  initialLoadPromise = new Promise<void>((resolve, reject) => {
-    resolveInitialLoad = resolve;
-    rejectInitialLoad = reject;
-  });
-
-  const config = vscode.workspace.getConfiguration("containerlab");
-  const enableInterfaceStats = config.get<boolean>("enableInterfaceStats", true);
-
-  const containerlabBinary = containerlabBinaryPath;
-  const baseArgs = ["events", "--format", "json", "--initial-state"];
-
-  // Only add --interface-stats if enabled in settings
-  if (enableInterfaceStats) {
-    baseArgs.push("--interface-stats");
   }
 
-  if (runtime) {
-    baseArgs.splice(1, 0, "-r", runtime);
-  }
-
-  const spawned = spawn(containerlabBinary, baseArgs, { stdio: ["ignore", "pipe", "pipe"] });
-  child = spawned;
-
-  stdoutInterface = readline.createInterface({ input: spawned.stdout });
-  stdoutInterface.on("line", handleEventLine);
-
-  spawned.stderr.on("data", (chunk) => {
-    console.warn(`[containerlabEvents]: stderr: ${chunk}`);
-  });
-
-  spawned.on("error", (err) => {
-    finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
-    stopProcess();
-  });
-
-  spawned.on("exit", (code, signal) => {
-    if (!initialLoadComplete) {
-      const message = `containerlab events exited prematurely (code=${code}, signal=${signal ?? ""})`;
-      finalizeInitialLoad(new Error(message));
-    }
-    stopProcess();
-  });
-
-  if (fallbackTimer) {
-    clearTimeout(fallbackTimer);
-  }
-  fallbackTimer = setTimeout(() => finalizeInitialLoad(), INITIAL_FALLBACK_TIMEOUT_MS);
-}
-
-export async function ensureEventStream(runtime: string): Promise<void> {
-  if (child !== null && currentRuntime === runtime) {
-    if (initialLoadComplete) {
+  handleEventLine(line: string): void {
+    const trimmed = line.trim();
+    if (!trimmed) {
       return;
     }
-    if (initialLoadPromise) {
-      return initialLoadPromise;
+
+    try {
+      this.handleEvent(JSON.parse(trimmed));
+    } catch (err) {
+      console.error(
+        `[containerlabEvents]: Failed to parse event line: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
-  stopProcess();
-  startProcess(runtime);
-
-  if (!initialLoadPromise) {
-    throw new Error("Failed to initialize containerlab events stream");
-  }
-  return initialLoadPromise;
-}
-
-export function stopEventStream(): void {
-  stopProcess();
-}
-
-export function getGroupedContainers(): Record<string, ClabDetailedJSON[]> {
-  const result: Record<string, ClabDetailedJSON[]> = {};
-
-  for (const [labName, lab] of labsByName.entries()) {
-    const containers = Array.from(lab.containers.values()).map((container) => ({
-      ...container,
-      Names: [...container.Names],
-      Labels: { ...container.Labels },
-      NetworkSettings: { ...container.NetworkSettings },
-      Mounts: container.Mounts.map((mount) => ({ ...mount })),
-      Ports: container.Ports.map((port) => ({ ...port }))
-    }));
-
-    if (isNonEmptyString(lab.topoFile)) {
-      Reflect.set(containers, "topo-file", lab.topoFile);
+  private markInterfacesDown(containerId: string): boolean {
+    const ifaceMap = this.interfacesByContainer.get(containerId);
+    if (!ifaceMap || ifaceMap.size === 0) {
+      return false;
     }
-    result[labName] = containers;
+
+    // When a container goes down, clear all interfaces
+    this.interfacesByContainer.delete(containerId);
+    this.bumpInterfaceVersion(containerId);
+
+    return true;
   }
 
-  return result;
+  private notifyContainerStateChanged(containerShortId: string, newState: string): void {
+    if (containerStateChangedListeners.size === 0) {
+      return;
+    }
+    for (const listener of Array.from(containerStateChangedListeners)) {
+      try {
+        listener(containerShortId, newState, this.connectionId);
+      } catch (err) {
+        console.error(
+          `[containerlabEvents]: Failed to notify state change listener: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
+  private removeContainer(containerShortId: string): void {
+    const record = this.containersById.get(containerShortId);
+    if (!record) {
+      return;
+    }
+
+    const lab = this.labsByName.get(record.labName);
+    if (lab) {
+      lab.containers.delete(containerShortId);
+      if (lab.containers.size === 0) {
+        this.labsByName.delete(record.labName);
+      }
+    }
+
+    this.clearNodeSnapshot(record);
+    this.containersById.delete(containerShortId);
+    this.interfacesByContainer.delete(containerShortId);
+    this.interfaceVersions.delete(containerShortId);
+    this.scheduleDataChanged();
+  }
+
+  private removeInterfaceRecord(containerId: string, ifaceName: string): boolean {
+    const ifaceMap = this.interfacesByContainer.get(containerId);
+    if (!ifaceMap) {
+      return false;
+    }
+
+    const removed = ifaceMap.delete(ifaceName);
+    if (ifaceMap.size === 0) {
+      this.interfacesByContainer.delete(containerId);
+    }
+    return removed;
+  }
+
+  /** Forgets every lab, e.g. before streaming from another backend. */
+  reset(): void {
+    this.containersById.clear();
+    this.labsByName.clear();
+    this.interfacesByContainer.clear();
+    this.interfaceVersions.clear();
+    this.nodeSnapshots.clear();
+    this.scheduleDataChanged();
+  }
+
+  private scheduleDataChanged(): void {
+    if (dataListeners.size === 0) {
+      return;
+    }
+    if (this.dataChangedTimer) {
+      return;
+    }
+    this.dataChangedTimer = setTimeout(() => {
+      this.dataChangedTimer = null;
+      for (const listener of Array.from(dataListeners)) {
+        try {
+          listener();
+        } catch (err) {
+          console.error(
+            `[containerlabEvents]: Failed to notify listener: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+    }, DATA_NOTIFY_DELAY_MS);
+  }
+
+  private scheduleInitialResolution(): void {
+    if (this.initialLoadComplete) {
+      return;
+    }
+
+    // Once we receive the first event, cancel the fallback timer.
+    // We'll rely on the idle timer to finalize after events stop arriving.
+    if (!this.receivedInitialEvent) {
+      this.receivedInitialEvent = true;
+      if (this.fallbackTimer) {
+        clearTimeout(this.fallbackTimer);
+        this.fallbackTimer = null;
+      }
+    }
+
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+    }
+
+    this.idleTimer = setTimeout(() => this.finalizeInitialLoad(), INITIAL_IDLE_TIMEOUT_MS);
+  }
+
+  private startProcess(backend: LabBackend, streamKey: string): void {
+    this.currentStreamKey = streamKey;
+    this.initialLoadComplete = false;
+
+    this.initialLoadPromise = new Promise<void>((resolve, reject) => {
+      this.resolveInitialLoad = resolve;
+      this.rejectInitialLoad = reject;
+    });
+
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const enableInterfaceStats = config.get<boolean>("enableInterfaceStats", true);
+
+    const controller = new AbortController();
+    this.streamController = controller;
+    void (async () => {
+      try {
+        const events = await backend.events(
+          {
+            initialState: true,
+            ...(enableInterfaceStats ? { interfaceStats: true, interfaceStatsInterval: "1s" } : {})
+          },
+          controller.signal
+        );
+        for await (const event of events) {
+          if (controller.signal.aborted) {
+            break;
+          }
+          try {
+            this.handleEvent(event);
+          } catch (err) {
+            console.error(
+              `[containerlabEvents]: Failed to apply event: ${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+        if (!controller.signal.aborted && !this.initialLoadComplete) {
+          this.finalizeInitialLoad(new Error("containerlab events ended prematurely"));
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          this.finalizeInitialLoad(err instanceof Error ? err : new Error(String(err)));
+        }
+      } finally {
+        if (this.streamController === controller) {
+          this.stopProcess();
+        }
+      }
+    })();
+
+    if (this.fallbackTimer) {
+      clearTimeout(this.fallbackTimer);
+    }
+    this.fallbackTimer = setTimeout(() => this.finalizeInitialLoad(), INITIAL_FALLBACK_TIMEOUT_MS);
+  }
+
+  stop(): void {
+    this.stopProcess();
+  }
+
+  private stopProcess(): void {
+    if (this.streamController) {
+      this.streamController.abort();
+      this.streamController = null;
+    }
+
+    this.initialLoadComplete = false;
+    this.initialLoadPromise = null;
+    this.resolveInitialLoad = null;
+    this.rejectInitialLoad = null;
+    this.receivedInitialEvent = false;
+
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+    if (this.fallbackTimer) {
+      clearTimeout(this.fallbackTimer);
+      this.fallbackTimer = null;
+    }
+  }
+
+  private updateLabMappings(previous: ContainerRecord | undefined, next: ContainerRecord): void {
+    if (previous && previous.labName !== next.labName) {
+      const previousLab = this.labsByName.get(previous.labName);
+      if (previousLab) {
+        previousLab.containers.delete(next.data.ShortID);
+        if (previousLab.containers.size === 0) {
+          this.labsByName.delete(previous.labName);
+        }
+      }
+    }
+
+    let lab = this.labsByName.get(next.labName);
+    if (!lab) {
+      lab = { topoFile: next.topoFile, containers: new Map() };
+      this.labsByName.set(next.labName, lab);
+    }
+    if (isNonEmptyString(next.topoFile)) {
+      lab.topoFile = next.topoFile;
+    }
+    lab.containers.set(next.data.ShortID, next.data);
+  }
+
+  private updateNodeSnapshot(
+    record: ContainerRecord,
+    eventTimestamp?: number,
+    action?: string
+  ): void {
+    const key = makeNodeSnapshotKey(record);
+    if (key === undefined || key === "") {
+      return;
+    }
+
+    const settings = record.data.NetworkSettings;
+    const snapshot = this.nodeSnapshots.get(key) ?? {};
+
+    if (settings.IPv4addr !== undefined && settings.IPv4addr !== "") {
+      snapshot.ipv4 = settings.IPv4addr;
+      snapshot.ipv4Prefix = settings.IPv4pLen;
+    }
+
+    if (settings.IPv6addr !== undefined && settings.IPv6addr !== "") {
+      snapshot.ipv6 = settings.IPv6addr;
+      snapshot.ipv6Prefix = settings.IPv6pLen;
+    }
+
+    if (record.data.State === "running") {
+      const estimatedStart = estimateStartedAtFromStatus(record.data.Status, eventTimestamp);
+      if (estimatedStart !== undefined) {
+        snapshot.startedAt = estimatedStart;
+      } else if (shouldResetLifecycleStatus(action ?? "") || snapshot.startedAt === undefined) {
+        snapshot.startedAt = resolveStartTimestamp(eventTimestamp, snapshot.startedAt);
+      }
+    } else {
+      snapshot.startedAt = undefined;
+    }
+
+    this.nodeSnapshots.set(key, snapshot);
+  }
 }
 
-export function getInterfaceSnapshot(
-  containerShortId: string,
-  containerName: string
-): ClabInterfaceSnapshot[] {
-  const ifaceMap = interfacesByContainer.get(containerShortId);
-  if (!ifaceMap || ifaceMap.size === 0) {
-    return [];
+const streams = new Map<string, LabEventStream>();
+
+/** The event stream of a connection; it starts with `ensure`. */
+export function eventStreamFor(connectionId: string): LabEventStream {
+  let stream = streams.get(connectionId);
+  if (!stream) {
+    stream = new LabEventStream(connectionId);
+    streams.set(connectionId, stream);
   }
+  return stream;
+}
 
-  const interfaces = Array.from(ifaceMap.values()).map(toInterfaceSnapshotEntry);
-
-  interfaces.sort((a, b) => a.name.localeCompare(b.name));
-
-  return [
-    {
-      name: containerName,
-      interfaces
-    }
-  ];
+/** Stops the event stream of a connection and forgets its labs; all streams without an id. */
+export function stopEventStreams(connectionId?: string): void {
+  for (const [id, stream] of streams) {
+    if (connectionId !== undefined && id !== connectionId) continue;
+    stream.stop();
+    stream.reset();
+    streams.delete(id);
+  }
 }
 
 export function resetForTests(): void {
-  stopProcess();
-  containersById.clear();
-  labsByName.clear();
-  interfacesByContainer.clear();
-  interfaceVersions.clear();
-  nodeSnapshots.clear();
-  scheduleDataChanged();
+  stopEventStreams();
+}
+
+export function handleEventLineForTests(line: string, connectionId = "local"): void {
+  eventStreamFor(connectionId).handleEventLine(line);
 }
 
 export function estimateStartedAtFromStatusForTests(
@@ -1384,10 +1415,6 @@ export function estimateStartedAtFromStatusForTests(
   eventTimestamp?: number
 ): number | undefined {
   return estimateStartedAtFromStatus(status, eventTimestamp);
-}
-
-export function handleEventLineForTests(line: string): void {
-  handleEventLine(line);
 }
 
 export function onDataChanged(listener: DataListener): () => void {

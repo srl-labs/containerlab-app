@@ -5,59 +5,44 @@ import {
 import type { Response } from "undici";
 
 import type {
-  SaveConfigResponse,
-  SSHAccessResponse,
-  TerminalProtocol,
-  TerminalSessionInfo,
-  LogsResponse,
-  VersionResponse,
-  VersionCheckResponse,
+  CaptureCloseAllResponse,
+  CapturePacketflixResponse,
+  CaptureTarget,
+  CaptureWiresharkVncCreateResponse,
+  CaptureWiresharkVncReadyResponse,
   CustomNodesResponse,
+  DrawioGenerateResponse,
+  EdgeSharkStatusResponse,
+  FcliCommandResponse,
+  HealthMetricsResponse,
   IconListResponse,
   IconUploadRequest,
   IconUploadResponse,
+  ImportTopologyFromUrlResponse,
+  InspectAllLabsResponse,
+  InspectLabResponse,
+  LifecycleActionResult,
+  LoginResponse,
+  LogsResponse,
+  NetemResetRequest,
+  NetemSetRequest,
   NetemShowResponse,
-  CaptureTarget,
-  CapturePacketflixResponse,
-  CaptureWiresharkVncCreateResponse,
-  CaptureWiresharkVncReadyResponse,
-  EdgeSharkStatusResponse,
-  RuntimeImagesResponse,
-  RuntimeImageActionResponse,
   NodeBrowserPortsResponse,
+  NodeLifecycleAction,
+  RuntimeImageActionResponse,
+  RuntimeImagesResponse,
+  SaveConfigResponse,
   ShareToolAction,
   ShareToolResponse,
-  FcliCommandResponse,
-  DrawioGenerateResponse,
-  CaptureCloseAllResponse
-} from "@srl-labs/containerlab-app-contract";
-export type {
-  SaveConfigResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
-  LogsResponse,
-  VersionResponse,
+  TopologyEntry,
   VersionCheckResponse,
-  CustomNodesResponse,
-  IconListResponse,
-  IconUploadRequest,
-  IconUploadResponse,
-  NetemShowResponse,
-  CaptureTarget,
-  CapturePacketflixResponse,
-  CaptureWiresharkVncCreateResponse,
-  CaptureWiresharkVncReadyResponse,
-  EdgeSharkStatusResponse,
-  RuntimeImagesResponse,
-  RuntimeImageActionResponse,
-  NodeBrowserPortsResponse,
-  ShareToolAction,
-  ShareToolResponse,
-  FcliCommandResponse,
-  DrawioGenerateResponse,
-  CaptureCloseAllResponse
-} from "@srl-labs/containerlab-app-contract";
+  VersionResponse,
+  WorkspaceFileEntry
+} from "../contract/dto.ts";
+import { isNotFoundError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
 
@@ -83,117 +68,10 @@ interface LifecycleRequestOptions {
   lifecycleOptions?: LabLifecycleOptions;
 }
 
-export interface LoginResponse {
-  token: string;
-}
-
 interface LoginRequest {
   username: string;
   password: string;
   sessionDuration?: string;
-}
-
-export interface TopologyEntry {
-  labName: string;
-  absolutePath?: string;
-  yamlFileName: string;
-  annotationsFileName: string;
-  hasAnnotations: boolean;
-  deploymentState: string;
-}
-
-export interface WorkspaceFileEntry {
-  name: string;
-  path: string;
-  kind: "file" | "directory";
-  size?: number;
-  modifiedAt?: string;
-  hasChildren?: boolean;
-}
-
-export interface LifecycleActionResult {
-  result?: unknown;
-  message?: string;
-  logs?: string[];
-}
-
-export interface InspectContainerInfo {
-  name: string;
-  containerId: string;
-  image: string;
-  kind: string;
-  state: string;
-  status: string;
-  ipv4Address: string;
-  ipv6Address: string;
-  labName: string;
-  labPath: string;
-  absLabPath: string;
-  group: string;
-  owner: string;
-}
-
-export type InspectAllLabsResponse = Record<string, InspectContainerInfo[]>;
-export type InspectLabResponse = InspectContainerInfo[];
-
-export interface HealthMetricsResponse {
-  serverInfo: {
-    version: string;
-    uptime: string;
-    startTime: string;
-  };
-  metrics: {
-    cpu?: {
-      usagePercent: number;
-      numCPU: number;
-      loadAvg1?: number;
-      loadAvg5?: number;
-      loadAvg15?: number;
-      processPercent?: number;
-    };
-    mem?: {
-      totalMem: number;
-      usedMem: number;
-      availableMem: number;
-      usagePercent: number;
-      processMemMB?: number;
-      processMemPct?: number;
-    };
-    disk?: {
-      path: string;
-      totalDisk: number;
-      usedDisk: number;
-      freeDisk: number;
-      usagePercent: number;
-    };
-  };
-}
-
-export type CustomNodeTemplate = Record<string, unknown>;
-
-export interface NetemSetRequest {
-  containerName: string;
-  interface: string;
-  delay?: string;
-  jitter?: string;
-  loss?: number;
-  rate?: number;
-  corruption?: number;
-}
-
-export interface NetemResetRequest {
-  containerName: string;
-  interface: string;
-}
-
-export type NodeLifecycleAction =
-  "start" | "stop" | "restart" | "pause" | "unpause";
-
-export interface ImportTopologyFromUrlResponse {
-  success: boolean;
-  labName: string;
-  fileName: string;
-  topology: TopologyEntry;
 }
 
 type LifecycleEndpoint =
@@ -349,9 +227,11 @@ export class ClabApiClient {
       { stream: true },
     );
     if (!res.ok) {
-      throw new Error(
+      const error: HttpError = new Error(
         `Failed to open workspace event stream: ${res.status} ${res.statusText}`,
       );
+      error.status = res.status;
+      throw error;
     }
     return res;
   }
@@ -1092,7 +972,7 @@ export class ClabApiClient {
 
   async replaceCustomNodes(
     token: string,
-    customNodes: CustomNodeTemplate[],
+    customNodes: Record<string, unknown>[],
   ): Promise<CustomNodesResponse> {
     const res = await this.request(
       "PUT",
@@ -1106,7 +986,7 @@ export class ClabApiClient {
 
   async saveCustomNode(
     token: string,
-    customNode: CustomNodeTemplate,
+    customNode: Record<string, unknown>,
   ): Promise<CustomNodesResponse> {
     const res = await this.request(
       "POST",
@@ -1253,9 +1133,11 @@ export class ClabApiClient {
       { stream: true },
     );
     if (!res.ok) {
-      throw new Error(
+      const error: HttpError = new Error(
         `Failed to open event stream: ${res.status} ${res.statusText}`,
       );
+      error.status = res.status;
+      throw error;
     }
     return res;
   }
@@ -1440,19 +1322,6 @@ function normalizeLifecycleActionResult(
   const result = hasResultField ? payload.result : payload;
 
   return { result, message, logs };
-}
-
-export function isNotFoundError(error: unknown): boolean {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "status" in error &&
-    (error as { status?: unknown }).status === 404
-  ) {
-    return true;
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes("(404)");
 }
 
 export function getHttpErrorStatus(error: unknown): number | undefined {

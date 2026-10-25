@@ -144,7 +144,7 @@ function sectionsFor(layout: HarnessHostLayout, filePaths: string[]): ExplorerSe
   if (layout === "sandbox") {
     // Nothing can run in the sandbox, so its single workspace lists the topology files directly.
     return [
-      section("runningLabs", "Endpoints", labPaths.map((filePath) => lab(filePath, filePath)), "bareTree"),
+      section("runningLabs", "Lab hosts", labPaths.map((filePath) => lab(filePath, filePath)), "bareTree"),
       fileExplorer(SANDBOX_WORKSPACE_LABEL, filePaths)
     ];
   }
@@ -162,7 +162,7 @@ function sectionsFor(layout: HarnessHostLayout, filePaths: string[]): ExplorerSe
     state: "connected",
     statusIndicator: "green"
   };
-  return [section("runningLabs", "Endpoints", [endpoint], "bareTree"), fileExplorer(ENDPOINT.label, filePaths)];
+  return [section("runningLabs", "Lab hosts", [endpoint], "bareTree"), fileExplorer(ENDPOINT.label, filePaths)];
 }
 
 export function buildHarnessExplorerSnapshot(

@@ -4,7 +4,7 @@ description: Environment variables for the containerlab web app and desktop app.
 
 # Web and desktop settings
 
-Both apps are configured with environment variables. Everything else, like endpoints and appearance, is set in the app.
+Both apps are configured with environment variables. Everything else, like lab hosts and appearance, is set in the app.
 { .lead }
 
 ## Web app
@@ -23,6 +23,20 @@ Pass these with `-e` to `docker run`.
 | `WEB_TLS_HOST` | detected | Host name written into the self-signed certificate. |
 | `CLAB_STANDALONE_INTERFACE_STATS_INTERVAL` | `1s` | How often interface statistics refresh. |
 
+### Labs on the web app's host
+
+These run labs on the web app's own host, without `clab-api-server`; see [Run labs on the web app's host](../install/web.md#run-labs-on-the-web-apps-host).
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `WEB_LOCAL_LABS` | `false` | Run labs on the web app's host. Every browser that opens the app can then run labs there, without signing in. |
+| `WEB_LOCAL_LABEL` | host name | Name of the host in the explorer. |
+| `WEB_LOCAL_CLAB_BINARY` | `containerlab` | containerlab binary, looked up in `PATH`. |
+| `WEB_LOCAL_RUNTIME` | `docker` | Container runtime: `docker` or `podman`. |
+| `WEB_LOCAL_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket. |
+| `WEB_LOCAL_WORKSPACE` | `~/.clab` of the container user | Folder for the topologies. Mount it at the same path as on the host. |
+| `WEB_LOCAL_SUDO` | `false` | Run containerlab with `sudo -n`. |
+
 ## Desktop app
 
 Set these in the environment that starts the app.
@@ -33,3 +47,11 @@ Set these in the environment that starts the app.
 | `CLAB_API_TLS_VERIFY` | `false` | Verify the API server's certificate. |
 | `CONTAINERLAB_DESKTOP_PORT` | `32180` | Preferred local port for the app's built-in server. It only listens on loopback. |
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Log debug output from the built-in server. |
+| `CONTAINERLAB_DESKTOP_LOCAL` | `true` | Run labs on **This computer** with the local containerlab. Linux only. Set to `false` to start on the sign-in page. |
+| `CONTAINERLAB_DESKTOP_CLAB_BINARY` | `containerlab` | containerlab binary for **This computer**, looked up in `PATH`. |
+| `CONTAINERLAB_DESKTOP_RUNTIME` | `docker` | Container runtime for **This computer**: `docker` or `podman`. |
+| `CONTAINERLAB_DESKTOP_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket for **This computer**. |
+| `CONTAINERLAB_DESKTOP_WORKSPACE` | `~/.clab` | Folder for the topologies of **This computer**. |
+| `CONTAINERLAB_DESKTOP_SUDO` | `false` | Run containerlab with `sudo -n`. Needs passwordless sudo. |
+
+The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer).

@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 
+import { backendFor, connectionOf, pickConnection } from "../backend/labBackends";
+import type { LabConnection } from "../backend/connections";
+
 import { execCommandInTerminal } from "./command";
 
 // Packetflix reaches gostwire as "gostwire.ghost-in-da-edge" upstream, which
@@ -45,10 +48,54 @@ https://github.com/siemens/edgeshark/raw/main/deployments/wget/docker-compose.ya
 | DOCKER_DEFAULT_PLATFORM= docker compose -f - down`;
 }
 
-export async function installEdgeshark() {
+/** Installs or removes Edgeshark on a lab host. */
+async function manageRemoteEdgeshark(
+  connection: LabConnection,
+  action: "install" | "uninstall"
+): Promise<void> {
+  const title =
+    action === "install"
+      ? `Installing Edgeshark on ${connection.label}`
+      : `Removing Edgeshark from ${connection.label}`;
+  try {
+    const backend = backendFor(connection);
+    if (!backend.capabilities.edgesharkManagement) {
+      throw new Error(`${connection.label} does not manage Edgeshark.`);
+    }
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title },
+      () => (action === "install" ? backend.edgesharkInstall() : backend.edgesharkUninstall())
+    );
+    void vscode.window.showInformationMessage(
+      action === "install"
+        ? `Edgeshark is running on ${connection.label}.`
+        : "Edgeshark was removed."
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    void vscode.window.showErrorMessage(`${title} failed: ${message}`);
+  }
+}
+
+/** Where Edgeshark goes: the connection of a tree node, or the one the user picks. */
+async function edgesharkTarget(target: unknown, title: string): Promise<LabConnection | undefined> {
+  return target !== undefined ? connectionOf(target) : pickConnection(title);
+}
+
+export async function installEdgeshark(target?: unknown) {
+  const connection = await edgesharkTarget(target, "Install Edgeshark on");
+  if (!connection) return;
+  if (connection.kind === "api") {
+    return manageRemoteEdgeshark(connection, "install");
+  }
   execCommandInTerminal(getEdgesharkInstallCmd(), "Edgeshark Installation");
 }
 
-export async function uninstallEdgeshark() {
+export async function uninstallEdgeshark(target?: unknown) {
+  const connection = await edgesharkTarget(target, "Uninstall Edgeshark from");
+  if (!connection) return;
+  if (connection.kind === "api") {
+    return manageRemoteEdgeshark(connection, "uninstall");
+  }
   execCommandInTerminal(getEdgesharkUninstallCmd(), "Edgeshark Uninstallation");
 }

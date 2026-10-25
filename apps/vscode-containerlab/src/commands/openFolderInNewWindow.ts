@@ -3,6 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
+import { isUriString, labUri } from "../backend/labBackends";
 
 export async function openFolderInNewWindow(node: ClabLabTreeNode) {
   if (!node.labPath.absolute) {
@@ -11,8 +12,10 @@ export async function openFolderInNewWindow(node: ClabLabTreeNode) {
   }
 
   // The folder that contains the .clab.(yml|yaml)
-  const folderPath = path.dirname(node.labPath.absolute);
-  const uri = vscode.Uri.file(folderPath);
+  const labPath = node.labPath.absolute;
+  const uri = isUriString(labPath)
+    ? vscode.Uri.joinPath(labUri(labPath), "..")
+    : vscode.Uri.file(path.dirname(labPath));
 
   // Force opening that folder in a brand-new window
   await vscode.commands.executeCommand("vscode.openFolder", uri, {

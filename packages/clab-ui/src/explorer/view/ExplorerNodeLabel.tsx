@@ -53,9 +53,14 @@ function portStateOf(node: ExplorerNode): "up" | "down" | undefined {
   return node.contextValue === "containerlabInterfaceDown" ? "down" : undefined;
 }
 
-function statusWord(status: string): string {
-  const word = status === "expired" ? "session expired" : status;
-  return word.charAt(0).toUpperCase() + word.slice(1);
+/** The status of a lab host root in the words of the lab host settings. */
+function statusWord(status: string, local: boolean): string {
+  const words: Record<string, string> = {
+    expired: "Sign-in expired",
+    offline: local ? "Not ready" : "Unreachable",
+    saved: "Signed out"
+  };
+  return words[status] ?? status.charAt(0).toUpperCase() + status.slice(1);
 }
 
 interface StatusDotProps {
@@ -192,8 +197,9 @@ interface EndpointStatusProps {
 /** Connected endpoints show just the dot; anything else names its problem in plain words. */
 function EndpointStatus({ node, status }: Readonly<EndpointStatusProps>) {
   const connected = status === "connected";
+  const local = node.endpointKind === "local";
   return (
-    <Tooltip title={statusWord(status)} placement="bottom" enterDelay={300} disableInteractive>
+    <Tooltip title={statusWord(status, local)} placement="bottom" enterDelay={300} disableInteractive>
       <Box
         component="span"
         sx={{ display: "inline-flex", alignItems: "center", gap: "6px", minWidth: 0, flexShrink: 1, ml: "8px" }}
@@ -209,7 +215,7 @@ function EndpointStatus({ node, status }: Readonly<EndpointStatusProps>) {
               lineHeight: 1
             })}
           >
-            {statusWord(status)}
+            {statusWord(status, local)}
           </Typography>
         )}
       </Box>

@@ -3,7 +3,9 @@ import test from "node:test";
 
 import Fastify from "fastify";
 
-import type { ClabApiClient } from "./clabApiClient";
+import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
+
+import type { EndpointUiStore } from "./uiStore";
 import type { EndpointEntry } from "./endpointSessionStore";
 import { registerTopologyProxy } from "./topologyProxy";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager";
@@ -16,6 +18,7 @@ test("/api/topology/command resolves endpoint from topologyRef", async (t) => {
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",
@@ -46,7 +49,6 @@ test("/api/topology/command resolves endpoint from topologyRef", async (t) => {
     disposeSession() {
       return false;
     },
-    disposeSessionsForToken() {},
     getSession(id: string, endpointId?: string) {
       if (id !== sessionId || endpointId !== endpoint.id) {
         return null;
@@ -77,8 +79,9 @@ test("/api/topology/command resolves endpoint from topologyRef", async (t) => {
     (_request, _reply, preferredEndpointId) => {
       preferredEndpointIds.push(preferredEndpointId);
       return {
-        client: {} as never,
-        endpoint: preferredEndpointId === endpoint.id ? endpoint : fallbackEndpoint
+        backend: {} as LabBackend,
+        endpoint: preferredEndpointId === endpoint.id ? endpoint : fallbackEndpoint,
+        ui: {} as EndpointUiStore
       };
     },
     sessions
@@ -119,6 +122,7 @@ test("/api/topology/sessions preserves running-lab-doc topology ref", async (t) 
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",
@@ -147,22 +151,22 @@ test("/api/topology/sessions preserves running-lab-doc topology ref", async (t) 
     disposeSession() {
       return false;
     },
-    disposeSessionsForToken() {},
     getSession() {
       return null;
     }
   } as unknown as StandaloneTopologySessionManager;
-  const client = {
+  const backend = {
     listTopologies: async () => {
       throw new Error("listTopologies should not be called for running-lab-doc sessions");
     }
-  } as Pick<ClabApiClient, "listTopologies"> as ClabApiClient;
+  } as Pick<LabBackend, "listTopologies"> as LabBackend;
 
   registerTopologyProxy(
     app,
     () => ({
-      client,
-      endpoint
+      backend,
+      endpoint,
+      ui: {} as EndpointUiStore
     }),
     sessions
   );
@@ -195,6 +199,7 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
 
   const endpoint: EndpointEntry = {
     id: "endpoint-remote",
+    kind: "api",
     url: "http://remote.test",
     label: "Remote",
     token: "secret-token",
@@ -220,7 +225,6 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
     disposeSession() {
       return false;
     },
-    disposeSessionsForToken() {},
     getSession(id: string, endpointId?: string) {
       if (id !== sessionId || endpointId !== endpoint.id) {
         return null;
@@ -283,8 +287,9 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
   registerTopologyProxy(
     app,
     () => ({
-      client: {} as never,
-      endpoint
+      backend: {} as LabBackend,
+      endpoint,
+      ui: {} as EndpointUiStore
     }),
     sessions
   );

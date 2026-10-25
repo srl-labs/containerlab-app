@@ -42,7 +42,7 @@ Keep your topology files, device configurations, and running labs together in yo
 3. Select the **Containerlab** icon in the Activity Bar to find your labs.
 4. Open a lab in the topology viewer, or right-click a lab or device for actions such as **Deploy**, **Destroy**, and opening a shell.
 
-The extension runs containerlab directly in a Linux environment. On Windows, use WSL.
+The extension runs containerlab directly in a Linux environment. On Windows, use WSL. It can also show the labs of [lab hosts](#lab-hosts) next to the local ones: open **Containerlab: Manage Lab Hosts**, add a host, and sign in. This works from Linux, macOS, and Windows.
 
 > [!TIP]
 > Your editor and your labs can run on different machines. Connect to a Linux lab host with VS Code Remote SSH and install the Containerlab extension there. You can use this setup from Linux, macOS, or Windows.
@@ -55,7 +55,7 @@ See the [extension guide](apps/vscode-containerlab/README.md) for settings, pack
 
 Access your labs from a browser, with the same topology editor and lab tools available on any workstation that can reach the web app. You can connect to multiple lab hosts from one installation.
 
-First, [set up access to your lab host](#connect-the-web-and-desktop-apps-to-your-lab-host). Then run the web app on a Linux server or VM with Docker:
+First, [set up a lab host](#lab-hosts). Then run the web app on a Linux server or VM with Docker:
 
 ```bash
 docker run -d --name containerlab-app \
@@ -73,9 +73,11 @@ At login, enter the API URL for your lab host and its Linux username and passwor
 
 The container image supports Linux AMD64 and ARM64. Certificate and port options are listed under [configuration](#configuration).
 
+For a personal setup without an API server, the web app can also run labs on its own host with `WEB_LOCAL_LABS=true`. Anyone who can open the app then runs labs as root on that host, so keep it on a trusted network; see [Run labs on the web app's host](https://srl-labs.github.io/containerlab-app/docs/install/web/#run-labs-on-the-web-apps-host).
+
 ## Desktop app
 
-Use the Containerlab interface in its own application window on your workstation. The desktop app connects to your lab hosts over the API, so your labs can run on another machine while you work from Linux, macOS, or Windows.
+Use the Containerlab interface in its own application window on your workstation. On Linux it runs labs on the computer itself, like the VS Code extension, with no API server and no sign-in. It can also connect to your lab hosts, so your labs can run on another machine while you work from Linux, macOS, or Windows.
 
 Download a package from the [latest desktop release](https://github.com/srl-labs/containerlab-app/releases/latest):
 
@@ -87,14 +89,14 @@ Download a package from the [latest desktop release](https://github.com/srl-labs
 | macOS | Universal `.dmg` | Open the disk image and move Containerlab to Applications. |
 | Windows | `.exe` installer | Run the installer. |
 
-[Set up access to your lab host](#connect-the-web-and-desktop-apps-to-your-lab-host), launch the app, and enter the API URL and your Linux credentials for that host. For a remote host, use an address such as `https://lab-host.example.com:8090`.
+On Linux with containerlab and Docker set up, launch the app: it opens on the labs of **This computer**. When something is missing, it lists what to fix. To work with labs elsewhere, or on macOS and Windows, [set up a lab host](#lab-hosts), then sign in with its API URL, such as `https://lab-host.example.com:8090`, and your Linux credentials for that host.
 
 > [!NOTE]
 > The macOS and Windows packages are currently unsigned, so Gatekeeper or SmartScreen may show a warning when you open them.
 
-## Connect the web and desktop apps to your lab host
+## Lab hosts
 
-The web and desktop apps connect to `clab-api-server`, which manages labs on a Linux host with your container runtime. That host can be your Linux workstation, a VM, or a remote server. On macOS and Windows, run the API server in the Linux environment where your labs run.
+A lab host runs `clab-api-server`, which manages labs on a Linux host with your container runtime. Every app can sign in to it: the web app always, the desktop app and the VS Code extension for labs on another machine. That host can be your Linux workstation, a VM, or a remote server. On macOS and Windows, run the API server in the Linux environment where your labs run.
 
 If your lab host already has an API server, you only need its URL and an allowed Linux account. To set one up, run these commands on the lab host:
 

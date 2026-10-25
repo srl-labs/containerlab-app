@@ -1,20 +1,34 @@
 import * as vscode from "vscode";
-import type Dockerode from "dockerode";
 
 import { dockerClient, outputChannel } from "../../globals";
-import { ContainerAction, ImagePullPolicy } from "../consts";
+import { backendFor } from "../../backend/labBackends";
+import { LOCAL_CONNECTION, type LabConnection } from "../../backend/connections";
+import { ImagePullPolicy } from "../consts";
 
 // Internal helper to pull the docker image using dockerode client
-export async function pullDockerImage(image: string): Promise<boolean> {
+export async function pullDockerImage(
+  image: string,
+  connection: LabConnection = LOCAL_CONNECTION
+): Promise<boolean> {
   return vscode.window.withProgress<boolean>(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `Pulling Docker image ${image}`,
+      title:
+        connection.kind === "api"
+          ? `Pulling ${image} on ${connection.label}`
+          : `Pulling Docker image ${image}`,
       cancellable: false
     },
     async () => {
       outputChannel.info(`Pulling image ${image}`);
       try {
+        if (connection.kind === "api") {
+          // The lab host pulls the image for its own container runtime.
+          const result = await backendFor(connection).pullImage(image);
+          if (!result.success) throw new Error(result.message ?? result.output ?? "pull failed");
+          vscode.window.showInformationMessage(`Successfully pulled image '${image}'`);
+          return true;
+        }
         const stream = await dockerClient.pull(image);
         await new Promise<void>((resolve, reject) => {
           dockerClient.modem.followProgress(stream, (err) => {
@@ -83,54 +97,4 @@ export async function checkAndPullDockerImage(
   }
 
   return imageExists;
-}
-
-// Basic wrapper to safely return the name of a container based on the Dockerode.Container obj
-async function getContainerName(container: Dockerode.Container): Promise<string> {
-  let ctrName: string;
-  try {
-    ctrName = (await container.inspect()).Name;
-  } catch {
-    ctrName = container.id;
-  }
-
-  return ctrName;
-}
-
-export async function runContainerAction(
-  containerId: string,
-  action: ContainerAction
-): Promise<void> {
-  if (!containerId) {
-    vscode.window.showErrorMessage(`Failed to ${action} container. Container ID nil.`);
-    return;
-  }
-
-  const container = dockerClient.getContainer(containerId);
-  const ctrName = await getContainerName(container);
-
-  try {
-    switch (action) {
-      case ContainerAction.Start:
-        await container.start();
-        break;
-      case ContainerAction.Stop:
-        await container.stop();
-        break;
-      case ContainerAction.Pause:
-        await container.pause();
-        break;
-      case ContainerAction.Unpause:
-        await container.unpause();
-        break;
-    }
-    const msg = `${action}: Success for '${ctrName}'`;
-    outputChannel.info(msg);
-    vscode.window.showInformationMessage(msg);
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    const msg = `Failed to ${action} container ${ctrName}: ${message}`;
-    outputChannel.error(msg);
-    vscode.window.showErrorMessage(msg);
-  }
 }

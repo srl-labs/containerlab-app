@@ -2,7 +2,7 @@
   "name": "@srl-labs/containerlab-app-contract",
   "version": "0.3.0",
   "private": true,
-  "description": "Shared route DTO types for Containerlab app hosts.",
+  "description": "Endpoint and app configuration types shared by the app server and its clients.",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
@@ -16,8 +16,5 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "oxlint --type-aware --import-plugin --react-plugin --jsx-a11y-plugin src"
-  },
-  "dependencies": {
-    "@containerlab/clab-ui": "workspace:*"
   }
 }

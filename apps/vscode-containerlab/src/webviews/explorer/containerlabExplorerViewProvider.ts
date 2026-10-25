@@ -7,6 +7,7 @@ import {
 import { createExplorerController } from "@containerlab/clab-ui/host";
 
 import { hideNonOwnedLabsState } from "../../globals";
+import { getConnections } from "../../backend/labBackends";
 import type {
   HelpFeedbackProvider,
   LocalLabTreeDataProvider,
@@ -80,6 +81,10 @@ export class ContainerlabExplorerViewProvider
       getSnapshotOptions: async () => {
         this.options.hideNonOwnedLabs = hideNonOwnedLabsState;
         this.options.commandMetadata = await getExplorerCommandMetadata();
+        // With lab hosts, both sections list labs of every host, not only local ones.
+        this.options.sectionLabels = getConnections()?.grouped
+          ? { localLabs: "Undeployed Labs" }
+          : undefined;
         return this.options;
       },
       executeAction: async (binding) => {

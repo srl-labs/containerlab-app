@@ -7,9 +7,8 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test, { type TestContext } from "node:test";
 
-import { apiFetch } from "./upstreamRequest.ts";
+import { apiFetch, shouldVerifyApiTls } from "@srl-labs/containerlab-lab-backend/api";
 import { resolveWebTlsConfig } from "./tlsConfig.ts";
-import { shouldVerifyApiTls } from "./upstreamTls.ts";
 
 async function listen(t: TestContext, handler: http.RequestListener): Promise<string> {
   const server = http.createServer(handler);

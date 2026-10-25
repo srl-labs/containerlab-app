@@ -1,4 +1,4 @@
-import { parseBooleanEnv } from "./env.ts";
+import { parseBooleanEnv } from "../env.ts";
 
 export function shouldVerifyApiTls(env: NodeJS.ProcessEnv = process.env): boolean {
   return parseBooleanEnv(env.CLAB_API_TLS_VERIFY, false);

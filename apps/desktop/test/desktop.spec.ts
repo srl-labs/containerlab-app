@@ -25,7 +25,13 @@ function freePort(): Promise<number> {
 // the workspace Electron against the web build.
 function launchDesktop(userData: string, port: number): Promise<ElectronApplication> {
   const packaged = process.env.DESKTOP_EXECUTABLE;
-  const env = { ...process.env, XDG_CONFIG_HOME: userData, CONTAINERLAB_DESKTOP_PORT: String(port) };
+  // Without labs on this computer the app opens on the sign-in page, as on macOS and Windows.
+  const env = {
+    ...process.env,
+    XDG_CONFIG_HOME: userData,
+    CONTAINERLAB_DESKTOP_PORT: String(port),
+    CONTAINERLAB_DESKTOP_LOCAL: "0"
+  };
   if (packaged !== undefined) {
     return electron.launch({ executablePath: packaged, args: ["--ozone-platform=x11", "--no-sandbox"], env });
   }
@@ -59,7 +65,7 @@ test.afterAll(async () => {
 });
 
 test("serves the shared app from its own server", async () => {
-  await expect(mainWindow.getByRole("heading", { name: "Add Endpoint", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(mainWindow.getByRole("heading", { name: "Sign in to a lab host", exact: true })).toBeVisible({ timeout: 30_000 });
   expect(new URL(mainWindow.url()).origin).toBe(origin);
   const logo = await mainWindow.locator(".startup-fallback img").getAttribute("src");
   expect(logo).toBeTruthy();

@@ -1,14 +1,10 @@
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import {
-  outputChannel,
-  gottySessions,
-  runningLabsProvider,
-  containerlabBinaryPath
-} from "../globals";
+import { outputChannel, gottySessions, runningLabsProvider } from "../globals";
+import { backendOf } from "../backend/labBackends";
+import { isRemoteNode, remoteHostname } from "../backend/remoteNode";
 import { refreshGottySessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
-import { runCommand } from "../utils/utils";
 
 import { getHostname } from "./capture";
 
@@ -24,9 +20,9 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
-async function parseGottyLink(output: string): Promise<string | undefined> {
+async function parseGottyLink(output: string, node: ClabLabTreeNode): Promise<string | undefined> {
   try {
-    const bracketedHost = await getBracketedHostname();
+    const bracketedHost = await getBracketedHostname(node);
     const fromJson = tryParseLinkFromJson(output, bracketedHost);
     if (fromJson !== undefined && fromJson.length > 0) return fromJson;
     const fromText = tryParseLinkFromText(output, bracketedHost);
@@ -67,8 +63,9 @@ function tryParseLinkFromText(output: string, bracketedHost?: string): string | 
   return url;
 }
 
-async function getBracketedHostname(): Promise<string | undefined> {
-  const hostname = await getHostname();
+async function getBracketedHostname(node: ClabLabTreeNode): Promise<string | undefined> {
+  // GoTTY listens where the lab runs: this machine, or its lab host.
+  const hostname = (isRemoteNode(node) ? remoteHostname(node) : undefined) ?? (await getHostname());
   if (hostname.length === 0) return undefined;
   return hostname.includes(":") ? `[${hostname}]` : hostname;
 }
@@ -81,10 +78,9 @@ async function gottyStart(action: "attach" | "reattach", node: ClabLabTreeNode |
   const labName = node.name;
   try {
     const port = vscode.workspace.getConfiguration("containerlab").get<number>("gotty.port", 8080);
-    const command = `${containerlabBinaryPath} tools gotty ${action} -l ${labName} --port ${port}`;
-    const commandOutput = await runCommand(command, `GoTTY ${action}`, outputChannel, true, true);
-    const out = typeof commandOutput === "string" ? commandOutput : "";
-    const link = await parseGottyLink(out || "");
+    const result = await backendOf(node).shareTool("gotty", labName, action, { port });
+    if (result.output) outputChannel.info(result.output);
+    const link = await parseGottyLink(result.link ?? result.output ?? "", node);
     if (link !== undefined && link.length > 0) {
       gottySessions.set(labName, link);
       await vscode.env.clipboard.writeText(link);
@@ -121,8 +117,7 @@ export async function gottyDetach(node: ClabLabTreeNode | undefined) {
   }
   const labName = node.name;
   try {
-    const command = `${containerlabBinaryPath} tools gotty detach -l ${labName}`;
-    await runCommand(command, "GoTTY detach", outputChannel, false, false);
+    await backendOf(node).shareTool("gotty", labName, "detach");
     gottySessions.delete(labName);
     vscode.window.showInformationMessage("GoTTY session detached");
   } catch (err: unknown) {

@@ -18,6 +18,15 @@ The settings tab edits **User** or **Workspace** scope and stays in sync with VS
 | `appearance.fontFamily` | empty | Interface font. Empty follows VS Code. |
 | `appearance.reduceMotion` | `false` | Minimize animations and transitions. |
 
+## Lab hosts
+
+The **Lab Hosts** page of the settings tab manages these; see [Work with labs on a lab host](../install/vscode.md#work-with-labs-on-a-lab-host).
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `connections` | `[]` | Lab hosts running `clab-api-server`, each with `url`, `label`, and optionally `username` and `sessionDuration`. Passwords and tokens are never stored here. |
+| `localConnection` | `true` | Show **Local**, the labs on the machine VS Code runs on, next to the lab hosts. |
+
 ## Runtime
 
 | Setting | Default | What it does |

@@ -1,27 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import WebSocket, { type RawData } from "ws";
+import type { TerminalClientMessage } from "@srl-labs/containerlab-lab-backend";
+import { isValidCloseCode } from "@srl-labs/containerlab-lab-backend/api";
 
-import { buildWebSocketUrl } from "./clabApiClient.ts";
-import type { EndpointEntry } from "./endpointSessionStore.ts";
-import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { endpoint: EndpointEntry; client: { getBaseUrl(): string } } | null;
-
-function isValidCloseCode(code: number): boolean {
-  return (
-    Number.isInteger(code) &&
-    ((code >= 1000 &&
-      code <= 1014 &&
-      code !== 1004 &&
-      code !== 1005 &&
-      code !== 1006) ||
-      (code >= 3000 && code <= 4999))
-  );
-}
+import type { EndpointResolver } from "./endpointResolver.ts";
 
 function closeSocket(socket: WebSocket, code: number | undefined, reason: string): void {
   if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
@@ -34,6 +16,21 @@ function closeSocket(socket: WebSocket, code: number | undefined, reason: string
   socket.close();
 }
 
+function parseClientMessage(data: RawData): TerminalClientMessage | null {
+  try {
+    const value = JSON.parse(String(data)) as unknown;
+    return typeof value === "object" && value !== null && "type" in value
+      ? (value as TerminalClientMessage)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bridges the browser's terminal WebSocket to the endpoint's terminal session.
+ * Both sides speak the clab-api-server terminal protocol.
+ */
 export function registerTerminalStreamProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver
@@ -49,50 +46,47 @@ export function registerTerminalStreamProxy(
       }
 
       const sessionId = request.params.sessionId.trim();
-      const { client, endpoint } = resolved;
-      const upstream = new WebSocket(
-        buildWebSocketUrl(client.getBaseUrl(), `/api/v1/terminal-sessions/${encodeURIComponent(sessionId)}/stream`),
-        {
-          headers: {
-            Authorization: `Bearer ${endpoint.token}`
-          },
-          ...apiTlsWebSocketOptions()
-        }
-      );
-
-      const forwardUpstreamError = (error: Error): void => {
-        app.log.warn({ err: error, sessionId }, "terminal upstream websocket error");
-        closeSocket(socket, 1011, "Upstream terminal connection failed");
+      const pending: TerminalClientMessage[] = [];
+      let send = (message: TerminalClientMessage): void => {
+        pending.push(message);
       };
+      let detach = (): void => {};
+      let clientClosed = false;
 
-      upstream.on("open", () => {
-        socket.on("message", (data: RawData, isBinary: boolean) => {
-          if (upstream.readyState === WebSocket.OPEN) {
-            upstream.send(data, { binary: isBinary });
-          }
-        });
+      socket.on("message", (data: RawData) => {
+        const message = parseClientMessage(data);
+        if (message) send(message);
       });
-
-      upstream.on("message", (data: RawData, isBinary: boolean) => {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(data, { binary: isBinary });
-        }
-      });
-
-      upstream.on("close", (code: number, reason: Buffer) => {
-        closeSocket(socket, code, reason.toString() || "Terminal closed");
-      });
-
-      upstream.on("error", forwardUpstreamError);
-
       socket.on("close", () => {
-        closeSocket(upstream, 1000, "Client closed");
+        clientClosed = true;
+        detach();
       });
-
       socket.on("error", (error: Error) => {
         app.log.warn({ err: error, sessionId }, "terminal proxy websocket error");
-        closeSocket(upstream, 1011, "Proxy socket error");
+        detach();
       });
+
+      resolved.backend.attachTerminal(sessionId).then(
+        (stream) => {
+          if (clientClosed) {
+            stream.close();
+            return;
+          }
+          stream.onMessage((message) => {
+            if (socket.readyState === WebSocket.OPEN) {
+              socket.send(JSON.stringify(message));
+            }
+          });
+          stream.onClose((reason) => closeSocket(socket, 1000, reason));
+          send = (message) => stream.send(message);
+          detach = () => stream.close();
+          for (const message of pending.splice(0)) stream.send(message);
+        },
+        (error: unknown) => {
+          app.log.warn({ err: error, sessionId }, "terminal upstream websocket error");
+          closeSocket(socket, 1011, "Upstream terminal connection failed");
+        }
+      );
     }
   );
 }

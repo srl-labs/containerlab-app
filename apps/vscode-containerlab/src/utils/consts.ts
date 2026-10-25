@@ -9,10 +9,3 @@ export const enum ImagePullPolicy {
   Missing = "missing",
   Always = "always"
 }
-
-export const enum ContainerAction {
-  Start = "start",
-  Stop = "stop",
-  Pause = "pause",
-  Unpause = "unpause"
-}

@@ -46,6 +46,8 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
 
 - **Remote Labs:**
   Works perfectly with the: [SSH-Remote extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) to manage labs on remote servers.
+- **Lab Hosts:**
+  Manage labs on hosts running [clab-api-server](https://github.com/srl-labs/clab-api-server) from Linux, macOS, or Windows, without containerlab or Docker on your machine. Open **Containerlab: Manage Lab Hosts**, add a host and sign in: its labs show up in the explorer next to **Local**, each host with its status. Topologies open from the host's workspace, and deploy, node terminals, logs, and packet capture go through the API server. Lab hosts are listed in `containerlab.connections`; sign-in tokens stay in VS Code's secret storage.
 - **Remote Topology URLs:**
   Deploy labs directly from GitHub or GitLab by providing a repository or file URL when using the "Deploy an existing lab" command.
 
@@ -53,7 +55,7 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
 
 ## Requirements
 
-- **containerlab** must be installed. The extension will offer to install it if not found.
+- **containerlab** must be installed for labs on this machine. The extension will offer to install it if not found. Lab hosts need neither containerlab nor Docker locally.
 - You must be in the `clab_admins` (and `docker` group if you're using Docker). Podman is also supported for runtime features.
 - (Optional) **Edgeshark** for packet capture features - can be installed directly from the extension using the "Install Edgeshark" command.
 

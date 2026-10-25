@@ -1,10 +1,13 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import {
   shouldVerifyApiTls,
   createContainerlabAppServer,
+  createLocalEndpoint,
   normalizeBasePath,
+  resolveLocalBackendConfig,
   resolveWebTlsConfig
 } from "@srl-labs/containerlab-app-server";
 
@@ -28,12 +31,36 @@ function resolveStaticClientRoot(): string {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0];
 }
 
+/**
+ * Labs on the web app's own host, without clab-api-server. Opt-in with
+ * WEB_LOCAL_LABS=true: everyone who can open the app then runs labs as the
+ * server's OS user, so it suits a personal or trusted setup.
+ */
+function createWebLocalEndpoint() {
+  const config = resolveLocalBackendConfig({
+    platform: process.platform,
+    env: process.env,
+    envPrefix: "WEB_LOCAL_",
+    enableVariable: "WEB_LOCAL_LABS",
+    enabledByDefault: false
+  });
+  if (!config.enabled) return undefined;
+  return createLocalEndpoint({
+    options: config.options,
+    label: process.env.WEB_LOCAL_LABEL?.trim() || os.hostname(),
+    setupUrl: "https://srl-labs.github.io/containerlab-app/docs/install/web/#run-labs-on-the-web-apps-host",
+    autoConnect: true
+  });
+}
+
 async function start(): Promise<void> {
+  const localEndpoint = createWebLocalEndpoint();
   const app = await createContainerlabAppServer({
     basePath: BASE_PATH,
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     https: WEB_TLS.https,
     isDev: IS_DEV,
+    localEndpoint,
     logger: true,
     staticClientRoot: resolveStaticClientRoot(),
     viteDevUrl: VITE_DEV_URL
@@ -53,6 +80,21 @@ async function start(): Promise<void> {
     );
   }
   app.log.info(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
+  if (localEndpoint) {
+    const status = await localEndpoint.status();
+    app.log.warn(
+      `Labs on this host are on (WEB_LOCAL_LABS): everyone who can open the app runs labs as ${status.username} here, without signing in.`
+    );
+    if (!status.available) {
+      app.log.warn(`Labs on this host cannot run yet: ${status.problems.join(" ")}`);
+    }
+    // Event streams, terminals and Wireshark containers end with the server.
+    const stop = (): void => {
+      void Promise.allSettled([app.close(), localEndpoint.backend.dispose()]).finally(() => process.exit(0));
+    };
+    process.once("SIGTERM", stop);
+    process.once("SIGINT", stop);
+  }
   if (IS_DEV) {
     app.log.info(`Proxying frontend to: ${VITE_DEV_URL}`);
   }

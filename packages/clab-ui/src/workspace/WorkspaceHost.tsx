@@ -45,6 +45,11 @@ export function WorkspaceHostProvider({ host, children }: { host: WorkspaceHost;
   return <Context.Provider value={host}>{children}</Context.Provider>;
 }
 
+/** The workspace host when there is one, e.g. a lab host manager outside the workspace. */
+export function useOptionalWorkspaceHost(): WorkspaceHost | null {
+  return useContext(Context);
+}
+
 export function useWorkspaceHost(): WorkspaceHost {
   const host = useContext(Context);
   if (!host) throw new Error("WorkspaceHostProvider is required for standalone workspace views.");

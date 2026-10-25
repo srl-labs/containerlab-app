@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
+import type { NodeLifecycleAction } from "@srl-labs/containerlab-lab-backend";
 
-import { ClabLabTreeNode, type ClabContainerTreeNode } from "../treeView/common";
-import * as utils from "../utils";
+import type { ClabContainerTreeNode } from "../treeView/common";
+import { labNameForPath, resolveLab } from "../backend/labBackends";
+import { outputChannel } from "../globals";
 
-import { ClabCommand } from "./clabCommand";
+import { runWithProgress } from "./command";
 import {
   createTopoViewerLifecycleHandlers,
   notifyCurrentTopoViewerOfCommandFailure
@@ -12,7 +14,7 @@ import {
 type TopologyNodeLifecycleAction = "start" | "stop" | "restart";
 
 async function runNodeAction(
-  action: utils.ContainerAction,
+  action: Extract<NodeLifecycleAction, "pause" | "unpause">,
   node?: ClabContainerTreeNode
 ): Promise<void> {
   if (node === undefined) {
@@ -20,13 +22,26 @@ async function runNodeAction(
     return;
   }
 
-  const containerId = node.cID;
-  if (!containerId) {
+  if (!node.cID || !node.labPath.absolute) {
     vscode.window.showErrorMessage("No containerId found.");
     return;
   }
 
-  await utils.runContainerAction(containerId, action);
+  try {
+    const { backend } = await resolveLab(node.labPath.absolute, node.labName, node.connectionId);
+    await backend.nodeAction(
+      node.labName ?? labNameForPath(node.labPath.absolute),
+      node.name,
+      action
+    );
+    vscode.window.showInformationMessage(
+      `${action === "pause" ? "Paused" : "Unpaused"} ${node.name}`
+    );
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    outputChannel.error(`Failed to ${action} ${node.name}: ${message}`);
+    vscode.window.showErrorMessage(`Failed to ${action} container: ${message}`);
+  }
 }
 
 export async function startNode(node?: ClabContainerTreeNode): Promise<void> {
@@ -42,11 +57,11 @@ export async function restartNode(node?: ClabContainerTreeNode): Promise<void> {
 }
 
 export async function pauseNode(node?: ClabContainerTreeNode): Promise<void> {
-  await runNodeAction(utils.ContainerAction.Pause, node);
+  await runNodeAction("pause", node);
 }
 
 export async function unpauseNode(node?: ClabContainerTreeNode): Promise<void> {
-  await runNodeAction(utils.ContainerAction.Unpause, node);
+  await runNodeAction("unpause", node);
 }
 
 function resolveTopologyNodeName(node: ClabContainerTreeNode): string {
@@ -87,18 +102,24 @@ async function runTopologyNodeLifecycleAction(
     return;
   }
 
-  const labNode = new ClabLabTreeNode("", vscode.TreeItemCollapsibleState.None, node.labPath);
   const handlers = createTopoViewerLifecycleHandlers(action);
-  const cmd = new ClabCommand(
-    action,
-    labNode,
-    undefined,
-    undefined,
-    undefined,
-    handlers.onSuccess,
-    handlers.onFailure,
-    handlers.onOutputLine
+  const labPath = node.labPath.absolute;
+  const labName = node.labName ?? labNameForPath(labPath);
+  const containerName = node.name;
+  await runWithProgress(
+    async () => {
+      const { backend } = await resolveLab(labPath, labName, node.connectionId);
+      await backend.nodeAction(labName, containerName, action);
+    },
+    {
+      spinnerMsg: {
+        progressMsg: `Running ${action} on ${nodeName}...`,
+        successMsg: `${action} of ${nodeName} completed successfully`
+      },
+      actionName: action,
+      onSuccess: handlers.onSuccess,
+      onFailure: handlers.onFailure,
+      onOutputLine: handlers.onOutputLine
+    }
   );
-
-  await cmd.run(["--node", nodeName]);
 }

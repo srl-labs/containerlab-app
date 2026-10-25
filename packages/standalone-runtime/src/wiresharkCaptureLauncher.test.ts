@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { CaptureWiresharkVncSession } from "@srl-labs/containerlab-app-contract";
+import type { CaptureWiresharkVncSession } from "@srl-labs/containerlab-lab-backend";
 
 import {
   POPUP_BLOCKED_MESSAGE,

@@ -6,10 +6,10 @@
 export { delay } from "./async";
 
 // Constants
-export { DEFAULT_ATTACH_SHELL_CMD, DEFAULT_ATTACH_TELNET_PORT, ContainerAction } from "./consts";
+export { DEFAULT_ATTACH_SHELL_CMD, DEFAULT_ATTACH_TELNET_PORT } from "./consts";
 
 // Docker utilities
-export { checkAndPullDockerImage, runContainerAction } from "./docker/docker";
+export { checkAndPullDockerImage } from "./docker/docker";
 
 export {
   getDockerImages,

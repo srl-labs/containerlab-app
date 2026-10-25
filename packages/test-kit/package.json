@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@containerlab/clab-ui": "workspace:*",
-    "@playwright/test": "catalog:"
+    "@playwright/test": "catalog:",
+    "@srl-labs/containerlab-lab-backend": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

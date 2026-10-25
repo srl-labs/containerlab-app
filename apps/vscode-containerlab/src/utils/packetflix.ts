@@ -3,9 +3,11 @@ import * as os from "os";
 import * as vscode from "vscode";
 
 import type * as c from "../treeView/common";
-import { outputChannel } from "../globals";
+import { dockerClient, outputChannel } from "../globals";
+import { LOCAL_CONNECTION } from "../backend/connections";
 
 import * as utils from "./utils";
+import { isHttpEndpointReady } from "./webview";
 
 let sessionHostname = "";
 const HOST_NETNS_INTERFACE_PREFIX = "clab-s-";
@@ -71,16 +73,31 @@ export async function genPacketflixURI(
   return [uri, bracketed];
 }
 
+const EDGESHARK_VERSION_URL = "http://127.0.0.1:5001/version";
+const EDGESHARK_CHECK_TIMEOUT_MS = 3000;
+
+/** Whether Edgeshark containers run, whether or not they answer. */
+async function edgesharkContainersRunning(): Promise<boolean> {
+  try {
+    const containers = await dockerClient.listContainers({ filters: { name: ["edgeshark"] } });
+    return containers.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Ensure Edgeshark API is up; optionally prompt to start it
 async function ensureEdgesharkAvailable(): Promise<boolean> {
-  let edgesharkOk = false;
-  try {
-    const res = await fetch("http://127.0.0.1:5001/version");
-    edgesharkOk = res.ok;
-  } catch {
-    // Port is probably closed, edgeshark not running
+  if (await isHttpEndpointReady(EDGESHARK_VERSION_URL, EDGESHARK_CHECK_TIMEOUT_MS)) return true;
+  outputChannel.warn(`Edgeshark is not answering at ${EDGESHARK_VERSION_URL}`);
+
+  if (await edgesharkContainersRunning()) {
+    vscode.window.showErrorMessage(
+      `Capture: Edgeshark is running but does not answer at ${EDGESHARK_VERSION_URL}. ` +
+        "Check that this machine can reach the Edgeshark Docker network, or restart Edgeshark."
+    );
+    return false;
   }
-  if (edgesharkOk) return true;
 
   const selectedOpt = await vscode.window.showInformationMessage(
     "Capture: Edgeshark is not running. Would you like to start it?",
@@ -90,22 +107,18 @@ async function ensureEdgesharkAvailable(): Promise<boolean> {
   if (selectedOpt === "Yes") {
     // Dynamic import to avoid circular dependency
     const { installEdgeshark } = await import("../commands/edgeshark");
-    await installEdgeshark();
+    await installEdgeshark(LOCAL_CONNECTION);
 
     const maxRetries = 30;
     const delayMs = 1000;
     for (let i = 0; i < maxRetries; i++) {
-      try {
-        const res = await fetch("http://127.0.0.1:5001/version");
-        if (res.ok) {
-          return true;
-        }
-      } catch {
-        // wait and retry
+      if (await isHttpEndpointReady(EDGESHARK_VERSION_URL, EDGESHARK_CHECK_TIMEOUT_MS)) {
+        return true;
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
+    outputChannel.warn(`Edgeshark did not answer at ${EDGESHARK_VERSION_URL} after starting it`);
     vscode.window.showErrorMessage("Edgeshark did not start in time. Please try again.");
     return false;
   }

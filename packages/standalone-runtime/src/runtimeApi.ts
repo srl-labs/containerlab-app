@@ -23,7 +23,7 @@ import type {
   FcliCommandResponse,
   DrawioGenerateResponse,
   CaptureCloseAllResponse
-} from "@srl-labs/containerlab-app-contract";
+} from "@srl-labs/containerlab-lab-backend";
 export type {
   SaveConfigResponse,
   TerminalProtocol,
@@ -47,7 +47,7 @@ export type {
   FcliCommandResponse,
   DrawioGenerateResponse,
   CaptureCloseAllResponse
-} from "@srl-labs/containerlab-app-contract";
+} from "@srl-labs/containerlab-lab-backend";
 
 import type {
   CustomNodeTemplate,

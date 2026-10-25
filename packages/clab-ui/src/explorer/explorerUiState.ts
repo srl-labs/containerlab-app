@@ -129,6 +129,48 @@ export function nextExpandedBySectionForSnapshot(input: {
   };
 }
 
+/**
+ * Nodes that start expanded and appear for the first time, by section. They
+ * are remembered in `seen`, so a later collapse sticks.
+ */
+export function takeDefaultExpandedIds(
+  sections: readonly ExplorerSectionSnapshot[],
+  seen: Set<string>
+): Partial<Record<ExplorerSectionSnapshot["id"], string[]>> {
+  const result: Partial<Record<ExplorerSectionSnapshot["id"], string[]>> = {};
+  for (const section of sections) {
+    const added: string[] = [];
+    const visit = (nodes: readonly ExplorerSectionSnapshot["nodes"][number][]) => {
+      for (const node of nodes) {
+        const key = `${section.id}\u0000${node.id}`;
+        if (node.defaultExpanded === true && !seen.has(key)) {
+          seen.add(key);
+          added.push(node.id);
+        }
+        visit(node.children);
+      }
+    };
+    visit(section.nodes);
+    if (added.length > 0) result[section.id] = added;
+  }
+  return result;
+}
+
+/** Adds ids to the expanded items of their sections. */
+export function withExpandedIds(
+  expandedBySection: ExplorerUiState["expandedBySection"],
+  additions: Partial<Record<ExplorerSectionSnapshot["id"], string[]>>
+): ExplorerUiState["expandedBySection"] {
+  let next = expandedBySection;
+  for (const [sectionId, ids] of Object.entries(additions) as Array<
+    [ExplorerSectionSnapshot["id"], string[]]
+  >) {
+    const current = next?.[sectionId] ?? [];
+    next = { ...next, [sectionId]: [...current, ...ids.filter((id) => !current.includes(id))] };
+  }
+  return next;
+}
+
 export function buildExplorerUiState(input: {
   collapsedBySection: ExplorerUiState["collapsedBySection"];
   expandedBySection: ExplorerUiState["expandedBySection"];

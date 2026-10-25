@@ -3,10 +3,12 @@ import fs from "node:fs";
 import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
+// The server's own TLS certificate comes from openssl; it is not lab work.
+// oxlint-disable-next-line no-restricted-imports
 import { spawnSync } from "node:child_process";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
 
-import { parseBooleanEnv } from "./env.ts";
+import { parseBooleanEnv } from "@srl-labs/containerlab-lab-backend";
 
 const CERT_RENEWAL_MS = 30 * 24 * 60 * 60 * 1000;
 const CERT_DAYS = 3650;

@@ -1,20 +1,9 @@
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import {
-  outputChannel,
-  sshxSessions,
-  runningLabsProvider,
-  containerlabBinaryPath
-} from "../globals";
+import { outputChannel, sshxSessions, runningLabsProvider } from "../globals";
+import { backendOf } from "../backend/labBackends";
 import { refreshSshxSessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
-import { runCommand } from "../utils/utils";
-
-function parseLink(output: string): string | undefined {
-  const re = /(https?:\/\/\S+)/;
-  const m = re.exec(output);
-  return m ? m[1] : undefined;
-}
 
 async function sshxStart(action: "attach" | "reattach", node: ClabLabTreeNode) {
   if (node.name === undefined || node.name.length === 0) {
@@ -22,15 +11,9 @@ async function sshxStart(action: "attach" | "reattach", node: ClabLabTreeNode) {
     return;
   }
   try {
-    const outRaw = await runCommand(
-      `${containerlabBinaryPath} tools sshx ${action} -l ${node.name}`,
-      `SSHX ${action}`,
-      outputChannel,
-      true,
-      true
-    );
-    const out = typeof outRaw === "string" ? outRaw : "";
-    const link = parseLink(out);
+    const result = await backendOf(node).shareTool("sshx", node.name, action);
+    if (result.output) outputChannel.info(result.output);
+    const link = result.link;
     if (link !== undefined && link.length > 0) {
       sshxSessions.set(node.name, link);
       await vscode.env.clipboard.writeText(link);
@@ -64,13 +47,7 @@ export async function sshxDetach(node: ClabLabTreeNode) {
     return;
   }
   try {
-    await runCommand(
-      `${containerlabBinaryPath} tools sshx detach -l ${node.name}`,
-      "SSHX detach",
-      outputChannel,
-      false,
-      false
-    );
+    await backendOf(node).shareTool("sshx", node.name, "detach");
     sshxSessions.delete(node.name);
     vscode.window.showInformationMessage("SSHX session detached");
   } catch (err: unknown) {

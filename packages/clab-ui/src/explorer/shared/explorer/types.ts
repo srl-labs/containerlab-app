@@ -38,12 +38,16 @@ export interface ExplorerNode {
   tooltip?: string;
   contextValue?: string;
   endpointId?: string;
+  /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
+  endpointKind?: "local" | "api";
   state?: string;
   statusIndicator?: "green" | "red" | "yellow" | "blue" | "gray";
   statusDescription?: string;
   primaryAction?: ExplorerAction;
   shareAction?: ExplorerAction;
   hasChildren?: boolean;
+  /** Expanded the first time the explorer shows it, like a lab host root. */
+  defaultExpanded?: boolean;
   actions: ExplorerAction[];
   children: ExplorerNode[];
 }

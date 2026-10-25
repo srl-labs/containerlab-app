@@ -8,14 +8,16 @@ import {
 } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import type { Response } from "undici";
+import type {
+  LabBackend,
+  LabLifecycleAction,
+  LifecycleActionResult,
+  LifecycleRunOptions,
+  LifecycleStreamEvent
+} from "@srl-labs/containerlab-lab-backend";
+import { getHttpErrorStatus, isUpstreamNetworkError } from "@srl-labs/containerlab-lab-backend/api";
 
-import {
-  getHttpErrorStatus,
-  isUpstreamNetworkError,
-  type ClabApiClient,
-  type LifecycleActionResult
-} from "./clabApiClient.ts";
+import type { EndpointResolver } from "./endpointResolver.ts";
 import type { EndpointEntry } from "./endpointSessionStore.ts";
 import {
   extractEndpointIdFromTopologyId,
@@ -57,7 +59,7 @@ interface ResolveLabTargetOptions {
 
 const LAB_NODE_LIFECYCLE_ENDPOINTS = ["start", "stop", "restart"] as const;
 type LabNodeLifecycleEndpoint = (typeof LAB_NODE_LIFECYCLE_ENDPOINTS)[number];
-type LifecycleStreamEndpoint = "deploy" | "destroy" | "redeploy" | "apply" | LabNodeLifecycleEndpoint;
+type LifecycleStreamEndpoint = LabLifecycleAction;
 
 const LIFECYCLE_RECONCILE_TIMEOUT_MS = 30000;
 const LIFECYCLE_RECONCILE_INTERVAL_MS = 1000;
@@ -67,12 +69,6 @@ interface LifecycleStreamOptions {
   path?: string;
   lifecycleOptions?: LabLifecycleOptions;
 }
-
-type EndpointResolver = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  endpointId?: string
-) => { client: ClabApiClient; endpoint: EndpointEntry } | null;
 
 class RequestError extends Error {
   constructor(
@@ -103,10 +99,10 @@ function writeNdjsonLifecycleError(reply: FastifyReply, error: unknown): void {
   );
 }
 
-async function forwardNdjsonStream(
+async function forwardLifecycleEvents(
   request: FastifyRequest,
   reply: FastifyReply,
-  response: Response,
+  events: AsyncIterable<LifecycleStreamEvent>,
   isAborted: () => boolean
 ): Promise<void> {
   reply.raw.writeHead(200, streamResponseHeaders(request, {
@@ -117,21 +113,13 @@ async function forwardNdjsonStream(
     "X-Content-Type-Options": "nosniff"
   }));
 
-  if (!response.body) {
-    writeNdjsonLifecycleError(reply, new Error("Lifecycle stream has no response body"));
-    reply.raw.end();
-    return;
-  }
-
-  const reader = response.body.getReader();
   try {
-    while (!isAborted()) {
-      const { done, value } = await reader.read();
-      if (done) {
+    for await (const event of events) {
+      if (isAborted()) {
         break;
       }
-      if (value && !isAborted() && !reply.raw.destroyed && !reply.raw.writableEnded) {
-        reply.raw.write(Buffer.from(value));
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) {
+        reply.raw.write(`${JSON.stringify(event)}\n`);
       }
     }
   } catch (error) {
@@ -139,7 +127,6 @@ async function forwardNdjsonStream(
       writeNdjsonLifecycleError(reply, error);
     }
   } finally {
-    reader.cancel().catch(() => {});
     if (!isAborted() && !reply.raw.writableEnded) {
       reply.raw.end();
     }
@@ -148,7 +135,7 @@ async function forwardNdjsonStream(
 
 async function resolveLabTarget(
   endpoint: EndpointEntry,
-  client: ClabApiClient,
+  backend: LabBackend,
   sessions: StandaloneTopologySessionManager,
   target: LabTarget,
   options: ResolveLabTargetOptions = {}
@@ -160,8 +147,7 @@ async function resolveLabTarget(
       throw new RequestError("Topology session not found", 404);
     }
     const runtimeLabName = await resolveRunningLabNameForTopology(
-      client,
-      endpoint.token,
+      backend,
       session.topologyRef,
       session.topologyRef.labName
     );
@@ -178,14 +164,12 @@ async function resolveLabTarget(
 
   if (target.topologyRef) {
     const topologyRef = await resolveCanonicalStandaloneTopologyRef(
-      client,
-      endpoint.token,
+      backend,
       target.topologyRef,
       endpoint.id
     );
     const runtimeLabName = await resolveRunningLabNameForTopology(
-      client,
-      endpoint.token,
+      backend,
       topologyRef,
       topologyRef.labName
     );
@@ -232,8 +216,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function waitForLabRunningState(
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   expectedRunning: boolean
 ): Promise<{ matched: boolean; running?: boolean; error?: unknown }> {
@@ -243,7 +226,7 @@ async function waitForLabRunningState(
 
   while (Date.now() <= deadline) {
     try {
-      const running = await client.isLabRunning(token, labName);
+      const running = await backend.isLabRunning(labName);
       lastRunning = running;
       if (running === expectedRunning) {
         return { matched: true, running };
@@ -261,8 +244,7 @@ async function waitForLabRunningState(
 async function reconcileIndeterminateLifecycleError(
   reply: FastifyReply,
   error: unknown,
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   action: LifecycleStreamEndpoint,
   preRunning?: boolean
@@ -281,7 +263,7 @@ async function reconcileIndeterminateLifecycleError(
     });
   }
 
-  const state = await waitForLabRunningState(client, token, labName, expectedRunning);
+  const state = await waitForLabRunningState(backend, labName, expectedRunning);
   const canTrustState =
     action === "destroy" ||
     ((action === "deploy" || action === "apply") && preRunning === false);
@@ -309,8 +291,7 @@ async function reconcileIndeterminateLifecycleError(
 
 async function sendLifecycleJsonAction(
   reply: FastifyReply,
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   labName: string,
   action: LifecycleStreamEndpoint,
   run: () => Promise<LifecycleActionResult>,
@@ -328,8 +309,7 @@ async function sendLifecycleJsonAction(
     const reconciled = await reconcileIndeterminateLifecycleError(
       reply,
       error,
-      client,
-      token,
+      backend,
       labName,
       action,
       options.preRunning
@@ -344,8 +324,7 @@ async function sendLifecycleJsonAction(
 async function openAndForwardLifecycleStream(
   request: FastifyRequest,
   reply: FastifyReply,
-  client: ClabApiClient,
-  token: string,
+  backend: LabBackend,
   action: LifecycleStreamEndpoint,
   labName: string,
   options: LifecycleStreamOptions = {},
@@ -360,17 +339,19 @@ async function openAndForwardLifecycleStream(
 
   reply.raw.on("close", abort);
   try {
-    const streamResponse = await client.openLifecycleStream(token, action, labName, options, {
+    const runOptions: LifecycleRunOptions = {
+      cleanup: options.cleanup,
+      lifecycleOptions: options.lifecycleOptions,
       signal: abortController.signal
-    });
-    await forwardNdjsonStream(request, reply, streamResponse, () => aborted);
+    };
+    const events = await backend.streamLifecycle(action, { labName, path: options.path }, runOptions);
+    await forwardLifecycleEvents(request, reply, events, () => aborted);
   } catch (error) {
     if (!aborted) {
       const reconciled = await reconcileIndeterminateLifecycleError(
         reply,
         error,
-        client,
-        token,
+        backend,
         reconcileOptions.labName ?? labName,
         action,
         reconcileOptions.preRunning
@@ -402,18 +383,10 @@ export function registerLabProxy(
         if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
         try {
-          const { client, endpoint } = resolved;
-          const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-          return await sendLifecycleJsonAction(
-            reply,
-            client,
-            endpoint.token,
-            target.labName,
-            action,
-            () =>
-              client.controlLabLifecycle(endpoint.token, target.labName, action, {
-                includeLogs: true
-              })
+          const { backend, endpoint } = resolved;
+          const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+          return await sendLifecycleJsonAction(reply, backend, target.labName, action, () =>
+            backend.runLifecycle(action, { labName: target.labName })
           );
         } catch (error) {
           return handleRouteError(reply, error);
@@ -432,16 +405,9 @@ export function registerLabProxy(
         if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
         try {
-          const { client, endpoint } = resolved;
-          const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-          return await openAndForwardLifecycleStream(
-            request,
-            reply,
-            client,
-            endpoint.token,
-            action,
-            target.labName
-          );
+          const { backend, endpoint } = resolved;
+          const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+          return await openAndForwardLifecycleStream(request, reply, backend, action, target.labName);
         } catch (error) {
           return handleRouteError(reply, error);
         }
@@ -460,9 +426,9 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const running = await client.isLabRunning(endpoint.token, target.labName);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const running = await backend.isLabRunning(target.labName);
         return reply.send({ success: true, running });
       } catch (error) {
         if (error instanceof TopologySourceConflictError) {
@@ -484,22 +450,23 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           "deploy",
           () =>
-            client.deployLab(endpoint.token, target.labName, {
-              path: target.yamlPath,
-              cleanup: request.body.cleanup === true,
-              lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options),
-              includeLogs: true
-            }),
+            backend.runLifecycle(
+              "deploy",
+              { labName: target.labName, path: target.yamlPath },
+              {
+                cleanup: request.body.cleanup === true,
+                lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
+              }
+            ),
           { preRunning }
         );
       } catch (error) {
@@ -519,13 +486,12 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return await openAndForwardLifecycleStream(
           request,
           reply,
-          client,
-          endpoint.token,
+          backend,
           "deploy",
           target.labName,
           {
@@ -551,21 +517,23 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        const preRunning = await client.isLabRunning(endpoint.token, target.labName).catch(() => undefined);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
-          client,
-          endpoint.token,
+          backend,
           target.labName,
           "destroy",
           () =>
-            client.destroyLab(endpoint.token, target.labName, {
-              cleanup: request.body.cleanup === true,
-              lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options),
-              includeLogs: true
-            }),
+            backend.runLifecycle(
+              "destroy",
+              { labName: target.labName },
+              {
+                cleanup: request.body.cleanup === true,
+                lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
+              }
+            ),
           { preRunning }
         );
       } catch (error) {
@@ -585,13 +553,12 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return await openAndForwardLifecycleStream(
           request,
           reply,
-          client,
-          endpoint.token,
+          backend,
           "destroy",
           target.labName,
           {
@@ -616,20 +583,17 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
-        return await sendLifecycleJsonAction(
-          reply,
-          client,
-          endpoint.token,
-          target.labName,
-          "redeploy",
-          () =>
-            client.redeployLab(endpoint.token, target.labName, {
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        return await sendLifecycleJsonAction(reply, backend, target.labName, "redeploy", () =>
+          backend.runLifecycle(
+            "redeploy",
+            { labName: target.labName },
+            {
               cleanup: request.body.cleanup === true,
-              lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options),
-              includeLogs: true
-            })
+              lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
+            }
+          )
         );
       } catch (error) {
         return handleRouteError(reply, error);
@@ -648,13 +612,12 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         return await openAndForwardLifecycleStream(
           request,
           reply,
-          client,
-          endpoint.token,
+          backend,
           "redeploy",
           target.labName,
           {
@@ -679,8 +642,8 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body, {
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body, {
           preferTopologyLabName: true
         });
         const dirtyTarget = {
@@ -690,10 +653,11 @@ export function registerLabProxy(
         };
 
         if (request.body.dryRun === true) {
-          const lifecycle = await client.applyLab(endpoint.token, target.labName, {
-            path: target.yamlPath,
-            dryRun: true
-          });
+          const lifecycle = await backend.runLifecycle(
+            "apply",
+            { labName: target.labName, path: target.yamlPath },
+            { dryRun: true }
+          );
           const changesPending = applyResultHasPendingChanges(lifecycle.result);
           if (changesPending !== undefined) {
             sessions.setDirtyForTopology(dirtyTarget, changesPending);
@@ -707,17 +671,16 @@ export function registerLabProxy(
           });
         }
 
-        const preRunning = await client.isLabRunning(endpoint.token, target.runtimeLabName).catch(() => undefined);
+        const preRunning = await backend.isLabRunning(target.runtimeLabName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
-          client,
-          endpoint.token,
+          backend,
           target.runtimeLabName,
           "apply",
           async () => {
-            const lifecycle = await client.applyLab(endpoint.token, target.labName, {
-              path: target.yamlPath,
-              includeLogs: true
+            const lifecycle = await backend.runLifecycle("apply", {
+              labName: target.labName,
+              path: target.yamlPath
             });
             sessions.setDirtyForTopology(dirtyTarget, false);
             return lifecycle;
@@ -741,16 +704,15 @@ export function registerLabProxy(
       if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
 
       try {
-        const { client, endpoint } = resolved;
-        const target = await resolveLabTarget(endpoint, client, sessions, request.body, {
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body, {
           preferTopologyLabName: true
         });
-        const preRunning = await client.isLabRunning(endpoint.token, target.runtimeLabName).catch(() => undefined);
+        const preRunning = await backend.isLabRunning(target.runtimeLabName).catch(() => undefined);
         return await openAndForwardLifecycleStream(
           request,
           reply,
-          client,
-          endpoint.token,
+          backend,
           "apply",
           target.labName,
           {
