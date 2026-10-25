@@ -32,6 +32,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import UndoRoundedIcon from "@mui/icons-material/UndoRounded";
 import VerticalSplitOutlinedIcon from "@mui/icons-material/VerticalSplitOutlined";
@@ -427,6 +428,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     deploymentCommands.onRestartLab();
   }, [setProcessing, deploymentCommands]);
 
+  const topoViewerHost = useClabUiHost().topoViewer;
+  const validateTopology = topoViewerHost.validateTopology?.bind(topoViewerHost);
+  const handleValidate = React.useCallback(() => {
+    setDeployMenuPosition(null);
+    validateTopology?.();
+  }, [validateTopology]);
+
   const [lifecycleOptionsOpen, setLifecycleOptionsOpen] = React.useState(false);
 
   const handleOpenLifecycleOptions = React.useCallback(() => {
@@ -720,6 +728,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   }
                 })}
               <Divider />
+              {validateTopology ? (
+                <MenuItem
+                  onClick={handleValidate}
+                  disabled={isProcessing || !isTopologyActive}
+                  data-testid="navbar-deploy-item-validate"
+                >
+                  <ListItemIcon>
+                    <FactCheckOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText>Validate</ListItemText>
+                </MenuItem>
+              ) : null}
               <MenuItem
                 onClick={handleOpenLifecycleOptions}
                 disabled={isProcessing || !isTopologyActive}

@@ -1,5 +1,5 @@
 ---
-description: Deploy, apply changes, redeploy, and destroy labs, run them with containerlab options, and manage images.
+description: Deploy, apply changes, redeploy, and destroy labs, validate and share them, run them with containerlab options, and manage images.
 ---
 
 # Run a lab
@@ -43,6 +43,7 @@ The arrow next to the play button opens the rest:
 | **Destroy (cleanup)** | Also remove the lab directory with generated configs and certificates. |
 | **Start Nodes**, **Stop Nodes**, **Restart Nodes** | Start, stop, or restart the containers without redeploying. |
 | **Run Command…**, **Save Configs…**, **Save VM Snapshots…**, **Inspect Details** | Work with the running lab; see [Lab operations](#lab-operations). |
+| **Validate** | Run `containerlab validate` on the topology file without deploying it. |
 | **Run with options…** | Any of the above with extra containerlab flags. |
 
 In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanupWarning` is on.
@@ -89,6 +90,21 @@ Paths are relative to the topology file's folder. On a lab host they must stay i
 The explorer's **Save Configs To…** saves a deployed lab's configs with a copy, too.
 
 A lab host hides what it cannot do. Copying saved configs needs containerlab 0.73 and VM snapshots 0.72; on a lab host, running by label, snapshots, copies, details, snapshot restore and one-call multi-node actions need a clab-api-server that lists them in `/health`. Older lab hosts still run commands and start, stop, or restart several nodes, one node at a time.
+
+## Validate a topology
+
+**Validate** in the lifecycle menu, and **Validate Topology** on a lab in the explorer, check the topology file the way `containerlab validate` does: the schema, the nodes, and the links. A valid topology reports its node and link count. Otherwise you get containerlab's error. In VS Code, **Validate Topology** is also in the context menu of `.clab.yml` files.
+
+## Share a running lab
+
+The **Sharing** actions of a running lab start a terminal others can join in the browser.
+
+| Tool | Options when you share |
+| --- | --- |
+| **SSHX** | Also create a read-only link: viewers watch the terminals but cannot type. |
+| **GoTTY** | The port, a username and password instead of `admin`/`admin`, and the shell. |
+
+The app shows the links to copy or open. Labs on a lab host need a clab-api-server that offers these options; with an older one, sharing works with the defaults and the dialog says what is missing.
 
 ## Images
 

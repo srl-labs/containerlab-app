@@ -41,6 +41,7 @@ Supported imports:
 - `@containerlab/clab-ui/inspect`
 - `@containerlab/clab-ui/welcome`
 - `@containerlab/clab-ui/node-impairments`
+- `@containerlab/clab-ui/clos-generator`
 - `@containerlab/clab-ui/wireshark-vnc`
 - `@containerlab/clab-ui/styles/global.css`
 

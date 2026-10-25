@@ -12,6 +12,7 @@ import {
 import type {
   LabBackend,
   LabBackendCapabilities,
+  LabBackendFeatures,
   LabEvent,
   LabEventStreamOptions,
   LabFileContent,
@@ -36,14 +37,20 @@ import type {
   CaptureTarget,
   ExecResponse,
   InspectContainerInfo,
+  GenerateTopologyRequest,
+  GraphExportFormat,
   LifecycleActionResult,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
-  ShareToolAction
+  ShareToolAction,
+  ShareToolOptions,
+  ValidateTopologyResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
+import { gottyOptionsError } from "../shareOptions.ts";
 import { buildWebSocketUrl, ClabApiClient } from "./clabApiClient.ts";
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import { apiFetch } from "./upstreamRequest.ts";
@@ -87,9 +94,33 @@ type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
 const SERVER_FEATURES_TTL_MS = 60_000;
 const serverFeatureCache = new Map<string, { expires: number; features: Promise<ReadonlySet<string>> }>();
 
+/** Forgets what servers listed, e.g. between tests that fake different servers at one URL. */
+export function clearServerFeatureCache(): void {
+  serverFeatureCache.clear();
+}
+
 function unsupported(what: string): LabBackendError {
   return new LabBackendError(
     `This clab-api-server cannot ${what}. Update clab-api-server to use it.`,
+    501
+  );
+}
+
+/** The features a clab-api-server lists on `GET /health`; older servers list none. */
+function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures {
+  return {
+    // Servers before the feature list had validate already, or answer 404.
+    validate: true,
+    graphMermaid: listed.has("graph-mermaid"),
+    graphDot: listed.has("graph-dot"),
+    sshxReaders: listed.has("sshx-readers"),
+    gottyOptions: listed.has("gotty-options")
+  };
+}
+
+function unsupportedFeatureError(feature: string): LabBackendError {
+  return new LabBackendError(
+    `This lab host's clab-api-server does not support ${feature}. Update clab-api-server to use it.`,
     501
   );
 }
@@ -112,6 +143,11 @@ export function containerForNode(
     throw new LabBackendError(`Node "${nodeName}" was not found in lab "${labName}".`, 404);
   }
   return match;
+}
+
+/** gin's own 404 for a route the server does not have, unlike a handler's JSON 404. */
+function isMissingRoute(error: unknown): boolean {
+  return error instanceof Error && /\(404\): 404 page not found/.test(error.message);
 }
 
 /** A lab backend for one signed-in user of a clab-api-server. */
@@ -154,6 +190,10 @@ export class ApiLabBackend implements LabBackend {
 
   healthMetrics() {
     return this.client.getHealthMetrics(this.token);
+  }
+
+  async features(): Promise<LabBackendFeatures> {
+    return featuresFromServerList(await this.serverFeatures());
   }
 
   inspectAll() {
@@ -359,15 +399,63 @@ export class ApiLabBackend implements LabBackend {
     return this.client.getLabTailscaleStatus(this.token, labName);
   }
 
-  shareTool(
+  async shareTool(
     tool: "sshx" | "gotty",
     labName: string,
     action: ShareToolAction,
-    options: { port?: number } = {}
+    options: ShareToolOptions = {}
   ) {
+    if (action !== "detach") {
+      await this.requireShareOptions(tool, options);
+    }
     return tool === "sshx"
-      ? this.client.runSshxShareAction(this.token, labName, action)
+      ? this.client.runSshxShareAction(this.token, labName, action, options)
       : this.client.runGottyShareAction(this.token, labName, action, options);
+  }
+
+  /** Refuses options an older server would silently ignore, e.g. a GoTTY password. */
+  private async requireShareOptions(tool: "sshx" | "gotty", options: ShareToolOptions): Promise<void> {
+    if (tool === "gotty") {
+      const error = gottyOptionsError(options);
+      if (error) throw new LabBackendError(error, 400);
+    }
+    const wantsReaders = tool === "sshx" && options.enableReaders === true;
+    const wantsGottyOptions =
+      tool === "gotty" &&
+      (options.username !== undefined || options.password !== undefined || options.shell !== undefined);
+    if (!wantsReaders && !wantsGottyOptions) return;
+    const features = await this.features();
+    if (wantsReaders && !features.sshxReaders) throw unsupportedFeatureError("read-only sshx links");
+    if (wantsGottyOptions && !features.gottyOptions) {
+      throw unsupportedFeatureError("GoTTY credentials and shell");
+    }
+  }
+
+  async validate(lab: LabTarget): Promise<ValidateTopologyResponse> {
+    try {
+      return await this.client.validateTopology(this.token, lab.labName, lab.path);
+    } catch (error) {
+      throw isMissingRoute(error) ? unsupportedFeatureError("topology validation") : error;
+    }
+  }
+
+  async graphExport(
+    lab: LabTarget,
+    format: GraphExportFormat,
+    options: { direction?: MermaidDirection } = {}
+  ) {
+    const features = await this.features();
+    if (!(format === "mermaid" ? features.graphMermaid : features.graphDot)) {
+      throw unsupportedFeatureError(format === "mermaid" ? "Mermaid graphs" : "Graphviz graphs");
+    }
+    return this.client.generateGraphExport(this.token, lab.labName, format, {
+      path: lab.path,
+      direction: options.direction
+    });
+  }
+
+  generateTopology(request: GenerateTopologyRequest) {
+    return this.client.generateTopology(this.token, request);
   }
 
   nodeAction(labName: string, containerName: string, action: NodeLifecycleAction) {

@@ -489,6 +489,9 @@ export function createFakeClabUiHost(
       cancelLifecycle() {
         fakeLifecycle.cancel();
       },
+      validateTopology() {
+        recordHarnessMessage({ command: "topo-validate" });
+      },
       toggleSplitView() {},
       runNodeAction(action, nodeName) {
         void fakeLifecycle.nodeAction(action, nodeName);

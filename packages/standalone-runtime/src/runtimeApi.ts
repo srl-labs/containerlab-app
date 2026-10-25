@@ -23,7 +23,15 @@ import type {
   FcliCommandResponse,
   DrawioGenerateResponse,
   CaptureCloseAllResponse,
-  RenderedTopology
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
+  LabBackendFeatures,
+  MermaidDirection,
+  RenderedTopology,
+  ShareToolOptions,
+  ValidateTopologyResponse
 } from "@srl-labs/containerlab-lab-backend";
 export type {
   SaveConfigResponse,
@@ -47,7 +55,10 @@ export type {
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse
+  CaptureCloseAllResponse,
+  GraphExportFormat,
+  MermaidDirection,
+  ShareToolOptions
 } from "@srl-labs/containerlab-lab-backend";
 
 import { parseTailscaleStatus, type TailscaleStatus } from "@containerlab/clab-ui/host";
@@ -535,6 +546,7 @@ export async function fetchLabTailscaleStatus(
 export async function runSshxShareAction(
   input: RuntimeTargetRequest & {
     action: ShareToolAction;
+    enableReaders?: boolean;
   }
 ): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
@@ -546,10 +558,10 @@ export async function runSshxShareAction(
 }
 
 export async function runGottyShareAction(
-  input: RuntimeTargetRequest & {
-    action: ShareToolAction;
-    port?: number;
-  }
+  input: RuntimeTargetRequest &
+    Omit<ShareToolOptions, "enableReaders"> & {
+      action: ShareToolAction;
+    }
 ): Promise<ShareToolResponse> {
   const endpointId = resolveTargetEndpointId(input);
   return await requestJson<ShareToolResponse>(
@@ -582,6 +594,49 @@ export async function generateDrawioGraph(
   return await requestJson<DrawioGenerateResponse>(
     "/api/runtime/labs/graph/drawio",
     asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function generateGraphExport(
+  input: RuntimeTargetRequest & {
+    format: GraphExportFormat;
+    direction?: MermaidDirection;
+  }
+): Promise<GraphExportResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<GraphExportResponse>(
+    `/api/runtime/labs/graph/export/${encodeURIComponent(input.format)}`,
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function validateTopology(input: RuntimeTargetRequest): Promise<ValidateTopologyResponse> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson<ValidateTopologyResponse>(
+    "/api/runtime/labs/validate",
+    asJsonBody(input, endpointId),
+    endpointId
+  );
+}
+
+export async function generateTopology(input: {
+  endpointId: string;
+  request: GenerateTopologyRequest;
+}): Promise<GenerateTopologyResponse> {
+  return await requestJson<GenerateTopologyResponse>(
+    "/api/runtime/generate",
+    asJsonBody(input, input.endpointId),
+    input.endpointId
+  );
+}
+
+/** What the lab host offers beyond the basics; older clab-api-servers lack some. */
+export async function fetchBackendFeatures(endpointId?: string): Promise<LabBackendFeatures> {
+  return await requestJson<LabBackendFeatures>(
+    "/api/runtime/features",
+    withEndpointHeaders({}, endpointId),
     endpointId
   );
 }

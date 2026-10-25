@@ -165,6 +165,11 @@ export interface ShareToolResponse {
   message: string;
   link?: string;
   output?: string;
+  /** sshx with `enableReaders`: the link that only watches the session. */
+  readOnlyLink?: string;
+  /** GoTTY: the web terminal user and shell in effect, never the password. */
+  username?: string;
+  shell?: string;
 }
 
 export interface FcliCommandResponse {
@@ -327,3 +332,69 @@ export interface SnapshotSaveResponse {
 
 /** `containerlab inspect --details`: full runtime records of the containers, by lab name. */
 export type InspectDetailsResponse = Record<string, Record<string, unknown>[]>;
+
+// Lab operation tools: validate, generate, text graph exports and share options.
+
+/** `containerlab validate`; a rejected topology is `valid: false`, not an error. */
+export interface ValidateTopologyResponse {
+  valid: boolean;
+  path: string;
+  labName?: string;
+  nodes: number;
+  links: number;
+  /** containerlab's error when `valid` is false. */
+  error?: string;
+}
+
+export type GraphExportFormat = "mermaid" | "dot";
+export type MermaidDirection = "TD" | "TB" | "BT" | "RL" | "LR";
+
+/** `containerlab graph --mermaid` or `--dot`. */
+export interface GraphExportResponse {
+  fileName: string;
+  content: string;
+  format: GraphExportFormat;
+  direction?: MermaidDirection;
+  output?: string;
+}
+
+/** One Clos stage of `containerlab generate --nodes <count>:<kind>:<type>`. */
+export interface GenerateTopologyTier {
+  count: number;
+  kind?: string;
+  type?: string;
+}
+
+export interface GenerateTopologyRequest {
+  name: string;
+  tiers: GenerateTopologyTier[];
+  /** Kind of tiers that name none. */
+  defaultKind?: string;
+  /** Image per kind. */
+  images: Record<string, string>;
+  /** License file per kind, on the lab host. */
+  licenses?: Record<string, string>;
+  nodePrefix?: string;
+  groupPrefix?: string;
+  managementNetwork?: string;
+  ipv4Subnet?: string;
+  ipv6Subnet?: string;
+}
+
+export interface GenerateTopologyResponse {
+  message: string;
+  topologyYaml?: string;
+}
+
+/** Options of `containerlab tools sshx|gotty attach|reattach`. */
+export interface ShareToolOptions {
+  /** GoTTY: the port it listens on. */
+  port?: number;
+  /** sshx: also create a read-only link. */
+  enableReaders?: boolean;
+  /** GoTTY: web terminal credentials, both or neither. */
+  username?: string;
+  password?: string;
+  /** GoTTY: the shell of the web terminal. */
+  shell?: string;
+}

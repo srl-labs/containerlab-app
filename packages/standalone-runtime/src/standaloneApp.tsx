@@ -97,12 +97,14 @@ import {
   runtimeUiActions,
   useRuntimeUiStore,
   saveUiCustomNode,
+  resetNetem,
   setNetem,
   setDefaultUiCustomNode,
   uploadUiIcon,
   useLabTabsStore,
   type TerminalPreferences,
 } from "./mainApiDependencies";
+import { isNetemCleared } from "@srl-labs/containerlab-lab-backend";
 import type * as ImageManagerExports from "@containerlab/clab-ui/image-manager";
 import type {
   ContainerImageSummary,
@@ -120,6 +122,7 @@ import {
   type WiresharkCaptureRequest,
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
 import {
   controlNodesLifecycle,
@@ -1036,21 +1039,26 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
       );
       return;
     }
-    const delay = optionalStringField(msg.data, "delay");
-    const jitter = optionalStringField(msg.data, "jitter");
-    const loss = optionalNumberField(msg.data, "loss");
-    const rate = optionalNumberField(msg.data, "rate");
-    const corruption = optionalNumberField(msg.data, "corruption");
-    void setNetem({
-      ...target,
-      nodeName,
-      interfaceName,
-      delay,
-      jitter,
-      loss,
-      rate,
-      corruption,
-    })
+    // Clearing every value resets netem rather than setting zeros.
+    const cleared = isNetemCleared(msg.data);
+    const delay = cleared ? undefined : optionalStringField(msg.data, "delay");
+    const jitter = cleared ? undefined : optionalStringField(msg.data, "jitter");
+    const loss = cleared ? undefined : optionalNumberField(msg.data, "loss");
+    const rate = cleared ? undefined : optionalNumberField(msg.data, "rate");
+    const corruption = cleared ? undefined : optionalNumberField(msg.data, "corruption");
+    const request = cleared
+      ? resetNetem({ ...target, nodeName, interfaceName })
+      : setNetem({
+          ...target,
+          nodeName,
+          interfaceName,
+          delay,
+          jitter,
+          loss,
+          rate,
+          corruption,
+        });
+    void request
       .then(() => {
         useLabStore.getState().updateInterfaceNetemState({
           endpointId: target.endpointId,
@@ -1067,7 +1075,9 @@ function handleLinkImpairmentCommand(msg: VscodeMessage): void {
           }),
         });
         runtimeUiActions.notify(
-          `Updated impairments for ${nodeName}:${interfaceName}.`,
+          cleared
+            ? `Cleared impairments for ${nodeName}:${interfaceName}.`
+            : `Updated impairments for ${nodeName}:${interfaceName}.`,
           "success",
         );
       })
@@ -1257,6 +1267,10 @@ const STANDALONE_MESSAGE_HANDLERS: Record<string, StandaloneMessageHandler> = {
     });
   },
   "clab-link-impairment": handleLinkImpairmentCommand,
+  "topo-validate": () => {
+    const target = getActiveTopologyTarget();
+    if (target) void validateTopologyFlow(target);
+  },
   "topo-toggle-split-view": () =>
     runtimeUiActions.notify(
       "Split view is not available in standalone mode yet.",

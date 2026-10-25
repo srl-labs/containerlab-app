@@ -1,5 +1,5 @@
 ---
-description: Export the canvas as SVG, a Grafana dashboard, or a Draw.io diagram, and embed live topologies in your docs.
+description: Export the canvas as SVG, a Grafana dashboard, a Draw.io, Mermaid or Graphviz diagram, and embed live topologies in your docs.
 ---
 
 # Export a diagram
@@ -12,6 +12,7 @@ Take the topology somewhere else: a slide, a Grafana dashboard, a wiki page, or 
 | An exact picture of the canvas | [SVG](#svg) |
 | A live traffic map in Grafana | [Grafana bundle](#grafana-bundle) |
 | An editable diagram | [Draw.io](#drawio) |
+| A diagram as text, for Markdown or Graphviz | [Mermaid and Graphviz](#mermaid-and-graphviz) |
 | An interactive topology in your docs | [The viewer](#interactive-docs) |
 
 ## SVG
@@ -40,6 +41,14 @@ The bundle is only the picture and the mapping. It expects a Grafana with matchi
 ## Draw.io
 
 The graph actions generate a Draw.io file, laid out horizontally or vertically, for quick documentation. VS Code also has an interactive Draw.io mode. Use SVG when the diagram should look exactly like your canvas.
+
+## Mermaid and Graphviz
+
+**Export Graph (Mermaid)** and **Export Graph (Graphviz)**, next to the Draw.io actions of a lab, run `containerlab graph --mermaid` or `--dot` on the topology file. The lab does not need to run. Mermaid asks for the direction of the flowchart first.
+
+VS Code saves the file next to the topology and opens it. The desktop and web apps download it.
+
+Labs on a lab host need a clab-api-server that offers these exports. On an older one, the actions say so.
 
 ## Interactive docs
 

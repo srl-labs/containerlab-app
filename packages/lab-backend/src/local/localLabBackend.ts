@@ -14,6 +14,7 @@ import Docker from "dockerode";
 import type {
   LabBackend,
   LabBackendCapabilities,
+  LabBackendFeatures,
   LabEvent,
   LabEventStreamOptions,
   LabLifecycleAction,
@@ -27,13 +28,17 @@ import type {
 } from "../contract/backend.ts";
 import type {
   CaptureTarget,
+  GenerateTopologyRequest,
+  GraphExportFormat,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
   InspectContainerInfo,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
   ShareToolAction,
+  ShareToolOptions,
   SSHAccessResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
@@ -79,6 +84,14 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   sharedWorkspace: false,
   // containerlab has no command that reports it.
   tailscaleStatus: false
+};
+
+const LOCAL_FEATURES: LabBackendFeatures = {
+  validate: true,
+  graphMermaid: true,
+  graphDot: true,
+  sshxReaders: true,
+  gottyOptions: true
 };
 
 function shellQuote(value: string): string {
@@ -280,15 +293,34 @@ export class LocalLabBackend implements LabBackend {
     return localInspectDetails(this.options, await this.labRef(lab));
   }
 
+  /** The topology file of a lab that need not be running, like clab-api-server finds it. */
+  private async topologyFile(lab: LabTarget): Promise<string> {
+    return lab.path || (await this.runningTopologyFile(lab.labName))
+      ? this.labTopology(lab)
+      : this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
+  }
+
   async graphDrawio(
     lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
   ) {
-    const topology =
-      lab.path || (await this.runningTopologyFile(lab.labName))
-        ? await this.labTopology(lab)
-        : await this.resolveTopology(lab.labName, `${lab.labName}/${lab.labName}.clab.yml`);
-    return tools.drawioGraph(this.options, topology, options.layout, options.theme);
+    return tools.drawioGraph(this.options, await this.topologyFile(lab), options.layout, options.theme);
+  }
+
+  async graphExport(lab: LabTarget, format: GraphExportFormat, options: { direction?: MermaidDirection } = {}) {
+    return tools.graphExport(this.options, await this.topologyFile(lab), format, options.direction);
+  }
+
+  async validate(lab: LabTarget) {
+    return tools.validateTopology(this.options, await this.topologyFile(lab));
+  }
+
+  generateTopology(request: GenerateTopologyRequest) {
+    return tools.generateTopology(this.options, request);
+  }
+
+  async features(): Promise<LabBackendFeatures> {
+    return LOCAL_FEATURES;
   }
 
   async fcli(lab: LabTarget, command: string) {
@@ -318,8 +350,8 @@ export class LocalLabBackend implements LabBackend {
     });
   }
 
-  shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: { port?: number } = {}) {
-    return tools.shareTool(this.options, tool, labName, action, options.port);
+  shareTool(tool: "sshx" | "gotty", labName: string, action: ShareToolAction, options: ShareToolOptions = {}) {
+    return tools.shareTool(this.options, tool, labName, action, options);
   }
 
   /**

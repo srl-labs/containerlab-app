@@ -358,3 +358,37 @@ test("buildExplorerSnapshot keeps a section's last content when it fails to buil
   const filtered = await buildExplorerSnapshot(providers, "other", options, first);
   assert.equal(running(filtered)?.nodes.length, 0);
 });
+
+test("buildExplorerSnapshot offers validate, text graph exports and the Clos generator", async () => {
+  const endpoint = {
+    label: "Endpoint",
+    contextValue: "containerlabEndpoint",
+    state: "connected",
+    collapsibleState: TREE_ITEM_COLLAPSED,
+    children: [
+      { label: "demo.clab.yml", contextValue: "containerlabLabUndeployed", collapsibleState: 0 }
+    ]
+  };
+  const providers = {
+    runningProvider: provider([endpoint]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+
+  const { snapshot } = await buildExplorerSnapshot(providers, "", {
+    hideNonOwnedLabs: false,
+    isLocalCaptureAllowed: true
+  });
+
+  const endpointNode = snapshot.sections.find((section) => section.id === "runningLabs")?.nodes[0];
+  assert.ok(endpointNode);
+  assert.ok(endpointNode.actions.some((action) => action.commandId === "containerlab.lab.generate"));
+  const labCommands = endpointNode.children[0].actions.map((action) => action.commandId);
+  for (const commandId of [
+    "containerlab.lab.validate",
+    "containerlab.lab.graph.mermaid",
+    "containerlab.lab.graph.dot"
+  ]) {
+    assert.ok(labCommands.includes(commandId), commandId);
+  }
+});

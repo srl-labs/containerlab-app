@@ -1,4 +1,5 @@
 import type { Uri, Webview } from "vscode";
+import type { ClosGeneratorInitialData } from "@containerlab/clab-ui/clos-generator";
 import type { ImageManagerInitialData } from "@containerlab/clab-ui/image-manager";
 import type { InspectWebviewInitialData } from "@containerlab/clab-ui/inspect";
 import type { NodeImpairmentsInitialData } from "@containerlab/clab-ui/node-impairments";
@@ -53,6 +54,12 @@ export const NODE_IMPAIRMENTS_PANEL: WebviewPanelDefinition<NodeImpairmentsIniti
   scriptFile: "nodeImpairmentsWebview.js",
   webviewKind: "containerlab-node-impairments",
   title: (initialData) => `Manage Link Impairments for ${initialData.nodeName}`
+};
+
+export const CLOS_GENERATOR_PANEL: WebviewPanelDefinition<ClosGeneratorInitialData> = {
+  scriptFile: "closGeneratorWebview.js",
+  webviewKind: "containerlab-clos-generator",
+  title: "Generate Clos Topology"
 };
 
 export const WIRESHARK_VNC_PANEL: WebviewPanelDefinition<WiresharkVncInitialData> = {

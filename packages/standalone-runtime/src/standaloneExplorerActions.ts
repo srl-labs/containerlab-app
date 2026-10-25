@@ -5,10 +5,10 @@ import {
   runGottyShareAction,
   runSshxShareAction,
   type FileExplorerDocument,
-  type LabArchiveFormat
+  type LabArchiveFormat,
+  type ShareToolOptions
 } from "./runtimeApi";
 import {
-  confirmRuntimeAction,
   promptForEndpointSelection,
   promptForOptionSelection
 } from "./runtimeActionFlows";
@@ -195,12 +195,14 @@ export async function runLabShareAction(input: {
   endpointId?: string;
   kind: ShareActionKind;
   topologyRef: TopologyRef;
+  options?: ShareToolOptions;
 }) {
-  const { action, endpointId, kind, topologyRef } = input;
+  const { action, endpointId, kind, topologyRef, options = {} } = input;
   if (kind === "sshx") {
-    return runSshxShareAction({ endpointId, topologyRef, action });
+    return runSshxShareAction({ endpointId, topologyRef, action, enableReaders: options.enableReaders });
   }
-  return runGottyShareAction({ endpointId, topologyRef, action });
+  const { enableReaders: _readers, ...gottyOptions } = options;
+  return runGottyShareAction({ endpointId, topologyRef, action, ...gottyOptions });
 }
 
 export function persistShareLink(input: {
@@ -219,37 +221,6 @@ export function persistShareLink(input: {
   }
   if (link) {
     bucket.set(labKey, link);
-  }
-}
-
-function shareActionCanOpenLink(action: ShareLifecycleAction): boolean {
-  return action === "attach" || action === "reattach";
-}
-
-export async function handleShareActionLink(
-  kind: ShareActionKind,
-  action: ShareLifecycleAction,
-  link: string
-): Promise<void> {
-  if (!shareActionCanOpenLink(action)) {
-    return;
-  }
-  if (!link) {
-    runtimeUiActions.notify(
-      `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
-      "warning"
-    );
-    return;
-  }
-
-  await navigator.clipboard.writeText(link).catch(() => {});
-  const shouldOpen = await confirmRuntimeAction({
-    title: `${kind.toUpperCase()} Link Copied`,
-    message: "The link was copied to clipboard.\n\nOpen link now?",
-    confirmLabel: "Open Link"
-  });
-  if (shouldOpen) {
-    window.open(link, "_blank", "noopener,noreferrer");
   }
 }
 

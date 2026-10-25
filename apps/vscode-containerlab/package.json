@@ -209,6 +209,26 @@
         "category": "Containerlab"
       },
       {
+        "command": "containerlab.lab.graph.mermaid",
+        "title": "Export Graph (Mermaid)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.graph.dot",
+        "title": "Export Graph (Graphviz)",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.validate",
+        "title": "Validate Topology",
+        "category": "Containerlab"
+      },
+      {
+        "command": "containerlab.lab.generate",
+        "title": "Generate Clos Topology\u2026",
+        "category": "Containerlab"
+      },
+      {
         "command": "containerlab.lab.graph.topoViewer",
         "title": "Graph (TopoViewer)",
         "icon": "$(graph-line)",
@@ -655,6 +675,21 @@
           "command": "containerlab.lab.graph.topoViewer",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
+        },
+        {
+          "command": "containerlab.lab.graph.mermaid",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@2"
+        },
+        {
+          "command": "containerlab.lab.graph.dot",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@3"
+        },
+        {
+          "command": "containerlab.lab.validate",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "clabLabActions@10"
         }
       ],
       "explorer/context": [
@@ -717,6 +752,21 @@
           "command": "containerlab.lab.graph.topoViewer",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
+        },
+        {
+          "command": "containerlab.lab.graph.mermaid",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@2"
+        },
+        {
+          "command": "containerlab.lab.graph.dot",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "graph@3"
+        },
+        {
+          "command": "containerlab.lab.validate",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "group": "clabLabActions@10"
         }
       ],
       "commandPalette": [
@@ -771,6 +821,18 @@
         {
           "command": "containerlab.lab.graph.drawio.interactive",
           "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
+        },
+        {
+          "command": "containerlab.lab.graph.mermaid",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.graph.dot",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+        },
+        {
+          "command": "containerlab.lab.validate",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
         },
         {
           "command": "containerlab.install.edgeshark",

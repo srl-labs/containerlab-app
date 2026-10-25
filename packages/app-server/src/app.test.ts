@@ -10,6 +10,7 @@ import test, { type TestContext } from "node:test";
 import { gunzipSync } from "node:zlib";
 import undici, { Headers, type Request, Response } from "undici";
 import WebSocket, { WebSocketServer } from "ws";
+import { clearServerFeatureCache } from "@srl-labs/containerlab-lab-backend/api";
 
 import { createStandaloneApp } from "./app";
 import { normalizeBasePath } from "./basePath";
@@ -191,6 +192,7 @@ test("auth startup bounds an unresponsive endpoint and still reports healthy end
 async function createTestContext(t: TestContext, basePath = ""): Promise<TestAppContext> {
   const fetchMock = new FetchMock();
   t.mock.method(undici, "fetch", fetchMock.fetch);
+  clearServerFeatureCache();
 
   const app = await createStandaloneApp({
     basePath,
@@ -2541,4 +2543,131 @@ test("/api/runtime/file-explorer/rendered reports a server that cannot render", 
 
   assert.equal(response.statusCode, 501, response.body);
   assert.match(response.json<{ error: string }>().error, /cannot render/);
+});
+
+function mockLabToolsServer(context: TestAppContext, features: string[]): void {
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs", () => jsonResponse({}));
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features }),
+  );
+}
+
+test("/api/runtime/labs/graph/export forwards the topology path and Mermaid direction", async (t) => {
+  const context = await createTestContext(t);
+  mockLabToolsServer(context, ["graph-mermaid", "graph-dot"]);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  context.fetchMock.on(
+    "POST",
+    "http://api.example.test/api/v1/labs/demo/graph/mermaid?path=labs%2Fdemo.clab.yml",
+    (call) => {
+      assert.deepEqual(JSON.parse(call.body ?? "{}"), { direction: "LR" });
+      return jsonResponse({ fileName: "demo.clab.mermaid", content: "graph LR", format: "mermaid" });
+    },
+  );
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/labs/graph/export/mermaid",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId), direction: "lr" },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json<{ content: string }>().content, "graph LR");
+
+  const invalid = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/labs/graph/export/png",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId) },
+  });
+  assert.equal(invalid.statusCode, 400);
+});
+
+test("/api/runtime/features reports what an older clab-api-server lacks", async (t) => {
+  const context = await createTestContext(t);
+  mockLabToolsServer(context, []);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/features?endpointId=${encodeURIComponent(endpointId)}`,
+    headers: { cookie },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    validate: true,
+    graphMermaid: false,
+    graphDot: false,
+    sshxReaders: false,
+    gottyOptions: false,
+  });
+});
+
+test("share routes forward sshx readers and refuse unsafe GoTTY credentials", async (t) => {
+  const context = await createTestContext(t);
+  mockLabToolsServer(context, ["sshx-readers", "gotty-options"]);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  context.fetchMock.on("POST", "http://api.example.test/api/v1/labs/demo/sshx/attach", (call) => {
+    assert.deepEqual(JSON.parse(call.body ?? "{}"), { enableReaders: true });
+    return jsonResponse({
+      message: "ok",
+      link: "https://sshx.io/s/a#r,w",
+      readOnlyLink: "https://sshx.io/s/a#r",
+    });
+  });
+
+  const sshx = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/share/sshx/attach",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId), enableReaders: true },
+  });
+  assert.equal(sshx.statusCode, 200, sshx.body);
+  assert.equal(sshx.json<{ readOnlyLink: string }>().readOnlyLink, "https://sshx.io/s/a#r");
+
+  const gotty = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/share/gotty/attach",
+    headers: { cookie },
+    payload: { topologyRef: demoTopologyRef(endpointId), username: "lab", password: "x'; id" },
+  });
+  assert.equal(gotty.statusCode, 400, gotty.body);
+  assert.ok(!context.fetchMock.calls.some((call) => call.url.pathname.includes("/gotty/")));
+});
+
+test("/api/runtime/generate checks the wizard request and never deploys", async (t) => {
+  const context = await createTestContext(t);
+  mockLabToolsServer(context, []);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  context.fetchMock.on("POST", "http://api.example.test/api/v1/generate", (call) => {
+    const body = JSON.parse(call.body ?? "{}") as Record<string, unknown>;
+    assert.equal(body.deploy, false);
+    assert.deepEqual(body.tiers, [{ count: 2, kind: "nokia_srlinux" }, { count: 1 }]);
+    return jsonResponse({ message: "ok", topologyYaml: "name: clos\n" });
+  });
+
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/generate",
+    headers: { cookie },
+    payload: {
+      endpointId,
+      request: {
+        name: "clos",
+        tiers: [{ count: 2, kind: "nokia_srlinux" }, { count: 1, kind: " " }],
+        images: { nokia_srlinux: "ghcr.io/nokia/srlinux" },
+      },
+    },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json<{ topologyYaml: string }>().topologyYaml, "name: clos\n");
+
+  const invalid = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/generate",
+    headers: { cookie },
+    payload: { endpointId, request: { name: "clos", tiers: [{ count: 0 }], images: {} } },
+  });
+  assert.equal(invalid.statusCode, 400);
 });

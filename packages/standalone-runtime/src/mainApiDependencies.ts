@@ -28,6 +28,7 @@ export {
   reconcileUiIcons,
   removeRuntimeImage,
   replaceUiCustomNodes,
+  resetNetem,
   saveUiCustomNode,
   setNetem,
   setDefaultUiCustomNode,

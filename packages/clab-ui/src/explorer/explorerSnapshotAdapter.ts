@@ -131,6 +131,10 @@ const COMMAND_LABELS: Record<string, string> = {
   "containerlab.lab.graph.drawio.horizontal": "Graph (draw.io, Horizontal)",
   "containerlab.lab.graph.drawio.vertical": "Graph (draw.io, Vertical)",
   "containerlab.lab.graph.drawio.interactive": "Graph (draw.io, Interactive)",
+  "containerlab.lab.graph.mermaid": "Export Graph (Mermaid)",
+  "containerlab.lab.graph.dot": "Export Graph (Graphviz)",
+  "containerlab.lab.validate": "Validate Topology",
+  "containerlab.lab.generate": "Generate Clos Topology",
   "containerlab.node.start": "Start Node",
   "containerlab.node.stop": "Stop Node",
   "containerlab.node.restart": "Restart Node",
@@ -687,7 +691,10 @@ function appendLabActions(
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.horizontal", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.vertical", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.drawio.interactive", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.graph.mermaid", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.graph.dot", [item]);
   pushAction(actions, seen, registry, "containerlab.lab.graph.topoViewer", [item]);
+  pushAction(actions, seen, registry, "containerlab.lab.validate", [item]);
 
   if (sectionId === "localLabs" && !isDeployed && !isUndeployed) {
     // Keep local section behavior consistent for edge nodes without known lab context.
@@ -792,6 +799,7 @@ function appendEndpointActions(
   const local = item.endpointKind === "local";
   if (connected) {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor", [item]);
+    pushAction(actions, seen, registry, "containerlab.lab.generate", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.cloneRepo", [item]);
     pushAction(actions, seen, registry, "containerlab.install.edgeshark", [item]);
     pushAction(actions, seen, registry, "containerlab.uninstall.edgeshark", [item], undefined, true);
@@ -1175,6 +1183,7 @@ function toolbarActionsForSection(
 
   if (sectionId === "localLabs") {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor");
+    pushAction(actions, seen, registry, "containerlab.lab.generate");
     pushAction(actions, seen, registry, "containerlab.lab.cloneRepo");
     pushAction(actions, seen, registry, "containerlab.images.manage");
   }

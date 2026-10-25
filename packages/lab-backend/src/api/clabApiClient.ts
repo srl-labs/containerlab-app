@@ -16,6 +16,10 @@ import type {
   EdgeSharkStatusResponse,
   ExecResponse,
   FcliCommandResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
   HealthMetricsResponse,
   IconListResponse,
   IconUploadRequest,
@@ -27,6 +31,7 @@ import type {
   LifecycleActionResult,
   LoginResponse,
   LogsResponse,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NetemShowResponse,
@@ -36,12 +41,14 @@ import type {
   RuntimeImagesResponse,
   SaveConfigResponse,
   ShareToolAction,
+  ShareToolOptions,
   ShareToolResponse,
   SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   TopologyEntry,
+  ValidateTopologyResponse,
   VersionCheckResponse,
   VersionResponse,
   WorkspaceFileEntry
@@ -704,19 +711,6 @@ export class ClabApiClient {
     return (await res.json()) as SaveConfigResponse;
   }
 
-  /** Optional features this server advertises in `/health`; empty for servers that predate the list. */
-  async getServerFeatures(): Promise<string[]> {
-    const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs: 10_000 });
-    if (!res.ok) {
-      const err: HttpError = new Error(`GET /health failed (${res.status})`);
-      err.status = res.status;
-      throw err;
-    }
-    const payload = (await res.json().catch(() => undefined)) as unknown;
-    const features = isRecord(payload) ? toStringArray(payload.features) : undefined;
-    return features ?? [];
-  }
-
   /**
    * `containerlab exec` in a lab. `nodes` and `labels` need a server that
    * advertises `exec-filters`; `containerName` works with every server.
@@ -895,12 +889,14 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: ShareToolAction,
+    options: Pick<ShareToolOptions, "enableReaders"> = {},
   ): Promise<ShareToolResponse> {
+    const body = action !== "detach" && options.enableReaders === true ? { enableReaders: true } : {};
     const res = await this.request(
       "POST",
       `/api/v1/labs/${enc(labName)}/sshx/${enc(action)}`,
       token,
-      JSON.stringify({}),
+      JSON.stringify(body),
       "application/json",
     );
     return (await res.json()) as ShareToolResponse;
@@ -910,18 +906,27 @@ export class ClabApiClient {
     token: string,
     labName: string,
     action: ShareToolAction,
-    options: { port?: number } = {},
+    options: Omit<ShareToolOptions, "enableReaders"> = {},
   ): Promise<ShareToolResponse> {
     const params = new URLSearchParams();
     if (typeof options.port === "number" && Number.isFinite(options.port)) {
       params.set("port", String(options.port));
     }
     const query = params.toString();
+    // Older servers read only the port query and ignore the body.
+    const body =
+      action === "detach"
+        ? {}
+        : {
+            ...(options.username !== undefined ? { username: options.username } : {}),
+            ...(options.password !== undefined ? { password: options.password } : {}),
+            ...(options.shell !== undefined ? { shell: options.shell } : {}),
+          };
     const res = await this.request(
       "POST",
       `/api/v1/labs/${enc(labName)}/gotty/${enc(action)}${query ? `?${query}` : ""}`,
       token,
-      JSON.stringify({}),
+      JSON.stringify(body),
       "application/json",
     );
     return (await res.json()) as ShareToolResponse;
@@ -958,6 +963,68 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as DrawioGenerateResponse;
+  }
+
+  async validateTopology(
+    token: string,
+    labName: string,
+    path?: string,
+  ): Promise<ValidateTopologyResponse> {
+    const query = path ? `?${new URLSearchParams({ path }).toString()}` : "";
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/validate${query}`,
+      token,
+    );
+    return (await res.json()) as ValidateTopologyResponse;
+  }
+
+  async generateGraphExport(
+    token: string,
+    labName: string,
+    format: GraphExportFormat,
+    input: { path?: string; direction?: MermaidDirection } = {},
+  ): Promise<GraphExportResponse> {
+    const query = input.path ? `?${new URLSearchParams({ path: input.path }).toString()}` : "";
+    const body = format === "mermaid" && input.direction ? { direction: input.direction } : {};
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/graph/${format}${query}`,
+      token,
+      JSON.stringify(body),
+      "application/json",
+    );
+    return (await res.json()) as GraphExportResponse;
+  }
+
+  /** `containerlab generate` without deploying or writing a file on the server. */
+  async generateTopology(
+    token: string,
+    request: GenerateTopologyRequest,
+  ): Promise<GenerateTopologyResponse> {
+    const res = await this.request(
+      "POST",
+      "/api/v1/generate",
+      token,
+      JSON.stringify({ ...request, deploy: false }),
+      "application/json",
+    );
+    return (await res.json()) as GenerateTopologyResponse;
+  }
+
+  /** The optional features the server lists on its public health endpoint. */
+  async getServerFeatures(timeoutMs = 10_000): Promise<string[]> {
+    const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs });
+    if (!res.ok) {
+      const err: HttpError = new Error(`GET /health failed (${res.status})`);
+      err.status = res.status;
+      throw err;
+    }
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    const features = isRecord(payload) ? payload.features : undefined;
+    return Array.isArray(features)
+      ? features.filter((feature): feature is string => typeof feature === "string")
+      : [];
   }
 
   async getVersion(

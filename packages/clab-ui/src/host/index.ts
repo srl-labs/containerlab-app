@@ -35,7 +35,8 @@ import { isRecord } from "../core/utilities/typeHelpers";
 import {
   MSG_LAB_OPERATION,
   MSG_PLAN_APPLY_LAB,
-  MSG_TAILSCALE_STATUS
+  MSG_TAILSCALE_STATUS,
+  MSG_VALIDATE_TOPOLOGY
 } from "../core/messages/extension";
 import {
   MSG_APPLY_PLAN_RESULT,
@@ -569,6 +570,9 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       tailscaleStatus: createTailscaleStatusRequester(postMessage, subscribe),
       cancelLifecycle(): void {
         postMessage({ command: "cancelLabLifecycle" });
+      },
+      validateTopology(): void {
+        postMessage({ command: MSG_VALIDATE_TOPOLOGY });
       },
       toggleSplitView(): void {
         postMessage({ command: "topo-toggle-split-view" });
