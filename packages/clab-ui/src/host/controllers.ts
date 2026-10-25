@@ -167,7 +167,12 @@ function buildFallbackExplorerSnapshot(filterText: string): ExplorerSnapshotMess
   };
 }
 
-const MAX_RETIRED_EXPLORER_ACTION_BINDINGS = 2000;
+/**
+ * Actions of earlier snapshots stay usable this long: a menu opened before a
+ * refresh, e.g. while interface statistics refresh the tree every second.
+ */
+const RETIRED_EXPLORER_ACTION_TTL_MS = 10 * 60_000;
+const MAX_RETIRED_EXPLORER_ACTION_BINDINGS = 50_000;
 
 export function createExplorerController(options: ExplorerControllerOptions): ExplorerController {
   let connected = false;
@@ -178,25 +183,27 @@ export function createExplorerController(options: ExplorerControllerOptions): Ex
   let snapshotPending = false;
   let actionBindings = new Map<string, ExplorerActionInvocation>();
   let lastSnapshot: ExplorerSnapshotBuildResult | undefined;
-  let retiredActionBindings = new Map<string, ExplorerActionInvocation>();
+  /** Bindings of earlier snapshots, oldest first, with when they were retired. */
+  const retiredActionBindings = new Map<
+    string,
+    { binding: ExplorerActionInvocation; retiredAt: number }
+  >();
 
   const retireActionBindings = (bindings: Map<string, ExplorerActionInvocation>): void => {
+    const now = Date.now();
     for (const [actionRef, binding] of bindings) {
-      retiredActionBindings.set(actionRef, binding);
-    }
-
-    const overflow = retiredActionBindings.size - MAX_RETIRED_EXPLORER_ACTION_BINDINGS;
-    if (overflow <= 0) {
-      return;
-    }
-
-    let deleted = 0;
-    for (const actionRef of retiredActionBindings.keys()) {
+      // Re-insert so the map stays ordered by retirement time.
       retiredActionBindings.delete(actionRef);
-      deleted += 1;
-      if (deleted >= overflow) {
+      retiredActionBindings.set(actionRef, { binding, retiredAt: now });
+    }
+
+    let overflow = retiredActionBindings.size - MAX_RETIRED_EXPLORER_ACTION_BINDINGS;
+    for (const [actionRef, entry] of retiredActionBindings) {
+      if (overflow <= 0 && now - entry.retiredAt < RETIRED_EXPLORER_ACTION_TTL_MS) {
         break;
       }
+      retiredActionBindings.delete(actionRef);
+      overflow -= 1;
     }
   };
 
@@ -302,9 +309,12 @@ export function createExplorerController(options: ExplorerControllerOptions): Ex
     },
 
     async invokeAction(actionRef: string): Promise<void> {
-      const binding = actionBindings.get(actionRef) ?? retiredActionBindings.get(actionRef);
+      const binding =
+        actionBindings.get(actionRef) ?? retiredActionBindings.get(actionRef)?.binding;
       if (!binding) {
-        await publishError("Action is no longer available. Refresh and try again.");
+        // The item changed long ago; draw the current tree so the next click works.
+        scheduleSnapshot(0);
+        await publishError("This item has changed. The list was refreshed; try again.");
         return;
       }
       if (binding.disabled === true) {

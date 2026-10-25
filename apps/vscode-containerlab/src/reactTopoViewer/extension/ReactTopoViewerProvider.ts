@@ -8,6 +8,8 @@
  * - Topology data loading (via TopologyHost)
  */
 
+import * as path from "path";
+
 import * as vscode from "vscode";
 
 import { runningLabsProvider } from "../../globals";
@@ -557,6 +559,11 @@ export class ReactTopoViewer {
   }
 }
 
+/** Compares lab paths: URIs in one encoding, file paths resolved. */
+function viewerKey(labPath: string): string {
+  return isUriString(labPath) ? vscode.Uri.parse(labPath).toString() : path.resolve(labPath);
+}
+
 /**
  * Provider class for React TopoViewer (singleton pattern)
  */
@@ -572,6 +579,17 @@ export class ReactTopoViewerProvider {
   public static getInstance(context: vscode.ExtensionContext): ReactTopoViewerProvider {
     ReactTopoViewerProvider.instance ??= new ReactTopoViewerProvider(context);
     return ReactTopoViewerProvider.instance;
+  }
+
+  /** The open viewer of a lab, by its topology path or URI. */
+  public static findViewer(labPath: string): ReactTopoViewer | undefined {
+    const viewers = ReactTopoViewerProvider.instance?.viewers;
+    if (!viewers) return undefined;
+    const key = viewerKey(labPath);
+    for (const [path, viewer] of viewers) {
+      if (viewer.currentPanel && viewerKey(path) === key) return viewer;
+    }
+    return undefined;
   }
 
   /**
