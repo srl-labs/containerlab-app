@@ -40,7 +40,8 @@ export async function deploySpecificFile(target?: unknown) {
     const opts: vscode.OpenDialogOptions = {
       title: "Select containerlab topology file",
       filters: {
-        yaml: ["yaml", "yml"]
+        yaml: ["yaml", "yml"],
+        "Topology template": ["gotmpl"]
       },
       // A lab host deploys topologies from its own workspace.
       ...(remote ? { defaultUri: remoteUri(connection, "") } : {})

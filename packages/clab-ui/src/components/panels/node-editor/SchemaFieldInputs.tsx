@@ -72,6 +72,8 @@ interface ScalarInputProps {
   onChange: (value: unknown) => void;
   helperText?: string;
   required?: boolean;
+  /** Offer containerlab's magic variables, for keys containerlab expands */
+  magicVariables?: boolean;
 }
 
 export const ScalarInput: React.FC<ScalarInputProps> = ({
@@ -81,7 +83,8 @@ export const ScalarInput: React.FC<ScalarInputProps> = ({
   value,
   onChange,
   helperText,
-  required
+  required,
+  magicVariables
 }) => {
   const text = toText(value);
   const change = (next: string) => onChange(parseScalar(control, next));
@@ -128,6 +131,7 @@ export const ScalarInput: React.FC<ScalarInputProps> = ({
       min={isInteger ? control.minimum : undefined}
       max={isInteger ? control.maximum : undefined}
       placeholder={control.type === "string" ? control.defaultValue : undefined}
+      magicVariables={magicVariables === true && !isInteger}
       helperText={helperText}
       required={required}
     />
@@ -152,6 +156,8 @@ interface ListFieldProps {
   helperText?: string;
   /** Items inherited from defaults, a kind or a group, with where they come from */
   inheritedItems?: ReadonlyMap<string, string>;
+  /** Offer containerlab's magic variables, for keys containerlab expands */
+  magicVariables?: boolean;
 }
 
 /** A fixed set of choices, e.g. FRR daemons; none ticked means the key is not set. */
@@ -267,7 +273,8 @@ const StringList: React.FC<ListFieldProps> = ({
   value,
   onChange,
   helperText,
-  inheritedItems
+  inheritedItems,
+  magicVariables
 }) => {
   const items = Array.isArray(value) ? value.map(toText) : [];
   return (
@@ -282,6 +289,7 @@ const StringList: React.FC<ListFieldProps> = ({
           onChange={(next) => onChange(next.length > 0 ? next : undefined)}
           hideAddButton
           inheritedItems={inheritedItems}
+          magicVariables={magicVariables}
         />
       </Box>
     </PanelAddSection>

@@ -302,7 +302,7 @@ function contentDisposition(filename: string): string {
 }
 
 function isTopologyFileName(name: string): boolean {
-  return /\.clab\.ya?ml$/i.test(name);
+  return /\.clab\.(?:ya?ml|gotmpl)$/i.test(name);
 }
 
 function assertLabFolderEntries(labFolder: string, entries: WorkspaceFileEntry[]): void {

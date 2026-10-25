@@ -22,6 +22,11 @@ export interface LabLifecycleOptions {
   graceful?: boolean;
   /** Keep the management network (`--keep-mgmt-net`). */
   keepMgmtNet?: boolean;
+  /**
+   * Template variables file, relative to the topology file (`--vars`).
+   * Without it containerlab uses `<topology>_vars.yml` next to the topology.
+   */
+  varsFile?: string;
 }
 
 export type LabLifecycleOptionKind = "deploy" | "redeploy" | "destroy";
@@ -35,20 +40,22 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
   LabLifecycleOptionKind,
   readonly LabLifecycleOptionField[]
 > = {
-  deploy: ["nodeFilter", "maxWorkers", "skipPostDeploy", "skipLabdirAcl", "exportTemplate"],
+  deploy: ["nodeFilter", "maxWorkers", "skipPostDeploy", "skipLabdirAcl", "exportTemplate", "varsFile"],
   redeploy: [
     "maxWorkers",
     "skipPostDeploy",
     "skipLabdirAcl",
     "exportTemplate",
     "graceful",
-    "keepMgmtNet"
+    "keepMgmtNet",
+    "varsFile"
   ],
-  destroy: ["nodeFilter", "graceful", "keepMgmtNet"]
+  destroy: ["nodeFilter", "graceful", "keepMgmtNet", "varsFile"]
 };
 
 const NODE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const EXPORT_TEMPLATE_PATTERN = /^[A-Za-z0-9_./~-]+$/;
+const VARS_FILE_PATTERN = /^[A-Za-z0-9_./@+-]+$/;
 const BOOLEAN_FIELDS = ["skipPostDeploy", "skipLabdirAcl", "graceful", "keepMgmtNet"] as const;
 
 export function isValidLifecycleNodeName(name: string): boolean {
@@ -67,6 +74,17 @@ function readNodeFilter(value: unknown): string[] | undefined {
     .filter((name) => isValidLifecycleNodeName(name));
   const unique = Array.from(new Set(names));
   return unique.length > 0 ? unique : undefined;
+}
+
+/** A vars file path relative to the topology file, e.g. `lab.clab_vars.prod.yml`. */
+export function isValidVarsFile(file: string): boolean {
+  return VARS_FILE_PATTERN.test(file) && !file.startsWith("/");
+}
+
+function readVarsFile(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const file = value.trim();
+  return file.length > 0 && isValidVarsFile(file) ? file : undefined;
 }
 
 function readMaxWorkers(value: unknown): number | undefined {
@@ -107,6 +125,10 @@ export function normalizeLabLifecycleOptions(
   for (const field of BOOLEAN_FIELDS) {
     if (allowed.has(field) && raw[field] === true) options[field] = true;
   }
+  if (allowed.has("varsFile")) {
+    const varsFile = readVarsFile(raw.varsFile);
+    if (varsFile !== undefined) options.varsFile = varsFile;
+  }
 
   return Object.keys(options).length > 0 ? options : undefined;
 }
@@ -126,6 +148,7 @@ export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): 
   }
   if (options.graceful === true) flags.push("--graceful");
   if (options.keepMgmtNet === true) flags.push("--keep-mgmt-net");
+  if (options.varsFile !== undefined) flags.push("--vars", options.varsFile);
   return flags;
 }
 
@@ -144,6 +167,7 @@ export function labLifecycleQueryParams(
   if (options.exportTemplate !== undefined) params.push(["exportTemplate", options.exportTemplate]);
   if (options.graceful === true) params.push(["graceful", "true"]);
   if (options.keepMgmtNet === true) params.push(["keepMgmtNet", "true"]);
+  if (options.varsFile !== undefined) params.push(["varsPath", options.varsFile]);
   return params;
 }
 

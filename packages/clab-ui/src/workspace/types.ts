@@ -67,6 +67,17 @@ export interface FileExplorerDocument {
   content: string;
 }
 
+/** A topology template as containerlab renders it, for the read-only preview. */
+export interface RenderedTopologyPreview {
+  /** Topology YAML after the template and environment variables are expanded. */
+  content: string;
+  labName?: string;
+  /** Template variable files used, relative to the topology directory. */
+  varsFiles?: string[];
+  /** Why containerlab rejects the rendered topology, when it does. */
+  error?: string;
+}
+
 export type LabArchiveFormat = "zip" | "tar.gz";
 
 export interface BinaryDownloadResult {

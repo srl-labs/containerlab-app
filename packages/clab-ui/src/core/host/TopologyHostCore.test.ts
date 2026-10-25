@@ -457,3 +457,61 @@ test("pasting a copied node keeps its own keys and undo removes it again", async
   assertAck(undone);
   assert.equal(await fs.readFile(yamlFilePath), RICH_NODE_YAML);
 });
+
+test("the host's lab name and variables reach the snapshot and match running containers", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yaml = `name: dc-__gitBranch__
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+      image: \${SRL_IMAGE:=ghcr.io/nokia/srlinux}
+`;
+  await fs.writeFile("/labs/dc.clab.yml", yaml);
+  const requests: Array<{ labName: string; envNames: string[] }> = [];
+  const looked: string[] = [];
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: "/labs/dc.clab.yml",
+    mode: "edit",
+    deploymentState: "deployed",
+    containerDataProvider: {
+      findContainer: (containerName) => {
+        looked.push(containerName);
+        return undefined;
+      },
+      findInterface: () => undefined
+    },
+    resolveVariables: async (request) => {
+      requests.push(request);
+      return { labName: "dc-main", topologyDir: "/labs", env: { SRL_IMAGE: "srl:25" } };
+    }
+  });
+
+  const snapshot = await host.getSnapshot();
+  assert.equal(snapshot.labName, "dc-main");
+  assert.deepEqual(snapshot.variables, { labName: "dc-main", topologyDir: "/labs", env: { SRL_IMAGE: "srl:25" } });
+  assert.deepEqual(requests, [{ labName: "dc-__gitBranch__", envNames: ["CLAB_LABDIR_BASE", "SRL_IMAGE"] }]);
+  assert.ok(looked.includes("clab-dc-main-srl1"), `looked up ${looked.join(", ")}`);
+
+  // The lookup is cached until the name or the referenced variables change.
+  await host.onExternalChange();
+  assert.equal(requests.length, 2);
+  await host.getSnapshot();
+  assert.equal(requests.length, 2);
+});
+
+test("a failing variable lookup keeps the declared lab name", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  await fs.writeFile("/labs/demo.clab.yml", BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: "/labs/demo.clab.yml",
+    mode: "edit",
+    deploymentState: "undeployed",
+    resolveVariables: () => Promise.reject(new Error("offline"))
+  });
+  const snapshot = await host.getSnapshot();
+  assert.equal(snapshot.labName, "demo");
+  assert.equal(snapshot.variables, undefined);
+});

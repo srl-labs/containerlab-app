@@ -198,6 +198,12 @@ export function createStandaloneTopologySessionManager(): StandaloneTopologySess
         mode: options.mode,
         deploymentState: options.deploymentState,
         containerDataProvider: options.containerDataProvider,
+        // The lab name containerlab runs the lab under and the environment it deploys with.
+        resolveVariables: (request) =>
+          options.backend.topologyVariables(
+            { labName: options.topologyRef.labName, path: options.topologyRef.yamlPath },
+            request
+          ),
         setInternalUpdate: internalUpdateTracker.set,
         logger: {
           debug: () => {},

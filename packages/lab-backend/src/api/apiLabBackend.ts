@@ -1,3 +1,4 @@
+import { hasLabNameGitTokens, type TopologyVariables } from "@containerlab/clab-ui/host";
 import WebSocket, { type RawData } from "ws";
 
 import type {
@@ -11,6 +12,7 @@ import type {
   LabTarget,
   LifecycleRunOptions,
   LifecycleStreamEvent,
+  RenderedTopology,
   TerminalClientMessage,
   TerminalCreateOptions,
   TerminalServerMessage,
@@ -373,6 +375,36 @@ export class ApiLabBackend implements LabBackend {
 
   runningTopologyYaml(labName: string) {
     return this.client.getLabTopologyYaml(this.token, labName);
+  }
+
+  renderTopology(lab: LabTarget, options: { varsFile?: string } = {}): Promise<RenderedTopology> {
+    if (!lab.path) {
+      return Promise.reject(new LabBackendError("Rendering needs the topology file path.", 400));
+    }
+    return this.client.renderTopology(this.token, lab.labName, lab.path, options.varsFile);
+  }
+
+  /**
+   * The server's environment is not visible here, so only defaults resolve.
+   * Git tokens in the lab name expand through the server's render endpoint.
+   */
+  async topologyVariables(
+    lab: LabTarget,
+    request: { labName: string; envNames: string[] }
+  ): Promise<TopologyVariables> {
+    const entry = lab.path
+      ? (await this.listTopologies().catch(() => [])).find((topology) => topology.yamlFileName === lab.path)
+      : undefined;
+    let labName = request.labName;
+    if (lab.path && hasLabNameGitTokens(labName)) {
+      const rendered = await this.renderTopology(lab).catch(() => undefined);
+      labName = rendered?.labName ?? entry?.labName ?? labName;
+    }
+    const absolutePath = entry?.absolutePath;
+    return {
+      labName,
+      ...(absolutePath ? { topologyDir: absolutePath.slice(0, absolutePath.lastIndexOf("/")) || "/" } : {})
+    };
   }
 
   async watchTopology(labName: string, path: string, signal: AbortSignal) {

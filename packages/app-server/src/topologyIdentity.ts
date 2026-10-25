@@ -22,7 +22,7 @@ function normalizeTopologyPath(pathValue: string): string {
 }
 
 function stripTopologySuffix(name: string): string {
-  return name.replace(/\.clab\.(ya?ml)$/i, "");
+  return name.replace(/\.clab\.(?:ya?ml|gotmpl)$/i, "");
 }
 
 function safeFilename(pathValue: string): string {

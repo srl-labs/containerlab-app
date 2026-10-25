@@ -76,6 +76,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
           onChange={(value) => onChange({ startupConfig: value })}
           placeholder="Path to startup configuration file"
           helperText={inheritedFieldHint(props, "startupConfig")}
+          magicVariables
         />
         <SelectField
           id="node-startup-config-mode"
@@ -111,6 +112,8 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
           placeholder="host:container[:options]"
           hideAddButton
           inheritedItems={inheritedListItems(props, "binds")}
+          id="node-binds"
+          magicVariables
         />
       </PanelAddSection>
 

@@ -2,16 +2,21 @@ import { watch as watchFiles } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import {
+  isTopologyFileName,
+  isTopologyTemplateFileName,
+  literalTopologyName
+} from "@containerlab/clab-ui/host";
 import YAML from "yaml";
 
 import type { TopologyFileSystem, TopologyFilesOptions } from "../contract/backend.ts";
 import type { TopologyEntry } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { createAsyncQueue } from "../asyncQueue.ts";
+import { expandTopologyLabName } from "./topologyTemplates.ts";
 import type { WorkspacePaths } from "./workspace.ts";
 
 const LAB_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
-const TOPOLOGY_FILE_PATTERN = /\.clab\.ya?ml$/i;
 const ANNOTATIONS_SUFFIX = ".annotations.json";
 const SKIPPED_DIRECTORIES = new Set(["node_modules", "__pycache__"]);
 const RUNTIME_DIRECTORY_MARKERS = [".state.clab.yaml", "topology-data.json"];
@@ -55,18 +60,31 @@ async function isRegularFile(filePath: string): Promise<boolean> {
   }
 }
 
-async function readTopologyName(filePath: string): Promise<string | undefined> {
+/** The lab name a topology declares; a template's only when it is literal. */
+export function declaredTopologyName(content: string, fileName: string): string | undefined {
+  if (isTopologyTemplateFileName(fileName)) return literalTopologyName(content);
   try {
-    const parsed = YAML.parse(await fs.readFile(filePath, "utf8")) as unknown;
+    const parsed = YAML.parse(content) as unknown;
     const name = (parsed as { name?: unknown } | null)?.name;
     return typeof name === "string" ? name.trim() : undefined;
+  } catch {
+    return literalTopologyName(content);
+  }
+}
+
+async function readTopologyName(filePath: string): Promise<string | undefined> {
+  try {
+    return declaredTopologyName(await fs.readFile(filePath, "utf8"), filePath);
   } catch {
     return undefined;
   }
 }
 
 /** Finds topology files in the workspace, named the way clab-api-server names them. */
-export async function discoverTopologies(paths: WorkspacePaths): Promise<TopologyEntry[]> {
+export async function discoverTopologies(
+  paths: WorkspacePaths,
+  env?: NodeJS.ProcessEnv
+): Promise<TopologyEntry[]> {
   const found: string[] = [];
   const walk = async (relativeDir: string): Promise<void> => {
     const directory = paths.absolute(relativeDir);
@@ -83,7 +101,7 @@ export async function discoverTopologies(paths: WorkspacePaths): Promise<Topolog
         if (SKIPPED_DIRECTORIES.has(entry.name)) continue;
         if (await isRuntimeDirectory(path.join(directory, entry.name))) continue;
         await walk(entryPath);
-      } else if (entry.isFile() && TOPOLOGY_FILE_PATTERN.test(entry.name)) {
+      } else if (entry.isFile() && isTopologyFileName(entry.name)) {
         found.push(entryPath);
       }
     }
@@ -114,7 +132,11 @@ export async function discoverTopologies(paths: WorkspacePaths): Promise<Topolog
     }
     if (!labName || !isValidLabName(labName)) {
       const declared = await readTopologyName(paths.absolute(yamlFileName));
-      labName = declared && isValidLabName(declared) ? declared : sanitizeLabName(stem);
+      // Git tokens in the name expand to the name containerlab runs the lab under.
+      const runName = declared
+        ? await expandTopologyLabName(declared, paths.absolute(yamlFileName), env)
+        : undefined;
+      labName = runName && isValidLabName(runName) ? runName : sanitizeLabName(stem);
     }
     if (!isValidLabName(labName)) continue;
     const annotationsFileName = `${yamlFileName}${ANNOTATIONS_SUFFIX}`;
@@ -174,7 +196,7 @@ export async function resolveTopologyPath(
 }
 
 function isCanonicalTopologyName(labName: string, fileName: string): boolean {
-  return [".clab.yml", ".clab.yaml"].some(
+  return [".clab.yml", ".clab.yaml", ".clab.gotmpl"].some(
     (suffix) => fileName === `${labName}${suffix}` || fileName === `${labName}${suffix}${ANNOTATIONS_SUFFIX}`
   );
 }

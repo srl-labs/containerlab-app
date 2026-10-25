@@ -35,6 +35,20 @@ import { applyLabSettingsUpdate, extractLabSettings } from "./labSettingsYaml";
 import { applyInheritanceSectionUpdate } from "./inheritanceSectionYaml";
 import { createEmptyAnnotations, createNewLabAnnotations } from "../annotations/types";
 import { isNonEmptyString, toFiniteNumber, toPosition } from "../../annotations/valueParsers";
+import {
+  listEnvReferences,
+  topologyFileStem,
+  type TopologyVariables
+} from "../../host/topologyVariables";
+
+/**
+ * Looks up what containerlab will substitute in the topology: the lab name it
+ * runs the lab under and the referenced environment variables.
+ */
+type TopologyVariablesResolver = (request: {
+  labName: string;
+  envNames: string[];
+}) => Promise<TopologyVariables | undefined>;
 
 interface TopologyHostCoreOptions {
   fs: FileSystemAdapter;
@@ -53,6 +67,7 @@ interface TopologyHostCoreOptions {
   setInternalUpdate?: (updating: boolean) => void;
   logger?: IOLogger;
   maxHistory?: number;
+  resolveVariables?: TopologyVariablesResolver;
 }
 
 interface HistoryEntry {
@@ -113,6 +128,10 @@ export class TopologyHostCore implements TopologyHost {
   private future: HistoryEntry[] = [];
   private historyLimit: number;
   private historyMergeUntil: number | null = null;
+  private resolveVariables?: TopologyVariablesResolver;
+  private variables: { key: string; value: Promise<TopologyVariables | undefined> } | null = null;
+  /** The declared lab name and the name containerlab runs it under. */
+  private runLabName: { declared: string; name: string } | null = null;
 
   public currentClabTopology: ClabTopology | undefined;
 
@@ -127,6 +146,7 @@ export class TopologyHostCore implements TopologyHost {
     this.setInternalUpdate = options.setInternalUpdate;
     this.logger = options.logger ?? noopLogger;
     this.historyLimit = options.maxHistory ?? DEFAULT_HISTORY_LIMIT;
+    this.resolveVariables = options.resolveVariables;
 
     this.parserLogger = {
       info: (msg) => this.logger.info(msg),
@@ -318,6 +338,7 @@ export class TopologyHostCore implements TopologyHost {
 
   private async onExternalChangeUnlocked(): Promise<TopologySnapshot> {
     this.baseFs.invalidateCache?.();
+    this.variables = null;
     const previousYamlContent = this.documentBaseline?.yamlContent;
     this.past = [];
     this.future = [];
@@ -689,6 +710,7 @@ export class TopologyHostCore implements TopologyHost {
     const yamlDoc = YAML.parseDocument(yamlContent);
     const parsed = normalizeParsedTopologyValue(yamlDoc.toJS());
     this.currentClabTopology = parsed;
+    const variables = await this.lookupVariables(parsed, yamlContent);
 
     let annotationsContent = initialAnnotationsContent;
 
@@ -755,9 +777,37 @@ export class TopologyHostCore implements TopologyHost {
       deploymentState: this.deploymentState,
       dirty: this.dirty,
       labSettings: Object.keys(labSettings).length > 0 ? labSettings : undefined,
+      ...(variables ? { variables } : {}),
       canUndo: this.past.length > 0,
       canRedo: this.future.length > 0
     };
+  }
+
+  /**
+   * The host's view of the topology's variables, looked up again only when
+   * the lab name or the referenced environment variables change.
+   */
+  private async lookupVariables(
+    parsed: ClabTopology,
+    yamlContent: string
+  ): Promise<TopologyVariables | undefined> {
+    if (!this.resolveVariables) return undefined;
+    const labName = this.getDeclaredLabName(parsed);
+    const envNames = listEnvReferences(yamlContent);
+    const key = JSON.stringify([labName, envNames]);
+    if (this.variables?.key !== key) {
+      const resolve = this.resolveVariables;
+      this.variables = {
+        key,
+        value: resolve({ labName, envNames }).catch((error: unknown) => {
+          this.logger.warn(`[TopologyHost] Could not resolve topology variables: ${String(error)}`);
+          return undefined;
+        })
+      };
+    }
+    const variables = await this.variables.value;
+    this.runLabName = variables?.labName ? { declared: labName, name: variables.labName } : null;
+    return variables;
   }
 
   private parseTopology(
@@ -800,6 +850,11 @@ export class TopologyHostCore implements TopologyHost {
   }
 
   private getParserLabName(parsed?: ClabTopology): string {
+    const declared = this.getDeclaredLabName(parsed);
+    return this.runLabName?.declared === declared ? this.runLabName.name : declared;
+  }
+
+  private getDeclaredLabName(parsed?: ClabTopology): string {
     const yamlLabName = parsed?.name;
     if (typeof yamlLabName === "string" && yamlLabName.trim().length > 0) {
       return yamlLabName.trim();
@@ -809,7 +864,7 @@ export class TopologyHostCore implements TopologyHost {
 
   private getFallbackLabName(): string {
     const yamlFileName = this.baseFs.basename(this.yamlFilePath);
-    const clabName = yamlFileName.replace(/\.clab\.ya?ml$/i, "");
+    const clabName = topologyFileStem(yamlFileName);
     if (clabName && clabName !== yamlFileName) {
       return clabName;
     }

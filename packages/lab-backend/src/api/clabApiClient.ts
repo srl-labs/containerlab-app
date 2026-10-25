@@ -43,7 +43,8 @@ import type {
   VersionResponse,
   WorkspaceFileEntry
 } from "../contract/dto.ts";
-import { isNotFoundError } from "../contract/errors.ts";
+import type { RenderedTopology } from "../contract/backend.ts";
+import { isNotFoundError, LabBackendError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
 
@@ -601,6 +602,52 @@ export class ClabApiClient {
       throw err;
     }
     return res;
+  }
+
+  /**
+   * Renders a workspace topology without deploying it. A server without the
+   * endpoint answers with gin's plain-text 404, which becomes 501.
+   */
+  async renderTopology(
+    token: string,
+    labName: string,
+    topologyPath: string,
+    varsFile?: string,
+  ): Promise<RenderedTopology> {
+    const params = new URLSearchParams({ path: topologyPath });
+    if (varsFile) {
+      params.set("varsPath", varsFile);
+    }
+    const path = `/api/v1/labs/${enc(labName)}/topology/rendered?${params.toString()}`;
+    let res: Response;
+    try {
+      res = await apiFetch(`${this.baseUrl}${path}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (error) {
+      throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
+    }
+    const text = await res.text().catch(() => "");
+    let body: unknown;
+    try {
+      body = JSON.parse(text) as unknown;
+    } catch {
+      body = undefined;
+    }
+    if (!res.ok) {
+      if (!isRecord(body) && (res.status === 404 || res.status === 405)) {
+        throw new LabBackendError(
+          "This clab-api-server cannot render topology templates. Update it to preview them.",
+          501,
+        );
+      }
+      const message =
+        isRecord(body) && typeof body.error === "string"
+          ? body.error
+          : text || res.statusText;
+      throw new LabBackendError(message, res.status);
+    }
+    return normalizeRenderedTopology(body);
   }
 
   async isLabRunning(token: string, labName: string): Promise<boolean> {
@@ -1237,6 +1284,22 @@ function enc(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function normalizeRenderedTopology(payload: unknown): RenderedTopology {
+  if (!isRecord(payload) || typeof payload.content !== "string") {
+    throw new LabBackendError("clab-api-server returned no rendered topology", 502);
+  }
+  const labName =
+    typeof payload.labName === "string" && payload.labName ? payload.labName : undefined;
+  const error =
+    typeof payload.error === "string" && payload.error ? payload.error : undefined;
+  return {
+    content: payload.content,
+    ...(labName ? { labName } : {}),
+    varsFiles: toStringArray(payload.varsFiles) ?? [],
+    ...(error ? { error } : {}),
+  };
 }
 
 function toStringArray(value: unknown): string[] | undefined {

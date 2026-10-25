@@ -16,6 +16,7 @@ import {
 import type { HostRuntimeContainer } from "../../src/host";
 import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
 import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tailscaleStatus";
+import { expandLabNameGitTokens } from "../../src/host/topologyVariables";
 
 import { fakeRuntimeContainers } from "./fakeLab";
 import { createFakeLifecycle } from "./fakeLifecycle";
@@ -29,6 +30,11 @@ import {
 } from "./harnessExplorer";
 
 type SnapshotFixtureName = "basic" | "empty";
+
+// What a local host would report for the variables containerlab expands.
+const HARNESS_GIT = { branch: "main", hash: "abc1234" };
+const HARNESS_TOPOLOGY_DIR = "/home/clab/labs";
+const HARNESS_ENV: Record<string, string> = { SRL_IMAGE: "ghcr.io/nokia/srlinux:25.3.1" };
 
 function normalizePath(filePath: string): string {
   if (filePath.startsWith(`${TOPOLOGY_ROOT}/`)) return filePath;
@@ -255,6 +261,13 @@ export function createFakeClabUiHost(
       yamlFilePath,
       mode: "edit",
       deploymentState: "undeployed",
+      resolveVariables: async ({ labName, envNames }) => ({
+        labName: expandLabNameGitTokens(labName, HARNESS_GIT),
+        topologyDir: HARNESS_TOPOLOGY_DIR,
+        env: Object.fromEntries(
+          envNames.filter((name) => name in HARNESS_ENV).map((name) => [name, HARNESS_ENV[name]] as const)
+        )
+      }),
       logger: {
         debug: () => {},
         info: () => {},

@@ -671,7 +671,7 @@ const explorerBridge = createStandaloneExplorerBridge({
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
 
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
-  return /\.clab\.ya?ml(?:\.annotations\.json)?$/i.test(pathValue ?? "");
+  return /\.clab\.(?:ya?ml|gotmpl)(?:\.annotations\.json)?$/i.test(pathValue ?? "");
 }
 
 type VscodeMessage = {

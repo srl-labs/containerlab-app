@@ -5,6 +5,8 @@ import React, { useRef } from "react";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 
+import { useFieldVariablePreview, useMagicVariableAutocomplete } from "./FieldVariables";
+import { combineHelperText } from "./InputField";
 import { AddItemButton, DeleteItemButton, InheritedItemMarker } from "./ListButtons";
 import { createRowIds, nextRowId } from "./listRowIds";
 
@@ -17,6 +19,10 @@ interface DynamicListProps {
   hideAddButton?: boolean;
   /** Items inherited from defaults, a kind or a group, with where they come from; shown locked */
   inheritedItems?: ReadonlyMap<string, string>;
+  /** Prefix of the item ids, `<id>-<index>` */
+  id?: string;
+  /** containerlab expands magic variables such as `__clabNodeDir__` in the items */
+  magicVariables?: boolean;
 }
 
 export const DynamicList: React.FC<DynamicListProps> = ({
@@ -26,7 +32,9 @@ export const DynamicList: React.FC<DynamicListProps> = ({
   addLabel = "Add",
   disabled,
   hideAddButton,
-  inheritedItems
+  inheritedItems,
+  id,
+  magicVariables
 }) => {
   // Stable per-row identities so removing a row doesn't reassign focus/state to
   // its neighbor. Add/remove handlers keep the id list aligned with the items
@@ -58,6 +66,8 @@ export const DynamicList: React.FC<DynamicListProps> = ({
       {items.map((item, index) => (
         <DynamicListItem
           key={rowIds[index]}
+          id={id ? `${id}-${index}` : undefined}
+          magicVariables={magicVariables}
           value={item}
           onChange={(value) => handleChange(index, value)}
           onRemove={() => handleRemove(index)}
@@ -77,6 +87,8 @@ export const DynamicList: React.FC<DynamicListProps> = ({
  * Single list item with input and delete button
  */
 interface DynamicListItemProps {
+  id?: string;
+  magicVariables?: boolean;
   value: string;
   onChange: (value: string) => void;
   onRemove: () => void;
@@ -86,28 +98,51 @@ interface DynamicListItemProps {
 }
 
 const DynamicListItem: React.FC<DynamicListItemProps> = ({
+  id,
+  magicVariables,
   value,
   onChange,
   onRemove,
   placeholder,
   disabled,
   inheritedFrom
-}) => (
-  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-    <TextField
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      disabled={disabled}
-      size="small"
-      fullWidth
-      slotProps={{ htmlInput: { readOnly: inheritedFrom !== undefined } }}
-      sx={inheritedFrom !== undefined ? { "& input": { color: "text.secondary" } } : undefined}
-    />
-    {inheritedFrom !== undefined ? (
-      <InheritedItemMarker source={inheritedFrom} />
-    ) : (
-      <DeleteItemButton onRemove={onRemove} disabled={disabled} />
-    )}
-  </Box>
-);
+}) => {
+  const readOnly = inheritedFrom !== undefined;
+  const variablePreview = useFieldVariablePreview(value, magicVariables === true);
+  const autocomplete = useMagicVariableAutocomplete({
+    enabled: magicVariables === true && disabled !== true && !readOnly,
+    id: id ?? "list-item",
+    value,
+    onChange
+  });
+  return (
+    <Box sx={{ display: "flex", gap: 1, alignItems: variablePreview ? "flex-start" : "center" }}>
+      <TextField
+        id={id}
+        inputRef={autocomplete.inputRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        size="small"
+        fullWidth
+        helperText={combineHelperText(id, undefined, variablePreview)}
+        slotProps={{
+          htmlInput: {
+            readOnly,
+            onKeyDown: autocomplete.onKeyDown,
+            onSelect: autocomplete.onSelect,
+            onBlur: autocomplete.onBlur
+          }
+        }}
+        sx={readOnly ? { "& input": { color: "text.secondary" } } : undefined}
+      />
+      {autocomplete.suggestions}
+      {inheritedFrom !== undefined ? (
+        <InheritedItemMarker source={inheritedFrom} />
+      ) : (
+        <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+      )}
+    </Box>
+  );
+};

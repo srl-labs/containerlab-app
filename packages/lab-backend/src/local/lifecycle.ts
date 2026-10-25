@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { labLifecycleCliFlags } from "@containerlab/clab-ui/host";
+import { labLifecycleCliFlags, topologyFileStem } from "@containerlab/clab-ui/host";
 
 import type {
   LabLifecycleAction,
@@ -109,7 +109,7 @@ function parseJsonOutput(stdout: string): unknown {
 function labDisplayName(lab: LabTarget): string {
   if (lab.labName) return lab.labName;
   const file = (lab.path ?? "").split(/[\\/]/).pop() ?? "";
-  return file.replace(/\.clab\.ya?ml$/i, "") || "lab";
+  return topologyFileStem(file) || "lab";
 }
 
 export interface LifecycleContext {

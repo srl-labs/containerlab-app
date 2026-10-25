@@ -1,4 +1,4 @@
-// Renders the secondary webviews (image manager, inspect, welcome, impairments, Wireshark) with fixture data.
+// Renders the secondary webviews (image manager, inspect, welcome, impairments, Wireshark, template preview) with fixture data.
 import Box from "@mui/material/Box";
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -18,6 +18,8 @@ import { NodeImpairmentsApp } from "../../src/webviews/nodeImpairments/nodeImpai
 import { WelcomePageApp } from "../../src/webviews/welcome/welcomePage.webview";
 import { WiresharkVncApp } from "../../src/webviews/wiresharkVnc/wiresharkVnc.webview";
 import { WiresharkVncTabsApp } from "../../src/webviews/wiresharkVnc/wiresharkVncTabs";
+import { TopologyTemplatePreview } from "../../src/workspace/components/TopologyTemplatePreview";
+import type { RenderedTopologyPreview } from "../../src/workspace/types";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") ?? "image-manager";
@@ -204,6 +206,26 @@ function setupInitialData(): void {
   }
 }
 
+/** containerlab's rendering of a template, with a vars file per environment. */
+async function renderTemplate(request: {
+  endpointId: string;
+  path: string;
+  varsFile?: string;
+}): Promise<RenderedTopologyPreview> {
+  await new Promise((resolve) => window.setTimeout(resolve, 50));
+  if (request.varsFile === "missing.yml") {
+    throw new Error("file not found: labs/missing.yml");
+  }
+  const leaves = request.varsFile === "prod.yml" ? 4 : 2;
+  const nodes = Array.from({ length: leaves }, (_, index) => `    leaf${index + 1}:\n      kind: nokia_srlinux`);
+  return {
+    content: `name: fabric\ntopology:\n  nodes:\n${nodes.join("\n")}\n`,
+    labName: "fabric",
+    varsFiles: [request.varsFile ?? "fabric.clab_vars.yml"],
+    ...(request.varsFile === "prod.yml" ? { error: "unknown field bogus" } : {})
+  };
+}
+
 function postAfterMount(): void {
   window.setTimeout(() => {
     if (view === "welcome" && state !== "loading") {
@@ -271,6 +293,19 @@ function HarnessView(): React.JSX.Element {
       return <WiresharkVncApp />;
     case "wireshark-tabs":
       return <WiresharkVncTabsApp tabs={captureTabs} />;
+    case "template-preview":
+      return (
+        <MuiThemeProvider>
+          <Box sx={{ display: "flex", height: "100vh", bgcolor: "background.default", color: "text.primary" }}>
+            <TopologyTemplatePreview
+              endpointId="local"
+              path="labs/fabric.clab.gotmpl"
+              savedContent=""
+              render={renderTemplate}
+            />
+          </Box>
+        </MuiThemeProvider>
+      );
     default:
       return <ImageManagerApp runtime={runtime} initialData={window.__INITIAL_DATA__} />;
   }

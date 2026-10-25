@@ -2,6 +2,7 @@
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
 import {
   LAB_LIFECYCLE_OPTION_FIELDS,
+  isValidVarsFile,
   labLifecycleCliFlags,
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
@@ -19,6 +20,7 @@ export interface LifecycleOptionsForm {
   exportTemplate: string;
   graceful: boolean;
   keepMgmtNet: boolean;
+  varsFile: string;
 }
 
 export interface LifecycleOptionsRequest {
@@ -38,7 +40,8 @@ export function createLifecycleOptionsForm(kind: LabLifecycleOptionKind): Lifecy
     skipLabdirAcl: false,
     exportTemplate: "",
     graceful: false,
-    keepMgmtNet: false
+    keepMgmtNet: false,
+    varsFile: ""
   };
 }
 
@@ -62,6 +65,13 @@ export function maxWorkersError(value: string): string | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? undefined : "Enter a whole number above 0";
 }
 
+/** Problem with the variables file field, if any. Empty means the default file. */
+export function varsFileError(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "" || isValidVarsFile(trimmed)) return undefined;
+  return "Enter a path relative to the topology file";
+}
+
 const ACTIONS: Record<LabLifecycleOptionKind, [TopoViewerLifecycleAction, TopoViewerLifecycleAction]> =
   {
     deploy: ["deployLab", "deployLabCleanup"],
@@ -79,7 +89,8 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     skipLabdirAcl: form.skipLabdirAcl,
     exportTemplate: form.exportTemplate,
     graceful: form.graceful,
-    keepMgmtNet: form.keepMgmtNet
+    keepMgmtNet: form.keepMgmtNet,
+    varsFile: form.varsFile
   });
   const [plainAction, cleanupAction] = ACTIONS[form.kind];
   const command = ["containerlab", form.kind, ...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(options)]

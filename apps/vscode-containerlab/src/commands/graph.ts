@@ -1,5 +1,4 @@
 import * as fs from "fs";
-import * as path from "path";
 
 import * as vscode from "vscode";
 
@@ -8,6 +7,11 @@ import type { ReactTopoViewer } from "../reactTopoViewer";
 import { ReactTopoViewerProvider } from "../reactTopoViewer";
 import { getSelectedLabNode } from "../utils/utils";
 import { MSG_LAB_LIFECYCLE_LOG, MSG_LAB_LIFECYCLE_STATUS } from "@containerlab/clab-ui/session";
+import {
+  isTopologyFileName,
+  isTopologyTemplateFileName,
+  topologyFileStem
+} from "@containerlab/clab-ui/host";
 
 import {
   getLocalBackend,
@@ -20,6 +24,7 @@ import {
 } from "../backend/labBackends";
 
 import { execCommandInTerminal, runWithProgress } from "./command";
+import { showRenderedTopology } from "./renderedTopology";
 
 /**
  * Core routine for generating draw.io graphs.
@@ -128,8 +133,7 @@ function resolveLabPath(node?: ClabLabTreeNode): string | undefined {
   }
 
   const editor = vscode.window.activeTextEditor;
-  const topoFileRegex = /\.clab\.(yaml|yml)$/;
-  if (editor && topoFileRegex.test(editor.document.uri.path)) {
+  if (editor && isTopologyFileName(editor.document.uri.path)) {
     return labPathOf(editor.document.uri);
   }
 
@@ -151,12 +155,15 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
     return;
   }
 
+  // Only containerlab can turn a template into a topology: show its rendered result instead.
+  if (isTopologyTemplateFileName(labPath)) {
+    await showRenderedTopology(labPath, node?.connectionId);
+    return;
+  }
+
   // Derive the lab name
   const labName =
-    node?.name ??
-    (isUriString(labPath)
-      ? labNameForPath(labPath)
-      : path.basename(labPath).replace(/\.clab\.(yml|yaml)$/i, ""));
+    node?.name ?? (isUriString(labPath) ? labNameForPath(labPath) : topologyFileStem(labPath));
 
   // Use the provider to create/get the viewer. The viewer is always editable;
   // it attaches runtime data on its own when the lab is deployed.

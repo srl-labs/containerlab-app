@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { TailscaleStatus } from "@containerlab/clab-ui/host";
+import { isTopologyFileName, type TailscaleStatus } from "@containerlab/clab-ui/host";
 import Docker from "dockerode";
 
 import type {
@@ -12,6 +12,7 @@ import type {
   LabLifecycleAction,
   LabTarget,
   LifecycleRunOptions,
+  RenderedTopology,
   TerminalCreateOptions,
   TopologyFileSystem,
   TopologyFilesOptions,
@@ -42,6 +43,7 @@ import {
   type StreamingCommand
 } from "./process.ts";
 import { LocalTerminals } from "./terminals.ts";
+import { localTopologyVariables, renderTopologyFile } from "./topologyTemplates.ts";
 import * as tools from "./tools.ts";
 import {
   createLocalTopologyFiles,
@@ -452,7 +454,7 @@ export class LocalLabBackend implements LabBackend {
   }
 
   listTopologies() {
-    return discoverTopologies(this.fs.paths);
+    return discoverTopologies(this.fs.paths, this.options.env);
   }
 
   async importTopologyFromUrl(source: { url: string; labName?: string }): Promise<ImportTopologyFromUrlResponse> {
@@ -479,7 +481,7 @@ export class LocalLabBackend implements LabBackend {
     }
     const prefix = repository.subPath ? `${labName}/${repository.subPath}` : `${labName}/`;
     const topologies = (await this.listTopologies()).filter((entry) =>
-      repository.subPath?.match(/\.clab\.ya?ml$/i)
+      repository.subPath && isTopologyFileName(repository.subPath)
         ? entry.yamlFileName === prefix
         : entry.yamlFileName.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`)
     );
@@ -507,6 +509,20 @@ export class LocalLabBackend implements LabBackend {
       sourcePreference: "running-lab-doc",
       yamlPath: `${labName}.clab.yml`
     }).readFile(`${labName}.clab.yml`);
+  }
+
+  /** The topology file of a lab target: its workspace or absolute path, else the running lab's. */
+  private async targetTopologyFile(lab: LabTarget): Promise<string> {
+    if (lab.path) return this.resolveTopology(lab.labName, lab.path);
+    return this.requireRunningTopology(lab.labName);
+  }
+
+  async renderTopology(lab: LabTarget, options: { varsFile?: string } = {}): Promise<RenderedTopology> {
+    return renderTopologyFile(this.options, await this.targetTopologyFile(lab), options.varsFile);
+  }
+
+  async topologyVariables(lab: LabTarget, request: { labName: string; envNames: string[] }) {
+    return localTopologyVariables(this.options, await this.targetTopologyFile(lab), request);
   }
 
   watchTopology(labName: string, filePath: string, signal: AbortSignal) {

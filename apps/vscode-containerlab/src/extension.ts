@@ -61,6 +61,7 @@ import { ContainerlabExplorerViewProvider } from "./webviews/explorer/containerl
 
 import { refreshSettingsPanel, registerSettings } from "./webviews/settings/settingsPanel";
 import { registerAppearanceUpdates } from "./webviews/shared/appearance";
+import { registerRenderedTopologyProvider } from "./commands/renderedTopology";
 
 let explorerViewProvider: ContainerlabExplorerViewProvider | undefined;
 
@@ -956,6 +957,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Language features (YAML completion)
   registerClabImageCompletion(context);
+  registerRenderedTopologyProvider(context);
 
   // Register commands
   registerCommands(context);

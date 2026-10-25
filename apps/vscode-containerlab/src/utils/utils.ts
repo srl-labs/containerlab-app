@@ -261,7 +261,8 @@ export async function getSelectedLabNode(
     labPath = activeUri ? labPathOf(activeUri) : undefined;
   }
 
-  if (labPath === undefined || labPath === "" || !/\.clab\.(yml|yaml)$/i.test(labPath)) {
+  // Topology templates (`.clab.gotmpl`) run the same commands; containerlab renders them.
+  if (labPath === undefined || labPath === "" || !/\.clab\.(yml|yaml|gotmpl)$/i.test(labPath)) {
     return undefined;
   }
 

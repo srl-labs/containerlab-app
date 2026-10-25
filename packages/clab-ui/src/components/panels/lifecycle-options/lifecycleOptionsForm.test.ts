@@ -5,7 +5,8 @@ import {
   buildLifecycleOptionsRequest,
   createLifecycleOptionsForm,
   isCleanupBlocked,
-  maxWorkersError
+  maxWorkersError,
+  varsFileError
 } from "./lifecycleOptionsForm";
 
 test("an untouched form runs the plain action without options", () => {
@@ -64,4 +65,17 @@ test("max workers must be a whole number above 0 when set", () => {
   assert.notEqual(maxWorkersError("0"), undefined);
   assert.notEqual(maxWorkersError("1.5"), undefined);
   assert.notEqual(maxWorkersError("many"), undefined);
+});
+
+test("a template variables file is passed with --vars, relative to the topology", () => {
+  const form = { ...createLifecycleOptionsForm("destroy"), varsFile: " vars/prod.yml " };
+  assert.deepEqual(buildLifecycleOptionsRequest(form), {
+    action: "destroyLab",
+    options: { varsFile: "vars/prod.yml" },
+    command: "containerlab destroy --vars vars/prod.yml"
+  });
+  assert.equal(varsFileError(""), undefined);
+  assert.equal(varsFileError("../common/vars.yml"), undefined);
+  assert.notEqual(varsFileError("/etc/vars.yml"), undefined);
+  assert.notEqual(varsFileError("vars file.yml"), undefined);
 });

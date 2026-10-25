@@ -27,7 +27,7 @@ import {
 } from "@containerlab/clab-ui/session";
 import type { HostRuntimeContainer } from "@containerlab/clab-ui/host";
 import { fsAdapterFor } from "./shared/io";
-import { connectionOf, isUriString, labUri } from "../../backend/labBackends";
+import { connectionOf, isUriString, labUri, resolveLab } from "../../backend/labBackends";
 
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
@@ -329,6 +329,7 @@ export class ReactTopoViewer {
     this.runtimeContainers = [];
 
     // The topology is always editable; runtime data attaches when deployed.
+    const yamlFilePath = this.lastYamlFilePath;
     this.topologyHost = new TopologyHostCore({
       fs: fsAdapterFor(this.lastYamlFilePath),
       yamlFilePath: this.lastYamlFilePath,
@@ -339,7 +340,12 @@ export class ReactTopoViewer {
         ? createRuntimeContainerDataProvider(this.runtimeContainers)
         : undefined,
       setInternalUpdate: (updating: boolean) => this.setInternalUpdate(updating),
-      logger: log
+      logger: log,
+      // The lab name containerlab runs the lab under and the environment it deploys with.
+      resolveVariables: async (request) => {
+        const { backend, target } = await resolveLab(yamlFilePath);
+        return backend.topologyVariables(target, request);
+      }
     });
 
     this.messageRouter = new MessageRouter({

@@ -95,6 +95,7 @@ export const KindConfigTab: React.FC<TabProps> = (props) => {
               value={readValue(data, field.key)}
               onChange={(value) => set(field.key, value)}
               helperText={helperFor(props, field)}
+              magicVariables
             />
           ))}
         </PanelSection>
@@ -108,6 +109,7 @@ export const KindConfigTab: React.FC<TabProps> = (props) => {
           value={readValue(data, field.key)}
           onChange={(value) => set(field.key, value)}
           helperText={helperFor(props, field)}
+          magicVariables
         />
       ))}
     </Box>

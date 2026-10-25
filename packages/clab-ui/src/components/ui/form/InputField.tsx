@@ -14,6 +14,8 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import type { SxProps, Theme } from "@mui/material/styles";
 
+import { useFieldVariablePreview, useMagicVariableAutocomplete } from "./FieldVariables";
+
 interface InputFieldProps {
   id: string;
   value: string;
@@ -36,6 +38,8 @@ interface InputFieldProps {
   suffix?: string;
   /** Show a clear (×) button when the field has a value */
   clearable?: boolean;
+  /** containerlab expands magic variables such as `__clabNodeDir__` in this field */
+  magicVariables?: boolean;
 }
 
 const NUMBER_INPUT_SX: SxProps<Theme> = {
@@ -336,9 +340,17 @@ export const InputField: React.FC<InputFieldProps> = ({
   required,
   error,
   suffix,
-  clearable
+  clearable,
+  magicVariables
 }) => {
   const [revealed, setRevealed] = useState(false);
+  const variablePreview = useFieldVariablePreview(value, magicVariables === true);
+  const autocomplete = useMagicVariableAutocomplete({
+    enabled: magicVariables === true && disabled !== true,
+    id,
+    value,
+    onChange
+  });
   const isNumberField = type === "number";
   const isPasswordField = type === "password";
   const safeStep = normalizeStep(step);
@@ -391,31 +403,65 @@ export const InputField: React.FC<InputFieldProps> = ({
     : undefined;
 
   return (
-    <TextField
-      id={id}
-      type={isPasswordField && revealed ? "text" : type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      label={label}
-      placeholder={placeholder}
-      disabled={disabled}
-      size="small"
-      fullWidth
-      required={required}
-      error={error}
-      helperText={helperText}
-      sx={getInputSx(isNumberField)}
-      slotProps={{
-        htmlInput: {
-          "aria-label": ariaLabel,
-          // Keep the browser from filling in the user's own saved login
-          autoComplete: isPasswordField ? "new-password" : undefined,
-          min,
-          max,
-          step
-        },
-        input: inputSlotProps
-      }}
-    />
+    <>
+      <TextField
+        id={id}
+        inputRef={autocomplete.inputRef}
+        type={isPasswordField && revealed ? "text" : type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        label={label}
+        placeholder={placeholder}
+        disabled={disabled}
+        size="small"
+        fullWidth
+        required={required}
+        error={error}
+        helperText={combineHelperText(id, helperText, variablePreview)}
+        sx={getInputSx(isNumberField)}
+        slotProps={{
+          htmlInput: {
+            "aria-label": ariaLabel,
+            // Keep the browser from filling in the user's own saved login
+            autoComplete: isPasswordField ? "new-password" : undefined,
+            min,
+            max,
+            step,
+            onKeyDown: autocomplete.onKeyDown,
+            onSelect: autocomplete.onSelect,
+            onBlur: autocomplete.onBlur
+          },
+          input: inputSlotProps
+        }}
+      />
+      {autocomplete.suggestions}
+    </>
   );
 };
+
+/** The field's own hint and, below it, what its variables resolve to. */
+export function combineHelperText(
+  id: string | undefined,
+  helperText: string | undefined,
+  variablePreview: string | undefined
+): React.ReactNode {
+  if (!variablePreview) return helperText;
+  const preview = (
+    <Box
+      component="span"
+      data-testid={id ? `${id}-variables` : undefined}
+      sx={{ display: "block", overflowWrap: "anywhere" }}
+    >
+      {variablePreview}
+    </Box>
+  );
+  if (!helperText) return preview;
+  return (
+    <>
+      <Box component="span" sx={{ display: "block" }}>
+        {helperText}
+      </Box>
+      {preview}
+    </>
+  );
+}
