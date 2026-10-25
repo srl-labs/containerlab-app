@@ -101,7 +101,7 @@ export class SimpleExplorerProvider {
 }
 
 export function stripTopologySuffix(name: string): string {
-  return name.replace(/\.clab\.(ya?ml)$/i, "");
+  return name.replace(/\.clab\.(?:ya?ml|gotmpl)$/i, "");
 }
 
 export function safeFilename(pathValue: string): string {

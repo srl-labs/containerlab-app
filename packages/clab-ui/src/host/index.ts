@@ -40,6 +40,7 @@ export * from "./lifecycleOptions";
 export * from "./runtimeContext";
 export * from "./runtimeModel";
 export * from "./tailscaleStatus";
+export * from "./topologyVariables";
 export {
   resolveNodeCredentialsFromYaml,
   type CredentialsLevel,

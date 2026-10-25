@@ -5,10 +5,10 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { LabBackend, LabTarget } from "@srl-labs/containerlab-lab-backend";
 import {
+  declaredTopologyName,
   LocalLabBackend,
   type LocalLabBackendOptions
 } from "@srl-labs/containerlab-lab-backend/local";
-import YAML from "yaml";
 
 import { containerlabBinaryPath } from "../globals";
 
@@ -216,7 +216,11 @@ export function remoteUri(connection: LabConnection, workspacePath: string): vsc
 
 function remoteLabNameFallback(workspacePath: string): string {
   const segments = workspacePath.split("/");
-  return segments.length > 1 ? segments[0] : segments[0].replace(/\.clab\.ya?ml$/i, "");
+  return segments.length > 1 ? segments[0] : topologyFileStem(segments[0]);
+}
+
+function topologyFileStem(fileName: string): string {
+  return path.posix.basename(fileName).replace(/\.clab\.(ya?ml|gotmpl)$/i, "");
 }
 
 /**
@@ -236,17 +240,13 @@ export function labNameForPath(labPath: string): string {
       : undefined;
     return entry?.labName ?? remoteLabNameFallback(workspacePath);
   }
+  let declared: string | undefined;
   try {
-    const parsed: unknown = YAML.parse(fs.readFileSync(labPath, "utf8"));
-    const name: unknown =
-      typeof parsed === "object" && parsed !== null ? Reflect.get(parsed, "name") : undefined;
-    if (typeof name === "string" && name.trim().length > 0) {
-      return name.trim();
-    }
+    declared = declaredTopologyName(fs.readFileSync(labPath, "utf8"), labPath);
   } catch {
-    // Unreadable or not YAML; fall back to the file name.
+    // Unreadable; fall back to the file name.
   }
-  return path.basename(labPath).replace(/\.clab\.ya?ml$/i, "");
+  return declared !== undefined && declared !== "" ? declared : topologyFileStem(labPath);
 }
 
 /** The backend and target for a lab given by its topology path or URI. */

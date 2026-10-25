@@ -11,6 +11,7 @@ import type { TopologyAnnotations, EdgeAnnotation, DeploymentState } from "./top
 import type { TopoNode, TopoEdge } from "./graph";
 import type { LabSettings, LabSettingsUpdate } from "./labSettings";
 import type { InheritanceSectionUpdate } from "./inheritance";
+import type { TopologyVariables } from "../../host/topologyVariables";
 
 /**
  * Base message interface for all messages
@@ -125,6 +126,8 @@ export interface TopologySnapshot {
    */
   dirty?: boolean;
   labSettings?: LabSettings;
+  /** What the host knows about the variables containerlab expands in this topology. */
+  variables?: TopologyVariables;
   canUndo: boolean;
   canRedo: boolean;
 }

@@ -29,6 +29,7 @@ import {
   isCleanupBlocked,
   lifecycleKindTakes,
   maxWorkersError,
+  varsFileError,
   type LifecycleOptionsForm
 } from "./lifecycleOptionsForm";
 
@@ -132,12 +133,14 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
     lifecycleKindTakes(form.kind, field);
   const cleanupBlocked = isCleanupBlocked(form);
   const workersError = maxWorkersError(form.maxWorkers);
+  const varsError = varsFileError(form.varsFile);
+  const blocked = workersError !== undefined || varsError !== undefined;
   const request = buildLifecycleOptionsRequest(form);
   const kindAvailable = isKindAvailable(form.kind, deploymentState);
   const runLabel = KIND_LABELS[form.kind];
 
   const handleRun = () => {
-    if (!kindAvailable || workersError !== undefined) return;
+    if (!kindAvailable || blocked) return;
     onRun(request.action, request.options);
   };
 
@@ -282,6 +285,21 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           </Box>
         )}
 
+        {takes("varsFile") && (
+          <InputField
+            id="lifecycle-options-vars-file"
+            label="Template variables file"
+            value={form.varsFile}
+            onChange={(value) => update("varsFile", value)}
+            placeholder="<topology>_vars.yml"
+            error={varsError !== undefined}
+            helperText={
+              varsError ??
+              "Relative to the topology file. Empty uses the vars file next to the topology, if any."
+            }
+          />
+        )}
+
         <Box
           sx={{
             px: 1.5,
@@ -307,7 +325,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           size="small"
           color={form.kind === "destroy" ? "error" : "primary"}
           onClick={handleRun}
-          disabled={!kindAvailable || workersError !== undefined}
+          disabled={!kindAvailable || blocked}
           data-testid="lifecycle-options-run"
         >
           {runLabel}

@@ -1,3 +1,4 @@
+import { isTopologyTemplateFileName } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 import {
   dispatchEndpointUiAction,
@@ -707,6 +708,12 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           : "No canonical topology reference is available for this item."
       );
       if (!topologyRef) {
+        return;
+      }
+      // Only containerlab can turn a template into a topology: edit it as text with its rendered preview.
+      if (isTopologyTemplateFileName(topologyRef.yamlPath) && actionEndpointId) {
+        const document = await readFileExplorerFile(actionEndpointId, topologyRef.yamlPath);
+        await options.openFileEditor({ ...document, title: safeFilename(topologyRef.yamlPath) });
         return;
       }
       const itemState = deploymentStateFromContext(item?.contextValue);

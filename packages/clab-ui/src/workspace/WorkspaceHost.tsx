@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useSyncExternalStore } from "react";
 import type {
   EdgeSharkStatusResponse, EndpointHealthMetrics, FileExplorerEntry, InspectAllLabsResponse, InspectLabResponse,
-  InterfaceNetemPatch, LabState, LogsResponse, RuntimeTargetRequest, TerminalProtocol,
+  InterfaceNetemPatch, LabState, LogsResponse, RenderedTopologyPreview, RuntimeTargetRequest, TerminalProtocol,
   TerminalSessionInfo, VersionCheckResponse, VersionResponse, WorkspaceAsset
 } from "./types";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
@@ -23,6 +23,8 @@ export interface WorkspaceHost {
     fetchEndpointHealthMetrics: (endpointId: string, signal?: AbortSignal) => Promise<EndpointHealthMetrics>;
     listFileExplorerDirectory: (endpointId: string, parentPath?: string) => Promise<FileExplorerEntry[]>;
     writeFileExplorerFile: (document: { endpointId: string; path: string; content: string; originalContent?: string }) => Promise<void>;
+    /** Renders a topology template without deploying it; missing where the host cannot. */
+    renderTopologyFile?: (request: { endpointId: string; path: string; varsFile?: string }) => Promise<RenderedTopologyPreview>;
     fetchVersionInfo: (endpointId?: string) => Promise<VersionResponse>;
     fetchVersionCheck: (endpointId?: string) => Promise<VersionCheckResponse>;
     fetchEdgeSharkStatus: (endpointId?: string) => Promise<EdgeSharkStatusResponse>;

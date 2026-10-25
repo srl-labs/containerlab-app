@@ -533,239 +533,239 @@
     "menus": {
       "editor/title": [
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.graph.topoViewer",
           "group": "navigation@0"
         }
       ],
       "editor/title/run": [
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.apply",
           "group": "navigation@0"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy",
           "group": "navigation@1"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy.cleanup",
           "group": "navigation@2"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy",
           "group": "navigation@3"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy.cleanup",
           "group": "navigation@4"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy",
           "group": "navigation@5"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy.cleanup",
           "group": "navigation@6"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.start",
           "group": "navigation@7"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.stop",
           "group": "navigation@8"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.restart",
           "group": "navigation@9"
         }
       ],
       "editor/title/context": [
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.apply",
           "group": "clabLabActions@0"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy",
           "group": "clabLabActions@1"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy.cleanup",
           "group": "clabLabActions@2"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy",
           "group": "clabLabActions@3"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy.cleanup",
           "group": "clabLabActions@4"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy",
           "group": "clabLabActions@5"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy.cleanup",
           "group": "clabLabActions@6"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.start",
           "group": "clabLabActions@7"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.stop",
           "group": "clabLabActions@8"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.restart",
           "group": "clabLabActions@9"
         },
         {
           "submenu": "containerlab.submenu.lab.graph.drawio",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@0"
         },
         {
           "command": "containerlab.lab.graph.topoViewer",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
         }
       ],
       "explorer/context": [
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.apply",
           "group": "clabLabActions@0"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy",
           "group": "clabLabActions@1"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.deploy.cleanup",
           "group": "clabLabActions@2"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy",
           "group": "clabLabActions@3"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.redeploy.cleanup",
           "group": "clabLabActions@4"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy",
           "group": "clabLabActions@5"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.destroy.cleanup",
           "group": "clabLabActions@6"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.start",
           "group": "clabLabActions@7"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.stop",
           "group": "clabLabActions@8"
         },
         {
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "command": "containerlab.lab.restart",
           "group": "clabLabActions@9"
         },
         {
           "submenu": "containerlab.submenu.lab.graph.drawio",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@0"
         },
         {
           "command": "containerlab.lab.graph.topoViewer",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/",
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/",
           "group": "graph@1"
         }
       ],
       "commandPalette": [
         {
           "command": "containerlab.lab.deploy",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.deploy.cleanup",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.redeploy",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.redeploy.cleanup",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.apply",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.destroy",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.destroy.cleanup",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.start",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.stop",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.restart",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.graph.drawio.horizontal",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.graph.drawio.vertical",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.lab.graph.drawio.interactive",
-          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml)$/"
+          "when": "resourceFilename =~ /\\.clab\\.(yml|yaml|gotmpl)$/"
         },
         {
           "command": "containerlab.install.edgeshark",

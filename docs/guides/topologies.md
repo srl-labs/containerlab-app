@@ -53,6 +53,27 @@ Double-click a node to open the **Node Editor**: kind, type, image, startup conf
 
 A value the node gets from `defaults`, its kind, or its group shows where it comes from under the field, for example *From kind nokia_srlinux*. Type a new value to override it for this node, or clear the field to go back to the inherited one. Inherited environment variables, labels, binds, and exec commands are locked: change them where they are set. **Settings Group** picks the containerlab `group` the node inherits from. It is not the same as a group drawn on the canvas.
 
+## Variables
+
+containerlab replaces [environment variables](https://containerlab.dev/manual/topo-def-file/) such as `${SRL_IMAGE:=ghcr.io/nokia/srlinux}` anywhere in the file, and magic variables such as `__clabNodeDir__` in startup config paths, binds, exec commands, stage commands, and kind-specific settings. A field that uses them shows what it resolves to under the field, for example *Resolves to: /home/alice/labs/clab-dc/srl1/startup.cfg*.
+
+Type `__` in one of the fields that take magic variables to pick `__clabNodeName__`, `__clabNodeDir__`, `__clabDir__`, or `__clabLabName__`, with the value each has for the node.
+
+Environment values come from the machine that runs containerlab: your own in VS Code and in the desktop app's local mode. A lab host's environment is not visible to the app, so there the preview shows the default after `:=` or `:-` and says so. Through `sudo`, containerlab gets a different environment, so the local preview also shows defaults only.
+
+A lab `name` with `__gitBranch__` or `__gitHash__` runs under the branch and short commit of the Git repository in the topology's folder, `none` without one. The editor, the explorer, and the running lab views use that expanded name.
+
+## Topology templates
+
+A `*.clab.gotmpl` file is a [topology template](https://containerlab.dev/manual/topo-def-file/): Go template syntax that containerlab renders with the variables in `<name>.clab_vars.yml` and the snippets in `clab_templates/`. The explorer lists templates with the other topologies, and deploy, redeploy, and destroy work on them like on any topology.
+
+Only containerlab can turn a template into a topology, so the canvas does not edit it:
+
+- In the desktop and web apps, opening a template shows its text next to a read-only **Rendered topology**. Enter another variables file to try it; the preview renders again after you save.
+- In VS Code, the template opens as text. **Open TopoViewer** on a template shows the rendered topology in a read-only tab instead.
+
+Rendering runs `containerlab deploy --dry-run --export-rendered` on your machine, which needs containerlab 0.78 or later and deploys nothing. Lab hosts need a clab-api-server with template support; older servers do not list templates and the preview says the server cannot render them. In the desktop and web apps, a template whose `name` is not literal is listed and deployed under its file name.
+
 ## Share settings between nodes
 
 **Lab Settings** → **Defaults & Groups** lists the lab's `defaults`, `kinds`, and `groups`, with the number of nodes each one reaches. Edit one to open the same tabs as the Node Editor, add a kind or a group, or remove one. These edits save right away.

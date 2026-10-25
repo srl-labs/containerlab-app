@@ -1,4 +1,8 @@
-import type { LabLifecycleOptions, TailscaleStatus } from "@containerlab/clab-ui/host";
+import type {
+  LabLifecycleOptions,
+  TailscaleStatus,
+  TopologyVariables
+} from "@containerlab/clab-ui/host";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 import type {
@@ -157,6 +161,18 @@ export interface TopologyFilesOptions {
    * from, instead of the workspace file at `yamlPath`.
    */
   sourcePreference?: "api-file" | "running-lab-doc";
+}
+
+/** A topology as containerlab renders it before deploying. */
+export interface RenderedTopology {
+  /** Topology YAML after the template and environment variables are expanded. */
+  content: string;
+  /** The lab name in the rendered topology, with Git tokens expanded. */
+  labName?: string;
+  /** Template variable files containerlab used, relative to the topology directory. */
+  varsFiles?: string[];
+  /** Why containerlab rejects the rendered topology, when it does. */
+  error?: string;
 }
 
 /** File access for one topology, as the shared topology core expects it. */
@@ -343,6 +359,21 @@ export interface LabBackend {
   topologyFiles(options: TopologyFilesOptions): TopologyFileSystem;
   /** The topology YAML a running lab was deployed from. */
   runningTopologyYaml(labName: string): Promise<string>;
+  /**
+   * Renders the topology at `lab.path` like a deploy would, without
+   * deploying. `varsFile` is relative to the topology file. Rejects with
+   * 422 when the template does not render and 501 when the lab host cannot
+   * render topologies.
+   */
+  renderTopology(lab: LabTarget, options?: { varsFile?: string }): Promise<RenderedTopology>;
+  /**
+   * The lab name, topology directory and the named environment variables
+   * containerlab would expand in the topology at `lab.path`.
+   */
+  topologyVariables(
+    lab: LabTarget,
+    request: { labName: string; envNames: string[] }
+  ): Promise<TopologyVariables>;
   /**
    * Watches one topology document. Lines are NDJSON records such as
    * `{"type":"topology-doc",...}`; resolves once watching has started.

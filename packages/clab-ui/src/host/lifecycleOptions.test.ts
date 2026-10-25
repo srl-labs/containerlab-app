@@ -99,3 +99,14 @@ test("a destroy with a node filter is partial", () => {
   assert.equal(isPartialDestroy({ graceful: true }), false);
   assert.equal(isPartialDestroy({ nodeFilter: ["r1"] }), true);
 });
+
+test("a vars file applies to every action and maps to --vars and varsPath", () => {
+  for (const kind of ["deploy", "redeploy", "destroy"] as const) {
+    assert.deepEqual(normalizeLabLifecycleOptions(kind, { varsFile: " lab.clab_vars.prod.yml " }), {
+      varsFile: "lab.clab_vars.prod.yml"
+    });
+  }
+  assert.equal(normalizeLabLifecycleOptions("deploy", { varsFile: "/etc/passwd" }), undefined);
+  assert.deepEqual(labLifecycleCliFlags({ varsFile: "vars.yml" }), ["--vars", "vars.yml"]);
+  assert.deepEqual(labLifecycleQueryParams({ varsFile: "vars.yml" }), [["varsPath", "vars.yml"]]);
+});

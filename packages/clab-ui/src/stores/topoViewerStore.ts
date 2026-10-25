@@ -6,6 +6,7 @@ import type { CustomNodeTemplate, CustomTemplateEditorData } from "../core/types
 import type { EdgeAnnotation } from "../core/types/topology";
 import type { CustomIconInfo } from "../core/types/icons";
 import type { LabSettings } from "../core/types/labSettings";
+import type { TopologyVariables } from "../host/topologyVariables";
 import { upsertEdgeAnnotation } from "../annotations/edgeAnnotations";
 import {
   DEFAULT_ENDPOINT_LABEL_OFFSET,
@@ -59,6 +60,8 @@ export interface TopoViewerState {
    */
   cleanYamlContent: string | undefined;
   labSettings?: LabSettings;
+  /** Host view of the variables containerlab expands; see `TopologySnapshot.variables`. */
+  topologyVariables?: TopologyVariables;
   yamlFileName: string;
   annotationsFileName: string;
   /** Raw YAML content from host snapshot (used by Monaco source editors). */

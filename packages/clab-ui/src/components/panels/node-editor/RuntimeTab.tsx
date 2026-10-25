@@ -65,6 +65,8 @@ export const RuntimeTab: React.FC<TabProps> = (props) => {
           placeholder="Command to execute"
           hideAddButton
           inheritedItems={inheritedListItems(props, "exec")}
+          id="node-exec"
+          magicVariables
         />
       </PanelAddSection>
 

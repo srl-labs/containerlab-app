@@ -57,7 +57,7 @@ const DOCKERFILE_EXTENSION_REGEX = /\.dockerfile$/i;
 
 // One quiet glyph per kind of file; the tree stays monochrome so state colors stand out.
 const FILE_ICON_RULES: FileIconRule[] = [
-  { match: /\.clab\.ya?ml$/i, icon: AccountTreeOutlinedIcon },
+  { match: /\.clab\.(?:ya?ml|gotmpl)$/i, icon: AccountTreeOutlinedIcon },
   { match: /\.(ya?ml|jsonc?|toml|ini|conf|cfg|properties|env|sql|tf|tfvars|hcl|proto)$/i, icon: DataObjectRoundedIcon },
   { match: /\.(mdx?|txt|lic|license)$/i, icon: ArticleOutlinedIcon },
   { match: /\.(sh|bash|zsh|fish|ps1|bat|cmd)$/i, icon: TerminalRoundedIcon },

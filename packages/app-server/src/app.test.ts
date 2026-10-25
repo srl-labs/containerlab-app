@@ -2323,3 +2323,77 @@ test("/api/runtime/tailscale returns the Tailscale devices of the lab", async (t
   assert.equal(response.statusCode, 200, response.body);
   assert.deepEqual(response.json(), { supported: true, status });
 });
+
+test("/api/runtime/file-explorer/rendered renders a template under its listed lab name", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/topology/files", () =>
+    jsonResponse([
+      {
+        labName: "fabric",
+        yamlFileName: "labs/fabric.clab.gotmpl",
+        annotationsFileName: "labs/fabric.clab.gotmpl.annotations.json",
+        hasAnnotations: false,
+        deploymentState: "undeployed",
+      },
+    ]),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/fabric/topology/rendered?path=labs%2Ffabric.clab.gotmpl&varsPath=prod.yml",
+    () =>
+      jsonResponse({
+        path: "labs/fabric.clab.gotmpl",
+        content: "name: fabric\n",
+        labName: "fabric",
+        varsFiles: ["prod.yml"],
+      }),
+  );
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/file-explorer/rendered?path=labs%2Ffabric.clab.gotmpl&varsFile=prod.yml",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.deepEqual(response.json(), {
+    endpointId,
+    path: "labs/fabric.clab.gotmpl",
+    content: "name: fabric\n",
+    labName: "fabric",
+    varsFiles: ["prod.yml"],
+  });
+});
+
+test("/api/runtime/file-explorer/rendered reports a server that cannot render", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/topology/files", () =>
+    jsonResponse([]),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/old/topology/rendered?path=old.clab.gotmpl",
+    () => new Response("404 page not found", { status: 404 }),
+  );
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/runtime/file-explorer/rendered?path=old.clab.gotmpl",
+    headers: { cookie, "x-endpoint-id": endpointId },
+  });
+
+  assert.equal(response.statusCode, 501, response.body);
+  assert.match(response.json<{ error: string }>().error, /cannot render/);
+});

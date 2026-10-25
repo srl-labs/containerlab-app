@@ -1,5 +1,5 @@
 import type { WorkspaceHost } from "@containerlab/clab-ui/workspace";
-import { listFileExplorerDirectory, writeFileExplorerFile, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
+import { listFileExplorerDirectory, writeFileExplorerFile, renderFileExplorerTopology, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
 import { fetchEndpointHealthMetrics } from "./endpointHealth";
 import { getStandaloneBackend } from "./backend";
 import { publicAssetUrl } from "./publicAssetUrl";
@@ -20,6 +20,7 @@ class IdleWebSocket extends EventTarget {
 const runtimeApi: WorkspaceHost["api"] = {
   listFileExplorerDirectory,
   writeFileExplorerFile,
+  renderTopologyFile: renderFileExplorerTopology,
   fetchVersionInfo,
   fetchVersionCheck,
   fetchEdgeSharkStatus,

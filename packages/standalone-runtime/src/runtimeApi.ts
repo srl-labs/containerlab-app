@@ -22,7 +22,8 @@ import type {
   ShareToolResponse,
   FcliCommandResponse,
   DrawioGenerateResponse,
-  CaptureCloseAllResponse
+  CaptureCloseAllResponse,
+  RenderedTopology
 } from "@srl-labs/containerlab-lab-backend";
 export type {
   SaveConfigResponse,
@@ -729,6 +730,23 @@ export async function writeFileExplorerFile(input: {
       },
       input.endpointId
     ),
+    input.endpointId
+  );
+}
+
+/** Renders a topology template like containerlab does before a deploy, without deploying. */
+export async function renderFileExplorerTopology(input: {
+  endpointId: string;
+  path: string;
+  varsFile?: string;
+}): Promise<RenderedTopology> {
+  const params = new URLSearchParams({ path: input.path });
+  if (input.varsFile) {
+    params.set("varsFile", input.varsFile);
+  }
+  return requestJson<RenderedTopology>(
+    `/api/runtime/file-explorer/rendered?${params.toString()}`,
+    withEndpointHeaders({ method: "GET" }, input.endpointId),
     input.endpointId
   );
 }

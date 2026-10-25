@@ -63,6 +63,9 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 | Skip lab directory ACLs | ✓ | ✓ | | `--skip-labdir-acl` |
 | Max workers | ✓ | ✓ | | `--max-workers` |
 | Export template | ✓ | ✓ | | `--export-template` |
+| Template variables file | ✓ | ✓ | ✓ | `--vars` |
+
+The template variables file is relative to the topology file. Leave it empty to use `<topology>_vars.yml` next to the topology, as containerlab does. Destroy and redeploy need the same file as the deploy when the template depends on it. On a lab host, `--vars` needs a clab-api-server with template support; older servers ignore it.
 
 Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
 

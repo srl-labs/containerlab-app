@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { EditorPanel } from "../../../ui/editor/EditorPanel";
+import { FieldVariablesProvider } from "../../../ui/form/FieldVariables";
 import type { TabConfig } from "../../../ui/editor/EditorPanel";
 import { useApplySaveHandlers, useFooterControlsRef } from "../../../../hooks/ui";
 import { useNodeEditorForm, hasFieldChanged } from "../../../../hooks/editor/useNodeEditorForm";
@@ -237,12 +238,15 @@ export const NodeEditorView: React.FC<NodeEditorViewProps> = ({
   };
 
   return (
-    <EditorPanel
-      tabs={tabs}
-      activeTab={activeTab}
-      onTabChange={setActiveTab}
-      tabProps={tabProps}
-      readOnly={readOnly}
-    />
+    // A node template has no node yet, so per-node variables stay unresolved.
+    <FieldVariablesProvider nodeName={formData.isCustomTemplate === true ? undefined : formData.name}>
+      <EditorPanel
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        tabProps={tabProps}
+        readOnly={readOnly}
+      />
+    </FieldVariablesProvider>
   );
 };
