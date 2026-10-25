@@ -29,6 +29,7 @@ import {
 } from "./typeHelpers";
 import { normalizeNodeBoxAppearance } from "./nodeBoxAppearance";
 import { parseKindConfig, serializeKindConfig } from "./nodeKindConfig";
+import { parseOtherConfig, serializeOtherConfig } from "./nodeOtherConfig";
 import {
   INHERITED_STAGES_KEY,
   parseInheritedStages,
@@ -365,6 +366,12 @@ function parseKindConfigProps(extra: Record<string, unknown>): Pick<NodeEditorDa
   return kindConfig ? { kindConfig } : {};
 }
 
+/** Parse the node keys of the Other tab, kept by YAML key */
+function parseOtherConfigProps(extra: Record<string, unknown>): Pick<NodeEditorData, "otherConfig"> {
+  const otherConfig = parseOtherConfig(extra);
+  return otherConfig ? { otherConfig } : {};
+}
+
 /** Parse the node's own stages and the stages it inherits */
 function parseStagesProps(
   extra: Record<string, unknown>
@@ -397,6 +404,7 @@ export function convertToEditorData(
     ...parseHealthCheckProps(extra),
     ...parseComponentsProps(extra),
     ...parseKindConfigProps(extra),
+    ...parseOtherConfigProps(extra),
     ...parseStagesProps(extra),
     ...parseCredentialsProps(extra),
     ...parseInheritedFrom(extra)
@@ -870,6 +878,9 @@ export function convertEditorDataToYaml(
   convertComponentsToYaml(data, extraData);
   if ("kindConfig" in data) {
     Object.assign(extraData, serializeKindConfig(data.kindConfig));
+  }
+  if ("otherConfig" in data) {
+    Object.assign(extraData, serializeOtherConfig(data.otherConfig));
   }
   if ("stages" in data) {
     extraData.stages = serializeNodeStages(data.stages);

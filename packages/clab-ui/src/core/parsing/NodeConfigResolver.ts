@@ -321,7 +321,47 @@ export function subtractInherited(
     const own = value.filter((item) => !base.some((entry) => equals(entry, item)));
     return own.length > 0 ? own : undefined;
   }
+  if (key === "config" && isRecord(value)) return subtractConfig(value, inherited, equals);
   return equals(value, inherited) ? undefined : value;
+}
+
+/** `config.vars` merges deeply, so nested maps keep only the entries the node changes */
+function subtractDeep(
+  value: Record<string, unknown>,
+  inherited: unknown,
+  equals: (a: unknown, b: unknown) => boolean
+): Record<string, unknown> | undefined {
+  const base = isRecord(inherited) ? inherited : {};
+  const own: Record<string, unknown> = {};
+  for (const [entry, entryValue] of Object.entries(value)) {
+    const baseValue = base[entry];
+    if (equals(baseValue, entryValue)) continue;
+    const nested =
+      isRecord(entryValue) && isRecord(baseValue)
+        ? subtractDeep(entryValue, baseValue, equals)
+        : entryValue;
+    if (nested !== undefined) own[entry] = nested;
+  }
+  return Object.keys(own).length > 0 ? own : undefined;
+}
+
+/** The `config` block: vars deeply, other keys whole */
+function subtractConfig(
+  value: Record<string, unknown>,
+  inherited: unknown,
+  equals: (a: unknown, b: unknown) => boolean
+): Record<string, unknown> | undefined {
+  const base = isRecord(inherited) ? inherited : {};
+  const own: Record<string, unknown> = {};
+  for (const [entry, entryValue] of Object.entries(value)) {
+    if (entry === "vars" && isRecord(entryValue)) {
+      const vars = subtractDeep(entryValue, base.vars, equals);
+      if (vars !== undefined) own.vars = vars;
+    } else if (!equals(base[entry], entryValue)) {
+      own[entry] = entryValue;
+    }
+  }
+  return Object.keys(own).length > 0 ? own : undefined;
 }
 
 /** Map entries (or certificate fields) that differ from the inherited ones */
