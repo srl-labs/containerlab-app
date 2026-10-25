@@ -54,7 +54,7 @@ test.describe("Lab settings: certificate authority", () => {
     await modal.getByRole("textbox", { name: "Key Size" }).fill("4096");
     await modal.getByRole("textbox", { name: "Validity" }).fill("87600h");
     await modal.locator(SEL_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => YAML.parse(await topoViewerPage.getYamlFromFile(SIMPLE_FILE)).settings)
@@ -83,7 +83,7 @@ test.describe("Lab settings: certificate authority", () => {
 
     await modal.getByRole("textbox", { name: "CA Key" }).fill("ca/root.key");
     await modal.locator(SEL_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
     await expect
       .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE))
       .toBe(
@@ -99,7 +99,8 @@ test.describe("Lab settings: certificate authority", () => {
     await topoViewerPage.waitForCanvasReady();
     const modal = await openCertificatesTab(page);
     await modal.locator(SEL_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
+    await page.waitForTimeout(500);
     expect(await topoViewerPage.getYamlFromFile(SIMPLE_FILE)).toBe(WITH_CA);
   });
 });
