@@ -45,6 +45,12 @@ const backend = {
   },
   commandLine(args: string[]) {
     return ["containerlab", ...args].join(" ");
+  },
+  async netemSet(...args: unknown[]) {
+    record("netemSet", args);
+  },
+  async netemReset(...args: unknown[]) {
+    record("netemReset", args);
   }
 };
 

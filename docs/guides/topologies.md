@@ -17,6 +17,16 @@ Draw it or type it. The canvas and the YAML are two views of the same file, and 
 
 Unlock the canvas first: select the lock in the toolbar.
 
+## Generate a Clos fabric
+
+**Generate Clos Topology** builds a leaf–spine fabric with `containerlab generate` and opens it. Find it on a lab host in the explorer, next to **New Topology File**.
+
+- **Tiers**: how many nodes, which kind and type. Every node links to every node of the next tier.
+- **Images**: one per kind, and an optional license file.
+- **Names and management network**: node and group prefixes, the network and its subnets. Empty fields keep containerlab's defaults.
+
+The dialog shows the resulting `containerlab generate` command and how many nodes and links the fabric has.
+
 ## Add nodes
 
 - **Drag a template** from the **Palette** onto the canvas.

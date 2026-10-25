@@ -41,6 +41,10 @@ sudo usermod -aG clab_api alice
 
 Every signed-in user can read, edit, deploy, and destroy labs in it. There are no per-group permissions.
 
+## Features of newer servers
+
+Some actions need a recent clab-api-server: Mermaid and Graphviz exports, read-only SSHX links, and GoTTY credentials and shell. The server lists them in `features` of its `/health` response. With an older server, the app hides these options or explains that the server needs an update; everything else keeps working.
+
 ## REST API
 
 A running server documents its own API:

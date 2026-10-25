@@ -2,16 +2,21 @@ import type { TopologyRef } from "@containerlab/clab-ui/session";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type {
   CaptureTarget,
+  GenerateTopologyRequest,
+  GraphExportFormat,
   InspectContainerInfo,
   LabBackend,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
   RuntimeImageActionResponse,
   RuntimeImagesResponse,
   ShareToolAction,
+  ShareToolOptions,
   TerminalProtocol
 } from "@srl-labs/containerlab-lab-backend";
+import { gottyOptionsError } from "@srl-labs/containerlab-lab-backend";
 import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
 
 import type { EndpointListResolver, EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
@@ -78,6 +83,10 @@ interface NodeBrowserBody extends RuntimeTargetBody {
 
 interface ShareActionBody extends RuntimeTargetBody {
   port?: number;
+  enableReaders?: boolean;
+  username?: string;
+  password?: string;
+  shell?: string;
 }
 
 interface FcliBody extends RuntimeTargetBody {
@@ -88,6 +97,16 @@ interface DrawioBody extends RuntimeTargetBody {
   layout?: "horizontal" | "vertical" | "interactive";
   theme?: string;
 }
+
+interface GraphExportBody extends RuntimeTargetBody {
+  direction?: string;
+}
+
+interface GenerateTopologyBody extends RuntimeTargetBody {
+  request?: GenerateTopologyRequest;
+}
+
+const MERMAID_DIRECTIONS: readonly MermaidDirection[] = ["TD", "TB", "BT", "RL", "LR"];
 
 const POPULAR_REPOS_SEARCH_URL =
   "https://api.github.com/search/repositories?q=topic:clab-topo+org:srl-labs+fork:true&sort=stars&order=desc";
@@ -434,6 +453,75 @@ function normalizeHostForEndpoint(host: string | undefined, endpointUrl: string)
   }
 
   return trimmed;
+}
+
+function parseGraphExportFormat(value: string): GraphExportFormat {
+  const format = value.toLowerCase();
+  if (format !== "mermaid" && format !== "dot") {
+    throw new RequestError("Invalid graph format. Use mermaid or dot.", 400);
+  }
+  return format;
+}
+
+function parseMermaidDirection(value: unknown): MermaidDirection | undefined {
+  const direction = normalizeOptionalString(value)?.toUpperCase();
+  if (direction === undefined) return undefined;
+  const match = MERMAID_DIRECTIONS.find((candidate) => candidate === direction);
+  if (!match) throw new RequestError("Invalid Mermaid direction.", 400);
+  return match;
+}
+
+function gottyShareOptions(body: ShareActionBody): ShareToolOptions {
+  const options: ShareToolOptions = {};
+  const port = normalizeOptionalInteger(body.port);
+  if (port !== undefined) options.port = port;
+  for (const key of ["username", "password", "shell"] as const) {
+    const value = body[key];
+    if (typeof value === "string" && value.length > 0) options[key] = value;
+  }
+  const error = gottyOptionsError(options);
+  if (error !== undefined) throw new RequestError(error, 400);
+  return options;
+}
+
+function stringRecord(value: unknown): Record<string, string> {
+  if (typeof value !== "object" || value === null) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+  );
+}
+
+/** The wizard's `containerlab generate` request, checked like clab-api-server checks it. */
+function parseGenerateRequest(raw: GenerateTopologyRequest | undefined): GenerateTopologyRequest {
+  const name = normalizeOptionalString(raw?.name);
+  if (name === undefined || !/^[A-Za-z0-9_-]+$/.test(name)) {
+    throw new RequestError("Invalid characters in lab name.", 400);
+  }
+  const tiers = Array.isArray(raw?.tiers) ? raw.tiers : [];
+  if (tiers.length === 0) throw new RequestError("At least one tier must be defined.", 400);
+  const parsedTiers = tiers.map((tier, index) => {
+    const count = normalizeOptionalInteger(tier.count);
+    if (count === undefined || count < 1) {
+      throw new RequestError(`Tier ${index + 1} needs at least one node.`, 400);
+    }
+    return {
+      count,
+      kind: normalizeOptionalString(tier.kind),
+      type: normalizeOptionalString(tier.type)
+    };
+  });
+  return {
+    name,
+    tiers: parsedTiers,
+    images: stringRecord(raw?.images),
+    licenses: stringRecord(raw?.licenses),
+    defaultKind: normalizeOptionalString(raw?.defaultKind),
+    nodePrefix: normalizeOptionalString(raw?.nodePrefix),
+    groupPrefix: normalizeOptionalString(raw?.groupPrefix),
+    managementNetwork: normalizeOptionalString(raw?.managementNetwork),
+    ipv4Subnet: normalizeOptionalString(raw?.ipv4Subnet),
+    ipv6Subnet: normalizeOptionalString(raw?.ipv6Subnet)
+  };
 }
 
 function rewriteShareLinkForEndpoint(link: string | undefined, endpointUrl: string): string | undefined {
@@ -942,10 +1030,13 @@ export function registerRuntimeProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
-        const payload = await backend.shareTool("sshx", target.labName, action);
+        const payload = await backend.shareTool("sshx", target.labName, action, {
+          enableReaders: request.body.enableReaders === true
+        });
         return reply.send({
           ...payload,
-          link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
+          link: rewriteShareLinkForEndpoint(payload.link, endpoint.url),
+          readOnlyLink: rewriteShareLinkForEndpoint(payload.readOnlyLink, endpoint.url)
         });
       } catch (error) {
         return handleRouteError(reply, error);
@@ -970,11 +1061,12 @@ export function registerRuntimeProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
-        const port = normalizeOptionalInteger(request.body.port);
-        if (port !== undefined && (port <= 0 || port > 65535)) {
-          throw new RequestError("Invalid gotty port value.", 400);
-        }
-        const payload = await backend.shareTool("gotty", target.labName, action, { port });
+        const payload = await backend.shareTool(
+          "gotty",
+          target.labName,
+          action,
+          gottyShareOptions(request.body)
+        );
         return reply.send({
           ...payload,
           link: rewriteShareLinkForEndpoint(payload.link, endpoint.url)
@@ -1032,6 +1124,73 @@ export function registerRuntimeProxy(
       }
     }
   );
+
+  app.post<{ Params: { format: string }; Body: GraphExportBody }>(
+    "/api/runtime/labs/graph/export/:format",
+    async (
+      request: FastifyRequest<{ Params: { format: string }; Body: GraphExportBody }>,
+      reply: FastifyReply
+    ) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const format = parseGraphExportFormat(request.params.format);
+        const direction = parseMermaidDirection(request.body.direction);
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        return reply.send(
+          await backend.graphExport({ labName: target.labName, path: target.yamlPath }, format, {
+            direction
+          })
+        );
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: RuntimeTargetBody }>(
+    "/api/runtime/labs/validate",
+    async (request: FastifyRequest<{ Body: RuntimeTargetBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const { backend, endpoint } = resolved;
+        const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        return reply.send(await backend.validate({ labName: target.labName, path: target.yamlPath }));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.post<{ Body: GenerateTopologyBody }>(
+    "/api/runtime/generate",
+    async (request: FastifyRequest<{ Body: GenerateTopologyBody }>, reply: FastifyReply) => {
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(request.body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+      try {
+        const generateRequest = parseGenerateRequest(request.body.request);
+        return reply.send(await resolved.backend.generateTopology(generateRequest));
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+    }
+  );
+
+  app.get("/api/runtime/features", async (request, reply) => {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      return reply.send(await resolved.backend.features());
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
 
   app.post<{ Body: TerminalBody }>(
     "/api/runtime/terminal-sessions",

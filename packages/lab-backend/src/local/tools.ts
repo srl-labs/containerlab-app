@@ -3,11 +3,17 @@ import os from "node:os";
 import path from "node:path";
 
 import type Docker from "dockerode";
+import YAML from "yaml";
 
 import type {
   DrawioGenerateResponse,
   FcliCommandResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
   HealthMetricsResponse,
+  MermaidDirection,
   NetemInterfaceInfo,
   NetemResetRequest,
   NetemSetRequest,
@@ -17,13 +23,16 @@ import type {
   RuntimeImagesResponse,
   RuntimeImageSummary,
   ShareToolAction,
+  ShareToolOptions,
   ShareToolResponse,
+  ValidateTopologyResponse,
   VersionCheckResponse,
   VersionResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { gottyOptionsError, sshxReadOnlyLink } from "../shareOptions.ts";
 import type { ResolvedLocalOptions } from "./options.ts";
-import { containerlabCommand, runChecked, runCommand, stripAnsi } from "./process.ts";
+import { containerlabCommand, lastContainerlabError, runChecked, runCommand, stripAnsi } from "./process.ts";
 
 const STARTED_AT = new Date();
 
@@ -261,18 +270,181 @@ export async function shareTool(
   tool: "sshx" | "gotty",
   labName: string,
   action: ShareToolAction,
-  port?: number
+  shareOptions: ShareToolOptions = {}
 ): Promise<ShareToolResponse> {
-  const args = ["tools", tool, action, "-l", labName];
-  if (tool === "gotty" && action !== "detach") args.push("--port", String(port ?? 8080));
-  const result = await clab(options, args, 5 * 60_000);
+  const starts = action !== "detach";
+  const args = ["tools", tool, action, "-l", labName, ...(starts ? shareStartArgs(tool, shareOptions) : [])];
+  const result = await clab(options, args, 5 * 60_000).catch((error: unknown) => {
+    throw withoutSecret(error, shareOptions.password);
+  });
   const output = stripAnsi(`${result.stdout}\n${result.stderr}`).trim();
-  // Like clab-api-server, the link may still say HOST_IP; hosts know which name reaches them.
-  const link = /https?:\/\/[^\s"'<>]+/.exec(output)?.[0];
   return {
     message: `${tool.toUpperCase()} ${action} completed for lab '${labName}'.`,
-    ...(link ? { link } : {}),
+    ...shareLinks(output, tool === "sshx" && starts && shareOptions.enableReaders === true),
+    ...(tool === "gotty" && starts
+      ? { username: shareOptions.username ?? "admin", shell: shareOptions.shell ?? "bash" }
+      : {}),
     ...(output ? { output } : {})
+  };
+}
+
+/**
+ * The share link in containerlab's output. Like clab-api-server's, it may still
+ * say HOST_IP; hosts know which name reaches them. With readers, the full link
+ * carries both keys and the read-only one only the first.
+ */
+function shareLinks(output: string, readers: boolean): Pick<ShareToolResponse, "link" | "readOnlyLink"> {
+  const links = output.match(/https?:\/\/[^\s"'<>]+/g) ?? [];
+  const link = links.find((candidate) => /#[^,\s]+,/.test(candidate)) ?? links.at(0);
+  if (link === undefined) return {};
+  const readOnlyLink = readers ? sshxReadOnlyLink(link) : undefined;
+  return readOnlyLink === undefined ? { link } : { link, readOnlyLink };
+}
+
+/** The attach and reattach flags of `containerlab tools sshx|gotty`. */
+function shareStartArgs(tool: "sshx" | "gotty", options: ShareToolOptions): string[] {
+  if (tool === "sshx") return options.enableReaders === true ? ["--enable-readers"] : [];
+  const error = gottyOptionsError(options);
+  if (error !== undefined) throw new LabBackendError(error, 400);
+  const args = ["--port", String(options.port ?? 8080)];
+  if (options.username !== undefined && options.password !== undefined) {
+    args.push("--username", options.username, "--password", options.password);
+  }
+  if (options.shell !== undefined) args.push("--shell", options.shell);
+  return args;
+}
+
+/** A failed command line names its arguments; keep a password out of the message. */
+function withoutSecret(error: unknown, secret: string | undefined): unknown {
+  if (!secret || !(error instanceof LabBackendError) || !error.message.includes(secret)) return error;
+  return new LabBackendError(error.message.split(secret).join("***"), error.status);
+}
+
+/** `containerlab validate`: a rejected topology is a result, not an error. */
+export async function validateTopology(
+  options: ResolvedLocalOptions,
+  topology: string
+): Promise<ValidateTopologyResponse> {
+  const [file, args] = containerlabCommand(options, ["validate", "-r", options.runtime, "-t", topology]);
+  const result = await runCommand(file, args, {
+    env: options.env,
+    timeoutMs: 120_000,
+    cwd: path.dirname(topology)
+  });
+  const output = stripAnsi(`${result.stderr}\n${result.stdout}`).trim();
+  if (result.code !== 0) {
+    if (/unknown command "validate"/.test(output)) {
+      throw new LabBackendError("Topology validation needs containerlab 0.78 or newer.", 501);
+    }
+    return { valid: false, path: topology, nodes: 0, links: 0, error: validationError(output) };
+  }
+  const field = (name: string) => new RegExp(`\\b${name}=("?)([^\\s"]+)\\1`).exec(output)?.[2];
+  const labName = field("name");
+  return {
+    valid: true,
+    path: topology,
+    ...(labName ? { labName } : {}),
+    nodes: Number(field("nodes") ?? 0),
+    links: Number(field("links") ?? 0)
+  };
+}
+
+/** containerlab's reason for rejecting a topology, from `validate` output. */
+export function validationError(output: string): string {
+  const errorLine = lastContainerlabError(output);
+  if (errorLine) return errorLine;
+  const lines = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const errorIndex = lines.findIndex((line) => /^Error:/i.test(line));
+  return (errorIndex >= 0 ? lines.slice(errorIndex) : lines.slice(-5))
+    .join("\n")
+    .replace(/^Error:\s*/i, "");
+}
+
+/** Where `containerlab graph --mermaid|--dot` writes: `<lab dir>/graph/<topology file without extension>`. */
+async function graphExportFile(
+  options: ResolvedLocalOptions,
+  topology: string,
+  extension: ".mermaid" | ".dot",
+  output: string
+): Promise<string> {
+  const logged =
+    extension === ".mermaid"
+      ? /Created mermaid diagram file: (\S+)/.exec(output)?.[1]
+      : /Created (\S+\.dot)\b/.exec(output)?.[1];
+  if (logged) return path.resolve(path.dirname(topology), logged);
+  const parsed = YAML.parse(await fs.readFile(topology, "utf8")) as { name?: unknown } | null;
+  const labName = typeof parsed?.name === "string" ? parsed.name : "";
+  const baseDir = options.env.CLAB_LABDIR_BASE?.trim() || path.dirname(topology);
+  const fileName = path.basename(topology, path.extname(topology)) + extension;
+  return path.join(baseDir, `clab-${labName}`, "graph", fileName);
+}
+
+export async function graphExport(
+  options: ResolvedLocalOptions,
+  topology: string,
+  format: GraphExportFormat,
+  direction: MermaidDirection = "TD"
+): Promise<GraphExportResponse> {
+  const formatArgs = format === "mermaid" ? ["--mermaid", "--mermaid-direction", direction] : ["--dot"];
+  const result = await clab(options, ["graph", "-r", options.runtime, ...formatArgs, "-t", topology], 2 * 60_000);
+  const output = stripAnsi(`${result.stderr}${result.stdout}`).trim();
+  const file = await graphExportFile(options, topology, format === "mermaid" ? ".mermaid" : ".dot", output);
+  return {
+    fileName: path.basename(file),
+    content: await fs.readFile(file, "utf8"),
+    format,
+    ...(format === "mermaid" ? { direction } : {}),
+    ...(output ? { output } : {})
+  };
+}
+
+/** `containerlab generate` arguments; without `--file` it prints the topology. */
+export function generateArgs(request: GenerateTopologyRequest): string[] {
+  const defaultKind = request.defaultKind?.trim() || "nokia_srlinux";
+  const nodes = request.tiers.map((tier) => {
+    const type = tier.type?.trim();
+    return [String(tier.count), tier.kind?.trim() || defaultKind, ...(type ? [type] : [])].join(":");
+  });
+  const args = ["generate", "--name", request.name, "--kind", defaultKind, "--nodes", nodes.join(",")];
+  const perKind = (values: Record<string, string> | undefined) =>
+    Object.entries(values ?? {})
+      .filter(([, value]) => value.trim())
+      .map(([kind, value]) => `${kind}=${value.trim()}`);
+  const images = perKind(request.images);
+  if (images.length > 0) args.push("--image", images.join(","));
+  const licenses = perKind(request.licenses);
+  if (licenses.length > 0) args.push("--license", licenses.join(","));
+  const optional: Array<[string, string | undefined]> = [
+    ["--node-prefix", request.nodePrefix],
+    ["--group-prefix", request.groupPrefix],
+    ["--network", request.managementNetwork],
+    ["--ipv4-subnet", request.ipv4Subnet],
+    ["--ipv6-subnet", request.ipv6Subnet]
+  ];
+  for (const [flag, value] of optional) {
+    if (value?.trim()) args.push(flag, value.trim());
+  }
+  return args;
+}
+
+export async function generateTopology(
+  options: ResolvedLocalOptions,
+  request: GenerateTopologyRequest
+): Promise<GenerateTopologyResponse> {
+  if (!/^[A-Za-z0-9_-]+$/.test(request.name)) {
+    throw new LabBackendError("Invalid characters in lab name.", 400);
+  }
+  if (request.tiers.length === 0 || request.tiers.some((tier) => !Number.isInteger(tier.count) || tier.count < 1)) {
+    throw new LabBackendError("Every tier needs at least one node.", 400);
+  }
+  const result = await clab(options, generateArgs(request), 60_000);
+  const start = result.stdout.search(/^name:/m);
+  return {
+    message: `Topology '${request.name}' generated successfully.`,
+    topologyYaml: start >= 0 ? result.stdout.slice(start) : result.stdout
   };
 }
 

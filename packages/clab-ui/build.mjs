@@ -62,6 +62,7 @@ const entryPoints = {
   "inspect/index": "src/inspect/index.ts",
   "welcome/index": "src/welcome/index.ts",
   "node-impairments/index": "src/node-impairments/index.ts",
+  "clos-generator/index": "src/clos-generator/index.ts",
   "wireshark-vnc/index": "src/wireshark-vnc/index.ts",
   "viewer/index": "src/viewer/index.ts",
   "monaco/core": "src/monaco/core.ts",

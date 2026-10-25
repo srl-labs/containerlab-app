@@ -22,6 +22,8 @@ import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutlined";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
+import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import SettingsEthernetRoundedIcon from "@mui/icons-material/SettingsEthernetRounded";
 import SourceOutlinedIcon from "@mui/icons-material/SourceOutlined";
 import StarBorderRoundedIcon from "@mui/icons-material/StarBorderRounded";
@@ -150,6 +152,8 @@ const ACTION_ICON_BY_COMMAND: Record<string, SvgIconComponent> = {
   "containerlab.images.manage": Inventory2OutlinedIcon,
   "containerlab.editor.topoviewereditor": NoteAddOutlinedIcon,
   "containerlab.lab.clonerepo": SourceOutlinedIcon,
+  "containerlab.lab.generate": HubOutlinedIcon,
+  "containerlab.lab.validate": FactCheckOutlinedIcon,
   "containerlab.lab.togglefavorite": StarBorderRoundedIcon,
   "containerlab.lab.addtoworkspace": FolderOpenOutlinedIcon,
   "containerlab.lab.save": SaveOutlinedIcon,
@@ -273,7 +277,8 @@ const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
   },
   { match: (command) => command.includes("copy"), group: "copy" },
   {
-    match: (command) => command.includes("inspect") || command.includes("showlogs"),
+    match: (command) =>
+      command.includes("inspect") || command.includes("showlogs") || command.includes("validate"),
     group: "inspect"
   },
   {
@@ -303,7 +308,8 @@ const ACTION_GROUP_RULES: ReadonlyArray<CommandActionGroupRule> = [
       command.includes("openfolder") ||
       command.includes("addtoworkspace") ||
       command.includes("togglefavorite") ||
-      command.includes("clonerepo"),
+      command.includes("clonerepo") ||
+      command.includes(".generate"),
     group: "topology"
   },
   {
@@ -430,7 +436,9 @@ const GRAPH_COMMAND_ORDER = new Map<string, number>([
   ["containerlab.lab.graph.topoviewer", 1],
   ["containerlab.lab.graph.drawio.interactive", 2],
   ["containerlab.lab.graph.drawio.horizontal", 3],
-  ["containerlab.lab.graph.drawio.vertical", 4]
+  ["containerlab.lab.graph.drawio.vertical", 4],
+  ["containerlab.lab.graph.mermaid", 5],
+  ["containerlab.lab.graph.dot", 6]
 ]);
 
 function actionGroupLabel(groupId: ActionGroupId): string {

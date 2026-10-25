@@ -26,6 +26,7 @@ import {
   MSG_TAILSCALE_STATUS,
   MSG_TAILSCALE_STATUS_RESULT,
   MSG_TOGGLE_SPLIT_VIEW,
+  MSG_VALIDATE_TOPOLOGY,
   isCustomNodeCommand,
   isExportCommand,
   isIconCommand,
@@ -713,6 +714,14 @@ export class MessageRouter {
 
     if (command === MSG_TOGGLE_SPLIT_VIEW) {
       await this.handleSplitViewToggle(panel);
+      return true;
+    }
+
+    if (command === MSG_VALIDATE_TOPOLOGY) {
+      const yamlFilePath = this.context.yamlFilePath;
+      if (yamlFilePath) {
+        await vscode.commands.executeCommand("containerlab.lab.validate", labUri(yamlFilePath));
+      }
       return true;
     }
 

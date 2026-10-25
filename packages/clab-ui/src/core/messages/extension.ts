@@ -32,6 +32,9 @@ export const MSG_TAILSCALE_STATUS = "tailscaleStatus" as const;
  */
 export const MSG_LAB_OPERATION = "labOperation" as const;
 
+/** Run `containerlab validate` on the topology; the host shows the result. */
+export const MSG_VALIDATE_TOPOLOGY = "topo-validate" as const;
+
 const LIFECYCLE_COMMANDS_SET: ReadonlySet<string> = new Set(Object.values(LIFECYCLE_COMMANDS));
 
 export type LifecycleCommand = (typeof LIFECYCLE_COMMANDS)[keyof typeof LIFECYCLE_COMMANDS];
@@ -130,4 +133,5 @@ export type ExtensionCommandType =
   | typeof MSG_CANCEL_LAB_LIFECYCLE
   | typeof MSG_PLAN_APPLY_LAB
   | typeof MSG_TAILSCALE_STATUS
-  | typeof MSG_LAB_OPERATION;
+  | typeof MSG_LAB_OPERATION
+  | typeof MSG_VALIDATE_TOPOLOGY;

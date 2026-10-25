@@ -1,4 +1,5 @@
 export * from "./dialogs";
+export * from "./labToolDialogs";
 export * from "./documentUtils";
 export * from "./endpointActions";
 export * from "./endpointStatus";

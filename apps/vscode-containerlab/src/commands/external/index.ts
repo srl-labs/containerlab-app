@@ -14,6 +14,7 @@ export { cloneRepo } from "../cloneRepo";
 export { deployPopularLab } from "../deployPopular";
 export { clonePopularRepo } from "../clonePopularRepo";
 export { openLink } from "../openLink";
+export { generateClosTopology, graphDot, graphMermaid, validateLab } from "../labTools";
 export {
   fcliBgpPeers,
   fcliBgpRib,

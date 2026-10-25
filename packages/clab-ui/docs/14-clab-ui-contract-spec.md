@@ -14,6 +14,7 @@ This page is the contract-level reference for integrating `@containerlab/clab-ui
 | `@containerlab/clab-ui/inspect` | inspect bootstrapper |
 | `@containerlab/clab-ui/welcome` | welcome bootstrapper |
 | `@containerlab/clab-ui/node-impairments` | node-impairments bootstrapper |
+| `@containerlab/clab-ui/clos-generator` | Clos topology wizard bootstrapper |
 | `@containerlab/clab-ui/wireshark-vnc` | Wireshark/VNC bootstrapper |
 | `@containerlab/clab-ui/styles/global.css` | shared stylesheet |
 

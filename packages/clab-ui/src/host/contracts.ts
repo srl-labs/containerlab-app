@@ -207,6 +207,11 @@ export interface ClabUiTopoViewerHost {
    */
   tailscaleStatus?(): Promise<TailscaleStatus | undefined>;
   cancelLifecycle(): void;
+  /**
+   * Run `containerlab validate` on the topology file and show the result.
+   * Hosts that omit it have no Validate action.
+   */
+  validateTopology?(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
   /**

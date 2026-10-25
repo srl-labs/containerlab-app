@@ -56,6 +56,13 @@ import {
 } from "./standaloneHostShared";
 import { toggleStandaloneFavorite } from "./standaloneFavorites";
 import {
+  exportGraphFlow,
+  generateTopologyFlow,
+  promptShareToolOptions,
+  showShareResult,
+  validateTopologyFlow
+} from "./standaloneLabTools";
+import {
   type ShareActionKind,
   type ShareLifecycleAction,
   persistShowNonOwnedLabsSetting,
@@ -70,7 +77,6 @@ import {
   sshOpenedNotification,
   runLabShareAction,
   persistShareLink,
-  handleShareActionLink,
   deploymentStateFromContext,
   nodeAccessProtocol,
   nodeAccessTitlePrefix,
@@ -538,6 +544,18 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         postExplorerError("Sharing actions require a running lab item.");
         return;
       }
+      const shareOptions =
+        action === "detach"
+          ? {}
+          : await promptShareToolOptions({
+              kind,
+              action,
+              labName: topologyRef.labName,
+              endpointId: actionEndpointId
+            });
+      if (!shareOptions) {
+        return;
+      }
 
       try {
         runtimeUiActions.notify(
@@ -549,7 +567,8 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           action,
           endpointId: actionEndpointId,
           kind,
-          topologyRef
+          topologyRef,
+          options: shareOptions
         });
         const link = payload.link?.trim() || extractFirstHttpLink(payload.output ?? "") || "";
         const labKey = normalizeLabName(topologyRef.labName || resolveShareLabKey());
@@ -557,7 +576,17 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         persistShareLink({ action, bucket, labKey, link });
         scheduleSnapshot(0);
 
-        await handleShareActionLink(kind, action, link);
+        if (action !== "detach") {
+          if (link) {
+            await showShareResult(kind, payload, link, shareOptions);
+          } else {
+            runtimeUiActions.notify(
+              `${kind.toUpperCase()} ${action} completed, but no share link was returned.`,
+              "warning"
+            );
+            return;
+          }
+        }
         runtimeUiActions.notify(
           payload.message || `${kind.toUpperCase()} ${action} completed.`,
           "success"
@@ -660,6 +689,40 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       } catch (error) {
         runtimeUiActions.notify(error instanceof Error ? error.message : String(error), "error");
       }
+    };
+
+    const runLabTool = async (
+      run: (target: { endpointId?: string; topologyRef: TopologyRef }) => Promise<void>
+    ): Promise<void> => {
+      const topologyRef = resolveActionTopologyRef();
+      if (!topologyRef) {
+        postExplorerError("This action requires a lab item.");
+        return;
+      }
+      await run({ endpointId: actionEndpointId, topologyRef });
+    };
+
+    const generateClosTopologyFlow = async (): Promise<void> => {
+      const connectedEndpoints = endpoints.filter((endpoint) => endpoint.status === "connected");
+      if (connectedEndpoints.length === 0) {
+        postExplorerError("Connect an endpoint before generating a topology.");
+        return;
+      }
+      const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
+      await generateTopologyFlow({
+        endpointOptions: connectedEndpoints.map((endpoint) => ({
+          value: endpoint.id,
+          label: endpoint.label,
+          description: endpointDisplayAddress(endpoint)
+        })),
+        defaultEndpointId:
+          preferredEndpoint?.status === "connected" ? preferredEndpoint.id : connectedEndpoints[0]?.id,
+        directory: selectedDirectoryPath(),
+        onCreated: async (topologyRef, endpointId) => {
+          refreshWorkspaceAfterMutation(endpointId);
+          await options.loadTopologyFile(topologyRef, { deploymentState: "undeployed", endpointId });
+        }
+      });
     };
 
     const requireTopologyRef = (
@@ -1236,6 +1299,10 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.graph.drawio.horizontal": () => runDrawio("horizontal"),
       "containerlab.lab.graph.drawio.vertical": () => runDrawio("vertical"),
       "containerlab.lab.graph.drawio.interactive": () => runDrawio("interactive"),
+      "containerlab.lab.graph.mermaid": () => runLabTool((target) => exportGraphFlow(target, "mermaid")),
+      "containerlab.lab.graph.dot": () => runLabTool((target) => exportGraphFlow(target, "dot")),
+      "containerlab.lab.validate": () => runLabTool(validateTopologyFlow),
+      "containerlab.lab.generate": generateClosTopologyFlow,
       "containerlab.editor.topoViewerEditor": createTopologyFileFlow,
       "containerlab.lab.cloneRepo": cloneRepositoryFlow,
       "containerlab.lab.clonePopularRepo": () => clonePopularFlow("undeployed"),

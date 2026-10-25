@@ -130,6 +130,7 @@ function buildInterfaceMenuItems(
 
 const ENDPOINT_ROOT_MENU_COMMANDS = [
   "containerlab.editor.topoViewerEditor",
+  "containerlab.lab.generate",
   "containerlab.lab.cloneRepo",
   "containerlab.endpoint.reconnect",
   "containerlab.endpoint.copyUrl",

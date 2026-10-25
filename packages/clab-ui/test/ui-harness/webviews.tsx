@@ -20,6 +20,9 @@ import { WiresharkVncApp } from "../../src/webviews/wiresharkVnc/wiresharkVnc.we
 import { WiresharkVncTabsApp } from "../../src/webviews/wiresharkVnc/wiresharkVncTabs";
 import { TopologyTemplatePreview } from "../../src/workspace/components/TopologyTemplatePreview";
 import type { RenderedTopologyPreview } from "../../src/workspace/types";
+import { ClosGeneratorApp } from "../../src/webviews/closGenerator/closGenerator.webview";
+import { LabToolDialogs } from "../../src/workspace/components/LabToolDialogs";
+import * as labToolDialogs from "../../src/workspace/state/labToolDialogs";
 
 const params = new URLSearchParams(location.search);
 const view = params.get("view") ?? "image-manager";
@@ -104,8 +107,12 @@ if (captureLayout === "tabs" || captureLayout === "side-by-side") {
   localStorage.setItem("clab.wireshark.layout", captureLayout);
 }
 
+// Messages the views post to their host, for specs to read.
+const postedMessages: unknown[] = [];
+Object.assign(window, { __CLAB_UI_HARNESS_MESSAGES__: postedMessages, __LAB_TOOL_DIALOGS__: labToolDialogs });
+
 const runtime = createClabUiRuntime({
-  host: createWindowClabUiHost({ images, postMessage: () => undefined })
+  host: createWindowClabUiHost({ images, postMessage: (message) => postedMessages.push(message) })
 });
 
 const container = (
@@ -191,6 +198,8 @@ function setupInitialData(): void {
               mgmt0: { ...fields }
             }
     };
+  } else if (view === "clos-generator") {
+    win.__INITIAL_DATA__ = { targetLabel: "this machine" };
   } else if (view === "welcome") {
     win.__INITIAL_DATA__ = { extensionVersion: "0.24.0" };
   } else if (view === "wireshark") {
@@ -304,6 +313,15 @@ function HarnessView(): React.JSX.Element {
               render={renderTemplate}
             />
           </Box>
+        </MuiThemeProvider>
+      );
+    case "clos-generator":
+      return <ClosGeneratorApp />;
+    case "lab-tool-dialogs":
+      return (
+        <MuiThemeProvider>
+          <Box sx={{ height: "100vh", bgcolor: "background.default" }} data-testid="lab-tool-dialogs-ready" />
+          <LabToolDialogs />
         </MuiThemeProvider>
       );
     default:

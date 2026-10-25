@@ -66,6 +66,10 @@
       "types": "./dist/node-impairments/index.d.ts",
       "import": "./dist/node-impairments/index.js"
     },
+    "./clos-generator": {
+      "types": "./dist/clos-generator/index.d.ts",
+      "import": "./dist/clos-generator/index.js"
+    },
     "./wireshark-vnc": {
       "types": "./dist/wireshark-vnc/index.d.ts",
       "import": "./dist/wireshark-vnc/index.js"

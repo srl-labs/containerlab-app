@@ -37,6 +37,7 @@ import { isSharedWorkspacePath } from "../state/documentUtils";
 import { runtimeUiActions, useRuntimeUiStore } from "../state/runtimeUiStore";
 import { findRuntimeContainer } from "../state/runtimeContainerLookup";
 import { RuntimeCaptureDialog } from "./RuntimeCaptureDialog";
+import { LabToolDialogs } from "./LabToolDialogs";
 import {
   DEFAULT_TOPOLOGY_FILE_NAME,
   normalizeTopologyFileNameForCreate,
@@ -2073,6 +2074,7 @@ export function RuntimeActionDialogs() {
         submitRuntimeOptionSelectionDialog={submitRuntimeOptionSelectionDialog}
       />
       <RuntimeCaptureDialog />
+      <LabToolDialogs />
       {snackbar ? <RuntimeSnackbarView closeSnackbar={closeSnackbar} snackbar={snackbar} /> : null}
     </>
   );

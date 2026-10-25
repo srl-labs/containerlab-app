@@ -19,6 +19,10 @@ import type {
   EdgeSharkStatusResponse,
   ExecResponse,
   FcliCommandResponse,
+  GenerateTopologyRequest,
+  GenerateTopologyResponse,
+  GraphExportFormat,
+  GraphExportResponse,
   HealthMetricsResponse,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
@@ -26,6 +30,7 @@ import type {
   InspectLabResponse,
   LifecycleActionResult,
   LogsResponse,
+  MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NetemShowResponse,
@@ -35,12 +40,14 @@ import type {
   RuntimeImagesResponse,
   SaveConfigResponse,
   ShareToolAction,
+  ShareToolOptions,
   ShareToolResponse,
   SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
   TopologyEntry,
+  ValidateTopologyResponse,
   VersionCheckResponse,
   VersionResponse,
   WorkspaceFileEntry
@@ -66,6 +73,23 @@ export interface LabBackendCapabilities {
   sharedWorkspace: boolean;
   /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
   tailscaleStatus: boolean;
+}
+
+/**
+ * Operations a lab host may lack although the backend kind has them, e.g. an
+ * older clab-api-server. Hosts ask before offering them.
+ */
+export interface LabBackendFeatures {
+  /** `containerlab validate`. */
+  validate: boolean;
+  /** `containerlab graph --mermaid`. */
+  graphMermaid: boolean;
+  /** `containerlab graph --dot`. */
+  graphDot: boolean;
+  /** Read-only sshx links. */
+  sshxReaders: boolean;
+  /** GoTTY credentials and shell. */
+  gottyOptions: boolean;
 }
 
 export type LabLifecycleAction =
@@ -261,6 +285,7 @@ export interface LabBackend {
   version(options?: { timeoutMs?: number }): Promise<VersionResponse>;
   versionCheck(): Promise<VersionCheckResponse>;
   healthMetrics(): Promise<HealthMetricsResponse>;
+  features(): Promise<LabBackendFeatures>;
 
   // Labs
 
@@ -298,8 +323,18 @@ export interface LabBackend {
     tool: "sshx" | "gotty",
     labName: string,
     action: ShareToolAction,
-    options?: { port?: number }
+    options?: ShareToolOptions
   ): Promise<ShareToolResponse>;
+  /** `containerlab validate` on the topology file. */
+  validate(lab: LabTarget): Promise<ValidateTopologyResponse>;
+  /** `containerlab graph --mermaid|--dot`, from the topology file alone. */
+  graphExport(
+    lab: LabTarget,
+    format: GraphExportFormat,
+    options?: { direction?: MermaidDirection }
+  ): Promise<GraphExportResponse>;
+  /** `containerlab generate`: a Clos topology, returned and not written anywhere. */
+  generateTopology(request: GenerateTopologyRequest): Promise<GenerateTopologyResponse>;
 
   // Lab operations. Hosts check labOperationSupport() before exec by label,
   // snapshots, save --copy, inspect details and deploy restore.

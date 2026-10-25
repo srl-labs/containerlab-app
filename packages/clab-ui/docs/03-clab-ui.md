@@ -32,6 +32,7 @@ The supported integration boundary is the export map in `package.json`.
 | `@containerlab/clab-ui/inspect` | inspect webview bootstrapper and related types |
 | `@containerlab/clab-ui/welcome` | welcome-page bootstrapper |
 | `@containerlab/clab-ui/node-impairments` | node impairments webview bootstrapper and types |
+| `@containerlab/clab-ui/clos-generator` | Clos topology wizard webview bootstrapper and types |
 | `@containerlab/clab-ui/wireshark-vnc` | Wireshark/VNC webview bootstrapper and types |
 | `@containerlab/clab-ui/styles/global.css` | shared global stylesheet |
 
