@@ -121,6 +121,40 @@ async function updateConnection(connection: LabConnection): Promise<void> {
   }
 }
 
+/** How long Local waits before it starts a stopped events stream again. */
+const LOCAL_RESTART_DELAY_MS = 2000;
+
+/**
+ * Notices running event streams that stop. A lab host that stops streaming
+ * shows as not reachable until it answers again; Local starts its stream
+ * again after a moment.
+ */
+export function watchStreamLoss(onLocalRestarted: () => void): () => void {
+  let localRestart: ReturnType<typeof setTimeout> | undefined;
+  const stopListening = events.onStreamLost((connectionId, error) => {
+    const manager = getConnections();
+    const connection =
+      connectionId === LOCAL_CONNECTION.id ? LOCAL_CONNECTION : manager?.get(connectionId);
+    if (!connection) return;
+    outputChannel.warn(
+      `[inspector] Events stream of ${connection.label} stopped: ${error.message}`
+    );
+    if (connection.kind === "api") {
+      manager?.setProblem(connection, `Lost the connection: ${error.message}`);
+      return;
+    }
+    if (localRestart) clearTimeout(localRestart);
+    localRestart = setTimeout(() => {
+      localRestart = undefined;
+      void update().then(onLocalRestarted, () => {});
+    }, LOCAL_RESTART_DELAY_MS);
+  });
+  return () => {
+    stopListening();
+    if (localRestart) clearTimeout(localRestart);
+  };
+}
+
 async function updateWithPolling(connection: LabConnection): Promise<void> {
   const poller = pollerFor(connection);
   await poller.ensure();

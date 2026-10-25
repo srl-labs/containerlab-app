@@ -5,6 +5,7 @@ import {
   type ExplorerActionInvocation,
   type ExplorerIncomingMessage,
   type ExplorerOutgoingMessage,
+  type ExplorerSnapshotBuildResult,
   type ExplorerSnapshotMessage,
   type ExplorerSnapshotOptions,
   type ExplorerSnapshotProviders,
@@ -176,6 +177,7 @@ export function createExplorerController(options: ExplorerControllerOptions): Ex
   let snapshotInFlight = false;
   let snapshotPending = false;
   let actionBindings = new Map<string, ExplorerActionInvocation>();
+  let lastSnapshot: ExplorerSnapshotBuildResult | undefined;
   let retiredActionBindings = new Map<string, ExplorerActionInvocation>();
 
   const retireActionBindings = (bindings: Map<string, ExplorerActionInvocation>): void => {
@@ -226,11 +228,14 @@ export function createExplorerController(options: ExplorerControllerOptions): Ex
         hideNonOwnedLabs: false,
         isLocalCaptureAllowed: false
       };
-      const { snapshot, actionBindings: nextBindings } = await buildExplorerSnapshot(
+      const built = await buildExplorerSnapshot(
         providers,
         filterText,
-        snapshotOptions
+        snapshotOptions,
+        lastSnapshot
       );
+      const { snapshot, actionBindings: nextBindings } = built;
+      lastSnapshot = built;
       retireActionBindings(actionBindings);
       actionBindings = nextBindings;
       await publish(snapshot);

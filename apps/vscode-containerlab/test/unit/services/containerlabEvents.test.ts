@@ -21,6 +21,7 @@ import {
   estimateStartedAtFromStatusForTests,
   eventStreamFor,
   handleEventLineForTests,
+  onStreamLost,
   resetForTests
 } from "../../../src/services/containerlabEvents";
 
@@ -201,5 +202,68 @@ describe("containerlabEvents per connection", () => {
       handleEventLineForTests(containerEvent("die", { state: "exited" }));
       expect(ports()).to.deep.equal([]);
     });
+  });
+});
+
+describe("containerlabEvents stream loss", () => {
+  beforeEach(() => {
+    resetForTests();
+  });
+
+  /** A backend whose event stream sends one container, then fails when `drop` is called. */
+  function droppingBackend() {
+    let drop: (error: Error) => void = () => {};
+    const dropped = new Promise<never>((_, reject) => {
+      drop = reject;
+    });
+    const backend = {
+      scope: "api-1",
+      async events() {
+        return (async function* () {
+          yield {
+            type: "container",
+            action: "start",
+            actor_id: "aaaaaaaaaaaa",
+            actor_name: "clab-lab-n1",
+            attributes: { containerlab: "lab", "clab-node-name": "n1", state: "running" }
+          };
+          await dropped;
+        })();
+      }
+    };
+    return { backend: backend as any, drop: (error: Error) => drop(error) };
+  }
+
+  it("tells the listeners when a loaded stream stops", async () => {
+    const lost: Array<[string, string]> = [];
+    const stopListening = onStreamLost((connectionId, error) =>
+      lost.push([connectionId, error.message])
+    );
+    try {
+      const { backend, drop } = droppingBackend();
+      await eventStreamFor("api-1").ensure(backend, "api-1|docker");
+      expect(lost).to.deep.equal([]);
+
+      drop(new Error("socket closed"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(lost).to.deep.equal([["api-1", "socket closed"]]);
+    } finally {
+      stopListening();
+    }
+  });
+
+  it("does not report a stream that is stopped on purpose", async () => {
+    const lost: string[] = [];
+    const stopListening = onStreamLost((connectionId) => lost.push(connectionId));
+    try {
+      const { backend, drop } = droppingBackend();
+      await eventStreamFor("api-1").ensure(backend, "api-1|docker");
+      eventStreamFor("api-1").stop();
+      drop(new Error("aborted"));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(lost).to.deep.equal([]);
+    } finally {
+      stopListening();
+    }
   });
 });

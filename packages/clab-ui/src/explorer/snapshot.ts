@@ -1,6 +1,7 @@
 export {
   buildExplorerSnapshot,
   type ExplorerActionInvocation,
+  type ExplorerSnapshotBuildResult,
   type ExplorerSnapshotOptions,
   type ExplorerSnapshotProviders
 } from "./explorerSnapshotAdapter";

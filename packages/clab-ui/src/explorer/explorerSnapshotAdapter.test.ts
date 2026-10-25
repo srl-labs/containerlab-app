@@ -320,3 +320,41 @@ test("buildExplorerSnapshot applies host-contributed endpoint, lab, file, and to
     true
   );
 });
+
+test("buildExplorerSnapshot keeps a section's last content when it fails to build", async () => {
+  const lab = {
+    label: "demo",
+    contextValue: "containerlabLabDeployed",
+    collapsibleState: 0
+  };
+  const options = { hideNonOwnedLabs: false, isLocalCaptureAllowed: true };
+  const first = await buildExplorerSnapshot(
+    {
+      runningProvider: provider([lab]),
+      localProvider: provider([]),
+      helpProvider: provider([])
+    } as ExplorerSnapshotProviders,
+    "",
+    options
+  );
+  const failing = {
+    getTreeItem: (element: unknown) => element,
+    getChildren: () => Promise.reject(new Error("lab host did not answer"))
+  };
+  const providers = {
+    runningProvider: failing,
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as unknown as ExplorerSnapshotProviders;
+
+  const running = (result: typeof first) =>
+    result.snapshot.sections.find((section) => section.id === "runningLabs");
+  const second = await buildExplorerSnapshot(providers, "", options, first);
+  assert.deepEqual(running(second), running(first));
+  for (const actionRef of first.actionBindings.keys()) {
+    assert.ok(second.actionBindings.has(actionRef));
+  }
+
+  const filtered = await buildExplorerSnapshot(providers, "other", options, first);
+  assert.equal(running(filtered)?.nodes.length, 0);
+});

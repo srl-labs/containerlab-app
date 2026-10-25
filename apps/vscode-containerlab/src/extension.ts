@@ -747,6 +747,10 @@ function registerRealtimeUpdates(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push({ dispose: disposeStateChange });
 
+  // Event streams that stop: lab hosts show as not reachable, Local starts again
+  const disposeStreamLoss = ins.watchStreamLoss(handleDataChanged);
+  context.subscriptions.push({ dispose: disposeStreamLoss });
+
   // Stop realtime background workers on deactivate
   context.subscriptions.push({
     dispose: () => {
