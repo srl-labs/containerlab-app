@@ -1,7 +1,11 @@
 import type {
+  LabExecRequest,
   LabLifecycleOptions,
+  LabOperationSupport,
+  LabSnapshotSaveRequest,
   TailscaleStatus,
-  TopologyVariables
+  TopologyVariables,
+  TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
@@ -13,10 +17,12 @@ import type {
   CaptureWiresharkVncReadyResponse,
   DrawioGenerateResponse,
   EdgeSharkStatusResponse,
+  ExecResponse,
   FcliCommandResponse,
   HealthMetricsResponse,
   ImportTopologyFromUrlResponse,
   InspectAllLabsResponse,
+  InspectDetailsResponse,
   InspectLabResponse,
   LifecycleActionResult,
   LogsResponse,
@@ -30,6 +36,7 @@ import type {
   SaveConfigResponse,
   ShareToolAction,
   ShareToolResponse,
+  SnapshotSaveResponse,
   SSHAccessResponse,
   TerminalProtocol,
   TerminalSessionInfo,
@@ -275,7 +282,11 @@ export interface LabBackend {
     options?: LifecycleRunOptions
   ): Promise<AsyncIterable<LifecycleStreamEvent>>;
   deployFromUrl(source: { url: string; labName?: string }): Promise<InspectAllLabsResponse>;
-  save(lab: LabTarget, options?: { nodeFilter?: string }): Promise<SaveConfigResponse>;
+  /** `copyDir` copies the saved configs there (`save --copy`), relative to the topology directory. */
+  save(
+    lab: LabTarget,
+    options?: { nodeFilter?: string; copyDir?: string }
+  ): Promise<SaveConfigResponse>;
   graphDrawio(
     lab: LabTarget,
     options: { layout: "horizontal" | "vertical" | "interactive"; theme?: string }
@@ -289,6 +300,23 @@ export interface LabBackend {
     action: ShareToolAction,
     options?: { port?: number }
   ): Promise<ShareToolResponse>;
+
+  // Lab operations. Hosts check labOperationSupport() before exec by label,
+  // snapshots, save --copy, inspect details and deploy restore.
+
+  labOperationSupport(): Promise<LabOperationSupport>;
+  /** `containerlab exec` on the lab's nodes, restricted to the lab. */
+  exec(lab: LabTarget, request: LabExecRequest): Promise<ExecResponse>;
+  /** Start, stop or restart some nodes of a running lab, by topology node name, at once. */
+  nodesAction(
+    lab: LabTarget,
+    nodeNames: string[],
+    action: TopoViewerNodesAction
+  ): Promise<LifecycleActionResult>;
+  /** `containerlab tools snapshot save` for the lab's VM nodes. */
+  saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest): Promise<SnapshotSaveResponse>;
+  /** `containerlab inspect --details` for one lab. */
+  inspectLabDetails(lab: LabTarget): Promise<InspectDetailsResponse>;
 
   // Nodes (by container name)
 

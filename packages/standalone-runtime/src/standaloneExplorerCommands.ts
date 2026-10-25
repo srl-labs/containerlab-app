@@ -1285,6 +1285,23 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           );
         }
       },
+      "containerlab.lab.saveCopy": async () => {
+        const topologyRef = requireTopologyRef();
+        if (!topologyRef) return;
+        const copyDir = await promptForTextInput({
+          title: "Save Configs To",
+          message:
+            "Copy the saved configs to this directory, relative to the topology file. Each save adds timestamped files per node.",
+          label: "Directory",
+          defaultValue: "configs",
+          confirmLabel: "Save"
+        });
+        if (!copyDir?.trim()) return;
+        await saveConfigsFlow(
+          { endpointId: actionEndpointId, topologyRef, copyDir: copyDir.trim() },
+          `Saved configs for ${topologyRef.labName} and copied them to ${copyDir.trim()}.`
+        );
+      },
       "containerlab.lab.delete": deleteTopologyFlow,
       "containerlab.lab.downloadArchive": downloadLabArchiveFlow,
       "containerlab.lab.toggleFavorite": toggleFavoriteFlow,

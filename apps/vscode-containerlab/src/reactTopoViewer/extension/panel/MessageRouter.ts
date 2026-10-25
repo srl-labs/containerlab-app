@@ -11,6 +11,7 @@ import type { SplitViewManager } from "../services/SplitViewManager";
 import { customNodeConfigManager } from "../services/CustomNodeConfigManager";
 import type { CustomNodeConfig } from "../services/CustomNodeConfigManager";
 import { iconService } from "../services/IconService";
+import { labOperationsService } from "../services/LabOperationsService";
 import {
   MSG_APPLY_PLAN_RESULT,
   MSG_CANCEL_LAB_LIFECYCLE,
@@ -18,6 +19,8 @@ import {
   MSG_CUSTOM_NODE_UPDATED,
   MSG_ICON_LIST_RESPONSE,
   MSG_LAB_LIFECYCLE_STATUS,
+  MSG_LAB_OPERATION,
+  MSG_LAB_OPERATION_RESULT,
   MSG_PLAN_APPLY_LAB,
   MSG_SVG_EXPORT_RESULT,
   MSG_TAILSCALE_STATUS,
@@ -60,6 +63,13 @@ interface GrafanaBundleExportPayload {
 }
 
 const SNAPSHOT_ERROR_MODAL_COOLDOWN_MS = 5000;
+
+/** Node commands that act on several nodes at once when the webview sends `nodeNames`. */
+const NODES_ACTIONS: Partial<Record<NodeCommand, "start" | "stop" | "restart">> = {
+  "clab-node-start": "start",
+  "clab-node-stop": "stop",
+  "clab-node-restart": "restart"
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -234,6 +244,39 @@ export class MessageRouter {
       log.warn(`[MessageRouter] Tailscale status failed: ${error}`);
       panel.webview.postMessage({
         type: MSG_TAILSCALE_STATUS_RESULT,
+        requestId,
+        success: false,
+        error
+      });
+    }
+  }
+
+  private async handleLabOperation(
+    message: WebviewMessage,
+    panel: vscode.WebviewPanel
+  ): Promise<void> {
+    const requestId = typeof message.requestId === "string" ? message.requestId : "";
+    const yamlFilePath = this.context.yamlFilePath;
+    try {
+      if (!yamlFilePath) {
+        throw new Error("No topology file is open");
+      }
+      const result = await labOperationsService.run(
+        yamlFilePath,
+        message.operation,
+        message.request
+      );
+      panel.webview.postMessage({
+        type: MSG_LAB_OPERATION_RESULT,
+        requestId,
+        success: true,
+        result
+      });
+    } catch (err) {
+      const error = formatErrorMessage(err);
+      log.warn(`[MessageRouter] Lab operation ${String(message.operation)} failed: ${error}`);
+      panel.webview.postMessage({
+        type: MSG_LAB_OPERATION_RESULT,
         requestId,
         success: false,
         error
@@ -502,6 +545,12 @@ export class MessageRouter {
       log.warn(`[MessageRouter] Invalid node command payload: ${JSON.stringify(message)}`);
       return;
     }
+    const nodeNames = asStringArray(message.nodeNames);
+    const nodesAction = NODES_ACTIONS[command];
+    if (nodesAction && nodeNames.length > 1) {
+      await labOperationsService.nodesAction(yamlFilePath, nodesAction, nodeNames);
+      return;
+    }
     const res = await nodeCommandService.handleNodeEndpoint(command, nodeName, yamlFilePath);
     if (res.error != null && res.error.length > 0) log.error(`[MessageRouter] ${res.error}`);
     else if (res.result != null) log.info(`[MessageRouter] ${formatUnknownForLog(res.result)}`);
@@ -644,6 +693,11 @@ export class MessageRouter {
 
     if (command === MSG_TAILSCALE_STATUS) {
       await this.handleTailscaleStatus(message, panel);
+      return true;
+    }
+
+    if (command === MSG_LAB_OPERATION) {
+      await this.handleLabOperation(message, panel);
       return true;
     }
 

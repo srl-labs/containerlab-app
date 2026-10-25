@@ -19,6 +19,7 @@ import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tails
 import { expandLabNameGitTokens } from "../../src/host/topologyVariables";
 
 import { fakeRuntimeContainers } from "./fakeLab";
+import { createFakeLabOperations } from "./fakeLabOperations";
 import { createFakeLifecycle } from "./fakeLifecycle";
 import { createFakeTemplates, type TemplateState } from "./fakeTemplates";
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
@@ -492,6 +493,16 @@ export function createFakeClabUiHost(
       runNodeAction(action, nodeName) {
         void fakeLifecycle.nodeAction(action, nodeName);
       },
+      runNodesAction(action, nodeNames) {
+        recordHarnessMessage({ command: `clab-node-${action}`, nodeName: nodeNames[0], nodeNames });
+        void (async () => {
+          for (const nodeName of nodeNames) await fakeLifecycle.nodeAction(action, nodeName);
+        })();
+      },
+      labOperations: createFakeLabOperations({
+        readYaml: () => files.get(currentYamlPath),
+        record: recordHarnessMessage
+      }),
       captureInterface(nodeName, interfaceName, options = {}) {
         recordHarnessMessage({
           command: "clab-interface-capture",

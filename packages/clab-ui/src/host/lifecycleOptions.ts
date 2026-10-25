@@ -27,6 +27,19 @@ export interface LabLifecycleOptions {
    * Without it containerlab uses `<topology>_vars.yml` next to the topology.
    */
   varsFile?: string;
+  /**
+   * Restore VM snapshots from `<dir>/<node>.tar` (`--restore-all`). Relative
+   * paths start at the topology directory.
+   */
+  restoreAll?: string;
+  /** Restore single nodes from snapshot files (`--restore node=path`); wins over `restoreAll`. */
+  restore?: LabSnapshotRestore[];
+}
+
+/** One node restored from a VM snapshot file on deploy. */
+export interface LabSnapshotRestore {
+  node: string;
+  path: string;
 }
 
 export type LabLifecycleOptionKind = "deploy" | "redeploy" | "destroy";
@@ -40,7 +53,16 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
   LabLifecycleOptionKind,
   readonly LabLifecycleOptionField[]
 > = {
-  deploy: ["nodeFilter", "maxWorkers", "skipPostDeploy", "skipLabdirAcl", "exportTemplate", "varsFile"],
+  deploy: [
+    "nodeFilter",
+    "maxWorkers",
+    "skipPostDeploy",
+    "skipLabdirAcl",
+    "exportTemplate",
+    "restoreAll",
+    "restore",
+    "varsFile"
+  ],
   redeploy: [
     "maxWorkers",
     "skipPostDeploy",
@@ -57,6 +79,7 @@ const NODE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const EXPORT_TEMPLATE_PATTERN = /^[A-Za-z0-9_./~-]+$/;
 const VARS_FILE_PATTERN = /^[A-Za-z0-9_./@+-]+$/;
 const BOOLEAN_FIELDS = ["skipPostDeploy", "skipLabdirAcl", "graceful", "keepMgmtNet"] as const;
+const MAX_PATH_LENGTH = 4096;
 
 export function isValidLifecycleNodeName(name: string): boolean {
   return NODE_NAME_PATTERN.test(name);
@@ -64,6 +87,35 @@ export function isValidLifecycleNodeName(name: string): boolean {
 
 export function isValidExportTemplate(template: string): boolean {
   return EXPORT_TEMPLATE_PATTERN.test(template) && !template.includes("..");
+}
+
+/** A file or directory path a lab action reads or writes: no control characters. */
+export function isValidLabActionPath(value: string): boolean {
+  if (value.length === 0 || value.length > MAX_PATH_LENGTH) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code < 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
+
+function readPath(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return isValidLabActionPath(trimmed) ? trimmed : undefined;
+}
+
+function readRestore(value: unknown): LabSnapshotRestore[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const byNode = new Map<string, string>();
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.node !== "string") continue;
+    const node = entry.node.trim();
+    const path = readPath(entry.path);
+    if (path !== undefined && isValidLifecycleNodeName(node)) byNode.set(node, path);
+  }
+  const restore = Array.from(byNode, ([node, path]) => ({ node, path }));
+  return restore.length > 0 ? restore : undefined;
 }
 
 function readNodeFilter(value: unknown): string[] | undefined {
@@ -129,8 +181,20 @@ export function normalizeLabLifecycleOptions(
     const varsFile = readVarsFile(raw.varsFile);
     if (varsFile !== undefined) options.varsFile = varsFile;
   }
+  if (allowed.has("restoreAll")) Object.assign(options, readSnapshotRestore(raw));
 
   return Object.keys(options).length > 0 ? options : undefined;
+}
+
+function readSnapshotRestore(
+  raw: Record<string, unknown>
+): Pick<LabLifecycleOptions, "restoreAll" | "restore"> {
+  const restoreAll = readPath(raw.restoreAll);
+  const restore = readRestore(raw.restore);
+  return {
+    ...(restoreAll !== undefined ? { restoreAll } : {}),
+    ...(restore ? { restore } : {})
+  };
 }
 
 /** containerlab CLI flags for the options, in a stable order. */
@@ -149,6 +213,9 @@ export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): 
   if (options.graceful === true) flags.push("--graceful");
   if (options.keepMgmtNet === true) flags.push("--keep-mgmt-net");
   if (options.varsFile !== undefined) flags.push("--vars", options.varsFile);
+  // `--restore-all` has an optional value, so it only takes one after `=`.
+  if (options.restoreAll !== undefined) flags.push(`--restore-all=${options.restoreAll}`);
+  for (const entry of options.restore ?? []) flags.push(`--restore=${entry.node}=${entry.path}`);
   return flags;
 }
 
@@ -168,6 +235,8 @@ export function labLifecycleQueryParams(
   if (options.graceful === true) params.push(["graceful", "true"]);
   if (options.keepMgmtNet === true) params.push(["keepMgmtNet", "true"]);
   if (options.varsFile !== undefined) params.push(["varsPath", options.varsFile]);
+  if (options.restoreAll !== undefined) params.push(["restoreAll", options.restoreAll]);
+  for (const entry of options.restore ?? []) params.push(["restore", `${entry.node}=${entry.path}`]);
   return params;
 }
 
@@ -177,4 +246,9 @@ export function labLifecycleQueryParams(
  */
 export function isPartialDestroy(options: LabLifecycleOptions | undefined): boolean {
   return (options?.nodeFilter?.length ?? 0) > 0;
+}
+
+/** Deploys that restore VM snapshots need a lab host that supports it. */
+export function restoresSnapshots(options: LabLifecycleOptions | undefined): boolean {
+  return options?.restoreAll !== undefined || (options?.restore?.length ?? 0) > 0;
 }

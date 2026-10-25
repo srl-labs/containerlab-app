@@ -657,6 +657,22 @@ posts `{ command: "tailscaleStatus", requestId }` and expects
 `{ type: "tailscale-status-result", requestId, success, status?, error? }` back; a
 success without `status` means the lab host has no such report.
 
+The deploy options also carry `restoreAll` and `restore` (VM snapshots, `--restore-all`
+and `--restore`); `restoresSnapshots(options)` tells whether a deploy uses them.
+
+`runNodesAction(action, nodeNames)` is optional: start, stop or restart several selected
+nodes in one call. Without it, the canvas calls `runNodeAction` once per node. The window
+host posts `{ command: "clab-node-<action>", nodeName, nodeNames }`.
+
+`labOperations` is optional (`ClabUiLabOperationsHost` in `/host`): `support()`, `exec`,
+`saveSnapshots`, `saveConfigs` (with an optional copy directory) and `inspectDetails` for
+the open lab. Without it, those menu entries and dialogs stay hidden; `support()` hides
+the ones the lab host cannot do. The window host posts
+`{ command: "labOperation", requestId, operation, request? }` and expects
+`{ type: "lab-operation-result", requestId, success, result?, error? }` with the raw
+`clab-api-server` result; `parseExecResponse`, `parseSnapshotSaveResponse`,
+`parseSaveConfigsResponse` and `parseInspectDetails` read it.
+
 Important node action names:
 
 - `ssh`

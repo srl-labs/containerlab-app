@@ -15,9 +15,11 @@ import InfoIcon from "@mui/icons-material/Info";
 import LanIcon from "@mui/icons-material/Lan";
 import LayersIcon from "@mui/icons-material/Layers";
 import LinkIcon from "@mui/icons-material/Link";
+import ManageSearchIcon from "@mui/icons-material/ManageSearch";
 import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import RemoveIcon from "@mui/icons-material/Remove";
 import ReplayIcon from "@mui/icons-material/Replay";
+import SaveIcon from "@mui/icons-material/Save";
 import SpeedIcon from "@mui/icons-material/Speed";
 import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
@@ -27,7 +29,9 @@ import TuneIcon from "@mui/icons-material/Tune";
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 import { WiresharkIcon } from "../context-menu/WiresharkIcon";
 import type { LinkCaptureEnd } from "../panels/capture/linkCaptureOptions";
-import type { TopoViewerNodeAction } from "../../host";
+import type { TopoViewerNodeAction, TopoViewerNodesAction } from "../../host";
+import type { LabOperationSupport } from "../../host/labOperations";
+import type { LabOperationDialogKind } from "../../stores/labOperationsStore";
 import { getViewportCenter } from "../../utils/viewportUtils";
 import {
   FREE_TEXT_NODE_TYPE,
@@ -50,6 +54,14 @@ interface MenuBuilderContext {
   isDeployed: boolean;
   isLocked: boolean;
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
+  /** Selected topology nodes; with the target among two or more, lifecycle actions act on all. */
+  selectedNodeIds?: string[];
+  onNodesAction?: (action: TopoViewerNodesAction, nodeNames: string[]) => void;
+  /** Exec, config save and details of the lab host; absent when the host has none. */
+  labOperations?: {
+    support: LabOperationSupport;
+    open: (kind: LabOperationDialogKind, nodeNames: string[]) => void;
+  };
   /** Interface checklist to capture packets on this node; `close` closes the menu. */
   renderCapturePanel?: (nodeId: string, close: () => void) => React.ReactNode;
   closeContextMenu: () => void;
@@ -328,38 +340,86 @@ function buildTrafficRateContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
   return items;
 }
 
+/** The nodes a runtime action acts on: the selection when it holds the target, else the target. */
+function runtimeActionNodes(targetId: string, selectedNodeIds: readonly string[] = []): string[] {
+  return selectedNodeIds.length > 1 && selectedNodeIds.includes(targetId)
+    ? [...selectedNodeIds]
+    : [targetId];
+}
+
+const LIFECYCLE_ITEMS: ReadonlyArray<{
+  action: TopoViewerNodesAction;
+  label: string;
+  icon: typeof PlayArrowIcon;
+}> = [
+  { action: "start", label: "Start", icon: PlayArrowIcon },
+  { action: "stop", label: "Stop", icon: StopIcon },
+  { action: "restart", label: "Restart", icon: ReplayIcon }
+];
+
+function buildNodeLifecycleItems(ctx: MenuBuilderContext, nodes: string[]): ContextMenuItem[] {
+  const { targetId, targetRuntimeState, closeContextMenu, onNodeAction, onNodesAction } = ctx;
+  const several = nodes.length > 1;
+  return LIFECYCLE_ITEMS.map(({ action, label, icon }) => ({
+    id: `${action}-node`,
+    label: several ? `${label} ${nodes.length} Nodes` : label,
+    icon: React.createElement(icon, { fontSize: "small" }),
+    // Start always works; other selected nodes may run while the target does not.
+    ...(action === "start"
+      ? {}
+      : { disabled: !several && isNodeActionDisabled(action, targetRuntimeState) }),
+    onClick: () => {
+      if (!several) {
+        onNodeAction(action, targetId);
+      } else if (onNodesAction) {
+        onNodesAction(action, nodes);
+      } else {
+        for (const node of nodes) onNodeAction(action, node);
+      }
+      closeContextMenu();
+    }
+  }));
+}
+
+function buildLabOperationItems(ctx: MenuBuilderContext, nodes: string[]): ContextMenuItem[] {
+  const { labOperations, closeContextMenu } = ctx;
+  if (!labOperations) return [];
+  const suffix = nodes.length > 1 ? ` on ${nodes.length} Nodes` : "";
+  const open = (kind: LabOperationDialogKind) => () => {
+    labOperations.open(kind, nodes);
+    closeContextMenu();
+  };
+  const items: ContextMenuItem[] = [
+    { id: "divider-node-operations", label: "", divider: true },
+    {
+      id: "exec-node",
+      label: `Run Command${suffix}…`,
+      icon: React.createElement(TerminalIcon, { fontSize: "small" }),
+      onClick: open("exec")
+    },
+    {
+      id: "save-config-node",
+      label: nodes.length > 1 ? `Save ${nodes.length} Configs…` : "Save Config…",
+      icon: React.createElement(SaveIcon, { fontSize: "small" }),
+      onClick: open("saveConfigs")
+    }
+  ];
+  if (labOperations.support.inspectDetails) {
+    items.push({
+      id: "details-node",
+      label: "Inspect Details",
+      icon: React.createElement(ManageSearchIcon, { fontSize: "small" }),
+      onClick: open("details")
+    });
+  }
+  return items;
+}
+
 function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
   const { targetId, targetRuntimeState, closeContextMenu, onNodeAction, renderCapturePanel } = ctx;
+  const nodes = runtimeActionNodes(targetId, ctx.selectedNodeIds);
   return [
-    {
-      id: "start-node",
-      label: "Start",
-      icon: React.createElement(PlayArrowIcon, { fontSize: "small" }),
-      onClick: () => {
-        onNodeAction("start", targetId);
-        closeContextMenu();
-      }
-    },
-    {
-      id: "stop-node",
-      label: "Stop",
-      icon: React.createElement(StopIcon, { fontSize: "small" }),
-      disabled: isNodeActionDisabled("stop", targetRuntimeState),
-      onClick: () => {
-        onNodeAction("stop", targetId);
-        closeContextMenu();
-      }
-    },
-    {
-      id: "restart-node",
-      label: "Restart",
-      icon: React.createElement(ReplayIcon, { fontSize: "small" }),
-      disabled: isNodeActionDisabled("restart", targetRuntimeState),
-      onClick: () => {
-        onNodeAction("restart", targetId);
-        closeContextMenu();
-      }
-    },
+    ...buildNodeLifecycleItems(ctx, nodes),
     { id: "divider-node-lifecycle", label: "", divider: true },
     {
       id: "ssh-node",
@@ -391,6 +451,7 @@ function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
         closeContextMenu();
       }
     },
+    ...buildLabOperationItems(ctx, nodes),
     ...(renderCapturePanel
       ? [
           { id: "divider-node-capture", label: "", divider: true },

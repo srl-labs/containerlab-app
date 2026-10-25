@@ -488,6 +488,7 @@ function registerCommands(context: vscode.ExtensionContext) {
     ["containerlab.lab.stop", cmd.stopLab],
     ["containerlab.lab.restart", cmd.restartLab],
     ["containerlab.lab.save", cmd.saveLab],
+    ["containerlab.lab.saveCopy", cmd.saveLabCopy],
     ["containerlab.lab.sshx.attach", cmd.sshxAttach],
     ["containerlab.lab.sshx.detach", cmd.sshxDetach],
     ["containerlab.lab.sshx.reattach", cmd.sshxReattach],

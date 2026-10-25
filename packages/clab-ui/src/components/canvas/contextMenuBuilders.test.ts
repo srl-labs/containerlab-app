@@ -320,3 +320,69 @@ test("node context menu leaves capture out when the host offers no picker", () =
     false
   );
 });
+
+function buildSelectionMenu(selectedNodeIds: string[], withNodesAction = true) {
+  const single: Array<{ action: TopoViewerNodeAction; nodeName: string }> = [];
+  const several: Array<{ action: string; nodeNames: string[] }> = [];
+  const opened: Array<{ kind: string; nodeNames: string[] }> = [];
+  const items = buildNodeContextMenu({
+    targetId: "srl1",
+    targetNodeType: "topology-node",
+    targetRuntimeState: "stopped",
+    isEditMode: false,
+    isDeployed: true,
+    isLocked: false,
+    selectedNodeIds,
+    onNodeAction: (action, nodeName) => single.push({ action, nodeName }),
+    ...(withNodesAction
+      ? { onNodesAction: (action: string, nodeNames: string[]) => several.push({ action, nodeNames }) }
+      : {}),
+    labOperations: {
+      support: { execByLabel: true, snapshotSave: true, deployRestore: true, saveCopy: true, inspectDetails: false },
+      open: (kind, nodeNames) => opened.push({ kind, nodeNames })
+    },
+    closeContextMenu: () => {},
+    editNode: () => {},
+    editNetwork: () => {},
+    handleDeleteNode: () => {},
+    showNodeInfo: () => {}
+  });
+  return { items, single, several, opened };
+}
+
+test("runtime actions act on the whole selection when it holds the target", () => {
+  const { items, single, several, opened } = buildSelectionMenu(["srl1", "srl2", "srl3"]);
+
+  const stop = itemById(items, "stop-node");
+  assert.equal(stop.label, "Stop 3 Nodes");
+  // The target is stopped, but the others may run.
+  assert.equal(stop.disabled, false);
+  stop.onClick?.();
+  itemById(items, "exec-node").onClick?.();
+  assert.equal(itemById(items, "exec-node").label, "Run Command on 3 Nodes…");
+  assert.equal(itemById(items, "save-config-node").label, "Save 3 Configs…");
+  assert.equal(items.some((item) => item.id === "details-node"), false);
+
+  assert.deepEqual(single, []);
+  assert.deepEqual(several, [{ action: "stop", nodeNames: ["srl1", "srl2", "srl3"] }]);
+  assert.deepEqual(opened, [{ kind: "exec", nodeNames: ["srl1", "srl2", "srl3"] }]);
+});
+
+test("a selection without the target leaves runtime actions on the target", () => {
+  const { items, single } = buildSelectionMenu(["srl2", "srl3"]);
+
+  assert.equal(itemById(items, "start-node").label, "Start");
+  assert.equal(itemById(items, "stop-node").disabled, true);
+  itemById(items, "start-node").onClick?.();
+  assert.deepEqual(single, [{ action: "start", nodeName: "srl1" }]);
+});
+
+test("hosts without multi-node actions get one call per node", () => {
+  const { items, single } = buildSelectionMenu(["srl1", "srl2"], false);
+
+  itemById(items, "restart-node").onClick?.();
+  assert.deepEqual(single, [
+    { action: "restart", nodeName: "srl1" },
+    { action: "restart", nodeName: "srl2" }
+  ]);
+});

@@ -171,6 +171,11 @@
         "category": "Containerlab"
       },
       {
+        "command": "containerlab.lab.saveCopy",
+        "title": "Save configs to…",
+        "category": "Containerlab"
+      },
+      {
         "command": "containerlab.inspectAll",
         "title": "Inspect (All Labs)",
         "category": "Containerlab",

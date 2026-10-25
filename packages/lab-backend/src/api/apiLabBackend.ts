@@ -1,5 +1,13 @@
-import { hasLabNameGitTokens, type TopologyVariables } from "@containerlab/clab-ui/host";
 import WebSocket, { type RawData } from "ws";
+import {
+  hasLabNameGitTokens,
+  restoresSnapshots,
+  type LabExecRequest,
+  type LabOperationSupport,
+  type LabSnapshotSaveRequest,
+  type TopologyVariables,
+  type TopoViewerNodesAction
+} from "@containerlab/clab-ui/host";
 
 import type {
   LabBackend,
@@ -26,6 +34,8 @@ import type {
 } from "../contract/backend.ts";
 import type {
   CaptureTarget,
+  ExecResponse,
+  InspectContainerInfo,
   LifecycleActionResult,
   NetemResetRequest,
   NetemSetRequest,
@@ -60,6 +70,49 @@ const API_CAPABILITIES: LabBackendCapabilities = {
   sharedWorkspace: true,
   tailscaleStatus: true
 };
+
+/** Features clab-api-server lists in `/health`, by the operation that needs them. */
+const SERVER_FEATURES = {
+  execFilters: "exec-filters",
+  labLifecycleNodeFilter: "lab-lifecycle-node-filter",
+  saveCopy: "save-copy",
+  inspectDetails: "inspect-details",
+  snapshotSave: "snapshot-save",
+  deployRestore: "deploy-restore"
+} as const;
+
+type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
+
+/** Servers get upgraded in place; look again after a minute. */
+const SERVER_FEATURES_TTL_MS = 60_000;
+const serverFeatureCache = new Map<string, { expires: number; features: Promise<ReadonlySet<string>> }>();
+
+function unsupported(what: string): LabBackendError {
+  return new LabBackendError(
+    `This clab-api-server cannot ${what}. Update clab-api-server to use it.`,
+    501
+  );
+}
+
+/**
+ * The container of a topology node, for servers that only take container
+ * names: the node itself, `<prefix>-<lab>-<node>`, or `<prefix>-<node>`.
+ */
+export function containerForNode(
+  labName: string,
+  containers: readonly Pick<InspectContainerInfo, "name">[],
+  nodeName: string
+): string {
+  const names = containers.map((container) => container.name);
+  const match =
+    names.find((name) => name === nodeName) ??
+    names.find((name) => name.endsWith(`-${labName}-${nodeName}`)) ??
+    names.find((name) => name.endsWith(`-${nodeName}`));
+  if (!match) {
+    throw new LabBackendError(`Node "${nodeName}" was not found in lab "${labName}".`, 404);
+  }
+  return match;
+}
 
 /** A lab backend for one signed-in user of a clab-api-server. */
 export class ApiLabBackend implements LabBackend {
@@ -107,6 +160,115 @@ export class ApiLabBackend implements LabBackend {
     return this.client.listLabs(this.token);
   }
 
+  private serverFeatures(): Promise<ReadonlySet<string>> {
+    const key = this.client.getBaseUrl();
+    const cached = serverFeatureCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.features;
+    const features = this.client.getServerFeatures().then(
+      (list) => new Set(list),
+      (): ReadonlySet<string> => {
+        // An unreachable server is asked again on the next call.
+        serverFeatureCache.delete(key);
+        return new Set();
+      }
+    );
+    serverFeatureCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, features });
+    return features;
+  }
+
+  private async hasFeature(feature: ServerFeature): Promise<boolean> {
+    return (await this.serverFeatures()).has(feature);
+  }
+
+  async labOperationSupport(): Promise<LabOperationSupport> {
+    const features = await this.serverFeatures();
+    return {
+      execByLabel: features.has(SERVER_FEATURES.execFilters),
+      snapshotSave: features.has(SERVER_FEATURES.snapshotSave),
+      deployRestore: features.has(SERVER_FEATURES.deployRestore),
+      saveCopy: features.has(SERVER_FEATURES.saveCopy),
+      inspectDetails: features.has(SERVER_FEATURES.inspectDetails)
+    };
+  }
+
+  async exec(lab: LabTarget, request: LabExecRequest): Promise<ExecResponse> {
+    const nodes = request.nodeNames ?? [];
+    const labels = request.labels ?? [];
+    const { command } = request;
+    if (nodes.length === 0 && labels.length === 0) {
+      return this.client.execLab(this.token, lab.labName, { command });
+    }
+    if (await this.hasFeature(SERVER_FEATURES.execFilters)) {
+      return this.client.execLab(this.token, lab.labName, { command, nodes, labels });
+    }
+    if (labels.length > 0) throw unsupported("run commands on nodes by label");
+    // Older servers run on one container per call.
+    const containers = await this.inspectLab(lab.labName);
+    const responses = await Promise.all(
+      nodes.map((node) =>
+        this.client.execLab(this.token, lab.labName, {
+          command,
+          containerName: containerForNode(lab.labName, containers, node)
+        })
+      )
+    );
+    return Object.assign({}, ...responses) as ExecResponse;
+  }
+
+  async nodesAction(
+    lab: LabTarget,
+    nodeNames: string[],
+    action: TopoViewerNodesAction
+  ): Promise<LifecycleActionResult> {
+    if (nodeNames.length === 0) throw new LabBackendError("Choose at least one node.", 400);
+    if (await this.hasFeature(SERVER_FEATURES.labLifecycleNodeFilter)) {
+      return this.client.controlLabLifecycle(this.token, lab.labName, action, {
+        includeLogs: true,
+        nodeFilter: nodeNames
+      });
+    }
+    // Older servers act on the whole lab here, so go node by node.
+    const containers = await this.inspectLab(lab.labName);
+    for (const node of nodeNames) {
+      await this.client.controlNodeLifecycle(
+        this.token,
+        lab.labName,
+        containerForNode(lab.labName, containers, node),
+        action
+      );
+    }
+    return { message: `Nodes ${nodeNames.join(", ")}: ${action} done.` };
+  }
+
+  async saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest) {
+    if (!(await this.hasFeature(SERVER_FEATURES.snapshotSave))) {
+      throw unsupported("save VM snapshots");
+    }
+    return this.client.saveLabSnapshots(this.token, lab.labName, {
+      ...(request.nodeNames && request.nodeNames.length > 0 ? { nodes: request.nodeNames } : {}),
+      ...(request.outputDir ? { outputDir: request.outputDir } : {}),
+      ...(request.timeout ? { timeout: request.timeout } : {})
+    });
+  }
+
+  async inspectLabDetails(lab: LabTarget) {
+    if (!(await this.hasFeature(SERVER_FEATURES.inspectDetails))) {
+      throw unsupported("show inspect details");
+    }
+    return this.client.inspectLabDetails(this.token, lab.labName);
+  }
+
+  /** A deploy that restores snapshots must not run as a plain deploy on an older server. */
+  private async checkLifecycleOptions(action: LabLifecycleAction, options: LifecycleRunOptions) {
+    if (
+      action === "deploy" &&
+      restoresSnapshots(options.lifecycleOptions) &&
+      !(await this.hasFeature(SERVER_FEATURES.deployRestore))
+    ) {
+      throw unsupported("restore VM snapshots on deploy");
+    }
+  }
+
   inspectLab(labName: string) {
     return this.client.inspectLab(this.token, labName);
   }
@@ -120,6 +282,7 @@ export class ApiLabBackend implements LabBackend {
     lab: LabTarget,
     options: LifecycleRunOptions = {}
   ): Promise<LifecycleActionResult> {
+    await this.checkLifecycleOptions(action, options);
     const { token } = this;
     const lifecycle = { cleanup: options.cleanup, lifecycleOptions: options.lifecycleOptions };
     switch (action) {
@@ -153,6 +316,7 @@ export class ApiLabBackend implements LabBackend {
     lab: LabTarget,
     options: LifecycleRunOptions = {}
   ): Promise<AsyncIterable<LifecycleStreamEvent>> {
+    await this.checkLifecycleOptions(action, options);
     const response = await this.client.openLifecycleStream(
       this.token,
       action,
@@ -173,7 +337,10 @@ export class ApiLabBackend implements LabBackend {
     });
   }
 
-  save(lab: LabTarget, options: { nodeFilter?: string } = {}) {
+  async save(lab: LabTarget, options: { nodeFilter?: string; copyDir?: string } = {}) {
+    if (options.copyDir && !(await this.hasFeature(SERVER_FEATURES.saveCopy))) {
+      throw unsupported("copy saved configs");
+    }
     return this.client.saveLab(this.token, lab.labName, options);
   }
 

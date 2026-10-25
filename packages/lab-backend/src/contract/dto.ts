@@ -6,6 +6,8 @@ import type { CustomIconInfo, CustomNodeTemplate } from "@containerlab/clab-ui/s
 export interface SaveConfigResponse {
   message: string;
   output: string;
+  /** Where `save --copy` put the configs. */
+  copyDir?: string;
 }
 
 export interface SSHAccessResponse {
@@ -292,3 +294,36 @@ export interface ImportTopologyFromUrlResponse {
   fileName: string;
   topology: TopologyEntry;
 }
+
+// Lab operations: exec, VM snapshots and inspect details.
+
+/** One command run in one container, as `containerlab exec --format json` reports it. */
+export interface ExecCommandResult {
+  cmd: string[];
+  "return-code": number;
+  /** containerlab embeds output that is valid JSON as JSON. */
+  stdout: unknown;
+  stderr: string;
+}
+
+/** Exec results by container name. */
+export type ExecResponse = Record<string, ExecCommandResult[]>;
+
+export interface SnapshotNodeResult {
+  node: string;
+  status: "success" | "failed" | "skipped";
+  path?: string;
+  sizeBytes?: number;
+  durationMs?: number;
+  error?: string;
+  reason?: string;
+}
+
+export interface SnapshotSaveResponse {
+  outputDir: string;
+  results: SnapshotNodeResult[];
+  summary: string;
+}
+
+/** `containerlab inspect --details`: full runtime records of the containers, by lab name. */
+export type InspectDetailsResponse = Record<string, Record<string, unknown>[]>;

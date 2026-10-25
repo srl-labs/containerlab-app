@@ -77,6 +77,7 @@ const LIFECYCLE_COMMAND_IDS = [
   "containerlab.lab.stop",
   "containerlab.lab.restart",
   "containerlab.lab.save",
+  "containerlab.lab.saveCopy",
   "containerlab.lab.sshToAllNodes",
   "containerlab.node.save",
   "containerlab.node.start",
