@@ -126,6 +126,11 @@ export interface LabHostScriptResult {
   durationMs: number;
 }
 
+/** What a streamed host script reports: output as it comes, then how it ended. */
+export type LabHostScriptEvent =
+  | { type: "output"; stream: "stdout" | "stderr"; text: string }
+  | { type: "exit"; result: LabHostScriptResult };
+
 /** Lab operations on the lab that is open in the topology view. */
 export interface ClabUiLabOperationsHost {
   support(): Promise<LabOperationSupport>;

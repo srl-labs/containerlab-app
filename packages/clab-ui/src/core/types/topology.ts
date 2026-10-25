@@ -316,6 +316,8 @@ export interface TopologyAnnotations {
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;
+    /** Moving dashes on links show live traffic once the lab runs. */
+    animateTraffic?: boolean;
     showDummyLinks?: boolean;
     showWaitFor?: boolean;
     autoCreateTrafficRateAnnotations?: boolean;

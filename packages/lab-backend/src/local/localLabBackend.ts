@@ -45,7 +45,7 @@ import type {
 import { LabBackendError } from "../contract/errors.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { LocalCapture } from "./capture.ts";
-import { runLocalHostScript } from "./hostScripts.ts";
+import { runLocalHostScript, streamLocalHostScript } from "./hostScripts.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
 import {
   localExec,
@@ -301,6 +301,10 @@ export class LocalLabBackend implements LabBackend {
 
   async runHostScript(lab: LabTarget, request: LabHostScriptRequest) {
     return runLocalHostScript(this.options, await this.labRef(lab), request);
+  }
+
+  async streamHostScript(lab: LabTarget, request: LabHostScriptRequest) {
+    return streamLocalHostScript(this.options, await this.labRef(lab), request);
   }
 
   /** The topology file of a lab that need not be running, like clab-api-server finds it. */

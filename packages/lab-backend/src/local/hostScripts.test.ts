@@ -5,7 +5,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 
 import { LabBackendError } from "../contract/errors.ts";
-import { runLocalHostScript } from "./hostScripts.ts";
+import { runLocalHostScript, streamLocalHostScript } from "./hostScripts.ts";
 import { resolveLocalOptions } from "./options.ts";
 
 async function labFolder(t: TestContext): Promise<string> {
@@ -74,4 +74,34 @@ test("hosts that turn script buttons off refuse to run them", async (t) => {
     ),
     (error: unknown) => error instanceof LabBackendError && error.status === 403
   );
+});
+
+test("streamed output arrives line by line before the exit", async (t) => {
+  const folder = await labFolder(t);
+  const events = await streamLocalHostScript(
+    resolveLocalOptions({ workspaceRoot: folder }),
+    { labName: "demo", topology: path.join(folder, "demo.clab.yml") },
+    { script: "echo one; echo two >&2; echo three" }
+  );
+  const seen: string[] = [];
+  for await (const event of events) {
+    seen.push(event.type === "output" ? `${event.stream}:${event.text.trim()}` : `exit:${event.result.exitCode}`);
+  }
+  assert.deepEqual(seen.filter((entry) => entry.startsWith("stdout")), ["stdout:one", "stdout:three"]);
+  assert.ok(seen.includes("stderr:two"));
+  assert.equal(seen.at(-1), "exit:0");
+});
+
+test("stopping the stream early stops the script", async (t) => {
+  const folder = await labFolder(t);
+  const started = Date.now();
+  const events = await streamLocalHostScript(
+    resolveLocalOptions({ workspaceRoot: folder }),
+    { labName: "demo" },
+    { script: "echo ready; sleep 5; echo late" }
+  );
+  for await (const event of events) {
+    if (event.type === "output") break;
+  }
+  assert.ok(Date.now() - started < 3000, "the script kept running after the stream stopped");
 });

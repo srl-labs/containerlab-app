@@ -45,6 +45,8 @@ export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
   sshUsername?: string;
   telnetPort?: number;
   initialOutput?: string;
+  /** Output panes that receive more text through `appendTerminalOutput` while open. */
+  streaming?: boolean;
 }
 
 type RuntimeTerminalPaneState = "creating" | "connecting" | "ready" | "exited" | "error";
@@ -537,7 +539,31 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
     })
 }));
 
+// Text for streaming output panes, kept until the pane's terminal mounts.
+const terminalOutputListeners = new Map<string, (text: string) => void>();
+const pendingTerminalOutput = new Map<string, string>();
+
+function appendTerminalOutput(paneId: string, text: string): void {
+  const listener = terminalOutputListeners.get(paneId);
+  if (listener) listener(text);
+  else pendingTerminalOutput.set(paneId, (pendingTerminalOutput.get(paneId) ?? "") + text);
+}
+
+/** Receives a streaming output pane's text, starting with anything that came early. */
+export function subscribeTerminalOutput(paneId: string, listener: (text: string) => void): () => void {
+  terminalOutputListeners.set(paneId, listener);
+  const pending = pendingTerminalOutput.get(paneId);
+  if (pending !== undefined) {
+    pendingTerminalOutput.delete(paneId);
+    listener(pending);
+  }
+  return () => {
+    if (terminalOutputListeners.get(paneId) === listener) terminalOutputListeners.delete(paneId);
+  };
+}
+
 export const runtimeUiActions = {
+  appendTerminalOutput,
   activateTerminalGroup: (groupId: string) => useRuntimeUiStore.getState().activateTerminalGroup(groupId),
   activateTerminalPane: (paneId: string) => useRuntimeUiStore.getState().activateTerminalPane(paneId),
   closeAllTerminals: () => useRuntimeUiStore.getState().closeAllTerminals(),

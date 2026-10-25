@@ -393,6 +393,59 @@ function asJsonBody(body: unknown, endpointId?: string): RequestInit {
   );
 }
 
+/**
+ * Runs a host script and passes its output on as it arrives (NDJSON from the
+ * app server); resolves with the exit event's result.
+ */
+export async function streamHostScript(
+  input: RuntimeTargetRequest & { scriptPath?: string; script?: string; timeoutSeconds?: number },
+  onOutput: (text: string, stream: "stdout" | "stderr") => void
+): Promise<unknown> {
+  const endpointId = resolveTargetEndpointId(input);
+  let response: Response;
+  try {
+    response = await fetchRuntimeResource(
+      "/api/runtime/lab-operations/host-script/stream",
+      asJsonBody(input, endpointId)
+    );
+  } catch (error) {
+    markEndpointUnavailable(endpointId, "offline");
+    throw error;
+  }
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      markEndpointUnavailable(endpointId, "session_expired");
+    }
+    throw new Error(await readError(response));
+  }
+  if (!response.body) throw new Error("The script stream has no body.");
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: unknown;
+  const handle = (line: string) => {
+    if (line.trim() === "") return;
+    const event = JSON.parse(line) as { type?: string; stream?: string; text?: string; result?: unknown; error?: string };
+    if (event.type === "output" && typeof event.text === "string") {
+      onOutput(event.text, event.stream === "stderr" ? "stderr" : "stdout");
+    } else if (event.type === "exit") {
+      result = event.result;
+    } else if (event.type === "error") {
+      throw new Error(event.error ?? "The script failed.");
+    }
+  };
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    buffer += decoder.decode(chunk.value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    lines.forEach(handle);
+  }
+  handle(buffer);
+  if (result === undefined) throw new Error("The script stream ended without an exit status.");
+  return result;
+}
+
 export async function inspectAllLabs(endpointId?: string): Promise<InspectAllLabsResponse> {
   const payload = await requestJson<unknown>(
     "/api/runtime/inspect/all",

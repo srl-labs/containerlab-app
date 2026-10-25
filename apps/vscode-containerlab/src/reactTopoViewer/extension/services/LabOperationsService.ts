@@ -6,6 +6,7 @@
 import * as vscode from "vscode";
 import type {
   LabExecRequest,
+  LabHostScriptEvent,
   LabHostScriptRequest,
   LabHostScriptResult,
   LabOperationName,
@@ -48,17 +49,30 @@ function positiveNumber(value: unknown): number | undefined {
 
 let scriptOutput: vscode.OutputChannel | undefined;
 
-/** A script button's output in the "Containerlab Scripts" output channel. */
-function showScriptOutput(title: string, result: LabHostScriptResult): void {
+/**
+ * Runs a script button's script with its output in the "Containerlab Scripts"
+ * output channel as it comes; resolves with how it ended.
+ */
+async function runScriptInOutputChannel(
+  title: string,
+  events: AsyncIterable<LabHostScriptEvent>
+): Promise<LabHostScriptResult> {
   scriptOutput ??= vscode.window.createOutputChannel("Containerlab Scripts");
-  const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
-  scriptOutput.appendLine(`=== ${title} (${new Date().toLocaleTimeString()}) ===`);
-  for (const text of [result.stdout, result.stderr]) {
-    if (text.trim() !== "") scriptOutput.appendLine(text.trimEnd());
+  const channel = scriptOutput;
+  channel.appendLine(`=== ${title} (${new Date().toLocaleTimeString()}) ===`);
+  channel.show(true);
+  for await (const event of events) {
+    if (event.type === "output") {
+      channel.append(event.text);
+      continue;
+    }
+    const { result } = event;
+    const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
+    channel.appendLine(`[${status} after ${Math.round(result.durationMs / 100) / 10}s]`);
+    channel.appendLine("");
+    return result;
   }
-  scriptOutput.appendLine(`[${status} after ${Math.round(result.durationMs / 100) / 10}s]`);
-  scriptOutput.appendLine("");
-  scriptOutput.show(true);
+  throw new Error("The script ended without an exit status.");
 }
 
 class LabOperationsService {
@@ -109,10 +123,9 @@ class LabOperationsService {
             : { script: typeof request.script === "string" ? request.script : "" }),
           timeoutSeconds: positiveNumber(request.timeoutSeconds)
         };
-        const result = await backend.runHostScript(target, script);
         const outputTitle = optionalString(request.outputTitle);
-        if (outputTitle !== undefined) showScriptOutput(outputTitle, result);
-        return result;
+        if (outputTitle === undefined) return backend.runHostScript(target, script);
+        return runScriptInOutputChannel(outputTitle, await backend.streamHostScript(target, script));
       }
     }
   }

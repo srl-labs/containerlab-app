@@ -693,6 +693,7 @@ function buildInitialTopoViewerData(
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,
+    animateTraffic: viewerSettings.animateTraffic === true,
     showDummyLinks: viewerSettings.showDummyLinks !== false,
     showWaitFor: viewerSettings.showWaitFor === true,
     ...(resolvedLinkLabelMode !== null ? { linkLabelMode: resolvedLinkLabelMode } : {}),

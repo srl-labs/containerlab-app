@@ -2,11 +2,15 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { LabHostScriptRequest, LabHostScriptResult } from "@containerlab/clab-ui/host";
+import type {
+  LabHostScriptEvent,
+  LabHostScriptRequest,
+  LabHostScriptResult
+} from "@containerlab/clab-ui/host";
 
 import { LabBackendError } from "../contract/errors.ts";
 import type { ResolvedLocalOptions } from "./options.ts";
-import { runCommand } from "./process.ts";
+import { spawnLines } from "./process.ts";
 
 /** Keeps the tail of each stream so a chatty script cannot flood the UI. */
 const MAX_OUTPUT_CHARS = 512 * 1024;
@@ -41,15 +45,15 @@ async function resolveScriptFile(scriptPath: string, topology: string | undefine
 }
 
 /**
- * Runs a script button's script with bash on this machine, from the topology
- * folder, and collects its output. `CLAB_LAB_NAME` and `CLAB_TOPOLOGY` tell
- * the script which lab it belongs to.
+ * Starts a script button's script with bash on this machine, from the topology
+ * folder, and yields its output lines as they come, then how it ended.
+ * `CLAB_LAB_NAME` and `CLAB_TOPOLOGY` tell the script which lab it belongs to.
  */
-export async function runLocalHostScript(
+export async function streamLocalHostScript(
   options: ResolvedLocalOptions,
   lab: { labName: string; topology?: string },
   request: LabHostScriptRequest
-): Promise<LabHostScriptResult> {
+): Promise<AsyncIterable<LabHostScriptEvent>> {
   if (!options.hostScripts) {
     throw new LabBackendError("Script buttons are turned off on this lab host.", 403);
   }
@@ -71,18 +75,55 @@ export async function runLocalHostScript(
   };
 
   const started = Date.now();
-  const result = await runCommand("bash", args, {
+  const command = await spawnLines("bash", args, {
     cwd: lab.topology !== undefined ? path.dirname(lab.topology) : options.workspaceRoot,
-    env,
-    timeoutMs
+    env
   });
-  const durationMs = Date.now() - started;
-  return {
-    exitCode: result.code,
-    stdout: tail(result.stdout),
-    stderr: tail(result.stderr),
-    // A spawn timeout stops the script with a signal, which leaves no exit code.
-    timedOut: timeoutMs !== undefined && result.code === null && durationMs >= timeoutMs,
-    durationMs
-  };
+  let timedOut = false;
+  const timer =
+    timeoutMs !== undefined
+      ? setTimeout(() => {
+          timedOut = true;
+          command.kill();
+        }, timeoutMs)
+      : undefined;
+
+  async function* events(): AsyncGenerator<LabHostScriptEvent> {
+    const collected = { stdout: "", stderr: "" };
+    try {
+      for await (const { line, stream } of command.lines) {
+        const text = `${line}\n`;
+        collected[stream] = tail(collected[stream] + text);
+        yield { type: "output", stream, text };
+      }
+      const exit = await command.exit;
+      yield {
+        type: "exit",
+        result: {
+          exitCode: exit.code,
+          stdout: collected.stdout,
+          stderr: collected.stderr,
+          timedOut,
+          durationMs: Date.now() - started
+        }
+      };
+    } finally {
+      clearTimeout(timer);
+      // A consumer that stops reading early, e.g. a closed connection, stops the script.
+      command.kill();
+    }
+  }
+  return events();
+}
+
+/** Runs a script button's script to the end and collects its output. */
+export async function runLocalHostScript(
+  options: ResolvedLocalOptions,
+  lab: { labName: string; topology?: string },
+  request: LabHostScriptRequest
+): Promise<LabHostScriptResult> {
+  for await (const event of await streamLocalHostScript(options, lab, request)) {
+    if (event.type === "exit") return event.result;
+  }
+  throw new LabBackendError("The script ended without an exit status.", 500);
 }

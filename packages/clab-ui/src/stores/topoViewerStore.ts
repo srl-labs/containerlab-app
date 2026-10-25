@@ -94,6 +94,7 @@ export interface TopoViewerState {
   telemetryNodeSizePx: number;
   telemetryInterfaceSizePercent: number;
   showRateLabels: boolean;
+  animateTraffic: boolean;
   telemetryGlobalInterfaceOverrideSelection: string;
   telemetryInterfaceLabelOverrides: Record<string, string>;
   gridLineWidth: number;
@@ -149,6 +150,7 @@ export interface TopoViewerActions {
   setTelemetryNodeSizePx: (value: number) => void;
   setTelemetryInterfaceSizePercent: (value: number) => void;
   setShowRateLabels: (enabled: boolean) => void;
+  setAnimateTraffic: (enabled: boolean) => void;
   setTelemetryGlobalInterfaceOverrideSelection: (value: string) => void;
   setTelemetryInterfaceLabelOverrides: (overrides: Record<string, string>) => void;
   setTelemetryInterfaceLabelOverride: (endpoint: string, override: string | null) => void;
@@ -226,6 +228,7 @@ const initialState: TopoViewerState = {
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,
+  animateTraffic: false,
   telemetryGlobalInterfaceOverrideSelection: "__auto__",
   telemetryInterfaceLabelOverrides: {},
   gridLineWidth: 0.5,
@@ -507,6 +510,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set({ showRateLabels });
   },
 
+  setAnimateTraffic: (animateTraffic) => {
+    set({ animateTraffic });
+  },
+
   setTelemetryGlobalInterfaceOverrideSelection: (value) => {
     set({ telemetryGlobalInterfaceOverrideSelection: value });
   },
@@ -735,6 +742,9 @@ export const useNodeBoxSpacing = () => useTopoViewerStore((state) => state.nodeB
 
 /** Get how links are drawn: straight lines or right-angle elbows */
 export const useLinkStyle = () => useTopoViewerStore((state) => state.linkStyle);
+
+/** Whether links animate their live traffic */
+export const useAnimateTraffic = () => useTopoViewerStore((state) => state.animateTraffic);
 
 /** Get processing state */
 export const useIsProcessing = () => useTopoViewerStore((state) => state.isProcessing);

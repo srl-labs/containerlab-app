@@ -1999,6 +1999,16 @@ test("/api/runtime/lab-operations run exec, save with copy and details", async (
     payload: { script: "echo hi", topologyRef },
   });
   assert.equal(script.statusCode, 501, script.body);
+
+  // The streamed variant fails the same way, as JSON, before any output starts.
+  const stream = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/host-script/stream",
+    headers: { cookie },
+    payload: { script: "echo hi", topologyRef },
+  });
+  assert.equal(stream.statusCode, 501, stream.body);
+  assert.match(stream.headers["content-type"] ?? "", /application\/json/);
 });
 
 test("/api/runtime/lab-operations reject bad input before reaching the lab host", async (t) => {
@@ -2018,6 +2028,7 @@ test("/api/runtime/lab-operations reject bad input before reaching the lab host"
     ["/api/runtime/lab-operations/nodes/pause", { nodeNames: ["leaf1"], topologyRef }],
     ["/api/runtime/lab-operations/host-script", { script: "  ", topologyRef }],
     ["/api/runtime/lab-operations/host-script", { script: "echo hi", timeoutSeconds: -1, topologyRef }],
+    ["/api/runtime/lab-operations/host-script/stream", { script: " ", topologyRef }],
   ] as const) {
     const response = await context.app.inject({ method: "POST", url, headers: { cookie }, payload });
     assert.equal(response.statusCode, 400, `${url}: ${response.body}`);

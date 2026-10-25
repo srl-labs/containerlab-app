@@ -1,5 +1,6 @@
 import type {
   LabExecRequest,
+  LabHostScriptEvent,
   LabHostScriptRequest,
   LabHostScriptResult,
   LabLifecycleOptions,
@@ -356,6 +357,14 @@ export interface LabBackend {
   inspectLabDetails(lab: LabTarget): Promise<InspectDetailsResponse>;
   /** Runs a script button's script on the lab host, from the topology folder. */
   runHostScript(lab: LabTarget, request: LabHostScriptRequest): Promise<LabHostScriptResult>;
+  /**
+   * Like `runHostScript`, with output as it comes. Resolves once the script runs;
+   * the last event is its exit. Stopping the iteration stops the script.
+   */
+  streamHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest
+  ): Promise<AsyncIterable<LabHostScriptEvent>>;
 
   // Nodes (by container name)
 

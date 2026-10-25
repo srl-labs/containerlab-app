@@ -48,6 +48,7 @@ import type { ContainerState, LabState } from "../types";
 
 import {
   runtimeUiActions,
+  subscribeTerminalOutput,
   useRuntimeUiStore,
   type RuntimeTerminalGroup,
   type RuntimeTerminalPane,
@@ -438,11 +439,19 @@ export function RuntimeTerminalPaneView({
     term.loadAddon(fitAddon);
     term.open(terminalRef.current);
     requestAnimationFrame(() => fitAddon.fit());
+    let unsubscribeOutput: (() => void) | undefined;
     if (isOutputTerminal) {
       const output = (paneState.initialOutput ?? "").trim();
-      term.write(
-        output.length > 0 ? `${normalizeTerminalOutput(output)}\r\n` : "No output returned.\r\n"
-      );
+      if (output.length > 0) {
+        term.write(`${normalizeTerminalOutput(output)}\r\n`);
+      } else if (paneState.streaming !== true) {
+        term.write("No output returned.\r\n");
+      }
+      if (paneState.streaming === true) {
+        unsubscribeOutput = subscribeTerminalOutput(paneState.id, (text) =>
+          term.write(normalizeTerminalOutput(text))
+        );
+      }
       runtimeUiActions.setTerminalReady(paneState.id);
     } else {
       term.write(`Opening ${paneState.protocol} terminal for ${paneState.nodeName}...\r\n`);
@@ -477,6 +486,7 @@ export function RuntimeTerminalPaneView({
     fitAddonRef.current = fitAddon;
 
     return () => {
+      unsubscribeOutput?.();
       dataDisposable.dispose();
       observer.disconnect();
       xtermRef.current?.dispose();
@@ -488,6 +498,7 @@ export function RuntimeTerminalPaneView({
     isOutputTerminal,
     paneState.id,
     paneState.initialOutput,
+    paneState.streaming,
     paneState.nodeName,
     paneState.protocol
   ]);

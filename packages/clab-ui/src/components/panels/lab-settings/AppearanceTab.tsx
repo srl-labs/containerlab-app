@@ -105,6 +105,8 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const setNodeStyle = useTopoViewerStore((state) => state.setNodeStyle);
   const setNodeBoxSpacing = useTopoViewerStore((state) => state.setNodeBoxSpacing);
   const setLinkStyle = useTopoViewerStore((state) => state.setLinkStyle);
+  const animateTraffic = useTopoViewerStore((state) => state.animateTraffic);
+  const setAnimateTraffic = useTopoViewerStore((state) => state.setAnimateTraffic);
   const setMgmtNetworkBadge = useTopoViewerStore((state) => state.setMgmtNetworkBadge);
   const setTelemetryNodeSizePx = useTopoViewerStore((state) => state.setTelemetryNodeSizePx);
   const setTelemetryInterfaceSizePercent = useTopoViewerStore(
@@ -308,6 +310,18 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           onChange={(e) => {
             if (isReadOnly) return;
             onShowRateLabelsChange(e.target.checked);
+          }}
+        />
+      </SettingsField>
+      <SettingsField title="Animate traffic" description="Moving dashes show live traffic on links.">
+        <Switch
+          size="small"
+          checked={animateTraffic}
+          disabled={isReadOnly}
+          slotProps={{ input: { "aria-label": "Animate traffic" } }}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setAnimateTraffic(e.target.checked);
           }}
         />
       </SettingsField>
