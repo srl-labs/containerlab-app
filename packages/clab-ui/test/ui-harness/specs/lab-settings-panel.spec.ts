@@ -227,6 +227,9 @@ test.describe("Lab Settings Modal", () => {
         autoCreateTrafficRateAnnotations: true
       });
 
+    await page.locator(SEL_LAB_SETTINGS_CLOSE_BTN).click();
+    await expect(modal).toBeHidden();
+
     await topoViewerPage.gotoFile(SIMPLE_FILE);
     await topoViewerPage.waitForCanvasReady();
     await topoViewerPage.setEditMode();
@@ -500,7 +503,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.getByRole("spinbutton", { name: "Node size", exact: true }).fill("72");
 
     await saveBtn.click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
