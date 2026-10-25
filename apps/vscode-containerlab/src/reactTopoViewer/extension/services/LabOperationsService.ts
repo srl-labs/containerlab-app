@@ -125,7 +125,10 @@ class LabOperationsService {
         };
         const outputTitle = optionalString(request.outputTitle);
         if (outputTitle === undefined) return backend.runHostScript(target, script);
-        return runScriptInOutputChannel(outputTitle, await backend.streamHostScript(target, script));
+        return runScriptInOutputChannel(
+          outputTitle,
+          await backend.streamHostScript(target, script)
+        );
       }
     }
   }

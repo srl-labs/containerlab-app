@@ -233,7 +233,7 @@ test.describe("Node Icon Change", () => {
 
     await openNodeEditor(page, nodeId);
     await openIconEditor(page);
-    await expect(color).toHaveValue("ff6600");
+    await expect(color).toHaveValue("#ff6600");
     // The built-in default cyan must also be selectable as an explicit custom SVG tint.
     await color.fill("00c9ff");
     await color.blur();
@@ -284,7 +284,7 @@ test.describe("Node Icon Change", () => {
     await dialog.getByRole("tab", { name: "Built-in", exact: true }).click();
     await dialog.locator('button[title="Leaf"]').click();
     await expect(color).toBeEnabled();
-    await expect(color).toHaveValue("ff6600");
+    await expect(color).toHaveValue("#ff6600");
   });
 
   test("changing kind updates node data", async ({ page, topoViewerPage }) => {
