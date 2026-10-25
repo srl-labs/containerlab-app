@@ -245,7 +245,7 @@ export function SettingsApp({
               "&:hover": { color: "text.primary" },
             }}
           >
-            VS Code Settings
+            VS Code settings
           </Button>
         }
         toolbar={
@@ -492,7 +492,7 @@ export function SettingsApp({
               </Button>
             }
           >
-            Local and the lab hosts are managed on the Lab Hosts page.
+            Manage Local and lab hosts on the Lab Hosts page.
           </Alert>
         )}
         {showLabHosts && labHosts && (
@@ -584,10 +584,7 @@ export function SettingsApp({
               ))}
             </Box>
             <Typography variant="body2" color="text.secondary">
-              All {definitions.length} Containerlab settings stay in sync with
-              VS Code. User settings apply to this session; Workspace settings
-              apply to the open workspace. Reset removes an override so the
-              setting inherits again.
+              All {definitions.length} Settings stay in sync with VS Code. User settings apply to this session, Workspace settings to the open workspace. Reset removes an override.
             </Typography>
           </Box>
         )}
@@ -600,8 +597,7 @@ export function SettingsApp({
       >
         <DialogTitle>Discard unsaved changes?</DialogTitle>
         <DialogContent>
-          Your drafts belong to the current settings scope. Save them first or
-          discard them to switch.
+          Your drafts belong to this scope. Save or discard them to switch.
         </DialogContent>
         <DialogActions>
           <Button variant="text" onClick={() => setPendingTarget(undefined)}>

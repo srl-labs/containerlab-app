@@ -163,8 +163,7 @@ export function SettingCard({
     <Stack spacing={1}>
       {current.workspaceOverride && (
         <Alert severity="info" sx={{ py: 0 }}>
-          This workspace overrides the User value. Select Workspace to change
-          the value used here.
+          This workspace overrides the User value. Select Workspace to change it.
         </Alert>
       )}
       {dirty &&

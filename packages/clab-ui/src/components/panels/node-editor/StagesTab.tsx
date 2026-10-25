@@ -407,8 +407,7 @@ export const StagesTab: React.FC<TabProps> = ({ data, onChange }) => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", pb: 1 }}>
       <Typography variant="body2" sx={{ color: "text.secondary", px: 2, pt: 2 }}>
-        Hold back a stage until other nodes finish theirs, and run commands when the node
-        enters or leaves a stage.
+        Wait for stages of other nodes, and run commands when the node enters or leaves a stage.
       </Typography>
       {cycle && (
         <Typography

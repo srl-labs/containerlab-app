@@ -60,7 +60,7 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
         Cancel
       </Button>
       <Button size="small" onClick={onConfirm}>
-        Create Links
+        Create links
       </Button>
     </DialogActions>
   </Dialog>

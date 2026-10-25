@@ -184,7 +184,6 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
           mode={mode}
           isLocked={isLocked}
           labSettings={labSettings}
-          onClose={onClose}
           saveRef={saveRef}
           activeTab={activeSection}
           onInvalid={setActiveSection}

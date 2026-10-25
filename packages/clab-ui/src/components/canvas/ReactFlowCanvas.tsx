@@ -1001,8 +1001,7 @@ function renderGeoMapLayer(
         >
           <strong>Geo map unavailable:</strong> {geoInitError}
           <br />
-          The map requires WebGL. If VS Code is running without GPU acceleration (e.g. after a
-          driver update or suspend), fully restart VS Code and re-open this view.
+          The map needs WebGL. If VS Code lost GPU acceleration (for example after a driver update or suspend), restart VS Code and reopen this view.
         </div>
       )}
     </div>

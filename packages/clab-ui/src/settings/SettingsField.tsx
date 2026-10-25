@@ -5,6 +5,24 @@ import Typography from "@mui/material/Typography";
 /** Width every inline field shares, so selects and text fields line up down the page. */
 const CONTROL_WIDTH = 240;
 
+function SettingsFieldDescription({ description }: { description?: string }) {
+  if (description === undefined || description === "") return null;
+  return (
+    <Typography
+      variant="body2"
+      sx={{
+        mt: 0.25,
+        color: "text.secondary",
+        whiteSpace: "pre-line",
+        overflowWrap: "anywhere",
+        maxWidth: 680,
+      }}
+    >
+      {description}
+    </Typography>
+  );
+}
+
 /** Shared field geometry and surfaces; each host supplies its own controls. */
 export function SettingsField({
   title,
@@ -19,7 +37,7 @@ export function SettingsField({
   settingKey,
 }: {
   title: string;
-  description: string;
+  description?: string;
   metadata?: React.ReactNode;
   children: React.ReactNode;
   actions?: React.ReactNode;
@@ -92,18 +110,7 @@ export function SettingsField({
           </Typography>
           {metadata}
         </Box>
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 0.25,
-            color: "text.secondary",
-            whiteSpace: "pre-line",
-            overflowWrap: "anywhere",
-            maxWidth: 680,
-          }}
-        >
-          {description}
-        </Typography>
+        <SettingsFieldDescription description={description} />
       </Box>
       <Box
         sx={{

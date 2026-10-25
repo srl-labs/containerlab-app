@@ -26,10 +26,10 @@ test("signs in to a lab host, reports a wrong password, and signs out again", as
   const dialog = page.getByRole("dialog", { name: "Sign in to lab1" });
   await expect(dialog.getByLabel("Username")).toHaveValue("alice");
   await dialog.getByLabel("Password").fill("wrong");
-  await dialog.getByRole("button", { name: "Sign In", exact: true }).click();
+  await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByText("Invalid credentials")).toBeVisible();
   await dialog.getByLabel("Password").fill("secret");
-  await dialog.getByRole("button", { name: "Sign In", exact: true }).click();
+  await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(hostCard(page, "lab1")).toContainText("Connected");
 
@@ -44,12 +44,12 @@ test("adds a lab host only once its sign-in works", async ({ page }) => {
   await form.getByLabel("Name", { exact: true }).fill("lab2");
   await form.getByLabel("Username", { exact: true }).fill("bob");
   await form.getByLabel("Password", { exact: true }).fill("wrong");
-  await form.getByRole("button", { name: "Add Lab Host" }).click();
+  await form.getByRole("button", { name: "Add lab host" }).click();
   await expect(page.getByText("Invalid credentials")).toBeVisible();
   await expect(hostCard(page, "lab2")).toHaveCount(0);
 
   await form.getByLabel("Password", { exact: true }).fill("secret");
-  await form.getByRole("button", { name: "Add Lab Host" }).click();
+  await form.getByRole("button", { name: "Add lab host" }).click();
   await expect(hostCard(page, "lab2")).toContainText("Connected");
   await expect(page.getByRole("navigation").getByRole("button", { name: /Lab Hosts/ })).toContainText("3");
 });
@@ -58,10 +58,10 @@ test("hides Local and shows it again", async ({ page }) => {
   await page.goto("/settings.html?category=labHosts");
   await page.getByRole("button", { name: "Remove Local" }).click();
   const dialog = page.getByRole("dialog", { name: "Hide Local" });
-  await expect(dialog).toContainText("Show Local brings them back.");
+  await expect(dialog).toContainText("Show local brings them back.");
   await dialog.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(hostCard(page, "Local")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Show Local" }).click();
+  await page.getByRole("button", { name: "Show local" }).click();
   await expect(hostCard(page, "Local")).toContainText("Connected");
 });

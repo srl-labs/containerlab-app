@@ -103,7 +103,7 @@ for (const mode of ["production", "development"] as const) {
         const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
         const requestPromise = page.waitForRequest((request) => request.url().includes("/reconnect"));
-        await dialog.getByRole("button", { name: "Sign In", exact: true }).click();
+        await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
         const request = await requestPromise;
         expect(new URL(request.url()).pathname).toBe(`${basePath}/auth/endpoints/${savedEndpoint.id}/reconnect`);
         await expect(dialog).not.toBeVisible();

@@ -182,8 +182,7 @@ const PlanBody: React.FC<{ state: PlanState }> = ({ state }) => {
       ))}
       {applyPlanLosesState(plan) && (
         <Alert severity="warning" variant="outlined" data-testid="apply-plan-state-warning">
-          Recreated and removed nodes lose configuration that was not saved. Save the lab first to
-          keep it.
+          Recreated and removed nodes lose unsaved configuration. Save the lab first to keep it.
         </Alert>
       )}
     </>

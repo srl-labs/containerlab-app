@@ -159,10 +159,13 @@ const KeyValueItem: React.FC<KeyValueItemProps> = ({
       helperText={inherited !== undefined ? describeInheritedValue(value, inherited) : undefined}
       sx={{ flex: 1 }}
     />
-    {inherited !== undefined ? (
-      <InheritedItemMarker source={inherited.source} />
-    ) : (
-      <DeleteItemButton onRemove={onRemove} disabled={disabled} />
-    )}
+    {/* Centers the button on the 32px fields; the row stays top-aligned for helper text. */}
+    <Box sx={{ pt: 0.5 }}>
+      {inherited !== undefined ? (
+        <InheritedItemMarker source={inherited.source} />
+      ) : (
+        <DeleteItemButton onRemove={onRemove} disabled={disabled} />
+      )}
+    </Box>
   </Box>
 );

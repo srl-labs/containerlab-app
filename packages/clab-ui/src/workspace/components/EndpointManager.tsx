@@ -117,7 +117,7 @@ function addEndpointButtonLabel(busyKey: string | null, mode: "initial" | "manag
   if (busyKey === "add") {
     return "Signing in...";
   }
-  return mode === "initial" ? "Sign In" : "Add Lab Host";
+  return mode === "initial" ? "Sign in" : "Add lab host";
 }
 
 function endpointActionButtonLabel(
@@ -127,7 +127,7 @@ function endpointActionButtonLabel(
 ): string {
   const defaultLabels = {
     edit: "Save",
-    reconnect: "Sign In",
+    reconnect: "Sign in",
     remove: "Remove"
   };
   if (!endpoint) {
@@ -591,7 +591,7 @@ function LocalEndpointCard(props: {
               sx={{ alignSelf: props.variant === "initial" ? "stretch" : "flex-start" }}
               data-testid="standalone-local-endpoint-add"
             >
-              {offer.addLabel ?? "Use This Computer"}
+              {offer.addLabel ?? "Use this computer"}
             </Button>
           ) : null}
           {!offer.available && offer.onCheckAgain ? (
@@ -602,7 +602,7 @@ function LocalEndpointCard(props: {
               startIcon={<RefreshIcon />}
               data-testid="standalone-local-endpoint-check"
             >
-              Check Again
+              Check again
             </Button>
           ) : null}
         </Stack>
@@ -1604,7 +1604,7 @@ export function EndpointManager({
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
               {removeDialog.endpoint?.kind === "local"
-                ? `Running labs keep running. ${localEndpoint?.addLabel ?? "Use This Computer"} brings them back.`
+                ? `Running labs keep running. ${localEndpoint?.addLabel ?? "Use this computer"} brings them back.`
                 : "Its labs keep running on the host. Open topologies and terminals from it close."}
             </Typography>
           </Stack>

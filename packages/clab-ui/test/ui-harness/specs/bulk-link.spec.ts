@@ -81,7 +81,7 @@ test.describe("Bulk Link Devices", () => {
     await page.waitForTimeout(500);
 
     // Confirm link creation in the confirmation dialog
-    const createLinksBtn = page.getByRole("button", { name: "Create Links" });
+    const createLinksBtn = page.getByRole("button", { name: "Create links" });
     await expect(createLinksBtn).toBeVisible({ timeout: 3000 });
     await createLinksBtn.click();
     await page.waitForTimeout(500);

@@ -25,7 +25,6 @@ export interface LabSettingsSectionProps extends GridSettingsControlsProps {
   mode: "view" | "edit";
   isLocked: boolean;
   labSettings?: LabSettings;
-  onClose: () => void;
   saveRef?: React.RefObject<(() => Promise<void>) | null>;
   activeTab: "basic" | "mgmt" | "certificates" | "inheritance" | "appearance" | "grid";
   /** Called instead of saving when a section has errors, with the section to show */
@@ -36,7 +35,6 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   mode,
   isLocked,
   labSettings,
-  onClose,
   saveRef,
   activeTab,
   onInvalid,
@@ -123,7 +121,6 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
     if (!areTopologySettingsReadOnly) {
       await state.handleSave();
     }
-    onClose();
   };
 
   if (saveRef) saveRef.current = handleSave;

@@ -147,7 +147,7 @@ export function AppearanceSettingsContent({
           {pendingDelete && isInUse(pendingDelete)
             ? `The app switches back to ${resolveAppTheme(pendingDelete.mode, pendingDelete.base).name}. `
             : ""}
-          Export the theme first if you want to keep a copy.
+          Export it first to keep a copy.
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -307,7 +307,7 @@ export function AppearanceSettingsContent({
             }}
           >
             <PaletteOutlinedIcon sx={{ fontSize: 20, color: "var(--vscode-icon-foreground)", opacity: 0.7 }} />
-            <Typography variant="body2">No custom themes yet. New theme starts from the one you are using.</Typography>
+            <Typography variant="body2">No custom themes yet. New theme copies the current one.</Typography>
           </Box>
         ) : (
           <Box sx={{ border: 1, borderColor: "divider", borderRadius: floatingRadius }}>

@@ -86,7 +86,7 @@ test.describe("Multiple management networks", () => {
     await modal.getByRole("combobox", { name: "Management network badge" }).click();
     await page.getByRole("option", { name: "Always" }).click();
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await page.mouse.move(5, 5);
     await expect(dot).toHaveCSS("opacity", "1");
@@ -102,7 +102,7 @@ test.describe("Multiple management networks", () => {
     await expect(modal.getByTestId("lab-settings-mgmt-network-0")).toContainText("2 nodes");
     await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText("lab");
     await expect(modal.getByTestId("lab-settings-mgmt-unknown")).toContainText("client2 (storage)");
-    await expect(modal.getByRole("combobox", { name: "Default for Nodes" })).toContainText("oob");
+    await expect(modal.getByRole("combobox", { name: "Default management network" })).toContainText("oob");
   });
 
   test("adding a network appends it to the mgmt list", async ({ page, topoViewerPage }) => {
@@ -111,7 +111,7 @@ test.describe("Multiple management networks", () => {
     await expect(modal.getByTestId("lab-settings-mgmt-network-2")).toBeVisible();
     await modal.getByRole("textbox", { name: "Network Name" }).fill("storage");
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => (await readTopology(topoViewerPage, MULTI_FILE)).mgmt)
@@ -134,7 +134,7 @@ test.describe("Multiple management networks", () => {
     await modal.getByRole("button", { name: "Edit management network lab" }).click();
     await modal.getByRole("textbox", { name: "Network Name" }).fill("data");
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => {
@@ -207,11 +207,11 @@ test.describe("Single management network", () => {
     await modal.locator(SEL_ADD_NETWORK).click();
     await expect(modal.getByTestId("lab-settings-mgmt-unassigned")).toContainText("srl1, srl2");
 
-    await modal.getByRole("combobox", { name: "Default for Nodes" }).click();
+    await modal.getByRole("combobox", { name: "Default management network" }).click();
     await page.getByRole("option", { name: "clab" }).click();
     await expect(modal.getByTestId("lab-settings-mgmt-unassigned")).toHaveCount(0);
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => {
@@ -266,7 +266,7 @@ test.describe("Macvlan management network", () => {
       0
     );
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => (await readTopology(topoViewerPage, MULTI_FILE)).mgmt)

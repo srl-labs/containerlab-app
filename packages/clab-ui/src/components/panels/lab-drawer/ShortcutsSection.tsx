@@ -143,8 +143,8 @@ export const ShortcutsSection: React.FC = () => {
           <li>
             Box select nodes, then <code>Ctrl+G</code> to group or <code>Del</code> to delete
           </li>
-          <li>Double-click any item to directly edit</li>
-          <li>Shift+Click a node to start creating a link</li>
+          <li>Double-click an item to edit it</li>
+          <li>Shift+click a node to start a link</li>
         </Typography>
       </ShortcutSection>
     </Box>

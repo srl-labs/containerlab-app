@@ -12,6 +12,7 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
@@ -39,8 +40,6 @@ import { findRuntimeContainer } from "../state/runtimeContainerLookup";
 import { RuntimeCaptureDialog } from "./RuntimeCaptureDialog";
 import { LabToolDialogs } from "./LabToolDialogs";
 import {
-  DEFAULT_TOPOLOGY_FILE_NAME,
-  normalizeTopologyFileNameForCreate,
   setCloneRepoDialogRequester,
   setCreateTopologyDialogRequester,
   setEndpointSelectionDialogRequester,
@@ -608,7 +607,7 @@ function NetemDialogView(props: {
           </TableContainer>
           {!props.netemLoading && interfaceRows.length === 0 ? (
             <Typography variant="body2" sx={EMPTY_STATE_SX}>
-              No runtime interface data is available for this node.
+              No interface data for this node.
             </Typography>
           ) : null}
         </Stack>
@@ -835,6 +834,13 @@ function CloneRepoDialogView(props: {
   );
 }
 
+const TOPOLOGY_FILE_SUFFIX = ".clab.yml";
+
+/** The name without its topology extension, so the field holds only the part the user types. */
+function stripTopologyFileSuffix(fileName: string): string {
+  return fileName.replace(/\.clab\.ya?ml$/i, "");
+}
+
 function createTopologyFileNameError(fileName: string): string {
   if (isSharedWorkspacePath(fileName)) {
     return "Choose Shared above and enter the file name without @shared/.";
@@ -891,7 +897,7 @@ function CreateTopologyDialogView(props: {
   const [location, setLocation] = useState<"personal" | "shared">(
     isSharedWorkspacePath(request.defaultFileName) ? "shared" : "personal"
   );
-  const [fileName, setFileName] = useState(() => request.defaultFileName.replace(/^@shared\//, ""));
+  const [fileName, setFileName] = useState(() => stripTopologyFileSuffix(request.defaultFileName.replace(/^@shared\//, "")));
   const [workspace, setWorkspace] = useState<{
     endpointId: string;
     shared: boolean;
@@ -904,7 +910,8 @@ function CreateTopologyDialogView(props: {
   // single personal workspace (like the sandbox) asks for the file name alone.
   const showEndpoint = request.endpointOptions.length > 1;
   const showLocation = !currentWorkspace?.error && (sharedAvailable || sharedUnavailable);
-  const trimmedFileName = fileName.trim().replace(/\\/g, "/");
+  // A pasted full name keeps a single suffix.
+  const trimmedFileName = stripTopologyFileSuffix(fileName.trim().replace(/\\/g, "/"));
   const fileNameError = trimmedFileName ? createTopologyFileNameError(trimmedFileName) : "";
   const canSubmit = Boolean(
     currentWorkspace && !currentWorkspace.error && !sharedUnavailable && trimmedFileName && !fileNameError &&
@@ -941,7 +948,7 @@ function CreateTopologyDialogView(props: {
     if (!canSubmit) return;
     props.closeCreateTopologyDialog({
       endpointId,
-      fileName: `${location === "shared" ? "@shared/" : ""}${normalizeTopologyFileNameForCreate(trimmedFileName)}`
+      fileName: `${location === "shared" ? "@shared/" : ""}${trimmedFileName}${TOPOLOGY_FILE_SUFFIX}`
     });
   };
 
@@ -990,7 +997,16 @@ function CreateTopologyDialogView(props: {
               }
             }}
             error={Boolean(fileNameError)}
-            helperText={fileNameError || `Add a folder to save it in a subfolder, e.g. labs/${DEFAULT_TOPOLOGY_FILE_NAME}.`}
+            helperText={fileNameError || undefined}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography variant="body2" sx={{ color: "text.secondary" }}>{TOPOLOGY_FILE_SUFFIX}</Typography>
+                  </InputAdornment>
+                )
+              }
+            }}
           />
         </Stack>
       </DialogContent>
@@ -1239,7 +1255,7 @@ function RuntimeSnackbarView(props: {
       open={props.snackbar.open}
       autoHideDuration={5000}
       onClose={props.closeSnackbar}
-      anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      anchorOrigin={{ vertical: "top", horizontal: "center" }}
       sx={{
         maxWidth: { xs: "calc(100vw - 32px)", sm: 560 }
       }}

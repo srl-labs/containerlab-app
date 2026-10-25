@@ -256,7 +256,7 @@ export function LoginPage({
           />
           {hasPersistedEndpoints ? (
             <Typography variant="body2" sx={{ color: "text.secondary", mt: 2, textAlign: "center" }}>
-              Enter your password to reconnect to your endpoints.
+              Enter your password to reconnect.
             </Typography>
           ) : null}
         </Box>

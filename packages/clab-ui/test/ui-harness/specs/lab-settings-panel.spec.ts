@@ -208,7 +208,7 @@ test.describe("Lab Settings Modal", () => {
     await chooseOption(page, "Quadratic");
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -226,6 +226,9 @@ test.describe("Lab Settings Modal", () => {
         showRateLabels: true,
         autoCreateTrafficRateAnnotations: true
       });
+
+    await page.locator(SEL_LAB_SETTINGS_CLOSE_BTN).click();
+    await expect(modal).toBeHidden();
 
     await topoViewerPage.gotoFile(SIMPLE_FILE);
     await topoViewerPage.waitForCanvasReady();
@@ -275,7 +278,7 @@ test.describe("Lab Settings Modal", () => {
 
     await modal.getByRole("switch", { name: "Show rate labels", exact: true }).check();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -317,7 +320,7 @@ test.describe("Lab Settings Modal", () => {
     await expect(showRateLabels).toBeChecked();
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -354,7 +357,7 @@ test.describe("Lab Settings Modal", () => {
     await page.waitForTimeout(200);
     await modal.getByRole("switch", { name: "Show rate labels", exact: true }).check();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -366,12 +369,14 @@ test.describe("Lab Settings Modal", () => {
       )
       .toEqual(expect.arrayContaining([expect.objectContaining({ label: "autocreated" })]));
 
+    await page.locator(SEL_LAB_SETTINGS_CLOSE_BTN).click();
+    await expect(modal).toBeHidden();
     modal = await openModal(page);
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
     await page.waitForTimeout(200);
     await modal.getByRole("switch", { name: "Show rate labels", exact: true }).uncheck();
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -421,8 +426,8 @@ test.describe("Lab Settings Modal", () => {
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await page.waitForTimeout(500);
 
-    // Modal should close after save
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    // Apply keeps the modal open
+    await expect(modal).toBeVisible();
 
     // Verify YAML was updated
     const yaml = await topoViewerPage.getYamlFromFile(SIMPLE_FILE);
@@ -498,7 +503,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.getByRole("spinbutton", { name: "Node size", exact: true }).fill("72");
 
     await saveBtn.click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(
@@ -580,7 +585,7 @@ test.describe("Lab Settings Modal", () => {
     await labNameInput.clear();
     await labNameInput.fill("renamed-lab");
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE), { timeout: 5000 })
@@ -618,7 +623,7 @@ test.describe("Lab Settings Modal", () => {
     await labNameInput.clear();
     await labNameInput.fill("multi-lab");
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
-    await expect(modal).not.toBeVisible({ timeout: 3000 });
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE), { timeout: 5000 })

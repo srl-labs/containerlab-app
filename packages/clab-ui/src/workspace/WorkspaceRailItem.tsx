@@ -119,7 +119,7 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
           </Box>
         )}
         <Box sx={{
-          position: "absolute", inset: "0 auto 0 0", width: pinned ? "100%" : 36, borderRadius: "inherit", pointerEvents: "none",
+          position: "absolute", inset: 0, borderRadius: "inherit", pointerEvents: "none",
           bgcolor: selected ? "action.selected" : "transparent",
           transition: `background-color ${MOTION}`,
           ".workspace-rail-item:hover &": { bgcolor: selected ? "action.selected" : "action.hover" },
@@ -136,7 +136,7 @@ export const WorkspaceRailItem = React.forwardRef<HTMLButtonElement, {
         <Box sx={{ display: "flex", alignItems: "center", flexShrink: 0, ml: 1, mr: trailing ? 0.5 : 1.5, pointerEvents: "none" }}>
           <Typography
             component="span"
-            variant="body2"
+            variant="body1"
             noWrap
             data-testid="rail-item-label"
             sx={{

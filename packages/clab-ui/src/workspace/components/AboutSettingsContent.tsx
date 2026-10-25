@@ -25,6 +25,13 @@ interface AboutAuthor {
 
 const TEXT_SECONDARY = "text.secondary";
 
+function appBuild(): { version: string; commit: string } {
+  const env = (import.meta as ImportMeta & {
+    env?: { VITE_CLAB_APP_VERSION?: string; VITE_CLAB_APP_COMMIT?: string };
+  }).env;
+  return { version: env?.VITE_CLAB_APP_VERSION ?? "", commit: env?.VITE_CLAB_APP_COMMIT ?? "" };
+}
+
 const authors: AboutAuthor[] = [
   {
     name: "Florian Schwarz",
@@ -186,6 +193,7 @@ export function AboutSettingsContent({
   const { assetUrl: publicAssetUrl } = useWorkspaceHost();
   const versionValue = versionLoading ? "Loading…" : versionInfo;
   const updateValue = versionLoading ? "Loading…" : versionCheck;
+  const { version, commit } = appBuild();
 
   return (
     <Stack spacing={3}>
@@ -209,10 +217,13 @@ export function AboutSettingsContent({
           <Typography variant="h5" component="h3">
             Containerlab App
           </Typography>
-          <Typography variant="body2" color={TEXT_SECONDARY} sx={{ mt: 0.25 }}>
-            Interactive topology visualization and editing for Containerlab network labs in the
-            standalone browser UI.
-          </Typography>
+          {version || commit ? (
+            <Typography variant="body2" color={TEXT_SECONDARY} data-testid="about-app-build" sx={{ mt: 0.25 }}>
+              {version ? `Version ${version}` : null}
+              {version && commit ? " · " : null}
+              {commit ? <Box component="span" sx={{ fontFamily: MONO_FONT_FAMILY }}>{commit}</Box> : null}
+            </Typography>
+          ) : null}
         </Box>
       </Box>
 

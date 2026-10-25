@@ -89,7 +89,7 @@ export const InheritanceTab: React.FC<InheritanceTabProps> = ({ isViewMode }) =>
     <>
       <SettingsField
         title="Defaults"
-        description="Settings every node gets unless its kind, group or the node itself sets them (topology.defaults)."
+        description="Apply to every node unless its kind, group or the node sets them (topology.defaults)."
         wide
       >
         <SectionList testId="lab-inheritance-defaults">
@@ -106,7 +106,7 @@ export const InheritanceTab: React.FC<InheritanceTabProps> = ({ isViewMode }) =>
 
       <SettingsField
         title="Kinds"
-        description="Settings for every node of a kind (topology.kinds). They win over defaults."
+        description="Apply to every node of a kind and win over defaults (topology.kinds)."
         wide
       >
         <SectionList testId="lab-inheritance-kinds">
@@ -135,7 +135,7 @@ export const InheritanceTab: React.FC<InheritanceTabProps> = ({ isViewMode }) =>
 
       <SettingsField
         title="Groups"
-        description="Settings for the nodes that name a group (topology.groups). They win over kinds and defaults. Not the same as canvas groups."
+        description="Apply to nodes that name the group and win over kinds and defaults (topology.groups). Not canvas groups."
         wide
       >
         <SectionList testId="lab-inheritance-groups">

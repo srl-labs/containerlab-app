@@ -625,12 +625,18 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         // MUI pads small switch bases by 4px at higher specificity; keep the knob centered in the track.
         "&.MuiSwitch-sizeSmall .MuiSwitch-switchBase": { padding: 3 },
         "&.MuiSwitch-sizeSmall .MuiSwitch-thumb": { width: 12, height: 12 },
-        "&.MuiSwitch-sizeSmall .MuiSwitch-switchBase.Mui-checked": { transform: "translateX(12px)" }
+        "&.MuiSwitch-sizeSmall .MuiSwitch-switchBase.Mui-checked": { transform: "translateX(12px)" },
+        "&.MuiSwitch-sizeSmall .MuiSwitch-input": { width: 30 },
+        "&.MuiSwitch-sizeSmall .Mui-checked .MuiSwitch-input": { left: -12 }
       },
       switchBase: {
         padding: 3,
         color: "#ffffff",
         "&:hover": { backgroundColor: "transparent" },
+        // The root does not clip, so size the hit area to the track instead of MUI's 300% width,
+        // which pokes out of the switch and makes scroll containers scroll sideways.
+        "& .MuiSwitch-input": { left: 0, width: 34 },
+        "&.Mui-checked .MuiSwitch-input": { left: -14 },
         "&.Mui-checked": {
           transform: "translateX(14px)",
           color: BUTTON_FOREGROUND,

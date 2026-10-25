@@ -1,5 +1,5 @@
-// Management network settings tab: the list of networks and the form of the selected one.
-import React, { useMemo } from "react";
+// Management network settings tab: one card per network; the expanded card holds its form.
+import React, { useMemo, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -9,9 +9,8 @@ import TextField from "@mui/material/TextField";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 import AddIcon from "@mui/icons-material/Add";
-import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
-import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import { SettingsField } from "../../../settings/SettingsField";
 import { DEFAULT_MGMT_NETWORK_NAME, getMgmtNetworks } from "../../../core/types/labSettings";
@@ -71,106 +70,101 @@ function listNodes(nodes: string[]): string {
   return nodes.length > 6 ? `${shown} and ${nodes.length - 6} more` : shown;
 }
 
-const NetworkRow: React.FC<{
+/** One network as a card; the expanded card holds the form for that network. */
+const NetworkCard: React.FC<{
   network: MgmtNetworkFormState;
   index: number;
   count: number;
   nodeCount: number;
-  isSelected: boolean;
+  isExpanded: boolean;
   hasIssues: boolean;
   isViewMode: boolean;
   actions: MgmtNetworkListActions;
-}> = ({ network, index, count, nodeCount, isSelected, hasIssues, isViewMode, actions }) => {
+  onToggle: () => void;
+  children: React.ReactNode;
+}> = ({ network, index, count, nodeCount, isExpanded, hasIssues, isViewMode, actions, onToggle, children }) => {
   const name = displayName(network);
+  const bodyId = `lab-settings-mgmt-network-${network.id}-form`;
   return (
     <Box
-      data-testid={`lab-settings-mgmt-network-${index}`}
       sx={{
-        display: "flex",
-        alignItems: "center",
-        gap: 1,
-        pl: 1.5,
-        pr: 0.5,
-        py: 0.5,
-        borderTop: index > 0 ? 1 : 0,
-        borderColor: "divider",
-        bgcolor: isSelected ? "action.selected" : undefined
+        border: 1,
+        borderColor: isExpanded ? "primary.main" : "divider",
+        borderRadius: 1,
+        overflow: "hidden"
       }}
     >
       <Box
-        component="button"
-        type="button"
-        onClick={() => actions.select(index)}
-        aria-pressed={isSelected}
-        aria-label={`Edit management network ${name}`}
+        data-testid={`lab-settings-mgmt-network-${index}`}
         sx={{
-          flex: 1,
-          minWidth: 0,
           display: "flex",
           alignItems: "center",
-          gap: 1.25,
-          p: 0.5,
-          border: 0,
-          bgcolor: "transparent",
-          color: "inherit",
-          font: "inherit",
-          textAlign: "left",
-          cursor: "pointer"
+          gap: 1,
+          pl: 1,
+          pr: 0.5,
+          py: 0.5,
+          "&:hover": { bgcolor: "action.hover" }
         }}
       >
         <Box
+          component="button"
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          aria-controls={bodyId}
+          aria-label={`Edit management network ${name}`}
           sx={{
-            width: 10,
-            height: 10,
-            borderRadius: "50%",
-            flexShrink: 0,
-            bgcolor: getMgmtNetworkColor(index)
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.25,
+            p: 0.5,
+            border: 0,
+            bgcolor: "transparent",
+            color: "inherit",
+            font: "inherit",
+            textAlign: "left",
+            cursor: "pointer"
           }}
-        />
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
-            {name}
-            {index === 0 && count > 1 ? (
-              <Typography component="span" variant="caption" sx={{ color: "text.secondary", ml: 1 }}>
-                default
-              </Typography>
-            ) : null}
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{ color: hasIssues ? "error.main" : "text.secondary", display: "block" }}
-            noWrap
-          >
-            {hasIssues ? "Needs attention" : describeNetwork(network, nodeCount)}
-          </Typography>
+        >
+          <ExpandMoreIcon
+            fontSize="small"
+            sx={{
+              color: "text.secondary",
+              transform: isExpanded ? "none" : "rotate(-90deg)",
+              transition: "transform 120ms ease",
+              "@media (prefers-reduced-motion: reduce)": { transition: "none" }
+            }}
+          />
+          <Box
+            sx={{
+              width: 10,
+              height: 10,
+              borderRadius: "50%",
+              flexShrink: 0,
+              bgcolor: getMgmtNetworkColor(index)
+            }}
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
+              {name}
+              {index === 0 && count > 1 ? (
+                <Typography component="span" variant="caption" sx={{ color: "text.secondary", ml: 1 }}>
+                  default
+                </Typography>
+              ) : null}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{ color: hasIssues ? "error.main" : "text.secondary", display: "block" }}
+              noWrap
+            >
+              {hasIssues ? "Needs attention" : describeNetwork(network, nodeCount)}
+            </Typography>
+          </Box>
         </Box>
-      </Box>
-      {count > 1 && !isViewMode ? (
-        <Box sx={{ display: "flex", flexShrink: 0 }}>
-          <Tooltip title="Move up">
-            <span>
-              <IconButton
-                size="small"
-                aria-label={`Move ${name} up`}
-                disabled={index === 0}
-                onClick={() => actions.move(index, -1)}
-              >
-                <ArrowUpwardIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Move down">
-            <span>
-              <IconButton
-                size="small"
-                aria-label={`Move ${name} down`}
-                disabled={index === count - 1}
-                onClick={() => actions.move(index, 1)}
-              >
-                <ArrowDownwardIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
+        {count > 1 && !isViewMode ? (
           <Tooltip title="Remove">
             <IconButton
               size="small"
@@ -180,6 +174,14 @@ const NetworkRow: React.FC<{
               <DeleteOutlineIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+        ) : null}
+      </Box>
+      {isExpanded ? (
+        <Box
+          id={bodyId}
+          sx={{ display: "grid", rowGap: 2, p: 2, borderTop: 1, borderColor: "divider" }}
+        >
+          {children}
         </Box>
       ) : null}
     </Box>
@@ -190,49 +192,60 @@ const NetworkList: React.FC<{
   actions: MgmtNetworkListActions;
   usage: MgmtNetworkUsage;
   isViewMode: boolean;
-}> = ({ actions, usage, isViewMode }) => (
-  <SettingsField
-    title="Networks"
-    description={
-      actions.networks.length > 1
-        ? "Nodes join a network with mgmt-net. The first network is the default, used for tools containers. Docker runtime only."
-        : "Add a network to put nodes on separate management networks (Docker runtime only)."
+  renderForm: () => React.ReactNode;
+}> = ({ actions, usage, isViewMode, renderForm }) => {
+  // The selected network stays bound to the form while its card is collapsed.
+  const [collapsed, setCollapsed] = useState(false);
+  const toggle = (index: number) => {
+    if (index === actions.selected) {
+      setCollapsed((value) => !value);
+      return;
     }
-    wide
-  >
-    <Box
-      data-testid="lab-settings-mgmt-networks"
-      sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden" }}
+    actions.select(index);
+    setCollapsed(false);
+  };
+  return (
+    <SettingsField
+      title="Networks"
+      wide
     >
-      {actions.networks.map((network, index) => (
-        <NetworkRow
-          key={network.id}
-          network={network}
-          index={index}
-          count={actions.networks.length}
-          nodeCount={usage.counts[index] ?? 0}
-          isSelected={index === actions.selected}
-          hasIssues={Object.keys(actions.issues[index] ?? {}).length > 0}
-          isViewMode={isViewMode}
-          actions={actions}
-        />
-      ))}
-    </Box>
-    {!isViewMode ? (
-      <Box>
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={actions.add}
-          data-testid="lab-settings-mgmt-add-network"
-        >
-          Add network
-        </Button>
+      <Box data-testid="lab-settings-mgmt-networks" sx={{ display: "grid", gap: 1 }}>
+        {actions.networks.map((network, index) => (
+          <NetworkCard
+            key={network.id}
+            network={network}
+            index={index}
+            count={actions.networks.length}
+            nodeCount={usage.counts[index] ?? 0}
+            isExpanded={index === actions.selected && !collapsed}
+            onToggle={() => toggle(index)}
+            hasIssues={Object.keys(actions.issues[index] ?? {}).length > 0}
+            isViewMode={isViewMode}
+            actions={actions}
+          >
+            {index === actions.selected && !collapsed ? renderForm() : null}
+          </NetworkCard>
+        ))}
       </Box>
-    ) : null}
-  </SettingsField>
-);
+      {!isViewMode ? (
+        <Box>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              actions.add();
+              setCollapsed(false);
+            }}
+            data-testid="lab-settings-mgmt-add-network"
+          >
+            Add network
+          </Button>
+        </Box>
+      ) : null}
+    </SettingsField>
+  );
+};
 
 const DefaultNetworkField: React.FC<{ actions: MgmtNetworkListActions; isViewMode: boolean }> = ({
   actions,
@@ -243,11 +256,11 @@ const DefaultNetworkField: React.FC<{ actions: MgmtNetworkListActions; isViewMod
   const options = current !== "" && !names.includes(current) ? [...names, current] : names;
   return (
     <SettingsField
-      title="Default for Nodes"
+      title="Default management network"
       description="Network for nodes that do not pick one (topology.defaults.mgmt-net)."
     >
       <TextField
-        slotProps={{ select: { inputProps: { "aria-label": "Default for Nodes" } } }}
+        slotProps={{ select: { inputProps: { "aria-label": "Default management network" } } }}
         id="lab-mgmt-default-net"
         select
         size="small"
@@ -278,7 +291,7 @@ const UsageWarnings: React.FC<{ usage: MgmtNetworkUsage; several: boolean }> = (
     {several && usage.unassigned.length > 0 ? (
       <Alert severity="warning" variant="outlined" data-testid="lab-settings-mgmt-unassigned">
         {usage.unassigned.length === 1 ? "1 node has" : `${usage.unassigned.length} nodes have`} no
-        management network: {listNodes(usage.unassigned)}. Pick a default for nodes or set the
+        management network: {listNodes(usage.unassigned)}. Pick a default management network or set the
         network in each node.
       </Alert>
     ) : null}
@@ -305,38 +318,33 @@ export const MgmtTab: React.FC<MgmtTabProps> = ({
   );
   const usage = useMgmtNetworkUsage(labSettings, form);
   const several = networks.networks.length > 1;
-  const selectedName = displayName(networks.networks[networks.selected]);
   // The running lab was deployed from the file, so the saved settings decide.
   const joinsTailscale = getMgmtNetworks(labSettings).some(
     (network) => network.tailscale !== undefined
   );
   return (
     <>
-      <NetworkList actions={networks} usage={usage} isViewMode={isViewMode} />
+      <NetworkList
+        actions={networks}
+        usage={usage}
+        isViewMode={isViewMode}
+        renderForm={() => (
+          <MgmtNetworkForm
+            key={networks.networks[networks.selected]?.id}
+            mgmt={mgmt}
+            setMgmt={setMgmt}
+            driverOpts={driverOpts}
+            isViewMode={isViewMode}
+            isDefaultNetwork={networks.selected === 0}
+            issues={networks.issues[networks.selected] ?? {}}
+          />
+        )}
+      />
       {several || networks.defaultMgmtNet !== "" ? (
         <DefaultNetworkField actions={networks} isViewMode={isViewMode} />
       ) : null}
       <UsageWarnings usage={usage} several={several} />
       {joinsTailscale ? <TailscaleStatusSection /> : null}
-      {several ? (
-        <Typography
-          component="h3"
-          variant="subtitle2"
-          data-testid="lab-settings-mgmt-selected-title"
-          sx={{ pt: 1, borderTop: 1, borderColor: "divider" }}
-        >
-          Network {selectedName}
-        </Typography>
-      ) : null}
-      <MgmtNetworkForm
-        key={networks.networks[networks.selected]?.id}
-        mgmt={mgmt}
-        setMgmt={setMgmt}
-        driverOpts={driverOpts}
-        isViewMode={isViewMode}
-        isDefaultNetwork={networks.selected === 0}
-        issues={networks.issues[networks.selected] ?? {}}
-      />
     </>
   );
 };

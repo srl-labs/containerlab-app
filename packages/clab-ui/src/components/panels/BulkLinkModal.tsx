@@ -227,7 +227,7 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
                 color: "text.secondary"
               }}
             >
-              Create multiple links by matching node names with patterns.
+              Create links by matching node names with patterns.
             </Typography>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 0.5 }}>
               <TextField
@@ -264,14 +264,14 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
             )}
             {!canApply && (
               <Alert severity="warning" variant="outlined">
-                Bulk linking is disabled while locked or in view mode.
+                Not available while the lab is locked or in view mode.
               </Alert>
             )}
           </Box>
         </DialogContent>
         <DialogActions>
           <Button size="small" onClick={handleCompute} data-testid="bulk-link-apply-btn">
-            Apply
+            Preview
           </Button>
         </DialogActions>
       </Dialog>

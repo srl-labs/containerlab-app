@@ -174,8 +174,7 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
 const NonVethInfo: React.FC = () => (
   <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "action.hover" }}>
     <Typography variant="body2">
-      <strong>Note:</strong> This link connects to a network node. Configure extended properties on
-      the network node itself.
+      <strong>Note:</strong> This link ends on a network node. Set extended properties on that node.
     </Typography>
   </Paper>
 );

@@ -196,7 +196,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
       {nodeStyle === "boxed" ? (
         <SettingsField
           title="Box spacing"
-          description="Room between each box outline and its icon and name."
+          description="Padding inside each box."
         >
           <TextField
             slotProps={{ select: { inputProps: { "aria-label": "Box spacing" } } }}
@@ -217,7 +217,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
       ) : null}
       <SettingsField
         title="Link style"
-        description="Draw links as straight lines, or as elbows with right-angle bends."
+        description="Straight lines, or elbows with right-angle bends."
       >
         <TextField
           slotProps={{ select: { inputProps: { "aria-label": "Link style" } } }}
@@ -238,7 +238,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
       {hasSeveralMgmtNetworks ? (
         <SettingsField
           title="Management network badge"
-          description="Colored dot on each node for its management network. Nodes without a valid network are always marked."
+          description="Colored dot for each node's management network. Nodes with an invalid network are always marked."
         >
           <TextField
             slotProps={{ select: { inputProps: { "aria-label": "Management network badge" } } }}
@@ -278,7 +278,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           }}
         />
       </SettingsField>
-      <SettingsField title="Interface size" description="Telemetry interface label size as a percent of node size.">
+      <SettingsField title="Interface size" description="Interface label size, as a percent of node size.">
         <TextField
           id="telemetry-interface-size"
           size="small"

@@ -67,7 +67,7 @@ test("runs a lab on this computer without clab-api-server", async () => {
   await expect(page.getByTestId("workspace-rail").getByRole("button", { name: "Labs", exact: true })).toBeVisible({
     timeout: 30_000
   });
-  await expect(page.getByRole("button", { name: "Sign In", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("1-start.png") });
   await expect
     .poll(

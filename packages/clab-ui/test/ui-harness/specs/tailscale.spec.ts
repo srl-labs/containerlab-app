@@ -107,7 +107,7 @@ test.describe("Tailscale management network", () => {
     await chooseTailscale(page, modal, "Lab proxy (SSO login)");
     await expect(modal.getByTestId("lab-settings-mgmt-network-0")).toContainText("Tailscale");
     await modal.locator(SEL_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(async () => (await readTopology(topoViewerPage)).mgmt)
@@ -127,7 +127,7 @@ test.describe("Tailscale management network", () => {
     await expect(modal.getByText("Required in sidecar mode")).toBeVisible();
     await modal.getByRole("textbox", { name: "Auth Key" }).fill("${TS_AUTHKEY}");
     await modal.locator(SEL_SAVE_BTN).click();
-    await expect(modal).toBeHidden();
+    await expect(modal).toBeVisible();
 
     await expect
       .poll(() => topoViewerPage.getYamlFromFile(SIMPLE_FILE))

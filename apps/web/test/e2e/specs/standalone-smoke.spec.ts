@@ -13,7 +13,7 @@ test.describe("Standalone startup", () => {
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
     await expect(page.getByLabel("Stay signed in for")).toHaveValue("24h");
-    await expect(page.getByRole("button", { name: "Sign In" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeDisabled();
   });
 
   test("adds an endpoint and persists non-secret metadata", async ({ page }) => {
@@ -46,7 +46,7 @@ test.describe("Standalone startup", () => {
     await page.getByLabel("Password").fill("secret");
     await page.getByLabel("Stay signed in for").fill("36h");
 
-    const addButton = page.getByRole("button", { name: "Sign In" });
+    const addButton = page.getByRole("button", { name: "Sign in" });
     await expect(addButton).toBeEnabled();
     await addButton.click();
 

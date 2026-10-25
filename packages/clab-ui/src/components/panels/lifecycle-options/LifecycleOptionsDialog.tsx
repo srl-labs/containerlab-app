@@ -289,7 +289,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             <OptionCheckbox
               testId="lifecycle-options-skip-post-deploy"
               label="Skip post-deploy actions"
-              description="Do not run the node configuration steps after the containers start."
+              description="Skip node configuration after the containers start."
               checked={form.skipPostDeploy}
               onChange={(checked) => update("skipPostDeploy", checked)}
             />
@@ -298,7 +298,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             <OptionCheckbox
               testId="lifecycle-options-skip-labdir-acl"
               label="Skip lab directory ACLs"
-              description="Do not set extended file ACLs on the lab directory."
+              description="Skip extended file ACLs on the lab directory."
               checked={form.skipLabdirAcl}
               onChange={(checked) => update("skipLabdirAcl", checked)}
             />
