@@ -321,7 +321,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         labNameOverride = cloneOptions.labNameOverride?.trim() || undefined;
       } else {
         const rawLabNameOverride = await promptForTextInput({
-          title: "Lab Name Override",
+          title: "Lab name override",
           message: "Leave empty to use the default lab name.",
           label: "Lab name override",
           confirmLabel: "Continue",
@@ -508,7 +508,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         }
 
         const selectedUrl = await promptForOptionSelection({
-          title: "Open Browser Port",
+          title: "Open browser port",
           message: "Select a port to open in the browser.",
           label: "Port",
           confirmLabel: "Open",
@@ -559,7 +559,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
 
       try {
         runtimeUiActions.notify(
-          `${kind.toUpperCase()} ${action} started. This may take a moment...`,
+          `${kind.toUpperCase()} ${action} started. This may take a moment…`,
           "info"
         );
 
@@ -657,7 +657,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
 
       try {
-        runtimeUiActions.notify(`Generating draw.io (${layout})...`, "info");
+        runtimeUiActions.notify(`Generating draw.io (${layout})…`, "info");
         const response = await generateDrawioGraph({
           endpointId: actionEndpointId,
           topologyRef,
@@ -795,7 +795,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
       const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
       const createTopologyInput = await promptForCreateTopology({
-        title: "Create Topology File",
+        title: "Create topology file",
         confirmLabel: "Create",
         endpointOptions: connectedEndpoints.map((endpoint) => ({
           value: endpoint.id,
@@ -837,7 +837,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       const preferredEndpoint = findEndpointConfig(endpoints, actionEndpointId);
       const popularRepos = (await fetchPopularRepos()).slice(0, 12);
       const cloneRepoInput = await promptForCloneRepo({
-        title: "Clone Repository",
+        title: "Clone repository",
         message: "Choose endpoint, source, and target action.",
         confirmLabel: "Continue",
         endpointOptions: connectedEndpoints.map((endpoint) => ({
@@ -976,7 +976,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         findEndpointConfig(endpoints, actionEndpointId)?.label ?? actionEndpointId ?? "default";
       const currentHostname = getSessionHostnameOverride(actionEndpointId) ?? "";
       const rawValue = await promptForTextInput({
-        title: "Session Hostname Override",
+        title: "Session hostname override",
         message: `Session hostname override for packet capture on "${actionEndpointLabel}". Leave empty to clear.`,
         label: "Hostname override",
         defaultValue: currentHostname,
@@ -1181,7 +1181,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
           return;
         }
         const confirmed = await confirmRuntimeAction({
-          title: "Replace File",
+          title: "Replace file",
           message: `Replace "Lab workspace/${targetPath}" with "${file.name}"?`,
           confirmLabel: "Replace",
           severity: "warning"
@@ -1325,7 +1325,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.deploy.specificFile": () => runLabLifecycle("deploy", false),
       "containerlab.lab.deploy.cleanup": async () => {
         const confirmed = await confirmRuntimeAction({
-          title: "Deploy With Cleanup",
+          title: "Deploy with cleanup",
           message:
             "Deploy (cleanup) may remove existing lab artifacts first. Continue?",
           confirmLabel: "Deploy",
@@ -1356,7 +1356,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         const topologyRef = requireTopologyRef();
         if (!topologyRef) return;
         const copyDir = await promptForTextInput({
-          title: "Save Configs To",
+          title: "Save configs to",
           message:
             "Copy the saved configs to this directory, relative to the topology file. Each save adds timestamped files per node.",
           label: "Directory",
@@ -1393,7 +1393,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       "containerlab.lab.fcli.sysInfo": () => runFcli("sys-info"),
       "containerlab.lab.fcli.custom": async () => {
         const customCommand = await promptForTextInput({
-          title: "Custom fcli Command",
+          title: "Custom fcli command",
           label: "fcli command",
           defaultValue: "bgp-peers",
           confirmLabel: "Run"
@@ -1410,7 +1410,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         if (
           endpointId &&
           (await confirmRuntimeAction({
-            title: "Close Wireshark VNC Sessions",
+            title: "Close Wireshark VNC sessions",
             message: "Close all active Wireshark VNC sessions for this endpoint?",
             confirmLabel: "Close sessions",
             severity: "warning"

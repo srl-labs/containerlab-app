@@ -65,7 +65,7 @@ export const CredentialsSection: React.FC<TabProps> = ({ data, onChange }) => {
       />
       <InputField
         id="node-credentials-identity-file"
-        label="SSH Identity File"
+        label="SSH identity file"
         value={own.identityFile ?? ""}
         onChange={(value) => update({ identityFile: value })}
         placeholder={inherited.identityFile ?? "~/.ssh/id_ed25519"}

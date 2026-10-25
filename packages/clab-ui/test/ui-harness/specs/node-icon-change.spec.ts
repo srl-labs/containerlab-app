@@ -65,7 +65,7 @@ async function getCanvasIconSource(page: Page, nodeId: string): Promise<string> 
 
 async function openIconEditor(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Edit", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Edit Icons" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Edit icons" })).toBeVisible();
 }
 
 /**
@@ -167,13 +167,13 @@ test.describe("Node Icon Change", () => {
     await loadCustomIcons(page);
     await openNodeEditor(page, nodeId);
     await openIconEditor(page);
-    const dialog = page.getByRole("dialog", { name: "Edit Icons" });
+    const dialog = page.getByRole("dialog", { name: "Edit icons" });
     await dialog.getByRole("tab", { name: "Custom", exact: true }).click();
     await dialog.locator('button[title="custom-router (workspace)"]').click();
     const preview = dialog.getByAltText("Preview", { exact: true });
     await expect(preview).toHaveAttribute("src", CUSTOM_ICONS[0].dataUri);
 
-    const color = dialog.getByRole("textbox", { name: "Icon Color", exact: true });
+    const color = dialog.getByRole("textbox", { name: "Icon color", exact: true });
     await expect(color).toBeEnabled();
     await color.fill("ff6600");
     await color.blur();
@@ -266,8 +266,8 @@ test.describe("Node Icon Change", () => {
     await loadCustomIcons(page);
     await openNodeEditor(page, "srl1");
     await openIconEditor(page);
-    const dialog = page.getByRole("dialog", { name: "Edit Icons" });
-    const color = dialog.getByRole("textbox", { name: "Icon Color", exact: true });
+    const dialog = page.getByRole("dialog", { name: "Edit icons" });
+    const color = dialog.getByRole("textbox", { name: "Icon color", exact: true });
     await expect(color).toBeEnabled();
     await color.fill("ff6600");
     await color.blur();

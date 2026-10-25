@@ -548,7 +548,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
               />
               <InputField
                 id="traffic-rate-border-radius"
-                label="Corner Radius"
+                label="Corner radius"
                 type="number"
                 value={resolvedFields.borderRadiusValue}
                 onChange={(value) => {
@@ -567,7 +567,7 @@ export const TrafficRateEditorView: React.FC<TrafficRateEditorViewProps> = ({
 
           <PanelSection title="Text">
             <ColorField
-              label="Text Color"
+              label="Text color"
               value={resolvedFields.textColorValue}
               onChange={(value) => updateField("textColor", value)}
             />

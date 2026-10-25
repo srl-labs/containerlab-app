@@ -74,11 +74,11 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
     {mgmt.driver === "macvlan" ? (
       <>
         <SettingsField
-          title="Parent Interface"
+          title="Parent interface"
           description="Host interface the nodes attach to. For a VLAN, create its interface first, for example eth1.100."
         >
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "Parent Interface" } }}
+            slotProps={{ htmlInput: { "aria-label": "Parent interface" } }}
             id="lab-mgmt-macvlan-parent"
             size="small"
             placeholder="e.g., eth1"
@@ -90,11 +90,11 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
           />
         </SettingsField>
         <SettingsField
-          title="Macvlan Mode"
+          title="Macvlan mode"
           description="Bridge mode lets nodes on the same parent reach each other and is the only mode with host access."
         >
           <TextField
-            slotProps={{ select: { inputProps: { "aria-label": "Macvlan Mode" } } }}
+            slotProps={{ select: { inputProps: { "aria-label": "Macvlan mode" } } }}
             id="lab-mgmt-macvlan-mode"
             select
             size="small"
@@ -111,7 +111,7 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
         </SettingsField>
         {mgmt.macvlanMode === "bridge" ? (
           <SettingsField
-            title="Host Access"
+            title="Host access"
             description="Adds a macvlan interface on the host so it can reach the nodes. Without it, Linux blocks traffic between a parent and its macvlan interfaces."
           >
             <Switch
@@ -119,7 +119,7 @@ const DriverFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
               checked={mgmt.macvlanAux}
               onChange={(event) => setMgmt.setMacvlanAux(event.target.checked)}
               disabled={isViewMode}
-              slotProps={{ input: { "aria-label": "Host Access" } }}
+              slotProps={{ input: { "aria-label": "Host access" } }}
             />
           </SettingsField>
         ) : null}
@@ -191,9 +191,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
     />
     {mgmt.ipv4Type === "custom" ? (
       <>
-        <SettingsField title="IPv4 Subnet CIDR" description="Custom IPv4 subnet, for example 172.100.100.0/24.">
+        <SettingsField title="IPv4 subnet CIDR" description="Custom IPv4 subnet, for example 172.100.100.0/24.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv4 Subnet CIDR" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv4 subnet CIDR" } }}
             id="lab-mgmt-ipv4-subnet"
             size="small"
             placeholder="e.g., 172.100.100.0/24"
@@ -202,9 +202,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv4 Gateway" description="Gateway of the custom IPv4 subnet.">
+        <SettingsField title="IPv4 gateway" description="Gateway of the custom IPv4 subnet.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv4 Gateway" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv4 gateway" } }}
             id="lab-mgmt-ipv4-gateway"
             size="small"
             placeholder="e.g., 172.100.100.1"
@@ -213,9 +213,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv4 Range" description="Optional allocation range within the subnet.">
+        <SettingsField title="IPv4 range" description="Optional allocation range within the subnet.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv4 Range" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv4 range" } }}
             id="lab-mgmt-ipv4-range"
             size="small"
             placeholder="e.g., 172.100.100.128/25"
@@ -237,9 +237,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
     />
     {mgmt.ipv6Type === "custom" ? (
       <>
-        <SettingsField title="IPv6 Subnet CIDR" description="Custom IPv6 subnet, for example 3fff:172:100:100::/80.">
+        <SettingsField title="IPv6 subnet CIDR" description="Custom IPv6 subnet, for example 3fff:172:100:100::/80.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv6 Subnet CIDR" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv6 subnet CIDR" } }}
             id="lab-mgmt-ipv6-subnet"
             size="small"
             placeholder="e.g., 3fff:172:100:100::/80"
@@ -248,9 +248,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv6 Gateway" description="Gateway of the custom IPv6 subnet.">
+        <SettingsField title="IPv6 gateway" description="Gateway of the custom IPv6 subnet.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv6 Gateway" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv6 gateway" } }}
             id="lab-mgmt-ipv6-gateway"
             size="small"
             placeholder="e.g., 3fff:172:100:100::1"
@@ -259,9 +259,9 @@ const AddressFields: React.FC<FieldProps & { isDefaultNetwork: boolean }> = ({
             disabled={isViewMode}
           />
         </SettingsField>
-        <SettingsField title="IPv6 Range" description="Optional allocation range within the subnet.">
+        <SettingsField title="IPv6 range" description="Optional allocation range within the subnet.">
           <TextField
-            slotProps={{ htmlInput: { "aria-label": "IPv6 Range" } }}
+            slotProps={{ htmlInput: { "aria-label": "IPv6 range" } }}
             id="lab-mgmt-ipv6-range"
             size="small"
             placeholder="e.g., 3fff:172:100:100::8000/81"
@@ -290,9 +290,9 @@ const BridgeFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
         disabled={isViewMode}
       />
     </SettingsField>
-    <SettingsField title="Bridge Name" description="Linux bridge name (default: br-<network-id>).">
+    <SettingsField title="Bridge name" description="Linux bridge name (default: br-<network-id>).">
       <TextField
-        slotProps={{ htmlInput: { "aria-label": "Bridge Name" } }}
+        slotProps={{ htmlInput: { "aria-label": "Bridge name" } }}
         id="lab-mgmt-bridge"
         size="small"
         placeholder="Linux bridge name"
@@ -303,13 +303,13 @@ const BridgeFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
         helperText={issues.bridge}
       />
     </SettingsField>
-    <SettingsField title="Enable External Access" description="Allow access from outside the lab.">
+    <SettingsField title="Enable external access" description="Allow access from outside the lab.">
       <Switch
         size="small"
         checked={mgmt.externalAccess}
         onChange={(event) => setMgmt.setExternalAccess(event.target.checked)}
         disabled={isViewMode}
-        slotProps={{ input: { "aria-label": "Enable External Access" } }}
+        slotProps={{ input: { "aria-label": "Enable external access" } }}
       />
     </SettingsField>
   </>
@@ -318,11 +318,11 @@ const BridgeFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issues 
 const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) => (
   <>
     <SettingsField
-      title="Address Allocation"
+      title="Address allocation"
       description="Who assigns node addresses (ipam.provider). Containerlab keeps them stable across redeploys."
     >
       <TextField
-        slotProps={{ select: { inputProps: { "aria-label": "Address Allocation" } } }}
+        slotProps={{ select: { inputProps: { "aria-label": "Address allocation" } } }}
         id="lab-mgmt-ipam-provider"
         select
         size="small"
@@ -336,7 +336,7 @@ const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) =
     </SettingsField>
     {mgmt.ipamProvider === "containerlab" ? (
       <SettingsField
-        title="Duplicate Address Detection"
+        title="Duplicate address detection"
         description={
           mgmt.driver === "macvlan"
             ? "Check that an address is free before using it, with ARP and neighbour solicitation on the parent interface. Slows very large labs."
@@ -348,12 +348,12 @@ const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) =
           checked={mgmt.ipamDad}
           onChange={(event) => setMgmt.setIpamDad(event.target.checked)}
           disabled={isViewMode}
-          slotProps={{ input: { "aria-label": "Duplicate Address Detection" } }}
+          slotProps={{ input: { "aria-label": "Duplicate address detection" } }}
         />
       </SettingsField>
     ) : null}
     <SettingsField
-      title="Skip When Unused"
+      title="Skip when unused"
       description="Do not create the network when no node uses it: every node on it runs with network-mode: none, or none picks it."
     >
       <Switch
@@ -361,7 +361,7 @@ const AllocationFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode }) =
         checked={mgmt.skipWhenUnused}
         onChange={(event) => setMgmt.setSkipWhenUnused(event.target.checked)}
         disabled={isViewMode}
-        slotProps={{ input: { "aria-label": "Skip When Unused" } }}
+        slotProps={{ input: { "aria-label": "Skip when unused" } }}
       />
     </SettingsField>
   </>
@@ -399,11 +399,11 @@ const TailscaleFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issu
     </SettingsField>
     {mgmt.tailscaleMode === "sidecar" ? (
       <SettingsField
-        title="Auth Key"
+        title="Auth key"
         description="Reusable, ideally ephemeral key from the Tailscale admin console. Reference an environment variable such as ${TS_AUTHKEY} to keep the key out of the file."
       >
         <TextField
-          slotProps={{ htmlInput: { "aria-label": "Auth Key" } }}
+          slotProps={{ htmlInput: { "aria-label": "Auth key" } }}
           id="lab-mgmt-tailscale-auth-key"
           size="small"
           placeholder="${TS_AUTHKEY}"
@@ -429,9 +429,9 @@ export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
   const fieldProps: FieldProps = { mgmt, setMgmt, isViewMode, issues };
   return (
     <>
-      <SettingsField title="Network Name" description="Docker network name (default: clab).">
+      <SettingsField title="Network name" description="Docker network name (default: clab).">
         <TextField
-          slotProps={{ htmlInput: { "aria-label": "Network Name" } }}
+          slotProps={{ htmlInput: { "aria-label": "Network name" } }}
           id="lab-mgmt-network-name"
           size="small"
           placeholder="Docker network name (default: clab)"
@@ -448,7 +448,7 @@ export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
       <AllocationFields {...fieldProps} />
       <TailscaleFields {...fieldProps} />
       <SettingsField
-        title="Driver Options"
+        title="Driver options"
         description={`Key/value options passed to the Docker ${mgmt.driver} driver.`}
         wide
         feedback={

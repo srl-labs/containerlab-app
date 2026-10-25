@@ -215,7 +215,7 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
         data-testid="bulk-link-modal"
       >
         <DialogTitleWithClose
-          title="Bulk Link Devices"
+          title="Bulk link devices"
           onClose={handleCancel}
           closeButtonTestId="bulk-link-close-btn"
         />
@@ -232,25 +232,25 @@ export const BulkLinkModal: React.FC<BulkLinkModalProps> = ({
             <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, pt: 0.5 }}>
               <TextField
                 inputRef={sourceInputRef}
-                label="Source Pattern"
+                label="Source pattern"
                 required
                 size="small"
                 fullWidth
                 value={sourcePattern}
                 onChange={(e) => setSourcePattern(e.target.value)}
-                placeholder="e.g. leaf*, srl(\d+)"
+                placeholder="e.g., leaf*, srl(\d+)"
                 disabled={mode !== "edit"}
                 data-testid="bulk-link-source"
                 sx={PATTERN_FIELD_SX}
               />
               <TextField
-                label="Target Pattern"
+                label="Target pattern"
                 required
                 size="small"
                 fullWidth
                 value={targetPattern}
                 onChange={(e) => setTargetPattern(e.target.value)}
-                placeholder="e.g. spine*, client$1"
+                placeholder="e.g., spine*, client$1"
                 disabled={mode !== "edit"}
                 data-testid="bulk-link-target"
                 sx={PATTERN_FIELD_SX}

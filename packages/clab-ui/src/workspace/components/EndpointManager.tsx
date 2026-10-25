@@ -115,7 +115,7 @@ function formatEndpointImportResult(result: EndpointImportResult): string {
 
 function addEndpointButtonLabel(busyKey: string | null, mode: "initial" | "manage"): string {
   if (busyKey === "add") {
-    return "Signing in...";
+    return "Signing in…";
   }
   return mode === "initial" ? "Sign in" : "Add lab host";
 }
@@ -135,9 +135,9 @@ function endpointActionButtonLabel(
   }
 
   const busyLabels = {
-    edit: "Saving...",
-    reconnect: "Signing in...",
-    remove: "Removing..."
+    edit: "Saving…",
+    reconnect: "Signing in…",
+    remove: "Removing…"
   };
   return busyKey === `${action}:${endpoint.id}` ? busyLabels[action] : defaultLabels[action];
 }
@@ -263,7 +263,7 @@ function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: Endpoint
             color: "text.secondary"
           }}
         >
-          Loading health stats...
+          Loading health stats…
         </Typography>
       </Stack>
     );
@@ -492,7 +492,7 @@ function ManagedEndpointList(props: {
                     error={Boolean(durationDraft.trim()) && !durationValid}
                     helperText={
                       durationValid
-                        ? "Examples: 24h, 36h, 7d, 1h30m"
+                        ? "e.g., 24h, 36h, 7d, 1h30m"
                         : "Use values like 24h, 36h, 7d, or 1h30m"
                     }
                     placeholder="24h"
@@ -1211,7 +1211,7 @@ export function EndpointManager({
           disabled={busyKey !== null}
           data-testid="standalone-endpoints-import"
         >
-          {busyKey === "import" ? "Importing..." : "Import"}
+          {busyKey === "import" ? "Importing…" : "Import"}
         </Button>
       ) : null}
       {onExportEndpoints ? (
@@ -1385,7 +1385,7 @@ export function EndpointManager({
               error={Boolean(addForm.sessionDuration.trim()) && !addForm.sessionDurationValid}
               helperText={
                 addForm.sessionDurationValid
-                  ? "Examples: 24h, 36h, 7d, 1h30m"
+                  ? "e.g., 24h, 36h, 7d, 1h30m"
                   : "Use values like 24h, 36h, 7d, or 1h30m"
               }
               slotProps={{
@@ -1426,7 +1426,7 @@ export function EndpointManager({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Edit Lab Host</DialogTitle>
+        <DialogTitle>Edit lab host</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <TextField
@@ -1484,7 +1484,7 @@ export function EndpointManager({
               error={Boolean(editDialog.sessionDuration.trim()) && !editDialog.sessionDurationValid}
               helperText={
                 editDialog.sessionDurationValid
-                  ? "Examples: 24h, 36h, 7d, 1h30m"
+                  ? "e.g., 24h, 36h, 7d, 1h30m"
                   : "Use values like 24h, 36h, 7d, or 1h30m"
               }
             />

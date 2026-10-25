@@ -368,7 +368,7 @@ function LogsDialogView(props: {
 
   return (
     <Dialog open={props.logsRequest !== null} onClose={props.closeLogs} maxWidth="lg" fullWidth>
-      <DialogTitle>{props.logsRequest?.title ?? "Node Logs"}</DialogTitle>
+      <DialogTitle>{props.logsRequest?.title ?? "Node logs"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ pt: 1, alignItems: { sm: "center" } }}>
@@ -470,7 +470,7 @@ function VersionDialogView(props: {
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>Version Information</DialogTitle>
+      <DialogTitle>Version information</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           {props.versionLoading ? (
@@ -513,7 +513,7 @@ function NetemDialogView(props: {
 
   return (
     <Dialog open={props.netemRequest !== null} onClose={props.closeNetem} maxWidth="lg" fullWidth>
-      <DialogTitle>{props.netemRequest?.title ?? "Manage Impairments"}</DialogTitle>
+      <DialogTitle>{props.netemRequest?.title ?? "Manage impairments"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           {props.netemLoading ? (
@@ -753,7 +753,7 @@ function CloneRepoDialogView(props: {
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{request?.title ?? "Clone Repository"}</DialogTitle>
+      <DialogTitle>{request?.title ?? "Clone repository"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
@@ -1040,7 +1040,7 @@ function EndpointSelectionDialogView(props: {
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{request?.title ?? "Select Endpoint"}</DialogTitle>
+      <DialogTitle>{request?.title ?? "Select endpoint"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography

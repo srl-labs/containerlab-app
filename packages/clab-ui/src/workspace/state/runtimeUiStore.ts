@@ -556,7 +556,7 @@ export const runtimeUiActions = {
   openInspectAll: () =>
     useRuntimeUiStore.getState().openInspect({
       mode: "all",
-      title: "Inspect All Running Labs"
+      title: "Inspect all running labs"
     }),
   openInspectLab: (target: RuntimeTargetRequest, title: string) =>
     useRuntimeUiStore.getState().openInspect({

@@ -743,7 +743,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
   let exportButtonLabel = "Export SVG";
   if (isExporting) {
-    exportButtonLabel = "Exporting...";
+    exportButtonLabel = "Exporting…";
   } else if (exportGrafanaBundle) {
     exportButtonLabel = "Export Grafana bundle";
   }
@@ -789,7 +789,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
           <Divider />
           <Box sx={{ px: 2, py: 1 }}>
-            <Typography variant="subtitle2">Quality & Size</Typography>
+            <Typography variant="subtitle2">Quality & size</Typography>
           </Box>
           <Divider />
           <Box sx={{ p: 2 }}>
@@ -1038,7 +1038,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
         data-testid="svg-export-grafana-settings-modal"
       >
         <DialogTitleWithClose
-          title="Advanced Grafana Settings"
+          title="Advanced Grafana settings"
           onClose={() => setIsGrafanaSettingsOpen(false)}
         />
         <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1048,7 +1048,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
             variant="fullWidth"
           >
             <Tab label="General" value="general" />
-            <Tab label="Interface Names" value="interface-names" />
+            <Tab label="Interface names" value="interface-names" />
           </Tabs>
 
           {grafanaSettingsTab === "general" && (
@@ -1395,7 +1395,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsGrafanaSettingsOpen(false)}>Done</Button>
+          <Button variant="text" onClick={() => setIsGrafanaSettingsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

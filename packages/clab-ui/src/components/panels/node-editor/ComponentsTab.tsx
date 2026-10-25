@@ -187,7 +187,7 @@ const MdaSectionWrapper: React.FC<MdaSectionWrapperProps> = ({
         pt: 1
       }}
     >
-      <Typography variant="subtitle2">MDA Components</Typography>
+      <Typography variant="subtitle2">MDA components</Typography>
       <Button
         variant="text"
         size="small"
@@ -408,7 +408,7 @@ const ComponentXiomSection: React.FC<
           py: 1
         }}
       >
-        <Typography variant="subtitle2">XIOM Components</Typography>
+        <Typography variant="subtitle2">XIOM components</Typography>
         <Button
           variant="text"
           size="small"
@@ -967,7 +967,7 @@ const DistributedModeSection: React.FC<DistributedModeSectionProps> = ({
       <PanelSection title="Switch Fabric Module (SFM)">
         <FilterableDropdown
           id="sfm-type"
-          label="SFM Type"
+          label="SFM type"
           value={sfmValue}
           onChange={onSfmChange}
           options={toOptions(srosTypes.sfm)}

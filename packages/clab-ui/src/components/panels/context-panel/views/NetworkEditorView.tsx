@@ -98,7 +98,7 @@ const NetworkEditorContent: React.FC<{
       <PanelSection title="Network Configuration">
         <FilterableDropdown
           id="network-type"
-          label="Network Type"
+          label="Network type"
           options={NETWORK_TYPE_OPTIONS}
           value={formData.networkType}
           onChange={(v) => {
@@ -106,7 +106,7 @@ const NetworkEditorContent: React.FC<{
               handleNetworkTypeChange(v);
             }
           }}
-          placeholder="Select network type..."
+          placeholder="Select network type…"
           allowFreeText={false}
         />
         {formData.networkType === "mgmt-net" && <MgmtNetLinkNote />}
@@ -125,7 +125,7 @@ const NetworkEditorContent: React.FC<{
           VXLAN_TYPES.includes(formData.networkType)) && (
           <InputField
             id="network-label"
-            label="Label / Alias"
+            label="Label / alias"
             value={formData.label}
             onChange={(v) => onChange({ label: v })}
             placeholder="Label shown on the canvas"
@@ -139,7 +139,7 @@ const NetworkEditorContent: React.FC<{
             options={MACVLAN_MODE_OPTIONS}
             value={formData.macvlanMode ?? "bridge"}
             onChange={(v) => onChange({ macvlanMode: v })}
-            placeholder="Select mode..."
+            placeholder="Select mode…"
             allowFreeText={false}
           />
         )}
@@ -148,7 +148,7 @@ const NetworkEditorContent: React.FC<{
         {!BRIDGE_TYPES.includes(formData.networkType) && (
           <InputField
             id="network-mac"
-            label="MAC Address"
+            label="MAC address"
             value={formData.mac ?? ""}
             onChange={(v) => onChange({ mac: v })}
             placeholder="e.g., 00:11:22:33:44:55 (optional)"
@@ -176,14 +176,14 @@ const NetworkEditorContent: React.FC<{
             />
             <InputField
               id="vxlan-dst-port"
-              label="Dst Port"
+              label="Destination port"
               value={formData.vxlanDstPort ?? ""}
               onChange={(v) => onChange({ vxlanDstPort: v })}
               placeholder="e.g., 4789"
             />
             <InputField
               id="vxlan-src-port"
-              label="Src Port"
+              label="Source port"
               value={formData.vxlanSrcPort ?? ""}
               onChange={(v) => onChange({ vxlanSrcPort: v })}
               placeholder="e.g., 0"

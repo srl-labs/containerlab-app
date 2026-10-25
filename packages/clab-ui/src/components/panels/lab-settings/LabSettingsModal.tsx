@@ -168,7 +168,7 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
           <>
             <span />
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Button variant="outlined" onClick={onClose}>
+              <Button variant="text" onClick={onClose}>
                 Close
               </Button>
               {canSave ? (

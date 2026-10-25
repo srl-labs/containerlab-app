@@ -459,7 +459,7 @@ function CaptureSettingsSection(props: {
           </ToggleButton>
         </ToggleButtonGroup>
         <TextField
-          label="Session Hostname Override"
+          label="Session hostname override"
           value={props.captureSessionHostname}
           onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
           fullWidth
@@ -811,7 +811,7 @@ export function SettingsOverlay({
               tone="info"
             >
               <TextField
-                label="SSH User Mapping JSON"
+                label="SSH user mapping JSON"
                 value={sshUserMappingText}
                 onChange={(event) => setSshUserMappingText(event.target.value)}
                 fullWidth
@@ -827,7 +827,7 @@ export function SettingsOverlay({
                 sx={{ "& textarea": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}
               />
               <TextField
-                label="Telnet Port"
+                label="Telnet port"
                 value={telnetPortText}
                 onChange={(event) => setTelnetPortText(event.target.value)}
                 fullWidth
@@ -843,7 +843,7 @@ export function SettingsOverlay({
                 data-testid="standalone-settings-telnet-port"
               />
               <TextField
-                label="Terminal Font Size"
+                label="Terminal font size"
                 value={fontSizeText}
                 onChange={(event) => setFontSizeText(event.target.value)}
                 fullWidth
@@ -1002,7 +1002,7 @@ export function SettingsOverlay({
             ) : (
               <span />
             )}
-            <Button variant="outlined" onClick={handleCloseDialog}>
+            <Button variant="text" onClick={handleCloseDialog}>
               Close
             </Button>
           </>

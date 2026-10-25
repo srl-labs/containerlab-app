@@ -59,11 +59,11 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
 }) => (
   <>
     <SettingsField
-      title="Certificate Authority"
+      title="Certificate authority"
       description="Signs the TLS certificates of nodes that get one, such as SR Linux. Containerlab generates a CA in the lab directory unless you provide one."
     >
       <TextField
-        slotProps={{ select: { inputProps: { "aria-label": "Certificate Authority" } } }}
+        slotProps={{ select: { inputProps: { "aria-label": "Certificate authority" } } }}
         id="lab-ca-mode"
         select
         size="small"

@@ -235,7 +235,7 @@ const SourceEditorTab: React.FC<{
               justifyContent: "center"
             }}
           >
-            <Typography variant="caption">Loading editor...</Typography>
+            <Typography variant="caption">Loading editor…</Typography>
           </Box>
         }
       >
@@ -864,7 +864,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Search nodes..."
+                  placeholder="Search nodes…"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   slotProps={{

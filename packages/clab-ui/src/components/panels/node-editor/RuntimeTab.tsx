@@ -73,7 +73,7 @@ export const RuntimeTab: React.FC<TabProps> = (props) => {
       <PanelSection title="Lifecycle">
         <InputField
           id="node-startup-delay"
-          label="Startup Delay"
+          label="Startup delay"
           type="number"
           value={String(data.startupDelay ?? "")}
           onChange={(value) => onChange({ startupDelay: value ? parseInt(value, 10) : undefined })}
@@ -84,7 +84,7 @@ export const RuntimeTab: React.FC<TabProps> = (props) => {
         />
         <SelectField
           id="node-restart-policy"
-          label="Restart Policy"
+          label="Restart policy"
           value={data.restartPolicy ?? ""}
           onChange={(value) => onChange({ restartPolicy: value })}
           options={withCurrentOption(RESTART_POLICY_OPTIONS, data.restartPolicy ?? "")}

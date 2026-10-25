@@ -37,7 +37,7 @@ const STAGE_INFO: Record<StageName, { title: string; description: string }> = {
     description: "The container is created."
   },
   "create-links": {
-    title: "Create Links",
+    title: "Create links",
     description: "Links are attached to the node."
   },
   configure: {
@@ -201,7 +201,7 @@ const ExecRow: React.FC<ExecRowProps> = ({ id, entry, onChange, onRemove }) => (
           label="Command"
           value={entry.command}
           onChange={(command) => onChange({ ...entry, command })}
-          placeholder="e.g. ip link show"
+          placeholder="e.g., ip link show"
           magicVariables
         />
       </Box>

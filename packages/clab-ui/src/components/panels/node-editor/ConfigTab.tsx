@@ -71,7 +71,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
       <PanelSection title="Startup Configuration">
         <InputField
           id="node-startup-config"
-          label="Startup configuration Path"
+          label="Startup configuration path"
           value={data.startupConfig ?? ""}
           onChange={(value) => onChange({ startupConfig: value })}
           placeholder="Path to startup configuration file"
@@ -95,7 +95,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
       <PanelSection title="License">
         <InputField
           id="node-license"
-          label="License File"
+          label="License file"
           value={data.license ?? ""}
           onChange={(value) => onChange({ license: value })}
           placeholder="Path to license file"

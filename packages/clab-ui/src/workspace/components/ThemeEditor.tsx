@@ -264,7 +264,7 @@ function TokenOverrides({
           <TextField
             size="small"
             fullWidth
-            placeholder="Filter tokens, e.g. button or terminal"
+            placeholder="Filter tokens, e.g., button or terminal"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             slotProps={{ htmlInput: { "aria-label": "Filter tokens" } }}

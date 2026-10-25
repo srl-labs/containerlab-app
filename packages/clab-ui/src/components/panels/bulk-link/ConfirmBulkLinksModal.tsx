@@ -28,7 +28,7 @@ export const ConfirmBulkLinksModal: React.FC<ConfirmBulkLinksModalProps> = ({
   onConfirm
 }) => (
   <Dialog open={isOpen} onClose={onCancel} maxWidth="xs" fullWidth>
-    <DialogTitleWithClose title="Bulk Link Creation" onClose={onCancel} />
+    <DialogTitleWithClose title="Bulk link creation" onClose={onCancel} />
     <DialogContent dividers>
       <Box>
         <Typography variant="body2">

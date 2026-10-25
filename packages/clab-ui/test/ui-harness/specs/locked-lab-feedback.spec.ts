@@ -43,7 +43,7 @@ test.describe("Locked lab feedback", () => {
     await expect(page.getByTestId("palette-import-templates")).toHaveCount(0);
     await expect(page.getByTestId("palette-export-templates")).toHaveCount(0);
     // Searching stays available; it changes nothing.
-    await expect(page.getByPlaceholder("Search nodes...")).toBeEnabled();
+    await expect(page.getByPlaceholder("Search nodes…")).toBeEnabled();
 
     await page.locator('[data-tab="annotations"]').click();
     const textCard = page.locator("[aria-disabled='true']").filter({ hasText: "Rectangle" });
