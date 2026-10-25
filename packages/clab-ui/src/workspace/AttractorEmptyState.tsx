@@ -96,9 +96,6 @@ export function AttractorEmptyState({ onCreateLab }: { onCreateLab?: () => void 
         <Typography component="h1" sx={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.015em", lineHeight: 1.25, color: "text.primary" }}>
           Welcome to Containerlab
         </Typography>
-        <Typography variant="body1" sx={{ color: "text.secondary" }}>
-          Design, deploy and explore network labs.
-        </Typography>
       </Box>
       <Box sx={{ ...OVERLAY, bottom: 104, mb: "-5%", flexDirection: "row", gap: 1 }}>
         {onCreateLab ? (
