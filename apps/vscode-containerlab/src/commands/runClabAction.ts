@@ -28,7 +28,8 @@ export async function runClabAction(
   const execute = async () => {
     const handlers = createTopoViewerLifecycleHandlers(action, {
       // Destroying some nodes leaves the rest of the lab running.
-      labKeepsRunning: action === "destroy" && isPartialDestroy(lifecycleOptions)
+      labKeepsRunning: action === "destroy" && isPartialDestroy(lifecycleOptions),
+      labPath: node.labPath.absolute
     });
     const cmd = new ClabCommand(
       action,
@@ -61,7 +62,8 @@ export async function runClabAction(
       if (!selection) {
         await notifyCurrentTopoViewerOfCommandFailure(
           action,
-          new Error("Operation cancelled by user")
+          new Error("Operation cancelled by user"),
+          node.labPath.absolute
         );
         return;
       }

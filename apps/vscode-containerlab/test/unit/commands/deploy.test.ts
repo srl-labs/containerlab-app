@@ -113,7 +113,10 @@ describe("deploy command", () => {
     expect(spy.firstCall.args).to.deep.equal([
       { lifecycleOptions: { nodeFilter: ["r1", "r2"], maxWorkers: 2 } }
     ]);
-    expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: false });
+    expect(graphStub.createdHandlers[0].options).to.deep.equal({
+      labKeepsRunning: false,
+      labPath: "/home/user/lab.yml"
+    });
   });
 
   it("keeps the lab marked running after destroying some of its nodes", async () => {
@@ -124,6 +127,9 @@ describe("deploy command", () => {
     expect(spy.firstCall.args).to.deep.equal([
       { lifecycleOptions: { nodeFilter: ["r1"], graceful: true } }
     ]);
-    expect(graphStub.createdHandlers[0].options).to.deep.equal({ labKeepsRunning: true });
+    expect(graphStub.createdHandlers[0].options).to.deep.equal({
+      labKeepsRunning: true,
+      labPath: "/home/user/lab.yml"
+    });
   });
 });
