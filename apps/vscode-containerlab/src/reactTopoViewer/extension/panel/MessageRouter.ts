@@ -20,6 +20,8 @@ import {
   MSG_LAB_LIFECYCLE_STATUS,
   MSG_PLAN_APPLY_LAB,
   MSG_SVG_EXPORT_RESULT,
+  MSG_TAILSCALE_STATUS,
+  MSG_TAILSCALE_STATUS_RESULT,
   MSG_TOGGLE_SPLIT_VIEW,
   isCustomNodeCommand,
   isExportCommand,
@@ -207,6 +209,35 @@ export class MessageRouter {
       const error = formatErrorMessage(err);
       log.warn(`[MessageRouter] Apply dry run failed: ${error}`);
       panel.webview.postMessage({ type: MSG_APPLY_PLAN_RESULT, requestId, success: false, error });
+    }
+  }
+
+  private async handleTailscaleStatus(
+    message: WebviewMessage,
+    panel: vscode.WebviewPanel
+  ): Promise<void> {
+    const requestId = typeof message.requestId === "string" ? message.requestId : "";
+    const yamlFilePath = this.context.yamlFilePath;
+    try {
+      if (!yamlFilePath) {
+        throw new Error("No topology file is open");
+      }
+      const status = await labLifecycleService.tailscaleStatus(yamlFilePath);
+      panel.webview.postMessage({
+        type: MSG_TAILSCALE_STATUS_RESULT,
+        requestId,
+        success: true,
+        status
+      });
+    } catch (err) {
+      const error = formatErrorMessage(err);
+      log.warn(`[MessageRouter] Tailscale status failed: ${error}`);
+      panel.webview.postMessage({
+        type: MSG_TAILSCALE_STATUS_RESULT,
+        requestId,
+        success: false,
+        error
+      });
     }
   }
 
@@ -608,6 +639,11 @@ export class MessageRouter {
 
     if (command === MSG_PLAN_APPLY_LAB) {
       await this.handlePlanApply(message, panel);
+      return true;
+    }
+
+    if (command === MSG_TAILSCALE_STATUS) {
+      await this.handleTailscaleStatus(message, panel);
       return true;
     }
 

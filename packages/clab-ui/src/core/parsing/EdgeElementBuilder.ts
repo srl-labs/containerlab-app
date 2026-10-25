@@ -248,7 +248,7 @@ function validateExtendedLink(linkObj: Record<string, unknown>): string[] {
   const linkType = typeof linkObj.type === "string" ? linkObj.type : "";
   if (linkType === "") return [];
 
-  if (linkType === "veth") {
+  if (linkType === "veth" || linkType === "veth-stitch") {
     return validateVethLink(linkObj);
   }
 

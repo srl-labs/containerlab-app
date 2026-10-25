@@ -8,6 +8,7 @@ import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import LockOpenIcon from "@mui/icons-material/LockOpenOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
+import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";
@@ -34,6 +35,12 @@ const LAB_SETTINGS_SECTIONS = [
     label: "Management",
     description: "Management subnet and docker network",
     icon: <LanOutlinedIcon fontSize="small" />
+  },
+  {
+    key: "certificates",
+    label: "Certificates",
+    description: "Certificate authority that signs node certificates",
+    icon: <VerifiedUserOutlinedIcon fontSize="small" />
   },
   {
     key: "inheritance",

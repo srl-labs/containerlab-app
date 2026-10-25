@@ -335,7 +335,7 @@ export interface LinkEditorData {
   target: string;
   sourceEndpoint: string;
   targetEndpoint: string;
-  type?: "veth" | "host" | "mgmt-net" | "macvlan" | "dummy" | "vxlan" | "vxlan-stitch" | string;
+  type?: "veth" | "veth-stitch" | "host" | "mgmt-net" | "macvlan" | "dummy" | "vxlan" | "vxlan-stitch" | string;
   // Extended properties
   sourceMac?: string;
   targetMac?: string;

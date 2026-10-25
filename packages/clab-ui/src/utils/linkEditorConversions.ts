@@ -147,7 +147,8 @@ export function convertEditorDataToLinkSaveData(data: LinkEditorData): LinkSaveD
   // Build extraData with extended properties
   const extraData: LinkExtraData = {};
 
-  if (data.type !== undefined && data.type.length > 0 && data.type !== "veth") {
+  // "veth" is sent too, so switching a veth-stitch link back is saved.
+  if (data.type !== undefined && data.type.length > 0) {
     extraData.extType = data.type;
   }
   extraData.extMtu =

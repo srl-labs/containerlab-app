@@ -132,3 +132,13 @@ test("lifecycle options become clab-api-server query parameters", async (t) => {
   assert.equal(redeploy.searchParams.get("exportTemplate"), "__full");
   assert.equal(redeploy.searchParams.get("skipLabdirAcl"), "true");
 });
+
+test("tailscale status reads the lab's tailscale endpoint", async (t) => {
+  const urls = captureFetchUrls(t);
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+
+  await client.getLabTailscaleStatus("token", "my lab");
+
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].pathname, "/api/v1/labs/my%20lab/tailscale");
+});

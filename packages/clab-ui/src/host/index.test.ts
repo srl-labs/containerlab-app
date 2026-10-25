@@ -131,6 +131,65 @@ test("createWindowClabUiHost correlates apply plan requests with results", async
   await assert.rejects(failed, /lab not found/);
 });
 
+test("createWindowClabUiHost reads Tailscale status answers", async () => {
+  const messages: Array<Record<string, unknown>> = [];
+  const targetWindow = new FakeWindow();
+  targetWindow.vscode = {
+    postMessage: (message: unknown) => {
+      messages.push(message as Record<string, unknown>);
+    }
+  };
+
+  const host = createWindowClabUiHost({ targetWindow: targetWindow as unknown as Window });
+  const tailscaleStatus = host.topoViewer.tailscaleStatus;
+  assert.ok(tailscaleStatus);
+  const reported = tailscaleStatus();
+  const unsupported = tailscaleStatus();
+  const failed = tailscaleStatus();
+  assert.deepEqual(
+    messages.map((message) => message.command),
+    ["tailscaleStatus", "tailscaleStatus", "tailscaleStatus"]
+  );
+  const [first, second, third] = messages.map((message) => message.requestId);
+
+  targetWindow.dispatch({
+    type: "tailscale-status-result",
+    requestId: first,
+    success: true,
+    status: {
+      labName: "mylab",
+      devices: [
+        {
+          role: "proxy",
+          containerName: "clab-mylab-tailscale",
+          state: "running",
+          backendState: "NeedsLogin",
+          authUrl: "https://login.tailscale.com/a/1",
+          online: false,
+          forwards: [{ listenPort: 8022, target: "172.20.20.2:22", nodeName: "srl1" }]
+        },
+        { containerName: "no role" }
+      ]
+    }
+  });
+  targetWindow.dispatch({ type: "tailscale-status-result", requestId: second, success: true });
+  targetWindow.dispatch({
+    type: "tailscale-status-result",
+    requestId: third,
+    success: false,
+    error: "lab not found"
+  });
+
+  const status = await reported;
+  assert.equal(status?.devices.length, 1);
+  assert.equal(status?.devices[0].authUrl, "https://login.tailscale.com/a/1");
+  assert.deepEqual(status?.devices[0].forwards, [
+    { listenPort: 8022, target: "172.20.20.2:22", nodeName: "srl1" }
+  ]);
+  assert.equal(await unsupported, undefined);
+  await assert.rejects(failed, /lab not found/);
+});
+
 test("createWindowClabUiHost maps incoming topo viewer events", async () => {
   const targetWindow = new FakeWindow();
   targetWindow.vscode = {

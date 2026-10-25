@@ -55,7 +55,8 @@ const API_CAPABILITIES: LabBackendCapabilities = {
   edgesharkManagement: true,
   wiresharkVnc: true,
   healthMetrics: true,
-  sharedWorkspace: true
+  sharedWorkspace: true,
+  tailscaleStatus: true
 };
 
 /** A lab backend for one signed-in user of a clab-api-server. */
@@ -183,6 +184,10 @@ export class ApiLabBackend implements LabBackend {
 
   fcli(lab: LabTarget, command: string) {
     return this.client.runFcliCommand(this.token, lab.labName, command);
+  }
+
+  tailscaleStatus(labName: string) {
+    return this.client.getLabTailscaleStatus(this.token, labName);
   }
 
   shareTool(

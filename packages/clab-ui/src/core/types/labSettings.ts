@@ -1,7 +1,7 @@
 /**
  * Shared Lab Settings types.
  *
- * These reflect Containerlab's top-level "name", "prefix", and "mgmt" fields.
+ * These reflect Containerlab's top-level "name", "prefix", "mgmt" and "settings" fields.
  * Kept in shared/types so both extension host and webview can use the same shape.
  */
 
@@ -13,6 +13,20 @@ export interface LabSettings {
   mgmtNetworks?: MgmtSettings[];
   /** `topology.defaults.mgmt-net`: the management network nodes use unless they pick one. */
   defaultMgmtNet?: string;
+  /** `settings.certificate-authority` */
+  certificateAuthority?: CertificateAuthoritySettings;
+}
+
+/**
+ * The CA that signs node certificates: an existing one (`cert` and `key`), or
+ * the size and lifetime of the one containerlab generates.
+ */
+export interface CertificateAuthoritySettings {
+  cert?: string;
+  key?: string;
+  "key-size"?: number;
+  /** Go duration, e.g. `8760h`; hours are the largest unit */
+  "validity-duration"?: string;
 }
 
 export interface MgmtSettings {
@@ -34,6 +48,15 @@ export interface MgmtSettings {
   "macvlan-parent"?: string;
   "macvlan-mode"?: string;
   "macvlan-aux"?: boolean;
+  /** Joins the network to a tailnet; containerlab allows it on one network only. */
+  tailscale?: MgmtTailscaleSettings;
+}
+
+export interface MgmtTailscaleSettings {
+  /** Sidecar mode: every node joins the tailnet with this key */
+  "auth-key"?: string;
+  /** `sso`: proxy mode, the lab joins as one device */
+  "auth-mode"?: string;
 }
 
 export interface MgmtIpamSettings {
@@ -78,7 +101,13 @@ export interface LabSettingsUpdate {
   mgmtNetRenames?: Record<string, string>;
   /** New `topology.defaults.mgmt-net`; null removes it. */
   defaultMgmtNet?: string | null;
+  /** Merged key by key into `settings.certificate-authority`; `null` removes a key. */
+  certificateAuthority?: CertificateAuthorityUpdate;
 }
+
+export type CertificateAuthorityUpdate = {
+  [K in keyof CertificateAuthoritySettings]?: CertificateAuthoritySettings[K] | null;
+};
 
 export interface MgmtNetworkUpdate {
   /** Index of the existing network this entry was loaded from; absent for a new network. */
@@ -88,8 +117,9 @@ export interface MgmtNetworkUpdate {
 
 /** Nested maps are merged key by key; `null` removes a key. */
 export type MgmtSettingsUpdate = {
-  [K in Exclude<keyof MgmtSettings, "driver-opts" | "ipam">]?: MgmtSettings[K] | null;
+  [K in Exclude<keyof MgmtSettings, "driver-opts" | "ipam" | "tailscale">]?: MgmtSettings[K] | null;
 } & {
   "driver-opts"?: Record<string, string | null> | null;
   ipam?: { [K in keyof MgmtIpamSettings]?: MgmtIpamSettings[K] | null } | null;
+  tailscale?: { [K in keyof MgmtTailscaleSettings]?: MgmtTailscaleSettings[K] | null } | null;
 };

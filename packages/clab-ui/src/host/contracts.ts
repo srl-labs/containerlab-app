@@ -21,6 +21,7 @@ import type {
 
 import type { ApplyPlan } from "./applyPlan";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
+import type { TailscaleStatus } from "./tailscaleStatus";
 
 export type TopoViewerLifecycleAction =
   | "deployLab"
@@ -196,6 +197,11 @@ export interface ClabUiTopoViewerHost {
    * omit it apply without showing a plan first.
    */
   planApply?(): Promise<ApplyPlan>;
+  /**
+   * Tailscale devices of the running lab. Resolves undefined when the lab host
+   * cannot report them; hosts that omit it never can.
+   */
+  tailscaleStatus?(): Promise<TailscaleStatus | undefined>;
   cancelLifecycle(): void;
   toggleSplitView(): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;

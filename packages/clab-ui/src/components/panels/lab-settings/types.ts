@@ -10,6 +10,10 @@ export type IpType = "default" | "auto" | "custom";
 export type MgmtDriver = "bridge" | "macvlan";
 export type MacvlanMode = "bridge" | "private" | "vepa" | "passthru";
 export type IpamProvider = "containerlab" | "runtime";
+/** `off`, `sidecar` (auth-key, every node joins) or `proxy` (SSO, the lab joins as one device) */
+export type TailscaleMode = "off" | "sidecar" | "proxy";
+/** `generated` by containerlab, or `external` cert and key files */
+export type CaMode = "generated" | "external";
 
 export interface DriverOption {
   key: string;
@@ -44,6 +48,8 @@ export interface MgmtSettingsState {
   /** Duplicate address detection */
   ipamDad: boolean;
   skipWhenUnused: boolean;
+  tailscaleMode: TailscaleMode;
+  tailscaleAuthKey: string;
   driverOptions: DriverOption[];
 }
 
@@ -60,6 +66,15 @@ export interface MgmtFormState {
   networks: MgmtNetworkFormState[];
   /** `topology.defaults.mgmt-net`; empty when nodes pick their own */
   defaultMgmtNet: string;
+}
+
+/** The Certificates tab: `settings.certificate-authority` */
+export interface CertificateAuthorityState {
+  mode: CaMode;
+  cert: string;
+  key: string;
+  keySize: string;
+  validityDuration: string;
 }
 
 /** Grouped setters for the Basic tab (matches useLabSettingsState().setBasic) */
@@ -90,6 +105,8 @@ export interface MgmtSettingsSetters {
   setIpamProvider: (v: IpamProvider) => void;
   setIpamDad: (v: boolean) => void;
   setSkipWhenUnused: (v: boolean) => void;
+  setTailscaleMode: (v: TailscaleMode) => void;
+  setTailscaleAuthKey: (v: string) => void;
 }
 
 /** Driver-option list actions needed by the Management tab */

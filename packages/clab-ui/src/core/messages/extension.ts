@@ -22,6 +22,9 @@ export const MSG_CANCEL_LAB_LIFECYCLE = "cancelLabLifecycle" as const;
 /** Dry-run apply; the host answers with `MSG_APPLY_PLAN_RESULT` and the same `requestId`. */
 export const MSG_PLAN_APPLY_LAB = "planApplyLab" as const;
 
+/** Tailscale status of the running lab; the host answers with `MSG_TAILSCALE_STATUS_RESULT`. */
+export const MSG_TAILSCALE_STATUS = "tailscaleStatus" as const;
+
 const LIFECYCLE_COMMANDS_SET: ReadonlySet<string> = new Set(Object.values(LIFECYCLE_COMMANDS));
 
 export type LifecycleCommand = (typeof LIFECYCLE_COMMANDS)[keyof typeof LIFECYCLE_COMMANDS];
@@ -118,4 +121,5 @@ export type ExtensionCommandType =
   | ExportCommand
   | typeof MSG_TOGGLE_SPLIT_VIEW
   | typeof MSG_CANCEL_LAB_LIFECYCLE
-  | typeof MSG_PLAN_APPLY_LAB;
+  | typeof MSG_PLAN_APPLY_LAB
+  | typeof MSG_TAILSCALE_STATUS;

@@ -18,6 +18,7 @@ export {
   controlNodeLifecycle,
   deleteUiCustomNode,
   deleteUiIcon,
+  fetchLabTailscaleStatus,
   fetchRuntimeImages,
   fetchUiCustomNodes,
   fetchUiIcons,

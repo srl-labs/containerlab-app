@@ -46,6 +46,7 @@ This page maps `containerlab-app` routes to their real behavior. It is intention
 |---|---|---|
 | `GET /api/runtime/inspect/all` | `GET /api/v1/labs` | with no explicit endpoint, merges responses from every saved endpoint |
 | `POST /api/runtime/inspect/lab` | `GET /api/v1/labs/{labName}` | resolves target lab from `sessionId` or `topologyRef` |
+| `POST /api/runtime/tailscale` | `GET /api/v1/labs/{labName}/tailscale` | answers `{ supported, status? }`; `supported: false` for the local containerlab |
 | `POST /api/runtime/save` | `POST /api/v1/labs/{labName}/save` | optional node filter is resolved from a node name first |
 | `POST /api/runtime/ssh` | `POST /api/v1/labs/{labName}/nodes/{nodeName}/ssh` | optional duration and SSH username |
 | `POST /api/runtime/logs` | `GET /api/v1/labs/{labName}/nodes/{nodeName}/logs?tail=...` | browser host converts node name to the real container target first |

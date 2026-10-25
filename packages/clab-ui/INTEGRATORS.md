@@ -648,6 +648,15 @@ CLI's `--format json` kebab-case output) and rejects with a message the dialog s
 The window host posts `{ command: "planApplyLab", requestId }` and expects
 `{ type: "apply-plan-result", requestId, success, plan?, error? }` back.
 
+`tailscaleStatus()` is optional too. While a lab that joins Tailscale (`mgmt.tailscale`)
+is deployed, the Management tab of Lab Settings lists the lab's Tailscale devices from
+it: the SSO proxy and its login link, auth-key sidecars, and forwarded `/ts` ports. It
+resolves to a `TailscaleStatus` (see `parseTailscaleStatus` in `/host`), or to
+`undefined` when the lab host cannot report it, which hides the list. The window host
+posts `{ command: "tailscaleStatus", requestId }` and expects
+`{ type: "tailscale-status-result", requestId, success, status?, error? }` back; a
+success without `status` means the lab host has no such report.
+
 Important node action names:
 
 - `ssh`
