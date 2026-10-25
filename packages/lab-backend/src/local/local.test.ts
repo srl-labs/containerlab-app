@@ -130,8 +130,12 @@ test("repository URLs name the lab and the branch", () => {
 
 test("terminals open the kind's shell and SSH user", () => {
   assert.deepEqual(terminalShellCommand("nokia_srlinux"), ["sr_cli"]);
+  assert.deepEqual(terminalShellCommand("frr"), ["vtysh"]);
   assert.deepEqual(terminalShellCommand("linux"), ["sh"]);
+  assert.deepEqual(terminalShellCommand("constructor"), ["sh"]);
   assert.equal(terminalSshUsername("cisco_xrd"), "clab");
+  assert.equal(terminalSshUsername("ciena_saos"), "diag");
+  assert.equal(terminalSshUsername("nvidia_cumulusvx"), "cumulus");
   assert.equal(terminalSshUsername("nokia_srlinux"), "admin");
   assert.equal(terminalSshUsername("nokia_srlinux", "ops"), "ops");
   assert.equal(terminalSshUsername("linux", "bad name"), "admin");

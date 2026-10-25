@@ -60,12 +60,6 @@ export const extensionVersion = resolveExtensionVersion();
 export let containerlabBinaryPath: string = "containerlab";
 export let dockerClient: Docker;
 
-// JSON config mappings
-import * as execCmdJson from "../resources/exec_cmd.json";
-import * as sshUserJson from "../resources/ssh_users.json";
-export const execCmdMapping = execCmdJson;
-export const sshUserMapping = sshUserJson;
-
 // Setter functions for globals that need to be modified from extension.ts
 export function setOutputChannel(channel: vscode.LogOutputChannel) {
   outputChannel = channel;

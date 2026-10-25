@@ -43,6 +43,10 @@ export {
   type CredentialsLevel,
   type ResolvedNodeCredentials
 } from "../core/parsing/NodeCredentials";
+export {
+  DEFAULT_EXEC_COMMANDS_BY_KIND,
+  DEFAULT_SSH_USERS_BY_KIND
+} from "../core/constants/nodeKindDefaults";
 
 function newId(): string {
   return globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2);

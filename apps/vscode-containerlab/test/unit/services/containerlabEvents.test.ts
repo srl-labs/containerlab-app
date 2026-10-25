@@ -164,4 +164,42 @@ describe("containerlabEvents per connection", () => {
       "remote-lab"
     ]);
   });
+
+  describe("published ports", () => {
+    const containerEvent = (action: string, attributes: Record<string, unknown>) =>
+      JSON.stringify({
+        type: "container",
+        action,
+        actor_id: "cccccccccccc",
+        actor_name: "clab-ports-n1",
+        attributes: { containerlab: "ports", "clab-node-name": "n1", ...attributes }
+      });
+    const ports = () => eventStreamFor("local").getGroupedContainers().ports?.[0]?.Ports;
+
+    it("lists the host ports of the ports attribute once per port and protocol", () => {
+      handleEventLineForTests(
+        containerEvent("start", {
+          state: "running",
+          ports: "0.0.0.0:8080/tcp->80;[::]:8080/tcp->80;0.0.0.0:5353/udp->53;443/tcp;127.0.0.1:9000"
+        })
+      );
+
+      expect(ports()).to.deep.equal([
+        { port: 8080, protocol: "tcp" },
+        { port: 5353, protocol: "udp" },
+        { port: 9000, protocol: "tcp" }
+      ]);
+    });
+
+    it("keeps the ports of a running container and drops them once it stops", () => {
+      handleEventLineForTests(
+        containerEvent("start", { state: "running", ports: "0.0.0.0:8080/tcp->80" })
+      );
+      handleEventLineForTests(containerEvent("health_status: healthy", { state: "running" }));
+      expect(ports()).to.deep.equal([{ port: 8080, protocol: "tcp" }]);
+
+      handleEventLineForTests(containerEvent("die", { state: "exited" }));
+      expect(ports()).to.deep.equal([]);
+    });
+  });
 });
