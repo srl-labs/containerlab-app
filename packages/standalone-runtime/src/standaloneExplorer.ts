@@ -148,7 +148,7 @@ type EndpointHealthCacheEntry =
   | { status: "ready"; metrics: EndpointHealthMetrics; fetchedAt: number }
   | { status: "error"; fetchedAt: number };
 
-function topologyRefForRunningLab(
+export function topologyRefForRunningLab(
   lab: LabState,
   topologyEntry?: TopologyFileEntry,
 ): TopologyRef | undefined {
@@ -380,6 +380,8 @@ type StandaloneExplorerSnapshotProviders = ExplorerSnapshotProviders & {
 
 export interface StandaloneExplorerBridge {
   createTopologyFile: () => Promise<void>;
+  /** Runs an explorer command for another view, such as the labs overview; hidden commands do nothing. */
+  executeCommand: (commandId: string, args: unknown[]) => Promise<void>;
   explorer: {
     connect: () => void;
     invokeAction: (actionRef: string) => Promise<void>;
@@ -494,7 +496,7 @@ function getInterfaceContextValue(state: string): string {
     : "containerlabInterfaceDown";
 }
 
-function shouldShowRunningLab(
+export function shouldShowRunningLab(
   lab: LabState,
   endpointsById: ReadonlyMap<string, EndpointConfig>,
   topologyEntry?: TopologyFileEntry,
@@ -511,7 +513,7 @@ function shouldShowRunningLab(
   return normalizeLabName(owner) === normalizeLabName(endpointUser);
 }
 
-function findTopologyEntryForRunningLab(
+export function findTopologyEntryForRunningLab(
   lab: LabState,
   files: TopologyFileEntry[],
 ): TopologyFileEntry | undefined {
@@ -1378,6 +1380,10 @@ export function createStandaloneExplorerBridge(
 
   return {
     createTopologyFile: () => executeExplorerCommand("containerlab.editor.topoViewerEditor", []),
+    async executeCommand(commandId, args) {
+      if ((hiddenCommandIds as readonly string[]).includes(commandId)) return;
+      await executeExplorerCommand(commandId, args);
+    },
     explorer: {
       connect() {
         controller.connect();

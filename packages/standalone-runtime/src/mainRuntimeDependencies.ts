@@ -7,7 +7,7 @@ export {
 export { useAuth } from "./hooks/useAuth";
 export { useEventStream } from "./hooks/useEventStream";
 export { useWorkspaceFileEvents, type WorkspaceFileEvent } from "./hooks/useWorkspaceFileEvents";
-export { resolveStandaloneStartupScreen } from "./startupScreen";
+export { resolveStandaloneWorkspaceScreen } from "./startupScreen";
 export {
   createStandaloneLifecycleManager,
   isStandaloneLifecycleCommand

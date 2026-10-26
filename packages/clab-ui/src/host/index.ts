@@ -289,6 +289,10 @@ function toTopoViewerEvent(value: unknown): ClabUiTopoViewerEvent | null {
       return toLifecycleStatusEvent(value);
     case "fit-viewport":
       return { type: "fitViewport" };
+    case "focus-node":
+      return typeof value.nodeId === "string" && value.nodeId.trim()
+        ? { type: "focusNode", nodeId: value.nodeId.trim() }
+        : null;
     case "svg-export-result":
       return toSvgExportResultEvent(value);
     default:

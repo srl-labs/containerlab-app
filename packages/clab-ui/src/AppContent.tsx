@@ -57,6 +57,7 @@ import {
   splitNodeIdsByType
 } from "./services/deleteSelectionCommands";
 import { useAnnotations, useDerivedAnnotations, type AnnotationContextValue } from "./hooks/canvas";
+import { useFocusNodeRequest } from "./hooks/canvas/useFocusNodeRequest";
 import {
   useAppHandlers,
   useContextMenuHandlers,
@@ -727,6 +728,7 @@ export const AppContent: React.FC<AppContentProps> = ({
   useDevMockTrafficStats(shouldCollectDevMockTrafficStats(host, isDevMock, interactionMode));
   const { layoutRef, devExplorerWidth, isDevExplorerDragging, handleDevExplorerResizeStart } =
     useDevExplorerPane(showDevExplorer);
+  useFocusNodeRequest(rfInstance);
 
   React.useEffect(() => {
     if (!shouldDumpCssVars()) return;

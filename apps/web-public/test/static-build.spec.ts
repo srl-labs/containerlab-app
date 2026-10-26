@@ -54,5 +54,13 @@ test("the published build works at a subpath without any backend requests", asyn
   await expect(page.locator(".react-flow")).toBeVisible();
   await page.getByTestId("navbar-split-view").click();
   await expect(page.locator(".monaco-editor .view-lines")).toContainText("name: base-path");
+
+  // The address follows the open lab under the subpath, and opens it again.
+  const linked = `http://127.0.0.1:${previewPort}${BASE}?lab=pages-sandbox::base-path.clab.yml`;
+  await expect.poll(() => page.url()).toBe(linked);
+  await page.goto(linked);
+  await waitForWorkspace(page);
+  await expect(page.getByRole("tab", { name: "base-path", exact: true })).toHaveAttribute("aria-selected", "true");
+  expect(new URL(page.url()).pathname).toBe(BASE);
   expect(backendRequests).toEqual([]);
 });

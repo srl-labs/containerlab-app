@@ -30,6 +30,9 @@ export const MSG_NODE_STATS_UPDATE = "node-stats-update";
 /** Message type to request fit-to-viewport in webview */
 export const MSG_FIT_VIEWPORT = "fit-viewport";
 
+/** Selects a node (`{ nodeId }`) and centers the canvas on it once the node is drawn. */
+export const MSG_FOCUS_NODE = "focus-node";
+
 export const MSG_PANEL_ACTION = "panel-action";
 
 export const MSG_CUSTOM_NODE_UPDATED = "custom-nodes-updated";
@@ -64,6 +67,7 @@ export type WebviewMessageType =
   | typeof MSG_NODE_DATA_UPDATED
   | typeof MSG_NODE_STATS_UPDATE
   | typeof MSG_FIT_VIEWPORT
+  | typeof MSG_FOCUS_NODE
   | typeof MSG_PANEL_ACTION
   | typeof MSG_CUSTOM_NODE_UPDATED
   | typeof MSG_CUSTOM_NODE_ERROR

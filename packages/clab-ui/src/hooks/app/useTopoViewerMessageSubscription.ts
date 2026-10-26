@@ -166,6 +166,9 @@ export function useTopoViewerMessageSubscription(): void {
         case "fitViewport":
           handleFitViewport();
           break;
+        case "focusNode":
+          useCanvasStore.getState().requestFocusNode(event.nodeId);
+          break;
         case "svgExportResult":
           break;
       }

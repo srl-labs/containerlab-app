@@ -11,10 +11,10 @@ import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
 import type { EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
 import { getEndpointIdFromRequest } from "./middleware.ts";
 import {
-  disableStreamTimeouts,
-  startSseHeartbeat,
-  streamResponseHeaders,
-} from "./streamResponseHeaders.ts";
+  EventStreamRefusal,
+  sendSseEventStream,
+  type EventStreamSource,
+} from "./eventStreams.ts";
 import { buildStandaloneTopologyRef } from "./topologyIdentity.ts";
 
 interface WorkspaceFileExplorerEntry extends WorkspaceFileEntry {
@@ -59,6 +59,27 @@ function resolveFileEndpoint(
   resolveEndpoint: EndpointResolver,
 ): ResolvedEndpoint | null {
   return resolveEndpoint(request, reply, getEndpointIdFromRequest(request));
+}
+
+/** Changes to the files of an endpoint's workspace. */
+export function workspaceFileEventStreams(resolveEndpoint: EndpointResolver): EventStreamSource {
+  return (request, reply, params) => {
+    const resolved = resolveEndpoint(request, reply, params.endpointId);
+    if (!resolved) {
+      throw new EventStreamRefusal(401, "Not authenticated");
+    }
+
+    const { backend } = resolved;
+    return {
+      failureMessage: "Workspace event stream error",
+      async open(signal) {
+        const events = await backend.fs.watch(signal);
+        return (async function* () {
+          for await (const event of events) yield JSON.stringify(event);
+        })();
+      },
+    };
+  };
 }
 
 export function registerFileProxy(
@@ -119,63 +140,12 @@ export function registerFileProxy(
     }
   });
 
-  app.get("/api/runtime/file-explorer/events", async (request, reply) => {
-    const resolved = resolveFileEndpoint(request, reply, resolveEndpoint);
-    if (!resolved) {
-      return reply.status(401).send({ error: "Not authenticated" });
-    }
-
-    const { backend } = resolved;
-    disableStreamTimeouts(request, reply);
-
-    reply.raw.writeHead(
-      200,
-      streamResponseHeaders(request, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      }),
-    );
-    reply.raw.write(":ok\n\n");
-    const stopHeartbeat = startSseHeartbeat(reply);
-
-    let aborted = false;
-    const abortController = new AbortController();
-    const abort = (): void => {
-      aborted = true;
-      abortController.abort();
-    };
-    reply.raw.on("close", abort);
-
-    try {
-      const events = await backend.fs.watch(abortController.signal);
-      let eventId = 0;
-      for await (const event of events) {
-        if (aborted) {
-          break;
-        }
-        eventId += 1;
-        reply.raw.write(`id: ${eventId}\ndata: ${JSON.stringify(event)}\n\n`);
-      }
-    } catch (error) {
-      if (!aborted) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "Workspace event stream error";
-        reply.raw.write(
-          `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`,
-        );
-      }
-    } finally {
-      stopHeartbeat();
-      reply.raw.off("close", abort);
-      if (!aborted && !reply.raw.writableEnded) {
-        reply.raw.end();
-      }
-    }
-  });
+  const fileEvents = workspaceFileEventStreams(resolveEndpoint);
+  app.get("/api/runtime/file-explorer/events", (request, reply) =>
+    sendSseEventStream(request, reply, fileEvents, {
+      endpointId: getEndpointIdFromRequest(request),
+    }),
+  );
 
   app.get("/api/runtime/file-explorer/file", async (request, reply) => {
     const resolved = resolveFileEndpoint(request, reply, resolveEndpoint);

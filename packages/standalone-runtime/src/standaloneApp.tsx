@@ -20,6 +20,21 @@ import {
   StandaloneFileEditor,
   StandaloneLabEmptyState,
 } from "./components/StandaloneWorkspace";
+import {
+  StandaloneConnectionBanner,
+  StandaloneLabHostUnavailable,
+  useActiveTabUnavailable,
+} from "./components/StandaloneConnectionBanner";
+import { StandaloneLabsOverview } from "./components/StandaloneLabsOverview";
+import { replaceLabDeepLink } from "./labDeepLink";
+import {
+  createLabDeepLinkLauncher,
+  createLabsOverviewActions,
+  createOverviewSourceCache,
+  requestNodeFocus,
+} from "./standaloneLabNavigation";
+import type { EndpointStatus } from "./stores/endpointStore";
+import { useWorkspaceViewStore } from "./stores/workspaceViewStore";
 /**
  * Standalone app entry point.
  *
@@ -59,7 +74,7 @@ import {
   isStandaloneLifecycleCommand,
   labsEqualForExplorer,
   planTopologyApply,
-  resolveStandaloneStartupScreen,
+  resolveStandaloneWorkspaceScreen,
   useAuth,
   useEndpointStore,
   useEventStream,
@@ -394,11 +409,22 @@ function getEndpointIdForEditorContext(): string | undefined {
 }
 
 function hasActiveConnectedTopologySession(): boolean {
+  const endpointId = topologyManager.getCurrentEndpointId();
+  const status = endpointId
+    ? useEndpointStore.getState().endpoints.get(endpointId)?.status
+    : undefined;
+  // A lab host that stopped answering keeps its lab on the canvas: requests fail
+  // until it is back, instead of replacing the lab with an empty one.
   return Boolean(
-    getConnectedEndpointIdForUiAssets() &&
+    status &&
+    status !== "saved" &&
     topologyManager.getCurrentSessionId() &&
     topologyManager.getCurrentTopologyRef(),
   );
+}
+
+function isEndpointConnected(endpointId: string): boolean {
+  return useEndpointStore.getState().endpoints.get(endpointId)?.status === "connected";
 }
 
 function createEmptyTopologySnapshot(): TopologySnapshot {
@@ -520,9 +546,19 @@ async function activateLabTabById(
     return;
   }
   useLabTabsStore.getState().setActiveTab(tab.id);
+  const view = useWorkspaceViewStore.getState();
   if (isFileLabTab(tab)) {
+    view.setUnavailableTabId(null);
     return;
   }
+  if (!isEndpointConnected(tab.endpointId)) {
+    // The lab on the canvas stays; another one loads once its lab host answers
+    // again (see reloadReconnectedEndpoint).
+    const loaded = topologyManager.getCurrentTopologyRef()?.topologyId === tab.topologyRef.topologyId;
+    view.setUnavailableTabId(loaded ? null : tab.id);
+    return;
+  }
+  view.setUnavailableTabId(null);
   try {
     await queueTopologyTabActivation(async () => {
       await topologyManager.loadTopologyFile(tab.topologyRef, {
@@ -547,6 +583,7 @@ async function openTopologyInTab(
     },
     resolveLabTabFallbackEndpointId(),
   );
+  showDocument();
   const openResult = useLabTabsStore.getState().openOrFocusTab(resolvedTab);
   await activateLabTabById(openResult.tab.id, {
     deploymentState: options.deploymentState,
@@ -571,6 +608,57 @@ async function confirmCloseLabTab(tabId: string): Promise<boolean> {
   });
 }
 
+/** Opening or choosing a document leaves the labs overview and drops a link still waiting for its lab host. */
+function showDocument(): void {
+  useWorkspaceViewStore.getState().setOverviewOpen(false);
+  labDeepLinks.cancel();
+}
+
+async function selectLabTab(tabId: string): Promise<void> {
+  showDocument();
+  await activateLabTabById(tabId);
+}
+
+/**
+ * A lab host answers again: reload what it lists and the active lab when it is one
+ * of its labs. Signing in again replaces the host's topology sessions on the app
+ * server, so the active lab gets a new one.
+ */
+async function reloadReconnectedEndpoint(
+  endpointId: string,
+  previousStatus: EndpointStatus,
+): Promise<void> {
+  topologyManager.invalidateTopologyFileListCache(endpointId);
+  explorerBridge.invalidateFileExplorerCache(endpointId);
+  overviewSources.invalidate(endpointId);
+  useWorkspaceViewStore.getState().bumpFilesRevision();
+  if (previousStatus !== "offline") {
+    await queueTopologyTabActivation(() =>
+      topologyManager.disposeEndpointSession(endpointId),
+    );
+  }
+  const { activeTabId, tabs } = useLabTabsStore.getState();
+  const active = tabs.find((tab) => tab.id === activeTabId);
+  if (active && !isFileLabTab(active) && active.endpointId === endpointId) {
+    await activateLabTabById(active.id).catch(() => {});
+  }
+}
+
+function syncAddressWithActiveTab(): void {
+  // A link waiting for its lab host keeps the address until the lab opens.
+  if (labDeepLinks.isPending()) {
+    return;
+  }
+  const { activeTabId, tabs } = useLabTabsStore.getState();
+  const active = tabs.find((tab) => tab.id === activeTabId);
+  replaceLabDeepLink(
+    active && !isFileLabTab(active)
+      ? { endpointId: active.endpointId, path: active.topologyRef.yamlPath }
+      : null,
+  );
+}
+
+/** Shows a workspace file in a file tab, focusing the tab when it is already open. */
 function openWorkspaceFileInTab(document: {
   content: string;
   endpointId: string;
@@ -578,6 +666,7 @@ function openWorkspaceFileInTab(document: {
   title: string;
 }): void {
   const tab = resolveFileTab(document);
+  useWorkspaceViewStore.getState().setUnavailableTabId(null);
   const openResult = useLabTabsStore.getState().openOrFocusTab(tab);
   useLabTabsStore.getState().setActiveTab(openResult.tab.id);
 }
@@ -674,7 +763,10 @@ const explorerBridge = createStandaloneExplorerBridge({
     topologyManager.invalidateTopologyFileListCache,
   listTopologyFiles: topologyManager.listTopologyFiles,
   loadTopologyFile: openTopologyInTab,
-  openFileEditor: openWorkspaceFileInTab,
+  openFileEditor: (document) => {
+    showDocument();
+    openWorkspaceFileInTab(document);
+  },
   removeEndpoint: async (endpointId) => {
     await closeEndpointTabsAndActivateNext(endpointId);
     await topologyManager.disposeEndpointSession(endpointId);
@@ -686,6 +778,26 @@ const explorerBridge = createStandaloneExplorerBridge({
 });
 
 scheduleExplorerSnapshot = explorerBridge.scheduleSnapshot;
+
+const overviewSources = createOverviewSourceCache();
+
+const labsOverviewActions = createLabsOverviewActions({
+  executeCommand: explorerBridge.executeCommand,
+  createTopologyFile: explorerBridge.createTopologyFile,
+  listTopologyFiles: topologyManager.listTopologyFiles,
+  loadSources: overviewSources.load,
+  close: () => useWorkspaceViewStore.getState().setOverviewOpen(false),
+});
+
+const labDeepLinks = createLabDeepLinkLauncher({
+  getEndpoints: getConfiguredEndpoints,
+  listTopologyFilesForEndpoint: topologyManager.listTopologyFilesForEndpoint,
+  openLab: ({ endpointId, topologyRef }) =>
+    explorerBridge.executeCommand("containerlab.lab.graph.topoViewer", [
+      { endpointId, labName: topologyRef.labName, topologyRef, description: topologyRef.yamlPath },
+    ]),
+  focusNode: requestNodeFocus,
+});
 
 function workspaceEventTouchesTopology(pathValue: string | undefined): boolean {
   return /\.clab\.(?:ya?ml|gotmpl)(?:\.annotations\.json)?$/i.test(pathValue ?? "");
@@ -1535,16 +1647,26 @@ function StandaloneApp() {
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
     return activeTab?.kind ?? null;
   });
+  const overviewOpen = useWorkspaceViewStore((state) => state.overviewOpen);
+  const activeTabUnavailable = useActiveTabUnavailable();
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
-  const startupScreen = useMemo(
-    () => resolveStandaloneStartupScreen(endpointList),
-    [endpointList],
-  );
+  const startupScreen = resolveStandaloneWorkspaceScreen({
+    endpoints: endpointList,
+    hasLoadedOnce,
+    loading,
+  });
+
+  useEffect(() => {
+    if (startupScreen === "app") setHasLoadedOnce(true);
+  }, [startupScreen]);
 
   const handleWorkspaceFileEvent = useCallback(
     (endpointId: string, event: WorkspaceFileEvent) => {
       if (event.path === undefined || workspaceEventTouchesTopology(event.path)) {
         topologyManager.invalidateTopologyFileListCache(endpointId);
+        overviewSources.invalidate(endpointId, event.path);
+        useWorkspaceViewStore.getState().bumpFilesRevision();
       }
       explorerBridge.invalidateFileExplorerCache(endpointId);
     },
@@ -1581,8 +1703,8 @@ function StandaloneApp() {
     }
 
     if (!hasConnectedEndpoint) {
-      clearStandaloneUiState();
-      void clearLabTabsAndActiveTopology();
+      // Lab hosts that stopped answering or need a new sign-in keep their tabs and
+      // templates; their labs reload once they are back.
       return () => {
         cancelled = true;
       };
@@ -1630,15 +1752,36 @@ function StandaloneApp() {
   }, [endpointList]);
 
   useEffect(() => {
-    topologyManager.setAuthenticated(hasConnectedEndpoint);
+    // Only signing out of every lab host ends the topology session; an outage keeps it.
+    topologyManager.setAuthenticated(hasEndpointSession);
     return () => {
       topologyManager.closeEventStream();
     };
-  }, [hasConnectedEndpoint]);
+  }, [hasEndpointSession]);
 
   useEffect(() => {
     scheduleExplorerSnapshot(0);
   }, [endpointList]);
+
+  const endpointStatusesRef = useRef(new Map<string, EndpointStatus>());
+  useEffect(() => {
+    const previous = endpointStatusesRef.current;
+    endpointStatusesRef.current = new Map(
+      endpointList.map((endpoint) => [endpoint.id, endpoint.status]),
+    );
+    for (const endpoint of endpointList) {
+      const before = previous.get(endpoint.id);
+      if (endpoint.status === "connected" && before !== undefined && before !== "connected") {
+        void reloadReconnectedEndpoint(endpoint.id, before);
+      }
+    }
+    void labDeepLinks.resume().then(syncAddressWithActiveTab);
+  }, [endpointList]);
+
+  useEffect(() => {
+    syncAddressWithActiveTab();
+    return useLabTabsStore.subscribe(syncAddressWithActiveTab);
+  }, []);
 
   const handleAddEndpoint = useCallback(
     async (input: {
@@ -1788,7 +1931,16 @@ function StandaloneApp() {
     [updateEndpoint],
   );
 
-  if (loading) return <LoadingScreen logoUrl={publicAssetUrl("clab-animated-no-logo.svg")} />;
+  // The overview and other documents replace the canvas, which stays mounted beneath them.
+  const renderDocumentContent = () => {
+    if (overviewOpen) return <StandaloneLabsOverview actions={labsOverviewActions} />;
+    if (activeLabTabKind === "file") {
+      return <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />;
+    }
+    return activeTabUnavailable ? <StandaloneLabHostUnavailable /> : undefined;
+  };
+
+  if (startupScreen === "loading") return <LoadingScreen logoUrl={publicAssetUrl("clab-animated-no-logo.svg")} />;
 
   if (startupScreen === "login") {
     return (
@@ -1824,28 +1976,35 @@ function StandaloneApp() {
               hideLogo={hasDesktopTitleBar()}
               onColorSchemeChange={handleThemeChange}
               onOpenSettings={() => setSettingsOpen(true)}
+              overview={{
+                active: overviewOpen,
+                onToggle: () => useWorkspaceViewStore.getState().setOverviewOpen(!overviewOpen),
+              }}
               tabs={
                 tabOrientation === "vertical" ? (
                   <StandaloneLabTabs
                     orientation="vertical"
-                    onActivate={activateLabTabById}
+                    showSelection={!overviewOpen}
+                    onActivate={selectLabTab}
                     onClose={closeLabTabAndActivateNext}
                   />
                 ) : undefined
               }
             />
           ),
-          header:
-            tabOrientation === "horizontal" ? (
-              <StandaloneLabTabs
-                onActivate={activateLabTabById}
-                onClose={closeLabTabAndActivateNext}
-              />
-            ) : undefined,
-          content:
-            activeLabTabKind === "file" ? (
-              <StandaloneFileEditor onClose={closeLabTabAndActivateNext} />
-            ) : undefined,
+          header: (
+            <>
+              <StandaloneConnectionBanner />
+              {tabOrientation === "horizontal" ? (
+                <StandaloneLabTabs
+                  showSelection={!overviewOpen}
+                  onActivate={selectLabTab}
+                  onClose={closeLabTabAndActivateNext}
+                />
+              ) : null}
+            </>
+          ),
+          content: renderDocumentContent(),
           emptyState: <StandaloneLabEmptyState onCreateLab={explorerBridge.createTopologyFile} />,
         }}
       />
@@ -1994,6 +2153,7 @@ export function mountStandaloneApp(): void {
   currentTheme = applyStandaloneAppearance();
   if (!standaloneRuntime) {
     setupStandaloneUiHost();
+    labDeepLinks.start(window.location.search);
   }
   renderApp();
 }

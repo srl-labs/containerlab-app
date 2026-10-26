@@ -86,6 +86,7 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "src/viewer/entry.tsx",
       "test/ui-harness/settings.tsx",
       "test/ui-harness/explorer.tsx",
+      "test/ui-harness/overview.tsx",
       "test/ui-harness/webviews.tsx",
       "viewer-assets/component.mjs",
       "src/**/*.test.{ts,tsx}",

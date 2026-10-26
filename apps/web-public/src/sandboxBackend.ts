@@ -294,7 +294,7 @@ function isTopologyPath(pathValue: string): boolean {
   return /\.clab\.ya?ml$/i.test(pathValue) && !/\.annotations\.json$/i.test(pathValue);
 }
 
-function topologyFileEntry(pathValue: string, content: string): TopologyFileEntry {
+function topologyFileEntry(pathValue: string, content: string, hasAnnotations = false): TopologyFileEntry {
   const topologyRef = buildStandaloneTopologyRefFromPath(
     pathValue,
     labNameFromYaml(content) ?? stripTopologySuffix(safeFilename(pathValue)),
@@ -304,7 +304,7 @@ function topologyFileEntry(pathValue: string, content: string): TopologyFileEntr
     endpointId: SANDBOX_ENDPOINT_ID,
     filename: safeFilename(pathValue),
     path: pathValue,
-    hasAnnotations: false,
+    hasAnnotations,
     labName: topologyRef.labName,
     deploymentState: "undeployed",
     topologyRef,
@@ -409,9 +409,11 @@ export class SandboxBackend {
   }
 
   listTopologyFiles(): TopologyFileEntry[] {
-    return Object.entries(this.fs.readFiles())
+    const files = this.fs.readFiles();
+    return Object.entries(files)
       .filter(([pathValue]) => isTopologyPath(pathValue))
-      .map(([pathValue, content]) => topologyFileEntry(pathValue, content))
+      .map(([pathValue, content]) =>
+        topologyFileEntry(pathValue, content, files[`${pathValue}.annotations.json`] !== undefined))
       .sort((left, right) => left.path.localeCompare(right.path));
   }
 

@@ -2,15 +2,16 @@ import type { FastifyInstance } from "fastify";
 
 import type { EndpointListResolver, EndpointResolver } from "./endpointResolver.ts";
 import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.ts";
-import { registerEventsProxy } from "./eventsProxy.ts";
-import { registerFileProxy } from "./fileProxy.ts";
+import { registerEventChannel } from "./eventChannel.ts";
+import { labEventStreams, registerEventsProxy } from "./eventsProxy.ts";
+import { registerFileProxy, workspaceFileEventStreams } from "./fileProxy.ts";
 import { registerFileTransferProxy } from "./fileTransferProxy.ts";
 import { registerLabOperationsProxy } from "./labOperationsProxy.ts";
 import { registerLabProxy } from "./labProxy.ts";
 import { registerRuntimeProxy } from "./runtimeProxy.ts";
 import { registerRuntimeStreamProxy } from "./runtimeStreamProxy.ts";
 import { registerTerminalStreamProxy } from "./terminalStreamProxy.ts";
-import { registerTopologyEventsProxy } from "./topologyEventsProxy.ts";
+import { registerTopologyEventsProxy, topologyEventStreams } from "./topologyEventsProxy.ts";
 import { registerTopologyProxy } from "./topologyProxy.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 
@@ -21,6 +22,11 @@ export function registerStandaloneProxies(
   topologySessions: StandaloneTopologySessionManager
 ): void {
   registerEventsProxy(app, resolveEndpoint);
+  registerEventChannel(app, {
+    events: labEventStreams(resolveEndpoint),
+    files: workspaceFileEventStreams(resolveEndpoint),
+    topology: topologyEventStreams(resolveEndpoint, topologySessions)
+  });
   registerTopologyEventsProxy(app, resolveEndpoint, topologySessions);
   registerTopologyProxy(app, resolveEndpoint, topologySessions);
   registerFileProxy(app, resolveEndpoint);

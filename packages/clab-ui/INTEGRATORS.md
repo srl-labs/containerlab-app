@@ -690,6 +690,7 @@ Important topo viewer events:
 - `lifecycleLog`
 - `lifecycleStatus`
 - `fitViewport`
+- `focusNode` (`{ type: "focus-node", nodeId }`: selects the node and centers on it once it is drawn)
 - `svgExportResult`
 
 ### Editor data
@@ -797,6 +798,7 @@ bar inside a VS Code editor.
 | `…/workspace/login`, `…/workspace/bootstrap` | Authentication presentation and initial loading screen |
 | `…/workspace/dialogs`, `…/workspace/terminal` | Action dialogs and terminal views |
 | `…/workspace/empty-state` | Shared empty workspace presentation |
+| `…/workspace/overview` | Labs overview page with lab cards and topology thumbnails |
 | `…/workspace/state`, `…/workspace/types` | UI state and host data contracts |
 | `…/workspace/yaml` | YAML model helpers without importing editor views |
 
@@ -834,6 +836,16 @@ Document tabs sit above the document; the properties/YAML panel shares the docum
 area and respects its bounds. Do not position UI by querying another component's
 DOM. Shared floating surfaces use host theme tokens, with opaque high-contrast
 fallbacks; decorative animation respects reduced motion.
+
+Pass `overview` to `WorkspaceSidebar` to add the rail's Overview entry, and render
+`LabsOverview` from `…/workspace/overview` as the `content` slot while it is active.
+The host supplies the cards (built with the `…/workspace/state` lab helpers), the
+topology files for thumbnails and the card actions. Pass `watchUsage` to show the CPU
+and memory of running labs: a card calls it while it is visible, and stops when it
+scrolls away or the overview closes; a host without node usage leaves it out or answers
+`{ status: "unavailable" }`, and the card shows no usage row. `ConnectionBanner` in the
+`header` slot shows each lab host's API and live-events problems without blocking
+the workspace.
 
 Workspace entries are deliberately absent from the root and explorer export graphs.
 The packed-consumer check verifies that embedding these two entries does not pull

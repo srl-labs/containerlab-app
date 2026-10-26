@@ -17,6 +17,7 @@ const clabUiSubpathAliases = [
   ["workspace/dialogs", "workspace/dialogs.ts"],
   ["workspace/terminal", "workspace/terminal.ts"],
   ["workspace/empty-state", "workspace/empty-state.ts"],
+  ["workspace/overview", "workspace/overview.ts"],
   ["workspace/state", "workspace/state/index.ts"],
   ["workspace/types", "workspace/types.ts"],
   ["workspace", "workspace/index.ts"],

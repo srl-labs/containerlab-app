@@ -27,6 +27,7 @@ This page maps `containerlab-app` routes to their real behavior. It is intention
 | `POST /api/topology/snapshot` | local topology session host; upstream file/doc operations as needed | if no `sessionId` is supplied, returns an empty snapshot scaffold instead of failing |
 | `POST /api/topology/command` | local topology session host; upstream file/doc operations as needed | requires `sessionId` and `command`; returns topology-host ack/reject/error payloads |
 | `GET /api/topology/events` | `GET /api/v1/labs/{labName}/topology/events?path=...` | requires `sessionId`; converts upstream stream into browser SSE |
+| `GET /api/events/socket` (WebSocket) | the upstream streams of `/api/events`, `/api/runtime/file-explorer/events` and `/api/topology/events` | carries every live event stream of a browser tab over one socket, so the streams do not hold the browser's six HTTP/1.1 connections per host; the browser uses the SSE routes only when the socket never opens |
 
 ## Lab lifecycle routes
 
