@@ -12,6 +12,7 @@ import { customNodeConfigManager } from "../services/CustomNodeConfigManager";
 import type { CustomNodeConfig } from "../services/CustomNodeConfigManager";
 import { iconService } from "../services/IconService";
 import { labOperationsService } from "../services/LabOperationsService";
+import { openTopologyFileReference } from "../services/LabFileService";
 import {
   MSG_APPLY_PLAN_RESULT,
   MSG_CANCEL_LAB_LIFECYCLE,
@@ -21,6 +22,7 @@ import {
   MSG_LAB_LIFECYCLE_STATUS,
   MSG_LAB_OPERATION,
   MSG_LAB_OPERATION_RESULT,
+  MSG_OPEN_LAB_FILE,
   MSG_PLAN_APPLY_LAB,
   MSG_SVG_EXPORT_RESULT,
   MSG_TAILSCALE_STATUS,
@@ -283,6 +285,17 @@ export class MessageRouter {
         error
       });
     }
+  }
+
+  /** A bind source, startup config or license the webview links to, beside the topology. */
+  private async handleOpenLabFile(message: WebviewMessage): Promise<void> {
+    const yamlFilePath = this.getYamlFilePath(MSG_OPEN_LAB_FILE);
+    const filePath = typeof message.path === "string" ? message.path : "";
+    if (yamlFilePath == null || yamlFilePath.length === 0 || filePath.length === 0) return;
+    await openTopologyFileReference(yamlFilePath, {
+      path: filePath,
+      create: message.create === true
+    });
   }
 
   private async handleSplitViewToggle(panel: vscode.WebviewPanel): Promise<void> {
@@ -722,6 +735,11 @@ export class MessageRouter {
       if (yamlFilePath) {
         await vscode.commands.executeCommand("containerlab.lab.validate", labUri(yamlFilePath));
       }
+      return true;
+    }
+
+    if (command === MSG_OPEN_LAB_FILE) {
+      await this.handleOpenLabFile(message);
       return true;
     }
 

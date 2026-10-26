@@ -272,6 +272,7 @@ function computeLineBounds(
  */
 export function freeTextToNode(annotation: FreeTextAnnotation): Node<FreeTextNodeData> {
   const position = normalizePosition(annotation.position);
+  const zIndex = toFiniteNumber(annotation.zIndex);
   return {
     id: annotation.id,
     type: FREE_TEXT_NODE_TYPE,
@@ -279,6 +280,7 @@ export function freeTextToNode(annotation: FreeTextAnnotation): Node<FreeTextNod
     // Width/height at top level for React Flow's NodeResizer compatibility
     width: annotation.width,
     height: annotation.height,
+    ...(zIndex !== undefined ? { zIndex } : {}),
     draggable: true,
     selectable: true,
     data: {
@@ -504,7 +506,7 @@ export function nodeToFreeText(node: Node<FreeTextNodeData>): FreeTextAnnotation
   if (groupId !== undefined) annotation.groupId = groupId;
   const geoCoordinates = toLatLng(data.geoCoordinates);
   if (geoCoordinates !== undefined) annotation.geoCoordinates = geoCoordinates;
-  const zIndex = toFiniteNumber(data.zIndex);
+  const zIndex = toFiniteNumber(data.zIndex) ?? toFiniteNumber(node.zIndex);
   if (zIndex !== undefined) annotation.zIndex = zIndex;
   return annotation;
 }

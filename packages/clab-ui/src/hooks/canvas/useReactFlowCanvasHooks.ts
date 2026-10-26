@@ -17,6 +17,7 @@ import { log } from "../../utils/logger";
 import { allocateEndpointsForLink } from "../../utils/endpointAllocator";
 import { buildEdgeId } from "../../utils/edgeId";
 import { snapToGrid } from "../../utils/grid";
+import { MAX_FIT_ZOOM } from "../../components/canvas/fitView";
 
 /**
  * Hook for delete node/edge handlers
@@ -200,7 +201,7 @@ function createPositionUpdater(positions: PositionEntry[]) {
 /** Schedule a fit view after layout application */
 function scheduleFitView(rfRef: React.RefObject<ReactFlowInstance | null>): void {
   setTimeout(() => {
-    const fitViewPromise = rfRef.current?.fitView({ padding: 0.2, duration: 200 });
+    const fitViewPromise = rfRef.current?.fitView({ padding: 0.2, duration: 200, maxZoom: MAX_FIT_ZOOM });
     fitViewPromise?.catch(() => {
       /* ignore */
     });
@@ -231,7 +232,7 @@ export function useCanvasRefMethods(
   const sessionClient = useTopologySessionClient();
   return useMemo(
     () => ({
-      fit: () => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200 }),
+      fit: () => reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 200, maxZoom: MAX_FIT_ZOOM }),
       applyLayout: (layoutName: string) => {
         const name = isLayoutName(layoutName) ? layoutName : "preset";
         void applyLayout(name, nodes, edges)

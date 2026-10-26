@@ -30,6 +30,7 @@ import type * as NodeModule from "../../../src/reactTopoViewer/extension/service
 import type * as CustomModule from "../../../src/reactTopoViewer/extension/services/CustomNodeConfigManager";
 import type * as IconModule from "../../../src/reactTopoViewer/extension/services/IconService";
 import type * as LabOperationsModule from "../../../src/reactTopoViewer/extension/services/LabOperationsService";
+import type * as LabFileModule from "../../../src/reactTopoViewer/extension/services/LabFileService";
 import type { SplitViewManager } from "../../../src/reactTopoViewer/extension/services/SplitViewManager";
 
 type ModuleWithResolve = typeof Module & { _resolveFilename: Function };
@@ -83,6 +84,7 @@ let nodeCommandService: typeof NodeModule.nodeCommandService;
 let customNodeConfigManager: typeof CustomModule.customNodeConfigManager;
 let iconService: typeof IconModule.iconService;
 let labOperationsService: typeof LabOperationsModule.labOperationsService;
+let labFileService: typeof LabFileModule;
 
 interface WebviewHarness {
   host: ClabUiHost;
@@ -178,6 +180,7 @@ describe("MessageRouter with the clab-ui webview host", () => {
     ({ labOperationsService } = load(
       "services/LabOperationsService"
     ) as typeof LabOperationsModule);
+    labFileService = load("services/LabFileService") as typeof LabFileModule;
   });
 
   after(() => {
@@ -369,6 +372,20 @@ describe("MessageRouter with the clab-ui webview host", () => {
         YAML_PATH
       )
     ).to.equal(true);
+  });
+
+  it("opens the lab files the webview links to for the panel's topology", async () => {
+    const open = sinon.stub(labFileService, "openTopologyFileReference").resolves();
+    const webview = connectWebview();
+
+    webview.host.topoViewer.openLabFile?.({ path: "configs/r1.cfg", create: true });
+    webview.host.topoViewer.openLabFile?.({ path: "/etc/hosts" });
+    await webview.settle();
+
+    expect(open.args).to.deep.equal([
+      [YAML_PATH, { path: "configs/r1.cfg", create: true }],
+      [YAML_PATH, { path: "/etc/hosts", create: false }]
+    ]);
   });
 
   it("toggles the split view for the panel's topology file", async () => {

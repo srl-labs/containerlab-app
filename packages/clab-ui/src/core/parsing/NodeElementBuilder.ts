@@ -144,6 +144,7 @@ function buildContainerFields(
   mgmtIpv4Address: string;
   mgmtIpv6Address: string;
   state: string;
+  status?: string;
   runtimeInterfaces?: TopologyRuntimeInterface[];
 } {
   if (!includeContainerData || !containerData) {
@@ -153,6 +154,7 @@ function buildContainerFields(
     mgmtIpv4Address: containerData.IPv4Address,
     mgmtIpv6Address: containerData.IPv6Address,
     state: containerData.state,
+    status: containerData.status ?? "",
     runtimeInterfaces: toRuntimeCaptureInterfaces(containerData.interfaces, containerData.kind)
   };
 }
@@ -170,6 +172,7 @@ interface NodeExtraDataResult {
 function createNodeExtraData(params: {
   mergedNode: ClabNode;
   ownStages: unknown;
+  ownCredentials: unknown;
   inheritedStages: Array<{ level: string; stages: Record<string, unknown> }>;
   inheritedProps: string[];
   inheritedFrom: Record<string, string>;
@@ -186,6 +189,7 @@ function createNodeExtraData(params: {
   const {
     mergedNode,
     ownStages,
+    ownCredentials,
     inheritedStages,
     inheritedProps,
     inheritedFrom,
@@ -241,8 +245,14 @@ function createNodeExtraData(params: {
   if (ownStages === undefined) delete extraData.stages;
   else extraData.stages = ownStages;
   if (inheritedStages.length > 0) extraData[INHERITED_STAGES_KEY] = inheritedStages;
+  // The login pair and the identity file may come from different levels, so a
+  // node that sets credentials keeps only its own; the rest is inherited.
+  if (ownCredentials !== undefined) extraData.credentials = ownCredentials;
   if (interfacePattern !== undefined && interfacePattern.length > 0) {
     extraData.interfacePattern = interfacePattern;
+  }
+  if (containerFields.status !== undefined) {
+    extraData.status = containerFields.status;
   }
   if (containerFields.runtimeInterfaces !== undefined) {
     extraData[RUNTIME_INTERFACES_KEY] = containerFields.runtimeInterfaces;
@@ -356,6 +366,8 @@ function buildNodeElement(params: {
   nodeAnn: NodeAnnotation | undefined;
   nodeIndex: number;
   interfacePatternMapping: Record<string, string>;
+  /** The node is written without a body (`node1:`). */
+  emptyDefinition: boolean;
 }): NodeElementResult {
   const {
     parsed,
@@ -366,9 +378,11 @@ function buildNodeElement(params: {
     labName,
     nodeAnn,
     nodeIndex,
-    interfacePatternMapping
+    interfacePatternMapping,
+    emptyDefinition
   } = params;
-  const mergedNode = resolveNodeConfig(parsed, nodeObj);
+  const resolveOptions = { emptyDefinition };
+  const mergedNode = resolveNodeConfig(parsed, nodeObj, resolveOptions);
   const nodePropKeys = new Set(Object.keys(nodeObj));
   const inheritedProps = Object.keys(mergedNode).filter((k) => !nodePropKeys.has(k));
   const containerData = getContainerData(opts, fullPrefix, nodeName, labName, mergedNode);
@@ -379,9 +393,10 @@ function buildNodeElement(params: {
   const { extraData, migrationPattern } = createNodeExtraData({
     mergedNode,
     ownStages: nodeObj.stages,
+    ownCredentials: nodeObj.credentials,
     inheritedStages: resolveInheritedStages(parsed, nodeObj),
     inheritedProps,
-    inheritedFrom: resolveInheritedFrom(parsed, nodeObj),
+    inheritedFrom: resolveInheritedFrom(parsed, nodeObj, resolveOptions),
     nodeName,
     labName,
     nodeIndex,
@@ -474,7 +489,8 @@ export function addNodeElements(
       labName,
       nodeAnn,
       nodeIndex,
-      interfacePatternMapping
+      interfacePatternMapping,
+      emptyDefinition: nodeObj === null || nodeObj === undefined
     });
     elements.push(element);
     // Track migrations for nodes that need interfacePattern written to annotations

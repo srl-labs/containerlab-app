@@ -4,6 +4,8 @@
 import { useEffect, useRef } from "react";
 
 import { log } from "../../utils/logger";
+import { matchesShortcut, type ShortcutId } from "../../utils/shortcuts";
+import type { ZOrderAction } from "../../annotations/annotationZOrder";
 import { useGraphStore } from "../../stores/graphStore";
 import { useTopoViewerStore } from "../../stores/topoViewerStore";
 import {
@@ -62,6 +64,20 @@ interface KeyboardShortcutsOptions {
   onCreateGroup?: () => void;
   /** Called when an edit shortcut is blocked because the lab is locked */
   onLockedAction?: () => void;
+  /** Canvas tools behind single-key shortcuts; a tool that does not apply is missing */
+  tools?: CanvasToolHandlers;
+  /** Change the stacking order of the selected annotations (Ctrl+] and Ctrl+[) */
+  onZOrder?: (action: ZOrderAction) => void;
+}
+
+/** Handlers of the single-key tools (V, T, R, O, L, F). */
+export interface CanvasToolHandlers {
+  select?: () => void;
+  addText?: () => void;
+  addRectangle?: () => void;
+  addCircle?: () => void;
+  startLink?: () => void;
+  fitView?: () => void;
 }
 
 const EDITABLE_SELECTOR = [
@@ -172,10 +188,6 @@ function isClipboardEventInEditableContext(event: ClipboardEvent): boolean {
   return false;
 }
 
-function isModifiedKey(event: KeyboardEvent, key: string): boolean {
-  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === key;
-}
-
 function hasActiveGraphSelection(
   selectedNode: string | null,
   selectedEdge: string | null,
@@ -212,7 +224,7 @@ function handleNonEditableSelectAll(
   selectedEdge: string | null,
   selectedAnnotationIds?: Set<string>
 ): boolean {
-  if (!isModifiedKey(event, "a")) return false;
+  if (!matchesShortcut(event, "selectAll")) return false;
 
   if (
     shouldHandleTopologyShortcut(
@@ -242,8 +254,7 @@ function handleUndo(
   onUndo?: () => void
 ): boolean {
   if (mode !== "edit") return false;
-  if (!(event.ctrlKey || event.metaKey)) return false;
-  if (event.key.toLowerCase() !== "z" || event.shiftKey) return false;
+  if (!matchesShortcut(event, "undo")) return false;
   if (!canUndo || !onUndo) return false;
 
   log.info("[Keyboard] Undo");
@@ -262,14 +273,8 @@ function handleRedo(
   onRedo?: () => void
 ): boolean {
   if (mode !== "edit") return false;
-  if (!(event.ctrlKey || event.metaKey)) return false;
+  if (!matchesShortcut(event, "redo")) return false;
   if (!canRedo || !onRedo) return false;
-
-  // Ctrl+Y or Ctrl+Shift+Z
-  const key = event.key.toLowerCase();
-  const isCtrlY = key === "y";
-  const isCtrlShiftZ = key === "z" && event.shiftKey;
-  if (!isCtrlY && !isCtrlShiftZ) return false;
 
   log.info("[Keyboard] Redo");
   onRedo();
@@ -286,8 +291,7 @@ function handleCopy(
   selectedAnnotationIds?: Set<string>,
   onCopyAnnotations?: () => void
 ): boolean {
-  if (!(event.ctrlKey || event.metaKey)) return false;
-  if (event.key.toLowerCase() !== "c") return false;
+  if (!matchesShortcut(event, "copy")) return false;
 
   if (onCopy) {
     log.info("[Keyboard] Copy selected elements");
@@ -320,8 +324,7 @@ function handlePaste(
   onPaste?: ClipboardShortcutHandler,
   onPasteAnnotations?: ClipboardShortcutHandler
 ): boolean {
-  if (!(event.ctrlKey || event.metaKey)) return false;
-  if (event.key.toLowerCase() !== "v") return false;
+  if (!matchesShortcut(event, "paste")) return false;
   if (isLocked) return false;
 
   if (mode === "edit" && onPaste) {
@@ -354,8 +357,7 @@ function handleDuplicate(
   selectedAnnotationIds?: Set<string>,
   onDuplicateAnnotations?: ClipboardShortcutHandler
 ): boolean {
-  if (!(event.ctrlKey || event.metaKey)) return false;
-  if (event.key.toLowerCase() !== "d") return false;
+  if (!matchesShortcut(event, "duplicate")) return false;
   if (isLocked) return false;
 
   if (mode === "edit" && onDuplicate) {
@@ -437,7 +439,7 @@ function handlePasteClipboardEvent(
 }
 
 /**
- * Handle Ctrl+G: Create group from selected nodes
+ * Handle G or Ctrl+G: Create group from selected nodes
  * Note: Selection state and node filtering is handled by the onCreateGroup callback
  * since ReactFlow manages selection state directly
  */
@@ -447,9 +449,13 @@ function handleCreateGroup(
   onCreateGroup?: () => void
 ): boolean {
   if (mode !== "edit") return false;
-  if (!(event.ctrlKey || event.metaKey)) return false;
-  if (event.key.toLowerCase() !== "g") return false;
+  if (!matchesShortcut(event, "group")) return false;
   if (!onCreateGroup) return false;
+  // A bare G groups a selection; it never adds an empty group by accident.
+  const withModifier = event.ctrlKey || event.metaKey;
+  if (!withModifier && !useGraphStore.getState().nodes.some((node) => node.selected === true)) {
+    return false;
+  }
 
   log.info("[Keyboard] Creating group from selected nodes");
   event.preventDefault();
@@ -463,7 +469,7 @@ function handleCreateGroup(
  * Select only visible elements and suppress native text selection.
  */
 function handleSelectAll(event: KeyboardEvent): boolean {
-  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") return false;
+  if (!matchesShortcut(event, "selectAll")) return false;
 
   const target = event.target;
   if (target instanceof HTMLElement) {
@@ -646,11 +652,10 @@ function handleLockedEditShortcut(
   onLockedAction?: () => void
 ): boolean {
   if (!onLockedAction) return false;
-  const key = event.key.toLowerCase();
   const withModifier = event.ctrlKey || event.metaKey;
-  const isDelete = !withModifier && (event.key === "Delete" || event.key === "Backspace");
-  const isPaste = withModifier && key === "v";
-  const isDuplicate = withModifier && key === "d";
+  const isDelete = !withModifier && matchesShortcut(event, "delete");
+  const isPaste = matchesShortcut(event, "paste");
+  const isDuplicate = matchesShortcut(event, "duplicate");
   const blocked = ((isDelete || isDuplicate) && hasSelection) || (isPaste && hasClipboard);
   if (!blocked) return false;
   event.preventDefault();
@@ -674,7 +679,7 @@ function handleDelete(
   selectedAnnotationIds?: Set<string>,
   onDeleteAnnotations?: () => void
 ): boolean {
-  if (event.key !== "Delete" && event.key !== "Backspace") return false;
+  if (!matchesShortcut(event, "delete")) return false;
   if (isLocked) return false;
 
   // In view mode (running/deployed labs), allow deleting annotations only when unlocked.
@@ -723,7 +728,7 @@ function handleEscape(
   selectedAnnotationIds?: Set<string>,
   onClearAnnotationSelection?: () => void
 ): boolean {
-  if (event.key !== "Escape") return false;
+  if (!matchesShortcut(event, "deselect")) return false;
 
   // Clear annotation selection
   if (selectedAnnotationIds && selectedAnnotationIds.size > 0 && onClearAnnotationSelection) {
@@ -745,6 +750,48 @@ function handleEscape(
   // Also clear multi-selection even when there is no single selected element
   onDeselectAll();
   event.preventDefault();
+  return true;
+}
+
+const TOOL_SHORTCUTS: ReadonlyArray<[ShortcutId, keyof CanvasToolHandlers]> = [
+  ["selectTool", "select"],
+  ["textTool", "addText"],
+  ["rectangleTool", "addRectangle"],
+  ["circleTool", "addCircle"],
+  ["linkTool", "startLink"],
+  ["fitView", "fitView"]
+];
+
+/** Handle V, T, R, O, L and F: switch to a canvas tool */
+function handleToolShortcut(event: KeyboardEvent, tools?: CanvasToolHandlers): boolean {
+  if (!tools || event.repeat) return false;
+  for (const [id, tool] of TOOL_SHORTCUTS) {
+    const handler = tools[tool];
+    if (!handler || !matchesShortcut(event, id)) continue;
+    log.info(`[Keyboard] Tool ${id}`);
+    event.preventDefault();
+    handler();
+    return true;
+  }
+  return false;
+}
+
+const Z_ORDER_SHORTCUTS: ReadonlyArray<[ShortcutId, ZOrderAction]> = [
+  ["bringToFront", "front"],
+  ["sendToBack", "back"],
+  ["bringForward", "forward"],
+  ["sendBackward", "backward"]
+];
+
+/** Handle Ctrl+] and Ctrl+[ (with Shift: to front and back) for the selected annotations */
+function handleZOrderShortcut(event: KeyboardEvent, onZOrder?: (action: ZOrderAction) => void): boolean {
+  if (!onZOrder) return false;
+  const match = Z_ORDER_SHORTCUTS.find(([id]) => matchesShortcut(event, id));
+  if (!match) return false;
+  log.info(`[Keyboard] Annotation order ${match[1]}`);
+  event.preventDefault();
+  event.stopPropagation();
+  onZOrder(match[1]);
   return true;
 }
 
@@ -778,7 +825,9 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
     hasAnnotationClipboard,
     hasGraphClipboard,
     onCreateGroup,
-    onLockedAction
+    onLockedAction,
+    tools,
+    onZOrder
   } = options;
 
   const lastInteractionAreaRef = useRef<ShortcutInteractionArea>("other");
@@ -841,8 +890,10 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions): void {
       )
     )
       return;
-    // Group shortcut (Ctrl+G)
+    // Group shortcut (G or Ctrl+G)
     if (handleCreateGroup(event, mode, onCreateGroup)) return;
+    if (handleZOrderShortcut(event, onZOrder)) return;
+    if (handleToolShortcut(event, tools)) return;
     // Other shortcuts
     if (handleSelectAll(event)) return;
     if (

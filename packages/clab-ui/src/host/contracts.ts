@@ -21,6 +21,7 @@ import type {
 
 import type { ApplyPlan } from "./applyPlan";
 import type { ClabUiLabOperationsHost } from "./labOperations";
+import type { LabFileRequest } from "./labFiles";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
 import type { TailscaleStatus } from "./tailscaleStatus";
 
@@ -242,6 +243,12 @@ export interface ClabUiTopoViewerHost {
    */
   validateTopology?(): void;
   toggleSplitView(): void;
+  /**
+   * Open a file the topology refers to, such as a bind source or startup
+   * config, in the host's editor; the host reports failures itself. Hosts
+   * that omit it show no links to lab files.
+   */
+  openLabFile?(request: LabFileRequest): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
   /**
    * Start, stop or restart several nodes at once (`--node a,b`). Hosts that

@@ -12,7 +12,7 @@ import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/w
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
-import { workspaceHost } from "./workspaceHost";
+import { openWorkspaceFileInTab, workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { createNodeStatsFeed } from "./standaloneNodeStats";
 import {
@@ -107,7 +107,6 @@ import {
   reconcileUiIcons,
   removeRuntimeImage,
   replaceUiCustomNodes,
-  resolveFileTab,
   resolveLabTab,
   resolveStandaloneTheme,
   runtimeUiActions,
@@ -140,6 +139,7 @@ import {
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
+import type { LabFileRequest } from "@containerlab/clab-ui/host";
 import {
   controlNodesLifecycle,
   createStandaloneLabOperations,
@@ -658,17 +658,19 @@ function syncAddressWithActiveTab(): void {
   );
 }
 
-/** Shows a workspace file in a file tab, focusing the tab when it is already open. */
-function openWorkspaceFileInTab(document: {
-  content: string;
-  endpointId: string;
-  path: string;
-  title: string;
-}): void {
-  const tab = resolveFileTab(document);
-  useWorkspaceViewStore.getState().setUnavailableTabId(null);
-  const openResult = useLabTabsStore.getState().openOrFocusTab(tab);
-  useLabTabsStore.getState().setActiveTab(openResult.tab.id);
+/** A bind source, startup config or license of the open topology, in a file tab. */
+function openLabFileInTab(request: LabFileRequest): void {
+  const topologyRef = topologyManager.getCurrentTopologyRef();
+  const endpointId = resolveLabTabFallbackEndpointId();
+  if (!topologyRef || endpointId === undefined) {
+    return;
+  }
+  workspaceHost.openLabFile?.({
+    ...request,
+    endpointId,
+    topologyPath: topologyRef.yamlPath,
+    topologyDir: useTopoViewerStore.getState().topologyVariables?.topologyDir,
+  });
 }
 
 async function closeLabTabAndActivateNext(tabId: string): Promise<void> {
@@ -1566,6 +1568,7 @@ function setupStandaloneUiHost(): void {
       topoViewer: {
         ...apiHost.topoViewer,
         planApply,
+        openLabFile: openLabFileInTab,
         // Without lab lifecycle (the browser sandbox) no lab runs.
         tailscaleStatus: getStandaloneBackend().capabilities.lifecycle
           ? tailscaleStatus

@@ -7,6 +7,10 @@ import Button from "@mui/material/Button";
 import Typography from "@mui/material/Typography";
 
 import { isTopologyTemplateFileName } from "../../host/topologyVariables";
+import {
+  attachLabFileLinks,
+  plainTopologyFileLinks,
+} from "../../components/monaco/labFileLinks";
 import { headerBarHeight } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 
@@ -238,7 +242,8 @@ function installPlainSpaceKeyHandler(
 }
 
 export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
-  const { writeFileExplorerFile, renderTopologyFile } = useWorkspaceHost().api;
+  const workspaceHost = useWorkspaceHost();
+  const { writeFileExplorerFile, renderTopologyFile } = workspaceHost.api;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const currentModelPathRef = useRef<string | null>(null);
@@ -300,6 +305,19 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
     const schemaSupport = schemaModel
       ? attachContainerlabYamlSupport(monaco, schemaModel)
       : null;
+    // Ctrl/Cmd+click opens binds, startup configs and licenses in their own tabs.
+    const fileLinks =
+      schemaModel && workspaceHost.openLabFile
+        ? attachLabFileLinks(monaco, schemaModel, () =>
+            plainTopologyFileLinks(schemaModel, tab.path, (request) =>
+              workspaceHost.openLabFile?.({
+                ...request,
+                endpointId: tab.endpointId,
+                topologyPath: tab.path,
+              }),
+            ),
+          )
+        : null;
     const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
       theme,
       automaticLayout: true,
@@ -337,6 +355,7 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
 
     return () => {
       schemaSupport?.dispose();
+      fileLinks?.dispose();
       spaceDisposable.dispose();
       subscription.dispose();
       editor.dispose();
@@ -344,7 +363,7 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
       editorRef.current = null;
       currentModelPathRef.current = null;
     };
-  }, [handleSave, tab.endpointId, tab.id, tab.path]);
+  }, [handleSave, tab.endpointId, tab.id, tab.path, workspaceHost]);
 
   useEffect(() => {
     applyFileEditorMonacoTheme();

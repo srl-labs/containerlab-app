@@ -4,18 +4,7 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
-
-/** Platform detection for keyboard symbols */
-const isMac =
-  typeof window !== "undefined" &&
-  typeof window.navigator !== "undefined" &&
-  /macintosh/i.test(window.navigator.userAgent);
-
-/** Converts modifier keys based on platform */
-function formatKey(key: string): string {
-  if (!isMac) return key;
-  return key.replace(/Ctrl/g, "Cmd").replace(/Alt/g, "Option");
-}
+import { SHORTCUTS, formatKey, shortcutKeys, type ShortcutId } from "../../../utils/shortcuts";
 
 interface ShortcutRowProps {
   label: string;
@@ -80,6 +69,11 @@ interface ShortcutSectionProps {
   children: React.ReactNode;
 }
 
+/** A keyboard shortcut from the editor's shortcut table. */
+const KeyRow: React.FC<{ id: ShortcutId }> = ({ id }) => (
+  <ShortcutRow label={SHORTCUTS[id].label} shortcut={SHORTCUTS[id].keys} />
+);
+
 const ShortcutSection: React.FC<ShortcutSectionProps> = ({ title, children }) => (
   <Box sx={{ "& + &": { mt: 2.5 } }}>
     <Typography
@@ -110,20 +104,38 @@ export const ShortcutsSection: React.FC = () => {
         <ShortcutRow label="Create link" shortcut="Shift + Click node" />
         <ShortcutRow label="Delete element" shortcut="Alt + Click" />
         <ShortcutRow label="Context menu" shortcut="Right Click" />
-        <ShortcutRow label="Select all" shortcut="Ctrl + A" />
         <ShortcutRow label="Multi-select" shortcut="Shift + Click" />
-        <ShortcutRow label="Copy selected" shortcut="Ctrl + C" />
-        <ShortcutRow label="Paste" shortcut="Ctrl + V" />
-        <ShortcutRow label="Duplicate selected" shortcut="Ctrl + D" />
-        <ShortcutRow label="Undo" shortcut="Ctrl + Z" />
-        <ShortcutRow label="Redo" shortcut="Ctrl + Y" />
-        <ShortcutRow label="Create group" shortcut="Ctrl + G" />
-        <ShortcutRow label="Delete selected" shortcut="Del" />
+        <KeyRow id="selectAll" />
+        <KeyRow id="copy" />
+        <KeyRow id="paste" />
+        <KeyRow id="duplicate" />
+        <KeyRow id="undo" />
+        <KeyRow id="redo" />
+        <KeyRow id="group" />
+        <KeyRow id="delete" />
+      </ShortcutSection>
+
+      {/* Tools */}
+      <ShortcutSection title="Tools">
+        <KeyRow id="selectTool" />
+        <KeyRow id="textTool" />
+        <KeyRow id="rectangleTool" />
+        <KeyRow id="circleTool" />
+        <KeyRow id="linkTool" />
+      </ShortcutSection>
+
+      {/* Annotation order */}
+      <ShortcutSection title="Arrange Annotations">
+        <KeyRow id="bringForward" />
+        <KeyRow id="sendBackward" />
+        <KeyRow id="bringToFront" />
+        <KeyRow id="sendToBack" />
       </ShortcutSection>
 
       {/* Navigation */}
       <ShortcutSection title="Navigation">
-        <ShortcutRow label="Deselect all" shortcut="Esc" />
+        <KeyRow id="fitView" />
+        <KeyRow id="deselect" />
       </ShortcutSection>
 
       {/* Tips */}
@@ -141,7 +153,8 @@ export const ShortcutsSection: React.FC = () => {
         >
           <li>Use layout algorithms to auto-arrange</li>
           <li>
-            Box select nodes, then <code>Ctrl+G</code> to group or <code>Del</code> to delete
+            Box select nodes, then <code>{shortcutKeys("group")}</code> to group or{" "}
+            <code>{shortcutKeys("delete")}</code> to delete
           </li>
           <li>Double-click an item to edit it</li>
           <li>Shift+click a node to start a link</li>

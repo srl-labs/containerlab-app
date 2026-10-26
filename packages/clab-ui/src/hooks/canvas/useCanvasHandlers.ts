@@ -41,6 +41,7 @@ import { useDeploymentState } from "../../stores/topoViewerStore";
 import { allocateEndpointsForLink } from "../../utils/endpointAllocator";
 import { buildEdgeId } from "../../utils/edgeId";
 import { snapToGrid } from "../../utils/grid";
+import { MAX_FIT_ZOOM } from "../../components/canvas/fitView";
 
 /** Handlers for group member movement during drag */
 interface GroupMemberHandlers {
@@ -48,6 +49,16 @@ interface GroupMemberHandlers {
   getGroupMembers?: (groupId: string, options?: { includeNested?: boolean }) => string[];
   /** Handle node dropped (for group membership updates) */
   onNodeDropped?: (nodeId: string, position: { x: number; y: number }) => void;
+}
+
+/** Snapped node position per axis; null where no guide holds the node */
+type GuideSnap = { x: number | null; y: number | null };
+
+/** Alignment guides shown while dragging (see useHelperLines) */
+interface HelperLineHandlers {
+  beginHelperLines: (allNodes: Node[], excludeIds: ReadonlySet<string>) => void;
+  updateHelperLines: (draggingNode: Node) => GuideSnap;
+  clearHelperLines: () => void;
 }
 
 interface CanvasHandlersConfig {
@@ -86,6 +97,8 @@ interface CanvasHandlersConfig {
   ) => void;
   /** Handlers for group member movement */
   groupMemberHandlers?: GroupMemberHandlers;
+  /** Alignment guides; the dragged node snaps to them while dragging and on drop */
+  helperLines?: HelperLineHandlers;
   /** Called after topology/network node positions are manually committed. */
   onTopologyNodePositionCommit?: () => void;
   /** Optional shared React Flow instance ref */
@@ -478,6 +491,94 @@ function persistPositionChanges(sessionClient: TopologySessionClient, changes: N
   }
 }
 
+// ============================================================================
+// Guide snapping
+// ============================================================================
+
+/** A drag whose node follows the alignment guides */
+interface GuideDragSession {
+  /** The node under the pointer */
+  node: Node;
+  /** Nodes React Flow moves with it (the selection) */
+  movingIds: Set<string>;
+  snap: GuideSnap;
+  /** How far the guides moved the nodes off the pointer-driven position */
+  offset: XYPosition;
+  /** The drop position arrived; later changes are not part of the drag */
+  dropped: boolean;
+}
+
+function offsetPosition(position: XYPosition, offset: XYPosition): XYPosition {
+  return { x: position.x + offset.x, y: position.y + offset.y };
+}
+
+/** Where the session moved the node to, if it is the session's node */
+function guidedPosition(node: Node, session: GuideDragSession | null): XYPosition {
+  return session?.node.id === node.id ? offsetPosition(node.position, session.offset) : node.position;
+}
+
+/** Grid snap on the axes no guide holds */
+function snapToGridOffGuides(position: XYPosition, snap: GuideSnap): XYPosition {
+  const grid = snapToGrid(position);
+  return { x: snap.x ?? grid.x, y: snap.y ?? grid.y };
+}
+
+/**
+ * Where a drop leaves the node, and where the drag had it. Groups and
+ * annotations stay where they were dropped; other nodes keep the guide they
+ * snapped to and otherwise snap to the grid.
+ */
+function resolveDropPosition(
+  node: Node,
+  session: GuideDragSession | null
+): { position: XYPosition; finalPosition: XYPosition } {
+  const position = guidedPosition(node, session);
+  if (node.type === GROUP_NODE_TYPE || isAnnotationNodeType(node.type)) {
+    return { position, finalPosition: position };
+  }
+  const snap = session?.node.id === node.id ? session.snap : { x: null, y: null };
+  return { position, finalPosition: snapToGridOffGuides(position, snap) };
+}
+
+/**
+ * Move the dragged nodes onto the guides of the node under the pointer.
+ * React Flow keeps tracking the pointer position, so moving out of a guide's
+ * range frees the nodes again.
+ */
+function applyGuideSnap(
+  changes: NodeChange[],
+  session: GuideDragSession,
+  updateHelperLines: HelperLineHandlers["updateHelperLines"]
+): NodeChange[] {
+  if (session.dropped) return changes;
+  const primary = changes.find(
+    (change): change is NodePositionChange =>
+      isNodePositionChange(change) && change.id === session.node.id
+  );
+  if (primary?.position === undefined) return changes;
+
+  if (primary.dragging === true) {
+    const snap = updateHelperLines({ ...session.node, position: primary.position });
+    session.snap = snap;
+    session.offset = {
+      x: snap.x === null ? 0 : snap.x - primary.position.x,
+      y: snap.y === null ? 0 : snap.y - primary.position.y
+    };
+  } else {
+    // The drop repeats the last pointer position, so the last snap still holds.
+    session.dropped = true;
+  }
+
+  const { offset, movingIds } = session;
+  if (offset.x === 0 && offset.y === 0) return changes;
+  // Position objects are shared with React Flow's drag state: copy, never mutate.
+  return changes.map((change) =>
+    isNodePositionChange(change) && change.position !== undefined && movingIds.has(change.id)
+      ? { ...change, position: offsetPosition(change.position, offset) }
+      : change
+  );
+}
+
 /** Hook for node drag handlers with group member movement */
 function useNodeDragHandlers(
   sessionClient: TopologySessionClient,
@@ -487,8 +588,10 @@ function useNodeDragHandlers(
   setNodes: React.Dispatch<React.SetStateAction<Node[]>> | undefined,
   groupMemberHandlers?: GroupMemberHandlers,
   onTopologyNodePositionCommit?: () => void,
-  geoLayout?: CanvasHandlersConfig["geoLayout"]
+  geoLayout?: CanvasHandlersConfig["geoLayout"],
+  helperLines?: HelperLineHandlers
 ) {
+  const guideDragRef = useRef<GuideDragSession | null>(null);
   // Track the last position of a dragging group to compute delta
   const groupLastPositionRef = useRef<Map<string, XYPosition>>(new Map());
   // Track member IDs that are being moved with a group
@@ -535,11 +638,13 @@ function useNodeDragHandlers(
 
   const onNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void = useCallback(
     (_event, node) => {
+      guideDragRef.current = null;
       if (isLockedRef.current || !nodes) return;
 
       // If dragging a group node, capture members and their initial positions
+      let memberIds: string[] = [];
       if (node.type === GROUP_NODE_TYPE && groupMemberHandlers?.getGroupMembers) {
-        const memberIds = groupMemberHandlers.getGroupMembers(node.id, { includeNested: true });
+        memberIds = groupMemberHandlers.getGroupMembers(node.id, { includeNested: true });
         groupMembersRef.current.set(node.id, memberIds);
         groupMemberIdSetsRef.current.set(node.id, new Set(memberIds));
         groupLastPositionRef.current.set(node.id, { ...node.position });
@@ -550,8 +655,36 @@ function useNodeDragHandlers(
       for (const lineNode of lineNodes) {
         recordLineDragSnapshot(lineDragStartRef.current, lineNode);
       }
+
+      // Geo layout places nodes by map coordinates, without guides.
+      if (helperLines && geoLayout?.isGeoLayout !== true && !isLineHandleActive()) {
+        // React Flow drags the selection along with the node under the pointer.
+        const movingIds = new Set([node.id]);
+        for (const other of nodes) {
+          if (other.selected === true) movingIds.add(other.id);
+        }
+        helperLines.beginHelperLines(nodes, new Set([...movingIds, ...memberIds]));
+        guideDragRef.current = {
+          node,
+          movingIds,
+          snap: { x: null, y: null },
+          offset: { x: 0, y: 0 },
+          dropped: false
+        };
+      }
     },
-    [isLockedRef, nodes, groupMemberHandlers]
+    [isLockedRef, nodes, groupMemberHandlers, helperLines, geoLayout?.isGeoLayout]
+  );
+
+  // Snaps the dragged nodes to the guides before positions reach the store.
+  const onNodesChange: OnNodesChange = useCallback(
+    (changes) => {
+      const session = guideDragRef.current;
+      onNodesChangeBase(
+        session && helperLines ? applyGuideSnap(changes, session, helperLines.updateHelperLines) : changes
+      );
+    },
+    [onNodesChangeBase, helperLines]
   );
 
   // Called during drag - moves members with group using direct state update
@@ -563,11 +696,13 @@ function useNodeDragHandlers(
       if (node.type === GROUP_NODE_TYPE) {
         const lastPos = groupLastPositionRef.current.get(node.id);
         const memberIdSet = groupMemberIdSetsRef.current.get(node.id);
+        // Members follow the group where the guides put it, not the pointer.
+        const position = guidedPosition(node, guideDragRef.current);
 
         if (lastPos && memberIdSet && memberIdSet.size > 0) {
           // Calculate delta
-          const dx = node.position.x - lastPos.x;
-          const dy = node.position.y - lastPos.y;
+          const dx = position.x - lastPos.x;
+          const dy = position.y - lastPos.y;
 
           if (dx !== 0 || dy !== 0) {
             const pending = pendingGroupMoveRef.current;
@@ -583,7 +718,7 @@ function useNodeDragHandlers(
         }
 
         // Update last position for next delta calculation
-        groupLastPositionRef.current.set(node.id, { ...node.position });
+        groupLastPositionRef.current.set(node.id, { ...position });
       }
     },
     [isLockedRef, setNodes, flushPendingGroupMove, scheduleGroupMoveFlush]
@@ -591,6 +726,9 @@ function useNodeDragHandlers(
 
   const onNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void = useCallback(
     (_event, node) => {
+      const session = guideDragRef.current;
+      guideDragRef.current = null;
+      helperLines?.clearHelperLines();
       if (isLockedRef.current) return;
 
       flushScheduledGroupMove(groupMoveRafIdRef, flushPendingGroupMove);
@@ -608,16 +746,16 @@ function useNodeDragHandlers(
 
       // Normal (non-geo) mode: update preset position
       const isGroupNode = node.type === GROUP_NODE_TYPE;
-      const shouldSnap = !isAnnotationNodeType(node.type);
-      const finalPosition = isGroupNode || !shouldSnap ? node.position : snapToGrid(node.position);
+      const { position, finalPosition } = resolveDropPosition(node, session);
       const changes: NodeChange[] = [
         { type: "position", id: node.id, position: finalPosition, dragging: false }
       ];
+      // The selection moved along with the guides, so only the grid snap remains.
       const delta = isGroupNode
         ? null
         : {
-            x: finalPosition.x - node.position.x,
-            y: finalPosition.y - node.position.y
+            x: finalPosition.x - position.x,
+            y: finalPosition.y - position.y
           };
 
       // Handle group node members
@@ -667,11 +805,12 @@ function useNodeDragHandlers(
       onTopologyNodePositionCommit,
       geoLayout,
       setNodes,
-      flushPendingGroupMove
+      flushPendingGroupMove,
+      helperLines
     ]
   );
 
-  return { onNodeDragStart, onNodeDrag, onNodeDragStop };
+  return { onNodesChange, onNodeDragStart, onNodeDrag, onNodeDragStop };
 }
 
 /** Hook for context menu handlers */
@@ -989,6 +1128,7 @@ export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers 
     setNodes,
     onEdgeCreated,
     groupMemberHandlers,
+    helperLines,
     onTopologyNodePositionCommit,
     reactFlowInstanceRef,
     geoLayout
@@ -1015,7 +1155,7 @@ export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers 
       log.info("[ReactFlowCanvas] React Flow initialized");
       // Don't auto-fitView in geo layout mode - map controls the viewport
       if (geoLayout?.isGeoLayout !== true) {
-        void instance.fitView({ padding: 0.2, duration: 0 });
+        void instance.fitView({ padding: 0.2, duration: 0, maxZoom: MAX_FIT_ZOOM });
       }
     },
     [geoLayout?.isGeoLayout]
@@ -1049,7 +1189,7 @@ export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers 
   const onConnect = useConnectionHandler(modeRef, isLockedRef, onLockedAction, onEdgeCreated);
 
   // Drag handlers (extracted hook)
-  const { onNodeDragStart, onNodeDrag, onNodeDragStop } = useNodeDragHandlers(
+  const { onNodesChange, onNodeDragStart, onNodeDrag, onNodeDragStop } = useNodeDragHandlers(
     sessionClient,
     isLockedRef,
     nodes,
@@ -1057,7 +1197,8 @@ export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers 
     setNodes,
     groupMemberHandlers,
     onTopologyNodePositionCommit,
-    geoLayout
+    geoLayout,
+    helperLines
   );
 
   // Context menu handlers (extracted hook)
@@ -1089,8 +1230,9 @@ export function useCanvasHandlers(config: CanvasHandlersConfig): CanvasHandlers 
     onPaneClick,
     onConnect,
     // All nodes (topology + annotation) live in the graph store - the single
-    // source of truth - so node changes pass through to it directly.
-    onNodesChange: onNodesChangeBase,
+    // source of truth - so node changes pass through to it, with dragged
+    // nodes snapped to the alignment guides.
+    onNodesChange,
     onSelectionChange,
     onNodeContextMenu,
     onEdgeContextMenu,

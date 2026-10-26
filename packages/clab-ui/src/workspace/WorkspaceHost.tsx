@@ -5,6 +5,7 @@ import type {
   TerminalSessionInfo, VersionCheckResponse, VersionResponse, WorkspaceAsset
 } from "./types";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
+import type { LabFileRequest } from "../host/labFiles";
 
 type NodeTarget = RuntimeTargetRequest & { nodeName: string };
 type InterfaceTarget = NodeTarget & { interfaceName: string };
@@ -14,6 +15,14 @@ export interface WorkspaceHost {
   capabilities: { lifecycle: boolean; endpoints: boolean };
   assetUrl: (asset: WorkspaceAsset) => string;
   openTerminalWindow: (pane: RuntimeTerminalPane) => void;
+  /**
+   * Open a file a topology refers to in a file tab. Relative paths start at
+   * the topology's workspace path; absolute ones need its absolute
+   * `topologyDir`. Missing where the host cannot.
+   */
+  openLabFile?: (
+    request: LabFileRequest & { endpointId: string; topologyPath: string; topologyDir?: string }
+  ) => void;
   labs: {
     getSnapshot: () => Map<string, LabState>;
     subscribe: (listener: () => void) => () => void;

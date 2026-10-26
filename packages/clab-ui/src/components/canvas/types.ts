@@ -14,6 +14,7 @@ import type {
 } from "../../core/types/graph";
 import { DEFAULT_ICON_COLOR } from "../../core/types/graph";
 import type { FreeTextAnnotation } from "../../core/types/topology";
+import type { ZOrderAction } from "../../annotations/annotationZOrder";
 import { vscodePalette } from "../../theme/vscodePalette";
 type GridStyle = "dotted" | "quadratic";
 
@@ -46,6 +47,10 @@ export interface ReactFlowCanvasRef {
   updateNodes: (updater: (nodes: Node[]) => Node[]) => void;
   /** Update edges state (for undo/redo graph operations) */
   updateEdges: (updater: (edges: Edge[]) => Edge[]) => void;
+  /** Start creating a link from a node, as Shift+click does */
+  startLinkCreation: (nodeId: string) => void;
+  /** Stop creating a link, as Escape does */
+  cancelLinkCreation: () => void;
 }
 
 export type CanvasDropData = {
@@ -144,6 +149,8 @@ export interface AnnotationHandlers {
   onDeleteTrafficRate?: (id: string) => void;
   /** Get members of a group (for group dragging) */
   getGroupMembers?: (groupId: string, options?: { includeNested?: boolean }) => string[];
+  /** Change the stacking order of an annotation, or of the selection that holds it */
+  onChangeZOrder?: (id: string, action: ZOrderAction) => void;
 }
 
 /** Position entry for undo/redo move tracking */

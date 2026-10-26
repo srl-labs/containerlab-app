@@ -4,7 +4,6 @@ export {
   loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
-  resolveFileTab,
   resolveLabTab,
   resolveStandaloneTheme,
   runtimeUiActions,
