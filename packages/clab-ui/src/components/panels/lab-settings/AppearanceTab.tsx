@@ -87,6 +87,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const nodeBoxSpacing = useTopoViewerStore((state) => state.nodeBoxSpacing);
   const linkStyle = useTopoViewerStore((state) => state.linkStyle);
   const mgmtNetworkBadge = useTopoViewerStore((state) => state.mgmtNetworkBadge);
+  const showNodeCpu = useTopoViewerStore((state) => state.showNodeCpu);
   const hasSeveralMgmtNetworks = useTopoViewerStore(
     (state) => getMgmtNetworks(state.labSettings).length > 1
   );
@@ -108,6 +109,7 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
   const animateTraffic = useTopoViewerStore((state) => state.animateTraffic);
   const setAnimateTraffic = useTopoViewerStore((state) => state.setAnimateTraffic);
   const setMgmtNetworkBadge = useTopoViewerStore((state) => state.setMgmtNetworkBadge);
+  const setShowNodeCpu = useTopoViewerStore((state) => state.setShowNodeCpu);
   const setTelemetryNodeSizePx = useTopoViewerStore((state) => state.setTelemetryNodeSizePx);
   const setTelemetryInterfaceSizePercent = useTopoViewerStore(
     (state) => state.setTelemetryInterfaceSizePercent
@@ -259,6 +261,22 @@ export const AppearanceTab: React.FC<AppearanceTabProps> = ({
           </TextField>
         </SettingsField>
       ) : null}
+      <SettingsField
+        title="CPU usage on nodes"
+        description="A small badge with each running node's CPU usage, while the lab is deployed."
+      >
+        <Switch
+          size="small"
+          checked={showNodeCpu}
+          disabled={isReadOnly}
+          slotProps={{ input: { "aria-label": "CPU usage on nodes" } }}
+          onChange={(e) => {
+            if (isReadOnly) return;
+            setShowNodeCpu(e.target.checked);
+          }}
+          data-testid="lab-settings-node-cpu"
+        />
+      </SettingsField>
       <SettingsField title="Node size" description="Telemetry node marker size in pixels.">
         <TextField
           id="telemetry-node-size"

@@ -62,6 +62,7 @@ import { ContainerlabExplorerViewProvider } from "./webviews/explorer/containerl
 import { refreshSettingsPanel, registerSettings } from "./webviews/settings/settingsPanel";
 import { registerAppearanceUpdates } from "./webviews/shared/appearance";
 import { registerRenderedTopologyProvider } from "./commands/renderedTopology";
+import { openLabsOverview } from "./commands/labsOverview";
 
 let explorerViewProvider: ContainerlabExplorerViewProvider | undefined;
 
@@ -953,6 +954,15 @@ export async function activate(context: vscode.ExtensionContext) {
       {
         webviewOptions: { retainContextWhenHidden: true }
       }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("containerlab.labsOverview.open", () =>
+      openLabsOverview(context, {
+        runningProvider: newRunningProvider,
+        localProvider: newLocalProvider
+      })
     )
   );
 

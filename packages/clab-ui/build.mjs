@@ -47,6 +47,7 @@ const entryPoints = {
   "workspace/dialogs": "src/workspace/dialogs.ts",
   "workspace/terminal": "src/workspace/terminal.ts",
   "workspace/empty-state": "src/workspace/empty-state.ts",
+  "workspace/overview": "src/workspace/overview.ts",
   "workspace/state/index": "src/workspace/state/index.ts",
   "workspace/types": "src/workspace/types.ts",
 
@@ -63,6 +64,8 @@ const entryPoints = {
   "welcome/index": "src/welcome/index.ts",
   "node-impairments/index": "src/node-impairments/index.ts",
   "clos-generator/index": "src/clos-generator/index.ts",
+  "labs-overview/index": "src/labs-overview/index.ts",
+  "labs-overview/cards": "src/labs-overview/cards.ts",
   "wireshark-vnc/index": "src/wireshark-vnc/index.ts",
   "viewer/index": "src/viewer/index.ts",
   "monaco/core": "src/monaco/core.ts",

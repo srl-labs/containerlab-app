@@ -12,12 +12,15 @@ export interface ReadOnlyCopyFieldProps {
   label: string;
   value: string;
   mono?: boolean;
+  /** Shown without a copy button while there is no value; defaults to "N/A". */
+  placeholder?: string;
 }
 
 export const ReadOnlyCopyField: React.FC<ReadOnlyCopyFieldProps> = ({
   label,
   value,
-  mono = false
+  mono = false,
+  placeholder = "N/A"
 }) => {
   const handleCopy = useCallback(() => {
     if (value) {
@@ -28,7 +31,7 @@ export const ReadOnlyCopyField: React.FC<ReadOnlyCopyFieldProps> = ({
   return (
     <TextField
       label={label}
-      value={value || "N/A"}
+      value={value || placeholder}
       size="small"
       fullWidth
       slotProps={{

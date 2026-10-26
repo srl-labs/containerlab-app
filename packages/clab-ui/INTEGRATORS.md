@@ -551,8 +551,14 @@ type TopologySnapshot = {
   labSettings?: LabSettings;
   canUndo: boolean;
   canRedo: boolean;
+  history?: { scope: string; undo: number[]; redo: number[] };
 };
 ```
+
+`history` numbers the host's undo and redo steps, each stack with its next step
+last. The UI orders unsaved YAML and JSON tab edits among them, so one undo
+history covers the canvas and the source tabs. `TopologySessionCore` reports it;
+without it, undo takes back unsaved source edits first, then the host's steps.
 
 Minimum practical requirements:
 
@@ -665,6 +671,16 @@ and `--restore`); `restoresSnapshots(options)` tells whether a deploy uses them.
 nodes in one call. Without it, the canvas calls `runNodeAction` once per node. The window
 host posts `{ command: "clab-node-<action>", nodeName, nodeNames }`.
 
+`openLabFile(request)` is optional: it opens a file the topology refers to (a bind
+source, startup config or license) in the host's editor, creating it empty first when
+`request.create` is set and the file is missing. `request.path` is relative to the
+topology file's directory, or absolute on the lab host; the UI has already expanded
+containerlab's variables. Without it, the YAML editor shows no file links and nodes have
+no Files menu or open buttons. The window host posts `{ command: "openLabFile", path, create }`.
+`resolveWorkspaceLabFile` from `/host` maps a request to a workspace path for hosts that
+address files from a workspace root. `WorkspaceHost.openLabFile` does the same for
+topologies edited as text in a workspace file tab.
+
 `labOperations` is optional (`ClabUiLabOperationsHost` in `/host`): `support()`, `exec`,
 `saveSnapshots`, `saveConfigs` (with an optional copy directory) and `inspectDetails` for
 the open lab. Without it, those menu entries and dialogs stay hidden; `support()` hides
@@ -690,6 +706,7 @@ Important topo viewer events:
 - `lifecycleLog`
 - `lifecycleStatus`
 - `fitViewport`
+- `focusNode` (`{ type: "focus-node", nodeId }`: selects the node and centers on it once it is drawn)
 - `svgExportResult`
 
 ### Editor data
@@ -708,6 +725,11 @@ Build them with `normalizeRuntimeContainer` (numeric strings are parsed, empty s
 netem state are dropped, interfaces are sorted) instead of mapping fields by hand.
 `runtimeContainersEqual` and `runtimeContainersTopologyEqual` compare two snapshots, with
 or without live interface counters, so a host can skip redundant graph updates.
+
+Pass Docker's status line as `status`, e.g. `Up 5 minutes (health: starting)`: the canvas
+shows a node as booting until its container runs and reports healthy, or runs without a
+healthcheck. `classifyNodeReadiness` and `countReadyContainers` from
+`@containerlab/clab-ui/session` apply the same rules, e.g. for "3 of 5 nodes ready".
 
 ## Explorer Integration
 
@@ -792,6 +814,7 @@ bar inside a VS Code editor.
 | `…/workspace/login`, `…/workspace/bootstrap` | Authentication presentation and initial loading screen |
 | `…/workspace/dialogs`, `…/workspace/terminal` | Action dialogs and terminal views |
 | `…/workspace/empty-state` | Shared empty workspace presentation |
+| `…/workspace/overview` | Labs overview page with lab cards and topology thumbnails |
 | `…/workspace/state`, `…/workspace/types` | UI state and host data contracts |
 | `…/workspace/yaml` | YAML model helpers without importing editor views |
 
@@ -829,6 +852,16 @@ Document tabs sit above the document; the properties/YAML panel shares the docum
 area and respects its bounds. Do not position UI by querying another component's
 DOM. Shared floating surfaces use host theme tokens, with opaque high-contrast
 fallbacks; decorative animation respects reduced motion.
+
+Pass `overview` to `WorkspaceSidebar` to add the rail's Overview entry, and render
+`LabsOverview` from `…/workspace/overview` as the `content` slot while it is active.
+The host supplies the cards (built with the `…/workspace/state` lab helpers), the
+topology files for thumbnails and the card actions. Pass `watchUsage` to show the CPU
+and memory of running labs: a card calls it while it is visible, and stops when it
+scrolls away or the overview closes; a host without node usage leaves it out or answers
+`{ status: "unavailable" }`, and the card shows no usage row. `ConnectionBanner` in the
+`header` slot shows each lab host's API and live-events problems without blocking
+the workspace.
 
 Workspace entries are deliberately absent from the root and explorer export graphs.
 The packed-consumer check verifies that embedding these two entries does not pull

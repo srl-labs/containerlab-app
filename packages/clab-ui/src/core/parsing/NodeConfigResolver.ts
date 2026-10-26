@@ -39,6 +39,26 @@ const NODE_ONLY_KEYS = new Set(["mgmt-ipv4", "mgmt-ipv6", "aliases"]);
 /** Numeric keys where 0 means "not set", so a less specific value still applies. */
 const ZERO_IS_UNSET_KEYS = new Set(["cpu", "startup-delay"]);
 
+/**
+ * Flags containerlab reads through a pointer: `false` counts as set, and a node
+ * written without a definition (`node1:`) takes them from the defaults only.
+ */
+const FLAG_KEYS = new Set([
+  "privileged",
+  "enforce-startup-config",
+  "suppress-startup-config",
+  "auto-remove"
+]);
+
+/** How the node is written in the topology. */
+export interface ResolveNodeOptions {
+  /**
+   * The node has no definition (`node1:` without a body). containerlab then
+   * reads flags from the defaults only and gives it no `config`.
+   */
+  emptyDefinition?: boolean;
+}
+
 /** Whether a node can inherit `key` from defaults, kinds or groups. */
 function isInheritableKey(key: string): boolean {
   return !NODE_ONLY_KEYS.has(key);
@@ -117,6 +137,21 @@ export function getInheritanceLayers(parsed: ClabTopology, node: ClabNode): Inhe
   return layers;
 }
 
+/**
+ * The blocks merged into one key: a node without a definition takes flags
+ * from the defaults only and has no `config` at all.
+ */
+function blocksForKey(
+  key: string,
+  layers: InheritanceLayer[],
+  options: ResolveNodeOptions
+): InheritanceLayer[] {
+  if (options.emptyDefinition !== true) return layers;
+  if (key === "config") return [];
+  if (FLAG_KEYS.has(key)) return layers.filter((layer) => layer.level === "defaults");
+  return layers;
+}
+
 /** Destination path of a bind (`src:dst[:opts]`) or volume (`name:dst[:opts]`). */
 export function getMountDestination(entry: string): string {
   const parts = entry.split(":");
@@ -188,6 +223,53 @@ function mergeCertificates(values: unknown[]): Record<string, unknown> {
   return merged;
 }
 
+/**
+ * Stages add up across levels, like Stages.Merge: each level appends its
+ * wait-for entries (skipping one already waited for) and exec commands.
+ */
+function mergeStages(values: unknown[]): Record<string, unknown> {
+  const merged: Record<string, { "wait-for"?: unknown[]; exec?: unknown[] }> = {};
+  for (const value of values) {
+    if (!isRecord(value)) continue;
+    for (const [name, stage] of Object.entries(value)) {
+      if (!isRecord(stage)) continue;
+      const target = (merged[name] ??= {});
+      const waitFor = Array.isArray(stage["wait-for"]) ? stage["wait-for"] : [];
+      for (const entry of waitFor) {
+        const known = target["wait-for"]?.some((existing) => isSameWaitFor(existing, entry));
+        if (known !== true) (target["wait-for"] ??= []).push(entry);
+      }
+      if (Array.isArray(stage.exec) && stage.exec.length > 0) {
+        target.exec = [...(target.exec ?? []), ...stage.exec];
+      }
+    }
+  }
+  return merged;
+}
+
+function isSameWaitFor(a: unknown, b: unknown): boolean {
+  return isRecord(a) && isRecord(b) && a.node === b.node && a.stage === b.stage;
+}
+
+/**
+ * Username and password come together from the most specific level that sets
+ * either; the identity file is looked up on its own.
+ */
+function mergeCredentials(values: unknown[]): Record<string, unknown> | undefined {
+  const has = (value: unknown) => isSet("credentials", value);
+  const levels = values.filter(isRecord).reverse();
+  const login = levels.find((credentials) => has(credentials.username) || has(credentials.password));
+  const identity = levels.find((credentials) => has(credentials["identity-file"]));
+  if (!login && !identity) return undefined;
+  const merged: Record<string, unknown> = {};
+  if (login) {
+    if (has(login.username)) merged.username = login.username;
+    if (has(login.password)) merged.password = login.password;
+  }
+  if (identity) merged["identity-file"] = identity["identity-file"];
+  return merged;
+}
+
 /** `config.vars` merges deeply; other `config` keys come from the most specific level. */
 function mergeConfigBlocks(values: unknown[]): Record<string, unknown> {
   const merged = mergeMaps(values);
@@ -202,24 +284,35 @@ function mergeKey(key: string, values: unknown[]): unknown {
   if (MOUNT_LIST_KEYS.has(key)) return mergeMounts(values);
   if (key === "certificate") return mergeCertificates(values);
   if (key === "config") return mergeConfigBlocks(values);
+  if (key === "stages") return mergeStages(values);
+  if (key === "credentials") return mergeCredentials(values);
   for (let i = values.length - 1; i >= 0; i--) {
-    if (isSet(key, values[i])) return values[i];
+    if (!isSet(key, values[i])) continue;
+    const value = values[i];
+    return key === "type" && typeof value === "string" ? value.trim() : value;
   }
   return undefined;
 }
 
 /**
- * Merges configuration blocks, least specific first. `kind` and `group` are
- * left to the caller, since they follow their own lookup.
+ * Merges the inherited layers and the node's own block (if any), least
+ * specific first. `kind` and `group` are left to the caller, since they follow
+ * their own lookup.
  */
-function mergeBlocks(blocks: ClabNode[]): ClabNode {
+function mergeBlocks(
+  layers: InheritanceLayer[],
+  node: ClabNode | undefined,
+  options: ResolveNodeOptions
+): ClabNode {
   const keys = new Set<string>();
-  for (const block of blocks) {
+  for (const block of [...layers.map((layer) => layer.config), node ?? {}]) {
     for (const key of Object.keys(block)) keys.add(key);
   }
   const merged: ClabNode = {};
   for (const key of keys) {
     if (key === "kind" || key === "group") continue;
+    const inherited = isInheritableKey(key) ? blocksForKey(key, layers, options) : [];
+    const blocks = [...inherited.map((layer) => layer.config), ...(node ? [node] : [])];
     const values = blocks.map((block) => block[key]).filter((value) => isSet(key, value));
     if (values.length === 0) continue;
     const value = mergeKey(key, values);
@@ -228,22 +321,18 @@ function mergeBlocks(blocks: ClabNode[]): ClabNode {
   return merged;
 }
 
-function withoutNodeOnlyKeys(config: ClabNode): ClabNode {
-  const result: ClabNode = {};
-  for (const [key, value] of Object.entries(config)) {
-    if (isInheritableKey(key)) result[key] = value;
-  }
-  return result;
-}
-
 /**
  * The configuration a node inherits from defaults, its kind and its group,
  * without the node's own values. `kind` and `group` hold the names the node
  * resolves to when it does not set them itself.
  */
-export function resolveInheritedConfig(parsed: ClabTopology, node: ClabNode): ClabNode {
+export function resolveInheritedConfig(
+  parsed: ClabTopology,
+  node: ClabNode,
+  options: ResolveNodeOptions = {}
+): ClabNode {
   const layers = getInheritanceLayers(parsed, node);
-  const inherited = mergeBlocks(layers.map((layer) => withoutNodeOnlyKeys(layer.config)));
+  const inherited = mergeBlocks(layers, undefined, options);
   const { defaults = {}, groups } = parsed.topology ?? {};
   const kind =
     nonEmptyString(findGroupConfig(groups, nonEmptyString(node.group))?.kind) ??
@@ -260,9 +349,13 @@ export function resolveInheritedConfig(parsed: ClabTopology, node: ClabNode): Cl
  * configuration for a node. The precedence order is:
  * node -> group -> kind -> defaults.
  */
-export function resolveNodeConfig(parsed: ClabTopology, node: ClabNode): ClabNode {
+export function resolveNodeConfig(
+  parsed: ClabTopology,
+  node: ClabNode,
+  options: ResolveNodeOptions = {}
+): ClabNode {
   const layers = getInheritanceLayers(parsed, node);
-  const merged = mergeBlocks([...layers.map((layer) => withoutNodeOnlyKeys(layer.config)), node]);
+  const merged = mergeBlocks(layers, node, options);
   for (const key of NODE_ONLY_KEYS) {
     if (key in node) merged[key] = node[key];
   }
@@ -283,7 +376,8 @@ export function resolveNodeConfig(parsed: ClabTopology, node: ClabNode): ClabNod
  */
 export function resolveInheritedFrom(
   parsed: ClabTopology,
-  node: ClabNode
+  node: ClabNode,
+  options: ResolveNodeOptions = {}
 ): Record<string, InheritanceLevel> {
   const result: Record<string, InheritanceLevel> = {};
   const layers = getInheritanceLayers(parsed, node);
@@ -294,6 +388,7 @@ export function resolveInheritedFrom(
       if (key === level) continue;
       if (!isInheritableKey(key) || !isSet(key, value)) continue;
       if (isSet(key, node[key]) || key in result) continue;
+      if (!blocksForKey(key, layers, options).includes(layers[i])) continue;
       result[key] = level;
     }
   }
@@ -313,6 +408,8 @@ export function subtractInherited(
 ): unknown {
   // containerlab reads 0 as "not set" for these, so writing it changes nothing.
   if (!isSet(key, value)) return undefined;
+  // Stages add up, so the node's own entries are kept as written.
+  if (key === "stages") return value;
   if ((MERGED_MAP_KEYS.has(key) || key === "certificate") && isRecord(value)) {
     return subtractEntries(value, inherited, equals);
   }

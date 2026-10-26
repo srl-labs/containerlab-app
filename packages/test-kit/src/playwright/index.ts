@@ -9,10 +9,11 @@ export { defineHostSuiteConfig, type HostSuiteOptions } from "./config";
 export {
   connected,
   createTopologyFile,
+  EVENT_CHANNEL_URL,
   mockStandaloneApi,
   openSettings,
   seedEndpoints,
-  stubEventSource,
+  stubEventStreams,
   TEST_ENDPOINT,
   waitForWorkspace,
   type ConnectedEndpoint,

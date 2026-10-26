@@ -1,8 +1,9 @@
 import { getStandaloneBackend } from "../backend";
 import { useEffect, useRef } from "react";
 
+import { eventChannel } from "../eventChannel";
+import type { EventSourceLike } from "../eventStreamManager";
 import type { EndpointConfig } from "../stores/endpointStore";
-import { standaloneServerUrl } from "../standaloneServerOrigin";
 
 export interface WorkspaceFileEvent {
   action?: string;
@@ -17,7 +18,7 @@ export function useWorkspaceFileEvents(
   onWorkspaceFileEvent: (endpointId: string, event: WorkspaceFileEvent) => void,
 ): void {
   const handlerRef = useRef(onWorkspaceFileEvent);
-  const sourcesRef = useRef<Map<string, EventSource>>(new Map());
+  const sourcesRef = useRef<Map<string, EventSourceLike>>(new Map());
 
   useEffect(() => {
     handlerRef.current = onWorkspaceFileEvent;
@@ -48,11 +49,7 @@ export function useWorkspaceFileEvents(
         continue;
       }
 
-      const url = new URL(
-        standaloneServerUrl("/api/runtime/file-explorer/events"),
-      );
-      url.searchParams.set("endpointId", endpoint.id);
-      const source = new EventSource(url, { withCredentials: true });
+      const source = eventChannel().open({ stream: "files", endpointId: endpoint.id });
       sourcesRef.current.set(endpoint.id, source);
 
       source.onmessage = (message) => {

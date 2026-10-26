@@ -21,6 +21,7 @@ import type {
 
 import type { ApplyPlan } from "./applyPlan";
 import type { ClabUiLabOperationsHost } from "./labOperations";
+import type { LabFileRequest } from "./labFiles";
 import type { LabLifecycleOptionKind, LabLifecycleOptions } from "./lifecycleOptions";
 import type { TailscaleStatus } from "./tailscaleStatus";
 
@@ -102,6 +103,10 @@ export type ClabUiTopoViewerEvent =
       type: "fitViewport";
     }
   | {
+      type: "focusNode";
+      nodeId: string;
+    }
+  | {
       type: "svgExportResult";
       requestId: string;
       success: boolean;
@@ -142,11 +147,36 @@ export interface HostRuntimeInterface {
   netemState?: HostRuntimeNetemState;
 }
 
+/** Resource usage of one running node, as hosts post it with `node-stats-update`. */
+export interface HostNodeStats {
+  /** Container name. */
+  name: string;
+  /** Node name in the topology. */
+  nodeName: string;
+  /** CPU usage since the previous sample, where 100 is one busy CPU. */
+  cpuPercent?: number;
+  /** CPUs the node can use. */
+  cpuCount?: number;
+  memoryBytes: number;
+  memoryLimitBytes?: number;
+  pids?: number;
+}
+
+/** The resource usage of the open lab's running nodes at one time. */
+export interface HostNodeStatsSample {
+  /** ISO timestamp. */
+  time: string;
+  intervalSeconds: number;
+  nodes: HostNodeStats[];
+}
+
 export interface HostRuntimeContainer {
   name: string;
   nodeName: string;
   labName: string;
   state: string;
+  /** Docker's status line, e.g. `Up 5 minutes (health: starting)`; empty when unknown. */
+  status?: string;
   kind: string;
   image: string;
   ipv4Address: string;
@@ -213,6 +243,12 @@ export interface ClabUiTopoViewerHost {
    */
   validateTopology?(): void;
   toggleSplitView(): void;
+  /**
+   * Open a file the topology refers to, such as a bind source or startup
+   * config, in the host's editor; the host reports failures itself. Hosts
+   * that omit it show no links to lab files.
+   */
+  openLabFile?(request: LabFileRequest): void;
   runNodeAction(action: TopoViewerNodeAction, nodeName: string): void;
   /**
    * Start, stop or restart several nodes at once (`--node a,b`). Hosts that

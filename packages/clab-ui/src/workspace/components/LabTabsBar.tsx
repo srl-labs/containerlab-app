@@ -19,6 +19,8 @@ import { useRailPinned, WorkspaceRailItem } from "../WorkspaceRailItem";
 
 interface LabTabsBarProps {
   activeTabId: string | null;
+  /** False while another page, such as the labs overview, covers the document. */
+  showSelection?: boolean;
   endpointLabels: ReadonlyMap<string, string>;
   onActivate: (tabId: string) => void;
   onClose: (tabId: string) => void;
@@ -66,10 +68,12 @@ function TabIcon({ kind, dirty = false, fontSize }: { kind: LabTab["kind"]; dirt
 }
 
 /** Document tabs for hosts without native tabs. VS Code keeps its own editor tabs. */
-export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, orientation = "horizontal", tabs }: LabTabsBarProps): React.JSX.Element | null {
+export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, orientation = "horizontal", showSelection = true, tabs }: LabTabsBarProps): React.JSX.Element | null {
   const elements = useRef(new Map<string, HTMLElement>());
   const closingTab = useRef<string | null>(null);
   const selectedId = activeTabId ?? tabs[0]?.id;
+  // The selected tab stays focusable while another page covers the document.
+  const shownSelectionId = showSelection ? selectedId : undefined;
   const railPinned = useRailPinned();
 
   useEffect(() => {
@@ -120,7 +124,8 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
       "&::-webkit-scrollbar-thumb": { border: 0 }
     }}>
       {tabs.map((tab, index) => {
-        const active = tab.id === selectedId;
+        const focusable = tab.id === selectedId;
+        const active = tab.id === shownSelectionId;
         const dirty = tab.kind === "file" && tab.content !== tab.originalContent;
         const tabPath = tab.kind === "file" ? tab.path : tab.topologyRef.yamlPath;
         const keys = bindTab(tab, index);
@@ -136,7 +141,7 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
               label={tabLabel(tab, dirty, endpointLabels)}
               active={active}
               role="tab"
-              tabIndex={active ? 0 : -1}
+              tabIndex={focusable ? 0 : -1}
               testId={`lab-tab-${tab.id}`}
               onClick={() => onActivate(tab.id)}
               onKeyDown={keys.onKeyDown}
@@ -152,7 +157,7 @@ export function LabTabsBar({ activeTabId, endpointLabels, onActivate, onClose, o
           <Box key={tab.id} ref={(element: HTMLDivElement | null) => {
             if (element) elements.current.set(tab.id, element);
             else elements.current.delete(tab.id);
-          }} role="tab" tabIndex={active ? 0 : -1} aria-selected={active} aria-keyshortcuts="Delete"
+          }} role="tab" tabIndex={focusable ? 0 : -1} aria-selected={active} aria-keyshortcuts="Delete"
             data-testid={`lab-tab-${tab.id}`} title={tabPath}
             onClick={() => onActivate(tab.id)}
             onAuxClick={(event) => { if (event.button === 1) { event.preventDefault(); close(tab.id); } }}

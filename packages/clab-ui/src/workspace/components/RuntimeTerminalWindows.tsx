@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
   IconButton,
   Paper,
@@ -142,8 +143,14 @@ type TerminalSocketPayload = {
   encoding?: string;
   error?: string;
   exitCode?: number | null;
+  replay?: boolean;
+  resumable?: boolean;
   type?: string;
 };
+
+/** The lab host closes a terminal connection with this code when another window attached. */
+const TERMINAL_CLOSE_TAKEN_OVER = 4001;
+const RECONNECT_DELAYS_MS = [500, 1000, 2000, 5000, 10000];
 
 function sendTerminalResize(socket: WebSocket, terminal: Terminal | null): void {
   if (socket.readyState !== WebSocket.OPEN || !terminal) {
@@ -164,16 +171,25 @@ function handleTerminalSocketPayload(input: {
   socket: WebSocket;
   terminal: Terminal | null;
   paneId: string;
+  /** Set while the replayed output of an attach is due; the screen is reset when it arrives. */
+  replayPending: { current: boolean };
 }): void {
-  const { fitAddon, payload, socket, terminal, paneId } = input;
+  const { fitAddon, payload, socket, terminal, paneId, replayPending } = input;
   switch (payload.type) {
     case "ready":
+      if (payload.resumable === true) runtimeUiActions.setTerminalResumable(paneId);
+      replayPending.current = payload.replay === true;
       runtimeUiActions.setTerminalReady(paneId);
       fitAddon?.fit();
       sendTerminalResize(socket, terminal);
       break;
     case "output":
       if (payload.data && payload.encoding === "base64" && terminal) {
+        // Clearing only when the replay arrives keeps the old screen up until then.
+        if (replayPending.current) {
+          replayPending.current = false;
+          terminal.reset();
+        }
         terminal.write(decodeBase64ToBytes(payload.data));
       }
       break;
@@ -368,7 +384,8 @@ export function RuntimeTerminalPaneView({
   popoverZIndex?: number;
   terminalPreferences: TerminalPreferences;
 }) {
-  const { closeTerminalSession, connectTerminalSessionWebSocket, openTerminalSession } = useWorkspaceHost().api;
+  const { closeTerminalSession, connectTerminalSessionWebSocket, getTerminalSession, openTerminalSession } =
+    useWorkspaceHost().api;
   const labs = useWorkspaceLabs();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<HTMLDivElement | null>(null);
@@ -378,6 +395,9 @@ export function RuntimeTerminalPaneView({
   const latestPaneRef = useRef(paneState);
   const latestHiddenRef = useRef(hidden);
   const sessionClosedRef = useRef(false);
+  const replayPendingRef = useRef(false);
+  const reconnectAttemptRef = useRef(0);
+  const [reconnectToken, setReconnectToken] = useState(0);
   const latestPreferencesRef = useRef(terminalPreferences);
   const fontSizePreviewRef = useRef(terminalPreferences.fontSize);
   const fontSizePersistTimerRef = useRef<number | null>(null);
@@ -577,7 +597,9 @@ export function RuntimeTerminalPaneView({
       cols,
       rows,
       sshUsername,
-      telnetPort
+      telnetPort,
+      // The pane attaches again after a dropped connection or a reload.
+      resumable: true
     })
       .then((session) => {
         if (cancelled) {
@@ -611,26 +633,38 @@ export function RuntimeTerminalPaneView({
     terminalPreferences.telnetPort
   ]);
 
+  // A pane taken over by another window or with an expired session waits for the user.
+  const sessionPaused = paneState.state === "detached" || paneState.state === "expired";
+
   useEffect(() => {
-    if (!paneState.terminalSessionId || websocketRef.current || xtermRef.current === null) {
+    if (!paneState.terminalSessionId || websocketRef.current || xtermRef.current === null || sessionPaused) {
       return;
     }
 
+    const sessionId = paneState.terminalSessionId;
     sessionClosedRef.current = false;
-    const socket = connectTerminalSessionWebSocket(
-      paneState.terminalSessionId,
-      paneState.endpointId
-    );
+    let reconnectTimer: number | undefined;
+    // Read from the messages, since the pane state may not have re-rendered yet on close.
+    let ended = false;
+    let resumable = latestPaneRef.current.resumable === true;
+    const socket = connectTerminalSessionWebSocket(sessionId, paneState.endpointId);
     websocketRef.current = socket;
 
     socket.onmessage = (event) => {
       try {
+        const payload = JSON.parse(String(event.data)) as TerminalSocketPayload;
+        if (payload.type === "ready") {
+          reconnectAttemptRef.current = 0;
+          resumable ||= payload.resumable === true;
+        }
+        if (payload.type === "exit" || payload.type === "error") ended = true;
         handleTerminalSocketPayload({
           fitAddon: fitAddonRef.current,
-          payload: JSON.parse(String(event.data)) as TerminalSocketPayload,
+          payload,
           socket,
           terminal: xtermRef.current,
-          paneId: paneState.id
+          paneId: paneState.id,
+          replayPending: replayPendingRef
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -639,31 +673,82 @@ export function RuntimeTerminalPaneView({
     };
 
     socket.onerror = () => {
-      runtimeUiActions.setTerminalError(paneState.id, "Terminal connection failed.");
+      // Resumable sessions reconnect from onclose; report only when there is nothing to resume.
+      if (!resumable) {
+        runtimeUiActions.setTerminalError(paneState.id, "Terminal connection failed.");
+      }
     };
 
-    socket.onclose = () => {
+    // Attaches again after a delay unless the lab host says the session is over.
+    const scheduleReconnect = () => {
+      const attempt = reconnectAttemptRef.current;
+      reconnectAttemptRef.current = attempt + 1;
+      runtimeUiActions.setTerminalReconnecting(paneState.id, "Connection lost. Reconnecting…");
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = undefined;
+        void (async () => {
+          if (getTerminalSession) {
+            try {
+              const info = await getTerminalSession(sessionId, paneState.endpointId);
+              if (info.state === "closed") {
+                const reason = info.error ? ` (${info.error})` : "";
+                runtimeUiActions.setTerminalExpired(paneState.id, `The session ended while you were away${reason}.`);
+                return;
+              }
+            } catch (error) {
+              const status = (error as { status?: unknown }).status;
+              if (status === 404 || status === 410) {
+                runtimeUiActions.setTerminalExpired(paneState.id, "The session expired on the lab host.");
+                return;
+              }
+              // The lab host may still be unreachable: keep trying.
+            }
+          }
+          if (sessionClosedRef.current) return;
+          setReconnectToken((token) => token + 1);
+        })();
+      }, RECONNECT_DELAYS_MS[Math.min(attempt, RECONNECT_DELAYS_MS.length - 1)]);
+    };
+
+    socket.onclose = (event) => {
       websocketRef.current = null;
-      const latestPane = latestPaneRef.current;
-      if (
-        !sessionClosedRef.current &&
-        latestPane.state !== "exited" &&
-        latestPane.state !== "error"
-      ) {
-        runtimeUiActions.setTerminalExited(
-          latestPane.id,
-          latestPane.exitCode,
-          latestPane.error ?? "Connection closed."
-        );
+      if (sessionClosedRef.current) {
+        return;
       }
+      const latestPane = latestPaneRef.current;
+      if (ended || latestPane.state === "exited" || latestPane.state === "error" || latestPane.state === "expired") {
+        return;
+      }
+      if (event.code === TERMINAL_CLOSE_TAKEN_OVER) {
+        runtimeUiActions.setTerminalDetached(latestPane.id);
+        return;
+      }
+      if (resumable) {
+        scheduleReconnect();
+        return;
+      }
+      runtimeUiActions.setTerminalExited(
+        latestPane.id,
+        latestPane.exitCode,
+        latestPane.error ?? "Connection closed."
+      );
     };
 
     return () => {
       sessionClosedRef.current = true;
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       socket.close();
       websocketRef.current = null;
     };
-  }, [paneState.endpointId, paneState.id, paneState.terminalSessionId, connectTerminalSessionWebSocket]);
+  }, [
+    paneState.endpointId,
+    paneState.id,
+    paneState.terminalSessionId,
+    connectTerminalSessionWebSocket,
+    getTerminalSession,
+    reconnectToken,
+    sessionPaused
+  ]);
 
   useEffect(() => {
     return () => {
@@ -1049,7 +1134,8 @@ export function RuntimeTerminalPaneView({
           pt: 0.75,
           pl: 1.25,
           pr: 0.5,
-          bgcolor: "background.default"
+          bgcolor: "background.default",
+          position: "relative"
         }}
       >
         <Box
@@ -1062,7 +1148,86 @@ export function RuntimeTerminalPaneView({
             overflow: "hidden"
           }}
         />
+        <TerminalSessionOverlay paneState={paneState} />
       </Box>
+    </Box>
+  );
+}
+
+function sessionOverlayContent(paneState: RuntimeTerminalPane) {
+  if (paneState.state === "detached") {
+    return {
+      testId: "runtime-terminal-detached",
+      title: "Open in another window",
+      message: "This terminal session was opened somewhere else.",
+      action: "Continue here",
+      onAction: () => runtimeUiActions.setTerminalConnecting(paneState.id)
+    };
+  }
+  if (paneState.state === "expired") {
+    return {
+      testId: "runtime-terminal-expired",
+      title: "Session expired",
+      message: paneState.error ?? "The terminal session ended on the lab host.",
+      action: "Start new session",
+      onAction: () => runtimeUiActions.restartTerminal(paneState.id)
+    };
+  }
+  return undefined;
+}
+
+/** Tells why a pane has no live session and offers the way back. */
+function TerminalSessionOverlay({ paneState }: { paneState: RuntimeTerminalPane }) {
+  if (paneState.state === "reconnecting") {
+    return (
+      <Box
+        data-testid="runtime-terminal-reconnecting"
+        role="status"
+        sx={{
+          position: "absolute",
+          top: 8,
+          right: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          px: 1.25,
+          py: 0.5,
+          borderRadius: 1,
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          boxShadow: 1
+        }}
+      >
+        <CircularProgress size={12} />
+        <Typography variant="caption">{paneState.error ?? "Reconnecting…"}</Typography>
+      </Box>
+    );
+  }
+  const overlay = sessionOverlayContent(paneState);
+  if (!overlay) return null;
+  return (
+    <Box
+      data-testid={overlay.testId}
+      sx={{
+        position: "absolute",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        // The palette may hold CSS variables, which MUI's alpha() cannot parse.
+        bgcolor: (theme) => `color-mix(in srgb, ${theme.palette.background.default} 82%, transparent)`
+      }}
+    >
+      <Stack spacing={1} sx={{ alignItems: "center", textAlign: "center", maxWidth: 320, px: 2 }}>
+        <Typography variant="subtitle2">{overlay.title}</Typography>
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          {overlay.message}
+        </Typography>
+        <Button size="small" variant="contained" onClick={overlay.onAction}>
+          {overlay.action}
+        </Button>
+      </Stack>
     </Box>
   );
 }

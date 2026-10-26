@@ -22,6 +22,7 @@ description: Settings, users, and REST API of clab-api-server.
 | `CLAB_RUNTIME` | `docker` | Container runtime for labs. |
 | `CLAB_SHARED_LABS_ROOT` | unset | Directory for [shared labs](../guides/shared-labs.md). Unset turns them off. |
 | `CORS_ALLOWED_ORIGINS` | unset | Browser origins allowed to call the API directly. The web and desktop apps do not need this. |
+| `TERMINAL_IDLE_TIMEOUT` | `30m` | How long a browser terminal keeps running after its last window disconnected. Only terminals that asked to be resumable wait; older apps and other API clients end theirs when they disconnect. |
 
 The full list is in the [clab-api-server repository](https://github.com/srl-labs/clab-api-server).
 
@@ -43,7 +44,7 @@ Every signed-in user can read, edit, deploy, and destroy labs in it. There are n
 
 ## Features of newer servers
 
-Some actions need a recent clab-api-server: Mermaid and Graphviz exports, read-only SSHX links, and GoTTY credentials and shell. The server lists them in `features` of its `/health` response. With an older server, the app hides these options or explains that the server needs an update; everything else keeps working.
+Some actions need a recent clab-api-server: Mermaid and Graphviz exports, read-only SSHX links, GoTTY credentials and shell, node CPU and memory usage, live logs with stderr, and terminals that survive a dropped connection. The server lists them in `features` of its `/health` response. With an older server, the app hides these options or explains that the server needs an update; everything else keeps working.
 
 ## REST API
 

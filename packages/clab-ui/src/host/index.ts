@@ -34,6 +34,7 @@ import { parseTailscaleStatus, type TailscaleStatus } from "./tailscaleStatus";
 import { isRecord } from "../core/utilities/typeHelpers";
 import {
   MSG_LAB_OPERATION,
+  MSG_OPEN_LAB_FILE,
   MSG_PLAN_APPLY_LAB,
   MSG_TAILSCALE_STATUS,
   MSG_VALIDATE_TOPOLOGY
@@ -47,6 +48,7 @@ import { createLabOperationsRequester } from "./labOperations";
 export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
+export * from "./labFiles";
 export * from "./labOperations";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
@@ -289,6 +291,10 @@ function toTopoViewerEvent(value: unknown): ClabUiTopoViewerEvent | null {
       return toLifecycleStatusEvent(value);
     case "fit-viewport":
       return { type: "fitViewport" };
+    case "focus-node":
+      return typeof value.nodeId === "string" && value.nodeId.trim()
+        ? { type: "focusNode", nodeId: value.nodeId.trim() }
+        : null;
     case "svg-export-result":
       return toSvgExportResultEvent(value);
     default:
@@ -576,6 +582,9 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       },
       toggleSplitView(): void {
         postMessage({ command: "topo-toggle-split-view" });
+      },
+      openLabFile(request): void {
+        postMessage({ command: MSG_OPEN_LAB_FILE, path: request.path, create: request.create === true });
       },
       runNodeAction(action: TopoViewerNodeAction, nodeName: string): void {
         let command = "clab-node-view-logs";

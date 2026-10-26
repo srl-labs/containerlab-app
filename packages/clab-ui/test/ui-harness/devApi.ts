@@ -4,6 +4,8 @@ import type { TopologyAnnotations } from "../../src/core/types/topology";
 import type { TopologySnapshot } from "../../src/session";
 import type { DevModeInterface } from "../../src/types/devMode";
 
+import type { FakeNodeRuntime } from "./fakeLab";
+
 /** Members main.tsx puts on window.__DEV__ before the app adds its own. */
 export interface HarnessDevApi {
   setCustomIcons: (icons: CustomIconInfo[]) => void;
@@ -21,6 +23,11 @@ export interface HarnessDevApi {
   emitHostMessage: (message: unknown) => void;
   /** Mark the lab deployed with these containers, as a host refresh would. */
   applyRuntimeContainers: (containers: HostRuntimeContainer[]) => Promise<void>;
+  /**
+   * Force the state and status a node of the running fake lab reports, e.g.
+   * `{ status: "Up 1 minute (unhealthy)" }`; `null` lets the fake lab decide again.
+   */
+  setNodeRuntime: (nodeName: string, runtime: FakeNodeRuntime | null) => Promise<void>;
 }
 
 /** Shape of window.__DEV__ in the harness page. */

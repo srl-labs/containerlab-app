@@ -18,9 +18,10 @@ import { parseApplyPlan, type ApplyPlan } from "../../src/host/applyPlan";
 import { parseTailscaleStatus, type TailscaleStatus } from "../../src/host/tailscaleStatus";
 import { expandLabNameGitTokens } from "../../src/host/topologyVariables";
 
-import { fakeRuntimeContainers } from "./fakeLab";
+import { fakeRuntimeContainers, type FakeNodeRuntime } from "./fakeLab";
 import { createFakeLabOperations } from "./fakeLabOperations";
 import { createFakeLifecycle } from "./fakeLifecycle";
+import { createFakeNodeStats } from "./fakeNodeStats";
 import { createFakeTemplates, type TemplateState } from "./fakeTemplates";
 import { fixtureFiles, TOPOLOGY_ROOT } from "./fixtureFiles";
 import {
@@ -181,6 +182,7 @@ export interface FakeClabUiHost extends ClabUiHost {
     getCustomNodes(): TemplateState;
     emitHostMessage(message: unknown): void;
     applyRuntimeContainers(containers: HostRuntimeContainer[]): Promise<void>;
+    setNodeRuntime(nodeName: string, runtime: FakeNodeRuntime | null): Promise<void>;
   };
 }
 
@@ -204,9 +206,11 @@ export function createFakeClabUiHost(
     currentPath: () => currentYamlPath,
     readYaml: (path) => files.get(path),
     publish: publishFakeLab,
+    refreshRuntime: (lab) => host.harness.applyRuntimeContainers(fakeRuntimeContainers(lab)),
     emit: emitTopoViewerEvent
   });
   const templates = createFakeTemplates(options.seedTemplates ?? true, emitTopoViewerEvent);
+  const fakeStats = createFakeNodeStats((message) => host.harness.emitHostMessage(message));
 
   function emitTopoViewerEvent(event: ClabUiTopoViewerEvent): void {
     for (const subscriber of Array.from(topoViewerSubscribers)) {
@@ -219,6 +223,7 @@ export function createFakeClabUiHost(
     const lab = fakeLifecycle.labFor(currentYamlPath);
     const dirty = fakeLifecycle.dirtyFor(currentYamlPath);
     publishedDeployed = lab !== undefined;
+    fakeStats.follow(lab ? fakeRuntimeContainers(lab) : undefined);
     if (lab) {
       core.updateContext({ dirty });
       await host.harness.applyRuntimeContainers(fakeRuntimeContainers(lab));
@@ -333,6 +338,8 @@ export function createFakeClabUiHost(
         this.emitHostMessage({ type: "edge-stats-update", data: { edgeUpdates } });
         this.emitHostMessage({ type: "node-data-updated", data: { nodeUpdates } });
       },
+
+      setNodeRuntime: (nodeName, runtime) => fakeLifecycle.setNodeRuntime(nodeName, runtime),
 
       emitHostMessage(message) {
         const event = { data: message } as MessageEvent<unknown>;
@@ -493,6 +500,9 @@ export function createFakeClabUiHost(
         recordHarnessMessage({ command: "topo-validate" });
       },
       toggleSplitView() {},
+      openLabFile(request) {
+        recordHarnessMessage({ command: "openLabFile", path: request.path, create: request.create === true });
+      },
       runNodeAction(action, nodeName) {
         void fakeLifecycle.nodeAction(action, nodeName);
       },

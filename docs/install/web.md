@@ -100,6 +100,10 @@ By default the web app creates a self-signed certificate. To use yours, mount it
 
 If the API server has a trusted certificate too, set `CLAB_API_TLS_VERIFY=true`. All variables are in [web and desktop settings](../reference/app-settings.md#web-app).
 
+## Behind a reverse proxy
+
+Forward WebSocket upgrades to the web app. Live events, terminals, logs and Wireshark all use WebSockets, and each browser tab keeps one socket open for the live events of all its lab hosts. If the proxy does not pass WebSockets, live events fall back to one HTTP stream each, and browsers allow only six HTTP/1.1 connections per host: with several lab hosts or tabs, pages stop loading until a tab is closed. To serve the app under a path such as `/web`, set `WEB_BASE_PATH=/web` and forward `/web/` without stripping the prefix.
+
 ## If it does not connect
 
 ```bash

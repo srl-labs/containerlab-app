@@ -25,6 +25,7 @@ import TerminalIcon from "@mui/icons-material/TerminalOutlined";
 import StarIcon from "@mui/icons-material/Star";
 import StarOutlineIcon from "@mui/icons-material/StarBorder";
 import TextFieldsIcon from "@mui/icons-material/TextFieldsOutlined";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
@@ -57,9 +58,19 @@ import { TabNavigation } from "../../ui/editor/TabNavigation";
 import { IconPreview, PanelSectionHeader } from "../../ui/form";
 import { controlRadius } from "../../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
-import { executeTopologyCommand } from "../../../services/topologyHostCommands";
+import { saveSourceDraft } from "../../../services/editHistoryCommands";
+import {
+  closeSourceStep,
+  discardSourceDraft,
+  editSourceDraft,
+  useEditHistoryStore
+} from "../../../stores/editHistoryStore";
+import { useUndoRedoControls } from "../../../hooks/app/useUndoRedoControls";
 import { containerlabSchema } from "../../../core/schema/bundledSchema";
 import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
+import type { LabFileLinks } from "../../monaco/labFileLinks";
+import type { MonacoEditDetails, MonacoSelection } from "../../monaco/MonacoCodeEditor";
+import { useTopologyFileLinks } from "../../../hooks/editor/useLabFiles";
 
 interface PaletteSectionProps {
   mode?: "edit" | "view";
@@ -190,6 +201,17 @@ function isSourceTab(tabId: string): boolean {
   return tabId === "yaml" || tabId === "json";
 }
 
+function sourceTabTitle(
+  tabId: string,
+  yamlFileName: string,
+  annotationsFileName: string
+): string | undefined {
+  const [kind, fileName] =
+    tabId === "yaml" ? ["Topology", yamlFileName] : ["Annotations", annotationsFileName];
+  if (!isSourceTab(tabId)) return undefined;
+  return fileName ? `${kind} file: ${fileName}` : `${kind} file`;
+}
+
 const MonacoCodeEditor = React.lazy(preloadMonacoCodeEditor);
 
 /** Stands in for the Save button while the source can't be edited. */
@@ -209,14 +231,45 @@ const SourceEditorTab: React.FC<{
   language: "yaml" | "json";
   value: string;
   jsonSchema?: object;
-  onChange: (next: string) => void;
+  fileLinks?: LabFileLinks;
+  /** Set when the file changed (canvas edit, undo, another editor) since the unsaved edits began. */
+  onDiscardStale?: () => void;
+  onChange: (next: string, details: MonacoEditDetails) => void;
   onReadOnlyEditAttempt?: () => void;
-}> = ({ readOnly, error, language, value, jsonSchema, onChange, onReadOnlyEditAttempt }) => (
+  history: { undo: () => void; redo: () => void };
+  restoreSelection?: MonacoSelection | null;
+}> = ({
+  readOnly,
+  error,
+  language,
+  value,
+  jsonSchema,
+  fileLinks,
+  onDiscardStale,
+  onChange,
+  onReadOnlyEditAttempt,
+  history,
+  restoreSelection
+}) => (
   <Box sx={{ flex: 1, minHeight: 0, overflowY: "hidden", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
       <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
         {error}
       </Typography>
+    )}
+    {onDiscardStale && (
+      <Alert
+        severity="warning"
+        data-testid="palette-source-stale"
+        action={
+          <Button color="inherit" size="small" onClick={onDiscardStale}>
+            Discard edits
+          </Button>
+        }
+        sx={{ borderRadius: 0, py: 0, alignItems: "center", "& .MuiAlert-message": { fontSize: 12 } }}
+      >
+        The file changed since you started editing. Saving replaces those changes.
+      </Alert>
     )}
     {/* Read-only source shows no caret, so it doesn't invite typing. */}
     <Box
@@ -245,8 +298,12 @@ const SourceEditorTab: React.FC<{
           value={value}
           readOnly={readOnly}
           jsonSchema={jsonSchema}
+          fileLinks={fileLinks}
           onChange={readOnly ? undefined : onChange}
           onReadOnlyEditAttempt={onReadOnlyEditAttempt}
+          onBlur={closeSourceStep}
+          history={history}
+          restoreSelection={restoreSelection}
         />
       </Suspense>
     </Box>
@@ -582,13 +639,26 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
         if (t.id === "edit" && !showEditTab) return false;
         if (disabledTabIds?.includes(t.id)) return false;
         return true;
-      }).map((t) => ({ id: t.id, label: paletteTabLabels?.[t.id] ?? t.label }));
+      }).map((t) => ({
+        id: t.id,
+        label: paletteTabLabels?.[t.id] ?? t.label,
+        // The source tabs name the file they edit.
+        title: sourceTabTitle(t.id, yamlFileName, annotationsFileName)
+      }));
       const custom = (customPaletteTabs ?? [])
         .map((t) => ({ id: t.id, label: t.label }))
         .filter((t) => !disabledTabIds?.includes(t.id));
       return [...base, ...custom];
     },
-    [showInfoTab, showEditTab, customPaletteTabs, disabledTabIds, paletteTabLabels]
+    [
+      showInfoTab,
+      showEditTab,
+      customPaletteTabs,
+      disabledTabIds,
+      paletteTabLabels,
+      yamlFileName,
+      annotationsFileName
+    ]
   );
 
   const [userTab, setUserTab] = useState("nodes");
@@ -675,34 +745,54 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
   const [yamlError, setYamlError] = useState<string | null>(null);
   const [annotationsError, setAnnotationsError] = useState<string | null>(null);
-  const [yamlDraft, setYamlDraft] = useState<string>(yamlContent);
-  const [annotationsDraft, setAnnotationsDraft] = useState<string>(annotationsContent);
-  const [yamlDirty, setYamlDirty] = useState(false);
-  const [annotationsDirty, setAnnotationsDirty] = useState(false);
+  // Drafts live in the edit history store, so undo can put them back from anywhere.
+  const yamlDraftState = useEditHistoryStore((state) => state.drafts.yaml);
+  const annotationsDraftState = useEditHistoryStore((state) => state.drafts.json);
+  const selectionRestore = useEditHistoryStore((state) => state.selectionRestore);
+  // The host content local edits started from; null while the draft follows the host.
+  const yamlDraftBase = yamlDraftState.base;
+  const annotationsDraftBase = annotationsDraftState.base;
+  const yamlDraft = yamlDraftBase === null ? yamlContent : yamlDraftState.text;
+  const annotationsDraft =
+    annotationsDraftBase === null ? annotationsContent : annotationsDraftState.text;
+  // Edits back to the saved text are no edits, and saving them would add an empty undo step.
+  const yamlDirty = yamlDraftBase !== null && yamlDraft !== yamlContent;
+  const annotationsDirty = annotationsDraftBase !== null && annotationsDraft !== annotationsContent;
   const isSourceReadOnly = isLocked;
-
-  // Sync drafts with host unless user has local edits
-  useEffect(() => {
-    if (!yamlDirty) {
-      setYamlDraft(yamlContent);
-    }
-  }, [yamlContent, yamlDirty]);
+  const fileLinks = useTopologyFileLinks();
+  const sourceHistory = useUndoRedoControls();
 
   useEffect(() => {
-    if (!annotationsDirty) {
-      setAnnotationsDraft(annotationsContent);
-    }
-  }, [annotationsContent, annotationsDirty]);
-
-  useEffect(() => {
-    setYamlDirty(false);
     setYamlError(null);
   }, [yamlFileName]);
 
   useEffect(() => {
-    setAnnotationsDirty(false);
     setAnnotationsError(null);
   }, [annotationsFileName]);
+
+  const handleYamlDraftChange = useCallback(
+    (next: string, details: MonacoEditDetails) => {
+      editSourceDraft("yaml", next, yamlContent, details);
+    },
+    [yamlContent]
+  );
+
+  const handleAnnotationsDraftChange = useCallback(
+    (next: string, details: MonacoEditDetails) => {
+      editSourceDraft("json", next, annotationsContent, details);
+    },
+    [annotationsContent]
+  );
+
+  const discardYamlDraft = useCallback(() => {
+    discardSourceDraft("yaml");
+    setYamlError(null);
+  }, []);
+
+  const discardAnnotationsDraft = useCallback(() => {
+    discardSourceDraft("json");
+    setAnnotationsError(null);
+  }, []);
 
   const filteredNodes = useMemo(() => {
     if (!filter) return customNodes;
@@ -753,34 +843,21 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
 
   const handleSaveYaml = useCallback(async () => {
     try {
-      await executeTopologyCommand(
-        { command: "setYamlContent", payload: { content: yamlDraft } },
-        {},
-        sessionClient
-      );
-      setYamlDirty(false);
+      await saveSourceDraft("yaml", sessionClient);
       setYamlError(null);
     } catch (err) {
       setYamlError(err instanceof Error ? err.message : String(err));
     }
-  }, [sessionClient, yamlDraft]);
+  }, [sessionClient]);
 
   const handleSaveAnnotations = useCallback(async () => {
     try {
-      await executeTopologyCommand(
-        {
-          command: "setAnnotationsContent",
-          payload: { content: annotationsDraft }
-        },
-        {},
-        sessionClient
-      );
-      setAnnotationsDirty(false);
+      await saveSourceDraft("json", sessionClient);
       setAnnotationsError(null);
     } catch (err) {
       setAnnotationsError(err instanceof Error ? err.message : String(err));
     }
-  }, [annotationsDraft, sessionClient]);
+  }, [sessionClient]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -1024,10 +1101,13 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           language="yaml"
           value={yamlDraft}
           jsonSchema={yamlSchema ?? containerlabSchema}
-          onChange={(next) => {
-            setYamlDraft(next);
-            setYamlDirty(true);
-          }}
+          fileLinks={fileLinks}
+          onDiscardStale={
+            yamlDirty && yamlDraftBase !== yamlContent ? discardYamlDraft : undefined
+          }
+          onChange={handleYamlDraftChange}
+          history={sourceHistory}
+          restoreSelection={selectionRestore?.file === "yaml" ? selectionRestore.selection : null}
         />
       )}
 
@@ -1038,10 +1118,14 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
           error={annotationsError}
           language="json"
           value={annotationsDraft}
-          onChange={(next) => {
-            setAnnotationsDraft(next);
-            setAnnotationsDirty(true);
-          }}
+          onDiscardStale={
+            annotationsDirty && annotationsDraftBase !== annotationsContent
+              ? discardAnnotationsDraft
+              : undefined
+          }
+          onChange={handleAnnotationsDraftChange}
+          history={sourceHistory}
+          restoreSelection={selectionRestore?.file === "json" ? selectionRestore.selection : null}
         />
       )}
 

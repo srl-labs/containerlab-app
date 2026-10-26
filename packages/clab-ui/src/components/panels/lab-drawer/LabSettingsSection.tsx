@@ -81,6 +81,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeBoxSpacing,
       linkStyle,
       mgmtNetworkBadge,
+      showNodeCpu,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       animateTraffic
@@ -103,6 +104,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeBoxSpacing,
       linkStyle,
       mgmtNetworkBadge,
+      showNodeCpu,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,

@@ -9,6 +9,10 @@ import {
   type TopoViewerNodesAction
 } from "../../host";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
+import { trackNodeActions } from "../../stores/nodeLifecycleStore";
+import { useLabFileOpener, useLabFileScope } from "../../hooks/editor/useLabFiles";
+import type { LabFileRequest, LabFileScope } from "../../host/labFiles";
+import { collectNodeLabFiles } from "../../utils/nodeLabFiles";
 import { useDeploymentState, type DeploymentState } from "../../stores/topoViewerStore";
 import { CanvasCapturePanel } from "../panels/capture/CanvasCapturePanel";
 import {
@@ -82,6 +86,8 @@ interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   isEditMode: boolean;
   isLocked: boolean;
   deploymentState: DeploymentState;
+  labFileScope: LabFileScope;
+  openLabFile?: (request: LabFileRequest) => void;
 }
 
 function getStringField(record: Record<string, unknown>, key: string): string | undefined {
@@ -108,6 +114,21 @@ function resolveNodeRuntimeState(
     return undefined;
   }
   return getNodeRuntimeBadgeState(deploymentState, rawState);
+}
+
+/** The startup config, license and bind files of a topology node, with what it inherits. */
+function resolveNodeLabFiles(
+  node: Node | undefined,
+  params: ResolveContextMenuItemsParams
+): Parameters<typeof buildNodeContextMenu>[0]["labFiles"] {
+  const { openLabFile } = params;
+  if (!openLabFile || node?.type !== "topology-node") return undefined;
+  const extraData = toRecord(toRecord(node.data).extraData);
+  const nodeName = getStringField(extraData, "name") ?? node.id;
+  return {
+    files: collectNodeLabFiles(extraData, { ...params.labFileScope, nodeName }),
+    open: openLabFile
+  };
 }
 
 function buildNodeItems(
@@ -149,6 +170,8 @@ function buildNodeItems(
     deleteGroup: params.annotationHandlers?.onDeleteGroup,
     editTrafficRate: params.annotationHandlers?.onEditTrafficRate,
     deleteTrafficRate: params.annotationHandlers?.onDeleteTrafficRate,
+    changeZOrder: params.annotationHandlers?.onChangeZOrder,
+    labFiles: resolveNodeLabFiles(targetNode, params),
     runScriptButton: params.annotationHandlers?.onRunScriptButton,
     editScriptButton: params.annotationHandlers?.onEditScriptButton,
     deleteScriptButton: params.annotationHandlers?.onDeleteScriptButton
@@ -224,7 +247,21 @@ function nodesActionHandler(
   topoViewer: ClabUiTopoViewerHost
 ): ResolveContextMenuItemsParams["onNodesAction"] {
   const { runNodesAction } = topoViewer;
-  return runNodesAction ? (action, nodeNames) => runNodesAction.call(topoViewer, action, nodeNames) : undefined;
+  return runNodesAction
+    ? (action, nodeNames) => {
+        trackNodeActions(action, nodeNames);
+        runNodesAction.call(topoViewer, action, nodeNames);
+      }
+    : undefined;
+}
+
+function runNodeAction(
+  topoViewer: ClabUiTopoViewerHost,
+  action: TopoViewerNodeAction,
+  nodeName: string
+): void {
+  trackNodeActions(action, [nodeName]);
+  topoViewer.runNodeAction(action, nodeName);
 }
 
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
@@ -233,6 +270,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
   const labOperationSupport = useLabOperationsStore((state) => state.support);
   const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const hasLabOperations = topoViewer.labOperations !== undefined;
+  const labFileScope = useLabFileScope();
+  const openLabFile = useLabFileOpener();
   const {
     handlers,
     state,
@@ -265,7 +304,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
   return useMemo(() => {
     return resolveContextMenuItems({
       ...params,
-      onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
+      onNodeAction: (action, nodeName) => runNodeAction(topoViewer, action, nodeName),
       onNodesAction: nodesActionHandler(topoViewer),
       labOperations: hasLabOperations
         ? { support: labOperationSupport, open: openLabOperation }
@@ -278,7 +317,9 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
       edges: edgesRef.current,
       isEditMode: state.mode === "edit",
       isLocked: state.isLocked,
-      deploymentState
+      deploymentState,
+      labFileScope,
+      openLabFile
     });
   }, [
     type,
@@ -315,6 +356,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     onAddShapes,
     onAddShapeAtPosition,
     onAddTrafficRateAtPosition,
+    labFileScope,
+    openLabFile,
     onAddScriptButtonAtPosition
   ]);
 }

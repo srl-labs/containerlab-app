@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useSyncExternalStore } from "react";
 import type {
   EdgeSharkStatusResponse, EndpointHealthMetrics, FileExplorerEntry, InspectAllLabsResponse, InspectLabResponse,
-  InterfaceNetemPatch, LabState, LogsResponse, RenderedTopologyPreview, RuntimeTargetRequest, TerminalProtocol,
+  InterfaceNetemPatch, LabState, LogsResponse, NodeLogLine, RenderedTopologyPreview, RuntimeTargetRequest, TerminalProtocol,
   TerminalSessionInfo, VersionCheckResponse, VersionResponse, WorkspaceAsset
 } from "./types";
 import type { RuntimeTerminalPane } from "./state/runtimeUiStore";
+import type { LabFileRequest } from "../host/labFiles";
 
 type NodeTarget = RuntimeTargetRequest & { nodeName: string };
 type InterfaceTarget = NodeTarget & { interfaceName: string };
@@ -14,6 +15,14 @@ export interface WorkspaceHost {
   capabilities: { lifecycle: boolean; endpoints: boolean };
   assetUrl: (asset: WorkspaceAsset) => string;
   openTerminalWindow: (pane: RuntimeTerminalPane) => void;
+  /**
+   * Open a file a topology refers to in a file tab. Relative paths start at
+   * the topology's workspace path; absolute ones need its absolute
+   * `topologyDir`. Missing where the host cannot.
+   */
+  openLabFile?: (
+    request: LabFileRequest & { endpointId: string; topologyPath: string; topologyDir?: string }
+  ) => void;
   labs: {
     getSnapshot: () => Map<string, LabState>;
     subscribe: (listener: () => void) => () => void;
@@ -31,12 +40,21 @@ export interface WorkspaceHost {
     installEdgeShark: (endpointId?: string) => Promise<void>;
     uninstallEdgeShark: (endpointId?: string) => Promise<void>;
     fetchNodeLogs: (target: NodeTarget & { tail?: string }) => Promise<LogsResponse>;
+    /**
+     * Follows a node's log: the last `tail` lines, then new ones as they are
+     * written, until `signal` aborts or the node stops. Missing where the host
+     * cannot stream; the logs view polls `fetchNodeLogs` then.
+     */
+    streamNodeLogs?: (target: NodeTarget & { tail?: string; signal: AbortSignal }) => AsyncIterable<NodeLogLine>;
     inspectAllLabs: (endpointId?: string) => Promise<InspectAllLabsResponse>;
     inspectLab: (target: RuntimeTargetRequest) => Promise<InspectLabResponse>;
     setNetem: (target: InterfaceTarget & { delay?: string; jitter?: string; loss?: number; rate?: number; corruption?: number }) => Promise<void>;
     resetNetem: (target: InterfaceTarget) => Promise<void>;
-    openTerminalSession: (target: NodeTarget & { protocol: TerminalProtocol; cols: number; rows: number; sshUsername?: string; telnetPort?: number }) => Promise<TerminalSessionInfo>;
+    /** `resumable` keeps the session running when the stream drops, for attaching again. */
+    openTerminalSession: (target: NodeTarget & { protocol: TerminalProtocol; cols: number; rows: number; sshUsername?: string; telnetPort?: number; resumable?: boolean }) => Promise<TerminalSessionInfo>;
     closeTerminalSession: (sessionId: string, endpointId?: string) => Promise<void>;
+    /** Whether a session still runs, before attaching to it again; missing where the host cannot tell. */
+    getTerminalSession?: (sessionId: string, endpointId?: string) => Promise<TerminalSessionInfo>;
     connectTerminalSessionWebSocket: (sessionId: string, endpointId?: string) => WebSocket;
   };
 }

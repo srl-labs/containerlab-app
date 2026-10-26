@@ -815,6 +815,7 @@ export class ClabApiClient {
       rows: number;
       sshUsername?: string;
       telnetPort?: number;
+      resumable?: boolean;
     },
   ): Promise<TerminalSessionInfo> {
     const body = JSON.stringify({
@@ -823,6 +824,8 @@ export class ClabApiClient {
       rows: options.rows,
       sshUsername: options.sshUsername,
       telnetPort: options.telnetPort,
+      // Older servers ignore the field and keep their own behavior.
+      resumable: options.resumable === true ? true : undefined,
     });
     const res = await this.request(
       "POST",
@@ -872,6 +875,59 @@ export class ClabApiClient {
       token,
     );
     return (await res.json()) as LogsResponse;
+  }
+
+  /** Opens a node's log in follow mode, as NDJSON. Returns the raw Response for streaming. */
+  async openNodeLogStream(
+    token: string,
+    labName: string,
+    nodeName: string,
+    options: { tail?: string } = {},
+    requestOptions: StreamRequestOptions = {},
+  ): Promise<Response> {
+    const params = new URLSearchParams({ follow: "true" });
+    if (options.tail) {
+      params.set("tail", options.tail);
+    }
+    return this.openStream(
+      `/api/v1/labs/${enc(labName)}/nodes/${enc(nodeName)}/logs?${params.toString()}`,
+      token,
+      requestOptions,
+    );
+  }
+
+  /** Opens the NDJSON stream of a lab's node resource usage. */
+  async openLabStatsStream(
+    token: string,
+    labName: string,
+    options: { intervalSeconds?: number } = {},
+    requestOptions: StreamRequestOptions = {},
+  ): Promise<Response> {
+    const query =
+      options.intervalSeconds !== undefined ? `?interval=${options.intervalSeconds}s` : "";
+    return this.openStream(`/api/v1/labs/${enc(labName)}/stats${query}`, token, requestOptions);
+  }
+
+  private async openStream(
+    path: string,
+    token: string,
+    requestOptions: StreamRequestOptions,
+  ): Promise<Response> {
+    const res = await apiFetch(
+      `${this.baseUrl}${path}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: requestOptions.signal,
+      },
+      { stream: true },
+    );
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      const error: HttpError = new Error(`GET ${path} failed (${res.status}): ${text}`);
+      error.status = res.status;
+      throw error;
+    }
+    return res;
   }
 
   async controlNodeLifecycle(

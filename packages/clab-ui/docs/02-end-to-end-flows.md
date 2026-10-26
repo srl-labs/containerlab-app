@@ -71,7 +71,7 @@ All commands run from the monorepo root. The host commands rebuild the workspace
 | Class | Examples | Transport |
 |---|---|---|
 | Request/response | login, list labs, save topology file, inspect lab | HTTP |
-| Long-running stream | platform events, topology file events | streaming HTTP bridged to SSE in the browser host |
+| Long-running stream | platform events, topology file events | streaming HTTP bridged to one event-channel websocket per tab in the browser host (SSE when websockets do not get through) |
 | Interactive stream | terminal, VNC | websocket |
 | Local extension command | deploy, destroy, inspect, capture inside VS Code | command and message bridge |
 

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import { expect, stubEventSource, test } from "@srl-labs/containerlab-test-kit/playwright";
+import { expect, stubEventStreams, test } from "@srl-labs/containerlab-test-kit/playwright";
 import { createServer, type ViteDevServer } from "vite";
 import { createContainerlabAppServer } from "@srl-labs/containerlab-app-server";
 
@@ -16,8 +16,9 @@ const savedEndpoint = {
   sessionDuration: "24h"
 };
 
-async function mockRuntime(page: Page, basePath: string): Promise<void> {
-  await stubEventSource(page);
+async function mockRuntime(page: Page, basePath: string, { liveEvents = false } = {}): Promise<void> {
+  // Route mocks never see WebSockets: with live events the event channel reaches the actual app server.
+  if (!liveEvents) await stubEventStreams(page);
   await page.route("**/*", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
     const relative = pathname.slice(basePath.length);
@@ -90,7 +91,7 @@ for (const mode of ["production", "development"] as const) {
       });
 
       test("saved endpoint reconnection uses the app prefix", async ({ page }) => {
-        await mockRuntime(page, basePath);
+        await mockRuntime(page, basePath, { liveEvents: true });
         await page.addInitScript((endpoint) => {
           localStorage.setItem("clab-standalone-endpoints", JSON.stringify([endpoint]));
         }, savedEndpoint);
@@ -103,10 +104,24 @@ for (const mode of ["production", "development"] as const) {
         const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
         const requestPromise = page.waitForRequest((request) => request.url().includes("/reconnect"));
+        // Listen from the socket's first frame on: the refusal can arrive, and the socket close,
+        // before the dialog has gone.
+        const refusedOn = new Promise<string>((resolve) => {
+          page.on("websocket", (socket) => {
+            if (!socket.url().includes("/api/events/socket")) return;
+            socket.on("framereceived", (frame) => {
+              if (String(frame.payload).includes('"type":"refused"')) resolve(socket.url());
+            });
+          });
+        });
         await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
         const request = await requestPromise;
         expect(new URL(request.url()).pathname).toBe(`${basePath}/auth/endpoints/${savedEndpoint.id}/reconnect`);
         await expect(dialog).not.toBeVisible();
+
+        // Live events of the endpoint go over the app server's event channel below the base;
+        // the actual app server does not know the mocked endpoint, so it refuses the stream.
+        expect(new URL(await refusedOn).pathname).toBe(`${basePath}/api/events/socket`);
       });
 
       test("detached terminal entrypoint sends API requests to the app base", async ({ page }) => {

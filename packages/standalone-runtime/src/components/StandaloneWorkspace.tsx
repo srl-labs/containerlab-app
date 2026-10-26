@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo } from "react";
 
 import { isFileLabTab, useLabTabsStore, type TabOrientation } from "@containerlab/clab-ui/workspace/state";
 import { useEndpointStore } from "../stores/endpointStore";
+import { useWorkspaceViewStore } from "../stores/workspaceViewStore";
 import { LabTabsBar } from "./LabTabsBar";
 import { AttractorEmptyState } from "./AttractorEmptyState";
 
@@ -14,7 +15,10 @@ interface TabActions {
   onClose: (tabId: string) => Promise<void>;
 }
 
-export function StandaloneLabTabs({ onActivate, onClose, orientation = "horizontal" }: TabActions & { orientation?: TabOrientation }) {
+export function StandaloneLabTabs({ onActivate, onClose, orientation = "horizontal", showSelection = true }: TabActions & {
+  orientation?: TabOrientation;
+  showSelection?: boolean;
+}) {
   const tabs = useLabTabsStore((state) => state.tabs);
   const activeTabId = useLabTabsStore((state) => state.activeTabId);
   const endpoints = useEndpointStore((state) => state.endpoints);
@@ -28,6 +32,7 @@ export function StandaloneLabTabs({ onActivate, onClose, orientation = "horizont
       activeTabId={activeTabId}
       endpointLabels={endpointLabels}
       orientation={orientation}
+      showSelection={showSelection}
       onActivate={(id) => {
         void onActivate(id);
       }}
@@ -57,6 +62,7 @@ export function StandaloneFileEditor({ onClose }: Pick<TabActions, "onClose">) {
 
 export function StandaloneLabEmptyState({ onCreateLab }: { onCreateLab: () => Promise<void> }) {
   const hasTabs = useLabTabsStore((state) => state.tabs.length > 0);
-  if (hasTabs) return null;
+  const overviewOpen = useWorkspaceViewStore((state) => state.overviewOpen);
+  if (hasTabs || overviewOpen) return null;
   return <AttractorEmptyState onCreateLab={() => { void onCreateLab(); }} />;
 }

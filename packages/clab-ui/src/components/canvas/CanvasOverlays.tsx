@@ -2,7 +2,7 @@ import React from "react";
 import { useStore } from "@xyflow/react";
 import Box from "@mui/material/Box";
 
-import type { HelperLinePositions } from "../../hooks/canvas/useHelperLines";
+import type { GapMarker, HelperLinePositions } from "../../hooks/canvas/useHelperLines";
 
 interface HelperLinesProps {
   lines: HelperLinePositions;
@@ -12,15 +12,20 @@ const HELPER_LINE_COLOR = "#ff6b6b";
 const HELPER_LINE_WIDTH = 1;
 const MIDPOINT_LINE_COLOR = "#4ecdc4";
 const MIDPOINT_LINE_WIDTH = 1;
+const GAP_MARKER_COLOR = "#e056fd";
+const GAP_MARKER_WIDTH = 1;
+/** Half length of the ticks closing each gap marker (screen px) */
+const GAP_MARKER_TICK = 4;
 
 export const HelperLines: React.FC<HelperLinesProps> = React.memo(({ lines }) => {
-  const { horizontal, vertical, horizontalMidpoint, verticalMidpoint } = lines;
+  const { horizontal, vertical, horizontalMidpoint, verticalMidpoint, gaps } = lines;
 
   if (
     horizontal === null &&
     vertical === null &&
     horizontalMidpoint === null &&
-    verticalMidpoint === null
+    verticalMidpoint === null &&
+    gaps.length === 0
   ) {
     return null;
   }
@@ -107,7 +112,46 @@ const HelperLinesSvg: React.FC<HelperLinesProps> = ({ lines }) => {
           strokeDasharray="6 3"
         />
       )}
+
+      {lines.gaps.map((gap) => (
+        <GapMarkerPath
+          key={`${gap.axis}:${gap.start}:${gap.end}:${gap.offset}`}
+          gap={gap}
+          transform={transform}
+        />
+      ))}
     </svg>
+  );
+};
+
+/** A gap span with a tick at each end, drawn between two equally spaced nodes */
+const GapMarkerPath: React.FC<{ gap: GapMarker; transform: [number, number, number] }> = ({
+  gap,
+  transform
+}) => {
+  const [tx, ty, zoom] = transform;
+  const t = GAP_MARKER_TICK;
+  let d: string;
+  if (gap.axis === "x") {
+    const x1 = gap.start * zoom + tx;
+    const x2 = gap.end * zoom + tx;
+    const y = gap.offset * zoom + ty;
+    d = `M${x1} ${y}H${x2}M${x1} ${y - t}V${y + t}M${x2} ${y - t}V${y + t}`;
+  } else {
+    const y1 = gap.start * zoom + ty;
+    const y2 = gap.end * zoom + ty;
+    const x = gap.offset * zoom + tx;
+    d = `M${x} ${y1}V${y2}M${x - t} ${y1}H${x + t}M${x - t} ${y2}H${x + t}`;
+  }
+  return (
+    <path
+      d={d}
+      data-testid="helper-gap-marker"
+      data-axis={gap.axis}
+      stroke={GAP_MARKER_COLOR}
+      strokeWidth={GAP_MARKER_WIDTH}
+      fill="none"
+    />
   );
 };
 

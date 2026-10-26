@@ -3,6 +3,7 @@
  * Helper functions to query nodes and edges in React Flow graphs.
  */
 import type { TopoNode, TopoEdge } from "../core/types/graph";
+import { isAnnotationNodeType } from "../annotations/annotationNodeConverters";
 
 /**
  * Runtime guard for TopoNode-like objects.
@@ -87,6 +88,34 @@ export function markDummyEdgesHidden<T extends { source: string; target: string 
       ? { ...edge, hidden: !showDummyLinks }
       : edge
   );
+}
+
+export interface TopologyStats {
+  nodes: number;
+  links: number;
+  annotations: number;
+}
+
+/**
+ * What the canvas status line counts: topology and network nodes without
+ * dummy endpoints, links, and annotations (groups, text, shapes, traffic rates).
+ */
+export function countTopologyStats(
+  nodes: ReadonlyArray<{ type?: string; data?: unknown }>,
+  edges: ReadonlyArray<{ type?: string }>
+): TopologyStats {
+  const stats: TopologyStats = { nodes: 0, links: 0, annotations: 0 };
+  for (const node of nodes) {
+    if (node.type === "topology-node" || (node.type === "network-node" && !isDummyNode(node))) {
+      stats.nodes += 1;
+    } else if (isAnnotationNodeType(node.type)) {
+      stats.annotations += 1;
+    }
+  }
+  for (const edge of edges) {
+    if (edge.type === "topology-edge") stats.links += 1;
+  }
+  return stats;
 }
 
 /**

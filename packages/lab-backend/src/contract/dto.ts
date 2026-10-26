@@ -30,6 +30,10 @@ export interface TerminalSessionInfo {
   createdAt: string;
   expiresAt: string;
   lastActivity: string;
+  /** The session outlives a disconnected stream. Older lab hosts leave it out. */
+  resumable?: boolean;
+  /** A client is connected to the session's stream. */
+  attached?: boolean;
   exitCode?: number | null;
   error?: string;
 }
@@ -37,6 +41,37 @@ export interface TerminalSessionInfo {
 export interface LogsResponse {
   containerName: string;
   logs: string;
+}
+
+/** One line of a node's container log. */
+export interface NodeLogLine {
+  line: string;
+  /** The container output the line came from, when the lab host tells. */
+  stream?: "stdout" | "stderr";
+}
+
+/** Resource usage of one running node. */
+export interface NodeStats {
+  /** Container name. */
+  name: string;
+  /** Node name in the topology. */
+  nodeName: string;
+  /** CPU usage since the previous sample, where 100 is one busy CPU; missing in a node's first sample. */
+  cpuPercent?: number;
+  /** CPUs the node can use, when known. */
+  cpuCount?: number;
+  memoryBytes: number;
+  memoryLimitBytes?: number;
+  pids?: number;
+}
+
+/** The resource usage of a lab's running nodes at one time. */
+export interface LabStatsSample {
+  type: "stats";
+  /** ISO timestamp. */
+  time: string;
+  intervalSeconds: number;
+  nodes: NodeStats[];
 }
 
 export interface VersionResponse {

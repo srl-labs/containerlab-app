@@ -23,6 +23,8 @@ interface DynamicListProps {
   id?: string;
   /** containerlab expands magic variables such as `__clabNodeDir__` in the items */
   magicVariables?: boolean;
+  /** An extra control beside an item, such as a button that opens the file it names */
+  renderItemAction?: (item: string) => React.ReactNode;
 }
 
 export const DynamicList: React.FC<DynamicListProps> = ({
@@ -34,7 +36,8 @@ export const DynamicList: React.FC<DynamicListProps> = ({
   hideAddButton,
   inheritedItems,
   id,
-  magicVariables
+  magicVariables,
+  renderItemAction
 }) => {
   // Stable per-row identities so removing a row doesn't reassign focus/state to
   // its neighbor. Add/remove handlers keep the id list aligned with the items
@@ -74,6 +77,7 @@ export const DynamicList: React.FC<DynamicListProps> = ({
           placeholder={placeholder}
           disabled={disabled}
           inheritedFrom={inheritedItems?.get(item)}
+          action={renderItemAction?.(item)}
         />
       ))}
       {hideAddButton !== true && (
@@ -95,6 +99,7 @@ interface DynamicListItemProps {
   placeholder?: string;
   disabled?: boolean;
   inheritedFrom?: string;
+  action?: React.ReactNode;
 }
 
 const DynamicListItem: React.FC<DynamicListItemProps> = ({
@@ -105,7 +110,8 @@ const DynamicListItem: React.FC<DynamicListItemProps> = ({
   onRemove,
   placeholder,
   disabled,
-  inheritedFrom
+  inheritedFrom,
+  action
 }) => {
   const readOnly = inheritedFrom !== undefined;
   const variablePreview = useFieldVariablePreview(value, magicVariables === true);
@@ -138,6 +144,7 @@ const DynamicListItem: React.FC<DynamicListItemProps> = ({
         sx={readOnly ? { "& input": { color: "text.secondary" } } : undefined}
       />
       {autocomplete.suggestions}
+      {action}
       {inheritedFrom !== undefined ? (
         <InheritedItemMarker source={inheritedFrom} />
       ) : (

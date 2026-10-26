@@ -59,6 +59,7 @@ import {
   type TopoViewerLifecycleAction
 } from "../../host";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
+import { withShortcut } from "../../utils/shortcuts";
 import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDialogs";
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
@@ -76,6 +77,9 @@ const LazyApplyPlanDialog = React.lazy(async () => {
 });
 
 const ERROR_MAIN = "error.main";
+const UNDO_TOOLTIP = withShortcut("Undo", "undo");
+const REDO_TOOLTIP = withShortcut("Redo", "redo");
+const FIT_TOOLTIP = withShortcut("Fit to Viewport", "fitView");
 const SUCCESS_MAIN = "success.main";
 /** Below the context panel drawer (1200); menus still portal above. */
 const NAVBAR_Z_INDEX = 1100;
@@ -169,7 +173,7 @@ function CanvasZoomControls({
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title="Fit to Viewport" placement={tooltipPlacement}>
+      <Tooltip title={FIT_TOOLTIP} placement={tooltipPlacement}>
         <span>
           <IconButton
             aria-label="Fit to Viewport"
@@ -449,7 +453,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const handleRunWithOptions = React.useCallback(
     (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => {
       setLifecycleOptionsOpen(false);
-      setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy");
+      setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy", options?.nodeFilter);
       deploymentCommands.onRunWithOptions(action, options);
     },
     [setProcessing, deploymentCommands]
@@ -805,10 +809,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Undo - only show in edit mode */}
         {isEditMode && (
-          <Tooltip title="Undo (Ctrl+Z)">
+          <Tooltip title={UNDO_TOOLTIP}>
             <span>
               <IconButton
-                aria-label="Undo (Ctrl+Z)"
+                aria-label={UNDO_TOOLTIP}
                 size="small"
                 onClick={onUndo}
                 disabled={!isTopologyActive || !canUndo}
@@ -822,10 +826,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Redo - only show in edit mode */}
         {isEditMode && (
-          <Tooltip title="Redo (Ctrl+Y)">
+          <Tooltip title={REDO_TOOLTIP}>
             <span>
               <IconButton
-                aria-label="Redo (Ctrl+Y)"
+                aria-label={REDO_TOOLTIP}
                 size="small"
                 onClick={onRedo}
                 disabled={!isTopologyActive || !canRedo}

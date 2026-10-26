@@ -4,6 +4,7 @@ import test from "node:test";
 import type { TopoEdge, TopoNode } from "../core/types/graph";
 import {
   collectDummyNodeIds,
+  countTopologyStats,
   isDummyNode,
   markDummyEdgesHidden,
   markDummyNodesHidden
@@ -98,6 +99,21 @@ test("showing again clears the flag rather than leaving it stale", () => {
 
   assert.equal(shownNodes.find((node) => node.id === "dummy0")?.hidden, false);
   assert.equal(shownEdges.find((e) => e.id === "e2")?.hidden, false);
+});
+
+test("canvas stats count nodes without dummy endpoints, links and annotations", () => {
+  const nodes = [
+    ...graphNodes,
+    { id: "net", type: "network-node", position: { x: 0, y: 0 }, data: { nodeType: "host" } },
+    { id: "g", type: "group-node", position: { x: 0, y: 0 }, data: {} },
+    { id: "t", type: "free-text-node", position: { x: 0, y: 0 }, data: {} },
+    { id: "s", type: "free-shape-node", position: { x: 0, y: 0 }, data: {} },
+    { id: "r", type: "traffic-rate-node", position: { x: 0, y: 0 }, data: {} }
+  ];
+  const edges = graphEdges.map((entry) => ({ ...entry, type: "topology-edge" }));
+
+  assert.deepEqual(countTopologyStats(nodes, edges), { nodes: 3, links: 2, annotations: 4 });
+  assert.deepEqual(countTopologyStats([], []), { nodes: 0, links: 0, annotations: 0 });
 });
 
 test("a graph with no dummy nodes is returned untouched", () => {

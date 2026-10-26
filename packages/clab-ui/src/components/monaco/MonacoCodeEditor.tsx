@@ -22,6 +22,8 @@ import {
   getYamlPathAtLine
 } from "../../yaml";
 
+import { attachLabFileLinks, type LabFileLinks } from "./labFileLinks";
+
 declare global {
   interface Window {
     monacoEditorWorkerUrl?: string;
@@ -618,15 +620,72 @@ function readOnlyLook(readOnly: boolean): monaco.editor.IEditorOptions {
   return { renderLineHighlight: readOnly ? "none" : "line", hideCursorInOverviewRuler: readOnly };
 }
 
+function toMonacoSelection(selection: monaco.Selection | null): MonacoSelection | undefined {
+  if (!selection) return undefined;
+  return {
+    anchorLine: selection.selectionStartLineNumber,
+    anchorColumn: selection.selectionStartColumn,
+    line: selection.positionLineNumber,
+    column: selection.positionColumn
+  };
+}
+
+/** The cursor right after the first inserted text, which the other changes don't shift. */
+function selectionAfterChanges(
+  changes: readonly monaco.editor.IModelContentChange[]
+): MonacoSelection | undefined {
+  const change = changes.reduce<monaco.editor.IModelContentChange | undefined>(
+    (first, next) => (first === undefined || next.rangeOffset < first.rangeOffset ? next : first),
+    undefined
+  );
+  if (!change) return undefined;
+  const lines = change.text.split(/\r\n|\r|\n/);
+  const line = change.range.startLineNumber + lines.length - 1;
+  const lastLine = lines[lines.length - 1] ?? "";
+  const column =
+    lines.length > 1 ? lastLine.length + 1 : change.range.startColumn + lastLine.length;
+  return { anchorLine: line, anchorColumn: column, line, column };
+}
+
+const SEPARATE_EDIT_EVENTS = ["paste", "cut", "drop"] as const;
+const SEPARATE_EDIT_WAIT_MS = 1000;
+
+/** A selection as anchor and cursor position, the way the shared history keeps it. */
+export interface MonacoSelection {
+  anchorLine: number;
+  anchorColumn: number;
+  line: number;
+  column: number;
+}
+
+/** What an edit did besides changing the text. */
+export interface MonacoEditDetails {
+  /** Where the cursor was before the edit and where the edit left it. */
+  selectionBefore?: MonacoSelection;
+  selectionAfter?: MonacoSelection;
+  /** A paste, cut or drop rather than typing; undo takes it back on its own. */
+  separate: boolean;
+}
+
 export interface MonacoCodeEditorProps {
   value: string;
   language: "yaml" | "json";
   readOnly?: boolean;
   suggestionsEnabled?: boolean;
   jsonSchema?: object;
-  onChange?: (value: string) => void;
+  onChange?: (value: string, details: MonacoEditDetails) => void;
+  onBlur?: () => void;
+  /**
+   * Takes over undo and redo, from keys, menus and commands alike. The editor
+   * then follows `value` while focused, as the history puts text back.
+   */
+  history?: { undo: () => void; redo: () => void };
+  /** Moves the cursor whenever a new object arrives, e.g. after undo put text back. */
+  restoreSelection?: MonacoSelection | null;
   /** Called when the user types into the editor while it is read-only. */
   onReadOnlyEditAttempt?: () => void;
+  /** Ctrl/Cmd+click opens the files a topology refers to; YAML only. */
+  fileLinks?: LabFileLinks;
 }
 
 export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
@@ -636,7 +695,11 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   suggestionsEnabled = true,
   jsonSchema,
   onChange,
-  onReadOnlyEditAttempt
+  onReadOnlyEditAttempt,
+  fileLinks,
+  onBlur,
+  history,
+  restoreSelection
 }) => {
   const host = useClabUiHost();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -650,6 +713,17 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   const suggestionsEnabledRef = useRef(suggestionsEnabled);
   const onReadOnlyEditAttemptRef = useRef(onReadOnlyEditAttempt);
   onReadOnlyEditAttemptRef.current = onReadOnlyEditAttempt;
+  const fileLinksRef = useRef(fileLinks);
+  fileLinksRef.current = fileLinks;
+  // The editor outlives renders: read the latest handler, e.g. once a locked lab is unlocked.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const onBlurRef = useRef(onBlur);
+  onBlurRef.current = onBlur;
+  const historyRef = useRef(history);
+  historyRef.current = history;
+  const restoredSelectionRef = useRef(restoreSelection);
+  const separateEditRef = useRef(false);
   const isDevMock = host.meta?.isDevMock === true;
 
   const getEditorFontFamily = () => {
@@ -743,6 +817,8 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
     modelRef.current = monaco.editor.createModel(value, language, modelUriRef.current);
     setModelCompletionsEnabled(modelRef.current, suggestionsEnabled);
     lastExternalAppliedRef.current = value;
+    const fileLinksDisposable =
+      language === "yaml" ? attachLabFileLinks(monaco, modelRef.current, () => fileLinksRef.current) : null;
 
     editorRef.current = monaco.editor.create(container, {
       model: modelRef.current,
@@ -812,15 +888,54 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       };
     }
 
-    const disposable = editor.onDidChangeModelContent(() => {
+    // Undo and redo go through the model whichever key, menu or command asks for them.
+    const model = modelRef.current;
+    const ownUndo = model.undo.bind(model);
+    const ownRedo = model.redo.bind(model);
+    model.undo = () => (historyRef.current ? historyRef.current.undo() : ownUndo());
+    model.redo = () => (historyRef.current ? historyRef.current.redo() : ownRedo());
+
+    // Content changes arrive before the cursor moves, so this is the selection an edit started from.
+    let lastSelection = toMonacoSelection(editor.getSelection());
+    const selectionDisposable = editor.onDidChangeCursorSelection((event) => {
+      lastSelection = toMonacoSelection(event.selection);
+    });
+    const disposable = editor.onDidChangeModelContent((event) => {
       if (applyingExternalRef.current) return;
       const next = editor.getValue();
-      if (onChange !== undefined) onChange(next);
+      // A history owner keeps `value` in step with each edit.
+      if (historyRef.current) lastExternalAppliedRef.current = next;
+      onChangeRef.current?.(next, {
+        selectionBefore: lastSelection,
+        selectionAfter: selectionAfterChanges(event.changes),
+        separate: separateEditRef.current
+      });
+      separateEditRef.current = false;
       scheduleValidation();
+    });
+    const blurDisposable = editor.onDidBlurEditorText(() => {
+      onBlurRef.current?.();
     });
     const readOnlyAttemptDisposable = editor.onDidAttemptReadOnlyEdit(() => {
       onReadOnlyEditAttemptRef.current?.();
     });
+
+    // Monaco takes pastes at the document and may apply them only after asking
+    // paste providers, so the window sees them first and the edit comes later.
+    let separateEditTimer: ReturnType<typeof setTimeout> | undefined;
+    const markSeparateEdit = () => {
+      separateEditRef.current = true;
+      clearTimeout(separateEditTimer);
+      separateEditTimer = setTimeout(() => {
+        separateEditRef.current = false;
+      }, SEPARATE_EDIT_WAIT_MS);
+    };
+    const handleSeparateEditEvent = (event: Event) => {
+      if (event.target instanceof Node && container.contains(event.target)) markSeparateEdit();
+    };
+    for (const type of SEPARATE_EDIT_EVENTS) {
+      window.addEventListener(type, handleSeparateEditEvent, true);
+    }
 
     // -----------------------------------------------------------------------
     // Paste workaround for VS Code webview sandbox.
@@ -862,6 +977,7 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
         try {
           const clipText = await navigator.clipboard.readText();
           if (clipText) {
+            markSeparateEdit();
             triggerPaste(ed, clipText);
           }
         } catch {
@@ -877,13 +993,20 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       if (editorDomNode) {
         editorDomNode.removeEventListener("paste", handlePaste);
       }
+      for (const type of SEPARATE_EDIT_EVENTS) {
+        window.removeEventListener(type, handleSeparateEditEvent, true);
+      }
+      clearTimeout(separateEditTimer);
       pasteActionDisposable.dispose();
+      fileLinksDisposable?.dispose();
       for (const keybindingDisposable of suggestWidgetKeyDisposables) {
         keybindingDisposable.dispose();
       }
       plainSpaceKeyDisposable.dispose();
       disabledSuggestSuppressor.dispose();
       disposable.dispose();
+      selectionDisposable.dispose();
+      blurDisposable.dispose();
       readOnlyAttemptDisposable.dispose();
       editorRef.current?.dispose();
       editorRef.current = null;
@@ -964,6 +1087,21 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
     lastExternalAppliedRef.current = next;
     scheduleValidation();
   }, [scheduleValidation, value]);
+
+  // After the value effect, so the cursor lands in the text it belongs to.
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !restoreSelection || restoreSelection === restoredSelectionRef.current) return;
+    restoredSelectionRef.current = restoreSelection;
+    const selection = new monaco.Selection(
+      restoreSelection.anchorLine,
+      restoreSelection.anchorColumn,
+      restoreSelection.line,
+      restoreSelection.column
+    );
+    editor.setSelection(selection);
+    editor.revealRangeInCenterIfOutsideViewport(selection);
+  }, [restoreSelection]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 };

@@ -130,6 +130,20 @@ export interface TopologySnapshot {
   variables?: TopologyVariables;
   canUndo: boolean;
   canRedo: boolean;
+  /** The steps behind canUndo and canRedo; absent from hosts without a history. */
+  history?: TopologyHistoryState;
+}
+
+/**
+ * Host undo and redo stacks as step numbers, each with its next step last. A
+ * step keeps its number while it moves between the stacks, and new steps get
+ * higher numbers.
+ */
+export interface TopologyHistoryState {
+  /** Changes when the host (session) behind the history changes. */
+  scope: string;
+  undo: number[];
+  redo: number[];
 }
 
 export interface TopologyPatch {

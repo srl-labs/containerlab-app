@@ -65,3 +65,33 @@ body,
 .react-flow__node:hover .topology-node-mgmt-badge.on-hover {
   opacity: 1;
 }
+
+/* Nodes on their way up or down pulse until they settle. Each node sets its own
+ * negative animation-delay, so a lab coming up does not blink in unison. */
+@keyframes clab-node-booting {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.react-flow__node .node-booting {
+  animation: clab-node-booting 1.8s ease-in-out infinite;
+}
+
+/* A running node that fails its healthcheck keeps still with a warning tint. */
+.react-flow__node .node-unhealthy {
+  box-shadow:
+    0 0 0 2px #ea580c,
+    0 0 10px 2px rgba(234, 88, 12, 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node .node-booting {
+    animation: none;
+    opacity: 0.55 !important;
+  }
+}

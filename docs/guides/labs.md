@@ -25,7 +25,7 @@ For a running lab, Apply first runs `containerlab apply --dry-run` and lists wha
 - If the running lab already matches the file, the dialog says there is nothing to apply.
 - If the dry run fails, the dialog shows the error, and you can still choose **Apply anyway**.
 
-When a lab is running, its nodes show a status badge, and right-clicking a node gives you its [runtime actions](troubleshooting.md).
+When a lab is running, its nodes show a status badge, and right-clicking a node gives you its [runtime actions](troubleshooting.md). Nodes pulse while they start or stop, until their container runs and passes its healthcheck. A node that fails its healthcheck stays still with an orange warning.
 
 ![A running lab with a node's actions open](../images/app/running-lab-dark.webp#only-dark){ .shot }
 ![A running lab with a node's actions open](../images/app/running-lab-light.webp#only-light){ .shot }

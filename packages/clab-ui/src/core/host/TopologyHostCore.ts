@@ -17,6 +17,7 @@ import type {
 import type { LabSettingsUpdate } from "../types/labSettings";
 import type { InheritanceSectionUpdate } from "../types/inheritance";
 import type {
+  TopologyHistoryState,
   TopologyHostCommand,
   TopologyHostResponseMessage,
   TopologySnapshot
@@ -70,9 +71,14 @@ interface TopologyHostCoreOptions {
   resolveVariables?: TopologyVariablesResolver;
 }
 
-interface HistoryEntry {
+interface DocumentState {
   yamlContent: string;
   annotationsContent: string | null;
+}
+
+interface HistoryEntry extends DocumentState {
+  /** Names the edit across undo and redo, so clients can order it among their own steps. */
+  step: number;
 }
 
 const DEFAULT_HISTORY_LIMIT = 50;
@@ -108,7 +114,7 @@ const noopLogger: IOLogger = {
 export class TopologyHostCore implements TopologyHost {
   private yamlFilePath: string;
   private readonly documentKey: string;
-  private documentBaseline: HistoryEntry | null = null;
+  private documentBaseline: DocumentState | null = null;
   private mode: "edit" | "view";
   private deploymentState: DeploymentState;
   private dirty: boolean | undefined;
@@ -128,6 +134,8 @@ export class TopologyHostCore implements TopologyHost {
   private future: HistoryEntry[] = [];
   private historyLimit: number;
   private historyMergeUntil: number | null = null;
+  private readonly historyScope = createHistoryScope();
+  private lastHistoryStep = 0;
   private resolveVariables?: TopologyVariablesResolver;
   private variables: { key: string; value: Promise<TopologyVariables | undefined> } | null = null;
   /** The declared lab name and the name containerlab runs it under. */
@@ -213,7 +221,13 @@ export class TopologyHostCore implements TopologyHost {
       this.revision += 1;
       this.past = [];
       this.future = [];
-      this.snapshot = { ...this.snapshot, revision: this.revision, canUndo: false, canRedo: false };
+      this.snapshot = {
+        ...this.snapshot,
+        revision: this.revision,
+        canUndo: false,
+        canRedo: false,
+        history: this.historyState()
+      };
       this.markDirtyIfYamlChanged(previous.yamlContent, this.snapshot);
     }
     return this.snapshot;
@@ -252,7 +266,7 @@ export class TopologyHostCore implements TopologyHost {
     // actual document with the last snapshot while holding the document queue.
     if (!this.documentBaseline) await this.getSnapshotUnlocked();
     this.baseFs.invalidateCache?.();
-    const beforeState = await this.captureHistoryEntry();
+    const beforeState = await this.captureDocumentState();
     if (
       this.documentBaseline &&
       (beforeState.yamlContent !== this.documentBaseline.yamlContent ||
@@ -646,8 +660,8 @@ export class TopologyHostCore implements TopologyHost {
       };
     }
 
-    const current = await this.captureHistoryEntry();
     const entry = stack[stack.length - 1];
+    const current: HistoryEntry = { ...(await this.captureDocumentState()), step: entry.step };
 
     try {
       this.setInternalUpdate?.(true);
@@ -779,7 +793,16 @@ export class TopologyHostCore implements TopologyHost {
       labSettings: Object.keys(labSettings).length > 0 ? labSettings : undefined,
       ...(variables ? { variables } : {}),
       canUndo: this.past.length > 0,
-      canRedo: this.future.length > 0
+      canRedo: this.future.length > 0,
+      history: this.historyState()
+    };
+  }
+
+  private historyState(): TopologyHistoryState {
+    return {
+      scope: this.historyScope,
+      undo: this.past.map((entry) => entry.step),
+      redo: this.future.map((entry) => entry.step)
     };
   }
 
@@ -941,14 +964,15 @@ export class TopologyHostCore implements TopologyHost {
   // History + reload helpers
   // ---------------------------------------------------------------------------
 
-  private pushHistory(entry: HistoryEntry): void {
-    this.past.push(entry);
+  private pushHistory(state: DocumentState): void {
+    this.lastHistoryStep += 1;
+    this.past.push({ ...state, step: this.lastHistoryStep });
     if (this.past.length > this.historyLimit) {
       this.past.shift();
     }
   }
 
-  private async captureHistoryEntry(): Promise<HistoryEntry> {
+  private async captureDocumentState(): Promise<DocumentState> {
     const [yamlContent, annotationsContent] = await Promise.all([
       this.baseFs.readFile(this.yamlFilePath),
       this.readAnnotationsContent()
@@ -956,7 +980,7 @@ export class TopologyHostCore implements TopologyHost {
     return { yamlContent, annotationsContent };
   }
 
-  private async restoreHistoryEntry(entry: HistoryEntry): Promise<void> {
+  private async restoreHistoryEntry(entry: DocumentState): Promise<void> {
     this.transactionalFs.beginTransaction();
     await this.transactionalFs.writeFile(this.yamlFilePath, entry.yamlContent);
 
@@ -1077,6 +1101,11 @@ function shouldSkipHistory(command: TopologyHostCommand): boolean {
     return command.skipHistory === true;
   }
   return false;
+}
+
+/** Tells this core's history steps apart from those of an earlier session on the same client. */
+function createHistoryScope(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const ID_PREFIX_REGEX = /^([a-zA-Z]+)/;

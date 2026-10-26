@@ -267,3 +267,59 @@ describe("containerlabEvents stream loss", () => {
     }
   });
 });
+
+describe("containerlabEvents health of started containers", () => {
+  beforeEach(() => {
+    resetForTests();
+  });
+
+  /** A backend whose stream starts one container and whose inspect reports its health. */
+  function startingBackend(inspectedLabs: string[]) {
+    const backend = {
+      scope: "api-2",
+      async events() {
+        return (async function* () {
+          yield {
+            type: "container",
+            action: "start",
+            actor_id: "bbbbbbbbbbbb",
+            actor_name: "clab-lab-n1",
+            attributes: { containerlab: "lab", "clab-node-name": "n1", state: "running" }
+          };
+          await new Promise<never>(() => {});
+        })();
+      },
+      async inspectLab(labName: string) {
+        inspectedLabs.push(labName);
+        return [{ name: "clab-lab-n1", state: "running", status: "Up 1 second (health: starting)" }];
+      }
+    };
+    return backend as any;
+  }
+
+  it("reads the health from inspect, since docker sends no event when a check begins", async function () {
+    this.timeout(5000);
+    const inspectedLabs: string[] = [];
+    const stream = eventStreamFor("api-2");
+    await stream.ensure(startingBackend(inspectedLabs), "api-2|docker");
+    const status = () => stream.getGroupedContainers().lab?.[0]?.Status;
+    expect(status()).to.equal("Running");
+
+    await new Promise((resolve) => setTimeout(resolve, 1300));
+    expect(inspectedLabs).to.deep.equal(["lab"]);
+    expect(status()).to.equal("Running (health: starting)");
+
+    handleEventLineForTests(
+      JSON.stringify({
+        type: "container",
+        action: "health_status: healthy",
+        actor_id: "bbbbbbbbbbbb",
+        actor_name: "clab-lab-n1",
+        attributes: { containerlab: "lab", "clab-node-name": "n1" }
+      }),
+      "api-2"
+    );
+    expect(status()).to.equal("Running (healthy)");
+    stream.stop();
+  });
+});
