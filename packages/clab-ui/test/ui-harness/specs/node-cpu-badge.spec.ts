@@ -3,6 +3,8 @@ import type { Page } from "@playwright/test";
 import type { BrowserDevApi } from "../devApi";
 import { test, expect } from "../fixtures/topoviewer";
 
+type TopoViewerPage = Parameters<Parameters<typeof test>[2]>[0]["topoViewerPage"];
+
 const SIMPLE_FILE = "simple.clab.yml";
 
 async function emitStats(page: Page, data: Record<string, unknown>): Promise<void> {
@@ -26,23 +28,37 @@ async function emitCpu(page: Page, cpuByNode: Record<string, number | undefined>
   });
 }
 
+/** Opens the lab with these viewer settings, deployed. */
+async function openDeployed(
+  page: Page,
+  topoViewerPage: TopoViewerPage,
+  viewerSettings: Record<string, unknown> = {}
+): Promise<void> {
+  const annotations = await topoViewerPage.getAnnotationsFromFile(SIMPLE_FILE);
+  await topoViewerPage.writeAnnotationsFile(SIMPLE_FILE, {
+    ...annotations,
+    viewerSettings: { ...annotations.viewerSettings, ...viewerSettings }
+  });
+  await topoViewerPage.gotoFile(SIMPLE_FILE);
+  await topoViewerPage.waitForCanvasReady();
+  await topoViewerPage.unlock();
+  await topoViewerPage.fit();
+  await page.evaluate(() => {
+    window.__DEV__?.setDeploymentState?.("deployed");
+  });
+}
+
 /**
- * Running nodes carry a small badge with their CPU usage from the host's
- * stats stream, unless the lab turns it off in Appearance.
+ * Running nodes can carry a small badge with their CPU usage from the host's
+ * stats stream, once the lab turns it on in Appearance.
  */
 test.describe("Node CPU badge", () => {
-  test.beforeEach(async ({ page, topoViewerPage }) => {
+  test.beforeEach(async ({ topoViewerPage }) => {
     await topoViewerPage.resetFiles();
-    await topoViewerPage.gotoFile(SIMPLE_FILE);
-    await topoViewerPage.waitForCanvasReady();
-    await topoViewerPage.unlock();
-    await topoViewerPage.fit();
-    await page.evaluate(() => {
-      window.__DEV__?.setDeploymentState?.("deployed");
-    });
   });
 
   test("running nodes show their CPU usage, rounded, and lose it when they stop", async ({ page, topoViewerPage }) => {
+    await openDeployed(page, topoViewerPage, { showNodeCpu: true });
     const [first, second] = await topoViewerPage.getNodeIds();
     await topoViewerPage.setZoom(1);
     // A node's first sample has no CPU yet.
@@ -65,6 +81,7 @@ test.describe("Node CPU badge", () => {
   });
 
   test("the badge hides when zoomed far out and on undeployed labs", async ({ page, topoViewerPage }) => {
+    await openDeployed(page, topoViewerPage, { showNodeCpu: true });
     const [first] = await topoViewerPage.getNodeIds();
     await topoViewerPage.setZoom(1);
     await emitCpu(page, { [first]: 40 });
@@ -82,23 +99,64 @@ test.describe("Node CPU badge", () => {
     await expect(badge).toHaveCount(0);
   });
 
-  test("Appearance turns the badge off for the lab", async ({ page, topoViewerPage }) => {
+  test("the badge is off until Appearance turns it on for the lab", async ({ page, topoViewerPage }) => {
+    await openDeployed(page, topoViewerPage);
     const [first] = await topoViewerPage.getNodeIds();
     await topoViewerPage.setZoom(1);
     await emitCpu(page, { [first]: 25 });
-    await expect(page.getByTestId("node-cpu-badge")).toHaveCount(1);
+    await expect(page.getByTestId("node-cpu-badge")).toHaveCount(0);
 
     await page.getByTestId("navbar-lab-settings").click();
     const modal = page.getByTestId("lab-settings-modal");
     await modal.getByTestId("lab-settings-tab-appearance").click();
     const toggle = modal.getByRole("switch", { name: "CPU usage on nodes" });
-    await expect(toggle).toBeChecked();
+    await expect(toggle).not.toBeChecked();
     await toggle.click();
     await modal.getByTestId("lab-settings-save-btn").click();
-
-    await expect(page.getByTestId("node-cpu-badge")).toHaveCount(0);
     await expect
       .poll(async () => (await topoViewerPage.getAnnotationsFromFile(SIMPLE_FILE)).viewerSettings)
-      .toMatchObject({ showNodeCpu: false });
+      .toMatchObject({ showNodeCpu: true });
+
+    // Saving reloads the harness lab as undeployed, maybe after this; deploy it again until it sticks.
+    await expect(async () => {
+      await page.evaluate(() => {
+        window.__DEV__?.setDeploymentState?.("deployed");
+      });
+      await emitCpu(page, { [first]: 25 });
+      await expect(page.getByTestId("node-cpu-badge")).toHaveCount(1, { timeout: 1000 });
+    }).toPass();
+  });
+
+  test("beside an icon the badge looks like the node name; in a box it takes the box's colors", async ({ page, topoViewerPage }) => {
+    await openDeployed(page, topoViewerPage, { showNodeCpu: true });
+    const [first] = await topoViewerPage.getNodeIds();
+    await topoViewerPage.setZoom(1);
+    await emitCpu(page, { [first]: 40 });
+    const node = page.locator(`[data-id="${first}"]`);
+    const badge = node.getByTestId("node-cpu-badge");
+    const paint = () => badge.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    });
+    const labelColor = await node.locator(".topology-node-label").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    });
+    expect(await paint()).toEqual(labelColor);
+
+    await openDeployed(page, topoViewerPage, { showNodeCpu: true, nodeStyle: "boxed" });
+    await topoViewerPage.setZoom(1);
+    await emitCpu(page, { [first]: 40 });
+    await expect(badge).toHaveAttribute("data-boxed", "true");
+    const boxText = await node.locator(".topology-node-box-label").evaluate((element) => getComputedStyle(element).color);
+    expect(await paint()).toEqual({ color: boxText, background: "rgba(0, 0, 0, 0)" });
+    // Inside the box's outline.
+    const boxRect = await node.locator(".topology-node-box").boundingBox();
+    const badgeRect = await badge.boundingBox();
+    expect(boxRect && badgeRect).toBeTruthy();
+    if (!boxRect || !badgeRect) return;
+    expect(badgeRect.x).toBeGreaterThanOrEqual(boxRect.x);
+    expect(badgeRect.y).toBeGreaterThanOrEqual(boxRect.y);
+    expect(badgeRect.x + badgeRect.width).toBeLessThanOrEqual(boxRect.x + boxRect.width + 0.5);
   });
 });

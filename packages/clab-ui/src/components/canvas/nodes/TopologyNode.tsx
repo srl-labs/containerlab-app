@@ -115,6 +115,12 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
   const nodeBoxSpacing = useNodeBoxSpacing();
   const box = useNodeBoxAppearance(id, nodeData.box);
   const boxLabel = useNodeBoxLabel(label, iconSize, isBoxed && !suppressLabels, nodeBoxSpacing);
+  const cpuBadgeBox = useMemo(
+    () => (isBoxed ? { iconSize, spacing: nodeBoxSpacing, appearance: box } : undefined),
+    [isBoxed, iconSize, nodeBoxSpacing, box]
+  );
+  const cpuBadgeLabelBackground =
+    typeof labelBackgroundColor === "string" ? labelBackgroundColor.trim() || undefined : undefined;
   // Direction only applies to the icon style; boxed nodes keep the icon upright.
   const directionRotation = isBoxed ? 0 : getNodeDirectionRotation(direction);
 
@@ -259,7 +265,12 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
           <React.Suspense fallback={null}>
             <RuntimeBadge state={badgeState} />
           </React.Suspense>
-          <NodeCpuBadge nodeId={id} containerName={getContainerName(nodeData.extraData)} />
+          <NodeCpuBadge
+            nodeId={id}
+            containerName={getContainerName(nodeData.extraData)}
+            box={cpuBadgeBox}
+            labelBackground={cpuBadgeLabelBackground}
+          />
         </>
       )}
 
