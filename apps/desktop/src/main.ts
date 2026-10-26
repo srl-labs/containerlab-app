@@ -156,7 +156,8 @@ function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
     fileContent,
     envPrefix: "CONTAINERLAB_DESKTOP_",
     enableVariable: "CONTAINERLAB_DESKTOP_LOCAL",
-    enabledByDefault: true
+    enabledByDefault: true,
+    hostScriptsByDefault: true
   });
   if (!config.enabled) {
     return undefined;

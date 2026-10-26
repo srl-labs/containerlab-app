@@ -35,6 +35,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 } from "../../annotations/annotationNodeConverters";
 import { type ClabUiHost, useClabUiHost } from "../../host";
@@ -96,6 +97,7 @@ const ANNOTATION_NODE_TYPES: Set<string> = new Set([
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 ]);
 
@@ -743,7 +745,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
   let exportButtonLabel = "Export SVG";
   if (isExporting) {
-    exportButtonLabel = "Exporting...";
+    exportButtonLabel = "Exporting…";
   } else if (exportGrafanaBundle) {
     exportButtonLabel = "Export Grafana bundle";
   }
@@ -789,7 +791,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
 
           <Divider />
           <Box sx={{ px: 2, py: 1 }}>
-            <Typography variant="subtitle2">Quality & Size</Typography>
+            <Typography variant="subtitle2">Quality & size</Typography>
           </Box>
           <Divider />
           <Box sx={{ p: 2 }}>
@@ -1038,7 +1040,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
         data-testid="svg-export-grafana-settings-modal"
       >
         <DialogTitleWithClose
-          title="Advanced Grafana Settings"
+          title="Advanced Grafana settings"
           onClose={() => setIsGrafanaSettingsOpen(false)}
         />
         <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1048,7 +1050,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
             variant="fullWidth"
           >
             <Tab label="General" value="general" />
-            <Tab label="Interface Names" value="interface-names" />
+            <Tab label="Interface names" value="interface-names" />
           </Tabs>
 
           {grafanaSettingsTab === "general" && (
@@ -1395,7 +1397,7 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIsGrafanaSettingsOpen(false)}>Done</Button>
+          <Button variant="text" onClick={() => setIsGrafanaSettingsOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

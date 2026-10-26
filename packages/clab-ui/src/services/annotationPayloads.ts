@@ -8,19 +8,26 @@ type AnnotationPayloadKeys =
   | "freeTextAnnotations"
   | "freeShapeAnnotations"
   | "trafficRateAnnotations"
+  | "scriptButtonAnnotations"
   | "groupStyleAnnotations";
 
 export type AnnotationNodesPayload = Pick<TopologyAnnotations, AnnotationPayloadKeys>;
 
 export function buildAnnotationNodesPayload(nodes?: Node[]): AnnotationNodesPayload {
   const graphNodes = nodes ?? useGraphStore.getState().nodes;
-  const { freeTextAnnotations, freeShapeAnnotations, trafficRateAnnotations, groups } =
-    nodesToAnnotations(graphNodes);
+  const {
+    freeTextAnnotations,
+    freeShapeAnnotations,
+    trafficRateAnnotations,
+    scriptButtonAnnotations,
+    groups
+  } = nodesToAnnotations(graphNodes);
 
   return {
     freeTextAnnotations,
     freeShapeAnnotations,
     trafficRateAnnotations,
+    scriptButtonAnnotations,
     groupStyleAnnotations: groups
   };
 }

@@ -23,6 +23,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 } from "../../annotations/annotationNodeConverters";
 import { isRecord } from "../../core/utilities/typeHelpers";
@@ -144,7 +145,8 @@ const ANNOTATION_TYPES = new Set<string>([
   GROUP_NODE_TYPE,
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
-  TRAFFIC_RATE_NODE_TYPE
+  TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE
 ]);
 
 function readString(value: unknown): string | undefined {
@@ -198,6 +200,7 @@ function resolveNodeType(type: string | undefined): TopoNode["type"] {
     case FREE_TEXT_NODE_TYPE:
     case FREE_SHAPE_NODE_TYPE:
     case TRAFFIC_RATE_NODE_TYPE:
+    case SCRIPT_BUTTON_NODE_TYPE:
       return type;
     default:
       return "topology-node";

@@ -601,7 +601,7 @@ async function confirmCloseLabTab(tabId: string): Promise<boolean> {
     return true;
   }
   return confirmRuntimeAction({
-    title: "Discard Unsaved Changes",
+    title: "Discard unsaved changes",
     message: `Discard unsaved changes to "${tab.title}"?`,
     confirmLabel: "Discard",
     severity: "error",

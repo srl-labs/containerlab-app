@@ -327,7 +327,7 @@ test.describe("SVG export canvas parity", () => {
     const settings = page.locator('[data-testid="svg-export-grafana-settings-modal"]');
     await expect(settings).toBeVisible();
     await settings.getByRole("checkbox", { name: "Add traffic legend (top-left)" }).check();
-    await settings.getByRole("button", { name: "Done" }).click();
+    await settings.getByRole("button", { name: "Close", exact: true }).click();
     await page.waitForTimeout(200);
 
     await page.evaluate(() => {

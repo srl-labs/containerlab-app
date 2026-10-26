@@ -195,7 +195,7 @@ test("file tabs replace the canvas, guard unsaved edits and restore topology con
   await expect(page.getByTestId("file-editor-tab-save")).toBeEnabled();
   await tab.hover();
   await page.getByRole("button", { name: "Close notes.txt", exact: true }).click();
-  const confirm = page.getByRole("dialog", { name: "Discard Unsaved Changes" });
+  const confirm = page.getByRole("dialog", { name: "Discard unsaved changes" });
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(editor).toBeVisible();
   await page.getByTestId("file-editor-tab-save").click();

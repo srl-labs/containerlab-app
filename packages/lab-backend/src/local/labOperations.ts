@@ -54,14 +54,18 @@ function atLeast(version: string | undefined, release: readonly [number, number]
 }
 
 /** What the installed containerlab can do, by its version. */
-export function localOperationSupport(version: string | undefined): LabOperationSupport {
+export function localOperationSupport(
+  version: string | undefined,
+  hostScripts = true
+): LabOperationSupport {
   const snapshots = atLeast(version, SNAPSHOT_RELEASE);
   return {
     execByLabel: true,
     snapshotSave: snapshots,
     deployRestore: snapshots,
     saveCopy: atLeast(version, SAVE_COPY_RELEASE),
-    inspectDetails: true
+    inspectDetails: true,
+    hostScript: hostScripts
   };
 }
 

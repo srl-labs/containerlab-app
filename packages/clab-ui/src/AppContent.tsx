@@ -13,6 +13,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE,
   findEdgeAnnotationInLookup,
   parseEndpointLabelOffset
@@ -81,6 +82,8 @@ import {
   useTopoViewerStore
 } from "./stores";
 import type { TopoViewerState } from "./stores";
+import { ScriptButtonDialogs } from "./scriptButtons/ScriptButtonDialogs";
+import { useScriptButtons, type ScriptButtonActions } from "./scriptButtons/useScriptButtons";
 import { executeTopologyCommand, getCustomIconMap, saveViewerSettings } from "./services";
 import { useClabUiHost, useTopologySessionClient, useClabUiRuntime } from "./host";
 import {
@@ -132,7 +135,8 @@ const TOPO_NODE_TYPES = new Set<string>([
   GROUP_NODE_TYPE,
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
-  TRAFFIC_RATE_NODE_TYPE
+  TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE
 ]);
 const NETWORK_TYPE_VALUES = new Set<string>(NETWORK_TYPES);
 
@@ -249,6 +253,7 @@ interface ContextAnnotationState {
   editingTextAnnotation: unknown;
   editingShapeAnnotation: unknown;
   editingTrafficRateAnnotation: unknown;
+  editingScriptButtonId: unknown;
   editingGroup: unknown;
 }
 
@@ -266,6 +271,7 @@ function hasContextContentState(
     annotations.editingTextAnnotation,
     annotations.editingShapeAnnotation,
     annotations.editingTrafficRateAnnotation,
+    annotations.editingScriptButtonId,
     annotations.editingGroup
   ];
   return candidates.some((value) => value !== null && value !== undefined);
@@ -793,6 +799,8 @@ export const AppContent: React.FC<AppContentProps> = ({
   );
 
   const forward = React.useMemo(() => createRuntimeForwarder(annotationRuntimeRef), []);
+  // Canvas handlers stay stable; script button actions are read through a ref.
+  const scriptButtonsRef = React.useRef<ScriptButtonActions | null>(null);
 
   const annotationActions = React.useMemo(
     () => ({
@@ -870,6 +878,9 @@ export const AppContent: React.FC<AppContentProps> = ({
       onUpdateGroupSize: forward("updateGroupSize"),
       onEditGroup: forward("editGroup"),
       onDeleteGroup: forward("deleteGroup"),
+      onRunScriptButton: (id) => scriptButtonsRef.current?.runScriptButton(id),
+      onEditScriptButton: (id) => scriptButtonsRef.current?.editScriptButton(id),
+      onDeleteScriptButton: (id) => scriptButtonsRef.current?.deleteScriptButton(id),
       getGroupMembers: (groupId, options) =>
         annotationRuntimeRef.current?.getGroupMembers(groupId, options) ?? [],
       onChangeZOrder: handleChangeZOrder
@@ -881,6 +892,15 @@ export const AppContent: React.FC<AppContentProps> = ({
     () => annotationRuntimeRef.current?.groups ?? [],
     []
   );
+
+  const scriptButtons = useScriptButtons({
+    isLocked: isInteractionLocked,
+    onLockedAction: handleLockedAction,
+    sessionClient,
+    getGroups: getAnnotationGroups,
+    addToast
+  });
+  scriptButtonsRef.current = scriptButtons;
 
   const edgeAnnotationLookup = React.useMemo(
     () => buildEdgeAnnotationLookup(state.edgeAnnotations),
@@ -1137,6 +1157,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     annotationUiActions.closeTextEditor();
     annotationUiActions.closeShapeEditor();
     annotationUiActions.closeTrafficRateEditor();
+    annotationUiActions.closeScriptButtonEditor();
     annotationUiActions.closeGroupEditor();
   }, [topoActions, annotationUiActions]);
 
@@ -1199,12 +1220,19 @@ export const AppContent: React.FC<AppContentProps> = ({
     const nodesById = new Map(currentNodes.map((node) => [node.id, node]));
     const edgesById = new Map(currentEdges.filter(isTopoEdge).map((edge) => [edge.id, edge]));
 
-    const { graphNodeIds, groupIds, textIds, shapeIds, trafficRateIds } = splitNodeIdsByType(
-      nodeIds,
-      nodesById
-    );
+    const { graphNodeIds, groupIds, textIds, shapeIds, trafficRateIds, scriptButtonIds } =
+      splitNodeIdsByType(nodeIds, nodesById);
 
     applyGraphDeletions(graphActions, menuHandlers, graphNodeIds, edgeIds);
+    // Script buttons live only in the annotations file, so they leave with the annotation save.
+    for (const id of scriptButtonIds) useGraphStore.getState().removeNode(id);
+    const annotationUi = useAnnotationUIStore.getState();
+    if (
+      annotationUi.editingScriptButtonId !== null &&
+      scriptButtonIds.includes(annotationUi.editingScriptButtonId)
+    ) {
+      annotationUi.closeScriptButtonEditor();
+    }
 
     const annotationResult = annotationActions.deleteSelectedForBatch({
       groupIds,
@@ -1215,7 +1243,11 @@ export const AppContent: React.FC<AppContentProps> = ({
 
     const commands = buildDeleteCommands(graphNodeIds, edgeIds, edgesById);
 
-    if (annotationResult.didDelete || annotationResult.membersCleared) {
+    if (
+      annotationResult.didDelete ||
+      annotationResult.membersCleared ||
+      scriptButtonIds.length > 0
+    ) {
       const graphNodesForSave = useGraphStore.getState().nodes.filter(isTopoNode);
       commands.push(buildAnnotationSaveCommand(graphNodesForSave));
     }
@@ -1382,6 +1414,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       onAddGroupAtPosition: annotationActions.createGroupAtPosition,
       onAddShapeAtPosition: annotationActions.createShapeAtPosition,
       onAddTrafficRateAtPosition: annotationActions.createTrafficRateAtPosition,
+      onAddScriptButtonAtPosition: scriptButtons.createScriptButtonAtPosition,
       onDropCreateNode: handleDropCreateNode,
       onDropCreateNetwork: handleDropCreateNetwork,
       onTopologyNodePositionCommit: layoutControls.markLayoutPreset,
@@ -1411,6 +1444,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       graphHandlers.handleDeleteLink,
       handleOpenNodePalette,
       annotationActions,
+      scriptButtons.createScriptButtonAtPosition,
       handleDropCreateNode,
       handleDropCreateNetwork,
       layoutControls.markLayoutPreset,
@@ -1731,6 +1765,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                 )}
                 {!viewerOnly && hasActiveTopology && <NodeTemplateModal />}
                 <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+                <ScriptButtonDialogs />
               </Box>
             </Box>
           </Box>

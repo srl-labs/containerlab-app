@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   isTopologyFileName,
   type LabExecRequest,
+  type LabHostScriptRequest,
   type LabOperationSupport,
   type LabSnapshotSaveRequest,
   type TailscaleStatus,
@@ -47,6 +48,7 @@ import type {
 import { LabBackendError } from "../contract/errors.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { LocalCapture } from "./capture.ts";
+import { runLocalHostScript, streamLocalHostScript } from "./hostScripts.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
 import {
   localExec,
@@ -264,8 +266,12 @@ export class LocalLabBackend implements LabBackend {
 
   labOperationSupport(): Promise<LabOperationSupport> {
     this.support ??= this.version().then(
-      (response) => localOperationSupport(/version: (\S+)/.exec(response.versionInfo)?.[1]),
-      () => localOperationSupport(undefined)
+      (response) =>
+        localOperationSupport(
+          /version: (\S+)/.exec(response.versionInfo)?.[1],
+          this.options.hostScripts
+        ),
+      () => localOperationSupport(undefined, this.options.hostScripts)
     );
     return this.support;
   }
@@ -297,6 +303,14 @@ export class LocalLabBackend implements LabBackend {
 
   async inspectLabDetails(lab: LabTarget) {
     return localInspectDetails(this.options, await this.labRef(lab));
+  }
+
+  async runHostScript(lab: LabTarget, request: LabHostScriptRequest) {
+    return runLocalHostScript(this.options, await this.labRef(lab), request);
+  }
+
+  async streamHostScript(lab: LabTarget, request: LabHostScriptRequest) {
+    return streamLocalHostScript(this.options, await this.labRef(lab), request);
   }
 
   /** The topology file of a lab that need not be running, like clab-api-server finds it. */

@@ -143,7 +143,7 @@ export async function resolveEndpointForExplorerAction(input: {
   }
 
   const selectedEndpointId = await promptForEndpointSelection({
-    title: "Select Endpoint",
+    title: "Select endpoint",
     message: `Select endpoint for ${actionDescription}.`,
     confirmLabel: "Use endpoint",
     options: connectedEndpoints.map((endpoint) => ({
@@ -429,7 +429,7 @@ export function pickTransferFiles(accept = "", multiple = false): Promise<File[]
 
 export async function promptArchiveFormat(): Promise<LabArchiveFormat | undefined> {
   const value = await promptForOptionSelection({
-    title: "Archive Format",
+    title: "Archive format",
     message: "Choose the archive format to download.",
     label: "Format",
     confirmLabel: "Download",

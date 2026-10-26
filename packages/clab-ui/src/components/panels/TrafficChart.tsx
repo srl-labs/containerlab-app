@@ -247,26 +247,86 @@ const PANEL_GRID_STROKE = "var(--vscode-panel-border)";
 const PANEL_TICK_LABEL_STYLE = { fontSize: 10, fill: PANEL_MUTED_TEXT };
 const PANEL_AXIS_LABEL_STYLE = { fontSize: 11, fill: PANEL_MUTED_TEXT };
 
+/** Round tick steps in seconds, from 1 second to 6 hours. */
+const TIME_TICK_STEPS_SECONDS = [
+  1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600
+];
+const PANEL_TIME_TICKS = 5;
+const COMPACT_TIME_TICKS = 3;
+
+/**
+ * Tick times on round clock boundaries (e.g. every 30 s or every 5 min), with the
+ * smallest step that keeps at most `targetCount` ticks in the window.
+ */
+export function buildTimeTicks(
+  min: Date,
+  max: Date,
+  targetCount: number
+): { ticks: Date[]; stepSeconds: number } {
+  const spanSeconds = Math.max((max.getTime() - min.getTime()) / 1000, 1);
+  const stepSeconds =
+    TIME_TICK_STEPS_SECONDS.find((step) => spanSeconds / step <= targetCount) ??
+    TIME_TICK_STEPS_SECONDS[TIME_TICK_STEPS_SECONDS.length - 1];
+  const stepMs = stepSeconds * 1000;
+  const ticks: Date[] = [];
+  for (let time = Math.ceil(min.getTime() / stepMs) * stepMs; time <= max.getTime(); time += stepMs) {
+    ticks.push(new Date(time));
+  }
+  return { ticks, stepSeconds };
+}
+
+function formatClockTime(value: Date, withSeconds: boolean): string {
+  return value.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(withSeconds ? { second: "2-digit" as const } : {})
+  });
+}
+
 function buildXAxis(
   compact: boolean,
+  scale: number,
   xData: Date[],
   xMin: Date | undefined,
   xMax: Date | undefined
 ) {
+  const timeTicks =
+    xMin !== undefined && xMax !== undefined
+      ? buildTimeTicks(xMin, xMax, compact ? COMPACT_TIME_TICKS : PANEL_TIME_TICKS)
+      : undefined;
+  // Ticks on whole minutes read as HH:MM; the tooltip always shows the exact second.
+  const tickSeconds = timeTicks === undefined || timeTicks.stepSeconds % 60 !== 0;
   const baseAxis = {
     data: xData,
     scaleType: "time" as const,
     min: xMin,
     max: xMax,
     disableLine: true,
-    disableTicks: true,
-    valueFormatter: (value: Date) =>
-      value.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+    ...(timeTicks !== undefined ? { tickInterval: timeTicks.ticks } : {}),
+    valueFormatter: (value: Date, context: { location: string }) =>
+      formatClockTime(value, context.location !== "tick" || tickSeconds)
   };
   if (compact) {
-    return [{ ...baseAxis, position: "none" as const, height: 0 }];
+    const fontSize = Math.round(8 * scale);
+    return [
+      {
+        ...baseAxis,
+        disableTicks: true,
+        tickLabelStyle: { fontSize, fill: "#9aa0a6" },
+        height: Math.round(fontSize * 1.6)
+      }
+    ];
   }
-  return [{ ...baseAxis, tickLabelStyle: PANEL_TICK_LABEL_STYLE, height: 20 }];
+  return [
+    {
+      ...baseAxis,
+      label: "Time",
+      labelStyle: PANEL_AXIS_LABEL_STYLE,
+      tickLabelStyle: PANEL_TICK_LABEL_STYLE,
+      tickSize: 4,
+      height: 36
+    }
+  ];
 }
 
 function buildYAxis(compact: boolean, scale: number, unitLabel: string) {
@@ -377,7 +437,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
     }, [stats, endpointKey]);
   const margin = resolveChartMargin(compact, showLegend, scale);
   const legendSlotProps = resolveLegendSlotProps(compact, showLegend, scale);
-  const xAxis = buildXAxis(compact, xData, xMin, xMax);
+  const xAxis = buildXAxis(compact, scale, xData, xMin, xMax);
   const yAxis = buildYAxis(compact, scale, unitLabel);
   const series = buildSeries({
     compact,

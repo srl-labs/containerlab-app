@@ -35,6 +35,8 @@ export interface LocalLabBackendOptions {
   env?: NodeJS.ProcessEnv;
   /** The OS user who owns labs on this machine. */
   username?: string;
+  /** Let script buttons run shell scripts on this machine. On by default. */
+  hostScripts?: boolean;
 }
 
 export interface ResolvedLocalOptions {
@@ -51,6 +53,7 @@ export interface ResolvedLocalOptions {
   edgesharkExtraEnv: string[];
   env: NodeJS.ProcessEnv;
   username: string;
+  hostScripts: boolean;
 }
 
 export const DEFAULT_WIRESHARK_IMAGE = "ghcr.io/srl-labs/wireshark-vnc-docker:latest";
@@ -80,7 +83,8 @@ export function resolveLocalOptions(options: LocalLabBackendOptions = {}): Resol
     wiresharkImage: options.wiresharkImage?.trim() || DEFAULT_WIRESHARK_IMAGE,
     edgesharkExtraEnv: options.edgesharkExtraEnv ?? ["HTTP_PROXY=", "http_proxy="],
     env: options.env ?? process.env,
-    username: options.username?.trim() || defaultUsername()
+    username: options.username?.trim() || defaultUsername(),
+    hostScripts: options.hostScripts !== false
   };
 }
 

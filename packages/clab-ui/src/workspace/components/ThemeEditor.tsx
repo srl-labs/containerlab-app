@@ -36,7 +36,7 @@ import {
 } from "../../theme/customThemes";
 import { floatingRadius } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
-import { ThemeColorInput } from "./ThemeColorInput";
+import { ColorField, ColorSwatch } from "../../components/ui/form";
 import { ThemePreview } from "./ThemePreview";
 
 export type ThemeExportAction = "download" | "copy";
@@ -48,7 +48,6 @@ const ROW_SX = {
   py: 1,
   "&:not(:last-child)": { borderBottom: 1, borderColor: "divider" }
 } as const;
-const ACCENT_RING = "var(--clab-ui-button-background, var(--vscode-button-background))";
 
 function CustomizedMark() {
   return (
@@ -143,8 +142,9 @@ function RoleRow({
         {customized ? (
           <ResetButton label={role.label} onClick={() => onChange(withRoleColor(theme, role.key, undefined))} />
         ) : null}
-        <ThemeColorInput
-          label={role.label}
+        <ColorField
+          ariaLabel={role.label}
+          width={132}
           value={roleColor(vars, role)}
           onChange={(color) => onChange(withRoleColor(theme, role.key, color))}
           testId={`theme-color-${role.key}`}
@@ -198,32 +198,14 @@ function TerminalColors({
             const custom = theme.colors[role.key] !== undefined;
             return (
               <Tooltip key={role.key} title={`${role.label} ${color}${custom ? " (customized)" : ""}`}>
-                <Box
-                  component="label"
-                  data-role-row={role.key}
-                  sx={{
-                    position: "relative",
-                    width: 24,
-                    height: 24,
-                    flexShrink: 0,
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    // Mid-grey edges keep dark swatches visible on dark surfaces and light ones on light.
-                    border: "1px solid rgba(128, 128, 128, 0.5)",
-                    boxShadow: custom ? `0 0 0 1px var(--clab-ui-editor-background, var(--vscode-editor-background)), 0 0 0 2px ${ACCENT_RING}` : "none",
-                    "&:focus-within": { outline: "1px solid var(--vscode-focusBorder)", outlineOffset: 3 }
-                  }}
-                  style={{ background: color }}
-                >
-                  <Box
-                    component="input"
-                    type="color"
-                    aria-label={`Terminal ${role.label.toLowerCase()}`}
-                    value={color}
-                    onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
-                      onChange(withRoleColor(theme, role.key, event.target.value))
-                    }
-                    sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
+                <Box data-role-row={role.key}>
+                  <ColorSwatch
+                    size={24}
+                    color={color}
+                    pickerValue={color}
+                    highlighted={custom}
+                    ariaLabel={`Terminal ${role.label.toLowerCase()}`}
+                    onPick={(hex) => onChange(withRoleColor(theme, role.key, hex))}
                   />
                 </Box>
               </Tooltip>
@@ -264,7 +246,7 @@ function TokenOverrides({
           <TextField
             size="small"
             fullWidth
-            placeholder="Filter tokens, e.g. button or terminal"
+            placeholder="Filter tokens, e.g., button or terminal"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             slotProps={{ htmlInput: { "aria-label": "Filter tokens" } }}
@@ -293,9 +275,10 @@ function TokenOverrides({
                     {id}
                   </Typography>
                   {overridden ? <ResetButton label={id} onClick={() => onChange(withTokenColor(theme, id, undefined))} /> : null}
-                  <ThemeColorInput
+                  <ColorField
                     allowAlpha
-                    label={id}
+                    ariaLabel={id}
+                    width={224}
                     value={vars[colorIdToken(id)]}
                     onChange={(value) => onChange(withTokenColor(theme, id, value))}
                   />

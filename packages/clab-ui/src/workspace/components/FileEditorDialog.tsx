@@ -127,7 +127,7 @@ export function FileEditorDialog() {
     const state = useRuntimeUiStore.getState().fileEditor;
     if (state && state.content !== state.originalContent) {
       const shouldClose = await confirmRuntimeAction({
-        title: "Discard Unsaved Changes",
+        title: "Discard unsaved changes",
         message: `Discard unsaved changes to "${state.title}"?`,
         confirmLabel: "Discard",
         severity: "error",
@@ -221,7 +221,7 @@ export function FileEditorDialog() {
           }}
           disabled={!dirty || fileEditor.saving}
         >
-          {fileEditor.saving ? "Saving..." : "Save"}
+          {fileEditor.saving ? "Saving…" : "Save"}
         </Button>
       </DialogActions>
     </Dialog>

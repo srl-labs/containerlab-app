@@ -22,6 +22,7 @@ type PanelViewKind =
   | "freeTextEditor"
   | "freeShapeEditor"
   | "trafficRateEditor"
+  | "scriptButtonEditor"
   | "groupEditor";
 
 export interface PanelView {
@@ -67,6 +68,7 @@ type AnnotationEditingSlice = Pick<
   | "editingTextAnnotation"
   | "editingShapeAnnotation"
   | "editingTrafficRateAnnotation"
+  | "editingScriptButtonId"
   | "editingGroup"
 >;
 
@@ -84,6 +86,14 @@ function resolveAnnotationView(annotationUI: AnnotationEditingSlice): PanelView 
     return {
       kind: "trafficRateEditor",
       title: "Edit Traffic Rate",
+      hasFooter: false,
+      isEditor: true
+    };
+  }
+  if (annotationUI.editingScriptButtonId !== null) {
+    return {
+      kind: "scriptButtonEditor",
+      title: "Edit Script Button",
       hasFooter: false,
       isEditor: true
     };
@@ -138,6 +148,7 @@ function selectAnnotationEditingState(state: AnnotationUIState): AnnotationEditi
     editingTextAnnotation: state.editingTextAnnotation,
     editingShapeAnnotation: state.editingShapeAnnotation,
     editingTrafficRateAnnotation: state.editingTrafficRateAnnotation,
+    editingScriptButtonId: state.editingScriptButtonId,
     editingGroup: state.editingGroup
   };
 }

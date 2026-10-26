@@ -3,7 +3,12 @@ import test from "node:test";
 
 import { resolveLocalBackendConfig as resolve } from "./localEndpointConfig.ts";
 
-const DESKTOP = { envPrefix: "CONTAINERLAB_DESKTOP_", enableVariable: "CONTAINERLAB_DESKTOP_LOCAL", enabledByDefault: true };
+const DESKTOP = {
+  envPrefix: "CONTAINERLAB_DESKTOP_",
+  enableVariable: "CONTAINERLAB_DESKTOP_LOCAL",
+  enabledByDefault: true,
+  hostScriptsByDefault: true
+};
 
 /** The desktop app's settings: `local-backend.json`, then CONTAINERLAB_DESKTOP_* variables. */
 function resolveLocalBackendConfig(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, fileContent: string | undefined) {
@@ -30,7 +35,8 @@ test("local-backend.json configures the backend and the environment overrides it
     runtime: "podman",
     workspaceRoot: "/srv/labs",
     sudo: true,
-    deployExtraArgs: ["--max-workers", "2"]
+    deployExtraArgs: ["--max-workers", "2"],
+    hostScripts: true
   });
 
   const overridden = resolveLocalBackendConfig(
@@ -58,7 +64,7 @@ test("the local endpoint can be turned off by file or environment", () => {
 });
 
 test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => {
-  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false };
+  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false, hostScriptsByDefault: false };
   assert.equal(resolve({ ...web, platform: "linux", env: {} }).enabled, false);
   const enabled = resolve({
     ...web,
@@ -66,5 +72,22 @@ test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => 
     env: { WEB_LOCAL_LABS: "true", WEB_LOCAL_WORKSPACE: "/home/alice/.clab", WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab" }
   });
   assert.equal(enabled.enabled, true);
-  assert.deepEqual(enabled.options, { binaryPath: "/usr/local/bin/containerlab", workspaceRoot: "/home/alice/.clab" });
+  assert.deepEqual(enabled.options, {
+    binaryPath: "/usr/local/bin/containerlab",
+    workspaceRoot: "/home/alice/.clab",
+    hostScripts: false
+  });
+});
+
+test("script buttons follow the app default, then the file, then the environment", () => {
+  assert.equal(resolveLocalBackendConfig("linux", {}, undefined).options.hostScripts, true);
+  const off = JSON.stringify({ hostScripts: false });
+  assert.equal(resolveLocalBackendConfig("linux", {}, off).options.hostScripts, false);
+  assert.equal(
+    resolveLocalBackendConfig("linux", { CONTAINERLAB_DESKTOP_HOST_SCRIPTS: "true" }, off).options.hostScripts,
+    true
+  );
+  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false, hostScriptsByDefault: false };
+  assert.equal(resolve({ ...web, platform: "linux", env: {} }).options.hostScripts, false);
+  assert.equal(resolve({ ...web, platform: "linux", env: { WEB_LOCAL_HOST_SCRIPTS: "1" } }).options.hostScripts, true);
 });

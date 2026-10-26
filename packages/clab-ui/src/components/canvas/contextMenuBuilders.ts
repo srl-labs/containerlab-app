@@ -48,6 +48,7 @@ import {
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 } from "../../annotations/annotationNodeConverters";
 
@@ -110,6 +111,12 @@ interface MenuBuilderContext {
   changeZOrder?: (id: string, action: ZOrderAction) => void;
   /** Files of the node on the lab host and the host's opener; absent when the host has none. */
   labFiles?: { files: NodeLabFile[]; open: (request: LabFileRequest) => void };
+  /** Run a script button's script */
+  runScriptButton?: (id: string) => void;
+  /** Edit a script button */
+  editScriptButton?: (id: string) => void;
+  /** Delete a script button */
+  deleteScriptButton?: (id: string) => void;
 }
 
 interface EdgeMenuBuilderContext {
@@ -141,6 +148,7 @@ type PaneMenuActions = Pick<
   | "onAddShapes"
   | "onAddShapeAtPosition"
   | "onAddTrafficRateAtPosition"
+  | "onAddScriptButtonAtPosition"
 >;
 
 interface PaneMenuBuilderContext extends PaneMenuActions {
@@ -371,6 +379,51 @@ function buildGroupContextMenu(ctx: MenuBuilderContext): ContextMenuItem[] {
         danger: true,
         onClick: () => {
           deleteGroup?.(targetId);
+          closeContextMenu();
+        }
+      }
+    );
+  }
+  return items;
+}
+
+/**
+ * Build context menu for script buttons. Running is allowed while locked;
+ * editing and deleting are not.
+ */
+function buildScriptButtonContextMenu(ctx: MenuBuilderContext): ContextMenuItem[] {
+  const { targetId, isLocked, closeContextMenu, runScriptButton, editScriptButton, deleteScriptButton } = ctx;
+  const items: ContextMenuItem[] = [
+    {
+      id: "run-script-button",
+      label: "Run Script",
+      icon: React.createElement(PlayArrowIcon, { fontSize: "small" }),
+      onClick: () => {
+        runScriptButton?.(targetId);
+        closeContextMenu();
+      }
+    },
+    {
+      id: "edit-script-button",
+      label: "Edit Script Button",
+      icon: React.createElement(EditIcon, { fontSize: "small" }),
+      disabled: isLocked,
+      onClick: () => {
+        editScriptButton?.(targetId);
+        closeContextMenu();
+      }
+    }
+  ];
+  if (!isLocked) {
+    items.push(
+      { id: DIVIDER_ID, label: "", divider: true },
+      {
+        id: "delete-script-button",
+        label: "Delete Script Button",
+        icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+        danger: true,
+        onClick: () => {
+          deleteScriptButton?.(targetId);
           closeContextMenu();
         }
       }
@@ -677,6 +730,9 @@ export function buildNodeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
   if (targetNodeType === TRAFFIC_RATE_NODE_TYPE) {
     return buildTrafficRateContextMenu(ctx);
   }
+  if (targetNodeType === SCRIPT_BUTTON_NODE_TYPE) {
+    return buildScriptButtonContextMenu(ctx);
+  }
   if (targetNodeType === GROUP_NODE_TYPE) {
     return buildGroupContextMenu(ctx);
   }
@@ -862,6 +918,7 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
     onAddShapes,
     onAddShapeAtPosition,
     onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition,
     menuPosition
   } = ctx;
   const items: ContextMenuItem[] = [];
@@ -996,6 +1053,21 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
         const flowPosition = getFlowPosition();
         if (flowPosition) {
           onAddTrafficRateAtPosition(flowPosition);
+        }
+        closeContextMenu();
+      }
+    });
+  }
+  if (onAddScriptButtonAtPosition) {
+    editorItems.push({
+      id: "add-script-button",
+      label: "Add Script Button",
+      icon: React.createElement(TerminalIcon, { fontSize: "small" }),
+      disabled: isLocked,
+      onClick: () => {
+        const flowPosition = getFlowPosition();
+        if (flowPosition) {
+          onAddScriptButtonAtPosition(flowPosition);
         }
         closeContextMenu();
       }

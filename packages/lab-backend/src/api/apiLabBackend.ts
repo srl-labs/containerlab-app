@@ -3,6 +3,10 @@ import {
   hasLabNameGitTokens,
   restoresSnapshots,
   type LabExecRequest,
+  parseHostScriptResponse,
+  type LabHostScriptEvent,
+  type LabHostScriptRequest,
+  type LabHostScriptResult,
   type LabOperationSupport,
   type LabSnapshotSaveRequest,
   type TopologyVariables,
@@ -92,7 +96,8 @@ const SERVER_FEATURES = {
   deployRestore: "deploy-restore",
   nodeStats: "node-stats",
   logStream: "log-stream",
-  terminalResume: "terminal-resume"
+  terminalResume: "terminal-resume",
+  hostScripts: "host-scripts"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -236,7 +241,8 @@ export class ApiLabBackend implements LabBackend {
       snapshotSave: features.has(SERVER_FEATURES.snapshotSave),
       deployRestore: features.has(SERVER_FEATURES.deployRestore),
       saveCopy: features.has(SERVER_FEATURES.saveCopy),
-      inspectDetails: features.has(SERVER_FEATURES.inspectDetails)
+      inspectDetails: features.has(SERVER_FEATURES.inspectDetails),
+      hostScript: features.has(SERVER_FEATURES.hostScripts)
     };
   }
 
@@ -305,6 +311,31 @@ export class ApiLabBackend implements LabBackend {
       throw unsupported("show inspect details");
     }
     return this.client.inspectLabDetails(this.token, lab.labName);
+  }
+
+  async runHostScript(lab: LabTarget, request: LabHostScriptRequest): Promise<LabHostScriptResult> {
+    if (!(await this.hasFeature(SERVER_FEATURES.hostScripts))) {
+      throw unsupported("run script buttons");
+    }
+    // The output title is for the UI host; the server only needs the script.
+    const { outputTitle: _outputTitle, ...body } = request;
+    return parseHostScriptResponse(await this.client.runHostScript(this.token, lab.labName, body));
+  }
+
+  /** clab-api-server answers once the script ends, so the output arrives in one piece. */
+  async streamHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest
+  ): Promise<AsyncIterable<LabHostScriptEvent>> {
+    const result = await this.runHostScript(lab, request);
+    const events: LabHostScriptEvent[] = [
+      ...(result.stdout ? [{ type: "output" as const, stream: "stdout" as const, text: result.stdout }] : []),
+      ...(result.stderr ? [{ type: "output" as const, stream: "stderr" as const, text: result.stderr }] : []),
+      { type: "exit", result }
+    ];
+    return (async function* replay() {
+      yield* events;
+    })();
   }
 
   /** A deploy that restores snapshots must not run as a plain deploy on an older server. */

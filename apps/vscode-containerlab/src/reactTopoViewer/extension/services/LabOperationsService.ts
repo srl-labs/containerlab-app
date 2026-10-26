@@ -1,10 +1,14 @@
 /**
- * Exec, VM snapshots, config save, inspect details and multi-node
- * start/stop/restart for the lab open in the topology view.
+ * Exec, VM snapshots, config save, inspect details, script buttons and
+ * multi-node start/stop/restart for the lab open in the topology view.
  */
 
+import * as vscode from "vscode";
 import type {
   LabExecRequest,
+  LabHostScriptEvent,
+  LabHostScriptRequest,
+  LabHostScriptResult,
   LabOperationName,
   LabSaveConfigsRequest,
   LabSnapshotSaveRequest,
@@ -34,8 +38,41 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "exec" ||
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
-    value === "inspectDetails"
+    value === "inspectDetails" ||
+    value === "runHostScript"
   );
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+let scriptOutput: vscode.OutputChannel | undefined;
+
+/**
+ * Runs a script button's script with its output in the "Containerlab Scripts"
+ * output channel as it comes; resolves with how it ended.
+ */
+async function runScriptInOutputChannel(
+  title: string,
+  events: AsyncIterable<LabHostScriptEvent>
+): Promise<LabHostScriptResult> {
+  scriptOutput ??= vscode.window.createOutputChannel("Containerlab Scripts");
+  const channel = scriptOutput;
+  channel.appendLine(`=== ${title} (${new Date().toLocaleTimeString()}) ===`);
+  channel.show(true);
+  for await (const event of events) {
+    if (event.type === "output") {
+      channel.append(event.text);
+      continue;
+    }
+    const { result } = event;
+    const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
+    channel.appendLine(`[${status} after ${Math.round(result.durationMs / 100) / 10}s]`);
+    channel.appendLine("");
+    return result;
+  }
+  throw new Error("The script ended without an exit status.");
 }
 
 class LabOperationsService {
@@ -78,6 +115,21 @@ class LabOperationsService {
       }
       case "inspectDetails":
         return backend.inspectLabDetails(target);
+      case "runHostScript": {
+        const scriptPath = optionalString(request.scriptPath);
+        const script: LabHostScriptRequest = {
+          ...(scriptPath !== undefined
+            ? { scriptPath }
+            : { script: typeof request.script === "string" ? request.script : "" }),
+          timeoutSeconds: positiveNumber(request.timeoutSeconds)
+        };
+        const outputTitle = optionalString(request.outputTitle);
+        if (outputTitle === undefined) return backend.runHostScript(target, script);
+        return runScriptInOutputChannel(
+          outputTitle,
+          await backend.streamHostScript(target, script)
+        );
+      }
     }
   }
 

@@ -3,6 +3,8 @@ import React, { useCallback, useMemo, useRef } from "react";
 
 import { PaletteSection } from "../../lab-drawer/PaletteSection";
 import { usePanelTabVisibility } from "../../../../hooks/ui/usePanelTabVisibility";
+import { useAnnotationUIStore } from "../../../../stores/annotationUIStore";
+import { useAnnotationHandlers } from "../../../../stores/canvasStore";
 import type { NodeData, LinkData } from "../../../../hooks/ui";
 
 import type { ContextPanelEditorState, EditorFooterRef, EditorBannerRef } from "./editorTypes";
@@ -78,6 +80,8 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
     }
   }, [editTabOpensSelectedNode, editor]);
 
+  const editingScriptButtonId = useAnnotationUIStore((state) => state.editingScriptButtonId);
+  const annotationHandlers = useAnnotationHandlers();
   const editDeleteHandler = useMemo(() => {
     if (!editor) return undefined;
     if (editor.editingNodeData && editor.nodeEditorHandlers.handleDelete) {
@@ -124,8 +128,13 @@ export const PaletteView: React.FC<PaletteViewProps> = ({
         editor.groupHandlers.onClose();
       };
     }
+    if (editingScriptButtonId !== null && annotationHandlers?.onDeleteScriptButton) {
+      const del = annotationHandlers.onDeleteScriptButton;
+      // Deleting the button also closes its editor.
+      return () => del(editingScriptButtonId);
+    }
     return undefined;
-  }, [editor]);
+  }, [editor, editingScriptButtonId, annotationHandlers]);
 
   const handleEditTabLeave = useCallback(() => {
     localFooterRef.current?.handleDiscard();

@@ -42,7 +42,9 @@ function createWebLocalEndpoint() {
     env: process.env,
     envPrefix: "WEB_LOCAL_",
     enableVariable: "WEB_LOCAL_LABS",
-    enabledByDefault: false
+    enabledByDefault: false,
+    // Scripts would run as the server's OS user for anyone who can open the app.
+    hostScriptsByDefault: false
   });
   if (!config.enabled) return undefined;
   return createLocalEndpoint({

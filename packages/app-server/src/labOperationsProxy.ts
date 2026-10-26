@@ -1,6 +1,8 @@
 import {
   isValidLabActionPath,
   isValidLabelFilter,
+  type LabHostScriptEvent,
+  type LabHostScriptRequest,
   type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
@@ -15,6 +17,7 @@ import {
   resolveRequestedEndpointId,
   type RuntimeTargetBody
 } from "./runtimeProxy.ts";
+import { streamResponseHeaders } from "./streamResponseHeaders.ts";
 import type { StandaloneTopologySessionManager } from "./topologySessionManager.ts";
 
 interface NodesBody extends RuntimeTargetBody {
@@ -33,6 +36,37 @@ interface SnapshotsBody extends NodesBody {
 
 interface SaveBody extends NodesBody {
   copyDir?: unknown;
+}
+
+interface HostScriptBody extends RuntimeTargetBody {
+  scriptPath?: unknown;
+  script?: unknown;
+  timeoutSeconds?: unknown;
+}
+
+/** One day; a script that needs longer can run without a limit. */
+const MAX_SCRIPT_TIMEOUT_SECONDS = 24 * 60 * 60;
+const MAX_SCRIPT_CHARS = 256 * 1024;
+
+/** The lab and, when known, its topology file, so scripts run from the topology folder. */
+function toLabTarget(target: { labName: string; yamlPath?: string }): { labName: string; path?: string } {
+  return target.yamlPath !== undefined && target.yamlPath !== ""
+    ? { labName: target.labName, path: target.yamlPath }
+    : { labName: target.labName };
+}
+
+/** A host script request from the browser, checked before it reaches the lab host. */
+function parseHostScriptBody(body: Partial<HostScriptBody>): LabHostScriptRequest {
+  const scriptPath = typeof body.scriptPath === "string" ? body.scriptPath.trim() : "";
+  const script = typeof body.script === "string" ? body.script : "";
+  if (!scriptPath && !script.trim()) throw new RequestError("Script or scriptPath is required", 400);
+  if (script.length > MAX_SCRIPT_CHARS) throw new RequestError("Script is too long", 400);
+  const value = body.timeoutSeconds;
+  if (value === undefined || value === null) return scriptPath ? { scriptPath } : { script };
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > MAX_SCRIPT_TIMEOUT_SECONDS) {
+    throw new RequestError("Invalid timeoutSeconds", 400);
+  }
+  return { ...(scriptPath ? { scriptPath } : { script }), timeoutSeconds: value };
 }
 
 const MAX_NODES = 512;
@@ -81,14 +115,19 @@ export function registerLabOperationsProxy(
   async function withLab<Body extends RuntimeTargetBody>(
     request: FastifyRequest<{ Body: Body }>,
     reply: FastifyReply,
-    run: (backend: LabBackend, labName: string, body: Partial<Body>) => Promise<unknown>
+    run: (
+      backend: LabBackend,
+      labName: string,
+      body: Partial<Body>,
+      target: { labName: string; path?: string }
+    ) => Promise<unknown>
   ): Promise<FastifyReply> {
     const body: Partial<Body> = request.body ?? {};
     const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(body));
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
     try {
       const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, body);
-      return reply.send(await run(resolved.backend, target.labName, body));
+      return reply.send(await run(resolved.backend, target.labName, body, toLabTarget(target)));
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -114,6 +153,56 @@ export function registerLabOperationsProxy(
       const nodeNames = await resolveNodeNames(backend, labName, body.nodeNames);
       return backend.exec({ labName }, { command, nodeNames, labels });
     })
+  );
+
+  app.post<{ Body: HostScriptBody }>("/api/runtime/lab-operations/host-script", (request, reply) =>
+    withLab(request, reply, async (backend, _labName, body, target) =>
+      backend.runHostScript(target, parseHostScriptBody(body))
+    )
+  );
+
+  // The same script as NDJSON: output events as they come, then the exit event.
+  app.post<{ Body: HostScriptBody }>(
+    "/api/runtime/lab-operations/host-script/stream",
+    async (request, reply) => {
+      const body: Partial<HostScriptBody> = request.body ?? {};
+      const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(body));
+      if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+      let events: AsyncIterable<LabHostScriptEvent>;
+      try {
+        const script = parseHostScriptBody(body);
+        const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, body);
+        events = await resolved.backend.streamHostScript(toLabTarget(target), script);
+      } catch (error) {
+        return handleRouteError(reply, error);
+      }
+      reply.hijack();
+      reply.raw.writeHead(
+        200,
+        streamResponseHeaders(request, {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "no-cache",
+          "X-Accel-Buffering": "no",
+          "X-Content-Type-Options": "nosniff"
+        })
+      );
+      const iterator = events[Symbol.asyncIterator]();
+      // A closed connection ends the iteration, which stops the script.
+      reply.raw.on("close", () => void iterator.return?.());
+      try {
+        for (let next = await iterator.next(); next.done !== true; next = await iterator.next()) {
+          if (reply.raw.destroyed) break;
+          reply.raw.write(`${JSON.stringify(next.value)}\n`);
+        }
+      } catch (error) {
+        if (!reply.raw.destroyed) {
+          reply.raw.write(`${JSON.stringify({ type: "error", error: error instanceof Error ? error.message : String(error) })}\n`);
+        }
+      } finally {
+        if (!reply.raw.writableEnded) reply.raw.end();
+      }
+      return reply;
+    }
   );
 
   app.post<{ Body: SnapshotsBody }>("/api/runtime/lab-operations/snapshots", (request, reply) =>

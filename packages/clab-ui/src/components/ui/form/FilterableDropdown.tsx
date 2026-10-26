@@ -32,7 +32,7 @@ export const FilterableDropdown: React.FC<FilterableDropdownProps> = ({
   value,
   onChange,
   label,
-  placeholder = "Type to filter...",
+  placeholder = "Type to filter…",
   allowFreeText = false,
   disabled = false,
   renderOption,

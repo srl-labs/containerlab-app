@@ -1,5 +1,6 @@
 import {
   labLifecycleQueryParams,
+  type LabHostScriptRequest,
   type LabLifecycleOptions,
   type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
@@ -754,6 +755,26 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as SnapshotSaveResponse;
+  }
+
+  /**
+   * Runs a script button's script on the server's host, from the lab's
+   * topology folder, as the signed-in user. Servers that advertise
+   * `host-scripts` accept it; the body and result match `LocalLabBackend`.
+   */
+  async runHostScript(
+    token: string,
+    labName: string,
+    request: LabHostScriptRequest,
+  ): Promise<unknown> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/host-script`,
+      token,
+      JSON.stringify(request),
+      "application/json",
+    );
+    return await res.json();
   }
 
   async inspectLabDetails(

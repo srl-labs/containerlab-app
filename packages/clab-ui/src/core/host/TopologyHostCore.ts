@@ -1123,6 +1123,7 @@ function normalizeAnnotations(
     freeTextAnnotations: annotations.freeTextAnnotations ?? [],
     freeShapeAnnotations: annotations.freeShapeAnnotations ?? [],
     trafficRateAnnotations: annotations.trafficRateAnnotations ?? [],
+    scriptButtonAnnotations: annotations.scriptButtonAnnotations ?? [],
     groupStyleAnnotations: annotations.groupStyleAnnotations ?? [],
     nodeAnnotations: annotations.nodeAnnotations ?? [],
     networkNodeAnnotations: annotations.networkNodeAnnotations ?? [],

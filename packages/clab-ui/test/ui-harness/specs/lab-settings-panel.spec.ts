@@ -11,7 +11,7 @@ const SEL_LAB_SETTINGS_TAB_MGMT = '[data-testid="lab-settings-tab-mgmt"]';
 const SEL_LAB_SETTINGS_TAB_APPEARANCE = '[data-testid="lab-settings-tab-appearance"]';
 const SEL_LAB_SETTINGS_SAVE_BTN = '[data-testid="lab-settings-save-btn"]';
 
-const LABEL_CONTAINER_NAME_PREFIX = "Container Name Prefix";
+const LABEL_CONTAINER_NAME_PREFIX = "Container name prefix";
 
 /**
  * Lab Settings Modal E2E Tests (MUI Dialog version)
@@ -204,7 +204,7 @@ test.describe("Lab Settings Modal", () => {
 
     await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
-    await modal.getByRole("combobox", { name: "Grid Style", exact: true }).click();
+    await modal.getByRole("combobox", { name: "Grid style", exact: true }).click();
     await chooseOption(page, "Quadratic");
 
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
@@ -250,7 +250,7 @@ test.describe("Lab Settings Modal", () => {
     await reloadedModal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
     await expect(
-      reloadedModal.getByRole("combobox", { name: "Grid Style", exact: true })
+      reloadedModal.getByRole("combobox", { name: "Grid style", exact: true })
     ).toHaveText("Quadratic");
   });
 
@@ -392,7 +392,7 @@ test.describe("Lab Settings Modal", () => {
   test("shows current lab name in General tab", async ({ page }) => {
     const modal = await openModal(page);
 
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
     await expect(labNameInput).toBeVisible();
 
     const value = await labNameInput.inputValue();
@@ -401,7 +401,7 @@ test.describe("Lab Settings Modal", () => {
 
   test("can change lab name in General tab", async ({ page }) => {
     const modal = await openModal(page);
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
 
     await labNameInput.clear();
     await labNameInput.fill("test-lab");
@@ -419,7 +419,7 @@ test.describe("Lab Settings Modal", () => {
   test("save button persists lab name to YAML", async ({ page, topoViewerPage }) => {
     const modal = await openModal(page);
 
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
     await labNameInput.clear();
     await labNameInput.fill("updated-lab");
 
@@ -460,7 +460,7 @@ test.describe("Lab Settings Modal", () => {
     const saveBtn = page.locator(SEL_LAB_SETTINGS_SAVE_BTN);
     await expect(saveBtn).not.toBeVisible();
 
-    await expect(modal.getByRole("textbox", { name: "Lab Name" })).toBeDisabled();
+    await expect(modal.getByRole("textbox", { name: "Lab name" })).toBeDisabled();
     await expectMuiSelectDisabled(modal, LABEL_CONTAINER_NAME_PREFIX);
 
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
@@ -471,9 +471,9 @@ test.describe("Lab Settings Modal", () => {
 
     await modal.locator('[data-testid="lab-settings-tab-grid"]').click();
     await page.waitForTimeout(150);
-    await expect(modal.getByRole("spinbutton", { name: "Stroke Width", exact: true })).toBeDisabled();
+    await expect(modal.getByRole("spinbutton", { name: "Stroke width", exact: true })).toBeDisabled();
     await expect(
-      modal.getByRole("combobox", { name: "Grid Style", exact: true })
+      modal.getByRole("combobox", { name: "Grid style", exact: true })
     ).toBeDisabled();
   });
 
@@ -488,7 +488,7 @@ test.describe("Lab Settings Modal", () => {
     const saveBtn = page.locator(SEL_LAB_SETTINGS_SAVE_BTN);
     await expect(saveBtn).toBeVisible();
 
-    await expect(modal.getByRole("textbox", { name: "Lab Name" })).toBeDisabled();
+    await expect(modal.getByRole("textbox", { name: "Lab name" })).toBeDisabled();
     await expectMuiSelectDisabled(modal, LABEL_CONTAINER_NAME_PREFIX);
 
     await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
@@ -526,7 +526,7 @@ test.describe("Lab Settings Modal", () => {
     await prefixSelect.click();
     await chooseOption(page, /^Custom$/);
 
-    const customPrefix = modal.getByRole("textbox", { name: "Custom Prefix" });
+    const customPrefix = modal.getByRole("textbox", { name: "Custom prefix" });
     await expect(customPrefix).toBeVisible();
     await customPrefix.fill("myprefix");
     await expect(customPrefix).toHaveValue("myprefix");
@@ -540,7 +540,7 @@ test.describe("Lab Settings Modal", () => {
     // Option label is "Default (clab)"
     await chooseOption(page, /Default/i);
 
-    await expect(modal.getByRole("textbox", { name: "Custom Prefix" })).not.toBeVisible();
+    await expect(modal.getByRole("textbox", { name: "Custom prefix" })).not.toBeVisible();
   });
 
   test("Management tab shows network name field", async ({ page }) => {
@@ -549,7 +549,7 @@ test.describe("Lab Settings Modal", () => {
     await modal.locator(SEL_LAB_SETTINGS_TAB_MGMT).click();
     await page.waitForTimeout(200);
 
-    await expect(modal.getByRole("textbox", { name: "Network Name" })).toBeVisible();
+    await expect(modal.getByRole("textbox", { name: "Network name" })).toBeVisible();
   });
 
   test("Management tab shows IPv4 and IPv6 subnet selectors", async ({ page }) => {
@@ -581,7 +581,7 @@ test.describe("Lab Settings Modal", () => {
     await topoViewerPage.waitForCanvasReady();
 
     const modal = await openModal(page);
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
     await labNameInput.clear();
     await labNameInput.fill("renamed-lab");
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
@@ -616,10 +616,10 @@ test.describe("Lab Settings Modal", () => {
     await expect(modal.getByTestId("lab-settings-mgmt-network-0")).toContainText("default");
     await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText("net2");
     await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText("macvlan");
-    await expect(modal.getByRole("textbox", { name: "Network Name" })).toHaveValue("net1");
+    await expect(modal.getByRole("textbox", { name: "Network name" })).toHaveValue("net1");
 
     await modal.locator(SEL_LAB_SETTINGS_TAB_BASIC).click();
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
     await labNameInput.clear();
     await labNameInput.fill("multi-lab");
     await page.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
@@ -633,7 +633,7 @@ test.describe("Lab Settings Modal", () => {
 
   test("reopening modal preserves original data", async ({ page }) => {
     const modal = await openModal(page);
-    const labNameInput = modal.getByRole("textbox", { name: "Lab Name" });
+    const labNameInput = modal.getByRole("textbox", { name: "Lab name" });
     const initialValue = await labNameInput.inputValue();
     expect(initialValue).toBe("simple");
 

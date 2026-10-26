@@ -59,9 +59,9 @@ test.describe("Standalone Settings Dialog", () => {
 
     await dialog.getByTestId("standalone-settings-nav-terminal").click();
     await expect(dialog.getByRole("heading", { name: "Terminal", exact: true })).toBeVisible();
-    await expect(dialog.getByLabel("SSH User Mapping JSON")).toBeVisible();
-    await expect(dialog.getByLabel("Telnet Port")).toBeVisible();
-    await expect(dialog.getByLabel("Terminal Font Size")).toBeVisible();
+    await expect(dialog.getByLabel("SSH user mapping JSON")).toBeVisible();
+    await expect(dialog.getByLabel("Telnet port")).toBeVisible();
+    await expect(dialog.getByLabel("Terminal font size")).toBeVisible();
     await expect(dialog.getByTestId("standalone-settings-font-size-preset-15")).toBeVisible();
 
     await dialog.getByTestId("standalone-settings-nav-about").click();
@@ -122,7 +122,7 @@ test.describe("Standalone Settings Dialog", () => {
     await page.route("**/api/runtime/file-explorer/tree**", (route) => route.fulfill({ json: [] }));
     await page.getByRole("button", { name: "Labs", exact: true }).click();
     await page.getByRole("button", { name: "New Topology File", exact: true }).first().click();
-    const create = page.getByRole("dialog", { name: "Create Topology File", exact: true });
+    const create = page.getByRole("dialog", { name: "Create topology file", exact: true });
     await expect(create).toBeVisible();
     await expect(create.getByLabel("Topology file name", { exact: true })).toBeVisible();
     await expect(create.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
@@ -245,9 +245,9 @@ test.describe("Standalone Settings Dialog", () => {
     const dialog = await openSettings(page);
     await dialog.getByTestId("standalone-settings-nav-terminal").click();
 
-    const telnetField = dialog.getByLabel("Telnet Port");
-    const sshMappingField = dialog.getByLabel("SSH User Mapping JSON");
-    const fontSizeField = dialog.getByLabel("Terminal Font Size");
+    const telnetField = dialog.getByLabel("Telnet port");
+    const sshMappingField = dialog.getByLabel("SSH user mapping JSON");
+    const fontSizeField = dialog.getByLabel("Terminal font size");
     const saveButton = dialog.getByTestId("standalone-settings-save-terminal");
 
     await telnetField.fill("70000");
@@ -372,10 +372,10 @@ test.describe("Standalone Settings Dialog", () => {
       .toBe("light");
 
     await dialog.getByTestId("standalone-settings-nav-terminal").click();
-    await dialog.getByLabel("SSH User Mapping JSON").fill('{\n  "custom_kind": "operator"\n}');
-    await dialog.getByLabel("Telnet Port").fill("6001");
+    await dialog.getByLabel("SSH user mapping JSON").fill('{\n  "custom_kind": "operator"\n}');
+    await dialog.getByLabel("Telnet port").fill("6001");
     await dialog.getByTestId("standalone-settings-font-size-preset-15").click();
-    await expect(dialog.getByLabel("Terminal Font Size")).toHaveValue("15");
+    await expect(dialog.getByLabel("Terminal font size")).toHaveValue("15");
     await dialog.getByTestId("standalone-settings-save-terminal").click();
     await expect(dialog.getByTestId("standalone-settings-save-terminal")).toBeEnabled();
 
@@ -393,9 +393,9 @@ test.describe("Standalone Settings Dialog", () => {
     );
 
     await reloadedDialog.getByTestId("standalone-settings-nav-terminal").click();
-    await expect(reloadedDialog.getByLabel("Telnet Port")).toHaveValue("6001");
-    await expect(reloadedDialog.getByLabel("Terminal Font Size")).toHaveValue("15");
-    await expect(reloadedDialog.getByLabel("SSH User Mapping JSON")).toHaveValue(
+    await expect(reloadedDialog.getByLabel("Telnet port")).toHaveValue("6001");
+    await expect(reloadedDialog.getByLabel("Terminal font size")).toHaveValue("15");
+    await expect(reloadedDialog.getByLabel("SSH user mapping JSON")).toHaveValue(
       /"custom_kind": "operator"/
     );
   });

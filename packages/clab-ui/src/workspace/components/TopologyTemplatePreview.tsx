@@ -34,7 +34,7 @@ function describeSource(result: RenderedTopologyPreview): string {
 
 function describeState(state: PreviewState): string {
   if (state.status === "ready") return describeSource(state.result);
-  return state.status === "loading" ? "Rendering..." : " ";
+  return state.status === "loading" ? "Rendering…" : " ";
 }
 
 export function TopologyTemplatePreview({ endpointId, path, savedContent, render }: TopologyTemplatePreviewProps) {

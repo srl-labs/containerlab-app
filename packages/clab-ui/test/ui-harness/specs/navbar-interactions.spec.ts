@@ -176,10 +176,10 @@ test.describe("Navbar Interactions", () => {
       await page.waitForTimeout(200);
 
       const gridSection = modal.locator('[data-testid="lab-settings-grid-settings"]');
-      await expect(gridSection.getByRole("spinbutton", { name: "Stroke Width", exact: true })).toBeVisible();
-      await expect(gridSection.getByRole("combobox", { name: "Grid Style", exact: true })).toBeVisible();
-      await expect(gridSection.getByRole("textbox", { name: "Grid Color", exact: true })).toBeVisible();
-      await expect(gridSection.getByRole("textbox", { name: "Background Color", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("spinbutton", { name: "Stroke width", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("combobox", { name: "Grid style", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Grid color", exact: true })).toBeVisible();
+      await expect(gridSection.getByRole("textbox", { name: "Background color", exact: true })).toBeVisible();
     });
   });
 

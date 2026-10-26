@@ -38,7 +38,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
       <PanelSection title="Basic Information">
         <InputField
           id="group-name"
-          label="Group Name"
+          label="Group name"
           value={formData.name}
           onChange={(v) => updateField("name", v)}
           placeholder="e.g., rack1"
@@ -46,7 +46,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <SelectField
             id="group-label-position"
-            label="Label Position"
+            label="Label position"
             value={formData.style.labelPosition ?? "top-center"}
             onChange={(v) => updateField("style", { ...formData.style, labelPosition: v })}
             options={LABEL_POSITION_OPTIONS}
@@ -106,7 +106,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
           <InputField
             id="group-corner-radius"
-            label="Corner Radius"
+            label="Corner radius"
             type="number"
             value={String(style.borderRadius ?? 0)}
             onChange={(v) => updateStyle("borderRadius", Number(v))}
@@ -135,7 +135,7 @@ export const GroupFormContent: React.FC<Props> = ({ formData, updateField, updat
 
       <PanelSection title="Label">
         <ColorField
-          label="Text Color"
+          label="Text color"
           value={style.labelColor ?? style.color ?? "#ebecf0"}
           onChange={(v) => updateStyle("labelColor", v)}
         />

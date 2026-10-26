@@ -612,7 +612,7 @@ function endpointHealthTooltip(
     return undefined;
   }
   if (state.status === "loading") {
-    return "Health: loading...";
+    return "Health: loading…";
   }
   if (state.status === "error") {
     return "Health: unavailable";

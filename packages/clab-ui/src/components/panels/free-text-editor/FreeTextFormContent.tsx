@@ -141,7 +141,7 @@ const FontControls: React.FC<{
   <Box sx={{ display: "flex", gap: 1.5 }}>
     <TextField
       select
-      label="Font Family"
+      label="Font family"
       size="small"
       value={formData.fontFamily ?? "monospace"}
       onChange={(e) => updateField("fontFamily", e.target.value)}
@@ -152,7 +152,7 @@ const FontControls: React.FC<{
     <Box sx={{ flex: 3 }}>
       <InputField
         id="text-font-size"
-        label="Font Size"
+        label="Font size"
         type="number"
         value={String(formData.fontSize ?? 14)}
         onChange={(v) => updateField("fontSize", parseInt(v) || 14)}
@@ -217,7 +217,7 @@ export const FreeTextFormContent: React.FC<Props> = ({ formData, updateField }) 
         fullWidth
         value={formData.text}
         onChange={(e) => updateField("text", e.target.value)}
-        placeholder="Enter your text... (Markdown and fenced code blocks supported)"
+        placeholder="Enter your text… (Markdown and fenced code blocks supported)"
         sx={{ "& textarea": { resize: "vertical", overflow: "auto" } }}
       />
     </PanelSection>

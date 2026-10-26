@@ -167,7 +167,7 @@ export const ExecCommandDialog: React.FC<ExecCommandDialogProps> = ({
                 {...params}
                 label="Labels"
                 placeholder={form.labels.length === 0 ? "key=value, then Enter" : undefined}
-                helperText="Nodes need every label, e.g. clab-node-kind=nokia_srlinux."
+                helperText="Nodes need every label, e.g., clab-node-kind=nokia_srlinux."
                 slotProps={{
                   ...params.slotProps,
                   htmlInput: { ...params.slotProps.htmlInput, "data-testid": "lab-exec-labels" }

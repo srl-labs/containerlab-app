@@ -53,7 +53,7 @@ const ShapeSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
       <>
         <SelectField
           id="shape-type"
-          label="Shape Type"
+          label="Shape type"
           value={formData.shapeType}
           onChange={(v) => updateField("shapeType", toShapeType(v))}
           options={[
@@ -107,7 +107,7 @@ const FillSection: React.FC<SectionProps> = ({ formData, updateField, isLine }) 
     >
       <>
         <ColorField
-          label="Fill Color"
+          label="Fill color"
           value={formData.fillColor ?? DEFAULT_FILL_COLOR}
           onChange={(v) => updateField("fillColor", v)}
         />
@@ -160,7 +160,7 @@ const BorderSection: React.FC<BorderSectionProps> = ({
           {isRectangle && (
             <InputField
               id="shape-corner-radius"
-              label="Corner Radius"
+              label="Corner radius"
               type="number"
               value={String(formData.cornerRadius ?? DEFAULT_CORNER_RADIUS)}
               onChange={(v) => updateField("cornerRadius", Number(v))}
@@ -211,7 +211,7 @@ const ArrowSection: React.FC<SectionProps> = ({ formData, updateField, isLine })
         {hasArrows && (
           <InputField
             id="shape-arrow-size"
-            label="Arrow Size"
+            label="Arrow size"
             type="number"
             value={String(formData.lineArrowSize ?? DEFAULT_ARROW_SIZE)}
             onChange={(v) => updateField("lineArrowSize", Number(v))}

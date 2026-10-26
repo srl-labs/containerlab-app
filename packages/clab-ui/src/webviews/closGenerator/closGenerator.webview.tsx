@@ -50,7 +50,7 @@ export function ClosGeneratorApp(): React.JSX.Element {
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default", overflow: "auto" }}>
         <Box sx={{ maxWidth: 720, mx: "auto", px: 3, py: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
           <Box>
-            <Typography variant="h6">Generate Clos Topology</Typography>
+            <Typography variant="h6">Generate Clos topology</Typography>
             {initialData.targetLabel ? (
               <Typography variant="body2" sx={{ color: "text.secondary" }}>
                 On {initialData.targetLabel}

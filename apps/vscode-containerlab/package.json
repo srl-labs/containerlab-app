@@ -1150,6 +1150,21 @@
             "type": "boolean",
             "default": true,
             "markdownDescription": "Lock the lab canvas by default to prevent accidental modifications. Disable to start new sessions unlocked."
+          },
+          "containerlab.editor.scriptButtons.confirm": {
+            "type": "string",
+            "enum": [
+              "firstRun",
+              "always",
+              "never"
+            ],
+            "enumDescriptions": [
+              "Ask before a script runs for the first time, and again when an inline script changes.",
+              "Ask before every run.",
+              "Run without asking."
+            ],
+            "default": "firstRun",
+            "markdownDescription": "When script buttons on the canvas ask before running their script on the lab host. Applies to topology views opened after the change."
           }
         }
       },

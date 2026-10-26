@@ -83,7 +83,8 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       mgmtNetworkBadge,
       showNodeCpu,
       telemetryNodeSizePx,
-      telemetryInterfaceSizePercent
+      telemetryInterfaceSizePercent,
+      animateTraffic
     } = useTopoViewerStore.getState();
     const graphStore = useGraphStore.getState();
     const result = syncRateLabelAnnotationsForLinks(
@@ -108,6 +109,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,
       autoCreateTrafficRateAnnotations: draftShowRateLabels,
+      animateTraffic,
       gridLineWidth,
       gridStyle,
       gridColor,

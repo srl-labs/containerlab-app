@@ -599,7 +599,7 @@ export function createStandaloneLifecycleManager(
     config: LifecycleCommandConfig,
     request: ActiveLifecycleRequest
   ): Promise<{ message?: string }> {
-    postLifecycleLogMessage(config.commandType, `Sending ${config.label} request to API...`, "stdout");
+    postLifecycleLogMessage(config.commandType, `Sending ${config.label} request to API…`, "stdout");
     return await invokeLifecycleApiStream(config.endpoint, request.topologyRef, config.cleanup, {
       lifecycleOptions: config.lifecycleOptions,
       sessionId: request.sessionId,

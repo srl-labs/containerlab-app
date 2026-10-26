@@ -243,7 +243,7 @@ function LocalSetupCard(props: {
                 onClick={onCheckAgain}
                 type="button"
               >
-                {busy ? "Checking..." : "Check again"}
+                {busy ? "Checking…" : "Check again"}
               </button>
             ) : null}
             <a
@@ -471,12 +471,12 @@ export function BootstrapLoginPage(props: {
             />
             <span className="clab-login-helper">
               {sessionDurationValid
-                ? "Examples: 24h, 36h, 7d, 1h30m"
+                ? "e.g., 24h, 36h, 7d, 1h30m"
                 : "Use values like 24h, 36h, 7d, or 1h30m"}
             </span>
           </label>
           <button className="clab-login-button" disabled={submitDisabled} type="submit">
-            {busy ? "Signing in..." : "Sign in"}
+            {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
@@ -491,7 +491,7 @@ export function BootstrapLoginPage(props: {
             }}
             type="button"
           >
-            {importBusy ? "Importing..." : "Import"}
+            {importBusy ? "Importing…" : "Import"}
           </button>
           <button
             className="clab-login-link"

@@ -175,7 +175,7 @@ export const TailscaleStatusSection: React.FC = () => {
 
   return (
     <SettingsField
-      title="Tailscale Status"
+      title="Tailscale status"
       description="Devices this lab runs in the tailnet. Open the login link to authenticate the lab proxy."
       wide
       actions={

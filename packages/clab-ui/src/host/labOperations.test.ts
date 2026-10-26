@@ -36,7 +36,8 @@ test("support flags are true only when the host says so", () => {
     snapshotSave: false,
     deployRestore: false,
     saveCopy: false,
-    inspectDetails: false
+    inspectDetails: false,
+    hostScript: false
   });
   assert.equal(parseLabOperationSupport(undefined).inspectDetails, false);
 });

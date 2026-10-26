@@ -1,4 +1,4 @@
-// Pretend exec, VM snapshots, config save and inspect details for the harness.
+// Pretend exec, VM snapshots, config save, inspect details and host scripts for the harness.
 import {
   NO_LAB_OPERATIONS,
   parseExecResponse,
@@ -19,7 +19,8 @@ const ALL_SUPPORTED: LabOperationSupport = {
   snapshotSave: true,
   deployRestore: true,
   saveCopy: true,
-  inspectDetails: true
+  inspectDetails: true,
+  hostScript: true
 };
 
 /**
@@ -128,6 +129,21 @@ export function createFakeLabOperations(deps: {
           Labels: { "clab-node-name": node, "clab-node-kind": desired.kind, containerlab: current.labName }
         }))
       });
+    },
+
+    /** Echoes the script; a script or path that mentions "fail" exits with 1. */
+    async runHostScript(request) {
+      deps.record({ command: "labOperation", operation: "runHostScript", request });
+      await delay();
+      const source = request.scriptPath ?? request.script ?? "";
+      const failed = source.includes("fail");
+      return {
+        exitCode: failed ? 1 : 0,
+        stdout: failed ? "" : `ran ${source}`,
+        stderr: failed ? `${source}: failed` : "",
+        timedOut: false,
+        durationMs: 150
+      };
     }
   };
 }

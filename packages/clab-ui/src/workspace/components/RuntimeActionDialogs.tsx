@@ -350,7 +350,7 @@ function VersionDialogView(props: {
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>Version Information</DialogTitle>
+      <DialogTitle>Version information</DialogTitle>
       <DialogContent>
         <Stack spacing={2}>
           {props.versionLoading ? (
@@ -393,7 +393,7 @@ function NetemDialogView(props: {
 
   return (
     <Dialog open={props.netemRequest !== null} onClose={props.closeNetem} maxWidth="lg" fullWidth>
-      <DialogTitle>{props.netemRequest?.title ?? "Manage Impairments"}</DialogTitle>
+      <DialogTitle>{props.netemRequest?.title ?? "Manage impairments"}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           {props.netemLoading ? (
@@ -633,7 +633,7 @@ function CloneRepoDialogView(props: {
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{request?.title ?? "Clone Repository"}</DialogTitle>
+      <DialogTitle>{request?.title ?? "Clone repository"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography
@@ -920,7 +920,7 @@ function EndpointSelectionDialogView(props: {
       maxWidth="sm"
       fullWidth
     >
-      <DialogTitle>{request?.title ?? "Select Endpoint"}</DialogTitle>
+      <DialogTitle>{request?.title ?? "Select endpoint"}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ pt: 1 }}>
           <Typography

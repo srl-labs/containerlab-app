@@ -139,6 +139,13 @@ export const structuralOverrides: NonNullable<ThemeOptions["components"]> = {
         letterSpacing: "0.01em",
         color: "var(--vscode-descriptionForeground)"
       },
+      // Traffic flow dashes on links advance one dash cycle per animation run.
+      "@keyframes clabTrafficFlow": {
+        to: { strokeDashoffset: -12 }
+      },
+      "@media (prefers-reduced-motion: reduce)": {
+        ".clab-traffic-flow": { animation: "none !important" }
+      },
       "@keyframes shortcutFade": {
         "0%": { opacity: 0, transform: "translateY(8px) scale(0.95)" },
         "15%": { opacity: 1, transform: "translateY(0) scale(1)" },

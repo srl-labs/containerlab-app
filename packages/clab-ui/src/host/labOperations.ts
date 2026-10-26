@@ -15,6 +15,8 @@ export interface LabOperationSupport {
   saveCopy: boolean;
   /** `inspect --details`: everything the runtime knows about each container. */
   inspectDetails: boolean;
+  /** Script buttons: shell scripts that run on the lab host itself. */
+  hostScript: boolean;
 }
 
 export const NO_LAB_OPERATIONS: LabOperationSupport = {
@@ -22,7 +24,8 @@ export const NO_LAB_OPERATIONS: LabOperationSupport = {
   snapshotSave: false,
   deployRestore: false,
   saveCopy: false,
-  inspectDetails: false
+  inspectDetails: false,
+  hostScript: false
 };
 
 /** `containerlab exec`: one command on chosen nodes, on nodes with labels, or on all nodes. */
@@ -96,6 +99,38 @@ export interface LabInspectDetailsResult {
   containers: LabContainerDetails[];
 }
 
+/**
+ * A script that runs on the lab host with bash, from the topology folder.
+ * `scriptPath` wins over `script` when both are set.
+ */
+export interface LabHostScriptRequest {
+  /** Script file; relative paths start at the topology folder. */
+  scriptPath?: string;
+  /** Script body, used when there is no path. */
+  script?: string;
+  /** Stops the script after this many seconds; unset means no limit. */
+  timeoutSeconds?: number;
+  /**
+   * When set, the host also shows the output in its own terminal or output
+   * view under this title. Lab hosts ignore it.
+   */
+  outputTitle?: string;
+}
+
+export interface LabHostScriptResult {
+  /** Exit code; null when the script was stopped by a signal. */
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  durationMs: number;
+}
+
+/** What a streamed host script reports: output as it comes, then how it ended. */
+export type LabHostScriptEvent =
+  | { type: "output"; stream: "stdout" | "stderr"; text: string }
+  | { type: "exit"; result: LabHostScriptResult };
+
 /** Lab operations on the lab that is open in the topology view. */
 export interface ClabUiLabOperationsHost {
   support(): Promise<LabOperationSupport>;
@@ -103,6 +138,7 @@ export interface ClabUiLabOperationsHost {
   saveSnapshots(request: LabSnapshotSaveRequest): Promise<LabSnapshotSaveResult>;
   saveConfigs(request: LabSaveConfigsRequest): Promise<LabSaveConfigsResult>;
   inspectDetails(): Promise<LabInspectDetailsResult>;
+  runHostScript(request: LabHostScriptRequest): Promise<LabHostScriptResult>;
 }
 
 export type LabOperationName = keyof ClabUiLabOperationsHost;
@@ -169,7 +205,22 @@ export function parseLabOperationSupport(value: unknown): LabOperationSupport {
     snapshotSave: value.snapshotSave === true,
     deployRestore: value.deployRestore === true,
     saveCopy: value.saveCopy === true,
-    inspectDetails: value.inspectDetails === true
+    inspectDetails: value.inspectDetails === true,
+    hostScript: value.hostScript === true
+  };
+}
+
+export function parseHostScriptResponse(value: unknown): LabHostScriptResult {
+  if (!isRecord(value)) {
+    return { exitCode: null, stdout: "", stderr: "", timedOut: false, durationMs: 0 };
+  }
+  const exitCode = numberField(value, "exitCode");
+  return {
+    exitCode: exitCode ?? null,
+    stdout: stringField(value, "stdout") ?? "",
+    stderr: stringField(value, "stderr") ?? "",
+    timedOut: value.timedOut === true,
+    durationMs: numberField(value, "durationMs") ?? 0
   };
 }
 
@@ -309,7 +360,8 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   exec: 10 * 60_000,
   saveSnapshots: 60 * 60_000,
   saveConfigs: 15 * 60_000,
-  inspectDetails: 2 * 60_000
+  inspectDetails: 2 * 60_000,
+  runHostScript: 24 * 60 * 60_000
 };
 
 interface PendingLabOperation {
@@ -377,6 +429,8 @@ export function createLabOperationsRequester(options: {
       parseExecResponse(await send("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await send("saveSnapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await send("saveConfigs", request)),
-    inspectDetails: async () => parseInspectDetails(await send("inspectDetails"))
+    inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
+    runHostScript: async (request) =>
+      parseHostScriptResponse(await send("runHostScript", request))
   };
 }

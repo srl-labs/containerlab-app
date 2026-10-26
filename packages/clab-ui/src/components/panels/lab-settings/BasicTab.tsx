@@ -15,9 +15,9 @@ interface BasicTabProps {
 
 export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode }) => (
   <>
-    <SettingsField title="Lab Name" description="Unique name for this topology.">
+    <SettingsField title="Lab name" description="Unique name for this topology.">
       <TextField
-        slotProps={{ htmlInput: { "aria-label": "Lab Name" } }}
+        slotProps={{ htmlInput: { "aria-label": "Lab name" } }}
         id="lab-basic-name"
         size="small"
         placeholder="Unique name for this topology"
@@ -26,9 +26,9 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
         disabled={isViewMode}
       />
     </SettingsField>
-    <SettingsField title="Container Name Prefix" description="Prefix applied to deployed container names.">
+    <SettingsField title="Container name prefix" description="Prefix applied to deployed container names.">
       <TextField
-        slotProps={{ select: { inputProps: { "aria-label": "Container Name Prefix" } } }}
+        slotProps={{ select: { inputProps: { "aria-label": "Container name prefix" } } }}
         id="lab-basic-prefix-type"
         select
         size="small"
@@ -42,9 +42,9 @@ export const BasicTab: React.FC<BasicTabProps> = ({ basic, setBasic, isViewMode 
       </TextField>
     </SettingsField>
     {basic.prefixType === "custom" ? (
-      <SettingsField title="Custom Prefix" description="Used instead of the default clab prefix.">
+      <SettingsField title="Custom prefix" description="Used instead of the default clab prefix.">
         <TextField
-          slotProps={{ htmlInput: { "aria-label": "Custom Prefix" } }}
+          slotProps={{ htmlInput: { "aria-label": "Custom prefix" } }}
           id="lab-basic-custom-prefix"
           size="small"
           placeholder="Enter custom prefix"

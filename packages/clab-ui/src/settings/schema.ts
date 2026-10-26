@@ -93,6 +93,7 @@ const TITLES: Record<string, string> = {
   "editor.customNodes": "Custom node templates",
   "editor.updateLinkEndpointsOnKindChange": "Update link endpoints",
   "editor.lockLabByDefault": "Lock canvas by default",
+  "editor.scriptButtons.confirm": "Confirm script buttons",
   "node.execCommandMapping": "Shell commands by node kind",
   "node.sshUserMapping": "SSH users by node kind",
   "node.telnetPort": "Telnet port",

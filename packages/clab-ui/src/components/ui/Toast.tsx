@@ -25,8 +25,8 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
         open
         autoHideDuration={toast.duration ?? 3000}
         onClose={() => onDismiss(toast.id)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-        sx={{ bottom: `${24 + index * 60}px !important` }}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{ top: `${24 + index * 60}px !important` }}
       >
         <Alert
           onClose={() => onDismiss(toast.id)}

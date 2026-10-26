@@ -66,6 +66,12 @@ import {
   type StandaloneAppearance,
   type TabOrientation
 } from "../state/themePreferences";
+import {
+  isScriptButtonConfirm,
+  persistScriptButtonConfirm,
+  readPersistedScriptButtonConfirm,
+  SCRIPT_BUTTON_CONFIRM_OPTIONS
+} from "../../scriptButtons/scriptButtonPolicy";
 
 type SettingsSectionKey = "endpoints" | "general" | "appearance" | "terminal" | "capture" | "about";
 
@@ -459,7 +465,7 @@ function CaptureSettingsSection(props: {
           </ToggleButton>
         </ToggleButtonGroup>
         <TextField
-          label="Session Hostname Override"
+          label="Session hostname override"
           value={props.captureSessionHostname}
           onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
           fullWidth
@@ -522,6 +528,7 @@ export function SettingsOverlay({
   const [autoOpenPalette, setAutoOpenPalette] = useState(readPersistedAutoOpenPalette);
   const [autoOpenPaletteOnSelect, setAutoOpenPaletteOnSelect] = useState(readPersistedAutoOpenPaletteOnSelect);
   const [defaultLabLocked, setDefaultLabLocked] = useState(readPersistedDefaultLabLocked);
+  const [scriptButtonConfirm, setScriptButtonConfirm] = useState(readPersistedScriptButtonConfirm);
   const { fetchEdgeSharkStatus, fetchVersionCheck, fetchVersionInfo } = useWorkspaceHost().api;
   const { capabilities } = useWorkspaceHost();
   const dialogOpen = open;
@@ -793,6 +800,30 @@ export function SettingsOverlay({
                 slotProps={{ input: { "aria-label": "Lock labs by default" } }}
               />
             </SectionCard>
+            <SectionCard
+              title="Confirm script buttons"
+              description="When script buttons on the canvas ask before running their script on the lab host."
+              wide={false}
+            >
+              <TextField
+                select
+                size="small"
+                value={scriptButtonConfirm}
+                slotProps={{ select: { inputProps: { "aria-label": "Confirm script buttons" } } }}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  if (!isScriptButtonConfirm(next)) return;
+                  setScriptButtonConfirm(next);
+                  persistScriptButtonConfirm(next);
+                }}
+              >
+                {SCRIPT_BUTTON_CONFIRM_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </SectionCard>
           </>
         );
       case "appearance":
@@ -811,7 +842,7 @@ export function SettingsOverlay({
               tone="info"
             >
               <TextField
-                label="SSH User Mapping JSON"
+                label="SSH user mapping JSON"
                 value={sshUserMappingText}
                 onChange={(event) => setSshUserMappingText(event.target.value)}
                 fullWidth
@@ -827,7 +858,7 @@ export function SettingsOverlay({
                 sx={{ "& textarea": { fontFamily: MONO_FONT_FAMILY, fontSize: 12 } }}
               />
               <TextField
-                label="Telnet Port"
+                label="Telnet port"
                 value={telnetPortText}
                 onChange={(event) => setTelnetPortText(event.target.value)}
                 fullWidth
@@ -843,7 +874,7 @@ export function SettingsOverlay({
                 data-testid="standalone-settings-telnet-port"
               />
               <TextField
-                label="Terminal Font Size"
+                label="Terminal font size"
                 value={fontSizeText}
                 onChange={(event) => setFontSizeText(event.target.value)}
                 fullWidth
@@ -1002,7 +1033,7 @@ export function SettingsOverlay({
             ) : (
               <span />
             )}
-            <Button variant="outlined" onClick={handleCloseDialog}>
+            <Button variant="text" onClick={handleCloseDialog}>
               Close
             </Button>
           </>

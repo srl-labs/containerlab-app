@@ -152,7 +152,7 @@ export const InspectDetailsDialog: React.FC<InspectDetailsDialogProps> = ({
         >
           Refresh
         </Button>
-        <Button size="small" onClick={onClose}>
+        <Button variant="text" size="small" onClick={onClose}>
           Close
         </Button>
       </DialogActions>

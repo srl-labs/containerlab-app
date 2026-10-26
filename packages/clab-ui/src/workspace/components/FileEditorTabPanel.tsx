@@ -452,7 +452,7 @@ export function FileEditorTabPanel({ onClose, tab }: FileEditorTabPanelProps) {
           }}
           sx={{ minWidth: 64 }}
         >
-          {tab.saving ? "Saving..." : "Save"}
+          {tab.saving ? "Saving…" : "Save"}
         </Button>
       </Box>
       {tab.error ? (
