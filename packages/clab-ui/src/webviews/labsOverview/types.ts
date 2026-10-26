@@ -1,5 +1,7 @@
 import type { HostNodeStatsSample } from "../../host/contracts";
+import type { LabOverviewHost } from "../../workspace/state/labHostResources";
 import type { LabOverviewCard, LabThumbnailSources } from "../../workspace/state/labsOverview";
+import type { EndpointHealthMetrics } from "../../workspace/types";
 
 /** What the labs overview webview shows; the host sends it again whenever labs change. */
 export interface LabsOverviewWebviewState {
@@ -8,6 +10,8 @@ export interface LabsOverviewWebviewState {
   loading: boolean;
   /** Show each card's lab host, when there is more than one. */
   showEndpoints: boolean;
+  /** Local and the lab hosts, with their free resources above the cards. */
+  labHosts: LabOverviewHost[];
   /** Changes when topology files change, so visible thumbnails draw again. */
   sourcesRevision: number;
 }
@@ -22,6 +26,7 @@ export type LabsOverviewOutgoingMessage =
   | { type: "labs-overview:action"; action: LabsOverviewAction; cardId: string }
   | { type: "labs-overview:create-lab" }
   | { type: "labs-overview:load-sources"; requestId: number; cardId: string }
+  | { type: "labs-overview:host-metrics"; requestId: number; endpointId: string }
   | {
       type: "labs-overview:usage-start";
       streamId: number;
@@ -35,6 +40,12 @@ export type LabsOverviewOutgoingMessage =
 export type LabsOverviewIncomingMessage =
   | ({ type: "labs-overview:state" } & LabsOverviewWebviewState)
   | { type: "labs-overview:sources"; requestId: number; sources?: LabThumbnailSources }
+  | {
+      type: "labs-overview:host-metrics";
+      requestId: number;
+      metrics?: EndpointHealthMetrics;
+      error?: string;
+    }
   | {
       type: "labs-overview:usage";
       streamId: number;

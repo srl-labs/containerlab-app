@@ -4,6 +4,7 @@ export * from "./documentUtils";
 export * from "./endpointActions";
 export * from "./endpointStatus";
 export * from "./labTabsStore";
+export * from "./labHostResources";
 export * from "./labsOverview";
 export * from "./labUsage";
 export * from "./labUsageFeed";

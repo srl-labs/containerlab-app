@@ -28,8 +28,10 @@ import {
   type LabThumbnailSources
 } from "../state/labsOverview";
 import { canWatchLabUsage, type LabUsageUpdate, type WatchLabUsage } from "../state/labUsage";
+import type { FetchLabHostMetrics, LabOverviewHost } from "../state/labHostResources";
 import { controlRadius, floatingRadius, headerBarHeight } from "../../theme/surfaces";
 import { useNow } from "../useNow";
+import { LabHostsStrip } from "./LabHostsStrip";
 import { LabThumbnailView } from "./LabThumbnailView";
 import { LabUsageRow } from "./LabUsageRow";
 import { InViewRootContext, useInView, useSeen } from "./useInView";
@@ -37,7 +39,8 @@ import { InViewRootContext, useInView, useSeen } from "./useInView";
 const PREFERENCES_KEY = "clab.workspace.labsOverview.v1";
 const CARD_MIN_WIDTH = 232;
 
-type SectionId = "running" | "undeployed";
+type SectionId = "hosts" | "running" | "undeployed";
+const SECTION_IDS: readonly SectionId[] = ["hosts", "running", "undeployed"];
 type StateFilter = "all" | "running" | "partial" | "stopped" | "undeployed";
 
 const STATE_FILTERS: ReadonlyArray<{ id: Exclude<StateFilter, "all">; label: string }> = [
@@ -55,6 +58,9 @@ export interface LabsOverviewProps {
   lifecycleAvailable: boolean;
   /** Show each card's lab host, when there is more than one. */
   showEndpoints: boolean;
+  /** The lab hosts, shown above the cards with their free resources when `fetchHostMetrics` is given too. */
+  labHosts?: LabOverviewHost[];
+  fetchHostMetrics?: FetchLabHostMetrics;
   loadSources: (card: LabOverviewCard) => Promise<LabThumbnailSources | undefined>;
   /** Changes when topology files change, so visible thumbnails draw again. */
   sourcesRevision: number;
@@ -74,7 +80,7 @@ function readCollapsed(): Set<SectionId> {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(PREFERENCES_KEY) ?? "null");
     const collapsed = typeof value === "object" && value !== null && "collapsed" in value ? value.collapsed : [];
-    return new Set(Array.isArray(collapsed) ? collapsed.filter((id): id is SectionId => id === "running" || id === "undeployed") : []);
+    return new Set(Array.isArray(collapsed) ? collapsed.filter((id): id is SectionId => SECTION_IDS.some((section) => section === id)) : []);
   } catch {
     return new Set();
   }
@@ -237,10 +243,10 @@ function LabCard({ card, now, showEndpoint, lifecycleAvailable, loadSources, sou
   );
 }
 
-function Section({ id, label, cards, collapsed, onToggle, children }: {
+function Section({ id, label, count, collapsed, onToggle, children }: {
   id: SectionId;
   label: string;
-  cards: LabOverviewCard[];
+  count: number;
   collapsed: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -263,16 +269,17 @@ function Section({ id, label, cards, collapsed, onToggle, children }: {
           "@media (prefers-reduced-motion: reduce)": { transition: "none" }
         }} />
         <Typography component="h2" variant="subtitle2">{label}</Typography>
-        <Typography component="span" variant="caption" sx={{ color: "text.secondary" }}>{cards.length}</Typography>
+        <Typography component="span" variant="caption" sx={{ color: "text.secondary" }}>{count}</Typography>
       </ButtonBase>
-      {collapsed ? null : (
-        <Box
-          id={`${regionId}-cards`}
-          sx={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${CARD_MIN_WIDTH}px, 1fr))`, gap: 1.5 }}
-        >
-          {children}
-        </Box>
-      )}
+      {collapsed ? null : <Box id={`${regionId}-cards`}>{children}</Box>}
+    </Box>
+  );
+}
+
+function CardGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(${CARD_MIN_WIDTH}px, 1fr))`, gap: 1.5 }}>
+      {children}
     </Box>
   );
 }
@@ -384,12 +391,13 @@ function FilterBar({ cards, filters, lifecycleAvailable, onChange }: {
   );
 }
 
-function OverviewSections({ props, filtered, onClearFilters }: {
+function OverviewSections({ props, filtered, collapsed, onToggle, onClearFilters }: {
   props: LabsOverviewProps;
   filtered: LabOverviewCard[];
+  collapsed: ReadonlySet<SectionId>;
+  onToggle: (id: SectionId) => void;
   onClearFilters: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(readCollapsed);
   const now = useNow(60_000);
   if (props.cards.length === 0) {
     return props.loading === true
@@ -411,13 +419,6 @@ function OverviewSections({ props, filtered, onClearFilters }: {
       />
     );
   }
-  const toggle = (id: SectionId) => {
-    const next = new Set(collapsed);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setCollapsed(next);
-    persistCollapsed(next);
-  };
   const renderCards = (sectionCards: LabOverviewCard[]) => sectionCards.map((card) => (
     <LabCard
       key={card.id}
@@ -439,13 +440,13 @@ function OverviewSections({ props, filtered, onClearFilters }: {
   return (
     <>
       {props.lifecycleAvailable && running.length > 0 ? (
-        <Section id="running" label="Running" cards={running} collapsed={collapsed.has("running")} onToggle={() => toggle("running")}>
-          {renderCards(running)}
+        <Section id="running" label="Running" count={running.length} collapsed={collapsed.has("running")} onToggle={() => onToggle("running")}>
+          <CardGrid>{renderCards(running)}</CardGrid>
         </Section>
       ) : null}
       {undeployed.length > 0 ? (
-        <Section id="undeployed" label="Not deployed" cards={undeployed} collapsed={collapsed.has("undeployed")} onToggle={() => toggle("undeployed")}>
-          {renderCards(undeployed)}
+        <Section id="undeployed" label="Not deployed" count={undeployed.length} collapsed={collapsed.has("undeployed")} onToggle={() => onToggle("undeployed")}>
+          <CardGrid>{renderCards(undeployed)}</CardGrid>
         </Section>
       ) : null}
     </>
@@ -457,8 +458,17 @@ function OverviewSections({ props, filtered, onClearFilters }: {
  * and topology files nobody deployed. The explorer stays the dense view.
  */
 export function LabsOverview(props: LabsOverviewProps): React.JSX.Element {
-  const { cards, lifecycleAvailable, onClose, onCreateLab } = props;
+  const { cards, lifecycleAvailable, labHosts, fetchHostMetrics, onClose, onCreateLab } = props;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const toggle = (id: SectionId) => {
+    const next = new Set(collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCollapsed(next);
+    persistCollapsed(next);
+  };
+  const showHosts = lifecycleAvailable && fetchHostMetrics !== undefined && labHosts !== undefined && labHosts.length > 0;
   // Cards watch their visibility within the scrolling list.
   const [scrollRoot, setScrollRoot] = useState<HTMLElement | null>(null);
   const filtered = cards.filter((card) => matchesFilters(card, filters));
@@ -491,7 +501,24 @@ export function LabsOverview(props: LabsOverviewProps): React.JSX.Element {
       ) : null}
       <Box ref={setScrollRoot} sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: 2, pt: 0.5, pb: 2 }}>
         <InViewRootContext.Provider value={scrollRoot}>
-          <OverviewSections props={props} filtered={filtered} onClearFilters={() => setFilters(NO_FILTERS)} />
+          {showHosts ? (
+            <Section id="hosts" label="Lab hosts" count={labHosts.length} collapsed={collapsed.has("hosts")} onToggle={() => toggle("hosts")}>
+              <LabHostsStrip
+                hosts={labHosts}
+                cards={cards}
+                fetchMetrics={fetchHostMetrics}
+                selectedLabel={filters.endpoint}
+                onSelect={(endpoint) => setFilters({ ...filters, endpoint })}
+              />
+            </Section>
+          ) : null}
+          <OverviewSections
+            props={props}
+            filtered={filtered}
+            collapsed={collapsed}
+            onToggle={toggle}
+            onClearFilters={() => setFilters(NO_FILTERS)}
+          />
         </InViewRootContext.Provider>
       </Box>
     </Box>
