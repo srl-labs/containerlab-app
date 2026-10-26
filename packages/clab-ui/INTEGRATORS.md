@@ -551,8 +551,14 @@ type TopologySnapshot = {
   labSettings?: LabSettings;
   canUndo: boolean;
   canRedo: boolean;
+  history?: { scope: string; undo: number[]; redo: number[] };
 };
 ```
+
+`history` numbers the host's undo and redo steps, each stack with its next step
+last. The UI orders unsaved YAML and JSON tab edits among them, so one undo
+history covers the canvas and the source tabs. `TopologySessionCore` reports it;
+without it, undo takes back unsaved source edits first, then the host's steps.
 
 Minimum practical requirements:
 
@@ -664,6 +670,16 @@ and `--restore`); `restoresSnapshots(options)` tells whether a deploy uses them.
 `runNodesAction(action, nodeNames)` is optional: start, stop or restart several selected
 nodes in one call. Without it, the canvas calls `runNodeAction` once per node. The window
 host posts `{ command: "clab-node-<action>", nodeName, nodeNames }`.
+
+`openLabFile(request)` is optional: it opens a file the topology refers to (a bind
+source, startup config or license) in the host's editor, creating it empty first when
+`request.create` is set and the file is missing. `request.path` is relative to the
+topology file's directory, or absolute on the lab host; the UI has already expanded
+containerlab's variables. Without it, the YAML editor shows no file links and nodes have
+no Files menu or open buttons. The window host posts `{ command: "openLabFile", path, create }`.
+`resolveWorkspaceLabFile` from `/host` maps a request to a workspace path for hosts that
+address files from a workspace root. `WorkspaceHost.openLabFile` does the same for
+topologies edited as text in a workspace file tab.
 
 `labOperations` is optional (`ClabUiLabOperationsHost` in `/host`): `support()`, `exec`,
 `saveSnapshots`, `saveConfigs` (with an optional copy directory) and `inspectDetails` for

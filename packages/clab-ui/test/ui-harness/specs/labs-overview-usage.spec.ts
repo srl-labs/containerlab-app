@@ -80,3 +80,50 @@ test.describe("Labs overview usage", () => {
     await expect.poll(() => activeWatches(page)).toEqual([]);
   });
 });
+
+function postedToHost(page: Page): Promise<Array<{ type: string; action?: string; cardId?: string }>> {
+  return page.evaluate(() => (window as unknown as { __OVERVIEW__: { posted: Array<{ type: string }> } }).__OVERVIEW__.posted);
+}
+
+/** In VS Code the overview is its own editor tab; the extension host sends labs, files and usage. */
+test.describe("Labs overview in an editor tab", () => {
+  test("shows the host's labs with thumbnails and live usage, and sends actions back", async ({ page }) => {
+    const errors = await openOverview(page, "host=webview");
+    const card = page.getByRole("article", { name: "spine-leaf" });
+    await expect(card.getByTestId("lab-card-thumbnail")).toHaveAttribute("data-loaded", "true");
+    await expect(card.getByTestId("lab-card-usage")).toHaveAttribute("data-status", "live");
+    await expect(card.getByTestId("lab-card-usage-cpu-value")).toHaveText(/^\d+(\.\d)? %$/);
+    await expect(card.getByTestId("lab-thumbnail-cpu")).toHaveCount(6);
+    // The tab closes like any editor; links are a browser thing.
+    await expect(page.getByRole("button", { name: "Close labs overview" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Copy link/ })).toHaveCount(0);
+
+    await card.getByRole("button", { name: "Open spine-leaf" }).click();
+    await page.getByRole("article", { name: "simple" }).getByRole("button", { name: "Deploy simple" }).click();
+    await page.getByRole("button", { name: "New lab" }).click();
+    await expect.poll(async () => (await postedToHost(page)).filter((message) => message.type !== "labs-overview:load-sources" && !message.type.startsWith("labs-overview:usage"))).toEqual([
+      { type: "labs-overview:ready" },
+      { type: "labs-overview:action", action: "open", cardId: expect.stringMatching(/spine-leaf\.clab\.yml$/) },
+      { type: "labs-overview:action", action: "deploy", cardId: expect.stringMatching(/simple\.clab\.yml$/) },
+      { type: "labs-overview:create-lab" }
+    ]);
+    expect(errors).toEqual([]);
+  });
+
+  test("a lab host without node stats shows no usage row", async ({ page }) => {
+    await openOverview(page, "host=webview&stats=unavailable");
+    await expect(page.getByRole("article", { name: "spine-leaf" }).getByTestId("lab-card-thumbnail")).toHaveAttribute("data-loaded", "true");
+    await expect(page.getByTestId("lab-card-usage")).toHaveCount(0);
+  });
+
+  test("streams follow the visible cards", async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 700 });
+    await openOverview(page, "host=webview&many=1");
+    await expect.poll(() => activeWatches(page)).toContain("spine-leaf");
+    expect(await activeWatches(page)).not.toContain("lab-57");
+
+    await page.getByRole("article", { name: "lab-57" }).scrollIntoViewIfNeeded();
+    await expect.poll(() => activeWatches(page)).toContain("lab-57");
+    await expect.poll(() => activeWatches(page)).not.toContain("spine-leaf");
+  });
+});

@@ -115,6 +115,25 @@ test.describe("Zoom and Pan", () => {
     expect(panMoved).toBe(true);
   });
 
+  test("fitting a lab of one node stops at a normal zoom", async ({ page, topoViewerPage }) => {
+    await topoViewerPage.gotoFile("empty.clab.yml");
+    await topoViewerPage.waitForCanvasReady();
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await topoViewerPage.createNode("n1", { x: 200, y: 200 });
+    await topoViewerPage.setZoom(0.5);
+    // The palette opens on an empty lab; fit the whole canvas.
+    await page.getByTestId("panel-toggle-btn").click();
+    await expect(page.getByTestId("context-panel")).toHaveCSS("pointer-events", "none");
+
+    await page.getByTestId("navbar-fit-viewport").click();
+    await expect.poll(() => topoViewerPage.getZoom()).toBeCloseTo(2, 1);
+
+    // By hand the canvas still zooms in further.
+    await topoViewerPage.setZoom(6);
+    expect(await topoViewerPage.getZoom()).toBeCloseTo(6, 1);
+  });
+
   test("zoom can be set to extreme values", async ({ topoViewerPage }) => {
     // Set zoom to very small value
     await topoViewerPage.setZoom(0.1);

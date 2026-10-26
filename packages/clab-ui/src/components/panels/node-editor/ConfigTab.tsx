@@ -14,6 +14,7 @@ import {
 import type { TabProps } from "./types";
 import { inheritedFieldHint, inheritedListItems, inheritedMapEntries } from "./inheritanceHints";
 import { CredentialsSection } from "./CredentialsSection";
+import { OpenLabFileButton, useNodeLabFile } from "./OpenLabFileButton";
 
 type StartupConfigMode = "default" | "enforce" | "suppress";
 
@@ -27,6 +28,28 @@ function isStartupConfigMode(value: string): value is StartupConfigMode {
   return value === "default" || value === "enforce" || value === "suppress";
 }
 
+/**
+ * A field with an open button for the file it names, when there is one. The
+ * field keeps its place in the tree, so typing never remounts it.
+ */
+const FileField: React.FC<{ field: React.ReactNode; button: React.ReactElement | null }> = ({
+  field,
+  button
+}) => (
+  <Box sx={{ display: "flex", alignItems: "flex-start" }}>
+    <Box sx={{ flex: 1, minWidth: 0 }}>{field}</Box>
+    {/* Centered on the 40px input, above the helper text. */}
+    {button !== null && (
+      <Box sx={{ display: "flex", alignItems: "center", height: 40, ml: 1 }}>{button}</Box>
+    )}
+  </Box>
+);
+
+/** The node's own value, else what it inherits. */
+function effectiveValue(own: string | undefined, inherited: string | undefined): string | undefined {
+  return own !== undefined && own !== "" ? own : inherited;
+}
+
 function getStartupConfigMode(data: {
   enforceStartupConfig?: boolean;
   suppressStartupConfig?: boolean;
@@ -37,8 +60,14 @@ function getStartupConfigMode(data: {
 }
 
 export const ConfigTab: React.FC<TabProps> = (props) => {
-  const { data, onChange } = props;
+  const { data, onChange, inheritance } = props;
   const mode = getStartupConfigMode(data);
+  // Templates are no node: their files have nothing to resolve against.
+  const labFile = useNodeLabFile(data.isCustomTemplate === true ? undefined : data.name);
+  const fileButton = (value: string | undefined, kind: "bind" | "file", testId: string) => {
+    const file = labFile(value, kind);
+    return file ? <OpenLabFileButton file={file} testId={testId} /> : null;
+  };
   const modeHint =
     inheritedFieldHint(props, "enforceStartupConfig") ??
     inheritedFieldHint(props, "suppressStartupConfig");
@@ -69,14 +98,23 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <PanelSection title="Startup Configuration">
-        <InputField
-          id="node-startup-config"
-          label="Startup configuration Path"
-          value={data.startupConfig ?? ""}
-          onChange={(value) => onChange({ startupConfig: value })}
-          placeholder="Path to startup configuration file"
-          helperText={inheritedFieldHint(props, "startupConfig")}
-          magicVariables
+        <FileField
+          field={
+            <InputField
+              id="node-startup-config"
+              label="Startup configuration Path"
+              value={data.startupConfig ?? ""}
+              onChange={(value) => onChange({ startupConfig: value })}
+              placeholder="Path to startup configuration file"
+              helperText={inheritedFieldHint(props, "startupConfig")}
+              magicVariables
+            />
+          }
+          button={fileButton(
+            effectiveValue(data.startupConfig, inheritance?.values.startupConfig),
+            "file",
+            "node-startup-config-open"
+          )}
         />
         <SelectField
           id="node-startup-config-mode"
@@ -93,13 +131,22 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
       </PanelSection>
 
       <PanelSection title="License">
-        <InputField
-          id="node-license"
-          label="License File"
-          value={data.license ?? ""}
-          onChange={(value) => onChange({ license: value })}
-          placeholder="Path to license file"
-          helperText={inheritedFieldHint(props, "license")}
+        <FileField
+          field={
+            <InputField
+              id="node-license"
+              label="License File"
+              value={data.license ?? ""}
+              onChange={(value) => onChange({ license: value })}
+              placeholder="Path to license file"
+              helperText={inheritedFieldHint(props, "license")}
+            />
+          }
+          button={fileButton(
+            effectiveValue(data.license, inheritance?.values.license),
+            "file",
+            "node-license-open"
+          )}
         />
       </PanelSection>
 
@@ -114,6 +161,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
           inheritedItems={inheritedListItems(props, "binds")}
           id="node-binds"
           magicVariables
+          renderItemAction={(item) => fileButton(item, "bind", "node-bind-open")}
         />
       </PanelAddSection>
 

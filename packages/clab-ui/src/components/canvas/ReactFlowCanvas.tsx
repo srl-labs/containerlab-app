@@ -73,12 +73,12 @@ import type {
   ReactFlowCanvasProps,
   ReactFlowCanvasRef
 } from "./types";
+import { MAX_FIT_ZOOM } from "./fitView";
 
 const GRID_SIZE = 20;
 const QUADRATIC_GRID_SIZE = 40;
 const DEFAULT_GRID_LINE_WIDTH = 0.5;
 const MIN_ZOOM = 0.1;
-const MAX_FIT_ZOOM = 2;
 type ViewportState = { x: number; y: number; zoom: number };
 
 /** Hook for wrapped node click handling */
@@ -340,7 +340,7 @@ const canvasStyle: React.CSSProperties = {
 // Constants
 const proOptions = { hideAttribution: true };
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
-const fitViewOptions = { padding: 0.2 };
+const fitViewOptions = { padding: 0.2, maxZoom: MAX_FIT_ZOOM };
 const LOW_DETAIL_ZOOM_THRESHOLD = 0.5;
 // Below this zoom the CPU badge's text is too small to read.
 const CPU_BADGE_MIN_ZOOM = 0.6;
@@ -449,50 +449,6 @@ function useRenderConfig(
   );
 
   return { isLowDetail, edgeRenderConfig, nodeRenderConfig };
-}
-
-/** Hook for node drag handler wrappers with helper line support */
-function useDragHandlers(
-  onNodeDrag: (event: MouseEvent | TouchEvent, node: Node) => void,
-  wrappedOnNodeDragStart: (event: MouseEvent | TouchEvent, node: Node) => void,
-  wrappedOnNodeDragStop: (event: MouseEvent | TouchEvent, node: Node) => void,
-  helperLineHandlers?: {
-    updateHelperLines: (node: Node, allNodes: Node[]) => void;
-    clearHelperLines: () => void;
-    allNodes: Node[];
-    isGeoLayout: boolean;
-  }
-) {
-  const handleNodeDragStart = useCallback(
-    (event: MouseEvent | TouchEvent, node: Node) => {
-      wrappedOnNodeDragStart(event, node);
-    },
-    [wrappedOnNodeDragStart]
-  );
-
-  const handleNodeDrag = useCallback(
-    (event: MouseEvent | TouchEvent, node: Node) => {
-      onNodeDrag(event, node);
-      // Update helper lines during drag (skip in geo layout).
-      if (helperLineHandlers && !helperLineHandlers.isGeoLayout) {
-        helperLineHandlers.updateHelperLines(node, helperLineHandlers.allNodes);
-      }
-    },
-    [onNodeDrag, helperLineHandlers]
-  );
-
-  const handleNodeDragStop = useCallback(
-    (event: MouseEvent | TouchEvent, node: Node) => {
-      wrappedOnNodeDragStop(event, node);
-      // Clear helper lines when drag ends
-      if (helperLineHandlers) {
-        helperLineHandlers.clearHelperLines();
-      }
-    },
-    [wrappedOnNodeDragStop, helperLineHandlers]
-  );
-
-  return { handleNodeDragStart, handleNodeDrag, handleNodeDragStop };
 }
 
 /** Hook to wrap onInit with additional callback */
@@ -1355,7 +1311,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
 
         const occlusion = getContextPanelOcclusion(canvasContainer, isContextPanelOpen);
         if (occlusion.width <= 0) {
-          await instance.fitView(options);
+          await instance.fitView({ ...options, maxZoom: MAX_FIT_ZOOM });
           return;
         }
 
@@ -1372,7 +1328,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
           options.padding
         );
         if (!hasFiniteViewport(viewport)) {
-          await instance.fitView(options);
+          await instance.fitView({ ...options, maxZoom: MAX_FIT_ZOOM });
           return;
         }
 
@@ -1530,6 +1486,14 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
     // Refs for context menu (to avoid re-renders)
     const { nodesRef, edgesRef } = useGraphRefs(allNodes, allEdges);
 
+    // Helper lines for node alignment during drag; dragged nodes snap to them
+    const { helperLines, beginHelperLines, updateHelperLines, clearHelperLines } =
+      useHelperLines();
+    const helperLineHandlers = useMemo(
+      () => ({ beginHelperLines, updateHelperLines, clearHelperLines }),
+      [beginHelperLines, updateHelperLines, clearHelperLines]
+    );
+
     const handlers = useCanvasHandlers({
       selectNode,
       selectEdge,
@@ -1549,6 +1513,7 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
         getGroupMembers: annotationHandlers?.getGroupMembers,
         onNodeDropped: annotationHandlers?.onNodeDropped
       },
+      helperLines: helperLineHandlers,
       onTopologyNodePositionCommit,
       reactFlowInstanceRef,
       geoLayout: {
@@ -1569,9 +1534,6 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
     const sourceNodePosition = useSourceNodePosition(linkSourceNode, allNodes);
     const { linkTargetNodeId, handleNodeMouseEnter, handleNodeMouseLeave } =
       useLinkTargetHover(linkSourceNode);
-
-    // Helper lines for node alignment during drag
-    const { helperLines, updateHelperLines, clearHelperLines } = useHelperLines();
 
     // Use extracted hooks for render config and drag handlers
     const { isLowDetail, edgeRenderConfig, nodeRenderConfig } = useRenderConfig(
@@ -1624,9 +1586,11 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
     const refHandle = useMemo(
       () => ({
         ...refMethods,
-        fit: fitCanvas
+        fit: fitCanvas,
+        startLinkCreation,
+        cancelLinkCreation
       }),
-      [refMethods, fitCanvas]
+      [refMethods, fitCanvas, startLinkCreation, cancelLinkCreation]
     );
     useImperativeHandle(ref, () => refHandle, [refHandle]);
 
@@ -1746,17 +1710,11 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
 
     const { reactFlowInstance: handlersReactFlowInstance } = handlers;
 
-    const { handleNodeDragStart, handleNodeDrag, handleNodeDragStop } = useDragHandlers(
-      handlers.onNodeDrag,
-      wrappedOnNodeDragStart,
-      wrappedOnNodeDragStop,
-      {
-        updateHelperLines,
-        clearHelperLines,
-        allNodes,
-        isGeoLayout
-      }
-    );
+    // Alignment guides and their snapping run in the canvas handlers, which see
+    // each position change before it reaches the store.
+    const handleNodeDragStart = wrappedOnNodeDragStart;
+    const handleNodeDrag = handlers.onNodeDrag;
+    const handleNodeDragStop = wrappedOnNodeDragStop;
 
     const { onInit: handleOnInit } = handlers;
 

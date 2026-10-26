@@ -164,3 +164,75 @@ test("inherited config leaves out the node's own values", () => {
     env: { A: "1", B: "2" }
   });
 });
+
+test("stages add up across levels, a wait-for entry only once", () => {
+  const parsed = topo({
+    defaults: { stages: { create: { "wait-for": [{ node: "db", stage: "healthy" }] } } },
+    kinds: {
+      linux: {
+        stages: {
+          create: { "wait-for": [{ node: "db", stage: "healthy" }], exec: [{ command: "echo k" }] }
+        }
+      }
+    },
+    groups: { g: { stages: { healthy: { exec: [{ command: "echo g" }] } } } },
+    nodes: {}
+  });
+  const resolved = resolveNodeConfig(parsed, {
+    kind: "linux",
+    group: "g",
+    stages: { create: { "wait-for": [{ node: "dns" }], exec: [{ command: "echo n" }] } }
+  });
+  assert.deepEqual(resolved.stages, {
+    create: {
+      "wait-for": [{ node: "db", stage: "healthy" }, { node: "dns" }],
+      exec: [{ command: "echo k" }, { command: "echo n" }]
+    },
+    healthy: { exec: [{ command: "echo g" }] }
+  });
+  assert.deepEqual(resolveInheritedConfig(parsed, { kind: "linux", group: "g" }).stages, {
+    create: { "wait-for": [{ node: "db", stage: "healthy" }], exec: [{ command: "echo k" }] },
+    healthy: { exec: [{ command: "echo g" }] }
+  });
+});
+
+test("username and password come from one level, the identity file on its own", () => {
+  const parsed = topo({
+    defaults: { credentials: { username: "d", password: "d", "identity-file": "~/.ssh/d" } },
+    groups: { g: { credentials: { password: "g" } } },
+    nodes: {}
+  });
+  assert.deepEqual(resolveNodeConfig(parsed, { group: "g" }).credentials, {
+    password: "g",
+    "identity-file": "~/.ssh/d"
+  });
+  assert.deepEqual(
+    resolveNodeConfig(parsed, { group: "g", credentials: { "identity-file": "~/.ssh/n" } })
+      .credentials,
+    { password: "g", "identity-file": "~/.ssh/n" }
+  );
+});
+
+test("the node type is trimmed", () => {
+  const parsed = topo({ kinds: { nokia_srlinux: { type: " ixr-d2l " } }, nodes: {} });
+  assert.equal(resolveNodeConfig(parsed, { kind: "nokia_srlinux" }).type, "ixr-d2l");
+});
+
+test("a node without a definition takes flags from the defaults only and has no config", () => {
+  const parsed = topo({
+    defaults: { kind: "linux", "auto-remove": false, config: { vars: { a: 1 } } },
+    kinds: { linux: { privileged: true, "auto-remove": true, image: "alpine" } },
+    nodes: {}
+  });
+  const resolved = resolveNodeConfig(parsed, {}, { emptyDefinition: true });
+  assert.equal(resolved.privileged, undefined);
+  assert.equal(resolved["auto-remove"], false);
+  assert.equal(resolved.config, undefined);
+  assert.equal(resolved.image, "alpine");
+  assert.deepEqual(resolveInheritedFrom(parsed, {}, { emptyDefinition: true }), {
+    kind: "defaults",
+    "auto-remove": "defaults",
+    image: "kind"
+  });
+  assert.equal(resolveNodeConfig(parsed, {}).privileged, true);
+});

@@ -29,6 +29,7 @@ import {
 import { AUTO_CREATED_TRAFFIC_RATE_LABEL } from "../annotations/constants";
 import { useGraphStore } from "../stores/graphStore";
 import { useTopoViewerStore } from "../stores/topoViewerStore";
+import { syncEditHistory } from "../stores/editHistoryStore";
 import type {
   LinkLabelMode,
   NonTelemetryLinkLabelMode,
@@ -340,6 +341,7 @@ function syncUndoRedo(snapshot: TopologySnapshot): void {
     canUndo: snapshot.canUndo,
     canRedo: snapshot.canRedo
   });
+  syncEditHistory(snapshot);
 }
 
 async function persistLayoutPositions(
@@ -682,7 +684,7 @@ function buildInitialTopoViewerData(
     nodeBoxSpacing: nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
     linkStyle: linkStyle ?? DEFAULT_LINK_STYLE,
     mgmtNetworkBadge: mgmtNetworkBadge ?? DEFAULT_MGMT_NETWORK_BADGE,
-    showNodeCpu: viewerSettings.showNodeCpu !== false,
+    showNodeCpu: viewerSettings.showNodeCpu === true,
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,
@@ -749,6 +751,7 @@ export function applySnapshotToStores(
     annotations.trafficRateAnnotations
   );
   useTopoViewerStore.getState().setInitialData(initialData);
+  syncEditHistory(snapshot);
 
   if (options.isInitialLoad === true) {
     useCanvasStore.getState().requestFitView();

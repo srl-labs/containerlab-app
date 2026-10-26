@@ -70,6 +70,14 @@
       "types": "./dist/clos-generator/index.d.ts",
       "import": "./dist/clos-generator/index.js"
     },
+    "./labs-overview": {
+      "types": "./dist/labs-overview/index.d.ts",
+      "import": "./dist/labs-overview/index.js"
+    },
+    "./labs-overview/cards": {
+      "types": "./dist/labs-overview/cards.d.ts",
+      "import": "./dist/labs-overview/cards.js"
+    },
     "./wireshark-vnc": {
       "types": "./dist/wireshark-vnc/index.d.ts",
       "import": "./dist/wireshark-vnc/index.js"

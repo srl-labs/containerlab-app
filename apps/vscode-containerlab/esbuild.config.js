@@ -10,6 +10,7 @@ const iifeWebviewEntries = {
   welcomePageWebview: path.join(__dirname, "src/webviews/welcome/entry.tsx"),
   settingsWebview: path.join(__dirname, "src/webviews/settings/entry.tsx"),
   inspectWebview: path.join(__dirname, "src/webviews/inspect/entry.tsx"),
+  labsOverviewWebview: path.join(__dirname, "src/webviews/labsOverview/entry.tsx"),
   imageManagerWebview: path.join(__dirname, "src/webviews/imageManager/entry.tsx"),
   nodeImpairmentsWebview: path.join(__dirname, "src/webviews/nodeImpairments/entry.tsx"),
   closGeneratorWebview: path.join(__dirname, "src/webviews/closGenerator/entry.tsx"),

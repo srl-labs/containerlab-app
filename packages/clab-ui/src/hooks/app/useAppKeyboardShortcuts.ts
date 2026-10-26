@@ -7,7 +7,8 @@
  */
 import React from "react";
 
-import { useKeyboardShortcuts } from "../ui/useKeyboardShortcuts";
+import { useKeyboardShortcuts, type CanvasToolHandlers } from "../ui/useKeyboardShortcuts";
+import type { ZOrderAction } from "../../annotations/annotationZOrder";
 
 import type { ClipboardHandlersReturn } from "./useClipboardHandlers";
 
@@ -44,6 +45,8 @@ export interface AppKeyboardShortcutsConfig {
   };
   handleDeselectAll: () => void;
   onLockedAction?: () => void;
+  tools?: CanvasToolHandlers;
+  onZOrder?: (action: ZOrderAction) => void;
 }
 
 /**
@@ -60,7 +63,9 @@ export function useAppKeyboardShortcuts(config: AppKeyboardShortcutsConfig): voi
     clipboardHandlers,
     deleteHandlers,
     handleDeselectAll,
-    onLockedAction
+    onLockedAction,
+    tools,
+    onZOrder
   } = config;
 
   // Combined selection IDs (text + shape + group annotations)
@@ -106,6 +111,8 @@ export function useAppKeyboardShortcuts(config: AppKeyboardShortcutsConfig): voi
     hasAnnotationClipboard: clipboardHandlers.hasClipboardData,
     hasGraphClipboard: clipboardHandlers.hasClipboardData,
     onCreateGroup: annotations.handleAddGroup,
-    onLockedAction
+    onLockedAction,
+    tools,
+    onZOrder
   });
 }

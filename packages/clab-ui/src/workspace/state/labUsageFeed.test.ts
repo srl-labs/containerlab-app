@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { LabOverviewCard, LabUsageUpdate } from "@containerlab/clab-ui/workspace/state";
-import type { LabStatsSample } from "@srl-labs/containerlab-lab-backend";
+import type { HostNodeStatsSample } from "../../host/contracts";
 
-import { createLabUsageFeed, MAX_LAB_USAGE_STREAMS, type LabUsageFeedDeps } from "./standaloneLabUsage";
+import type { LabOverviewCard } from "./labsOverview";
+import type { LabUsageUpdate } from "./labUsage";
+import { createLabUsageFeed, MAX_LAB_USAGE_STREAMS, type LabUsageFeedDeps } from "./labUsageFeed";
 
 function card(labName: string, endpointId = "ep1"): LabOverviewCard {
   return {
@@ -13,9 +14,8 @@ function card(labName: string, endpointId = "ep1"): LabOverviewCard {
   };
 }
 
-function sample(cpuPercent: number): LabStatsSample {
+function sample(cpuPercent: number): HostNodeStatsSample {
   return {
-    type: "stats",
     time: new Date().toISOString(),
     intervalSeconds: 3,
     nodes: [{ name: "clab-x-a", nodeName: "a", cpuPercent, memoryBytes: 1024 }]
@@ -24,7 +24,7 @@ function sample(cpuPercent: number): LabStatsSample {
 
 /** A stats stream the test feeds by hand, ending when its signal aborts. */
 class FakeStream {
-  readonly queue: LabStatsSample[] = [];
+  readonly queue: HostNodeStatsSample[] = [];
   error: unknown;
   private wake?: () => void;
 
@@ -32,7 +32,7 @@ class FakeStream {
     signal.addEventListener("abort", () => this.wake?.());
   }
 
-  push(value: LabStatsSample): void {
+  push(value: HostNodeStatsSample): void {
     this.queue.push(value);
     this.wake?.();
   }
@@ -42,7 +42,7 @@ class FakeStream {
     this.wake?.();
   }
 
-  async *values(): AsyncGenerator<LabStatsSample> {
+  async *values(): AsyncGenerator<HostNodeStatsSample> {
     while (!this.signal.aborted) {
       const next = this.queue.shift();
       if (next) {

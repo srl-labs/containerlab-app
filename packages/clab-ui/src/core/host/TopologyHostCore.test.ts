@@ -10,6 +10,7 @@ import type {
 } from "../types/messages";
 import type { FileSystemAdapter } from "../io/types";
 import { extractNodeYamlSources } from "../io/NodeYamlClone";
+import { createRuntimeContainerDataProvider } from "../../topology/runtime";
 
 type AckWithSnapshot = Extract<TopologyHostResponseMessage, { type: "topology-host:ack" }> & {
   snapshot: TopologySnapshot;
@@ -514,4 +515,100 @@ test("a failing variable lookup keeps the declared lab name", async () => {
   const snapshot = await host.getSnapshot();
   assert.equal(snapshot.labName, "demo");
   assert.equal(snapshot.variables, undefined);
+});
+
+test("running containers give their nodes a state and the docker status line", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  await fs.writeFile(
+    "/labs/demo.clab.yml",
+    `name: demo
+topology:
+  nodes:
+    srl1:
+      kind: nokia_srlinux
+    srl2:
+      kind: nokia_srlinux
+  links: []
+`
+  );
+  const container = (nodeName: string, status: string) => ({
+    name: `clab-demo-${nodeName}`,
+    nodeName,
+    labName: "demo",
+    state: "running",
+    status,
+    kind: "nokia_srlinux",
+    image: "",
+    ipv4Address: "",
+    ipv6Address: ""
+  });
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: "/labs/demo.clab.yml",
+    mode: "edit",
+    deploymentState: "deployed",
+    containerDataProvider: createRuntimeContainerDataProvider([
+      container("srl1", "Up 3 seconds (health: starting)"),
+      container("srl2", "Up 2 minutes")
+    ])
+  });
+
+  const snapshot = await host.getSnapshot();
+  const extraData = (id: string) =>
+    snapshot.nodes.find((node) => node.id === id)?.data.extraData as Record<string, unknown>;
+  assert.equal(extraData("srl1").state, "running");
+  assert.equal(extraData("srl1").status, "Up 3 seconds (health: starting)");
+  assert.equal(extraData("srl2").status, "Up 2 minutes");
+});
+
+function historyOf(snapshot: TopologySnapshot): NonNullable<TopologySnapshot["history"]> {
+  assert.ok(snapshot.history);
+  return snapshot.history;
+}
+
+test("history steps keep their numbers between undo and redo", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/history-steps.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath,
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+
+  const initial = await host.getSnapshot();
+  assert.deepEqual(historyOf(initial).undo, []);
+  const first = await apply(host, initial.revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+  const second = await apply(host, first.snapshot.revision, {
+    command: "setYamlContent",
+    payload: { content: BASE_YAML }
+  });
+  const steps = historyOf(second.snapshot).undo;
+  assert.equal(steps.length, 2);
+  const [firstStep, secondStep] = steps;
+  assert.ok(secondStep > firstStep);
+
+  const undone = await apply(host, second.snapshot.revision, { command: "undo" });
+  assert.deepEqual(historyOf(undone.snapshot).undo, [firstStep]);
+  assert.deepEqual(historyOf(undone.snapshot).redo, [secondStep]);
+  const redone = await apply(host, undone.snapshot.revision, { command: "redo" });
+  assert.deepEqual(historyOf(redone.snapshot).undo, [firstStep, secondStep]);
+  assert.equal(historyOf(redone.snapshot).scope, historyOf(initial).scope);
+
+  // A new edit after an undo gets a new number and drops the redo step.
+  const again = await apply(host, redone.snapshot.revision, { command: "undo" });
+  const third = await apply(host, again.snapshot.revision, {
+    command: "setYamlContent",
+    payload: { content: `${CHANGED_YAML}# note\n` }
+  });
+  assert.deepEqual(historyOf(third.snapshot).redo, []);
+  assert.ok((historyOf(third.snapshot).undo.at(-1) ?? 0) > secondStep);
+
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const external = await host.onExternalChange();
+  assert.deepEqual(historyOf(external), { scope: historyOf(initial).scope, undo: [], redo: [] });
 });

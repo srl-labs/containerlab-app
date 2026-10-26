@@ -10,6 +10,8 @@ export interface TabDefinition {
   id: string;
   label: string;
   hidden?: boolean;
+  /** Native tooltip, e.g. the file a source tab edits */
+  title?: string;
 }
 
 interface TabNavigationProps {
@@ -87,6 +89,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({
           key={tab.id}
           value={tab.id}
           label={tab.label}
+          title={tab.title}
           data-tab={tab.id}
           data-testid={`panel-tab-${tab.id}`}
         />

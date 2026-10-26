@@ -12,6 +12,7 @@ import type {
 import type { TopologySessionClient } from "../session/client";
 import { getRecordUnknown } from "../core/utilities/typeHelpers";
 import { useTopoViewerStore } from "../stores/topoViewerStore";
+import { syncEditHistory } from "../stores/editHistoryStore";
 
 import { enqueueHostCommand } from "./topologyHostQueue";
 import { applySnapshotToStores } from "./topologyHostSync";
@@ -51,6 +52,7 @@ async function handleHostResponse(
       canUndo: snapshot.canUndo,
       canRedo: snapshot.canRedo
     });
+    syncEditHistory(snapshot);
   };
 
   const syncSource = (snapshot: TopologySnapshot) => {

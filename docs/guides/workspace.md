@@ -38,7 +38,7 @@ Along the top of the canvas:
 | Play and its menu | Deploy, apply, redeploy, destroy, start or stop nodes. See [Run a lab](labs.md). |
 | Lock | Allow or block edits. |
 | Filter | Find a node by name. |
-| Undo, redo | Step through your edits. |
+| Undo, redo | Step through your edits, on the canvas and in the YAML and JSON tabs alike. |
 | Bulk Link Devices | Connect many nodes by name pattern. |
 | Layout | Arrange the nodes automatically. |
 | Links | Show interface names always, on select, or never. |
@@ -52,7 +52,7 @@ Panels open on the side of the canvas and stay out of the way otherwise.
 
 - **Palette**: node templates, networks, and annotations to drag onto the canvas.
 - **Node Editor** and **Link Editor**: every property of the selected item.
-- **Nodes**, **Annotations**, **YAML**, and **JSON** tabs: lists of the lab's nodes and annotations, and the two files behind the canvas, editable.
+- **Nodes**, **Annotations**, **YAML**, and **JSON** tabs: lists of the lab's nodes and annotations, and the two files behind the canvas, editable. Typing stays a draft until you save it. Undo and redo, from the toolbar or with Ctrl+Z inside the editor, walk your typing and your canvas edits together, in the order you made them; a pause in typing starts a new step.
 
 ## What each app adds
 

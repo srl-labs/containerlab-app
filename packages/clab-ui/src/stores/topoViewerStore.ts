@@ -232,7 +232,7 @@ const initialState: TopoViewerState = {
   nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
   linkStyle: DEFAULT_LINK_STYLE,
   mgmtNetworkBadge: DEFAULT_MGMT_NETWORK_BADGE,
-  showNodeCpu: true,
+  showNodeCpu: false,
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,

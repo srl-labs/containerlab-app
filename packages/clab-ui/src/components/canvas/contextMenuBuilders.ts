@@ -11,7 +11,13 @@ import CropSquareIcon from "@mui/icons-material/CropSquare";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import FlipToBackIcon from "@mui/icons-material/FlipToBack";
+import FlipToFrontIcon from "@mui/icons-material/FlipToFront";
+import FolderOpenIcon from "@mui/icons-material/FolderOpen";
+import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import InfoIcon from "@mui/icons-material/Info";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import LanIcon from "@mui/icons-material/Lan";
 import LayersIcon from "@mui/icons-material/Layers";
 import LinkIcon from "@mui/icons-material/Link";
@@ -25,6 +31,7 @@ import StopIcon from "@mui/icons-material/Stop";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import TuneIcon from "@mui/icons-material/Tune";
+import VpnKeyIcon from "@mui/icons-material/VpnKeyOutlined";
 
 import type { ContextMenuItem } from "../context-menu/ContextMenu";
 import { WiresharkIcon } from "../context-menu/WiresharkIcon";
@@ -32,6 +39,10 @@ import type { LinkCaptureEnd } from "../panels/capture/linkCaptureOptions";
 import type { TopoViewerNodeAction, TopoViewerNodesAction } from "../../host";
 import type { LabOperationSupport } from "../../host/labOperations";
 import type { LabOperationDialogKind } from "../../stores/labOperationsStore";
+import type { LabFileRequest } from "../../host/labFiles";
+import type { NodeLabFile, NodeLabFileRole } from "../../utils/nodeLabFiles";
+import { shortcutKeys, type ShortcutId } from "../../utils/shortcuts";
+import type { ZOrderAction } from "../../annotations/annotationZOrder";
 import { getViewportCenter } from "../../utils/viewportUtils";
 import {
   FREE_TEXT_NODE_TYPE,
@@ -95,6 +106,10 @@ interface MenuBuilderContext {
   editTrafficRate?: (id: string) => void;
   /** Delete traffic-rate annotation */
   deleteTrafficRate?: (id: string) => void;
+  /** Change the stacking order of an annotation (or the selection holding it) */
+  changeZOrder?: (id: string, action: ZOrderAction) => void;
+  /** Files of the node on the lab host and the host's opener; absent when the host has none. */
+  labFiles?: { files: NodeLabFile[]; open: (request: LabFileRequest) => void };
 }
 
 interface EdgeMenuBuilderContext {
@@ -172,6 +187,62 @@ function isNodeActionDisabled(
   }
 }
 
+const Z_ORDER_ITEMS: ReadonlyArray<{
+  action: ZOrderAction;
+  id: string;
+  label: string;
+  shortcut: ShortcutId;
+  icon: typeof FlipToFrontIcon;
+}> = [
+  {
+    action: "front",
+    id: "bring-to-front",
+    label: "Bring to Front",
+    shortcut: "bringToFront",
+    icon: FlipToFrontIcon
+  },
+  {
+    action: "forward",
+    id: "bring-forward",
+    label: "Bring Forward",
+    shortcut: "bringForward",
+    icon: KeyboardArrowUpIcon
+  },
+  {
+    action: "backward",
+    id: "send-backward",
+    label: "Send Backward",
+    shortcut: "sendBackward",
+    icon: KeyboardArrowDownIcon
+  },
+  {
+    action: "back",
+    id: "send-to-back",
+    label: "Send to Back",
+    shortcut: "sendToBack",
+    icon: FlipToBackIcon
+  }
+];
+
+/** Stacking order of an annotation; editable annotations only. */
+function buildZOrderItems(ctx: MenuBuilderContext): ContextMenuItem[] {
+  const { targetId, isLocked, changeZOrder, closeContextMenu } = ctx;
+  if (isLocked || !changeZOrder) return [];
+  return [
+    { id: "divider-z-order", label: "", divider: true },
+    ...Z_ORDER_ITEMS.map(({ action, id, label, shortcut, icon }) => ({
+      id,
+      label,
+      icon: React.createElement(icon, { fontSize: "small" }),
+      shortcut: shortcutKeys(shortcut),
+      onClick: () => {
+        changeZOrder(targetId, action);
+        closeContextMenu();
+      }
+    }))
+  ];
+}
+
 /**
  * Build context menu for free text annotations
  */
@@ -205,16 +276,19 @@ function buildFreeTextContextMenu(ctx: MenuBuilderContext): ContextMenuItem[] {
         id: "duplicate-text",
         label: "Duplicate Text",
         icon: React.createElement(ContentCopyIcon, { fontSize: "small" }),
+        shortcut: shortcutKeys("duplicate"),
         onClick: () => {
           duplicateFreeText?.(targetId);
           closeContextMenu();
         }
       },
+      ...buildZOrderItems(ctx),
       { id: DIVIDER_ID, label: "", divider: true },
       {
         id: "delete-text",
         label: "Delete Text",
         icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+        shortcut: shortcutKeys("delete"),
         disabled: isLocked,
         danger: true,
         onClick: () => {
@@ -247,11 +321,13 @@ function buildFreeShapeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[] {
   ];
   if (!isLocked) {
     items.push(
+      ...buildZOrderItems(ctx),
       { id: DIVIDER_ID, label: "", divider: true },
       {
         id: "delete-shape",
         label: "Delete Shape",
         icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+        shortcut: shortcutKeys("delete"),
         disabled: isLocked,
         danger: true,
         onClick: () => {
@@ -284,11 +360,13 @@ function buildGroupContextMenu(ctx: MenuBuilderContext): ContextMenuItem[] {
   ];
   if (!isLocked) {
     items.push(
+      ...buildZOrderItems(ctx),
       { id: DIVIDER_ID, label: "", divider: true },
       {
         id: "delete-group",
         label: "Delete Group",
         icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+        shortcut: shortcutKeys("delete"),
         disabled: isLocked,
         danger: true,
         onClick: () => {
@@ -322,11 +400,13 @@ function buildTrafficRateContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
 
   if (!isLocked) {
     items.push(
+      ...buildZOrderItems(ctx),
       { id: DIVIDER_ID, label: "", divider: true },
       {
         id: "delete-traffic-rate",
         label: "Delete Traffic Rate",
         icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+        shortcut: shortcutKeys("delete"),
         disabled: isLocked,
         danger: true,
         onClick: () => {
@@ -469,6 +549,32 @@ function buildNodeRuntimeItems(ctx: MenuBuilderContext): ContextMenuItem[] {
   ];
 }
 
+const LAB_FILE_ICONS: Record<NodeLabFileRole, typeof InsertDriveFileIcon> = {
+  "startup-config": ArticleIcon,
+  license: VpnKeyIcon,
+  bind: InsertDriveFileIcon
+};
+
+/** Files submenu: the node's startup config, license and bind sources. */
+function buildNodeFilesItem(ctx: MenuBuilderContext): ContextMenuItem | undefined {
+  const { labFiles, closeContextMenu } = ctx;
+  if (!labFiles || labFiles.files.length === 0) return undefined;
+  return {
+    id: "files-node",
+    label: "Files",
+    icon: React.createElement(FolderOpenIcon, { fontSize: "small" }),
+    children: labFiles.files.map(({ role, request }, index) => ({
+      id: `files-node-${index}`,
+      label: request.path,
+      icon: React.createElement(LAB_FILE_ICONS[role], { fontSize: "small" }),
+      onClick: () => {
+        labFiles.open(request);
+        closeContextMenu();
+      }
+    }))
+  };
+}
+
 function buildNodeEditItems(ctx: MenuBuilderContext): ContextMenuItem[] {
   const {
     targetId,
@@ -506,6 +612,7 @@ function buildNodeEditItems(ctx: MenuBuilderContext): ContextMenuItem[] {
       id: "create-link",
       label: "Create Link",
       icon: React.createElement(LinkIcon, { fontSize: "small" }),
+      shortcut: shortcutKeys("linkTool"),
       disabled: isLocked,
       onClick: () => {
         startLinkCreation?.(targetId);
@@ -532,12 +639,15 @@ function buildNodeEditItems(ctx: MenuBuilderContext): ContextMenuItem[] {
       closeContextMenu();
     }
   });
+  const filesItem = isNetworkNode ? undefined : buildNodeFilesItem(ctx);
+  if (filesItem) items.push(filesItem);
 
   items.push({ id: DIVIDER_ID, label: "", divider: true });
   items.push({
     id: "delete-node",
     label: "Delete Node",
     icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+    shortcut: shortcutKeys("delete"),
     disabled: isLocked,
     danger: true,
     onClick: () => handleDeleteNode(targetId)
@@ -590,6 +700,9 @@ export function buildNodeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
     if (items.length > 0) {
       items.push({ id: DIVIDER_ID + "-info", label: "", divider: true });
     }
+    // Edit mode lists the files next to Edit Node.
+    const filesItem = isEditMode || isNetworkNode ? undefined : buildNodeFilesItem(ctx);
+    if (filesItem) items.push(filesItem);
     items.push({
       id: "info-node",
       label: "Info",
@@ -722,6 +835,7 @@ export function buildEdgeContextMenu(ctx: EdgeMenuBuilderContext): ContextMenuIt
       id: "delete-edge",
       label: "Delete Link",
       icon: React.createElement(DeleteIcon, { fontSize: "small" }),
+      shortcut: shortcutKeys("delete"),
       disabled: isLocked,
       danger: true,
       onClick: () => handleDeleteEdge(targetId)
@@ -788,6 +902,7 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
       id: "add-group",
       label: "Add Group",
       icon: React.createElement(LayersIcon, { fontSize: "small" }),
+      shortcut: shortcutKeys("group"),
       disabled: isLocked,
       onClick: () => {
         onAddGroup();
@@ -800,6 +915,7 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
       id: "add-text",
       label: "Add Text",
       icon: React.createElement(TextFieldsIcon, { fontSize: "small" }),
+      shortcut: shortcutKeys("textTool"),
       disabled: isLocked,
       onClick: () => {
         const flowPosition = getFlowPosition();
@@ -824,6 +940,7 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
           id: "add-shape-rectangle",
           label: "Rectangle",
           icon: React.createElement(CropSquareIcon, { fontSize: "small" }),
+          shortcut: shortcutKeys("rectangleTool"),
           disabled: isLocked,
           onClick: () => {
             const flowPosition = getFlowPosition();
@@ -839,6 +956,7 @@ export function buildPaneContextMenu(ctx: PaneMenuBuilderContext): ContextMenuIt
           id: "add-shape-circle",
           label: "Circle",
           icon: React.createElement(CircleOutlinedIcon, { fontSize: "small" }),
+          shortcut: shortcutKeys("circleTool"),
           disabled: isLocked,
           onClick: () => {
             const flowPosition = getFlowPosition();

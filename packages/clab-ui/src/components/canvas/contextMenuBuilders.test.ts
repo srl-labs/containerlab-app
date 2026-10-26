@@ -377,6 +377,94 @@ test("a selection without the target leaves runtime actions on the target", () =
   assert.deepEqual(single, [{ action: "start", nodeName: "srl1" }]);
 });
 
+test("node Files submenu opens the node's files, next to Edit Node or before Info", () => {
+  const opened: string[] = [];
+  const labFiles = {
+    files: [
+      { role: "startup-config" as const, request: { path: "configs/srl1.cfg", create: true } },
+      { role: "bind" as const, request: { path: "certs/ca.pem", create: true } }
+    ],
+    open: (request: { path: string }) => opened.push(request.path)
+  };
+  const ctx = {
+    targetId: "srl1",
+    targetNodeType: "topology-node",
+    isDeployed: false,
+    isLocked: true,
+    onNodeAction: () => {},
+    closeContextMenu: () => {},
+    editNode: () => {},
+    editNetwork: () => {},
+    handleDeleteNode: () => {},
+    labFiles
+  };
+
+  const editItems = buildNodeContextMenu({ ...ctx, isEditMode: true });
+  const ids = editItems.map((item) => item.id);
+  assert.equal(ids.indexOf("files-node"), ids.indexOf("edit-node") + 1);
+  const files = itemById(editItems, "files-node");
+  assert.deepEqual(
+    files.children?.map((child) => child.label),
+    ["configs/srl1.cfg", "certs/ca.pem"]
+  );
+  itemById(files.children ?? [], "files-node-1").onClick?.();
+  assert.deepEqual(opened, ["certs/ca.pem"]);
+
+  const viewItems = buildNodeContextMenu({ ...ctx, isEditMode: false });
+  const viewIds = viewItems.map((item) => item.id);
+  assert.equal(viewIds.indexOf("files-node"), viewIds.indexOf("info-node") - 1);
+
+  const noFiles = buildNodeContextMenu({
+    ...ctx,
+    isEditMode: true,
+    labFiles: { ...labFiles, files: [] }
+  });
+  assert.equal(noFiles.some((item) => item.id === "files-node"), false);
+});
+
+test("annotation menus arrange the annotation and show their shortcuts", () => {
+  const changes: Array<[string, string]> = [];
+  const base = {
+    isDeployed: true,
+    onNodeAction: () => {},
+    closeContextMenu: () => {},
+    editNode: () => {},
+    editNetwork: () => {},
+    handleDeleteNode: () => {},
+    changeZOrder: (id: string, action: string) => changes.push([id, action])
+  };
+  const items = buildNodeContextMenu({
+    ...base,
+    targetId: "freeText_1",
+    targetNodeType: FREE_TEXT_NODE_TYPE,
+    isEditMode: false,
+    isLocked: false,
+    editFreeText: () => {},
+    deleteFreeText: () => {},
+    duplicateFreeText: () => {}
+  });
+
+  assert.equal(itemById(items, "duplicate-text").shortcut, "Ctrl+D");
+  assert.equal(itemById(items, "delete-text").shortcut, "Del");
+  assert.equal(itemById(items, "bring-to-front").shortcut, "Ctrl+Shift+]");
+  assert.equal(itemById(items, "send-backward").shortcut, "Ctrl+[");
+  itemById(items, "bring-to-front").onClick?.();
+  itemById(items, "send-to-back").onClick?.();
+  assert.deepEqual(changes, [
+    ["freeText_1", "front"],
+    ["freeText_1", "back"]
+  ]);
+
+  const locked = buildNodeContextMenu({
+    ...base,
+    targetId: "freeShape_1",
+    targetNodeType: "free-shape-node",
+    isEditMode: true,
+    isLocked: true
+  });
+  assert.equal(locked.some((item) => item.id === "bring-to-front"), false);
+});
+
 test("hosts without multi-node actions get one call per node", () => {
   const { items, single } = buildSelectionMenu(["srl1", "srl2"], false);
 

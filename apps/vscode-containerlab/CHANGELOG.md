@@ -11,6 +11,8 @@
 - A **Lab Hosts** page in the Containerlab settings adds, signs in to, edits, signs out of, and removes lab hosts, with each host's CPU, memory, and disk, and shows or hides **Local**. **Containerlab: Manage Lab Hosts** and the server button in the explorer title bar open it.
 - When containerlab cannot run on this machine, **Local** shows what is missing, with the commands that fix it, and **Check Again**.
 - The extension now activates without containerlab, Docker, or the `clab_admins` group, so lab hosts work on machines that cannot run labs.
+- **Containerlab: Open Labs Overview** (and the dashboard button in the explorer title bar) opens an editor tab with a card per lab of every lab host: a thumbnail of its topology, its state, uptime, and live CPU and memory of running labs, with open, deploy, and destroy.
+- TopoViewer can show each running node's CPU usage on the canvas (**Lab Settings → Appearance → CPU usage on nodes**, off by default). In the boxed node style the value sits inside the box, in the box's text color.
 
 ## [0.26.0] - 2026-07-07
 

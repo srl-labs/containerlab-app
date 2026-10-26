@@ -500,6 +500,9 @@ export function createFakeClabUiHost(
         recordHarnessMessage({ command: "topo-validate" });
       },
       toggleSplitView() {},
+      openLabFile(request) {
+        recordHarnessMessage({ command: "openLabFile", path: request.path, create: request.create === true });
+      },
       runNodeAction(action, nodeName) {
         void fakeLifecycle.nodeAction(action, nodeName);
       },

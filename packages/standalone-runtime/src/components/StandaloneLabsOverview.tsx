@@ -1,12 +1,16 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
-import type { LabOverviewCard, LabThumbnailSources } from "@containerlab/clab-ui/workspace/state";
+import {
+  createLabUsageFeed,
+  type LabOverviewCard,
+  type LabThumbnailSources,
+  type LabUsageFeed
+} from "@containerlab/clab-ui/workspace/state";
 import { getStandaloneBackend } from "../backend";
 import { labDeepLinkUrl } from "../labDeepLink";
 import { fetchBackendFeatures, streamLabStats } from "../runtimeApi";
 import { labsEqualForExplorer, type TopologyFileEntry } from "../standaloneHostShared";
 import { buildLabOverviewCards, type UptimeEstimates } from "../standaloneLabsOverview";
-import { createLabUsageFeed, type LabUsageFeed } from "../standaloneLabUsage";
 import { useEndpointStore } from "../stores/endpointStore";
 import { useLabStore, type LabState } from "../stores/labStore";
 import { useWorkspaceViewStore } from "../stores/workspaceViewStore";

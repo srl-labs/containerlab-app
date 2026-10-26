@@ -1,18 +1,13 @@
 /**
  * CPU and memory usage of the running labs the labs overview shows. A lab is
  * streamed only while one of its cards is visible and the page is shown, with
- * a few streams at a time; each stream is one WebSocket, which, unlike HTTP
- * requests, does not take one of the browser's few connections per host.
+ * a few streams at a time. In the browser each stream is one WebSocket, which,
+ * unlike HTTP requests, does not take one of the browser's few connections per host.
  */
-import {
-  nextLabUsage,
-  type LabOverviewCard,
-  type LabUsage,
-  type LabUsageUpdate,
-  type WatchLabUsage
-} from "@containerlab/clab-ui/workspace/state";
+import type { HostNodeStatsSample } from "../../host/contracts";
 
-import type { LabStatsSample } from "@srl-labs/containerlab-lab-backend";
+import type { LabOverviewCard } from "./labsOverview";
+import { nextLabUsage, type LabUsage, type LabUsageUpdate, type WatchLabUsage } from "./labUsage";
 
 const INTERVAL_SECONDS = 3;
 /** Streams open at once; more visible cards wait for one to end. */
@@ -29,7 +24,7 @@ export interface LabUsageFeedDeps {
     labName: string;
     intervalSeconds: number;
     signal: AbortSignal;
-  }) => AsyncIterable<LabStatsSample>;
+  }) => AsyncIterable<HostNodeStatsSample>;
   /** Whether the lab host reports node usage at all. */
   supportsNodeStats: (endpointId: string) => Promise<boolean>;
   /** Whether the page is hidden, and a subscription to changes of it. */

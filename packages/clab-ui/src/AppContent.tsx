@@ -23,6 +23,7 @@ import {
 } from "./annotations/edgeAnnotations";
 import type { ReactFlowCanvasRef } from "./components/canvas";
 import { ReactFlowCanvas } from "./components/canvas";
+import { CanvasStats } from "./components/canvas/CanvasStats";
 import { Navbar } from "./components/navbar/Navbar";
 import type { LinkImpairmentData } from "./components/panels";
 import { ContextPanel } from "./components/panels/context-panel";
@@ -58,6 +59,10 @@ import {
 } from "./services/deleteSelectionCommands";
 import { useAnnotations, useDerivedAnnotations, type AnnotationContextValue } from "./hooks/canvas";
 import { useFocusNodeRequest } from "./hooks/canvas/useFocusNodeRequest";
+import { useAnnotationZOrder, zOrderTargets } from "./hooks/canvas/useAnnotationZOrder";
+import type { CanvasToolHandlers } from "./hooks/ui/useKeyboardShortcuts";
+import type { ZOrderAction } from "./annotations/annotationZOrder";
+import { useAnnotationUIStore } from "./stores/annotationUIStore";
 import {
   useAppHandlers,
   useContextMenuHandlers,
@@ -86,6 +91,7 @@ import {
 } from "./utils/netemOverrides";
 import { isRecord } from "./core/utilities/typeHelpers";
 import { readPersistedAutoOpenPalette, readPersistedAutoOpenPaletteOnSelect, readPersistedDefaultLabLocked } from "./workspace/state/themePreferences";
+import { MAX_FIT_ZOOM } from "./components/canvas/fitView";
 
 type LayoutControls = ReturnType<typeof useLayoutControls>;
 const DEV_EXPLORER_DEFER_MS = 300;
@@ -583,8 +589,6 @@ type AppContentStateSlice = Pick<
   | "yamlFileName"
   | "mode"
   | "labSettings"
-  | "canUndo"
-  | "canRedo"
   | "selectedNode"
   | "selectedEdge"
   | "editingImpairment"
@@ -615,8 +619,6 @@ function selectAppContentState(state: TopoViewerState): AppContentStateSlice {
     yamlFileName: state.yamlFileName,
     mode: state.mode,
     labSettings: state.labSettings,
-    canUndo: state.canUndo,
-    canRedo: state.canRedo,
     selectedNode: state.selectedNode,
     selectedEdge: state.selectedEdge,
     editingImpairment: state.editingImpairment,
@@ -747,7 +749,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     host.topoViewer.dumpCssVars(sorted);
   }, [host]);
 
-  const undoRedo = useUndoRedoControls(state.canUndo, state.canRedo);
+  const undoRedo = useUndoRedoControls();
 
   const { toasts, dismissToast, addToast } = useAppToasts({
     customNodeError: state.customNodeError,
@@ -756,6 +758,21 @@ export const AppContent: React.FC<AppContentProps> = ({
 
   // Every blocked edit shakes the navbar lock.
   const handleLockedAction = topoActions.nudgeLock;
+  const changeAnnotationZOrder = useAnnotationZOrder(isInteractionLocked, handleLockedAction);
+  /** Reorders the target annotation, or the selection holding it; without a target, the selection. */
+  const handleChangeZOrder = React.useCallback(
+    (targetId: string | undefined, action: ZOrderAction) => {
+      const ui = useAnnotationUIStore.getState();
+      const selected = [
+        ...ui.selectedGroupIds,
+        ...ui.selectedTextIds,
+        ...ui.selectedShapeIds,
+        ...ui.selectedTrafficRateIds
+      ];
+      changeAnnotationZOrder(zOrderTargets(targetId, selected), action);
+    },
+    [changeAnnotationZOrder]
+  );
 
   const annotationRuntimeRef = React.useRef<AnnotationContextValue | null>(null);
   const annotationUiState = useAnnotationUIState();
@@ -854,9 +871,10 @@ export const AppContent: React.FC<AppContentProps> = ({
       onEditGroup: forward("editGroup"),
       onDeleteGroup: forward("deleteGroup"),
       getGroupMembers: (groupId, options) =>
-        annotationRuntimeRef.current?.getGroupMembers(groupId, options) ?? []
+        annotationRuntimeRef.current?.getGroupMembers(groupId, options) ?? [],
+      onChangeZOrder: handleChangeZOrder
     }),
-    [forward]
+    [forward, handleChangeZOrder]
   );
 
   const getAnnotationGroups = React.useCallback(
@@ -1220,6 +1238,59 @@ export const AppContent: React.FC<AppContentProps> = ({
     state.selectedNode
   ]);
 
+  const handleZoomToFit = React.useCallback(() => {
+    if (reactFlowRef.current) {
+      reactFlowRef.current.fit();
+      return;
+    }
+    rfInstance?.fitView({ padding: 0.1, maxZoom: MAX_FIT_ZOOM }).catch(() => {
+      /* ignore */
+    });
+  }, [reactFlowRef, rfInstance]);
+
+  // Links start from the one selected node, as Shift+click on it does.
+  const handleStartLinkFromSelection = React.useCallback(() => {
+    const linkable = (type: string | undefined) => type === "topology-node" || type === "network-node";
+    const selected = useGraphStore
+      .getState()
+      .nodes.filter((node) => node.selected === true && linkable(node.type));
+    if (selected.length !== 1) return;
+    if (isInteractionLocked) {
+      handleLockedAction();
+      return;
+    }
+    reactFlowRef.current?.startLinkCreation(selected[0].id);
+  }, [handleLockedAction, isInteractionLocked, reactFlowRef]);
+
+  const canvasTools = React.useMemo<CanvasToolHandlers>(
+    () => ({
+      select: () => {
+        annotationUiActions.disableAddTextMode();
+        annotationUiActions.disableAddShapeMode();
+        reactFlowRef.current?.cancelLinkCreation();
+      },
+      addText: annotationActions.handleAddText,
+      addRectangle: () => annotationActions.handleAddShapes("rectangle"),
+      addCircle: () => annotationActions.handleAddShapes("circle"),
+      // Deployed labs (view mode) take annotations, but no new links.
+      startLink: interactionMode === "edit" ? handleStartLinkFromSelection : undefined,
+      fitView: handleZoomToFit
+    }),
+    [
+      annotationActions,
+      annotationUiActions,
+      handleStartLinkFromSelection,
+      handleZoomToFit,
+      interactionMode,
+      reactFlowRef
+    ]
+  );
+
+  const handleZOrderShortcut = React.useCallback(
+    (action: ZOrderAction) => handleChangeZOrder(undefined, action),
+    [handleChangeZOrder]
+  );
+
   useAppKeyboardShortcuts({
     disabled: viewerOnly,
     state: {
@@ -1244,7 +1315,9 @@ export const AppContent: React.FC<AppContentProps> = ({
       handleDeleteSelection
     },
     handleDeselectAll,
-    onLockedAction: handleLockedAction
+    onLockedAction: handleLockedAction,
+    tools: canvasTools,
+    onZOrder: handleZOrderShortcut
   });
 
   // Auto-open context panel when selection/editing state changes
@@ -1269,16 +1342,6 @@ export const AppContent: React.FC<AppContentProps> = ({
       panelVisibility.handleCloseContextPanel();
     }
   }, [clearAllEditingState, panelVisibility]);
-
-  const handleZoomToFit = React.useCallback(() => {
-    if (reactFlowRef.current) {
-      reactFlowRef.current.fit();
-      return;
-    }
-    rfInstance?.fitView({ padding: 0.1 }).catch(() => {
-      /* ignore */
-    });
-  }, [reactFlowRef, rfInstance]);
 
   const handleOpenNodePalette = React.useCallback(() => {
     if (!hasActiveTopology || viewerOnly) {
@@ -1632,6 +1695,7 @@ export const AppContent: React.FC<AppContentProps> = ({
                         endpointLabelOffsetEnabled={state.endpointLabelOffsetEnabled}
                       />
                       <ShortcutDisplay shortcuts={shortcutDisplay.shortcuts} side={panelSide} />
+                      {!viewerOnly && <CanvasStats />}
                     </>
                   )}
                 </Box>

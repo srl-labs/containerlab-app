@@ -1,10 +1,13 @@
 /**
  * useUndoRedoControls - app-level undo/redo bindings.
+ *
+ * Walks the history the canvas shares with the source tabs.
  */
 import React from "react";
 
 import { useTopologySessionClient } from "../../host";
-import { executeTopologyCommand } from "../../services";
+import { redoEdit, undoEdit } from "../../services/editHistoryCommands";
+import { useEditHistoryStore } from "../../stores/editHistoryStore";
 
 export interface UndoRedoControls {
   undo: () => void;
@@ -13,15 +16,17 @@ export interface UndoRedoControls {
   canRedo: boolean;
 }
 
-export function useUndoRedoControls(canUndo: boolean, canRedo: boolean): UndoRedoControls {
+export function useUndoRedoControls(): UndoRedoControls {
   const sessionClient = useTopologySessionClient();
+  const canUndo = useEditHistoryStore((state) => state.canUndo);
+  const canRedo = useEditHistoryStore((state) => state.canRedo);
 
   const undo = React.useCallback(() => {
-    void executeTopologyCommand({ command: "undo" }, {}, sessionClient);
+    void undoEdit(sessionClient);
   }, [sessionClient]);
 
   const redo = React.useCallback(() => {
-    void executeTopologyCommand({ command: "redo" }, {}, sessionClient);
+    void redoEdit(sessionClient);
   }, [sessionClient]);
 
   return React.useMemo(

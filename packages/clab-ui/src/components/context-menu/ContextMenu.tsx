@@ -6,6 +6,7 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Divider from "@mui/material/Divider";
 import Popover from "@mui/material/Popover";
+import Typography from "@mui/material/Typography";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 
 export interface ContextMenuItem {
@@ -21,6 +22,8 @@ export interface ContextMenuItem {
   panel?: (close: () => void) => React.ReactNode;
   /** Accessible name of the panel; defaults to the label. */
   panelLabel?: string;
+  /** Keys that do the same, shown right-aligned, e.g. "Ctrl+D" */
+  shortcut?: string;
 }
 
 /** Compact menus cap their width; submenus flip left when this much room is missing on the right. */
@@ -258,6 +261,11 @@ function renderMenuItemLabel(item: ContextMenuItem): React.ReactElement {
     <>
       {hasIcon && <ListItemIcon>{item.icon}</ListItemIcon>}
       <ListItemText slotProps={{ primary: { noWrap: true } }}>{item.label}</ListItemText>
+      {item.shortcut !== undefined && (
+        <Typography variant="body2" sx={{ ml: 3, color: "text.secondary", flexShrink: 0 }}>
+          {item.shortcut}
+        </Typography>
+      )}
     </>
   );
 }
