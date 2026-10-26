@@ -737,6 +737,50 @@ test("/files proxies topology entries with bearer auth and Explorer topology ref
   ]);
 });
 
+test("/api/runtime/topology-file/create opens a bare file name in its lab folder", async (t) => {
+  const context = await createTestContext(t);
+  context.fetchMock.on("POST", "http://api.example.test/login", () => {
+    return jsonResponse({ token: "secret-token" });
+  });
+  // clab-api-server stores a bare `<lab>.clab.yml` in the lab's folder.
+  let written: string | undefined;
+  context.fetchMock.on("HEAD", /\/api\/v1\/labs\/campus\/topology\/file\?/, () => new Response(null, { status: 404 }));
+  context.fetchMock.on("GET", /\/api\/v1\/labs\/campus\/topology\/file\?/, () => jsonResponse({ error: "not found" }, 404));
+  context.fetchMock.on("PUT", /\/api\/v1\/labs\/campus\/topology\/file\?/, (call) => {
+    written = call.url.searchParams.get("path") ?? undefined;
+    return jsonResponse({ message: "saved" });
+  });
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/topology/files", () =>
+    jsonResponse(
+      written === undefined
+        ? []
+        : [
+            {
+              labName: "campus",
+              yamlFileName: "campus/campus.clab.yml",
+              annotationsFileName: "campus/campus.clab.yml.annotations.json",
+              hasAnnotations: false,
+              deploymentState: "undeployed",
+            },
+          ],
+    ),
+  );
+
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const response = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/topology-file/create",
+    headers: { cookie },
+    payload: { endpointId, fileName: "campus.clab.yml" },
+  });
+
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(written, "campus.clab.yml");
+  assert.equal(response.json().topologyRef.yamlPath, "campus/campus.clab.yml");
+});
+
 test("/api/runtime/file-explorer/tree proxies workspace entries without topology polling", async (t) => {
   const context = await createTestContext(t);
   context.fetchMock.on("POST", "http://api.example.test/login", () => {

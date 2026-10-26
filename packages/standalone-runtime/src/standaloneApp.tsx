@@ -584,13 +584,43 @@ async function openTopologyInTab(
     resolveLabTabFallbackEndpointId(),
   );
   showDocument();
+  const previousTabId = useLabTabsStore.getState().activeTabId;
   const openResult = useLabTabsStore.getState().openOrFocusTab(resolvedTab);
-  await activateLabTabById(openResult.tab.id, {
-    deploymentState: options.deploymentState,
-  });
+  try {
+    await activateLabTabById(openResult.tab.id, {
+      deploymentState: options.deploymentState,
+    });
+  } catch (error: unknown) {
+    // The canvas still holds the previous lab; a new tab must not show it.
+    if (!openResult.alreadyOpen) {
+      await restoreTabAfterFailedOpen(openResult.tab.id, previousTabId);
+    }
+    throw error;
+  }
   if (!openResult.alreadyOpen) {
     requestViewportFitFromHost();
   }
+}
+
+async function restoreTabAfterFailedOpen(
+  tabId: string,
+  previousTabId: string | null,
+): Promise<void> {
+  const tabs = useLabTabsStore.getState();
+  tabs.closeTab(tabId);
+  const previous = tabs.tabs.find((tab) => tab.id === previousTabId);
+  const loaded = topologyManager.getCurrentTopologyRef()?.topologyId;
+  if (previous && !isFileLabTab(previous) && previous.topologyRef.topologyId === loaded) {
+    tabs.setActiveTab(previous.id);
+    return;
+  }
+  if (previous) {
+    await activateLabTabById(previous.id).catch(() => {});
+    return;
+  }
+  await queueTopologyTabActivation(async () => {
+    await topologyManager.clearActiveTopology();
+  });
 }
 
 async function confirmCloseLabTab(tabId: string): Promise<boolean> {

@@ -1766,10 +1766,10 @@ export function registerRuntimeProxy(
           await files.writeFile(fileName, content);
         }
 
+        // A bare file name lands in the lab's folder, as clab-api-server stores it.
+        const writtenPath = fileName.includes("/") ? fileName : `${labName}/${fileName}`;
         const topologies = await backend.listTopologies();
-        const topologyEntry = topologies.find(
-          (entry) => entry.yamlFileName === fileName
-        );
+        const topologyEntry = topologies.find((entry) => entry.yamlFileName === writtenPath);
 
         return reply.send({
           success: true,
@@ -1777,10 +1777,10 @@ export function registerRuntimeProxy(
             ? buildStandaloneTopologyRef(topologyEntry, endpoint.id)
             : buildStandaloneTopologyRef(
                 {
-                  annotationsFileName: `${fileName}.annotations.json`,
+                  annotationsFileName: `${writtenPath}.annotations.json`,
                   hasAnnotations: false,
                   labName,
-                  yamlFileName: fileName
+                  yamlFileName: writtenPath
                 },
                 endpoint.id
               )
