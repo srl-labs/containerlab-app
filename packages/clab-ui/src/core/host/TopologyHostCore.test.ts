@@ -561,6 +561,49 @@ topology:
   assert.equal(extraData("srl2").status, "Up 2 minutes");
 });
 
+test("invalidateSnapshot picks up runtime data that arrived after the first snapshot", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  await fs.writeFile("/labs/demo.clab.yml", BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath: "/labs/demo.clab.yml",
+    mode: "edit",
+    deploymentState: "deployed",
+    containerDataProvider: createRuntimeContainerDataProvider([])
+  });
+  const state = (snapshot: TopologySnapshot) => {
+    const extraData = snapshot.nodes.find((node) => node.id === "srl1")?.data.extraData as
+      | Record<string, unknown>
+      | undefined;
+    return extraData?.state;
+  };
+  const first = await host.getSnapshot();
+  assert.notEqual(state(first), "running");
+
+  host.updateContext({
+    containerDataProvider: createRuntimeContainerDataProvider([
+      {
+        name: "clab-demo-srl1",
+        nodeName: "srl1",
+        labName: "demo",
+        state: "running",
+        status: "Up 2 minutes",
+        kind: "nokia_srlinux",
+        image: "",
+        ipv4Address: "",
+        ipv6Address: ""
+      }
+    ])
+  });
+  // Runtime ticks keep the cached snapshot; only an explicit invalidate rebuilds it.
+  assert.notEqual(state(await host.getSnapshot()), "running");
+  host.invalidateSnapshot();
+  const snapshot = await host.getSnapshot();
+  assert.equal(state(snapshot), "running");
+  // The files did not change: same revision, history kept.
+  assert.equal(snapshot.revision, first.revision);
+});
+
 function historyOf(snapshot: TopologySnapshot): NonNullable<TopologySnapshot["history"]> {
   assert.ok(snapshot.history);
   return snapshot.history;

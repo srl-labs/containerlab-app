@@ -215,6 +215,46 @@ function resolveMapLibreWorkerUrl(): string | null {
   return getOrCreateWorkerBlobUrl(sourceKey, bootstrapSource) ?? configuredWorkerUrl;
 }
 
+/**
+ * The worker as a blob URL made from the source at `maplibreWorkerUrl`, so a
+ * host does not have to embed the ~1MB source in its page. Falls back to
+ * resolveMapLibreWorkerUrl when there is nothing to fetch or the fetch fails.
+ */
+async function fetchMapLibreWorkerUrl(): Promise<string | null> {
+  if (typeof window === "undefined" || typeof fetch !== "function") {
+    return resolveMapLibreWorkerUrl();
+  }
+  const configuredWorkerUrl = window.maplibreWorkerUrl;
+  const embedded = window.maplibreWorkerSourceBase64;
+  if (
+    (embedded != null && embedded.length > 0) ||
+    configuredWorkerUrl == null ||
+    configuredWorkerUrl.length === 0 ||
+    configuredWorkerUrl.startsWith("blob:") ||
+    configuredWorkerUrl.startsWith("data:")
+  ) {
+    return resolveMapLibreWorkerUrl();
+  }
+  try {
+    const response = await fetch(configuredWorkerUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const workerSource = await response.text();
+    return (
+      getOrCreateWorkerBlobUrl(`fetched:${configuredWorkerUrl}`, workerSource) ??
+      resolveMapLibreWorkerUrl()
+    );
+  } catch (error) {
+    log.warn(
+      `[GeoMap] Failed to fetch worker source, falling back to worker URL: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return resolveMapLibreWorkerUrl();
+  }
+}
+
 function roundCoord(value: number): number {
   return Number(value.toFixed(6));
 }
@@ -636,13 +676,15 @@ export function useGeoMapLayout({
     if (!isGeoLayout || mapRef.current || !containerRef.current) return;
     let cancelled = false;
 
-    void loadMapLibreModule().then((maplibreModule) => {
+    void Promise.all([
+      loadMapLibreModule(),
+      workerConfiguredRef.current ? Promise.resolve(null) : fetchMapLibreWorkerUrl()
+    ]).then(([maplibreModule, workerUrl]) => {
       if (cancelled || !isGeoLayout || mapRef.current || !containerRef.current) return;
       const maplibregl = maplibreModule;
 
       try {
         if (!workerConfiguredRef.current) {
-          const workerUrl = resolveMapLibreWorkerUrl();
           if (workerUrl != null && workerUrl.length > 0) {
             maplibregl.setWorkerUrl(workerUrl);
           }

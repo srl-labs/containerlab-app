@@ -141,7 +141,9 @@ function downloadNodeTemplates(
 const REACTFLOW_NODE_MIME_TYPE = "application/reactflow-node";
 const ACTION_HOVER_BG = "action.hover";
 const TEXT_SECONDARY = "text.secondary";
-const MONACO_PRELOAD_DELAY_MS = 750;
+// Monaco is ~4MB of script: warm it only once the opened lab has settled.
+// Hovering or opening a source tab loads it right away.
+const MONACO_PRELOAD_DELAY_MS = 8000;
 const PALETTE_ICON_SIZE = 28;
 const PALETTE_LIST_SX = { display: "flex", flexDirection: "column", gap: 0.75 } as const;
 const PALETTE_GRID_SX = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0.75 } as const;
@@ -715,12 +717,9 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
     let idleCallbackId: number | null = null;
     const timerId = window.setTimeout(() => {
       if (typeof window.requestIdleCallback === "function") {
-        idleCallbackId = window.requestIdleCallback(
-          () => {
-            void preloadMonacoCodeEditor();
-          },
-          { timeout: 2500 }
-        );
+        idleCallbackId = window.requestIdleCallback(() => {
+          void preloadMonacoCodeEditor();
+        });
         return;
       }
       void preloadMonacoCodeEditor();

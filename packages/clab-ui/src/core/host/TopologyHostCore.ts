@@ -201,6 +201,15 @@ export class TopologyHostCore implements TopologyHost {
     }
   }
 
+  /**
+   * Drops the cached snapshot, so the next getSnapshot reads the files and the
+   * runtime data again. updateContext keeps it when only the runtime data
+   * changes, since that happens every second.
+   */
+  invalidateSnapshot(): void {
+    this.snapshot = null;
+  }
+
   getSnapshot(): Promise<TopologySnapshot> {
     return runDocumentOperation(this.documentKey, () => this.getSnapshotUnlocked());
   }
