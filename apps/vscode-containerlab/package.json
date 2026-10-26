@@ -1075,6 +1075,11 @@
             "type": "boolean",
             "default": false,
             "description": "Minimize interface animations and transitions in Containerlab views."
+          },
+          "containerlab.appearance.hoverCards": {
+            "type": "boolean",
+            "default": true,
+            "description": "Show a card with a node's or link's details when the pointer rests on it in the topology viewer."
           }
         }
       },

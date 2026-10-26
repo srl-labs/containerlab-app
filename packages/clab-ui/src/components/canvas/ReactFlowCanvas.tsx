@@ -75,6 +75,8 @@ import type {
 } from "./types";
 import { MAX_FIT_ZOOM } from "./fitView";
 
+const CanvasHoverCard = React.lazy(() => import("./hover-card/CanvasHoverCard"));
+
 const GRID_SIZE = 20;
 const QUADRATIC_GRID_SIZE = 40;
 const DEFAULT_GRID_LINE_WIDTH = 0.5;
@@ -1956,6 +1958,11 @@ const ReactFlowCanvasInner = forwardRef<ReactFlowCanvasRef, ReactFlowCanvasProps
 
         {overlays.annotationIndicator}
         {!readOnlyViewer && <RotationMatchOverlay canvasRef={canvasContainerRef} />}
+        {!readOnlyViewer && (
+          <React.Suspense fallback={null}>
+            <CanvasHoverCard canvasRef={canvasContainerRef} />
+          </React.Suspense>
+        )}
       </div>
     );
   }

@@ -8,4 +8,5 @@ export {
   type LabRunState,
   type LabThumbnailSources
 } from "../workspace/state/labsOverview";
+export type { LabOverviewHost } from "../workspace/state/labHostResources";
 export type * from "../webviews/labsOverview/types";

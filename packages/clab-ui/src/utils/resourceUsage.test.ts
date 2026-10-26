@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cpuLoadLevel, formatBytes, formatPercent } from "./resourceUsage";
+import { cpuLoadLevel, formatBitRate, formatBytes, formatPercent } from "./resourceUsage";
 
 test("usage reads in short units", () => {
   assert.equal(formatBytes(512), "512 B");
@@ -17,4 +17,12 @@ test("CPU load levels count one busy CPU as full", () => {
   assert.equal(cpuLoadLevel(50), "medium");
   assert.equal(cpuLoadLevel(85), "high");
   assert.equal(cpuLoadLevel(350), "high");
+});
+
+test("bit rates step by 1000, with one decimal below 100", () => {
+  assert.equal(formatBitRate(undefined), "–");
+  assert.equal(formatBitRate(800), "800 bps");
+  assert.equal(formatBitRate(1500), "1.5 kbps");
+  assert.equal(formatBitRate(250_000_000), "250 Mbps");
+  assert.equal(formatBitRate(10_000_000_000), "10.0 Gbps");
 });

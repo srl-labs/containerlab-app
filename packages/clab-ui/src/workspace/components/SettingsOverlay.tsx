@@ -60,9 +60,11 @@ import {
   persistAutoOpenPalette,
   persistAutoOpenPaletteOnSelect,
   persistDefaultLabLocked,
+  persistHoverCards,
   readPersistedAutoOpenPalette,
   readPersistedAutoOpenPaletteOnSelect,
   readPersistedDefaultLabLocked,
+  readPersistedHoverCards,
   type StandaloneAppearance,
   type TabOrientation
 } from "../state/themePreferences";
@@ -522,6 +524,7 @@ export function SettingsOverlay({
   const [autoOpenPalette, setAutoOpenPalette] = useState(readPersistedAutoOpenPalette);
   const [autoOpenPaletteOnSelect, setAutoOpenPaletteOnSelect] = useState(readPersistedAutoOpenPaletteOnSelect);
   const [defaultLabLocked, setDefaultLabLocked] = useState(readPersistedDefaultLabLocked);
+  const [hoverCards, setHoverCards] = useState(readPersistedHoverCards);
   const { fetchEdgeSharkStatus, fetchVersionCheck, fetchVersionInfo } = useWorkspaceHost().api;
   const { capabilities } = useWorkspaceHost();
   const dialogOpen = open;
@@ -791,6 +794,23 @@ export function SettingsOverlay({
                   persistDefaultLabLocked(next);
                 }}
                 slotProps={{ input: { "aria-label": "Lock labs by default" } }}
+              />
+            </SectionCard>
+            <SectionCard
+              title="Details on hover"
+              description="Show a card with a node's or link's details when the pointer rests on it."
+              wide={false}
+              compactControl
+            >
+              <Switch
+                size="small"
+                checked={hoverCards}
+                onChange={(event) => {
+                  const next = event.target.checked;
+                  setHoverCards(next);
+                  persistHoverCards(next);
+                }}
+                slotProps={{ input: { "aria-label": "Details on hover" } }}
               />
             </SectionCard>
           </>

@@ -7,9 +7,11 @@ import {
   labRunState,
   parseDockerUptime,
   type LabNodeRunState,
-  type LabOverviewCard
+  type LabOverviewCard,
+  type LabOverviewHost
 } from "@containerlab/clab-ui/labs-overview/cards";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
+import type { HealthMetricsResponse, LabBackend } from "@srl-labs/containerlab-lab-backend";
 
 export interface OverviewContainer {
   nodeName: string;
@@ -135,4 +137,38 @@ export function buildOverviewCards(
     if (!runningPaths.has(card.id)) cards.push(card);
   }
   return cards.sort(compareCards);
+}
+
+/** The connections as the overview's lab host tiles list them. */
+interface OverviewConnections<Connection extends OverviewConnection> {
+  list(): Connection[];
+  status(connection: Connection): LabOverviewHost["status"];
+}
+
+/** Local and the lab hosts, with whether they are signed in; just Local before connections load. */
+export function overviewLabHosts<Connection extends OverviewConnection>(
+  connections: OverviewConnections<Connection> | undefined,
+  local: OverviewConnection
+): LabOverviewHost[] {
+  if (!connections) return [{ id: local.id, label: local.label, status: "connected" }];
+  return connections.list().map((connection) => ({
+    id: connection.id,
+    label: connection.label,
+    status: connections.status(connection)
+  }));
+}
+
+/** A lab host's CPU, memory and disk usage, or why there is none. */
+export async function overviewHostMetrics(
+  backendOf: () => Pick<LabBackend, "capabilities" | "healthMetrics">
+): Promise<{ metrics?: HealthMetricsResponse; error?: string }> {
+  try {
+    const backend = backendOf();
+    if (!backend.capabilities.healthMetrics) {
+      return { error: "This lab host does not report its resources." };
+    }
+    return { metrics: await backend.healthMetrics() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }

@@ -10,6 +10,8 @@ interface Appearance {
   fontSize: number;
   fontFamily: string;
   reduceMotion: boolean;
+  /** Cards with a node's or link's details on hover; on unless false. */
+  hoverCards?: boolean;
 }
 type AppearanceWindow = Window & { __CLAB_APPEARANCE__?: Appearance };
 export function useAppearance() {

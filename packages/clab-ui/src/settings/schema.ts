@@ -110,6 +110,7 @@ const TITLES: Record<string, string> = {
   "appearance.fontSize": "Interface font size",
   "appearance.fontFamily": "Interface font family",
   "appearance.reduceMotion": "Reduce motion",
+  "appearance.hoverCards": "Details on hover",
 };
 const RELOAD_KEYS = new Set([
   "binaryPath",
