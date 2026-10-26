@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
-  FormControlLabel,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -19,7 +18,6 @@ import {
   Select,
   Snackbar,
   Stack,
-  Switch,
   Table,
   TableBody,
   TableCell,
@@ -61,6 +59,7 @@ import { floatingShadow } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { VersionList } from "./AboutSettingsContent";
 import { FileEditorDialog } from "./FileEditorDialog";
+import { NodeLogsDialog } from "./NodeLogsDialog";
 
 interface InspectGroup {
   labName: string;
@@ -247,13 +246,6 @@ function mergeInterfaceFields(
   return next;
 }
 
-function countLogLines(content: string): number {
-  if (!content) {
-    return 0;
-  }
-  return content.split(/\r?\n/).length;
-}
-
 function InspectDialogView(props: {
   closeInspect: () => void;
   filteredInspectGroups: InspectGroup[];
@@ -339,118 +331,6 @@ function InspectDialogView(props: {
       </DialogContent>
       <DialogActions>
         <Button variant="text" onClick={props.closeInspect}>Close</Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function LogsDialogView(props: {
-  closeLogs: () => void;
-  exportLogs: () => void;
-  fetchLogs: (tailValue: string, showLoading: boolean) => Promise<void>;
-  filteredLogsContent: string;
-  logsError: string | null;
-  logsFilter: string;
-  logsFollow: boolean;
-  logsLoading: boolean;
-  logsPaperRef: React.RefObject<HTMLDivElement | null>;
-  logsRequest: ReturnType<typeof useRuntimeUiStore.getState>["logsRequest"];
-  logsTail: string;
-  setLogsFilter: (value: string) => void;
-  setLogsFollow: (value: boolean) => void;
-  setLogsTail: (value: string) => void;
-  totalLogLines: number;
-  visibleLogLines: number;
-}) {
-  const logLineSummary = props.logsFilter.trim()
-    ? `Showing ${props.visibleLogLines}/${props.totalLogLines} lines`
-    : `${props.totalLogLines} lines`;
-
-  return (
-    <Dialog open={props.logsRequest !== null} onClose={props.closeLogs} maxWidth="lg" fullWidth>
-      <DialogTitle>{props.logsRequest?.title ?? "Node Logs"}</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={2}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ pt: 1, alignItems: { sm: "center" } }}>
-            <TextField
-              label="Tail"
-              value={props.logsTail}
-              onChange={(event) => props.setLogsTail(event.target.value)}
-              size="small"
-              sx={{ maxWidth: 200 }}
-            />
-            <TextField
-              label="Find"
-              value={props.logsFilter}
-              onChange={(event) => props.setLogsFilter(event.target.value)}
-              size="small"
-              sx={{ minWidth: 240 }}
-            />
-            <Button
-              variant="outlined"
-              onClick={() => void props.fetchLogs(props.logsTail, true)}
-              disabled={props.logsLoading}
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={props.exportLogs}
-              disabled={!props.filteredLogsContent}
-            >
-              Export
-            </Button>
-            <FormControlLabel
-              sx={{ ml: { sm: 0.5 } }}
-              control={
-                <Switch
-                  size="small"
-                  checked={props.logsFollow}
-                  onChange={(event) => props.setLogsFollow(event.target.checked)}
-                />
-              }
-              label="Follow"
-            />
-          </Stack>
-          {props.logsLoading ? (
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              Loading logs…
-            </Typography>
-          ) : null}
-          {props.logsError ? <Alert severity="error">{props.logsError}</Alert> : null}
-          <Typography variant="body2" sx={{ color: "text.secondary" }}>
-            {logLineSummary}
-          </Typography>
-          <Paper
-            ref={props.logsPaperRef}
-            variant="outlined"
-            sx={{
-              bgcolor: "background.default",
-              maxHeight: 480,
-              overflow: "auto",
-              px: 1.5,
-              py: 1.25
-            }}
-          >
-            <Typography
-              component="pre"
-              sx={{
-                fontFamily: MONO_FONT_FAMILY,
-                fontSize: 12,
-                lineHeight: 1.6,
-                margin: 0,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word"
-              }}
-            >
-              {props.filteredLogsContent ||
-                (props.logsFilter.trim() ? "No matching log lines." : "No logs returned.")}
-            </Typography>
-          </Paper>
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button variant="text" onClick={props.closeLogs}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -1291,15 +1171,13 @@ function RuntimeSnackbarView(props: {
 
 export function RuntimeActionDialogs() {
   const { updateInterfaceNetemState } = useWorkspaceHost().labs;
-  const { fetchNodeLogs, fetchVersionCheck, fetchVersionInfo, inspectAllLabs, inspectLab, resetNetem, setNetem } = useWorkspaceHost().api;
+  const { fetchVersionCheck, fetchVersionInfo, inspectAllLabs, inspectLab, resetNetem, setNetem } = useWorkspaceHost().api;
   const labs = useWorkspaceLabs();
   const inspectRequest = useRuntimeUiStore((state) => state.inspectRequest);
-  const logsRequest = useRuntimeUiStore((state) => state.logsRequest);
   const netemRequest = useRuntimeUiStore((state) => state.netemRequest);
   const snackbar = useRuntimeUiStore((state) => state.snackbar);
   const versionOpen = useRuntimeUiStore((state) => state.versionOpen);
   const closeInspect = useRuntimeUiStore((state) => state.closeInspect);
-  const closeLogs = useRuntimeUiStore((state) => state.closeLogs);
   const closeNetem = useRuntimeUiStore((state) => state.closeNetem);
   const closeSnackbar = useRuntimeUiStore((state) => state.closeSnackbar);
 
@@ -1307,15 +1185,6 @@ export function RuntimeActionDialogs() {
   const [inspectError, setInspectError] = useState<string | null>(null);
   const [inspectGroups, setInspectGroups] = useState<InspectGroup[]>([]);
   const [inspectFilter, setInspectFilter] = useState("");
-
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsError, setLogsError] = useState<string | null>(null);
-  const [logsTail, setLogsTail] = useState("200");
-  const [logsFollow, setLogsFollow] = useState(true);
-  const [logsFilter, setLogsFilter] = useState("");
-  const [logsContent, setLogsContent] = useState("");
-  const logsFetchRequestIdRef = useRef(0);
-  const logsPaperRef = useRef<HTMLDivElement | null>(null);
 
   const [versionLoading, setVersionLoading] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
@@ -1362,20 +1231,6 @@ export function RuntimeActionDialogs() {
     () => filterInspectGroups(inspectGroups, inspectFilter),
     [inspectGroups, inspectFilter]
   );
-
-  const filteredLogsContent = useMemo(() => {
-    const normalizedFilter = logsFilter.trim().toLowerCase();
-    if (!normalizedFilter) {
-      return logsContent;
-    }
-    return logsContent
-      .split(/\r?\n/)
-      .filter((line) => line.toLowerCase().includes(normalizedFilter))
-      .join("\n");
-  }, [logsContent, logsFilter]);
-
-  const totalLogLines = useMemo(() => countLogLines(logsContent), [logsContent]);
-  const visibleLogLines = useMemo(() => countLogLines(filteredLogsContent), [filteredLogsContent]);
 
   const runtimeContainer = useMemo(() => {
     if (!netemRequest) {
@@ -1643,101 +1498,6 @@ export function RuntimeActionDialogs() {
     };
   }, [inspectRequest, inspectAllLabs, inspectLab]);
 
-  const fetchLogs = useCallback(
-    async (tailValue: string, showLoading: boolean): Promise<void> => {
-      if (!logsRequest) {
-        return;
-      }
-      const requestId = ++logsFetchRequestIdRef.current;
-      if (showLoading) {
-        setLogsLoading(true);
-      }
-      setLogsError(null);
-      try {
-        const response = await fetchNodeLogs({
-          sessionId: logsRequest.sessionId,
-          topologyRef: logsRequest.topologyRef,
-          nodeName: logsRequest.nodeName,
-          tail: tailValue
-        });
-        if (requestId !== logsFetchRequestIdRef.current) {
-          return;
-        }
-        setLogsContent(response.logs);
-      } catch (error) {
-        if (requestId !== logsFetchRequestIdRef.current) {
-          return;
-        }
-        setLogsError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (showLoading && requestId === logsFetchRequestIdRef.current) {
-          setLogsLoading(false);
-        }
-      }
-    },
-    [logsRequest, fetchNodeLogs]
-  );
-
-  useEffect(() => {
-    if (!logsRequest) {
-      logsFetchRequestIdRef.current += 1;
-      setLogsContent("");
-      setLogsError(null);
-      setLogsTail("200");
-      setLogsFollow(true);
-      setLogsFilter("");
-      setLogsLoading(false);
-      return;
-    }
-
-    const initialTail = "200";
-    setLogsTail(initialTail);
-    setLogsFollow(true);
-    setLogsFilter("");
-    void fetchLogs(initialTail, true);
-    return () => {
-      logsFetchRequestIdRef.current += 1;
-    };
-  }, [fetchLogs, logsRequest]);
-
-  useEffect(() => {
-    if (!logsRequest || !logsFollow) {
-      return;
-    }
-    const intervalId = window.setInterval(() => {
-      void fetchLogs(logsTail, false);
-    }, 2000);
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [fetchLogs, logsFollow, logsRequest, logsTail]);
-
-  useEffect(() => {
-    if (!logsFollow) {
-      return;
-    }
-    const paperNode = logsPaperRef.current;
-    if (!paperNode) {
-      return;
-    }
-    paperNode.scrollTop = paperNode.scrollHeight;
-  }, [filteredLogsContent, logsFollow]);
-
-  const exportLogs = useCallback((): void => {
-    if (!logsRequest || !filteredLogsContent) {
-      return;
-    }
-    const safeNodeName = logsRequest.nodeName.trim().replace(/[^A-Za-z0-9._-]/g, "-") || "node";
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const blob = new Blob([filteredLogsContent], { type: "text/plain;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${safeNodeName}-logs-${stamp}.log`;
-    link.click();
-    window.URL.revokeObjectURL(url);
-  }, [filteredLogsContent, logsRequest]);
-
   useEffect(() => {
     if (!versionOpen) {
       setVersionError(null);
@@ -1982,26 +1742,7 @@ export function RuntimeActionDialogs() {
         />
       ) : null}
 
-      {logsRequest ? (
-        <LogsDialogView
-          closeLogs={closeLogs}
-          exportLogs={exportLogs}
-          fetchLogs={fetchLogs}
-          filteredLogsContent={filteredLogsContent}
-          logsError={logsError}
-          logsFilter={logsFilter}
-          logsFollow={logsFollow}
-          logsLoading={logsLoading}
-          logsPaperRef={logsPaperRef}
-          logsRequest={logsRequest}
-          logsTail={logsTail}
-          setLogsFilter={setLogsFilter}
-          setLogsFollow={setLogsFollow}
-          setLogsTail={setLogsTail}
-          totalLogLines={totalLogLines}
-          visibleLogLines={visibleLogLines}
-        />
-      ) : null}
+      <NodeLogsDialog />
 
       {netemRequest ? (
         <NetemDialogView

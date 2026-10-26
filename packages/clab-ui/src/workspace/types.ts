@@ -245,6 +245,13 @@ export interface LogsResponse {
   logs: string;
 }
 
+/** One line of a node's container log. */
+export interface NodeLogLine {
+  line: string;
+  /** The container output the line came from, when the lab host tells. */
+  stream?: "stdout" | "stderr";
+}
+
 export interface VersionResponse {
   versionInfo: string;
 }

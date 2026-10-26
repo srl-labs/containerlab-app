@@ -27,6 +27,7 @@ export interface RuntimeContainerInput {
   nodeName?: string;
   labName?: string;
   state?: string;
+  status?: string;
   kind?: string;
   image?: string;
   ipv4Address?: string;
@@ -126,6 +127,7 @@ export function normalizeRuntimeContainer(input: RuntimeContainerInput): HostRun
     nodeName: input.nodeName ?? "",
     labName: input.labName ?? "",
     state: input.state ?? "",
+    status: input.status ?? "",
     kind: input.kind ?? "",
     image: input.image ?? "",
     ipv4Address: input.ipv4Address ?? "",
@@ -160,6 +162,7 @@ function runtimeContainerMetadataEqual(
     previous.nodeName === next.nodeName &&
     previous.labName === next.labName &&
     previous.state === next.state &&
+    (previous.status ?? "") === (next.status ?? "") &&
     previous.kind === next.kind &&
     previous.image === next.image &&
     previous.ipv4Address === next.ipv4Address &&

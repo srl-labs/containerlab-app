@@ -1070,14 +1070,15 @@ export function EndpointManager({
       ),
     [endpoints]
   );
+  const connectedEndpointKey = sortedEndpoints
+    .filter((endpoint) => endpoint.status === "connected")
+    .map((endpoint) => endpoint.id)
+    .join("|");
+  // Keyed by the ids, so a fresh endpoints array with the same hosts loads no health stats again.
   const connectedEndpointIds = useMemo(
-    () =>
-      sortedEndpoints
-        .filter((endpoint) => endpoint.status === "connected")
-        .map((endpoint) => endpoint.id),
-    [sortedEndpoints]
+    () => (connectedEndpointKey ? connectedEndpointKey.split("|") : []),
+    [connectedEndpointKey]
   );
-  const connectedEndpointKey = connectedEndpointIds.join("|");
   const endpointHealth = useEndpointHealthState(
     connectedEndpointIds,
     connectedEndpointKey,

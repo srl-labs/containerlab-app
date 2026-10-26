@@ -337,6 +337,7 @@ function toContainerInfo(container: HostRuntimeContainer): ContainerInfo {
     name_short: shortContainerName(container),
     rootNodeName: container.nodeName ?? "",
     state: container.state ?? "",
+    status: container.status ?? "",
     kind: container.kind ?? "",
     image: container.image ?? "",
     IPv4Address: stripCidr(container.ipv4Address),
@@ -624,8 +625,72 @@ export function buildRuntimeNodeUpdates(
       containerLongName: container.name,
       containerShortName: shortContainerName(container),
       state: container.state,
+      status: container.status ?? "",
       mgmtIpv4Address: stripCidr(container.ipv4Address),
       mgmtIpv6Address: stripCidr(container.ipv6Address),
       interfaces: toRuntimeCaptureInterfaces(container.interfaces, container.kind)
     }));
+}
+
+/**
+ * How close a node is to being usable. A node is ready once its container runs
+ * and Docker reports it healthy, or runs without a healthcheck.
+ */
+export type NodeReadiness = "ready" | "starting" | "stopping" | "unhealthy" | "paused" | "stopped";
+
+/** A lifecycle action on a node or its lab: one that brings it up, or one that takes it down. */
+export type NodeLifecycleDirection = "up" | "down";
+
+export interface NodeReadinessInput {
+  /** Container state, e.g. `running`, `created` or `exited`; empty without a container. */
+  state?: string;
+  /**
+   * Docker's status line, e.g. `Up 5 minutes (health: starting)`. Docker names
+   * the health of every container with a healthcheck, so a running container
+   * whose status names none has no healthcheck.
+   */
+  status?: string;
+  /** A lifecycle action in progress for the node or its lab. */
+  lifecycle?: NodeLifecycleDirection;
+}
+
+type DockerHealth = "starting" | "healthy" | "unhealthy";
+
+/** The health Docker appends to a status line: `(healthy)`, `(unhealthy)`, `(health: starting)`. */
+function dockerHealth(status: string): DockerHealth | undefined {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("health: starting")) return "starting";
+  if (normalized.includes("(unhealthy)")) return "unhealthy";
+  if (normalized.includes("(healthy)")) return "healthy";
+  return undefined;
+}
+
+export function classifyNodeReadiness(input: NodeReadinessInput): NodeReadiness {
+  const state = normalizeName(input.state);
+  if (state === "created" || state === "restarting") return "starting";
+  if (state === "removing") return "stopping";
+
+  const running = state.includes("run");
+  const paused = state.includes("pause");
+  if (input.lifecycle === "down" && (running || paused)) return "stopping";
+  if (running) {
+    const health = dockerHealth(input.status ?? "");
+    if (health === "starting") return "starting";
+    return health === "unhealthy" ? "unhealthy" : "ready";
+  }
+  if (input.lifecycle === "up") return "starting";
+  return paused ? "paused" : "stopped";
+}
+
+/** How many of the containers are ready, e.g. for "3 of 5 nodes ready". */
+export function countReadyContainers(
+  containers: HostRuntimeContainer[],
+  lifecycle?: NodeLifecycleDirection
+): { ready: number; total: number } {
+  const ready = containers.filter(
+    (container) =>
+      classifyNodeReadiness({ state: container.state, status: container.status, lifecycle }) ===
+      "ready"
+  ).length;
+  return { ready, total: containers.length };
 }

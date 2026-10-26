@@ -20,6 +20,13 @@ export const MSG_NODE_RENAMED = "node-renamed";
 /** Message type for updating node data */
 export const MSG_NODE_DATA_UPDATED = "node-data-updated";
 
+/**
+ * CPU and memory usage of the open lab's nodes: `{ sample }` with a
+ * `HostNodeStatsSample`, `{ unavailable }` with the reason when the lab host
+ * cannot report it, or `{ clear: true }` when the lab stopped.
+ */
+export const MSG_NODE_STATS_UPDATE = "node-stats-update";
+
 /** Message type to request fit-to-viewport in webview */
 export const MSG_FIT_VIEWPORT = "fit-viewport";
 
@@ -55,6 +62,7 @@ export type WebviewMessageType =
   | typeof MSG_TOPO_MODE_CHANGE
   | typeof MSG_NODE_RENAMED
   | typeof MSG_NODE_DATA_UPDATED
+  | typeof MSG_NODE_STATS_UPDATE
   | typeof MSG_FIT_VIEWPORT
   | typeof MSG_PANEL_ACTION
   | typeof MSG_CUSTOM_NODE_UPDATED

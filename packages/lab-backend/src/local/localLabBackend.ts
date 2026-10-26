@@ -18,8 +18,10 @@ import type {
   LabEvent,
   LabEventStreamOptions,
   LabLifecycleAction,
+  LabStatsStreamOptions,
   LabTarget,
   LifecycleRunOptions,
+  NodeLogStreamOptions,
   RenderedTopology,
   TerminalCreateOptions,
   TopologyFileSystem,
@@ -37,6 +39,7 @@ import type {
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
+  NodeLogLine,
   ShareToolAction,
   ShareToolOptions,
   SSHAccessResponse
@@ -54,6 +57,7 @@ import {
   type LocalLabRef
 } from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
+import { labStats } from "./stats.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import {
   containerlabCommand,
@@ -91,7 +95,9 @@ const LOCAL_FEATURES: LabBackendFeatures = {
   graphMermaid: true,
   graphDot: true,
   sshxReaders: true,
-  gottyOptions: true
+  gottyOptions: true,
+  nodeStats: true,
+  terminalResume: true
 };
 
 function shellQuote(value: string): string {
@@ -427,6 +433,34 @@ export class LocalLabBackend implements LabBackend {
   async nodeLogs(labName: string, containerName: string, options: { tail?: string } = {}) {
     const container = await this.container(labName, containerName);
     return tools.containerLogs(this.options, container.name, options.tail ?? "all");
+  }
+
+  async streamNodeLogs(
+    labName: string,
+    containerName: string,
+    options: NodeLogStreamOptions
+  ): Promise<AsyncIterable<NodeLogLine>> {
+    const container = await this.container(labName, containerName);
+    const command = await spawnLines(
+      this.options.runtime,
+      ["logs", "--follow", "--tail", options.tail ?? "all", "--timestamps", container.name],
+      { env: this.options.env, signal: options.signal }
+    );
+    // The runtime CLI writes the container's stderr to its own stderr.
+    async function* lines(): AsyncGenerator<NodeLogLine> {
+      try {
+        for await (const output of command.lines) yield output;
+      } finally {
+        command.kill();
+      }
+    }
+    return lines();
+  }
+
+  async streamLabStats(labName: string, options: LabStatsStreamOptions) {
+    await this.inspectLab(labName);
+    const interval = Math.min(20, Math.max(1, Math.round(options.intervalSeconds ?? 2)));
+    return labStats(this.docker, labName, interval, options.signal);
   }
 
   async nodeBrowserPorts(labName: string, containerName: string) {

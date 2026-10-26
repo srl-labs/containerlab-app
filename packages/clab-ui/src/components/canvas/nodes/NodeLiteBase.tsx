@@ -28,6 +28,7 @@ const CONTAINER_STYLE_BASE: React.CSSProperties = {
 interface LiteNodeShellProps {
   className: string;
   iconStyle: React.CSSProperties;
+  iconClassName?: string;
   size?: number;
   /** Draw the boxed node style's box (same footprint as the full node, no name). */
   boxed?: boolean;
@@ -62,6 +63,7 @@ function buildLiteBoxStyle(
 export const LiteNodeShell: React.FC<LiteNodeShellProps> = ({
   className,
   iconStyle,
+  iconClassName,
   size = ICON_SIZE,
   boxed = false,
   boxAppearance,
@@ -90,7 +92,10 @@ export const LiteNodeShell: React.FC<LiteNodeShellProps> = ({
         isConnectable={false}
       />
       {boxed && <div style={buildLiteBoxStyle(size, boxSpacing, boxAppearance, selected)} />}
-      <div style={boxed ? { ...iconStyle, position: "relative" } : iconStyle} />
+      <div
+        style={boxed ? { ...iconStyle, position: "relative" } : iconStyle}
+        className={iconClassName}
+      />
     </div>
   );
 };

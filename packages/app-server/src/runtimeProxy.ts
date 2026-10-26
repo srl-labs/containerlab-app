@@ -61,6 +61,8 @@ interface TerminalBody extends RuntimeTargetBody {
   rows?: number;
   sshUsername?: string;
   telnetPort?: number;
+  /** The browser attaches again after a dropped connection; older pages leave it out. */
+  resumable?: boolean;
 }
 
 interface NetemBody extends RuntimeTargetBody {
@@ -1222,7 +1224,8 @@ export function registerRuntimeProxy(
                     request.body
                   )
                 : normalizeOptionalString(request.body.sshUsername),
-            telnetPort: normalizeOptionalInteger(request.body.telnetPort)
+            telnetPort: normalizeOptionalInteger(request.body.telnetPort),
+            resumable: request.body.resumable === true
           }
         );
         return reply.send(session);

@@ -12,25 +12,31 @@ import {
   deployFakeLab,
   destroyFakeNodes,
   fakeContainerName,
+  healthcheckedNodes,
   planFakeApply,
   planFakeDeployWaves,
   readTopology,
   resolveFakeNode,
   type DeployWave,
   type DesiredLab,
-  type FakeLab
+  type FakeLab,
+  type FakeNodeRuntime
 } from "./fakeLab";
 
 /** Pause between log lines, so the progress dialog is visible. */
 const STEP_MS = 250;
 /** Pause after each wait-for wave, so the nodes coming up one group at a time are visible. */
 const WAVE_MS = 1500;
+/** How long a node with a healthcheck reports `health: starting` once a command is done with it. */
+const HEALTHCHECK_MS = 2500;
 
 interface FakeLifecycleDeps {
   currentPath(): string;
   readYaml(path: string): string | undefined;
   /** Show the lab of the current file (or its absence) the way a host refresh would. */
   publish(): Promise<void>;
+  /** Show new container data of a running lab, as a periodic host refresh does. */
+  refreshRuntime(lab: FakeLab): Promise<void>;
   emit(event: ClabUiTopoViewerEvent): void;
 }
 
@@ -89,10 +95,14 @@ function stagedDeploy(desired: DesiredLab, nodeFilter: string[] | undefined, bef
       wave.waitedFor.filter((dep) => dep.dependsOnStage === "healthy").map((dep) => dep.dependsOn)
     )
   );
+  // Only the newest wave is still in its healthcheck; earlier waves passed theirs.
   const started: string[] = [];
   const steps = plan.waves.map((wave) => {
     started.push(...wave.nodes);
-    return { lines: waveLines(wave, watchedHealthy), lab: deployFakeLab(desired, [...started]) };
+    return {
+      lines: waveLines(wave, watchedHealthy),
+      lab: withStartingNodes(deployFakeLab(desired, [...started]), wave.nodes)
+    };
   });
   return {
     lines: [...before, info(`Creating lab directory path=./clab-${next.labName}`)],
@@ -101,8 +111,13 @@ function stagedDeploy(desired: DesiredLab, nodeFilter: string[] | undefined, bef
       ...next.links.map((link) => info(`Created link: ${link.replace(" -- ", " ▪┄┄▪ ")}`)),
       info("Adding host entries path=/etc/hosts")
     ],
-    next
+    next: withStartingNodes(next, plan.waves.at(-1)?.nodes ?? [])
   };
+}
+
+/** The lab with the healthchecks of these nodes, and only these, starting over. */
+function withStartingNodes(lab: FakeLab, nodes: Iterable<string>): FakeLab {
+  return { ...lab, startingNodes: healthcheckedNodes(lab, nodes) };
 }
 
 function destroyLines(lab: FakeLab, nodes: string[], cleanup: boolean): string[] {
@@ -131,8 +146,21 @@ function notRunning(labName: string): Outcome {
   return { lines: [], error: `no containers found for lab "${labName}"` };
 }
 
-function withNodeStates(lab: FakeLab, stopped: Set<string>): FakeLab {
-  return { ...lab, stoppedNodes: stopped };
+/** The lab with these nodes stopped, and the healthchecks of `started` starting over. */
+function withNodeStates(
+  lab: FakeLab,
+  stopped: Set<string>,
+  started: Iterable<string> = []
+): FakeLab {
+  const startingNodes = [...lab.startingNodes, ...healthcheckedNodes(lab, started)].filter(
+    (name) => !stopped.has(name)
+  );
+  return {
+    ...lab,
+    stoppedNodes: stopped,
+    startingNodes: new Set(startingNodes),
+    runtimeOverrides: new Map()
+  };
 }
 
 type OutcomeHandler = (
@@ -154,7 +182,17 @@ const deployOutcome: OutcomeHandler = (running, desired, options, cleanup) => {
 
 const applyOutcome: OutcomeHandler = (running, desired) => {
   if (!running) return stagedDeploy(desired, undefined, []);
-  return { lines: applyLines(planFakeApply(running, desired)), next: deployFakeLab(desired) };
+  const plan = planFakeApply(running, desired);
+  const touched = [
+    ...plan.addedNodes,
+    ...plan.recreatedNodes,
+    ...plan.startedNodes,
+    ...plan.restartedNodes
+  ];
+  return {
+    lines: applyLines(plan),
+    next: withStartingNodes(deployFakeLab(desired), [...running.startingNodes, ...touched])
+  };
 };
 
 const redeployOutcome: OutcomeHandler = (running, desired, _options, cleanup) => {
@@ -178,7 +216,7 @@ function nodeStateOutcome(verb: string, stop: boolean): OutcomeHandler {
     if (!running) return notRunning(desired.labName);
     const lines = [...running.nodes.keys()].map((name) => info(`${verb} container name=${name}`));
     const stopped = stop ? new Set(running.nodes.keys()) : new Set<string>();
-    return { lines, next: withNodeStates(running, stopped) };
+    return { lines, next: withNodeStates(running, stopped, stop ? [] : running.nodes.keys()) };
   };
 }
 
@@ -197,7 +235,30 @@ const LIFECYCLE_OUTCOMES: Record<TopoViewerLifecycleAction, OutcomeHandler> = {
 
 export function createFakeLifecycle(deps: FakeLifecycleDeps) {
   const labs = new Map<string, FakeLab>();
+  const healthchecks = new Map<string, ReturnType<typeof setTimeout>>();
   let active: ActiveRun | undefined;
+
+  function cancelHealthchecks(path: string): void {
+    clearTimeout(healthchecks.get(path));
+    healthchecks.delete(path);
+  }
+
+  /** Let the healthchecks of the lab's starting nodes pass after a while. */
+  function scheduleHealthchecks(path: string): void {
+    cancelHealthchecks(path);
+    if ((labs.get(path)?.startingNodes.size ?? 0) === 0) return;
+    healthchecks.set(
+      path,
+      setTimeout(() => {
+        healthchecks.delete(path);
+        const lab = labs.get(path);
+        if (!lab) return;
+        const healthy = { ...lab, startingNodes: new Set<string>() };
+        labs.set(path, healthy);
+        if (deps.currentPath() === path) void deps.refreshRuntime(healthy);
+      }, HEALTHCHECK_MS)
+    );
+  }
 
   const desiredFor = (path: string): DesiredLab | undefined => {
     const yaml = deps.readYaml(path);
@@ -265,6 +326,7 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
         clearTimeout(active.timer);
         active = undefined;
       }
+      for (const path of healthchecks.keys()) cancelHealthchecks(path);
       labs.clear();
     },
 
@@ -273,6 +335,7 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
       const path = deps.currentPath();
       const desired = desiredFor(path);
       if (!desired) return;
+      cancelHealthchecks(path);
       const run: ActiveRun = { timer: undefined, cancelled: false };
       active = run;
       const outcome = LIFECYCLE_OUTCOMES[action](
@@ -288,10 +351,12 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
       let finished = await stream([...header, ...outcome.lines], run);
       if (finished && "steps" in outcome) finished = await runSteps(path, outcome, run);
       if (active === run) active = undefined;
-      if (!finished) return;
-
-      if ("error" in outcome) {
-        status({ type: "lifecycleStatus", status: "error", errorMessage: outcome.error });
+      if (!finished || "error" in outcome) {
+        // Whatever came up before the command stopped finishes its healthchecks.
+        scheduleHealthchecks(path);
+        if (finished && "error" in outcome) {
+          status({ type: "lifecycleStatus", status: "error", errorMessage: outcome.error });
+        }
         return;
       }
       if (outcome.next) {
@@ -301,6 +366,7 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
       }
       await deps.publish();
       status({ type: "lifecycleStatus", status: "success" });
+      scheduleHealthchecks(path);
     },
 
     cancel(): void {
@@ -333,8 +399,28 @@ export function createFakeLifecycle(deps: FakeLifecycleDeps) {
       const stopped = new Set(lab.stoppedNodes);
       if (action === "stop") stopped.add(nodeName);
       else stopped.delete(nodeName);
-      labs.set(path, withNodeStates(lab, stopped));
+      labs.set(path, withNodeStates(lab, stopped, action === "stop" ? [] : [nodeName]));
       await deps.publish();
+      scheduleHealthchecks(path);
+    },
+
+    /**
+     * Force a node's state and status, e.g. `{ status: "Up 1 minute (unhealthy)" }`,
+     * until the next lifecycle command; `null` goes back to what the fake lab reports.
+     */
+    async setNodeRuntime(name: string, runtime: FakeNodeRuntime | null): Promise<void> {
+      const path = deps.currentPath();
+      const lab = labs.get(path);
+      const nodeName = lab ? resolveFakeNode(lab, name) : undefined;
+      if (!lab || nodeName === undefined) {
+        throw new Error(`No running fake node "${name}" in ${path}`);
+      }
+      const runtimeOverrides = new Map(lab.runtimeOverrides);
+      if (runtime) runtimeOverrides.set(nodeName, runtime);
+      else runtimeOverrides.delete(nodeName);
+      const next = { ...lab, runtimeOverrides };
+      labs.set(path, next);
+      await deps.refreshRuntime(next);
     }
   };
 }

@@ -28,7 +28,9 @@ import type {
   GraphExportFormat,
   GraphExportResponse,
   LabBackendFeatures,
+  LabStatsSample,
   MermaidDirection,
+  NodeLogLine,
   RenderedTopology,
   ShareToolOptions,
   ValidateTopologyResponse
@@ -433,6 +435,7 @@ export async function openTerminalSession(
     rows: number;
     sshUsername?: string;
     telnetPort?: number;
+    resumable?: boolean;
   }
 ): Promise<TerminalSessionInfo> {
   const endpointId = resolveTargetEndpointId(input);
@@ -451,10 +454,22 @@ export async function closeTerminalSession(sessionId: string, endpointId?: strin
   );
 }
 
+/** Rejects with a `RuntimeStreamError` of status 404 once the session is gone. */
+export async function getTerminalSession(sessionId: string, endpointId?: string): Promise<TerminalSessionInfo> {
+  const response = await fetchRuntimeResource(
+    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}`,
+    withEndpointHeaders({}, endpointId)
+  );
+  if (!response.ok) {
+    throw new RuntimeStreamError(await readError(response), response.status);
+  }
+  return (await response.json()) as TerminalSessionInfo;
+}
+
 export function connectTerminalSessionWebSocket(sessionId: string, endpointId?: string): WebSocket {
+  // The app server may live below a base path, like every other route.
   const url = new URL(
-    `/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}/stream`,
-    window.location.origin
+    standaloneServerUrl(`/api/runtime/terminal-sessions/${encodeURIComponent(sessionId)}/stream`)
   );
   if (endpointId) {
     url.searchParams.set("endpointId", endpointId);
@@ -475,6 +490,110 @@ export async function fetchNodeLogs(
     asJsonBody(input, endpointId),
     endpointId
   );
+}
+
+/** An error of a runtime stream, with the HTTP status when the server refused it. */
+export class RuntimeStreamError extends Error {
+  readonly status?: number;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "RuntimeStreamError";
+    this.status = status;
+  }
+}
+
+/**
+ * The records of a WebSocket stream route: sends `request` once connected,
+ * then yields each JSON message until the server ends the stream. WebSockets
+ * keep these long streams off the browser's few HTTP connections per host.
+ */
+async function* runtimeSocketRecords(
+  path: string,
+  request: unknown,
+  endpointId: string | undefined,
+  signal: AbortSignal
+): AsyncGenerator<Record<string, unknown>> {
+  const url = new URL(standaloneServerUrl(path));
+  if (endpointId) url.searchParams.set("endpointId", endpointId);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(url);
+  const records: Array<Record<string, unknown>> = [];
+  let closed: { code: number; reason: string } | undefined;
+  let wake: (() => void) | undefined;
+  const notify = () => {
+    const resume = wake;
+    wake = undefined;
+    resume?.();
+  };
+  const abort = () => socket.close(1000, "Client closed");
+  signal.addEventListener("abort", abort, { once: true });
+  socket.onopen = () => socket.send(JSON.stringify(request));
+  socket.onmessage = (event) => {
+    try {
+      const value = JSON.parse(String(event.data)) as unknown;
+      if (typeof value === "object" && value !== null) records.push(value as Record<string, unknown>);
+    } catch {
+      // Not a record of this protocol.
+    }
+    notify();
+  };
+  socket.onclose = (event) => {
+    closed = { code: event.code, reason: event.reason };
+    notify();
+  };
+  try {
+    while (true) {
+      const record = records.shift();
+      if (record) {
+        if (record.type === "end") return;
+        if (record.type === "error") {
+          const status = typeof record.status === "number" ? record.status : undefined;
+          throw new RuntimeStreamError(
+            typeof record.error === "string" && record.error ? record.error : "The stream failed.",
+            status
+          );
+        }
+        yield record;
+        continue;
+      }
+      if (closed) {
+        if (signal.aborted) return;
+        if (closed.code === 1008) markEndpointUnavailable(endpointId, "session_expired");
+        throw new RuntimeStreamError(closed.reason || "The stream connection closed.");
+      }
+      await new Promise<void>((resume) => {
+        wake = resume;
+      });
+    }
+  } finally {
+    signal.removeEventListener("abort", abort);
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      socket.close(1000, "Client closed");
+    }
+  }
+}
+
+export async function* streamNodeLogs(
+  input: RuntimeTargetRequest & { nodeName: string; tail?: string; signal: AbortSignal }
+): AsyncGenerator<NodeLogLine> {
+  const { signal, ...target } = input;
+  const endpointId = resolveTargetEndpointId(target);
+  for await (const record of runtimeSocketRecords("/api/runtime/logs/socket", target, endpointId, signal)) {
+    if (record.type !== "line" || typeof record.line !== "string") continue;
+    const stream = record.stream === "stdout" || record.stream === "stderr" ? record.stream : undefined;
+    yield stream ? { line: record.line, stream } : { line: record.line };
+  }
+}
+
+export async function* streamLabStats(
+  input: RuntimeTargetRequest & { intervalSeconds?: number; signal: AbortSignal }
+): AsyncGenerator<LabStatsSample> {
+  const { signal, ...target } = input;
+  const endpointId = resolveTargetEndpointId(target);
+  for await (const record of runtimeSocketRecords("/api/runtime/stats/socket", target, endpointId, signal)) {
+    if (record.type === "stats" && Array.isArray(record.nodes)) yield record as unknown as LabStatsSample;
+  }
 }
 
 export async function controlNodeLifecycle(

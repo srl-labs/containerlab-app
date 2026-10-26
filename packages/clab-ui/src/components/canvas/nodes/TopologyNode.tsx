@@ -29,12 +29,16 @@ import { clampTelemetryNodeSizePx } from "../../../utils/telemetryInterfaceLabel
 import {
   buildNodeLabelStyle,
   HIDDEN_HANDLE_STYLE,
+  getNodeBadgeState,
+  getNodeBootingAnimationDelay,
   getNodeDirectionRotation,
   getNodeRuntimeIconOpacity,
   getNodeRuntimeBadgeState
 } from "./nodeStyles";
 import { NodeBox, useNodeBoxLabel } from "./NodeBox";
+import { NodeCpuBadge } from "./NodeCpuBadge";
 import { NodeMgmtNetworkBadge } from "./NodeMgmtNetworkBadge";
+import { isNodeBooting, useNodeReadiness } from "./useNodeReadiness";
 
 const RuntimeBadge = React.lazy(() => import("./NodeRuntimeBadge"));
 
@@ -42,6 +46,11 @@ const FALLBACK_NODE_DATA: TopologyNodeData = {
   label: "",
   role: "default"
 };
+
+function getContainerName(extraData: Record<string, unknown> | undefined): string | undefined {
+  const longname = extraData?.longname;
+  return typeof longname === "string" && longname.length > 0 ? longname : undefined;
+}
 
 function isTopologyNodeData(value: unknown): value is TopologyNodeData {
   if (typeof value !== "object" || value === null) return false;
@@ -129,6 +138,9 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
 
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
+  const readiness = useNodeReadiness(id, nodeData);
+  const booting = isNodeBooting(readiness);
+  const badgeState = getNodeBadgeState(runtimeBadgeState, readiness);
 
   // Build icon style with dynamic properties
   const iconStyle = useMemo((): React.CSSProperties => {
@@ -150,8 +162,13 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       style.boxShadow = LINK_END_GLOW;
     }
 
+    if (booting) {
+      style.animationDelay = getNodeBootingAnimationDelay(id);
+    }
+
     return style;
   }, [
+    id,
     iconUrl,
     iconCornerRadius,
     directionRotation,
@@ -159,7 +176,8 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     selected,
     isLinkEnd,
     isBoxed,
-    iconSize
+    iconSize,
+    booting
   ]);
 
   // Container style based on link target mode
@@ -172,8 +190,15 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
     [isLinkTarget, iconSize]
   );
 
-  // Build class names for CSS-based hover effects
-  const iconClassName = isLinkTarget ? "topology-node-icon link-target" : "topology-node-icon";
+  // Build class names for CSS-based hover effects and the booting pulse
+  const iconClassName = [
+    "topology-node-icon",
+    isLinkTarget ? "link-target" : undefined,
+    booting ? "node-booting" : undefined,
+    readiness === "unhealthy" ? "node-unhealthy" : undefined
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const labelStyle = useMemo(
     () =>
@@ -193,6 +218,7 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       style={containerStyle}
       className={isBoxed ? "topology-node topology-node-boxed" : "topology-node"}
       title={isBoxed ? boxLabel.title : undefined}
+      data-readiness={readiness}
     >
       {/* Single source and target handles for edge connections.
           The floating edge style calculates actual connection points dynamically,
@@ -229,9 +255,12 @@ const TopologyNodeComponent: React.FC<NodeProps> = ({ id, data, selected }) => {
       <div style={iconStyle} className={iconClassName} />
       <NodeMgmtNetworkBadge extraData={nodeData.extraData} />
       {!suppressRuntimeBadges && (
-        <React.Suspense fallback={null}>
-          <RuntimeBadge state={runtimeBadgeState} />
-        </React.Suspense>
+        <>
+          <React.Suspense fallback={null}>
+            <RuntimeBadge state={badgeState} />
+          </React.Suspense>
+          <NodeCpuBadge nodeId={id} containerName={getContainerName(nodeData.extraData)} />
+        </>
       )}
 
       {/* Node label */}

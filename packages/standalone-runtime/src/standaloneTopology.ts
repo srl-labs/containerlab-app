@@ -48,6 +48,13 @@ interface StandaloneTopologyManagerOptions {
   getDefaultEndpointId?: () => string | undefined;
   getSessionClient: () => TopologySessionClient;
   onTopologyFilesChanged: () => void;
+  /** Called with the host context each time it is synced, e.g. to follow the deployed lab. */
+  onHostContextSynced?: (context: {
+    topologyRef?: TopologyRef;
+    sessionId?: string;
+    endpointId?: string;
+    deploymentState: DeploymentState;
+  }) => void;
 }
 
 interface HostContextOptions {
@@ -610,6 +617,12 @@ export function createStandaloneTopologyManager(
       },
       options.getSessionClient()
     );
+    options.onHostContextSynced?.({
+      topologyRef: topologyRef ?? undefined,
+      sessionId: currentSessionId ?? undefined,
+      endpointId: currentEndpointId ?? undefined,
+      deploymentState
+    });
   }
 
   async function resolveDeploymentState(topologyRef: TopologyRef): Promise<DeploymentState | undefined> {

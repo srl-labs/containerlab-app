@@ -127,6 +127,8 @@ export interface ContainerInfo {
   rootNodeName?: string;
   /** Container state (e.g., "running", "stopped") */
   state: string;
+  /** Docker status line (e.g., "Up 5 minutes (healthy)") */
+  status?: string;
   /** Node kind (e.g., "nokia_srlinux") */
   kind: string;
   /** Container image */

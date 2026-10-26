@@ -1,5 +1,6 @@
 import { runtimeFetch } from "./backend";
 import { useTopoViewerStore } from "@containerlab/clab-ui";
+import { useLifecycleLogHistory } from "@containerlab/clab-ui/workspace/state";
 import {
   createLifecycleCommandController,
   isPartialDestroy,
@@ -160,11 +161,20 @@ function postWebviewMessage(data: Record<string, unknown>): void {
   window.dispatchEvent(new MessageEvent("message", { data }));
 }
 
+/**
+ * The topology whose lifecycle log is being recorded. Lifecycle commands run
+ * one at a time, so the log lines in between belong to it.
+ */
+let recordingTopologyId: string | undefined;
+
 function postLifecycleLogMessage(
   commandType: LifecycleCommandType,
   line: string,
   stream: LifecycleCommandStream
 ): void {
+  if (recordingTopologyId !== undefined && line.trim()) {
+    useLifecycleLogHistory.getState().append(recordingTopologyId, line.trim(), stream);
+  }
   postWebviewMessage({
     type: MSG_LAB_LIFECYCLE_LOG,
     data: { commandType, line, stream }
@@ -176,6 +186,12 @@ function postLifecycleStatusMessage(
   status: "success" | "error",
   errorMessage?: string
 ): void {
+  if (recordingTopologyId !== undefined) {
+    const history = useLifecycleLogHistory.getState();
+    if (status === "error" && errorMessage) history.append(recordingTopologyId, `[error] ${errorMessage}`, "stderr");
+    history.finish(recordingTopologyId, status);
+    recordingTopologyId = undefined;
+  }
   postWebviewMessage({
     type: MSG_LAB_LIFECYCLE_STATUS,
     data: { commandType, status, errorMessage }
@@ -674,6 +690,12 @@ export function createStandaloneLifecycleManager(
   ): Promise<void> {
     const label = topologyRef.labName || topologyRef.yamlPath;
     const request = createActiveLifecycleRequest(config, topologyRef, execution, sessionId);
+    recordingTopologyId = topologyRef.topologyId;
+    useLifecycleLogHistory.getState().begin({
+      topologyId: topologyRef.topologyId,
+      labName: topologyRef.labName,
+      action: config.commandType
+    });
     postLifecycleStart(config, label);
 
     try {

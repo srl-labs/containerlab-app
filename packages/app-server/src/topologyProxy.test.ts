@@ -308,6 +308,7 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
           nodeName: "srl1",
           labName: "demo",
           state: "running",
+          status: "Up 3 seconds (health: starting)",
           interfaces: [{ name: "e1-1", state: "up", type: "veth" }]
         },
         {
@@ -333,4 +334,7 @@ test("/api/topology/snapshot applies runtime link class updates to cached snapsh
   // Nodes carry their live interfaces so the capture dialog can offer all of them.
   const nodes = (response.json() as { snapshot: { nodes: Array<{ data?: { extraData?: Record<string, unknown> } }> } }).snapshot.nodes;
   assert.deepEqual(nodes[0]?.data?.extraData?.runtimeInterfaces, [{ name: "e1-1", state: "up" }]);
+  // The docker status line tells the canvas whether a node is still booting.
+  assert.equal(nodes[0]?.data?.extraData?.status, "Up 3 seconds (health: starting)");
+  assert.equal(nodes[1]?.data?.extraData?.status, "");
 });

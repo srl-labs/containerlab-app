@@ -18,9 +18,11 @@ import type {
   LabFileContent,
   LabFileSystem,
   LabLifecycleAction,
+  LabStatsStreamOptions,
   LabTarget,
   LifecycleRunOptions,
   LifecycleStreamEvent,
+  NodeLogStreamOptions,
   RenderedTopology,
   TerminalClientMessage,
   TerminalCreateOptions,
@@ -39,11 +41,13 @@ import type {
   InspectContainerInfo,
   GenerateTopologyRequest,
   GraphExportFormat,
+  LabStatsSample,
   LifecycleActionResult,
   MermaidDirection,
   NetemResetRequest,
   NetemSetRequest,
   NodeLifecycleAction,
+  NodeLogLine,
   ShareToolAction,
   ShareToolOptions,
   ValidateTopologyResponse
@@ -85,7 +89,10 @@ const SERVER_FEATURES = {
   saveCopy: "save-copy",
   inspectDetails: "inspect-details",
   snapshotSave: "snapshot-save",
-  deployRestore: "deploy-restore"
+  deployRestore: "deploy-restore",
+  nodeStats: "node-stats",
+  logStream: "log-stream",
+  terminalResume: "terminal-resume"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -114,7 +121,9 @@ function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures
     graphMermaid: listed.has("graph-mermaid"),
     graphDot: listed.has("graph-dot"),
     sshxReaders: listed.has("sshx-readers"),
-    gottyOptions: listed.has("gotty-options")
+    gottyOptions: listed.has("gotty-options"),
+    nodeStats: listed.has(SERVER_FEATURES.nodeStats),
+    terminalResume: listed.has(SERVER_FEATURES.terminalResume)
   };
 }
 
@@ -466,6 +475,46 @@ export class ApiLabBackend implements LabBackend {
     return this.client.getNodeLogs(this.token, labName, containerName, options);
   }
 
+  async streamNodeLogs(
+    labName: string,
+    containerName: string,
+    options: NodeLogStreamOptions
+  ): Promise<AsyncIterable<NodeLogLine>> {
+    // Older servers send no heartbeats, so a quiet node looks like a lost host there.
+    const heartbeats = await this.hasFeature(SERVER_FEATURES.logStream);
+    const response = await this.client.openNodeLogStream(
+      this.token,
+      labName,
+      containerName,
+      { tail: options.tail },
+      { signal: options.signal }
+    );
+    if (!response.body) {
+      throw new Error("No log stream body");
+    }
+    const body = heartbeats ? withIdleTimeout(response.body, STREAM_IDLE_TIMEOUT_MS) : response.body;
+    return logLines(readJsonLines<{ line?: unknown; stream?: unknown }>(body));
+  }
+
+  async streamLabStats(
+    labName: string,
+    options: LabStatsStreamOptions
+  ): Promise<AsyncIterable<LabStatsSample>> {
+    if (!(await this.hasFeature(SERVER_FEATURES.nodeStats))) {
+      throw unsupported("report node CPU and memory usage");
+    }
+    const response = await this.client.openLabStatsStream(
+      this.token,
+      labName,
+      { intervalSeconds: options.intervalSeconds },
+      { signal: options.signal }
+    );
+    if (!response.body) {
+      throw new Error("No stats stream body");
+    }
+    return readJsonLines<LabStatsSample>(withIdleTimeout(response.body, STREAM_IDLE_TIMEOUT_MS));
+  }
+
   nodeBrowserPorts(labName: string, containerName: string) {
     return this.client.getNodeBrowserPorts(this.token, labName, containerName);
   }
@@ -759,13 +808,27 @@ async function readBodyWithLimit(
   return data;
 }
 
+/** clab-api-server closes a terminal connection with this code when another client attached. */
+const TERMINAL_CLOSE_TAKEN_OVER = 4001;
+
+/** Log lines from the NDJSON of the follow-mode logs endpoint. */
+async function* logLines(
+  records: AsyncIterable<{ line?: unknown; stream?: unknown }>
+): AsyncGenerator<NodeLogLine> {
+  for await (const record of records) {
+    if (typeof record.line !== "string") continue;
+    const stream = record.stream === "stdout" || record.stream === "stderr" ? record.stream : undefined;
+    yield stream ? { line: record.line, stream } : { line: record.line };
+  }
+}
+
 /**
  * The clab-api-server terminal protocol over a WebSocket. Messages and the
  * close that arrive before a listener subscribes are kept for it.
  */
 function webSocketTerminalStream(socket: WebSocket): TerminalStream {
   const messageListeners = new Set<(message: TerminalServerMessage) => void>();
-  const closeListeners = new Set<(reason: string) => void>();
+  const closeListeners = new Set<(reason: string, details: { takenOver: boolean }) => void>();
   const pending: TerminalServerMessage[] = [];
   let closedReason: string | undefined;
 
@@ -782,9 +845,11 @@ function webSocketTerminalStream(socket: WebSocket): TerminalStream {
     }
     for (const listener of messageListeners) listener(message);
   });
-  socket.on("close", (_code: number, reason: Buffer) => {
+  let takenOver = false;
+  socket.on("close", (code: number, reason: Buffer) => {
     closedReason = reason.toString() || "Terminal closed";
-    for (const listener of closeListeners) listener(closedReason);
+    takenOver = code === TERMINAL_CLOSE_TAKEN_OVER;
+    for (const listener of closeListeners) listener(closedReason, { takenOver });
   });
   socket.on("error", () => {
     // Reported through "close".
@@ -803,7 +868,7 @@ function webSocketTerminalStream(socket: WebSocket): TerminalStream {
     },
     onClose(listener) {
       if (closedReason !== undefined) {
-        listener(closedReason);
+        listener(closedReason, { takenOver });
         return () => {};
       }
       closeListeners.add(listener);

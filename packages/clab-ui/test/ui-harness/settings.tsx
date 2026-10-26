@@ -211,7 +211,8 @@ async function request(
   }
   if (String(payload.action).startsWith("labHosts.")) {
     const result = labHostAction(payload);
-    emit();
+    // Reading health stats changes nothing, so it sends no new snapshot.
+    if (payload.action !== "labHosts.metrics") emit();
     return result as SettingsSnapshot;
   }
   if (payload.action === "read") target = payload.target as SettingsTarget;

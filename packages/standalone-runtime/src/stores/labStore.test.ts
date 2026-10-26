@@ -566,6 +566,40 @@ test("processEvent marks die events as stopped until a removal event arrives", (
   assert.equal(useLabStore.getState().labs.size, 0);
 });
 
+test("processEvent keeps the docker status line and puts health events in it", () => {
+  const store = useLabStore.getState();
+  const containerEvent = (action: string, attributes: Record<string, string> = {}) =>
+    store.processEvent(ENDPOINT_ID, {
+      type: "container",
+      action,
+      attributes: {
+        name: "clab-demo-srl1",
+        lab: "demo",
+        "lab-path": "/labs/demo.clab.yml",
+        "clab-node-name": "srl1",
+        ...attributes
+      }
+    });
+  const status = () => firstLab()?.containers.get("clab-demo-srl1")?.status;
+
+  // The initial state carries docker's status line; live events carry none.
+  containerEvent("running", { state: "running", status: "Up 4 seconds (health: starting)" });
+  containerEvent("exec_start: /bin/sh -c test -f /tmp/ready");
+  assert.equal(status(), "Up 4 seconds (health: starting)");
+
+  containerEvent("health_status: healthy");
+  assert.equal(status(), "Up 4 seconds (healthy)");
+  assert.equal(firstLab()?.containers.get("clab-demo-srl1")?.state, "running");
+
+  // A restart starts the health over; the next check reports it again.
+  containerEvent("start");
+  assert.equal(status(), "");
+  containerEvent("health_status: unhealthy");
+  assert.equal(status(), "Up (unhealthy)");
+  containerEvent("health_status: starting");
+  assert.equal(status(), "Up (health: starting)");
+});
+
 test("removeLabByTopology removes endpoint-scoped lab state so later events start from fresh records", () => {
   const store = useLabStore.getState();
 

@@ -7,6 +7,8 @@ import type { TopoEdge } from "../core/types/graph";
 import {
   buildRuntimeEdgeStatsUpdates,
   buildRuntimeNodeUpdates,
+  classifyNodeReadiness,
+  countReadyContainers,
   createRuntimeContainerDataProvider
 } from "./runtime";
 
@@ -196,4 +198,64 @@ test("runtime node updates list the capturable interfaces of each container", ()
     { name: "e1-10", alias: "ethernet-1/10", state: "down" },
     { name: "eth0", state: "up" }
   ]);
+});
+
+test("runtime node updates and container data carry the docker status line", () => {
+  const containers = [{ ...runtimeContainers[0], status: "Up 4 seconds (health: starting)" }];
+
+  const [update] = buildRuntimeNodeUpdates(containers, "demo");
+  assert.equal(update.status, "Up 4 seconds (health: starting)");
+
+  const provider = createRuntimeContainerDataProvider(containers);
+  assert.equal(provider.findContainer("srl1", "demo")?.status, "Up 4 seconds (health: starting)");
+  assert.equal(buildRuntimeNodeUpdates([runtimeContainers[1]], "demo")[0]?.status, "");
+});
+
+test("a node is ready when it runs healthy or without a healthcheck", () => {
+  assert.equal(
+    classifyNodeReadiness({ state: "running", status: "Up 5 minutes (healthy)" }),
+    "ready"
+  );
+  assert.equal(classifyNodeReadiness({ state: "running", status: "Up 5 minutes" }), "ready");
+  assert.equal(classifyNodeReadiness({ state: "running" }), "ready");
+});
+
+test("a node is starting while its container is created or its healthcheck has not passed", () => {
+  assert.equal(
+    classifyNodeReadiness({ state: "running", status: "Up 3 seconds (health: starting)" }),
+    "starting"
+  );
+  assert.equal(classifyNodeReadiness({ state: "created", status: "Created" }), "starting");
+  assert.equal(classifyNodeReadiness({ state: "restarting" }), "starting");
+  assert.equal(classifyNodeReadiness({ state: "running", status: "Up (healthy)" }), "ready");
+});
+
+test("an unhealthy node is told apart from a starting one", () => {
+  assert.equal(
+    classifyNodeReadiness({ state: "running", status: "Up 9 minutes (unhealthy)" }),
+    "unhealthy"
+  );
+});
+
+test("lifecycle actions bring nodes up or take them down until their containers follow", () => {
+  assert.equal(classifyNodeReadiness({ state: "", lifecycle: "up" }), "starting");
+  assert.equal(classifyNodeReadiness({ state: "exited", lifecycle: "up" }), "starting");
+  // Running nodes are past the action; their health decides.
+  assert.equal(classifyNodeReadiness({ state: "running", status: "Up", lifecycle: "up" }), "ready");
+  assert.equal(classifyNodeReadiness({ state: "running", lifecycle: "down" }), "stopping");
+  assert.equal(classifyNodeReadiness({ state: "removing" }), "stopping");
+  assert.equal(classifyNodeReadiness({ state: "exited", lifecycle: "down" }), "stopped");
+  assert.equal(classifyNodeReadiness({ state: "exited" }), "stopped");
+  assert.equal(classifyNodeReadiness({ state: "paused" }), "paused");
+});
+
+test("countReadyContainers counts the ready containers of a lab", () => {
+  const containers: HostRuntimeContainer[] = [
+    { ...runtimeContainers[0], status: "Up 1 minute (healthy)" },
+    { ...runtimeContainers[1], status: "Up 2 seconds (health: starting)" },
+    { ...runtimeContainers[1], name: "clab-demo-srl3", state: "exited", status: "Exited (0)" }
+  ];
+
+  assert.deepEqual(countReadyContainers(containers), { ready: 1, total: 3 });
+  assert.deepEqual(countReadyContainers(containers, "down"), { ready: 0, total: 3 });
 });

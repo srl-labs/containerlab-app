@@ -19,10 +19,12 @@ import { useCanvasIconInk } from "../../../icons/iconInk";
 
 import { LiteNodeShell } from "./NodeLiteBase";
 import {
+  getNodeBootingAnimationDelay,
   getNodeDirectionRotation,
   getNodeRuntimeBadgeState,
   getNodeRuntimeIconOpacity
 } from "./nodeStyles";
+import { isNodeBooting, useNodeReadiness } from "./useNodeReadiness";
 
 function toTopologyNodeData(data: NodeProps["data"]): TopologyNodeData {
   return {
@@ -47,6 +49,11 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ id, data, selected }) 
   const rotation = isBoxed ? 0 : getNodeDirectionRotation(nodeData.direction);
   const runtimeBadgeState = getNodeRuntimeBadgeState(deploymentState, nodeData.state);
   const runtimeIconOpacity = getNodeRuntimeIconOpacity(runtimeBadgeState);
+  const readiness = useNodeReadiness(id, data);
+  const booting = isNodeBooting(readiness);
+  let iconClassName: string | undefined;
+  if (booting) iconClassName = "node-booting";
+  else if (readiness === "unhealthy") iconClassName = "node-unhealthy";
 
   const iconStyle: React.CSSProperties = {
     width: iconSize,
@@ -57,13 +64,15 @@ const TopologyNodeLiteComponent: React.FC<NodeProps> = ({ id, data, selected }) 
     transform: rotation !== 0 ? `rotate(${rotation}deg)` : undefined,
     opacity: runtimeIconOpacity,
     outline: selected && !isBoxed ? `2px solid ${SELECTION_COLOR}` : "none",
-    outlineOffset: 1
+    outlineOffset: 1,
+    animationDelay: booting ? getNodeBootingAnimationDelay(id) : undefined
   };
 
   return (
     <LiteNodeShell
       className="topology-node-lite"
       iconStyle={iconStyle}
+      iconClassName={iconClassName}
       size={iconSize}
       boxed={isBoxed}
       boxSpacing={boxSpacing}

@@ -1,5 +1,7 @@
 import type React from "react";
 
+import type { NodeReadiness } from "../../../topology/runtime";
+
 export const HIDDEN_HANDLE_STYLE: React.CSSProperties = {
   opacity: 0,
   pointerEvents: "none",
@@ -123,6 +125,31 @@ export function buildNodeLabelStyle(params: {
 }
 
 export type NodeRuntimeBadgeState = "running" | "stopped" | "paused" | "undeployed";
+
+/** The badge a node shows: its container state, or that it is booting or unhealthy. */
+export type NodeBadgeState = NodeRuntimeBadgeState | "booting" | "unhealthy";
+
+export function getNodeBadgeState(
+  runtimeState: NodeRuntimeBadgeState,
+  readiness: NodeReadiness | undefined
+): NodeBadgeState {
+  if (readiness === "starting" || readiness === "stopping") return "booting";
+  if (readiness === "unhealthy") return "unhealthy";
+  return runtimeState;
+}
+
+/** One pulse of a booting node; matches the `clab-node-booting` animation in global.css. */
+const NODE_BOOTING_PULSE_MS = 1800;
+
+/**
+ * A negative animation delay derived from the node id, so booting nodes each
+ * pulse in their own phase instead of blinking together.
+ */
+export function getNodeBootingAnimationDelay(nodeId: string): string {
+  let hash = 0;
+  for (const char of nodeId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `-${hash % NODE_BOOTING_PULSE_MS}ms`;
+}
 
 export function getNodeRuntimeIconOpacity(state: NodeRuntimeBadgeState): number {
   switch (state) {

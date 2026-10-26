@@ -78,6 +78,19 @@ test("runtimeContainersEqual treats identical stats as unchanged", () => {
   assert.equal(runtimeContainersEqual(previous, next), true);
 });
 
+test("runtime containers carry the docker status; a health change refreshes the topology", () => {
+  const labs = buildLabs("1000");
+  const previous = getRuntimeContainersForLab("demo", labs);
+  const container = labs.get("demo")?.containers.get("clab-demo-srl1");
+  assert.ok(container);
+  container.status = "Up (healthy)";
+  const next = getRuntimeContainersForLab("demo", labs);
+
+  assert.equal(previous[0]?.status, "Up");
+  assert.equal(next[0]?.status, "Up (healthy)");
+  assert.equal(runtimeContainersTopologyEqual(previous, next), false);
+});
+
 test("runtime containers include interface label and netem state", () => {
   const [container] = getRuntimeContainersForLab("demo", buildLabs("1000"));
   const [iface] = container?.interfaces ?? [];

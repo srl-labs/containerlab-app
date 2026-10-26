@@ -34,6 +34,7 @@ export function labsToRuntimeContainers(
           nodeName: container.rootNodeName ?? container.name_short,
           labName,
           state: container.state,
+          status: container.status,
           kind: container.kind,
           image: container.image,
           ipv4Address: container.IPv4Address,
