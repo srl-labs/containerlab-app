@@ -586,8 +586,9 @@ export async function* streamNodeLogs(
   }
 }
 
+/** Samples of a lab by its topology, or of any running lab by `labName` as the lab host lists it. */
 export async function* streamLabStats(
-  input: RuntimeTargetRequest & { intervalSeconds?: number; signal: AbortSignal }
+  input: RuntimeTargetRequest & { labName?: string; intervalSeconds?: number; signal: AbortSignal }
 ): AsyncGenerator<LabStatsSample> {
   const { signal, ...target } = input;
   const endpointId = resolveTargetEndpointId(target);

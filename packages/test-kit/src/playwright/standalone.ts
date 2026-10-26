@@ -27,8 +27,21 @@ export function connected(endpoint: EndpointProfile): ConnectedEndpoint {
   return { ...endpoint, status: "connected", connected: true };
 }
 
-/** Keeps live event streams closed; tests drive state through routes instead. */
-export async function stubEventSource(page: Page): Promise<void> {
+/** The app's event channel socket, below any base path. */
+export const EVENT_CHANNEL_URL = /\/api\/events\/socket$/;
+
+/**
+ * Keeps live event streams quiet; tests drive state through routes instead.
+ * Every stream of the event channel opens and sends nothing, and so does an
+ * EventSource on the SSE routes.
+ */
+export async function stubEventStreams(page: Page): Promise<void> {
+  await page.routeWebSocket(EVENT_CHANNEL_URL, (socket) => {
+    socket.onMessage((message) => {
+      const request = JSON.parse(String(message)) as { type?: string; id?: string };
+      if (request.type === "open") socket.send(JSON.stringify({ id: request.id, type: "open" }));
+    });
+  });
   await page.addInitScript(() => {
     class StubEventSource extends EventTarget {
       onopen: ((event: Event) => void) | null = null;
@@ -69,13 +82,27 @@ export async function mockStandaloneApi(
   page: Page,
   { endpoints = [] as ConnectedEndpoint[], defaultClabApiUrl = TEST_ENDPOINT.url } = {}
 ): Promise<void> {
-  await stubEventSource(page);
+  await stubEventStreams(page);
   await page.route("**/api/config", (route) => route.fulfill({ json: { defaultClabApiUrl, endpoints: [] } }));
   await page.route("**/auth/me**", (route) =>
     route.fulfill({ json: { authenticated: endpoints.length > 0, endpoints } })
   );
   await page.route("**/files**", (route) => route.fulfill({ json: [] }));
   await page.route("**/api/runtime/inspect/all**", (route) => route.fulfill({ json: {} }));
+  // A lab host without the optional features, so nothing opens their streams.
+  await page.route("**/api/runtime/features**", (route) =>
+    route.fulfill({
+      json: {
+        validate: false,
+        graphMermaid: false,
+        graphDot: false,
+        sshxReaders: false,
+        gottyOptions: false,
+        nodeStats: false,
+        terminalResume: false
+      }
+    })
+  );
   await page.route("**/api/runtime/ui/custom-nodes**", (route) =>
     route.fulfill({ json: { customNodes: [], defaultNode: "" } })
   );

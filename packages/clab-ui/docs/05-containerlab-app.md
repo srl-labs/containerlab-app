@@ -41,6 +41,7 @@ A browser app cannot safely own the full runtime contract by itself.
 | `/api/lab/*` | deploy, destroy, redeploy, and lab-status flows |
 | `/api/runtime/*` | inspect, save, SSH, logs, terminal, netem, capture, icons, custom nodes, topology-file create/delete |
 | `/api/events` | platform event SSE bridge |
+| `/api/events/socket` | one WebSocket per browser tab for the platform, workspace-file and topology events of every lab host |
 
 ## Development commands
 

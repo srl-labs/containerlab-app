@@ -2759,9 +2759,103 @@ test("/api/runtime/stats/socket forwards lab samples, or says a server cannot", 
 
   assert.deepEqual(await readStreamSocket(context, cookie, path, request), [sample, { type: "end" }]);
 
+  // The labs overview names a running lab directly, as the lab host lists it.
+  assert.deepEqual(
+    await readStreamSocket(context, cookie, path, { intervalSeconds: 3, labName: "demo" }),
+    [sample, { type: "end" }],
+  );
+
   clearServerFeatureCache();
   features = [];
   const refused = await readStreamSocket(context, cookie, path, request);
   assert.equal(refused.length, 1);
   assert.equal((refused[0] as { type: string; status: number }).status, 501);
+});
+
+test("/api/events/socket carries the event streams of several lab hosts on one socket", async (t) => {
+  const context = await createTestContext(t);
+  let releaseFirstHost: (() => void) | undefined;
+  for (const host of ["api.example.test", "api2.example.test"]) {
+    context.fetchMock.on("POST", `http://${host}/login`, () => jsonResponse({ token: `${host}-token` }));
+  }
+  context.fetchMock.on("GET", /^http:\/\/api\.example\.test\/api\/v1\/events\?/, (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer api.example.test-token");
+    // Stays open until the client closes the stream.
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode(`${JSON.stringify({ event: "ready" })}\n`));
+        call.signal?.addEventListener("abort", () => {
+          controller.close();
+          releaseFirstHost?.();
+        });
+      },
+    });
+    return new Response(body, { headers: { "content-type": "application/x-ndjson" } });
+  });
+  context.fetchMock.on("GET", "http://api2.example.test/api/v1/labs/workspace/events", (call) => {
+    assert.equal(call.headers.get("authorization"), "Bearer api2.example.test-token");
+    return ndjsonResponse(`${JSON.stringify({ type: "workspace-file", path: "labs/a.clab.yml" })}\n`);
+  });
+  const first = await loginEndpoint(context, { url: "http://api.example.test" });
+  const second = await loginEndpoint(context, { url: "http://api2.example.test" }, first.cookie);
+
+  const address = await context.app.listen({ host: "127.0.0.1", port: 0 });
+  const socket = new WebSocket(`${address.replace("http:", "ws:")}/api/events/socket`, {
+    headers: { cookie: first.cookie },
+  });
+  t.after(() => socket.terminate());
+  const messages: Array<Record<string, unknown>> = [];
+  let wake: (() => void) | undefined;
+  socket.on("message", (data) => {
+    messages.push(JSON.parse(String(data)) as Record<string, unknown>);
+    wake?.();
+  });
+  const waitFor = async (predicate: () => boolean): Promise<void> => {
+    const deadline = Date.now() + 5000;
+    while (!predicate()) {
+      if (Date.now() > deadline) assert.fail(`timed out, got ${JSON.stringify(messages)}`);
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        setTimeout(resolve, 100);
+      });
+    }
+  };
+  const of = (id: string) => messages.filter((message) => message.id === id);
+  await once(socket, "open", { signal: AbortSignal.timeout(5000) });
+
+  for (const message of [
+    { type: "open", id: "e1", stream: "events", endpointId: first.endpointId },
+    { type: "open", id: "f2", stream: "files", endpointId: second.endpointId },
+    { type: "open", id: "x", stream: "events", endpointId: "missing" },
+    { type: "open", id: "t", stream: "topology", endpointId: first.endpointId },
+    { type: "open", id: "u", stream: "unknown" },
+  ]) {
+    socket.send(JSON.stringify(message));
+  }
+
+  await waitFor(() => of("f2").some((message) => message.type === "end") && of("e1").length >= 2);
+  assert.deepEqual(of("e1"), [
+    { id: "e1", type: "open" },
+    { id: "e1", type: "event", data: JSON.stringify({ event: "ready" }) },
+  ]);
+  assert.deepEqual(of("f2"), [
+    { id: "f2", type: "open" },
+    { id: "f2", type: "event", data: JSON.stringify({ type: "workspace-file", path: "labs/a.clab.yml" }) },
+    { id: "f2", type: "end" },
+  ]);
+  assert.deepEqual(of("x"), [{ id: "x", type: "refused", status: 401, error: "Not authenticated" }]);
+  assert.deepEqual(of("t"), [{ id: "t", type: "refused", status: 400, error: "Missing sessionId" }]);
+  assert.equal(of("u")[0]?.status, 404);
+
+  // Closing a stream ends its upstream request but keeps the socket.
+  const released = new Promise<void>((resolve) => {
+    releaseFirstHost = resolve;
+  });
+  socket.send(JSON.stringify({ type: "close", id: "e1" }));
+  await released;
+  assert.equal(socket.readyState, WebSocket.OPEN);
+  assert.equal(of("e1").length, 2, "a closed stream sends nothing more");
+  socket.close();
+  await once(socket, "close", { signal: AbortSignal.timeout(5000) });
 });

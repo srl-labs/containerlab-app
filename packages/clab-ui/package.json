@@ -134,6 +134,10 @@
       "types": "./dist/workspace/empty-state.d.ts",
       "import": "./dist/workspace/empty-state.js"
     },
+    "./workspace/overview": {
+      "types": "./dist/workspace/overview.d.ts",
+      "import": "./dist/workspace/overview.js"
+    },
     "./workspace/state": {
       "types": "./dist/workspace/state/index.d.ts",
       "import": "./dist/workspace/state/index.js"

@@ -102,6 +102,10 @@ export type ClabUiTopoViewerEvent =
       type: "fitViewport";
     }
   | {
+      type: "focusNode";
+      nodeId: string;
+    }
+  | {
       type: "svgExportResult";
       requestId: string;
       success: boolean;

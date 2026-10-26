@@ -32,15 +32,28 @@ async function connect(browser: Browser, username: string, password: string): Pr
   await context.addInitScript(() => {
     const events: unknown[] = [];
     Reflect.set(window, "sharedTestEvents", events);
-    const NativeEventSource = window.EventSource;
-    window.EventSource = class extends NativeEventSource {
-      constructor(url: string | URL, options?: EventSourceInit) {
-        super(url, options);
-        if (!String(url).includes("/api/events")) return;
-        this.addEventListener("message", (event) => {
-          const payload = JSON.parse(event.data) as { type?: string };
+    // Lab events arrive on the event channel socket, on its `events` streams.
+    const NativeWebSocket = window.WebSocket;
+    window.WebSocket = class extends NativeWebSocket {
+      private readonly labStreams = new Set<string>();
+
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        if (!String(url).includes("/api/events/socket")) return;
+        this.addEventListener("message", (event: MessageEvent) => {
+          const message = JSON.parse(String(event.data)) as { id?: string; type?: string; data?: string };
+          if (message.type !== "event" || !this.labStreams.has(message.id ?? "")) return;
+          const payload = JSON.parse(message.data ?? "{}") as { type?: string };
           if (payload.type !== "interface-stats") events.push(payload);
         });
+      }
+
+      send(data: Parameters<WebSocket["send"]>[0]): void {
+        if (typeof data === "string" && String(this.url).includes("/api/events/socket")) {
+          const message = JSON.parse(data) as { id?: string; type?: string; stream?: string };
+          if (message.type === "open" && message.stream === "events" && message.id) this.labStreams.add(message.id);
+        }
+        super.send(data);
       }
     };
   });

@@ -2,9 +2,8 @@
  * Live streams of a running lab over WebSockets: a node's container log as it
  * is written, and the CPU and memory usage of the lab's nodes.
  *
- * Browsers allow only six HTTP/1.1 connections per host, and the app already
- * keeps event streams open on several of them; WebSockets do not count
- * against that limit, so these streams cannot starve other requests.
+ * Browsers allow only six HTTP/1.1 connections per host; WebSockets do not
+ * count against that limit, so these streams cannot starve other requests.
  *
  * The client sends one JSON message with its target once connected. The
  * server answers with `{type:"line"}` or `{type:"stats"}` messages, then
@@ -30,6 +29,8 @@ interface NodeLogStreamRequest extends RuntimeTargetBody {
 }
 
 interface LabStatsStreamRequest extends RuntimeTargetBody {
+  /** A running lab by the name the lab host lists it under, e.g. from the labs overview. */
+  labName?: string;
   intervalSeconds?: number;
 }
 
@@ -134,9 +135,12 @@ export function registerRuntimeStreamProxy(
       serveStream<LabStatsStreamRequest, unknown>(
         socket,
         async (body, signal) => {
-          const target = await resolveLabTarget(endpoint, backend, sessions, body);
+          // The lab host decides which labs a user may see, as it does for the lab listing.
+          const labName = typeof body.labName === "string" && body.labName.trim()
+            ? body.labName.trim()
+            : (await resolveLabTarget(endpoint, backend, sessions, body)).labName;
           const interval = Number(body.intervalSeconds);
-          return backend.streamLabStats(target.labName, {
+          return backend.streamLabStats(labName, {
             ...(Number.isFinite(interval) && interval > 0 ? { intervalSeconds: interval } : {}),
             signal
           });

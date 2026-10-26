@@ -47,6 +47,7 @@ const entryPoints = {
   "workspace/dialogs": "src/workspace/dialogs.ts",
   "workspace/terminal": "src/workspace/terminal.ts",
   "workspace/empty-state": "src/workspace/empty-state.ts",
+  "workspace/overview": "src/workspace/overview.ts",
   "workspace/state/index": "src/workspace/state/index.ts",
   "workspace/types": "src/workspace/types.ts",
 

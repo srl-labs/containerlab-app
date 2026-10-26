@@ -4,6 +4,8 @@ export * from "./documentUtils";
 export * from "./endpointActions";
 export * from "./endpointStatus";
 export * from "./labTabsStore";
+export * from "./labsOverview";
+export * from "./labUsage";
 export * from "./lifecycleLogHistory";
 export * from "./runtimeCaptureSettings";
 export * from "./runtimeTerminalActions";

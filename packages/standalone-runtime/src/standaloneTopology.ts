@@ -20,6 +20,8 @@ import { getRuntimeContainersForTopology } from "./runtimeData";
 import { refreshTopologyDirtyState, resetTopologyDirtyState } from "./standaloneDirtyState";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type { LabState } from "./stores/labStore";
+import { eventChannel } from "./eventChannel";
+import type { EventSourceLike } from "./eventStreamManager";
 import { connectedEndpoints, isConnectedEndpointId } from "./standaloneEndpointSelection";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 import {
@@ -108,10 +110,12 @@ export function createStandaloneTopologyManager(
   let currentSessionId: string | null = null;
   let currentTopologyRef: TopologyRef | null = null;
   let currentSourcePreference: TopologySourcePreference = "api-file";
+  /** The deployment state the canvas was last given. */
+  let currentDeploymentState: DeploymentState = "unknown";
   let standaloneAuthenticated = false;
   const fileListCache = new Map<string, { entries: TopologyFileEntry[]; fetchedAt: number }>();
   const fileListInFlight = new Map<string, Promise<TopologyFileEntry[]>>();
-  let topologyEventSource: EventSource | null = null;
+  let topologyEventSource: EventSourceLike | null = null;
   let unsubscribeLocalFiles: (() => void) | undefined;
   let topologyEventStreamEndpointId: string | null = null;
   let topologyEventStreamSessionId: string | null = null;
@@ -430,6 +434,7 @@ export function createStandaloneTopologyManager(
     clearPendingRuntimeStatsGraphUpdate();
     clearTopologyGraph();
     await disposeCurrentSession();
+    currentDeploymentState = "unknown";
     setHostContext(
       {
         topologyRef: undefined,
@@ -573,10 +578,7 @@ export function createStandaloneTopologyManager(
     }
 
     closeTopologyEventStream();
-    const url = new URL(standaloneServerUrl("/api/topology/events"));
-    url.searchParams.set("sessionId", sessionId);
-    url.searchParams.set("endpointId", endpointId);
-    const source = new EventSource(url, { withCredentials: true });
+    const source = eventChannel().open({ stream: "topology", endpointId, sessionId });
     topologyEventSource = source;
     topologyEventStreamEndpointId = endpointId;
     topologyEventStreamSessionId = sessionId;
@@ -594,7 +596,7 @@ export function createStandaloneTopologyManager(
     };
 
     source.onerror = () => {
-      // EventSource reconnects automatically.
+      // The stream reconnects automatically.
     };
   }
 
@@ -605,6 +607,7 @@ export function createStandaloneTopologyManager(
     const deploymentState = hostOptions.deploymentState ?? (isDeployed ? "deployed" : "undeployed");
     const mode = hostOptions.mode ?? modeForSourcePreference(currentSourcePreference);
     const runtimeContainers = getRuntimeContainersForTopology(topologyRef ?? undefined, labs);
+    currentDeploymentState = deploymentState;
 
     setHostContext(
       {
@@ -755,7 +758,10 @@ export function createStandaloneTopologyManager(
       return;
     }
 
-    const wasDeployed = isTopologyRunning(currentTopologyRef, previousLabs);
+    // Compare with what the canvas shows, not with the previous labs: a lab
+    // opened while the running labs were still loading was given a state that
+    // no later change between two lab lists would correct.
+    const wasDeployed = currentDeploymentState === "deployed";
     const isDeployed = isTopologyRunning(currentTopologyRef, nextLabs);
     const previousRuntimeContainers = getRuntimeContainersForTopology(currentTopologyRef, previousLabs);
     const nextRuntimeContainers = getRuntimeContainersForTopology(currentTopologyRef, nextLabs);
@@ -765,6 +771,14 @@ export function createStandaloneTopologyManager(
       clearPendingRuntimeStatsGraphUpdate();
       syncHostContext({ deploymentState: isDeployed ? "deployed" : "undeployed" });
       topologySyncController.schedule();
+      // A lab that turned out to run after it opened still needs its sync
+      // baseline; a running deploy or apply checks it when it ends.
+      if (!wasDeployed && isDeployed && !useTopoViewerStore.getState().isProcessing) {
+        void refreshTopologyDirtyState({
+          sessionId: currentSessionId ?? undefined,
+          topologyRef: currentTopologyRef
+        });
+      }
       return;
     }
 

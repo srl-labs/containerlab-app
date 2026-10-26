@@ -168,6 +168,25 @@ export interface EndpointConfig {
 
 export type EndpointStatus = "connected" | "session_expired" | "offline" | "saved";
 
+/** The live-events stream of one lab host. */
+export interface EndpointEventStreamStatus {
+  state: "connected" | "connecting" | "reconnecting" | "paused";
+  /** When the next attempt starts, for a countdown. */
+  retryAt?: number;
+  /** The last error the stream reported. */
+  error?: string;
+}
+
+/** A lab host with a connection problem, as the connection banner shows it. */
+export interface EndpointConnectionIssue {
+  endpointId: string;
+  label: string;
+  /** Whether the lab host's API answers, as the app server last checked it. */
+  api: "reachable" | "unreachable" | "session_expired";
+  /** Missing where the host offers no live events, such as the browser sandbox. */
+  events?: EndpointEventStreamStatus;
+}
+
 /**
  * Labs on the app's own machine, which hosts that can run containerlab there
  * offer (the desktop app on Linux). It needs no URL or sign-in.
