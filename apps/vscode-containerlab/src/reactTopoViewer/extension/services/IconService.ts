@@ -123,24 +123,26 @@ class IconService {
 
       const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
 
-      for (const entry of entries) {
-        if (!entry.isFile()) continue;
+      // Read the icons at the same time; the list keeps the directory's order.
+      const loaded = await Promise.all(
+        entries.map(async (entry): Promise<CustomIconInfo | null> => {
+          if (!entry.isFile()) return null;
 
-        const ext = path.extname(entry.name).toLowerCase();
-        if (!isSupportedIconExtension(ext)) continue;
+          const ext = path.extname(entry.name).toLowerCase();
+          if (!isSupportedIconExtension(ext)) return null;
 
-        const filePath = path.join(dirPath, entry.name);
-        const dataUri = await this.loadIconAsDataUri(filePath);
-
-        if (dataUri !== null && dataUri.length > 0) {
-          const name = path.basename(entry.name, ext);
-          icons.push({
-            name,
+          const dataUri = await this.loadIconAsDataUri(path.join(dirPath, entry.name));
+          if (dataUri === null || dataUri.length === 0) return null;
+          return {
+            name: path.basename(entry.name, ext),
             source,
             dataUri,
             format: getIconFormat(ext)
-          });
-        }
+          };
+        })
+      );
+      for (const icon of loaded) {
+        if (icon) icons.push(icon);
       }
     } catch (err) {
       log.warn(`Failed to list icons from ${dirPath}: ${formatErrorMessage(err)}`);
@@ -157,12 +159,13 @@ class IconService {
     const globalDir = this.getGlobalIconDir();
 
     // Load workspace icons first (they take priority); a lab host keeps its own.
-    const workspaceIcons = isUriString(yamlFilePath)
-      ? []
-      : await this.listIconsFromDir(this.getWorkspaceIconDir(yamlFilePath), "workspace");
-
-    // Load global icons
-    const globalIcons = await this.listIconsFromDir(globalDir, "global");
+    // Both directories are read at the same time.
+    const [workspaceIcons, globalIcons] = await Promise.all([
+      isUriString(yamlFilePath)
+        ? Promise.resolve([])
+        : this.listIconsFromDir(this.getWorkspaceIconDir(yamlFilePath), "workspace"),
+      this.listIconsFromDir(globalDir, "global")
+    ]);
 
     // Merge: workspace icons override global icons with same name
     const iconMap = new Map<string, CustomIconInfo>();

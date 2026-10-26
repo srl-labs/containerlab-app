@@ -177,6 +177,8 @@ export class ReactTopoViewer {
         ? createRuntimeContainerDataProvider(this.runtimeContainers)
         : undefined
     });
+    // The cached snapshot may carry the runtime data from before this resync.
+    this.topologyHost.invalidateSnapshot();
     const snapshot = await this.topologyHost.getSnapshot();
     this.lastTopologyEdges = snapshot.edges;
     panel.webview.postMessage(buildTopologySnapshotMessage(snapshot, "resync"));
@@ -379,6 +381,12 @@ export class ReactTopoViewer {
           }
         }
       }
+    });
+
+    // Read and parse the topology while the webview loads its bundle; the
+    // webview's snapshot request then gets the cached result.
+    this.topologyHost.getSnapshot().catch((err: unknown) => {
+      log.warn(`[ReactTopoViewer] Prefetching the topology failed: ${formatErrorMessage(err)}`);
     });
 
     this.initializeWatchers(panel);

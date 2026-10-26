@@ -175,6 +175,15 @@ export async function update(): Promise<void> {
   );
 }
 
+/**
+ * Updates the running labs of one connection, e.g. the one of an opened lab,
+ * without waiting for the others. Connections the views do not show are skipped.
+ */
+export async function updateOne(connection: LabConnection): Promise<void> {
+  if (!inspectedConnections().some((shown) => shown.id === connection.id)) return;
+  await updateConnection(connection);
+}
+
 export function getInterfacesSnapshot(
   connectionId: string,
   containerShortId: string,

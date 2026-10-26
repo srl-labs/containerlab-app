@@ -23,3 +23,5 @@ export const createTopoViewerLifecycleHandlers: typeof graph.createTopoViewerLif
 
 export const notifyCurrentTopoViewerOfCommandFailure: typeof graph.notifyCurrentTopoViewerOfCommandFailure =
   async () => {};
+
+export const getCurrentTopoViewer: typeof graph.getCurrentTopoViewer = () => undefined;
