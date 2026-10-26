@@ -496,6 +496,8 @@ topology:
   assert.ok(looked.includes("clab-dc-main-srl1"), `looked up ${looked.join(", ")}`);
 
   // The lookup is cached until the name or the referenced variables change.
+  // An edit by someone else looks them up again.
+  await fs.writeFile("/labs/dc.clab.yml", `${yaml}# edited\n`);
   await host.onExternalChange();
   assert.equal(requests.length, 2);
   await host.getSnapshot();
@@ -602,6 +604,98 @@ test("invalidateSnapshot picks up runtime data that arrived after the first snap
   assert.equal(state(snapshot), "running");
   // The files did not change: same revision, history kept.
   assert.equal(snapshot.revision, first.revision);
+});
+
+test("a late report of the host's own save keeps the revision, history and next edit", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/echo.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({
+    fs,
+    yamlFilePath,
+    mode: "edit",
+    deploymentState: "undeployed"
+  });
+  const { revision } = await host.getSnapshot();
+  const saved = await apply(host, revision, {
+    command: "setYamlContent",
+    payload: { content: CHANGED_YAML }
+  });
+
+  // The file watcher reports the save after it finished: nothing changed.
+  const echoed = await host.onExternalChange();
+  assert.equal(echoed.revision, saved.snapshot.revision);
+  assert.equal(echoed.canUndo, true);
+  // The next edit, made against the revision the webview has, still applies.
+  const next = await apply(host, saved.snapshot.revision, {
+    command: "setYamlContent",
+    payload: { content: BASE_YAML }
+  });
+
+  // A real change by someone else still reloads.
+  await fs.writeFile(yamlFilePath, CHANGED_YAML);
+  const external = await host.onExternalChange();
+  assert.ok(external.revision > next.snapshot.revision);
+  assert.equal(external.yamlContent, CHANGED_YAML);
+});
+
+test("annotations of nodes that are gone are removed; a renamed node keeps its own", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/orphans.clab.yml";
+  await fs.writeFile(
+    yamlFilePath,
+    `name: orphans
+topology:
+  nodes:
+    srl4:
+      kind: nokia_srlinux
+    srl5:
+      kind: nokia_srlinux
+`
+  );
+  await fs.writeFile(
+    `${yamlFilePath}.annotations.json`,
+    JSON.stringify({
+      nodeAnnotations: [
+        { id: "client2", position: { x: 580, y: 300 } },
+        { id: "srl4", position: { x: 220, y: 480 }, icon: "router" },
+        // srl5 was renamed from srl9 in the YAML.
+        { id: "srl9", position: { x: 40, y: 40 } },
+        { id: "host:eth1", position: { x: 1, y: 1 } }
+      ]
+    })
+  );
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+
+  await host.getSnapshot();
+  const saved = JSON.parse(await fs.readFile(`${yamlFilePath}.annotations.json`)) as {
+    nodeAnnotations: Array<{ id: string; position: { x: number; y: number } }>;
+    networkNodeAnnotations?: Array<{ id: string }>;
+  };
+  assert.deepEqual(saved.nodeAnnotations.map((n) => n.id).sort(), ["srl4", "srl5"]);
+  // Special endpoints are no YAML nodes and stay.
+  assert.equal(saved.networkNodeAnnotations?.some((n) => n.id === "host:eth1"), true);
+  assert.deepEqual(saved.nodeAnnotations.find((n) => n.id === "srl5")?.position, { x: 40, y: 40 });
+});
+
+test("a move that arrives after its node was deleted adds no annotation", async () => {
+  const fs = new MemoryFileSystemAdapter();
+  const yamlFilePath = "/labs/late-move.clab.yml";
+  await fs.writeFile(yamlFilePath, BASE_YAML);
+  const host = new TopologyHostCore({ fs, yamlFilePath, mode: "edit", deploymentState: "undeployed" });
+  const { revision } = await host.getSnapshot();
+
+  await apply(host, revision, {
+    command: "savePositions",
+    payload: [
+      { id: "srl1", position: { x: 10, y: 20 } },
+      { id: "client2", position: { x: 580, y: 300 } }
+    ]
+  });
+  const saved = JSON.parse(await fs.readFile(`${yamlFilePath}.annotations.json`)) as {
+    nodeAnnotations: Array<{ id: string }>;
+  };
+  assert.deepEqual(saved.nodeAnnotations.map((n) => n.id), ["srl1"]);
 });
 
 function historyOf(snapshot: TopologySnapshot): NonNullable<TopologySnapshot["history"]> {
