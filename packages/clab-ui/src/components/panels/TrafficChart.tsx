@@ -1,15 +1,18 @@
 // Real-time traffic chart for link endpoints.
-import React, { useRef, useMemo } from "react";
+import React, { useMemo } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import type { SxProps, Theme } from "@mui/material/styles";
 import { LineChart } from "@mui/x-charts/LineChart";
 
 import type { InterfaceStatsPayload, EndpointStatsHistory } from "../../core/types/topology";
+import {
+  MAX_GRAPH_POINTS,
+  MIN_TIMESTAMP_STEP_SECONDS,
+  recordTrafficSample,
+  resolveValidIntervalSeconds
+} from "../../utils/trafficHistory";
 
-const MAX_GRAPH_POINTS = 60;
-const MIN_TIMESTAMP_STEP_SECONDS = 0.001;
-const DELAY_FALLBACK_MULTIPLIER = 3;
 
 interface BpsUnit {
   divisor: number;
@@ -39,50 +42,6 @@ function determineBpsUnit(maxBps: number): BpsUnit {
     return { divisor: 1_000, label: "Kbps" };
   }
   return { divisor: 1, label: "bps" };
-}
-
-/**
- * Create initial empty history
- */
-function createEmptyHistory(): EndpointStatsHistory {
-  return {
-    timestamps: [],
-    rxBps: [],
-    txBps: [],
-    rxPps: [],
-    txPps: []
-  };
-}
-
-function resolveValidIntervalSeconds(stats: InterfaceStatsPayload | undefined): number | undefined {
-  const interval = stats?.statsIntervalSeconds;
-  if (typeof interval !== "number" || !Number.isFinite(interval) || interval <= 0) {
-    return undefined;
-  }
-  return interval;
-}
-
-function resolveNextTimestampSeconds(
-  history: EndpointStatsHistory,
-  stats: InterfaceStatsPayload | undefined,
-  nowSeconds: number
-): number {
-  const prev = history.timestamps[history.timestamps.length - 1];
-  if (typeof prev !== "number" || !Number.isFinite(prev)) {
-    return nowSeconds;
-  }
-
-  const interval = resolveValidIntervalSeconds(stats);
-  if (interval === undefined) {
-    return Math.max(nowSeconds, prev + MIN_TIMESTAMP_STEP_SECONDS);
-  }
-
-  const expected = prev + interval;
-  if (nowSeconds - expected > interval * DELAY_FALLBACK_MULTIPLIER) {
-    return nowSeconds;
-  }
-
-  return expected;
 }
 
 function resolveChartMargin(compact: boolean, showLegend: boolean, scale: number) {
@@ -130,46 +89,6 @@ function resolveLegendSlotProps(compact: boolean, showLegend: boolean, scale: nu
       }
     }
   };
-}
-
-// Global history store per endpoint key
-const historyStore = new Map<string, EndpointStatsHistory>();
-
-function getOrCreateHistory(endpointKey: string): EndpointStatsHistory {
-  let history = historyStore.get(endpointKey);
-  if (!history) {
-    history = createEmptyHistory();
-    historyStore.set(endpointKey, history);
-  }
-  return history;
-}
-
-function trimHistory(history: EndpointStatsHistory): void {
-  while (history.timestamps.length > MAX_GRAPH_POINTS) {
-    history.timestamps.shift();
-    history.rxBps.shift();
-    history.txBps.shift();
-    history.rxPps.shift();
-    history.txPps.shift();
-  }
-}
-
-function appendStatsSample(
-  history: EndpointStatsHistory,
-  stats: InterfaceStatsPayload | undefined,
-  lastStatsRef: { current: InterfaceStatsPayload | undefined }
-): void {
-  if (!stats || stats === lastStatsRef.current) {
-    return;
-  }
-
-  lastStatsRef.current = stats;
-  history.timestamps.push(resolveNextTimestampSeconds(history, stats, Date.now() / 1000));
-  history.rxBps.push(stats.rxBps ?? 0);
-  history.txBps.push(stats.txBps ?? 0);
-  history.rxPps.push(stats.rxPps ?? 0);
-  history.txPps.push(stats.txPps ?? 0);
-  trimHistory(history);
 }
 
 function resolveWindowIntervalSeconds(
@@ -366,14 +285,9 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
   emptyMessage = "No traffic data available"
 }) => {
   const resolvedHeight = height ?? (compact ? "100%" : 240);
-  // Track last-seen stats to avoid double-push in Strict Mode
-  const lastStatsRef = useRef<InterfaceStatsPayload | undefined>(undefined);
-
   const { xData, rxBpsData, txBpsData, rxPpsData, txPpsData, unitLabel, xMin, xMax } =
     useMemo(() => {
-      const history = getOrCreateHistory(endpointKey);
-      appendStatsSample(history, stats, lastStatsRef);
-      return buildChartData(history, stats);
+      return buildChartData(recordTrafficSample(endpointKey, stats), stats);
     }, [stats, endpointKey]);
   const margin = resolveChartMargin(compact, showLegend, scale);
   const legendSlotProps = resolveLegendSlotProps(compact, showLegend, scale);

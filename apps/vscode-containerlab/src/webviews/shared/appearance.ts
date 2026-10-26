@@ -8,7 +8,8 @@ function readAppearance(): Record<string, unknown> {
     colorScheme: config.get("colorScheme", "vscode"),
     fontSize: config.get("fontSize", 0),
     fontFamily: config.get("fontFamily", ""),
-    reduceMotion: config.get("reduceMotion", false)
+    reduceMotion: config.get("reduceMotion", false),
+    hoverCards: config.get("hoverCards", true)
   };
 }
 export function appearanceBootstrap(webview: vscode.Webview): string {

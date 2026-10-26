@@ -94,7 +94,7 @@ test.describe("Node readiness", () => {
       await expect(topologyNode(page, nodeId)).toHaveAttribute("data-readiness", "ready");
     }
     await expect(nodeIcon(page, "leaf1")).not.toHaveClass(/node-booting/);
-    await expect(nodeBadge(page, "leaf1")).toHaveClass(/state-running/);
+    await expect(nodeBadge(page, "leaf1")).toHaveCount(0);
   });
 
   test("a deploy limited to some nodes pulses only those", async ({ page, topoViewerPage }) => {
@@ -140,7 +140,7 @@ test.describe("Node readiness", () => {
 
     await setNodeRuntime(page, "srl1", { status: "Up 3 minutes (healthy)" });
     await expect(topologyNode(page, "srl1")).toHaveAttribute("data-readiness", "ready");
-    await expect(nodeBadge(page, "srl1")).toHaveClass(/state-running/);
+    await expect(nodeBadge(page, "srl1")).toHaveCount(0);
   });
 
   test("the info panel shows pending values while a node boots", async ({

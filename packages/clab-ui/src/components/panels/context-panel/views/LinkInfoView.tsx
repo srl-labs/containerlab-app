@@ -5,6 +5,7 @@ import Box from "@mui/material/Box";
 import type { LinkData } from "../../../../hooks/ui";
 import type { InterfaceStatsPayload } from "../../../../core/types/topology";
 import { getString } from "../../../../core/utilities/typeHelpers";
+import { linkTrafficKey } from "../../../../utils/trafficHistory";
 import type { TabDefinition } from "../../../ui/editor";
 import { TabNavigation } from "../../../ui/editor/TabNavigation";
 import { PanelSection, PanelSectionHeader, ReadOnlyCopyField } from "../../../ui/form";
@@ -108,7 +109,7 @@ export const LinkInfoView: React.FC<LinkInfoViewProps> = ({ linkData }) => {
 
   const endpoints = getEndpoints(linkData);
   const currentEndpoint = activeTab === "a" ? endpoints.a : endpoints.b;
-  const endpointKey = `${activeTab}:${currentEndpoint.node}:${currentEndpoint.interface}`;
+  const endpointKey = linkTrafficKey(activeTab, currentEndpoint.node ?? "", currentEndpoint.interface ?? "");
 
   const endpointTabs: TabDefinition[] = [
     { id: "a", label: `${linkData.source}:${linkData.sourceEndpoint ?? "eth"}` },

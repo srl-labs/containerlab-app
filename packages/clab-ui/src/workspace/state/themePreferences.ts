@@ -206,3 +206,29 @@ export function readPersistedAutoOpenPaletteOnSelect(): boolean {
 export function persistAutoOpenPaletteOnSelect(enabled: boolean): void {
   persistFlag(AUTO_OPEN_PALETTE_ON_SELECT_STORAGE_KEY, enabled);
 }
+
+const HOVER_CARDS_STORAGE_KEY = "clab-standalone-hover-cards";
+/** Tells this window the hover card preference changed; other windows see a storage event. */
+const HOVER_CARDS_CHANGE_EVENT = "clab:hover-cards";
+
+export function readPersistedHoverCards(): boolean {
+  return readFlag(HOVER_CARDS_STORAGE_KEY);
+}
+
+export function persistHoverCards(enabled: boolean): void {
+  persistFlag(HOVER_CARDS_STORAGE_KEY, enabled);
+  window.dispatchEvent(new Event(HOVER_CARDS_CHANGE_EVENT));
+}
+
+/** Calls `onChange` when this or another window saves the hover card preference. */
+export function watchHoverCards(onChange: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === null || event.key === HOVER_CARDS_STORAGE_KEY) onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(HOVER_CARDS_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(HOVER_CARDS_CHANGE_EVENT, onChange);
+  };
+}
