@@ -2,6 +2,7 @@ import type { Uri, Webview } from "vscode";
 import type { ClosGeneratorInitialData } from "@containerlab/clab-ui/clos-generator";
 import type { ImageManagerInitialData } from "@containerlab/clab-ui/image-manager";
 import type { InspectWebviewInitialData } from "@containerlab/clab-ui/inspect";
+import type { LabsOverviewWebviewInitialData } from "@containerlab/clab-ui/labs-overview/cards";
 import type { NodeImpairmentsInitialData } from "@containerlab/clab-ui/node-impairments";
 import type { SettingsSnapshot } from "@containerlab/clab-ui/settings";
 import type { WiresharkVncInitialData } from "@containerlab/clab-ui/wireshark-vnc";
@@ -42,6 +43,12 @@ export const INSPECT_PANEL: WebviewPanelDefinition<InspectWebviewInitialData> = 
   scriptFile: "inspectWebview.js",
   webviewKind: "containerlab-inspect",
   title: "Containerlab Inspect"
+};
+
+export const LABS_OVERVIEW_PANEL: WebviewPanelDefinition<LabsOverviewWebviewInitialData> = {
+  scriptFile: "labsOverviewWebview.js",
+  webviewKind: "containerlab-labs-overview",
+  title: "Labs Overview"
 };
 
 export const IMAGE_MANAGER_PANEL: WebviewPanelDefinition<ImageManagerInitialData> = {

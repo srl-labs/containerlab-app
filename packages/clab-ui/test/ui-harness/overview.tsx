@@ -2,13 +2,21 @@
  * The labs overview against fixture labs: running labs stream fake usage while
  * their cards are visible. `?stats=unavailable` plays a lab host without node
  * stats, `?stats=none` a host without a usage feed, `?many=1` adds many labs.
+ * `?host=webview` shows it as the editor-tab webview, with a fake extension host
+ * answering its messages.
  */
 import React from "react";
 import { createRoot } from "react-dom/client";
 import { parse } from "yaml";
 
 import { MuiThemeProvider } from "../../src/theme/MuiThemeProvider";
-import type { HostRuntimeContainer } from "../../src/host";
+import {
+  ClabUiRuntimeProvider,
+  createClabUiRuntime,
+  createWindowClabUiHost,
+  type HostRuntimeContainer
+} from "../../src/host";
+import { LabsOverviewApp, type LabsOverviewIncomingMessage, type LabsOverviewOutgoingMessage } from "../../src/labs-overview";
 import { LabsOverview } from "../../src/workspace/overview";
 import {
   canWatchLabUsage,
@@ -105,11 +113,31 @@ function buildCards(): LabOverviewCard[] {
 
 const active = new Map<string, number>();
 
+function countActive(key: string, delta: 1 | -1): void {
+  const count = (active.get(key) ?? 0) + delta;
+  if (count > 0) active.set(key, count);
+  else active.delete(key);
+}
+
+function usageContainers(watched: LabOverviewCard): HostRuntimeContainer[] {
+  return Object.entries(watched.nodes)
+    .filter(([, state]) => state !== "down")
+    .map(([nodeName]) => ({ name: `clab-${watched.labName}-${nodeName}`, nodeName, labName: watched.labName!, state: "running" }) as HostRuntimeContainer);
+}
+
+/** One fake sample; the first of a node has no CPU, as with real hosts. */
+function fakeSample(containers: HostRuntimeContainer[], tick: number) {
+  const nodes = fakeNodeStats(containers, tick).map((node, index) =>
+    tick === 1 ? { ...node, cpuPercent: undefined } : { ...node, cpuPercent: (node.cpuPercent ?? 0) * (index % 5 === 1 ? 2.4 : 1) }
+  );
+  return { time: new Date().toISOString(), intervalSeconds: 3, nodes };
+}
+
 /** Fake usage per lab while a card watches it, built from the same samples as the canvas harness. */
 const watchUsage: WatchLabUsage = (watched, listener) => {
   if (!canWatchLabUsage(watched)) return () => undefined;
   const key = watched.labName!;
-  active.set(key, (active.get(key) ?? 0) + 1);
+  countActive(key, 1);
   if (statsMode === "unavailable") {
     listener({ status: "unavailable" });
   } else {
@@ -117,29 +145,23 @@ const watchUsage: WatchLabUsage = (watched, listener) => {
   }
   let usage: LabUsage | undefined;
   let tick = 0;
-  const containers = Object.entries(watched.nodes)
-    .filter(([, state]) => state !== "down")
-    .map(([nodeName]) => ({ name: `clab-${key}-${nodeName}`, nodeName, labName: key, state: "running" }) as HostRuntimeContainer);
+  const containers = usageContainers(watched);
   const post = () => {
     tick += 1;
-    const nodes = fakeNodeStats(containers, tick).map((node, index) =>
-      // The first sample of a node has no CPU, as with real hosts.
-      tick === 1 ? { ...node, cpuPercent: undefined } : { ...node, cpuPercent: (node.cpuPercent ?? 0) * (index % 5 === 1 ? 2.4 : 1) }
-    );
-    usage = nextLabUsage(usage, { time: new Date().toISOString(), intervalSeconds: 3, nodes });
+    usage = nextLabUsage(usage, fakeSample(containers, tick));
     listener({ status: "live", usage });
   };
   const timer = statsMode === "unavailable" ? undefined : setInterval(post, INTERVAL_MS);
   if (timer !== undefined) post();
   return () => {
     if (timer !== undefined) clearInterval(timer);
-    const count = (active.get(key) ?? 1) - 1;
-    if (count > 0) active.set(key, count);
-    else active.delete(key);
+    countActive(key, -1);
   };
 };
 
-Object.assign(window, { __OVERVIEW__: { activeWatches: () => [...active.keys()].sort() } });
+// Messages the webview posted to its host, for specs to read.
+const posted: LabsOverviewOutgoingMessage[] = [];
+Object.assign(window, { __OVERVIEW__: { activeWatches: () => [...active.keys()].sort(), posted } });
 
 async function loadSources(target: LabOverviewCard) {
   if (target.path === undefined || !(target.path in fixtureFiles)) return undefined;
@@ -170,10 +192,72 @@ function OverviewHarness() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <MuiThemeProvider>
-      <OverviewHarness />
-    </MuiThemeProvider>
-  </React.StrictMode>
-);
+/** Answers the webview as the extension host would: labs, topology files and usage streams. */
+function fakeExtensionHost(cards: LabOverviewCard[]) {
+  const send = (message: LabsOverviewIncomingMessage) => window.postMessage(message, "*");
+  const streams = new Map<number, { key: string; timer?: ReturnType<typeof setInterval> }>();
+  return (message: LabsOverviewOutgoingMessage) => {
+    posted.push(message);
+    switch (message.type) {
+      case "labs-overview:ready":
+        setTimeout(() => send({ type: "labs-overview:state", cards, loading: false, showEndpoints: false, sourcesRevision: 0 }), 100);
+        break;
+      case "labs-overview:load-sources": {
+        const target = cards.find((entry) => entry.id === message.cardId);
+        void loadSources(target!).then((sources) => send({ type: "labs-overview:sources", requestId: message.requestId, sources }));
+        break;
+      }
+      case "labs-overview:usage-start": {
+        const { streamId, labName } = message;
+        if (statsMode === "unavailable") {
+          send({ type: "labs-overview:usage", streamId, end: true, error: "Not implemented", status: 501 });
+          break;
+        }
+        const watched = cards.find((entry) => entry.labName === labName);
+        const containers = watched ? usageContainers(watched) : [];
+        let tick = 0;
+        const post = () => {
+          tick += 1;
+          send({ type: "labs-overview:usage", streamId, sample: fakeSample(containers, tick) });
+        };
+        countActive(labName, 1);
+        streams.set(streamId, { key: labName, timer: setInterval(post, INTERVAL_MS) });
+        post();
+        break;
+      }
+      case "labs-overview:usage-stop": {
+        const stream = streams.get(message.streamId);
+        if (!stream) break;
+        clearInterval(stream.timer);
+        streams.delete(message.streamId);
+        countActive(stream.key, -1);
+        break;
+      }
+      default:
+        break;
+    }
+  };
+}
+
+if (params.get("host") === "webview") {
+  const runtime = createClabUiRuntime({
+    host: createWindowClabUiHost({ postMessage: fakeExtensionHost(buildCards()) as (message: unknown) => void })
+  });
+  createRoot(document.getElementById("root")!).render(
+    <ClabUiRuntimeProvider runtime={runtime}>
+      <React.StrictMode>
+        <div style={{ position: "fixed", inset: 0 }}>
+          <LabsOverviewApp />
+        </div>
+      </React.StrictMode>
+    </ClabUiRuntimeProvider>
+  );
+} else {
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <MuiThemeProvider>
+        <OverviewHarness />
+      </MuiThemeProvider>
+    </React.StrictMode>
+  );
+}

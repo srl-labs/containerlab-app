@@ -63,9 +63,11 @@ export interface LabsOverviewProps {
   onOpen: (card: LabOverviewCard) => void;
   onDeploy: (card: LabOverviewCard) => void;
   onDestroy: (card: LabOverviewCard) => void;
-  onCopyLink: (card: LabOverviewCard) => void;
+  /** Copies a card's link; without it cards offer none. */
+  onCopyLink?: (card: LabOverviewCard) => void;
   onCreateLab: () => void;
-  onClose: () => void;
+  /** Closes the overview; without it, as in its own editor tab, there is no close button. */
+  onClose?: () => void;
 }
 
 function readCollapsed(): Set<SectionId> {
@@ -223,7 +225,7 @@ function LabCard({ card, now, showEndpoint, lifecycleAvailable, loadSources, sou
             </IconButton>
           </Tooltip>
         ) : null}
-        {card.link ? (
+        {card.link && onCopyLink ? (
           <Tooltip title="Copy link">
             <IconButton size="small" aria-label={`Copy link to ${card.name}`} onClick={() => onCopyLink(card)}>
               <LinkOutlinedIcon fontSize="small" />
@@ -480,7 +482,9 @@ export function LabsOverview(props: LabsOverviewProps): React.JSX.Element {
           </Typography>
         </Typography>
         <Button size="small" variant="text" startIcon={<AddIcon />} onClick={onCreateLab}>New lab</Button>
-        <IconButton size="small" aria-label="Close labs overview" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
+        {onClose ? (
+          <IconButton size="small" aria-label="Close labs overview" onClick={onClose}><CloseIcon fontSize="small" /></IconButton>
+        ) : null}
       </Box>
       {cards.length > 0 ? (
         <FilterBar cards={cards} filters={filters} lifecycleAvailable={lifecycleAvailable} onChange={setFilters} />

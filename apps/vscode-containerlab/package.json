@@ -182,6 +182,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "containerlab.labsOverview.open",
+        "title": "Open Labs Overview",
+        "category": "Containerlab",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "containerlab.images.manage",
         "title": "Manage Images",
         "category": "Containerlab",
@@ -866,6 +872,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "containerlab.labsOverview.open",
+          "when": "view == containerlabExplorerWebview",
+          "group": "navigation@80"
+        },
         {
           "command": "containerlab.connection.manage",
           "when": "view == containerlabExplorerWebview",

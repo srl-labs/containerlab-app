@@ -6,6 +6,7 @@ export * from "./endpointStatus";
 export * from "./labTabsStore";
 export * from "./labsOverview";
 export * from "./labUsage";
+export * from "./labUsageFeed";
 export * from "./lifecycleLogHistory";
 export * from "./runtimeCaptureSettings";
 export * from "./runtimeTerminalActions";
