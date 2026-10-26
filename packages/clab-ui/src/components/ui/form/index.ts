@@ -1,5 +1,6 @@
 // Shared form components.
 export { InputField } from "./InputField";
+export { NumberTextField } from "./NumberTextField";
 export { SelectField } from "./SelectField";
 export { CheckboxField } from "./CheckboxField";
 export { ColorField } from "./ColorField";
