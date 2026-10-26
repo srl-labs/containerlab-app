@@ -4,6 +4,11 @@
  * Buffers writes/deletes and restores the original files if a commit fails.
  * Individual renames are atomic where supported; a multi-file commit is not
  * crash-atomic. Backups are retained if recovery itself fails.
+ *
+ * A written file is replaced by renaming its temp file over it, and backed up
+ * by a copy, so it exists throughout the commit: readers such as file
+ * watchers never see it missing, even when each step is a request to a lab
+ * host.
  */
 
 import type { FileSystemAdapter } from "./types";
@@ -145,16 +150,27 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
 
   private async createBackups(
     entries: PendingEntry[],
-    backups: Map<string, string>
+    backups: Map<string, string>,
+    existing: Set<string>
   ): Promise<void> {
+    // A lone write replaces its file with one rename, which either happens or
+    // not; there is nothing to restore, so it needs no backup.
+    const loneWrite = entries.length === 1 && entries[0].content !== null;
     for (const entry of entries) {
       const exists = await this.base.exists(entry.path);
       if (!exists) continue;
+      existing.add(entry.path);
+      if (loneWrite) continue;
       const dir = this.base.dirname(entry.path);
       const base = this.base.basename(entry.path);
       const backupPath = this.buildTempPath(dir, base, "bak");
       backups.set(entry.path, backupPath);
-      await this.base.rename(entry.path, backupPath);
+      if (entry.content === null) {
+        // The file goes away; moving it aside is its backup.
+        await this.base.rename(entry.path, backupPath);
+      } else {
+        await this.base.writeFile(backupPath, await this.base.readFile(entry.path));
+      }
     }
   }
 
@@ -187,11 +203,14 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
 
   private async restoreBackups(
     backups: Map<string, string>,
-    attemptedWrites: Set<string>
+    attemptedWrites: Set<string>,
+    existing: Set<string>
   ): Promise<void> {
     const errors: Error[] = [];
     for (const targetPath of attemptedWrites) {
-      if (backups.has(targetPath)) continue;
+      // A file that existed without a backup was a lone write whose rename
+      // failed, so it still holds its old content.
+      if (backups.has(targetPath) || existing.has(targetPath)) continue;
       try {
         await this.base.unlink(targetPath);
       } catch (cause) {
@@ -229,14 +248,15 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
 
     const tempFiles = new Map<string, string>();
     const backups = new Map<string, string>();
+    const existing = new Set<string>();
     const attemptedWrites = new Set<string>();
 
     try {
       // 1) Write temp files for all writes.
       await this.writeTempFiles(entries, tempFiles);
 
-      // 2) Move existing targets to backups.
-      await this.createBackups(entries, backups);
+      // 2) Back up existing targets: copies for writes, moves for deletes.
+      await this.createBackups(entries, backups, existing);
 
       // 3) Apply writes (rename temp -> target).
       await this.applyWrites(entries, tempFiles, attemptedWrites);
@@ -248,7 +268,7 @@ export class TransactionalFileSystemAdapter implements FileSystemAdapter {
       }
     } catch (err) {
       try {
-        await this.restoreBackups(backups, attemptedWrites);
+        await this.restoreBackups(backups, attemptedWrites, existing);
       } catch (recoveryError) {
         throw new AggregateError(
           [err, recoveryError],

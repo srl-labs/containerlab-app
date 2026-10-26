@@ -199,16 +199,26 @@ export class ReactTopoViewer {
       panel.webview.postMessage(buildTopologySnapshotMessage(snapshot, "external-change"));
     };
 
+    const loadExternalChange = async (): Promise<unknown> => {
+      const host = this.topologyHost;
+      if (!host) return null;
+      const { revision } = await host.getSnapshot();
+      const snapshot = await host.onExternalChange();
+      // Files that did not change, e.g. this panel's own save reported late,
+      // need no redraw: it would interrupt what the user is doing.
+      return snapshot.revision === revision ? null : snapshot;
+    };
+
     this.watcherManager.setupFileWatcher(
       this.lastYamlFilePath,
       updateController,
-      () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
+      loadExternalChange,
       postSnapshot
     );
     this.watcherManager.setupSaveListener(
       this.lastYamlFilePath,
       updateController,
-      () => this.topologyHost?.onExternalChange() ?? Promise.resolve(null),
+      loadExternalChange,
       postSnapshot
     );
     this.watcherManager.setupDockerImagesSubscription(

@@ -644,6 +644,8 @@ function watchRemoteWorkspaces(connections: ConnectionManager): vscode.Disposabl
     void (async () => {
       try {
         for await (const event of await backend.fs.watch(controller.signal)) {
+          // Temp and backup files of a save are dot files; they change no topology.
+          if (path.posix.basename(event.path).startsWith(".")) continue;
           if (event.kind !== "file" || /\.clab\.ya?ml$/i.test(event.path))
             scheduleRefresh(connection);
         }

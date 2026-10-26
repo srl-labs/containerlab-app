@@ -237,6 +237,8 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
     const running = new Set(Object.keys(ins.labsOf(connection.id) ?? {}));
     const filter = this.treeFilter ? FilterUtils.createFilter(this.treeFilter) : undefined;
     const nodes = entries
+      // Dot files, like the temp files of a save in progress, as on this machine.
+      .filter((entry) => !path.posix.basename(entry.yamlFileName).startsWith("."))
       .filter((entry) => !running.has(entry.labName))
       .map((entry) => {
         const folder = path.posix.dirname(entry.yamlFileName);
