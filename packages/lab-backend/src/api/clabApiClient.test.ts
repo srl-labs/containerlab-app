@@ -187,3 +187,25 @@ test("the vars file of a lifecycle action goes to the server as varsPath", async
   await client.destroyLab("token", "demo", { lifecycleOptions: { varsFile: "vars/prod.yml" } });
   assert.equal(urls[0].searchParams.get("varsPath"), "vars/prod.yml");
 });
+
+test("a terminal session is resumable only when the client asks for it", async (t) => {
+  const bodies: unknown[] = [];
+  t.mock.method(undici, "fetch", (_input: unknown, init?: { body?: string }) => {
+    bodies.push(JSON.parse(init?.body ?? "{}"));
+    return Promise.resolve(
+      new Response("{}", { status: 200, headers: { "content-type": "application/json" } })
+    );
+  });
+  const client = new ClabApiClient({ baseUrl: "https://api.test" });
+  await client.createTerminalSession("token", "demo", "clab-demo-n1", { protocol: "shell", cols: 80, rows: 24 });
+  await client.createTerminalSession("token", "demo", "clab-demo-n1", {
+    protocol: "shell",
+    cols: 80,
+    rows: 24,
+    resumable: true
+  });
+  assert.deepEqual(bodies, [
+    { protocol: "shell", cols: 80, rows: 24 },
+    { protocol: "shell", cols: 80, rows: 24, resumable: true }
+  ]);
+});

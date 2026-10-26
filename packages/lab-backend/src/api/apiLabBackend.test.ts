@@ -45,7 +45,9 @@ test("features come from the server's health endpoint and older servers list non
     graphMermaid: true,
     graphDot: true,
     sshxReaders: true,
-    gottyOptions: true
+    gottyOptions: true,
+    nodeStats: false,
+    terminalResume: false
   });
 
   t.mock.restoreAll();
@@ -57,7 +59,9 @@ test("features come from the server's health endpoint and older servers list non
     graphMermaid: false,
     graphDot: false,
     sshxReaders: false,
-    gottyOptions: false
+    gottyOptions: false,
+    nodeStats: false,
+    terminalResume: false
   });
 });
 
@@ -144,4 +148,66 @@ test("generate never deploys or writes on the server", async (t) => {
     images: { nokia_srlinux: "srl" },
     deploy: false
   });
+});
+
+/** Answers streaming requests with NDJSON `lines` and `/health` with `features`. */
+function mockStreamServer(t: test.TestContext, features: string[], lines: string[]): URL[] {
+  const urls: URL[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    const url = new URL(String(input));
+    urls.push(url);
+    if (url.pathname === "/health") return Promise.resolve(Response.json({ status: "healthy", features }));
+    return Promise.resolve(
+      new Response(lines.join("\n"), { headers: { "content-type": "application/x-ndjson" } })
+    );
+  });
+  return urls;
+}
+
+async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = [];
+  for await (const value of values) result.push(value);
+  return result;
+}
+
+test("node logs follow the server's NDJSON stream with the stream of each line", async (t) => {
+  const urls = mockStreamServer(t, ["log-stream"], [
+    JSON.stringify({ containerName: "clab-demo-n1", line: "booting", stream: "stdout" }),
+    "",
+    JSON.stringify({ containerName: "clab-demo-n1", line: "warn", stream: "stderr" }),
+    JSON.stringify({ containerName: "clab-demo-n1", line: "older server" })
+  ]);
+  const backend = new ApiLabBackend({ baseUrl: "https://logs.test", token: "token" });
+  const lines = await collect(
+    await backend.streamNodeLogs("demo", "clab-demo-n1", { tail: "100", signal: new AbortController().signal })
+  );
+  assert.deepEqual(lines, [
+    { line: "booting", stream: "stdout" },
+    { line: "warn", stream: "stderr" },
+    { line: "older server" }
+  ]);
+  const logs = urls.find((url) => url.pathname.endsWith("/logs"));
+  assert.equal(logs?.pathname, "/api/v1/labs/demo/nodes/clab-demo-n1/logs");
+  assert.equal(logs?.searchParams.get("follow"), "true");
+  assert.equal(logs?.searchParams.get("tail"), "100");
+});
+
+test("lab stats need a server that lists node-stats", async (t) => {
+  const sample = { type: "stats", time: "2026-01-01T00:00:00Z", intervalSeconds: 2, nodes: [] };
+  const urls = mockStreamServer(t, ["node-stats"], [JSON.stringify(sample)]);
+  const backend = new ApiLabBackend({ baseUrl: "https://stats.test", token: "token" });
+  const samples = await collect(
+    await backend.streamLabStats("demo", { intervalSeconds: 5, signal: new AbortController().signal })
+  );
+  assert.deepEqual(samples, [sample]);
+  const stats = urls.find((url) => url.pathname.endsWith("/stats"));
+  assert.equal(stats?.searchParams.get("interval"), "5s");
+
+  t.mock.restoreAll();
+  mockStreamServer(t, [], []);
+  const older = new ApiLabBackend({ baseUrl: "https://stats-older.test", token: "token" });
+  await assert.rejects(
+    older.streamLabStats("demo", { signal: new AbortController().signal }),
+    (error: Error & { status?: number }) => error.status === 501
+  );
 });

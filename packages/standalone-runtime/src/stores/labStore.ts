@@ -244,6 +244,61 @@ function fallbackContainerStatus(state: string): string {
   }
 }
 
+/** Docker reports health changes as `health_status: <health>` events. */
+const HEALTH_STATUS_ACTION = "health_status:";
+
+/** Events after which the container's last status line no longer applies. */
+const STATUS_RESETTING_ACTIONS = new Set([
+  "create",
+  "start",
+  "restart",
+  "die",
+  "stop",
+  "kill",
+  "pause",
+  "unpause"
+]);
+
+function healthFromAction(action: string): string | undefined {
+  if (!action.startsWith(HEALTH_STATUS_ACTION)) {
+    return undefined;
+  }
+  const health = action.slice(HEALTH_STATUS_ACTION.length).trim();
+  return health.length > 0 ? health : undefined;
+}
+
+/** Puts the health in a status line the way Docker shows it: `Up 5 minutes (healthy)`. */
+function statusWithHealth(status: string, health: string): string {
+  const base = status.replace(/\s*\((?:healthy|unhealthy|health: [^)]*)\)\s*$/i, "").trim() || "Up";
+  const suffix = health === "healthy" || health === "unhealthy" ? health : `health: ${health}`;
+  return `${base} (${suffix})`;
+}
+
+/**
+ * The status line after a container event. Live events carry none, so the last
+ * one stays until a health change or a start or stop makes it outdated.
+ */
+function resolveContainerEventStatus(
+  attrs: Record<string, EventAttributeValue>,
+  action: string,
+  incoming: ContainerState,
+  existing: ContainerState | undefined
+): string {
+  const reported = getAttrString(attrs, "status");
+  if (reported !== undefined) {
+    return reported;
+  }
+  const normalizedAction = action.trim().toLowerCase();
+  const health = healthFromAction(normalizedAction);
+  if (health !== undefined) {
+    return statusWithHealth(existing?.status ?? "", health);
+  }
+  if (!existing || STATUS_RESETTING_ACTIONS.has(normalizedAction)) {
+    return fallbackContainerStatus(incoming.state);
+  }
+  return existing.status;
+}
+
 function isRunningContainerState(state: string): boolean {
   const normalized = state.trim().toLowerCase();
   return normalized.includes("running") || normalized.includes("healthy");
@@ -637,6 +692,7 @@ function applyContainerEvent(
   const container: ContainerState = {
     ...(existing ?? incoming),
     ...incoming,
+    status: resolveContainerEventStatus(attrs, action, incoming, existing),
     endpointId,
     interfaces: interfacesForContainerState(existing, incoming)
   };

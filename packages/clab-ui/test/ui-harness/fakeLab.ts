@@ -24,6 +24,8 @@ interface DesiredNode {
   config: Record<string, unknown>;
   /** wait-for entries from defaults, kind, group and the node, merged like containerlab. */
   waitFor: WaitForDependency[];
+  /** A healthcheck at any level: the node reports `health: starting` for a while once started. */
+  healthcheck: boolean;
 }
 
 export interface DesiredLab {
@@ -33,8 +35,17 @@ export interface DesiredLab {
   links: string[];
 }
 
+/** State and status a spec forces on a node, until the next lifecycle command. */
+export interface FakeNodeRuntime {
+  state?: string;
+  status?: string;
+}
+
 export interface FakeLab extends DesiredLab {
   stoppedNodes: Set<string>;
+  /** Running nodes whose healthcheck has not passed yet. */
+  startingNodes: Set<string>;
+  runtimeOverrides: Map<string, FakeNodeRuntime>;
 }
 
 /**
@@ -129,7 +140,10 @@ export function readTopology(yaml: string): DesiredLab {
       ],
       config
     );
-    nodes.set(name, { kind, image, linkApplyMode, config, waitFor });
+    const healthcheck = [config, groupConfig, kindConfig, defaults].some(
+      (level) => level.healthcheck !== undefined
+    );
+    nodes.set(name, { kind, image, linkApplyMode, config, waitFor, healthcheck });
   }
   return { labName: asString(doc.name) || "lab", nodes, links: readLinks(topology.links, nodes) };
 }
@@ -256,16 +270,34 @@ export function planFakeDeployWaves(
   return { waves };
 }
 
-/** The lab after deploying `desired`, or only the nodes in `nodeFilter`. */
+/** Nodes among `names` that define a healthcheck. */
+export function healthcheckedNodes(lab: DesiredLab, names: Iterable<string>): Set<string> {
+  return new Set([...names].filter((name) => lab.nodes.get(name)?.healthcheck === true));
+}
+
+/** The lab after deploying `desired`, or only the nodes in `nodeFilter`, healthchecks starting. */
 export function deployFakeLab(desired: DesiredLab, nodeFilter?: string[]): FakeLab {
   if (!nodeFilter || nodeFilter.length === 0) {
-    return { ...desired, nodes: new Map(desired.nodes), stoppedNodes: new Set() };
+    return {
+      ...desired,
+      nodes: new Map(desired.nodes),
+      stoppedNodes: new Set(),
+      startingNodes: healthcheckedNodes(desired, desired.nodes.keys()),
+      runtimeOverrides: new Map()
+    };
   }
   const keep = new Set(nodeFilter);
   const nodes = new Map([...desired.nodes].filter(([name]) => keep.has(name)));
   // containerlab skips links to nodes outside the filter.
   const links = desired.links.filter((link) => linkNodes(link).every((name) => keep.has(name)));
-  return { labName: desired.labName, nodes, links, stoppedNodes: new Set() };
+  return {
+    labName: desired.labName,
+    nodes,
+    links,
+    stoppedNodes: new Set(),
+    startingNodes: healthcheckedNodes(desired, keep),
+    runtimeOverrides: new Map()
+  };
 }
 
 /** The lab after destroying `nodeFilter`; undefined once nothing is left. */
@@ -278,7 +310,8 @@ export function destroyFakeNodes(lab: FakeLab, nodeFilter?: string[]): FakeLab |
     ...lab,
     nodes,
     links: lab.links.filter((link) => linkNodes(link).every((name) => !gone.has(name))),
-    stoppedNodes: new Set([...lab.stoppedNodes].filter((name) => !gone.has(name)))
+    stoppedNodes: new Set([...lab.stoppedNodes].filter((name) => !gone.has(name))),
+    startingNodes: new Set([...lab.startingNodes].filter((name) => !gone.has(name)))
   };
 }
 
@@ -304,11 +337,20 @@ export function fakeContainerName(lab: FakeLab, nodeName: string): string {
   return `clab-${lab.labName}-${nodeName}`;
 }
 
+/** Docker's status line for a fake container, health included. */
+function fakeStatus(lab: FakeLab, nodeName: string, running: boolean): string {
+  if (!running) return "Exited (0) 5 seconds ago";
+  if (lab.startingNodes.has(nodeName)) return "Up 3 seconds (health: starting)";
+  return lab.nodes.get(nodeName)?.healthcheck === true ? "Up 2 minutes (healthy)" : "Up 2 minutes";
+}
+
 /** The containers a host would report for the lab. */
 export function fakeRuntimeContainers(lab: FakeLab): HostRuntimeContainer[] {
   return [...lab.nodes].map(([nodeName, node], index) => {
     const name = fakeContainerName(lab, nodeName);
-    const running = !lab.stoppedNodes.has(nodeName);
+    const override = lab.runtimeOverrides.get(nodeName);
+    const state = override?.state ?? (lab.stoppedNodes.has(nodeName) ? "exited" : "running");
+    const running = state === "running";
     const ifaces = lab.links
       .flatMap((link) => link.split(" -- "))
       .filter((endpoint) => endpoint.startsWith(`${nodeName}:`))
@@ -317,7 +359,8 @@ export function fakeRuntimeContainers(lab: FakeLab): HostRuntimeContainer[] {
       name,
       nodeName,
       labName: lab.labName,
-      state: running ? "running" : "exited",
+      state,
+      status: override?.status ?? fakeStatus(lab, nodeName, running),
       kind: node.kind,
       image: node.image,
       ipv4Address: running ? `172.20.20.${index + 2}/24` : "",

@@ -14,6 +14,7 @@ import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
 import { workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
+import { createNodeStatsFeed } from "./standaloneNodeStats";
 import {
   StandaloneLabTabs,
   StandaloneFileEditor,
@@ -457,6 +458,7 @@ async function refreshRuntimeStoreForTopology(target: {
 }
 
 let scheduleExplorerSnapshot = (_delay?: number) => {};
+const nodeStatsFeed = createNodeStatsFeed();
 let standaloneRuntime: ReturnType<typeof createClabUiRuntime> | null = null;
 
 const topologyManager = createStandaloneTopologyManager({
@@ -472,6 +474,14 @@ const topologyManager = createStandaloneTopologyManager({
   getLabs: () => useLabStore.getState().labs,
   onTopologyFilesChanged: () => {
     scheduleExplorerSnapshot(0);
+  },
+  onHostContextSynced: ({ deploymentState, endpointId, sessionId, topologyRef }) => {
+    const streams = getStandaloneBackend().capabilities.lifecycle;
+    nodeStatsFeed.setTarget(
+      streams && deploymentState === "deployed" && topologyRef
+        ? { topologyRef, sessionId, endpointId }
+        : null
+    );
   },
 });
 
@@ -967,6 +977,20 @@ function handleNodeLogsCommand(msg: VscodeMessage): void {
   });
 }
 
+/**
+ * Docker sends no event when a started container's healthcheck begins, so
+ * inspect the lab once more for the `health: starting` status of booting nodes.
+ */
+function refreshRuntimeAfterNodeStart(
+  target: { sessionId?: string; topologyRef: TopologyRef },
+  action: "start" | "stop" | "restart",
+): void {
+  if (action === "stop") return;
+  refreshRuntimeStoreForTopology(target).catch(() => {
+    // Events keep the runtime store current without the health detail.
+  });
+}
+
 function handleNodeLifecycleCommand(msg: VscodeMessage): void {
   if (!getStandaloneBackend().capabilities.lifecycle) return;
   const target = getActiveTopologyTarget();
@@ -997,6 +1021,7 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
           message ?? `${nodesAction} requested for ${nodeNames.length} nodes.`,
           "success",
         );
+        refreshRuntimeAfterNodeStart(target, nodesAction);
       })
       .catch((error: unknown) => {
         runtimeUiActions.notify(
@@ -1014,6 +1039,7 @@ function handleNodeLifecycleCommand(msg: VscodeMessage): void {
   })
     .then(() => {
       runtimeUiActions.notify(`${nodeName} ${action} requested.`, "success");
+      refreshRuntimeAfterNodeStart(target, action);
     })
     .catch((error: unknown) => {
       runtimeUiActions.notify(

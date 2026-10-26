@@ -9,6 +9,7 @@ import {
   type TopoViewerNodesAction
 } from "../../host";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
+import { trackNodeActions } from "../../stores/nodeLifecycleStore";
 import { useDeploymentState, type DeploymentState } from "../../stores/topoViewerStore";
 import { CanvasCapturePanel } from "../panels/capture/CanvasCapturePanel";
 import {
@@ -219,7 +220,21 @@ function nodesActionHandler(
   topoViewer: ClabUiTopoViewerHost
 ): ResolveContextMenuItemsParams["onNodesAction"] {
   const { runNodesAction } = topoViewer;
-  return runNodesAction ? (action, nodeNames) => runNodesAction.call(topoViewer, action, nodeNames) : undefined;
+  return runNodesAction
+    ? (action, nodeNames) => {
+        trackNodeActions(action, nodeNames);
+        runNodesAction.call(topoViewer, action, nodeNames);
+      }
+    : undefined;
+}
+
+function runNodeAction(
+  topoViewer: ClabUiTopoViewerHost,
+  action: TopoViewerNodeAction,
+  nodeName: string
+): void {
+  trackNodeActions(action, [nodeName]);
+  topoViewer.runNodeAction(action, nodeName);
 }
 
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
@@ -259,7 +274,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
   return useMemo(() => {
     return resolveContextMenuItems({
       ...params,
-      onNodeAction: (action, nodeName) => topoViewer.runNodeAction(action, nodeName),
+      onNodeAction: (action, nodeName) => runNodeAction(topoViewer, action, nodeName),
       onNodesAction: nodesActionHandler(topoViewer),
       labOperations: hasLabOperations
         ? { support: labOperationSupport, open: openLabOperation }

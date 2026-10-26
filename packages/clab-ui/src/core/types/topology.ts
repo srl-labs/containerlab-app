@@ -286,6 +286,8 @@ export interface TopologyAnnotations {
     nodeBoxSpacing?: "default" | "narrow";
     linkStyle?: "straight" | "elbow";
     mgmtNetworkBadge?: "always" | "hover";
+    /** CPU usage badge on running nodes; shown unless false. */
+    showNodeCpu?: boolean;
     telemetryNodeSizePx?: number;
     telemetryInterfaceSizePercent?: number;
     showRateLabels?: boolean;

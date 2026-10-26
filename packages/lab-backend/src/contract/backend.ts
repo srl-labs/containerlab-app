@@ -28,6 +28,7 @@ import type {
   InspectAllLabsResponse,
   InspectDetailsResponse,
   InspectLabResponse,
+  LabStatsSample,
   LifecycleActionResult,
   LogsResponse,
   MermaidDirection,
@@ -36,6 +37,7 @@ import type {
   NetemShowResponse,
   NodeBrowserPortsResponse,
   NodeLifecycleAction,
+  NodeLogLine,
   RuntimeImageActionResponse,
   RuntimeImagesResponse,
   SaveConfigResponse,
@@ -90,6 +92,10 @@ export interface LabBackendFeatures {
   sshxReaders: boolean;
   /** GoTTY credentials and shell. */
   gottyOptions: boolean;
+  /** CPU and memory usage of a lab's nodes (`streamLabStats`). */
+  nodeStats: boolean;
+  /** Terminal sessions that keep running when the client disconnects, and replay their output. */
+  terminalResume: boolean;
 }
 
 export type LabLifecycleAction =
@@ -218,6 +224,12 @@ export interface TerminalCreateOptions {
   rows: number;
   sshUsername?: string;
   telnetPort?: number;
+  /**
+   * Keeps the session running when its stream disconnects, so it can be
+   * attached again (`terminalResume`). Without it the session ends with its
+   * stream, which is what clients that never attach again expect.
+   */
+  resumable?: boolean;
 }
 
 /** Messages from the lab host, as in the clab-api-server terminal protocol. */
@@ -228,6 +240,10 @@ export type TerminalServerMessage =
       protocol: TerminalProtocol;
       createdAt: string;
       expiresAt: string;
+      /** The session outlives this connection and can be attached again. */
+      resumable?: boolean;
+      /** The first output replays the session's recent output. */
+      replay?: boolean;
     }
   | { type: "output"; data: string; encoding: "base64" }
   | { type: "exit"; exitCode?: number | null; error?: string; state: string };
@@ -241,9 +257,29 @@ export type TerminalClientMessage =
 export interface TerminalStream {
   send(message: TerminalClientMessage): void;
   onMessage(listener: (message: TerminalServerMessage) => void): () => void;
-  /** Called once when the stream ends from either side. */
-  onClose(listener: (reason: string) => void): () => void;
+  /**
+   * Called once when the stream ends from either side. `takenOver` is true
+   * when another client attached to the session.
+   */
+  onClose(listener: (reason: string, details: { takenOver: boolean }) => void): () => void;
+  /**
+   * Disconnects. A resumable session on a lab host with `terminalResume`
+   * keeps running for the next attach; send `close` or call `closeTerminal`
+   * to end it. Any other session ends with its stream.
+   */
   close(): void;
+}
+
+export interface NodeLogStreamOptions {
+  /** Lines from the end of the log to start with: a number or `all`. */
+  tail?: string;
+  signal: AbortSignal;
+}
+
+export interface LabStatsStreamOptions {
+  /** Time between samples, 1 to 20 seconds. */
+  intervalSeconds?: number;
+  signal: AbortSignal;
 }
 
 /** One HTTP request to a Wireshark VNC session's web server. */
@@ -357,6 +393,16 @@ export interface LabBackend {
 
   nodeAction(labName: string, containerName: string, action: NodeLifecycleAction): Promise<void>;
   nodeLogs(labName: string, containerName: string, options?: { tail?: string }): Promise<LogsResponse>;
+  /**
+   * Follows a node's container log: the last `tail` lines, then new lines as
+   * the node writes them. Resolves once the stream is open; ends when
+   * `signal` aborts or the container goes away.
+   */
+  streamNodeLogs(
+    labName: string,
+    containerName: string,
+    options: NodeLogStreamOptions
+  ): Promise<AsyncIterable<NodeLogLine>>;
   nodeBrowserPorts(labName: string, containerName: string): Promise<NodeBrowserPortsResponse>;
   requestSshAccess(
     labName: string,
@@ -451,6 +497,11 @@ export interface LabBackend {
 
   /** Resolves once the stream is open; ends when `signal` aborts. */
   events(options: LabEventStreamOptions, signal: AbortSignal): Promise<AsyncIterable<LabEvent>>;
+  /**
+   * The CPU and memory usage of a lab's running nodes, one sample per
+   * interval. Rejects with 501 when the lab host has no `nodeStats`.
+   */
+  streamLabStats(labName: string, options: LabStatsStreamOptions): Promise<AsyncIterable<LabStatsSample>>;
 
   /** Stops background work: event streams, terminals and capture containers. */
   dispose(): void | Promise<void>;

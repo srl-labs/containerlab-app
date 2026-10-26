@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { TopologyRef } from "../../session";
 
-import { useRuntimeUiStore } from "./runtimeUiStore";
+import { resumableTerminalState, useRuntimeUiStore, type RuntimeTerminalPane } from "./runtimeUiStore";
 
 function makeTopologyRef(path: string, labName: string, endpointId: string): TopologyRef {
   return {
@@ -126,4 +126,44 @@ test("setTerminalSession stores the terminal session separately from the topolog
   assert.ok(terminal);
   assert.equal(terminal.sessionId, "topology-session-1");
   assert.equal(terminal.terminalSessionId, "runtime-terminal-session-1");
+});
+
+test("only open, resumable terminal panes come back after a reload", () => {
+  const pane = (id: string, extra: Partial<RuntimeTerminalPane>): RuntimeTerminalPane => ({
+    id,
+    nodeName: id,
+    protocol: "shell",
+    title: id,
+    state: "ready",
+    terminalSessionId: `session-${id}`,
+    resumable: true,
+    ...extra
+  });
+  const restored = resumableTerminalState({
+    activeTerminalGroupId: "gone",
+    terminalShell: { id: "shell", x: 0, y: 0, width: 800, height: 400, zIndex: 1401, minimized: false },
+    terminals: [
+      {
+        id: "group-1",
+        title: "Shell",
+        activePaneId: "exited",
+        panes: [
+          pane("live", { state: "reconnecting", error: "Connection lost." }),
+          pane("exited", { state: "exited" }),
+          pane("old-server", { resumable: undefined }),
+          pane("elsewhere", { state: "detached" })
+        ]
+      },
+      { id: "group-2", title: "Expired", activePaneId: "expired", panes: [pane("expired", { state: "expired" })] }
+    ]
+  });
+  assert.deepEqual(
+    restored?.terminals.map((group) => ({
+      id: group.id,
+      activePaneId: group.activePaneId,
+      panes: group.panes.map((entry) => [entry.id, entry.state, entry.error])
+    })),
+    [{ id: "group-1", activePaneId: "live", panes: [["live", "connecting", undefined]] }]
+  );
+  assert.equal(restored?.activeTerminalGroupId, "group-1");
 });

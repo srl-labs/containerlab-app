@@ -14,11 +14,19 @@ export function setLifecycleEvents(events: LifecycleStreamEvent[]): void {
   lifecycleEvents = events;
 }
 
+/** Whether the backend reports node usage, and the samples `streamLabStats` yields. */
+export let nodeStats: { supported: boolean; samples: unknown[] } = { supported: true, samples: [] };
+
+export function setNodeStats(next: { supported: boolean; samples: unknown[] }): void {
+  nodeStats = next;
+}
+
 export function reset(): void {
   calls.length = 0;
   lifecycleEvents = [{ type: "done" }];
   shareSessions.sshx = [];
   shareSessions.gotty = [];
+  nodeStats = { supported: true, samples: [] };
 }
 
 function record(method: string, args: unknown[]): void {
@@ -51,6 +59,20 @@ const backend = {
   },
   async netemReset(...args: unknown[]) {
     record("netemReset", args);
+  },
+  async features() {
+    return { nodeStats: nodeStats.supported, terminalResume: true };
+  },
+  async streamLabStats(labName: string, options: { signal: AbortSignal }) {
+    record("streamLabStats", [labName]);
+    const { samples } = nodeStats;
+    return (async function* () {
+      yield* samples;
+      // A live stream stays open until the caller stops it.
+      await new Promise((resolve) =>
+        options.signal.addEventListener("abort", resolve, { once: true })
+      );
+    })();
   }
 };
 

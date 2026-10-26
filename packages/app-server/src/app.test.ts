@@ -2128,97 +2128,102 @@ test("/api/runtime/capture forwards node-namespace targets so one capture can ho
   assert.equal(response.statusCode, 200, response.body);
 });
 
-test("terminal session creation resolves topology ref and short node name before proxying", async (t) => {
-  const context = await createTestContext(t);
-  context.fetchMock.on("POST", "http://api.example.test/login", () => {
-    return jsonResponse({ token: "secret-token" });
-  });
-  context.fetchMock.on(
-    "GET",
-    "http://api.example.test/api/v1/labs/topology/files",
-    () => {
-      return jsonResponse([
-        {
+// Pages from before resumable terminals leave the flag out, and their sessions end with the page.
+for (const resumable of [false, true]) {
+  test(`terminal session creation resolves topology ref and short node name before proxying (resumable: ${resumable})`, async (t) => {
+    const context = await createTestContext(t);
+    context.fetchMock.on("POST", "http://api.example.test/login", () => {
+      return jsonResponse({ token: "secret-token" });
+    });
+    context.fetchMock.on(
+      "GET",
+      "http://api.example.test/api/v1/labs/topology/files",
+      () => {
+        return jsonResponse([
+          {
+            labName: "demo",
+            yamlFileName: "labs/demo.clab.yml",
+            annotationsFileName: "labs/demo.clab.yml.annotations.json",
+            hasAnnotations: true,
+            deploymentState: "deployed",
+          },
+        ]);
+      },
+    );
+    context.fetchMock.on(
+      "GET",
+      "http://api.example.test/api/v1/labs/demo",
+      () => {
+        return jsonResponse([
+          {
+            name: "clab-demo-srl1",
+            containerId: "abc",
+            image: "ghcr.io/nokia/srlinux",
+            kind: "nokia_srlinux",
+            state: "running",
+            status: "Up",
+            ipv4Address: "",
+            ipv6Address: "",
+            labName: "demo",
+            labPath: "labs/demo.clab.yml",
+            absLabPath: "/labs/demo.clab.yml",
+            group: "",
+            owner: "",
+          },
+        ]);
+      },
+    );
+    context.fetchMock.on(
+      "POST",
+      "http://api.example.test/api/v1/labs/demo/nodes/clab-demo-srl1/terminal-sessions",
+      (call) => {
+        assert.deepEqual(JSON.parse(call.body ?? "{}"), {
+          protocol: "ssh",
+          cols: 80,
+          rows: 24,
+          ...(resumable ? { resumable: true } : {}),
+        });
+        return jsonResponse({
+          sessionId: "terminal-1",
+          username: "admin",
           labName: "demo",
-          yamlFileName: "labs/demo.clab.yml",
-          annotationsFileName: "labs/demo.clab.yml.annotations.json",
-          hasAnnotations: true,
-          deploymentState: "deployed",
-        },
-      ]);
-    },
-  );
-  context.fetchMock.on(
-    "GET",
-    "http://api.example.test/api/v1/labs/demo",
-    () => {
-      return jsonResponse([
-        {
-          name: "clab-demo-srl1",
-          containerId: "abc",
-          image: "ghcr.io/nokia/srlinux",
-          kind: "nokia_srlinux",
-          state: "running",
-          status: "Up",
-          ipv4Address: "",
-          ipv6Address: "",
+          nodeName: "clab-demo-srl1",
+          protocol: "ssh",
+          state: "open",
+          createdAt: "2026-04-24T00:00:00Z",
+          expiresAt: "2026-04-24T01:00:00Z",
+          lastActivity: "2026-04-24T00:00:00Z",
+        });
+      },
+    );
+
+    const { cookie, endpointId } = await loginEndpoint(context, {
+      url: "http://api.example.test",
+    });
+
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/runtime/terminal-sessions",
+      headers: { cookie },
+      payload: {
+        topologyRef: {
+          topologyId: `standalone:${endpointId}::labs/demo.clab.yml`,
           labName: "demo",
-          labPath: "labs/demo.clab.yml",
-          absLabPath: "/labs/demo.clab.yml",
-          group: "",
-          owner: "",
+          yamlPath: "labs/demo.clab.yml",
+          source: "standalone",
         },
-      ]);
-    },
-  );
-  context.fetchMock.on(
-    "POST",
-    "http://api.example.test/api/v1/labs/demo/nodes/clab-demo-srl1/terminal-sessions",
-    (call) => {
-      assert.deepEqual(JSON.parse(call.body ?? "{}"), {
+        nodeName: "srl1",
         protocol: "ssh",
         cols: 80,
         rows: 24,
-      });
-      return jsonResponse({
-        sessionId: "terminal-1",
-        username: "admin",
-        labName: "demo",
-        nodeName: "clab-demo-srl1",
-        protocol: "ssh",
-        state: "open",
-        createdAt: "2026-04-24T00:00:00Z",
-        expiresAt: "2026-04-24T01:00:00Z",
-        lastActivity: "2026-04-24T00:00:00Z",
-      });
-    },
-  );
-
-  const { cookie, endpointId } = await loginEndpoint(context, {
-    url: "http://api.example.test",
-  });
-
-  const response = await context.app.inject({
-    method: "POST",
-    url: "/api/runtime/terminal-sessions",
-    headers: { cookie },
-    payload: {
-      topologyRef: {
-        topologyId: `standalone:${endpointId}::labs/demo.clab.yml`,
-        labName: "demo",
-        yamlPath: "labs/demo.clab.yml",
-        source: "standalone",
+        ...(resumable ? { resumable: true } : {}),
       },
-      nodeName: "srl1",
-      protocol: "ssh",
-      cols: 80,
-      rows: 24,
-    },
-  });
+    });
 
-  assert.equal(response.statusCode, 200, response.body);
-  assert.equal(response.json<{ sessionId: string }>().sessionId, "terminal-1");
-});
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json<{ sessionId: string }>().sessionId, "terminal-1");
+  });
+}
 
 async function createStaticAppContext(
   t: TestContext,
@@ -2601,6 +2606,8 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     graphDot: false,
     sshxReaders: false,
     gottyOptions: false,
+    nodeStats: false,
+    terminalResume: false,
   });
 });
 
@@ -2670,4 +2677,91 @@ test("/api/runtime/generate checks the wizard request and never deploys", async 
     payload: { endpointId, request: { name: "clos", tiers: [{ count: 0 }], images: {} } },
   });
   assert.equal(invalid.statusCode, 400);
+});
+
+/** Opens a stream socket of the app server, sends `request` and collects messages until it closes. */
+async function readStreamSocket(
+  context: TestAppContext,
+  cookie: string,
+  path: string,
+  request: unknown,
+): Promise<unknown[]> {
+  // A second socket in the same test reuses the listening server.
+  const server = context.app.server.address();
+  const address =
+    server && typeof server !== "string"
+      ? `http://127.0.0.1:${server.port}`
+      : await context.app.listen({ host: "127.0.0.1", port: 0 });
+  const socket = new WebSocket(`${address.replace("http:", "ws:")}${path}`, { headers: { cookie } });
+  const messages: unknown[] = [];
+  socket.on("message", (data) => messages.push(JSON.parse(String(data)) as unknown));
+  await once(socket, "open", { signal: AbortSignal.timeout(5000) });
+  socket.send(JSON.stringify(request));
+  await once(socket, "close", { signal: AbortSignal.timeout(5000) });
+  return messages;
+}
+
+test("/api/runtime/logs/socket follows a node log line by line", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["log-stream"] }),
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([{ name: "clab-demo-leaf1", state: "running" }]),
+  );
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo/nodes/clab-demo-leaf1/logs?follow=true&tail=50",
+    () =>
+      ndjsonResponse(
+        `${JSON.stringify({ containerName: "clab-demo-leaf1", line: "ready", stream: "stdout" })}\n\n` +
+          `${JSON.stringify({ containerName: "clab-demo-leaf1", line: "oops", stream: "stderr" })}\n`,
+      ),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+
+  const messages = await readStreamSocket(context, cookie, `/api/runtime/logs/socket?endpointId=${endpointId}`, {
+    nodeName: "leaf1",
+    tail: "50",
+    topologyRef: demoTopologyRef(endpointId),
+  });
+
+  assert.deepEqual(messages, [
+    { type: "line", line: "ready", stream: "stdout" },
+    { type: "line", line: "oops", stream: "stderr" },
+    { type: "end" },
+  ]);
+});
+
+test("/api/runtime/stats/socket forwards lab samples, or says a server cannot", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  let features = ["node-stats"];
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features }),
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([{ name: "clab-demo-leaf1", state: "running" }]),
+  );
+  const sample = {
+    type: "stats",
+    time: "2026-10-25T00:00:00Z",
+    intervalSeconds: 3,
+    nodes: [{ name: "clab-demo-leaf1", nodeName: "leaf1", cpuPercent: 4.5, memoryBytes: 1024 }],
+  };
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo/stats?interval=3s", () =>
+    ndjsonResponse(`${JSON.stringify(sample)}\n`),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const path = `/api/runtime/stats/socket?endpointId=${endpointId}`;
+  const request = { intervalSeconds: 3, topologyRef: demoTopologyRef(endpointId) };
+
+  assert.deepEqual(await readStreamSocket(context, cookie, path, request), [sample, { type: "end" }]);
+
+  clearServerFeatureCache();
+  features = [];
+  const refused = await readStreamSocket(context, cookie, path, request);
+  assert.equal(refused.length, 1);
+  assert.equal((refused[0] as { type: string; status: number }).status, 501);
 });

@@ -65,7 +65,8 @@ harnessWindow.__DEV__ = {
   writeAnnotationsFile: (filename: string, content: unknown) =>
     host.harness.writeAnnotationsFile(filename, content),
   emitHostMessage: (message: unknown) => host.harness.emitHostMessage(message),
-  applyRuntimeContainers: (containers) => host.harness.applyRuntimeContainers(containers)
+  applyRuntimeContainers: (containers) => host.harness.applyRuntimeContainers(containers),
+  setNodeRuntime: (nodeName, runtime) => host.harness.setNodeRuntime(nodeName, runtime)
 };
 harnessWindow.__INITIAL_DATA__ = initialData;
 

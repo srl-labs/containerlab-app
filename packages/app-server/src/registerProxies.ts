@@ -8,6 +8,7 @@ import { registerFileTransferProxy } from "./fileTransferProxy.ts";
 import { registerLabOperationsProxy } from "./labOperationsProxy.ts";
 import { registerLabProxy } from "./labProxy.ts";
 import { registerRuntimeProxy } from "./runtimeProxy.ts";
+import { registerRuntimeStreamProxy } from "./runtimeStreamProxy.ts";
 import { registerTerminalStreamProxy } from "./terminalStreamProxy.ts";
 import { registerTopologyEventsProxy } from "./topologyEventsProxy.ts";
 import { registerTopologyProxy } from "./topologyProxy.ts";
@@ -26,6 +27,7 @@ export function registerStandaloneProxies(
   registerFileTransferProxy(app, resolveEndpoint);
   registerLabProxy(app, resolveEndpoint, topologySessions);
   registerRuntimeProxy(app, resolveEndpoint, listEndpoints, topologySessions);
+  registerRuntimeStreamProxy(app, resolveEndpoint, topologySessions);
   registerLabOperationsProxy(app, resolveEndpoint, topologySessions);
   registerCaptureVncStreamProxy(app, resolveEndpoint);
   registerTerminalStreamProxy(app, resolveEndpoint);

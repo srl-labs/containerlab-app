@@ -47,12 +47,27 @@ export interface RuntimeTerminalRequest extends RuntimeNodeRequest {
   initialOutput?: string;
 }
 
-type RuntimeTerminalPaneState = "creating" | "connecting" | "ready" | "exited" | "error";
+/**
+ * `reconnecting`: the connection dropped and the pane attaches again.
+ * `detached`: another window attached to the session. `expired`: the session
+ * ended on the lab host while the pane was away.
+ */
+type RuntimeTerminalPaneState =
+  | "creating"
+  | "connecting"
+  | "ready"
+  | "reconnecting"
+  | "detached"
+  | "expired"
+  | "exited"
+  | "error";
 
 export interface RuntimeTerminalPane extends RuntimeTerminalRequest {
   id: string;
   terminalSessionId?: string;
   state: RuntimeTerminalPaneState;
+  /** The lab host keeps the session when the connection drops. */
+  resumable?: boolean;
   exitCode?: number | null;
   error?: string;
 }
@@ -130,6 +145,12 @@ interface RuntimeUiState {
   setTerminalMinimized: (id: string, minimized: boolean) => void;
   setTerminalReady: (id: string) => void;
   setTerminalSession: (id: string, sessionId: string) => void;
+  setTerminalResumable: (id: string) => void;
+  setTerminalReconnecting: (id: string, message?: string) => void;
+  setTerminalDetached: (id: string) => void;
+  setTerminalExpired: (id: string, message?: string) => void;
+  /** Starts a new session in the pane, e.g. after the old one expired. */
+  restartTerminal: (id: string) => void;
   showSnackbar: (message: string, severity?: AlertColor) => void;
   updateTerminalLayout: (
     id: string,
@@ -260,6 +281,68 @@ function updatePane(
   return { changed, terminals: nextTerminals };
 }
 
+// Terminals of a lab host that keeps sessions come back after a page reload.
+// sessionStorage keeps them per browser tab, so a second tab does not take
+// over the first one's terminals.
+const TERMINAL_STATE_STORAGE_KEY = "clab.workspace.terminals.v1";
+
+interface StoredTerminalState {
+  activeTerminalGroupId?: string;
+  terminalShell: RuntimeTerminalShell;
+  terminals: RuntimeTerminalGroup[];
+}
+
+function terminalStorage(): Storage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The panes that can attach again: resumable sessions that were still open. */
+export function resumableTerminalState(state: StoredTerminalState): StoredTerminalState | undefined {
+  const terminals = state.terminals
+    .map((group) => {
+      const panes = group.panes
+        .filter(
+          (pane) =>
+            pane.resumable === true &&
+            pane.terminalSessionId !== undefined &&
+            pane.state !== "exited" &&
+            pane.state !== "error" &&
+            pane.state !== "expired" &&
+            // Taken over by another window: a reload must not take it back.
+            pane.state !== "detached"
+        )
+        .map((pane): RuntimeTerminalPane => ({ ...pane, state: "connecting", error: undefined }));
+      if (panes.length === 0) return undefined;
+      const activePaneId = panes.some((pane) => pane.id === group.activePaneId) ? group.activePaneId : panes[0].id;
+      return { ...group, activePaneId, panes };
+    })
+    .filter((group): group is RuntimeTerminalGroup => group !== undefined);
+  if (terminals.length === 0) return undefined;
+  return {
+    activeTerminalGroupId: resolveNextActiveGroupId(terminals, state.activeTerminalGroupId),
+    terminalShell: state.terminalShell,
+    terminals
+  };
+}
+
+function restoreTerminalState(): StoredTerminalState | undefined {
+  try {
+    const raw = terminalStorage()?.getItem(TERMINAL_STATE_STORAGE_KEY);
+    if (!raw) return undefined;
+    const stored = JSON.parse(raw) as StoredTerminalState;
+    if (!Array.isArray(stored.terminals) || typeof stored.terminalShell !== "object") return undefined;
+    return resumableTerminalState(stored);
+  } catch {
+    return undefined;
+  }
+}
+
+const restoredTerminals = restoreTerminalState();
+
 export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   inspectRequest: null,
   logsRequest: null,
@@ -267,9 +350,9 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
   captureRequest: null,
   imageManagerOpen: false,
   fileEditor: null,
-  activeTerminalGroupId: undefined,
-  terminalShell: defaultTerminalShell,
-  terminals: [],
+  activeTerminalGroupId: restoredTerminals?.activeTerminalGroupId,
+  terminalShell: restoredTerminals?.terminalShell ?? defaultTerminalShell,
+  terminals: restoredTerminals?.terminals ?? [],
   versionOpen: false,
   snackbar: defaultSnackbar,
   openFileEditor: (document) =>
@@ -469,6 +552,49 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
       }));
       return result.changed ? { terminals: result.terminals } : state;
     }),
+  setTerminalResumable: (id) =>
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) =>
+        pane.resumable === true ? pane : { ...pane, resumable: true }
+      );
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
+  setTerminalReconnecting: (id, message) =>
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "reconnecting",
+        error: message
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
+  setTerminalDetached: (id) =>
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({ ...pane, state: "detached", error: undefined }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
+  setTerminalExpired: (id, message) =>
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "expired",
+        terminalSessionId: undefined,
+        error: message
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
+  restartTerminal: (id) =>
+    set((state) => {
+      const result = updatePane(state.terminals, id, (pane) => ({
+        ...pane,
+        state: "creating",
+        terminalSessionId: undefined,
+        resumable: undefined,
+        exitCode: undefined,
+        error: undefined
+      }));
+      return result.changed ? { terminals: result.terminals } : state;
+    }),
   setTerminalExited: (id, exitCode, error) =>
     set((state) => {
       const result = updatePane(state.terminals, id, (pane) => ({
@@ -585,8 +711,34 @@ export const runtimeUiActions = {
   setTerminalReady: (id: string) => useRuntimeUiStore.getState().setTerminalReady(id),
   setTerminalSession: (id: string, sessionId: string) =>
     useRuntimeUiStore.getState().setTerminalSession(id, sessionId),
+  setTerminalResumable: (id: string) => useRuntimeUiStore.getState().setTerminalResumable(id),
+  setTerminalReconnecting: (id: string, message?: string) =>
+    useRuntimeUiStore.getState().setTerminalReconnecting(id, message),
+  setTerminalDetached: (id: string) => useRuntimeUiStore.getState().setTerminalDetached(id),
+  setTerminalExpired: (id: string, message?: string) =>
+    useRuntimeUiStore.getState().setTerminalExpired(id, message),
+  restartTerminal: (id: string) => useRuntimeUiStore.getState().restartTerminal(id),
   updateTerminalLayout: (
     id: string,
     layout: Partial<Pick<RuntimeTerminalShell, "height" | "width" | "x" | "y">>
   ) => useRuntimeUiStore.getState().updateTerminalLayout(id, layout)
 };
+
+// Saves the panes that can attach again after a reload.
+let storedTerminalState = "";
+useRuntimeUiStore.subscribe((state) => {
+  const resumable = resumableTerminalState(state);
+  const next = resumable ? JSON.stringify(resumable) : "";
+  if (next === storedTerminalState) return;
+  storedTerminalState = next;
+  try {
+    const storage = terminalStorage();
+    if (next) {
+      storage?.setItem(TERMINAL_STATE_STORAGE_KEY, next);
+    } else {
+      storage?.removeItem(TERMINAL_STATE_STORAGE_KEY);
+    }
+  } catch {
+    // Storage may be full or blocked; terminals then just don't come back.
+  }
+});

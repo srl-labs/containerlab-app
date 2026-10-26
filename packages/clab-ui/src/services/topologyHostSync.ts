@@ -682,6 +682,7 @@ function buildInitialTopoViewerData(
     nodeBoxSpacing: nodeBoxSpacing ?? DEFAULT_NODE_BOX_SPACING,
     linkStyle: linkStyle ?? DEFAULT_LINK_STYLE,
     mgmtNetworkBadge: mgmtNetworkBadge ?? DEFAULT_MGMT_NETWORK_BADGE,
+    showNodeCpu: viewerSettings.showNodeCpu !== false,
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,

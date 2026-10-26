@@ -5,6 +5,9 @@ import { isValidCloseCode } from "@srl-labs/containerlab-lab-backend/api";
 
 import type { EndpointResolver } from "./endpointResolver.ts";
 
+/** Tells the browser that another client attached to its terminal session. */
+const TERMINAL_CLOSE_TAKEN_OVER = 4001;
+
 function closeSocket(socket: WebSocket, code: number | undefined, reason: string): void {
   if (socket.readyState === WebSocket.CLOSING || socket.readyState === WebSocket.CLOSED) {
     return;
@@ -29,7 +32,9 @@ function parseClientMessage(data: RawData): TerminalClientMessage | null {
 
 /**
  * Bridges the browser's terminal WebSocket to the endpoint's terminal session.
- * Both sides speak the clab-api-server terminal protocol.
+ * Both sides speak the clab-api-server terminal protocol. When the browser
+ * goes away the upstream is only disconnected: a resumable session stays for
+ * the page to attach again after a reload, any other session ends.
  */
 export function registerTerminalStreamProxy(
   app: FastifyInstance,
@@ -77,7 +82,9 @@ export function registerTerminalStreamProxy(
               socket.send(JSON.stringify(message));
             }
           });
-          stream.onClose((reason) => closeSocket(socket, 1000, reason));
+          stream.onClose((reason, { takenOver }) =>
+            closeSocket(socket, takenOver ? TERMINAL_CLOSE_TAKEN_OVER : 1000, reason)
+          );
           send = (message) => stream.send(message);
           detach = () => stream.close();
           for (const message of pending.splice(0)) stream.send(message);

@@ -81,6 +81,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeBoxSpacing,
       linkStyle,
       mgmtNetworkBadge,
+      showNodeCpu,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent
     } = useTopoViewerStore.getState();
@@ -102,6 +103,7 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       nodeBoxSpacing,
       linkStyle,
       mgmtNetworkBadge,
+      showNodeCpu,
       telemetryNodeSizePx,
       telemetryInterfaceSizePercent,
       showRateLabels: draftShowRateLabels,

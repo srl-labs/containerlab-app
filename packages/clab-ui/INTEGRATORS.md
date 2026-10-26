@@ -709,6 +709,11 @@ netem state are dropped, interfaces are sorted) instead of mapping fields by han
 `runtimeContainersEqual` and `runtimeContainersTopologyEqual` compare two snapshots, with
 or without live interface counters, so a host can skip redundant graph updates.
 
+Pass Docker's status line as `status`, e.g. `Up 5 minutes (health: starting)`: the canvas
+shows a node as booting until its container runs and reports healthy, or runs without a
+healthcheck. `classifyNodeReadiness` and `countReadyContainers` from
+`@containerlab/clab-ui/session` apply the same rules, e.g. for "3 of 5 nodes ready".
+
 ## Explorer Integration
 
 If your product embeds the explorer UI, use:

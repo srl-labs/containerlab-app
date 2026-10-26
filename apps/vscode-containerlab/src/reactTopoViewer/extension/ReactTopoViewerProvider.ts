@@ -34,6 +34,7 @@ import { connectionOf, isUriString, labUri, resolveLab } from "../../backend/lab
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
 import { computeDeployedTopologyDirtyState } from "./services/DirtyState";
+import { NodeStatsFeed } from "./services/NodeStatsFeed";
 import { SplitViewManager } from "./services/SplitViewManager";
 import { labsToRuntimeContainers } from "./services/runtimeContainers";
 import {
@@ -97,6 +98,9 @@ export class ReactTopoViewer {
   private watcherManager: WatcherManager;
   private messageRouter: MessageRouter | undefined;
   private splitViewManager: SplitViewManager = new SplitViewManager();
+  private nodeStatsFeed = new NodeStatsFeed((message) => {
+    void this.currentPanel?.webview.postMessage(message);
+  });
   private internalUpdateDepth = 0;
   private internalUpdateGraceUntil = 0;
   private internalUpdateGraceTimer: ReturnType<typeof setTimeout> | undefined;
@@ -232,6 +236,7 @@ export class ReactTopoViewer {
         this.topologyHost = undefined;
         this.runtimeContainers = [];
         this.watcherManager.dispose();
+        this.nodeStatsFeed.dispose();
       },
       null,
       context.subscriptions
@@ -263,6 +268,16 @@ export class ReactTopoViewer {
     if (this.isDeployed) {
       this.runtimeContainers = await this.loadRunningLabRuntimeContainers();
     }
+    this.syncNodeStatsFeed();
+  }
+
+  /** Streams node usage while the open lab runs. */
+  private syncNodeStatsFeed(): void {
+    this.nodeStatsFeed.update(
+      this.currentPanel && this.isDeployed
+        ? { yamlPath: this.lastYamlFilePath, labName: this.currentLabName }
+        : undefined
+    );
   }
 
   /** Whether the lab is running, i.e. runtime data should be attached. */
@@ -466,6 +481,7 @@ export class ReactTopoViewer {
 
       // Reload running lab data when the lab is (still) deployed
       this.runtimeContainers = this.isDeployed ? await this.loadRunningLabRuntimeContainers() : [];
+      this.syncNodeStatsFeed();
 
       await this.postTopologyResync(panel);
 

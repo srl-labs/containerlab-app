@@ -4,6 +4,7 @@
  * Handles extension messages related to graph state:
  * - topology-host:snapshot: Replace nodes/edges from host snapshot
  * - edge-stats-update: Update edge extraData (packet stats)
+ * - node-stats-update: Node CPU and memory usage
  */
 import { useEffect } from "react";
 import type { Edge, Node } from "@xyflow/react";
@@ -15,6 +16,9 @@ import {
   type TypedMessageEvent
 } from "../../messaging/webviewMessageBus";
 import { useGraphStore } from "../../stores/graphStore";
+import { useNodeStatsStore } from "../../stores/nodeStatsStore";
+import { MSG_NODE_STATS_UPDATE } from "../../core/messages/webview";
+import type { HostNodeStatsSample } from "../../host/contracts";
 import { applySnapshotToStores } from "../../services/topologyHostSync";
 import {
   PENDING_NETEM_KEY,
@@ -63,10 +67,16 @@ type NodeRuntimeUpdateEntry = NonNullable<
   NonNullable<NodeDataUpdateMessage["data"]>["nodeUpdates"]
 >[number];
 
+interface NodeStatsUpdateMessage {
+  type: typeof MSG_NODE_STATS_UPDATE;
+  data?: { sample?: HostNodeStatsSample; unavailable?: string; clear?: boolean };
+}
+
 type ExtensionMessage =
   | { type: "topology-host:snapshot"; snapshot?: TopologySnapshot }
   | EdgeStatsUpdateMessage
   | NodeDataUpdateMessage
+  | NodeStatsUpdateMessage
   | { type: string };
 
 // ============================================================================
@@ -293,6 +303,22 @@ function applyNodeRuntimeUpdate(
   };
 }
 
+function isNodeStatsMessage(message: ExtensionMessage): message is NodeStatsUpdateMessage {
+  return message.type === MSG_NODE_STATS_UPDATE;
+}
+
+function handleNodeStatsUpdateMessage(message: NodeStatsUpdateMessage): void {
+  const store = useNodeStatsStore.getState();
+  const data = message.data;
+  if (data?.clear === true) {
+    store.clear();
+  } else if (typeof data?.unavailable === "string") {
+    store.setUnavailable(data.unavailable);
+  } else if (data?.sample && Array.isArray(data.sample.nodes)) {
+    store.applySample(data.sample);
+  }
+}
+
 // ============================================================================
 // Hook
 // ============================================================================
@@ -321,6 +347,10 @@ export function useGraphMessageSubscription(): void {
       }
       if (isNodeDataMessage(message)) {
         handleNodeDataUpdateMessage(message);
+        return;
+      }
+      if (isNodeStatsMessage(message)) {
+        handleNodeStatsUpdateMessage(message);
       }
     };
 

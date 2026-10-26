@@ -1,5 +1,5 @@
 import type { WorkspaceHost } from "@containerlab/clab-ui/workspace";
-import { listFileExplorerDirectory, writeFileExplorerFile, renderFileExplorerTopology, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
+import { listFileExplorerDirectory, writeFileExplorerFile, renderFileExplorerTopology, fetchVersionInfo, fetchVersionCheck, fetchEdgeSharkStatus, installEdgeShark, uninstallEdgeShark, fetchNodeLogs, streamNodeLogs, inspectAllLabs, inspectLab, setNetem, resetNetem, openTerminalSession, closeTerminalSession, getTerminalSession, connectTerminalSessionWebSocket } from "./runtimeApi";
 import { fetchEndpointHealthMetrics } from "./endpointHealth";
 import { getStandaloneBackend } from "./backend";
 import { publicAssetUrl } from "./publicAssetUrl";
@@ -27,12 +27,14 @@ const runtimeApi: WorkspaceHost["api"] = {
   installEdgeShark,
   uninstallEdgeShark,
   fetchNodeLogs,
+  streamNodeLogs,
   inspectAllLabs,
   inspectLab,
   setNetem,
   resetNetem,
   openTerminalSession,
   closeTerminalSession,
+  getTerminalSession,
   connectTerminalSessionWebSocket,
   fetchEndpointHealthMetrics
 };

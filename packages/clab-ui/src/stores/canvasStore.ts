@@ -19,6 +19,8 @@ interface EdgeRenderConfig {
 interface NodeRenderConfig {
   suppressLabels: boolean;
   suppressRuntimeBadges?: boolean;
+  /** Zoomed out too far for the CPU badge to read */
+  suppressCpuBadges?: boolean;
 }
 
 /** Box look the node editor shows on one node before it is applied */

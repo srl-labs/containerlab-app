@@ -342,6 +342,8 @@ const proOptions = { hideAttribution: true };
 const defaultViewport = { x: 0, y: 0, zoom: 1 };
 const fitViewOptions = { padding: 0.2 };
 const LOW_DETAIL_ZOOM_THRESHOLD = 0.5;
+// Below this zoom the CPU badge's text is too small to read.
+const CPU_BADGE_MIN_ZOOM = 0.6;
 const LARGE_GRAPH_NODE_THRESHOLD = 600;
 const LARGE_GRAPH_EDGE_THRESHOLD = 900;
 
@@ -420,6 +422,14 @@ function useRenderConfig(
     (left, right) => left === right
   );
 
+  const isTooFarForCpuBadges = useStore(
+    useCallback(
+      (store) => !disableZoomTracking && store.transform[2] < CPU_BADGE_MIN_ZOOM,
+      [disableZoomTracking]
+    ),
+    (left, right) => left === right
+  );
+
   const edgeRenderConfig = useMemo(
     () => ({
       labelMode: linkLabelMode,
@@ -432,9 +442,10 @@ function useRenderConfig(
   const nodeRenderConfig = useMemo(
     () => ({
       suppressLabels: isLowDetail,
-      suppressRuntimeBadges
+      suppressRuntimeBadges,
+      suppressCpuBadges: isTooFarForCpuBadges
     }),
-    [isLowDetail, suppressRuntimeBadges]
+    [isLowDetail, suppressRuntimeBadges, isTooFarForCpuBadges]
   );
 
   return { isLowDetail, edgeRenderConfig, nodeRenderConfig };

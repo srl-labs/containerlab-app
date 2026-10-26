@@ -47,6 +47,7 @@ test("normalizeRuntimeContainer fills defaults and sorts interfaces by name", ()
   });
 
   assert.equal(container.nodeName, "");
+  assert.equal(container.status, "");
   assert.equal(container.ipv4Address, "");
   assert.deepEqual(
     container.interfaces?.map((iface) => iface.name),
@@ -76,4 +77,18 @@ test("runtimeContainersEqual separates counter changes from topology changes", (
   assert.equal(runtimeContainersEqual(build(1), build(2)), false);
   assert.equal(runtimeContainersTopologyEqual(build(1), build(2)), true);
   assert.equal(runtimeContainersTopologyEqual(build(1), build(1, "down")), false);
+});
+
+test("a health change is a runtime change, with or without a reported status", () => {
+  const build = (status?: string) => [
+    normalizeRuntimeContainer({ name: "clab-demo-srl1", status })
+  ];
+  const starting = build("Up 2 seconds (health: starting)");
+
+  assert.equal(runtimeContainersTopologyEqual(starting, build("Up 2 seconds (healthy)")), false);
+  assert.equal(runtimeContainersTopologyEqual(build(), build("")), true);
+  assert.equal(
+    runtimeContainersTopologyEqual(starting, [{ ...starting[0], status: undefined }]),
+    false
+  );
 });

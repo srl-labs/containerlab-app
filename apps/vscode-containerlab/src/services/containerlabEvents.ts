@@ -246,6 +246,8 @@ interface LabRecord {
 
 const INITIAL_IDLE_TIMEOUT_MS = 250;
 const INITIAL_FALLBACK_TIMEOUT_MS = 2000;
+/** How long after the last container start a lab's health is read from inspect. */
+const HEALTH_REFRESH_DELAY_MS = 1000;
 
 type DataListener = () => void;
 type ContainerStateChangedListener = (
@@ -646,6 +648,11 @@ function updateStatusWithHealthSuffix(status: string, healthSuffix: string): str
   return `${trimmed} ${healthSuffix}`;
 }
 
+/** The healthcheck suffix of a docker status line, e.g. "(health: starting)". */
+function statusHealthSuffix(status: string): string | undefined {
+  return /\((?:healthy|unhealthy|health: [^)]+)\)\s*$/i.exec(status.trim())?.[0];
+}
+
 function resolveStatusValue(current: string, fallback: string | undefined, action: string): string {
   // For termination events (stop/die/kill), reset status - don't preserve old "Up X" for stopped containers
   if (action === "stop" || action === "die" || action === "kill") {
@@ -875,6 +882,11 @@ export class LabEventStream {
   private readonly interfaceVersions = new Map<string, number>();
   private readonly nodeSnapshots = new Map<string, NodeSnapshot>();
   private dataChangedTimer: ReturnType<typeof setTimeout> | null = null;
+  private backend: LabBackend | null = null;
+  private healthRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly healthRefreshLabs = new Set<string>();
+  /** Containers with a health event since the running refresh read their lab. */
+  private readonly healthEventsDuringRefresh = new Set<string>();
 
   constructor(readonly connectionId: string) {}
 
@@ -906,6 +918,12 @@ export class LabEventStream {
 
     this.containersById.set(enrichedRecord.data.ShortID, enrichedRecord);
     this.updateLabMappings(existing, enrichedRecord);
+
+    if (extractHealthSuffix(action) !== undefined) {
+      this.healthEventsDuringRefresh.add(enrichedRecord.data.ShortID);
+    } else if (action === "start" || action === "restart") {
+      this.scheduleHealthRefresh(enrichedRecord.labName);
+    }
 
     if (oldState !== undefined && oldState !== "" && oldState !== newState) {
       this.notifyContainerStateChanged(enrichedRecord.data.ShortID, newState);
@@ -1224,6 +1242,74 @@ export class LabEventStream {
     return removed;
   }
 
+  /**
+   * Docker sends no event when the healthcheck of a started container begins,
+   * so read the health of the lab from inspect once its containers settle.
+   */
+  private scheduleHealthRefresh(labName: string): void {
+    if (this.backend === null || labName === "" || labName === "unknown") {
+      return;
+    }
+    this.healthRefreshLabs.add(labName);
+    if (this.healthRefreshTimer) {
+      clearTimeout(this.healthRefreshTimer);
+    }
+    this.healthRefreshTimer = setTimeout(() => {
+      this.healthRefreshTimer = null;
+      void this.refreshHealth();
+    }, HEALTH_REFRESH_DELAY_MS);
+  }
+
+  private async refreshHealth(): Promise<void> {
+    const backend = this.backend;
+    const labNames = [...this.healthRefreshLabs];
+    this.healthRefreshLabs.clear();
+    this.healthEventsDuringRefresh.clear();
+    if (!backend) {
+      return;
+    }
+    let changed = false;
+    for (const labName of labNames) {
+      // The event stream stays authoritative when inspect fails.
+      const containers = await backend.inspectLab(labName).catch(() => []);
+      for (const container of containers) {
+        changed = this.applyInspectedHealth(container.name, container.status) || changed;
+      }
+    }
+    if (changed) {
+      this.scheduleDataChanged();
+    }
+  }
+
+  /** Puts the inspected health on a running container that had no health event since. */
+  private applyInspectedHealth(name: string, status: string): boolean {
+    const healthSuffix = statusHealthSuffix(status);
+    if (healthSuffix === undefined) {
+      return false;
+    }
+    for (const record of this.containersById.values()) {
+      if (record.data.Names[0] !== name) {
+        continue;
+      }
+      if (
+        record.data.State !== "running" ||
+        this.healthEventsDuringRefresh.has(record.data.ShortID)
+      ) {
+        return false;
+      }
+      const next = updateStatusWithHealthSuffix(
+        pickNonEmpty(record.data.Status, "Running"),
+        healthSuffix
+      );
+      if (next === record.data.Status) {
+        return false;
+      }
+      record.data.Status = next;
+      return true;
+    }
+    return false;
+  }
+
   /** Forgets every lab, e.g. before streaming from another backend. */
   reset(): void {
     this.containersById.clear();
@@ -1279,6 +1365,7 @@ export class LabEventStream {
 
   private startProcess(backend: LabBackend, streamKey: string): void {
     this.currentStreamKey = streamKey;
+    this.backend = backend;
     this.initialLoadComplete = false;
 
     this.initialLoadPromise = new Promise<void>((resolve, reject) => {
@@ -1355,6 +1442,12 @@ export class LabEventStream {
       this.streamController.abort();
       this.streamController = null;
     }
+    this.backend = null;
+    if (this.healthRefreshTimer) {
+      clearTimeout(this.healthRefreshTimer);
+      this.healthRefreshTimer = null;
+    }
+    this.healthRefreshLabs.clear();
 
     this.initialLoadComplete = false;
     this.initialLoadPromise = null;

@@ -43,6 +43,9 @@ test("runs a lab on the web app's host without signing in", async ({ page }) => 
   await page.screenshot({ path: test.info().outputPath("running-lab.png") });
 
   expect(await lab.openShell()).toBe(true);
+  expect(await lab.resumeShell()).toEqual({ resumable: true, replayed: true, plainEndsOnDisconnect: true });
+  expect(await lab.followsLogs()).toBe(true);
+  expect(await lab.statsNodes()).toEqual(["n1", "n2"]);
   expect(await lab.planHasChanges()).toBe(false);
   expect((await lab.destroy()).last).toEqual({ type: "done" });
   expect(await lab.isRunning()).toBe(false);

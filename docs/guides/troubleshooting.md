@@ -17,13 +17,23 @@ Right-click a node on the canvas:
 | --- | --- |
 | **Shell** | Opens a shell in the container. In VS Code, `node.execCommandMapping` can drop you straight into a network OS's CLI. |
 | **SSH** | Opens an SSH session to the node's management address. It logs in with the node's `credentials` from the topology (set them in the node editor under **Configuration** → **Login Credentials**), otherwise with the kind's default user. VS Code also uses the `identity-file`. |
-| **Logs** | Shows the container's log output. |
+| **Logs** | Follows the container's log as the node writes it. |
 | **Start**, **Stop**, **Restart** | Acts on this node's container only. |
-| **Info** | Shows the node's kind, image, state, and addresses. |
+| **Info** | Shows the node's kind, image, state, addresses, and live CPU and memory usage. |
 
 The same node in the explorer has a few more, such as copying its name, addresses, or image.
 
 In VS Code, terminals open as VS Code terminals. The desktop and web apps open them in terminal windows inside the app, connected through the lab host.
+
+A terminal keeps running on the lab host when the connection drops or you reload the page. The terminal window reconnects by itself and shows what the node printed in the meantime. Opening the same terminal in another browser window moves it there; **Continue here** takes it back. A terminal without a window ends after 30 minutes, and the window then offers to start a new session. Closing a terminal tab ends its session right away. Labs on a lab host need a recent clab-api-server for this; with an older one, a dropped connection ends the terminal. Terminals opened by older versions of the apps also end when their connection drops.
+
+## Read logs
+
+**Logs** opens the node's log at its last 200 lines and keeps adding new lines while **Follow** is on. Timestamps, log levels, and `key=value` pairs are colored, and lines the node wrote to stderr are marked. **Source** switches to another node of the lab, or to the log of the lab's last deploy, apply, or destroy in this window. **Find** filters the lines, and **Export** saves them.
+
+## Watch node usage
+
+Select a node of a running lab to see its CPU and memory usage in the info panel, with the last two minutes as a chart. 100 % CPU is one busy CPU, so a node can show more than 100 %. Labs on a lab host need a recent clab-api-server; the panel says so when the server cannot report usage.
 
 ## Capture packets
 

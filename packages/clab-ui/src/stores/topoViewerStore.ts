@@ -91,6 +91,8 @@ export interface TopoViewerState {
   nodeBoxSpacing: NodeBoxSpacing;
   linkStyle: LinkStyle;
   mgmtNetworkBadge: MgmtNetworkBadgeMode;
+  /** CPU usage badge on the running nodes of a deployed lab */
+  showNodeCpu: boolean;
   telemetryNodeSizePx: number;
   telemetryInterfaceSizePercent: number;
   showRateLabels: boolean;
@@ -109,6 +111,8 @@ export interface TopoViewerState {
   editingCustomTemplate: CustomTemplateEditorData | null;
   isProcessing: boolean;
   processingMode: ProcessingMode;
+  /** The nodes a lifecycle command is limited to, or null for the whole lab. */
+  processingNodes: string[] | null;
   lifecycleModalOpen: boolean;
   lifecycleStatus: LifecycleStatus;
   lifecycleStatusMessage: string | null;
@@ -146,6 +150,7 @@ export interface TopoViewerActions {
   setNodeBoxSpacing: (spacing: NodeBoxSpacing) => void;
   setLinkStyle: (style: LinkStyle) => void;
   setMgmtNetworkBadge: (mode: MgmtNetworkBadgeMode) => void;
+  setShowNodeCpu: (enabled: boolean) => void;
   setTelemetryNodeSizePx: (value: number) => void;
   setTelemetryInterfaceSizePercent: (value: number) => void;
   setShowRateLabels: (enabled: boolean) => void;
@@ -169,7 +174,11 @@ export interface TopoViewerActions {
   clearCustomNodeError: () => void;
 
   // Processing state
-  setProcessing: (isProcessing: boolean, mode?: Exclude<ProcessingMode, null>) => void;
+  setProcessing: (
+    isProcessing: boolean,
+    mode?: Exclude<ProcessingMode, null>,
+    nodes?: string[]
+  ) => void;
   setLifecycleStatus: (status: LifecycleStatus, message?: string | null) => void;
   appendLifecycleLog: (line: string, stream?: LifecycleLogStream) => void;
   clearLifecycleLogs: () => void;
@@ -223,6 +232,7 @@ const initialState: TopoViewerState = {
   nodeBoxSpacing: DEFAULT_NODE_BOX_SPACING,
   linkStyle: DEFAULT_LINK_STYLE,
   mgmtNetworkBadge: DEFAULT_MGMT_NETWORK_BADGE,
+  showNodeCpu: true,
   telemetryNodeSizePx: 40,
   telemetryInterfaceSizePercent: 100,
   showRateLabels: false,
@@ -241,6 +251,7 @@ const initialState: TopoViewerState = {
   editingCustomTemplate: null,
   isProcessing: false,
   processingMode: null,
+  processingNodes: null,
   lifecycleModalOpen: false,
   lifecycleStatus: null,
   lifecycleStatusMessage: null,
@@ -492,6 +503,10 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
     set({ mgmtNetworkBadge });
   },
 
+  setShowNodeCpu: (showNodeCpu) => {
+    set({ showNodeCpu });
+  },
+
   setTelemetryNodeSizePx: (value) => {
     const next = Number.isFinite(value) ? value : 40;
     set({ telemetryNodeSizePx: next });
@@ -582,13 +597,14 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
   },
 
   // Processing state
-  setProcessing: (isProcessing, mode) => {
+  setProcessing: (isProcessing, mode, nodes) => {
     const next: Partial<TopoViewerState> = {
       isProcessing
     };
 
     if (isProcessing) {
       next.processingMode = mode ?? null;
+      next.processingNodes = nodes && nodes.length > 0 ? nodes : null;
       next.lifecycleModalOpen = true;
       next.lifecycleStatus = "running";
       next.lifecycleStatusMessage = null;
@@ -637,7 +653,8 @@ export const useTopoViewerStore = createWithEqualityFn<TopoViewerStore>((set, ge
       lifecycleStatus: null,
       lifecycleStatusMessage: null,
       lifecycleLogs: [],
-      processingMode: null
+      processingMode: null,
+      processingNodes: null
     });
   },
 

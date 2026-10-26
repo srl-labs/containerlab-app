@@ -17,7 +17,12 @@ import type {
 import type { TerminalProtocol, TerminalSessionInfo } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 
-const SESSION_TTL_MS = 60 * 60 * 1000;
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
+/** A resumable session without a client ends this long after the client left. */
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+const CLEANUP_INTERVAL_MS = 60 * 1000;
+/** Recent output replayed to a client that attaches again. */
+const SCROLLBACK_BYTES = 256 * 1024;
 const DEFAULT_TELNET_PORT = 5000;
 const SSH_USERNAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_-]{0,31}$/;
 
@@ -61,14 +66,55 @@ interface TerminalProcess {
   kill(): void;
 }
 
+/** One client's view of a session. */
+interface Attachment {
+  emit(message: TerminalServerMessage): void;
+  finish(reason: string, takenOver: boolean): void;
+}
+
 interface Session {
   info: TerminalSessionInfo;
   target: TerminalTarget;
   size: { cols: number; rows: number };
   sshUsername: string;
   telnetPort: number;
-  attached: boolean;
+  attachment?: Attachment;
+  /** When the last client left, or the creation time. */
+  detachedAt: number;
+  scrollback: Scrollback;
   process?: TerminalProcess;
+  /** Set while the process starts, so concurrent attaches start it once. */
+  starting?: Promise<void>;
+}
+
+/** The most recent output of a session, up to a byte limit. */
+export class Scrollback {
+  private chunks: Buffer[] = [];
+  private size = 0;
+  private readonly limit: number;
+
+  constructor(limit = SCROLLBACK_BYTES) {
+    this.limit = limit;
+  }
+
+  write(chunk: Buffer): void {
+    this.chunks.push(chunk);
+    this.size += chunk.length;
+    while (this.size - (this.chunks[0]?.length ?? 0) >= this.limit) {
+      this.size -= this.chunks.shift()?.length ?? 0;
+    }
+  }
+
+  /** The kept output, from the start of a line where the oldest output was cut. */
+  read(): Buffer {
+    let data = Buffer.concat(this.chunks);
+    if (data.length > this.limit) {
+      data = data.subarray(data.length - this.limit);
+      const newline = data.subarray(0, 4096).indexOf(0x0a);
+      if (newline >= 0) data = data.subarray(newline + 1);
+    }
+    return data;
+  }
 }
 
 type ProcessEvents = {
@@ -76,12 +122,18 @@ type ProcessEvents = {
   exit(exitCode: number | null, error?: string): void;
 };
 
-/** Node terminals on this machine: docker exec for shell and telnet, SSH for ssh. */
+/**
+ * Node terminals on this machine: docker exec for shell and telnet, SSH for
+ * ssh. A resumable session keeps running when its client disconnects, and
+ * replays its recent output to the next one; any other session ends with its
+ * client, as on clab-api-server.
+ */
 export class LocalTerminals {
   private readonly sessions = new Map<string, Session>();
 
   private readonly docker: () => Docker;
   private readonly username: string;
+  private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(docker: () => Docker, username: string) {
     this.docker = docker;
@@ -105,7 +157,8 @@ export class LocalTerminals {
       state: "ready",
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
-      lastActivity: now.toISOString()
+      lastActivity: now.toISOString(),
+      resumable: options.resumable === true
     };
     this.sessions.set(sessionId, {
       info,
@@ -116,85 +169,90 @@ export class LocalTerminals {
         options.telnetPort && options.telnetPort > 0 && options.telnetPort <= 65535
           ? options.telnetPort
           : DEFAULT_TELNET_PORT,
-      attached: false
+      detachedAt: now.getTime(),
+      scrollback: new Scrollback()
     });
+    this.cleanupTimer ??= setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref?.();
     return { ...info };
   }
 
   get(sessionId: string): TerminalSessionInfo {
-    return { ...this.session(sessionId).info };
+    const session = this.session(sessionId);
+    return { ...session.info, attached: session.attachment !== undefined };
   }
 
   close(sessionId: string): void {
-    const session = this.session(sessionId);
+    this.end(sessionId, this.session(sessionId));
+  }
+
+  private end(sessionId: string, session: Session): void {
     session.process?.kill();
     session.info.state = "closed";
-    this.sessions.delete(sessionId);
+    if (this.sessions.get(sessionId) === session) this.sessions.delete(sessionId);
   }
 
   dispose(): void {
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    this.cleanupTimer = undefined;
     for (const session of this.sessions.values()) session.process?.kill();
     this.sessions.clear();
   }
 
+  /**
+   * Attaches a client. A client that is still attached is told it was taken
+   * over, so a reloaded page continues the session it had.
+   */
   async attach(sessionId: string): Promise<TerminalStream> {
     const session = this.session(sessionId);
     if (session.info.state === "closed") {
       throw new LabBackendError("Terminal session already exited", 410);
     }
-    if (session.attached) {
-      throw new LabBackendError("Terminal session already attached", 409);
-    }
-    session.attached = true;
+    session.attachment?.finish("Terminal attached elsewhere", true);
 
     const messageListeners = new Set<(message: TerminalServerMessage) => void>();
-    const closeListeners = new Set<(reason: string) => void>();
+    const closeListeners = new Set<(reason: string, details: { takenOver: boolean }) => void>();
     const pending: TerminalServerMessage[] = [];
-    let closedReason: string | undefined;
-    const emit = (message: TerminalServerMessage) => {
-      if (messageListeners.size === 0) pending.push(message);
-      for (const listener of messageListeners) listener(message);
+    let closed: { reason: string; takenOver: boolean } | undefined;
+    const attachment: Attachment = {
+      emit: (message) => {
+        if (closed) return;
+        if (messageListeners.size === 0) pending.push(message);
+        for (const listener of messageListeners) listener(message);
+      },
+      finish: (reason, takenOver) => {
+        if (closed) return;
+        closed = { reason, takenOver };
+        if (session.attachment === attachment) {
+          session.attachment = undefined;
+          session.detachedAt = Date.now();
+        }
+        for (const listener of closeListeners) listener(reason, { takenOver });
+      }
     };
-    const finish = (reason: string) => {
-      if (closedReason !== undefined) return;
-      closedReason = reason;
-      for (const listener of closeListeners) listener(reason);
-    };
+    session.attachment = attachment;
 
-    emit({
+    const replay = session.scrollback.read();
+    attachment.emit({
       type: "ready",
       sessionId,
       protocol: session.info.protocol,
       createdAt: session.info.createdAt,
-      expiresAt: session.info.expiresAt
+      expiresAt: session.info.expiresAt,
+      resumable: session.info.resumable === true,
+      replay: replay.length > 0
     });
-
-    const events: ProcessEvents = {
-      output: (data) => {
-        session.info.lastActivity = new Date().toISOString();
-        emit({ type: "output", data: data.toString("base64"), encoding: "base64" });
-      },
-      exit: (exitCode, error) => {
-        session.info.state = "closed";
-        session.info.exitCode = exitCode;
-        if (error) session.info.error = error;
-        this.sessions.delete(sessionId);
-        emit({ type: "exit", exitCode, ...(error ? { error } : {}), state: "closed" });
-        finish(error ?? "Terminal closed");
-      }
-    };
-
-    try {
-      session.process = await this.start(session, events);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      events.exit(null, message);
+    if (replay.length > 0) {
+      attachment.emit({ type: "output", data: replay.toString("base64"), encoding: "base64" });
     }
+
+    session.starting ??= this.startProcess(sessionId, session);
+    await session.starting;
 
     return {
       send: (message: TerminalClientMessage) => {
         const terminal = session.process;
-        if (!terminal) return;
+        if (!terminal || closed) return;
         switch (message.type) {
           case "input":
             terminal.write(message.data);
@@ -214,17 +272,48 @@ export class LocalTerminals {
         return () => messageListeners.delete(listener);
       },
       onClose(listener) {
-        if (closedReason !== undefined) {
-          listener(closedReason);
+        if (closed) {
+          listener(closed.reason, { takenOver: closed.takenOver });
           return () => {};
         }
         closeListeners.add(listener);
         return () => closeListeners.delete(listener);
       },
       close: () => {
-        session.process?.kill();
+        const current = session.attachment === attachment;
+        attachment.finish("Client disconnected", false);
+        // Disconnecting leaves only a resumable session running for the next attach.
+        if (current && session.info.resumable !== true) this.end(sessionId, session);
       }
     };
+  }
+
+  /** Starts the session's process once; its output goes to the scrollback and the attached client. */
+  private async startProcess(sessionId: string, session: Session): Promise<void> {
+    const events: ProcessEvents = {
+      output: (data) => {
+        session.info.lastActivity = new Date().toISOString();
+        session.scrollback.write(data);
+        session.attachment?.emit({ type: "output", data: data.toString("base64"), encoding: "base64" });
+      },
+      exit: (exitCode, error) => {
+        session.info.state = "closed";
+        session.info.exitCode = exitCode;
+        if (error) session.info.error = error;
+        this.sessions.delete(sessionId);
+        const attachment = session.attachment;
+        attachment?.emit({ type: "exit", exitCode, ...(error ? { error } : {}), state: "closed" });
+        attachment?.finish(error ?? "Terminal closed", false);
+      }
+    };
+    try {
+      session.process = await this.start(session, events);
+      // The session may have been closed while its process started.
+      if (session.info.state === "closed") session.process.kill();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      events.exit(null, message);
+    }
   }
 
   private session(sessionId: string): Session {
@@ -236,7 +325,9 @@ export class LocalTerminals {
   private cleanup(): void {
     const now = Date.now();
     for (const [sessionId, session] of this.sessions) {
-      if (Date.parse(session.info.expiresAt) < now) {
+      const expired = Date.parse(session.info.expiresAt) < now;
+      const idle = !session.attachment && now - session.detachedAt > IDLE_TIMEOUT_MS;
+      if (expired || idle) {
         session.process?.kill();
         this.sessions.delete(sessionId);
       }

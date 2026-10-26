@@ -449,7 +449,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const handleRunWithOptions = React.useCallback(
     (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => {
       setLifecycleOptionsOpen(false);
-      setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy");
+      setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy", options?.nodeFilter);
       deploymentCommands.onRunWithOptions(action, options);
     },
     [setProcessing, deploymentCommands]
