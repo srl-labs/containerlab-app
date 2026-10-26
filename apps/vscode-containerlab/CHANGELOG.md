@@ -8,6 +8,7 @@
 - Fix Edgeshark capture on Podman by installing Edgeshark with the `gostwire` discovery hostname, which Podman can resolve.
 - Run containerlab through the shared lab backend: lifecycle actions, terminals, capture, and impairments use the same code as the desktop app.
 - Lab hosts: manage labs on hosts running `clab-api-server`, from any OS and without a local containerlab. Their labs show up in the explorer next to **Local**, each host as a root with its status; every action runs on the host the lab belongs to. Topologies open as `clab-api://` files; deploy, node shell, SSH, telnet, logs, Wireshark capture, images, and Edgeshark work through the API server. New settings `containerlab.connections` and `containerlab.localConnection`.
+- Lab hosts and **Local** are saved per machine: a remote window (SSH, WSL, Dev Container) has its own lab hosts instead of the ones added on the local machine.
 - A **Lab Hosts** page in the Containerlab settings adds, signs in to, edits, signs out of, and removes lab hosts, with each host's CPU, memory, and disk, and shows or hides **Local**. **Containerlab: Manage Lab Hosts** and the server button in the explorer title bar open it.
 - When containerlab cannot run on this machine, **Local** shows what is missing, with the commands that fix it, and **Check Again**.
 - The extension now activates without containerlab, Docker, or the `clab_admins` group, so lab hosts work on machines that cannot run labs.

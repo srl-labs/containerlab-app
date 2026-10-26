@@ -461,7 +461,11 @@ export class ConnectionManager implements vscode.Disposable {
     });
   }
 
-  /** Adds a lab host to the user settings, or updates the one with the same URL. */
+  /**
+   * Adds a lab host to the user settings, or updates the one with the same URL.
+   * The setting is machine-scoped, so in a remote window this writes the
+   * remote machine's settings and leaves the local list alone.
+   */
   async addConnection(
     label: string,
     url: string,

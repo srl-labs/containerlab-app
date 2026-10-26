@@ -1006,7 +1006,8 @@
           "containerlab.connections": {
             "type": "array",
             "default": [],
-            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
+            "scope": "machine",
+            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Each machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
             "items": {
               "type": "object",
               "required": [
@@ -1036,6 +1037,7 @@
           "containerlab.localConnection": {
             "type": "boolean",
             "default": true,
+            "scope": "machine",
             "description": "Show \"Local\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
           }
         }
