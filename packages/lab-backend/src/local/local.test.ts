@@ -309,3 +309,31 @@ test("the local user check reads the groups and needs no group for Podman", asyn
   const podman = await detectLocalUser({ runtime: "podman" });
   assert.equal(podman.inRuntimeGroup, true);
 });
+
+test("the workspace watcher skips folders it cannot read", async (t) => {
+  if (process.getuid?.() === 0) return t.skip("root reads every folder");
+  const root = await temporaryDirectory(t);
+  // Like containerlab's lab folder: a new folder holding a root-owned one.
+  const locked = path.join(root, "clab-lab", "node", "tls");
+  const backend = new LocalLabBackend({ workspaceRoot: root, binaryPath: "containerlab" });
+  const controller = new AbortController();
+  const events = (await backend.fs.watch(controller.signal))[Symbol.asyncIterator]();
+  const next = async (wanted: string) => {
+    while (true) {
+      const { value, done } = await events.next();
+      if (done === true) throw new Error(`events ended before ${wanted}`);
+      if (value.path === wanted) return value;
+    }
+  };
+
+  try {
+    await fs.mkdir(path.join(locked, "tls"), { recursive: true });
+    await fs.chmod(locked, 0o000);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    await fs.writeFile(path.join(root, "clab-lab", "node", "config.txt"), "1");
+    assert.equal((await next("clab-lab/node/config.txt")).action, "create");
+  } finally {
+    controller.abort();
+    await fs.chmod(locked, 0o755);
+  }
+});
