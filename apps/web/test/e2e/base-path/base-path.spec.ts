@@ -104,19 +104,24 @@ for (const mode of ["production", "development"] as const) {
         const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
         const requestPromise = page.waitForRequest((request) => request.url().includes("/reconnect"));
-        const channelPromise = page.waitForEvent("websocket", (socket) => socket.url().includes("/api/events/socket"));
+        // Listen from the socket's first frame on: the refusal can arrive, and the socket close,
+        // before the dialog has gone.
+        const refusedOn = new Promise<string>((resolve) => {
+          page.on("websocket", (socket) => {
+            if (!socket.url().includes("/api/events/socket")) return;
+            socket.on("framereceived", (frame) => {
+              if (String(frame.payload).includes('"type":"refused"')) resolve(socket.url());
+            });
+          });
+        });
         await dialog.getByRole("button", { name: "Sign in", exact: true }).click();
         const request = await requestPromise;
         expect(new URL(request.url()).pathname).toBe(`${basePath}/auth/endpoints/${savedEndpoint.id}/reconnect`);
         await expect(dialog).not.toBeVisible();
 
-        // Live events of the endpoint go over the app server's event channel below the base.
-        const channel = await channelPromise;
-        expect(new URL(channel.url()).pathname).toBe(`${basePath}/api/events/socket`);
-        // The actual app server does not know the mocked endpoint, so it refuses the stream.
-        await channel.waitForEvent("framereceived", {
-          predicate: (frame) => String(frame.payload).includes('"type":"refused"')
-        });
+        // Live events of the endpoint go over the app server's event channel below the base;
+        // the actual app server does not know the mocked endpoint, so it refuses the stream.
+        expect(new URL(await refusedOn).pathname).toBe(`${basePath}/api/events/socket`);
       });
 
       test("detached terminal entrypoint sends API requests to the app base", async ({ page }) => {
