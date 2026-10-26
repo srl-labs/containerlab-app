@@ -1,4 +1,5 @@
 import type { StandaloneBackend } from "@srl-labs/containerlab-standalone-runtime/backend";
+import { generateClosTopologyYaml, type ClosTopologyRequest } from "@containerlab/clab-ui/workspace/state";
 import type { TopologyHostCommand, TopologyRef } from "@containerlab/clab-ui/session";
 import { getSandboxBackend, SANDBOX_ENDPOINT, SANDBOX_FILES_CHANGED_EVENT, type SandboxBackend } from "./sandboxBackend";
 
@@ -69,6 +70,10 @@ export function createSandboxTransport(backend: SandboxBackend = getSandboxBacke
           const files = await Promise.all(form.getAll("files").filter((file): file is File => typeof file !== "string").map(async (file) => ({ name: file.name, content: await file.text() })));
           await backend.uploadFiles(String(form.get("path") ?? ""), files, form.get("targetKind") === "file" ? "file" : "directory");
           return json();
+        }
+        if (path === "/api/runtime/generate") {
+          const topologyYaml = generateClosTopologyYaml(body.request as ClosTopologyRequest);
+          return json({ message: "Topology generated.", topologyYaml });
         }
         if (path === "/api/runtime/topology-file/create") return json({ success: true, topologyRef: await backend.createTopologyFile(text("fileName"), typeof body.content === "string" ? body.content : undefined) });
         if (path === "/api/runtime/topology-file/delete") return json({ success: true, path: await backend.deleteTopologyFile(body.topologyRef as TopologyRef) });

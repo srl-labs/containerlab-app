@@ -15,11 +15,11 @@ Draw it or type it. The canvas and the YAML are two views of the same file, and 
 <figcaption>Every leaf connects to both spines. Scroll to zoom, drag to pan.</figcaption>
 </figure>
 
-Unlock the canvas first: select the lock in the toolbar.
+Unlock the canvas first: select the lock in the toolbar. A new, empty lab opens unlocked.
 
 ## Generate a Clos fabric
 
-**Generate Clos Topology** builds a leaf–spine fabric with `containerlab generate` and opens it. Find it on a lab host in the explorer, next to **New Topology File**.
+**Generate Clos Topology** builds a leaf–spine fabric with `containerlab generate` and opens it. Find it on a lab host in the explorer, next to **New Topology File**. The browser sandbox builds the same file itself and saves it in your browser.
 
 - **Tiers**: how many nodes, which kind and type. Every node links to every node of the next tier.
 - **Images**: one per kind, and an optional license file.
