@@ -38,6 +38,7 @@ import {
 import type { LinkSaveData } from "./LinkPersistenceIO";
 import { addLinkToDoc, editLinkInDoc, deleteLinkFromDoc } from "./LinkPersistenceIO";
 import { isRecord } from "../utilities/typeHelpers";
+import { isSpecialEndpointId } from "../utilities/LinkTypes";
 import { normalizeNodeBoxAppearance } from "../utilities/nodeBoxAppearance";
 
 // Types are available from ./NodePersistenceIO and ./LinkPersistenceIO directly
@@ -730,7 +731,16 @@ export class TopologyIO {
           if (!nodeById.has(annotation.id)) nodeById.set(annotation.id, annotation);
         }
 
-        for (const { id, position, geoCoordinates } of positions) {
+        // Only nodes that exist get a position: a move that arrives after its
+        // node was deleted adds nothing.
+        const known = positions.filter(
+          ({ id }) =>
+            topologyNodeIds.has(id) ||
+            networkNodeById.has(id) ||
+            nodeById.has(id) ||
+            isSpecialEndpointId(id)
+        );
+        for (const { id, position, geoCoordinates } of known) {
           // Check if this is a network node (exists in networkNodeAnnotations)
           const networkNode = networkNodeById.get(id);
           if (networkNode) {

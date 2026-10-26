@@ -13,6 +13,13 @@
 - The extension now activates without containerlab, Docker, or the `clab_admins` group, so lab hosts work on machines that cannot run labs.
 - **Containerlab: Open Labs Overview** (and the dashboard button in the explorer title bar) opens an editor tab with a card per lab of every lab host: a thumbnail of its topology, its state, uptime, and live CPU and memory of running labs, with open, deploy, and destroy.
 - TopoViewer can show each running node's CPU usage on the canvas (**Lab Settings → Appearance → CPU usage on nodes**, off by default). In the boxed node style the value sits inside the box, in the box's text color.
+- Faster startup and lab opening:
+  - The explorer appears without waiting for the containerlab, Docker, and share session checks, which now run in the background. Topology files are searched for while the extension starts.
+  - The explorer no longer redraws every second while labs run; interface traffic counters only update the TopoViewer.
+  - TopoViewer loads about 1.4 MB less script before it draws: the auto layout engine, the syntax highlighting of text annotations, and the geo map worker load when they are used. The topology is read while the view loads, and the code editor is preloaded only once the lab has settled.
+- Editing a topology on a lab host no longer makes nodes jump or the file blink in the explorer: saves replace the files in place instead of moving them aside first, and the TopoViewer ignores late reports of its own saves.
+- A deleted node's name is free again for the next node (deleting `srl1`–`srl3` and adding one gives `srl1`, not `srl4`).
+- Annotations of nodes that no longer exist are removed, so a node added in the YAML no longer takes over a deleted node's position.
 
 ## [0.26.0] - 2026-07-07
 

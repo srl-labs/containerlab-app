@@ -4,7 +4,8 @@
  */
 import MarkdownIt from "markdown-it";
 import { full as markdownItEmoji } from "markdown-it-emoji";
-import hljs from "highlight.js";
+// The common languages (yaml, json, bash, python, go, ...); all of them is over 1MB.
+import hljs from "highlight.js/lib/common";
 import DOMPurify from "dompurify";
 
 const ESCAPE_MAP: Record<string, string> = {

@@ -27,7 +27,8 @@ class DeploymentStateChecker {
     updateLabName?: (newLabName: string) => void
   ): Promise<DeploymentState> {
     try {
-      await inspector.update();
+      // Only the lab's own connection; a slow lab host does not hold up a local lab.
+      await inspector.updateOne(connectionOf(topoFilePath ?? ""));
       return this.resolveFromCache(labName, topoFilePath, updateLabName);
     } catch (err) {
       log.warn(`Failed to check deployment state: ${formatErrorMessage(err)}`);

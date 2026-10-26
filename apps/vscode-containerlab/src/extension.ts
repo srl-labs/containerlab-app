@@ -201,7 +201,6 @@ async function runFullStartupTasks(
 
   const welcomePage = new WelcomePage(context);
   await welcomePage.show();
-  void ins.update();
 }
 
 function stopRealtimeBackgroundWorkers(): void {
@@ -645,6 +644,8 @@ function watchRemoteWorkspaces(connections: ConnectionManager): vscode.Disposabl
     void (async () => {
       try {
         for await (const event of await backend.fs.watch(controller.signal)) {
+          // Temp and backup files of a save are dot files; they change no topology.
+          if (path.posix.basename(event.path).startsWith(".")) continue;
           if (event.kind !== "file" || /\.clab\.ya?ml$/i.test(event.path))
             scheduleRefresh(connection);
         }
@@ -800,6 +801,48 @@ async function setClabBinPath(): Promise<boolean> {
 }
 
 /**
+ * Checks containerlab, the user's groups and Docker on this machine, then
+ * starts the event stream and the share session lists. Runs after activation
+ * so the explorer does not wait for it.
+ */
+async function startLocalServices(
+  context: vscode.ExtensionContext,
+  connections: ConnectionManager,
+  options: {
+    config: vscode.WorkspaceConfiguration;
+    e2eSmokeTest: boolean;
+    hasLabServers: boolean;
+    isSupportedPlatform: boolean;
+  }
+): Promise<void> {
+  const { config, e2eSmokeTest, hasLabServers, isSupportedPlatform } = options;
+  const localReady =
+    isSupportedPlatform && (await prepareLocalContainerlab(e2eSmokeTest, hasLabServers));
+  if (!localReady && !isSupportedPlatform) {
+    setUsername(os.userInfo().username);
+  }
+  // The owner of each lab is known now; "hide non-owned labs" can apply.
+  runningLabsProvider.refreshWithoutDiscovery();
+  if (!e2eSmokeTest) {
+    // The running labs arrive through the event stream; start it right away.
+    void ins.update();
+  }
+  if (isSupportedPlatform && !e2eSmokeTest) {
+    // What is missing shows on Local's root; the version on the Lab Hosts page.
+    void checkLocalConnection(connections);
+  }
+  if (!e2eSmokeTest) {
+    // Share links of running labs; the explorer shows them once they are known.
+    void Promise.all([refreshSshxSessions(), refreshGottySessions()]).then(() =>
+      runningLabsProvider.softRefresh()
+    );
+  }
+  const dockerAvailable =
+    localReady && (await connectDockerSocket(e2eSmokeTest, hasLabServers)) === true;
+  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest, localReady);
+}
+
+/**
  * Called when VSCode activates your extension.
  */
 export async function activate(context: vscode.ExtensionContext) {
@@ -837,40 +880,9 @@ export async function activate(context: vscode.ExtensionContext) {
     return;
   }
 
-  const localReady =
-    isSupportedPlatform && (await prepareLocalContainerlab(e2eSmokeTest, hasLabServers));
-  if (!localReady && !isSupportedPlatform) {
-    setUsername(os.userInfo().username);
-  }
-  if (isSupportedPlatform && !e2eSmokeTest) {
-    // What is missing shows on Local's root; the version on the Lab Hosts page.
-    void checkLocalConnection(connections);
-  }
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "containerlab.connection.checkLocal",
-      async (options?: unknown) => {
-        const ready = await checkLocalConnection(connections);
-        await runningLabsProvider.refresh();
-        localLabsProvider.forceRefresh();
-        const quiet =
-          typeof options === "object" && options !== null && Reflect.get(options, "quiet") === true;
-        if (quiet) return;
-        if (ready) {
-          void vscode.window.showInformationMessage("containerlab is ready on this machine.");
-        } else {
-          void vscode.window.showWarningMessage(
-            `Labs on this machine: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
-          );
-        }
-      }
-    )
-  );
-  const dockerAvailable =
-    localReady && (await connectDockerSocket(e2eSmokeTest, hasLabServers)) === true;
-  await runFullStartupTasks(context, config, dockerAvailable, e2eSmokeTest, localReady);
-
-  // Explorer data providers (backing model for React explorer)
+  // The explorer and the commands come first. VS Code resolves the explorer
+  // view only once activate() returns, so containerlab, the user's groups and
+  // Docker are checked in the background below instead of before it.
   setExtensionContext(context);
   setFavoriteLabs(new Set(context.globalState.get<string[]>("favoriteLabs", [])));
 
@@ -879,6 +891,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const newHelpProvider = new HelpFeedbackProvider();
   setLocalLabsProvider(newLocalProvider);
   setRunningLabsProvider(newRunningProvider);
+  // Find the topology files while the rest starts up.
+  newLocalProvider.prefetch();
 
   // Webview views are resolved lazily, so we keep a hidden tree view badge proxy
   // to show running lab count on the activity icon before the explorer is opened.
@@ -916,12 +930,6 @@ export async function activate(context: vscode.ExtensionContext) {
   if (!e2eSmokeTest) {
     void updateActivityBadgeProxy();
   }
-
-  if (!e2eSmokeTest) {
-    await refreshSshxSessions();
-    await refreshGottySessions();
-  }
-  // Docker images are refreshed on TopoViewer open to avoid unnecessary calls
 
   // Determine if local capture is allowed.
   const isLocalCaptureAllowed = vscode.env.remoteName !== "ssh-remote" && !utils.isOrbstack();
@@ -977,6 +985,40 @@ export async function activate(context: vscode.ExtensionContext) {
   // Register commands
   registerCommands(context);
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(onDidChangeConfiguration));
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "containerlab.connection.checkLocal",
+      async (options?: unknown) => {
+        const ready = await checkLocalConnection(connections);
+        await runningLabsProvider.refresh();
+        localLabsProvider.forceRefresh();
+        const quiet =
+          typeof options === "object" && options !== null && Reflect.get(options, "quiet") === true;
+        if (quiet) return;
+        if (ready) {
+          void vscode.window.showInformationMessage("containerlab is ready on this machine.");
+        } else {
+          void vscode.window.showWarningMessage(
+            `Labs on this machine: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
+          );
+        }
+      }
+    )
+  );
+
+  const localStartup = startLocalServices(context, connections, {
+    config,
+    e2eSmokeTest,
+    hasLabServers,
+    isSupportedPlatform
+  }).catch((err: unknown) => {
+    outputChannel.error(`Startup failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
+  // The E2E smoke tests drive the extension right after activation.
+  if (e2eSmokeTest) {
+    await localStartup;
+  }
 
   // Expose a stable API surface for other extensions to access providers safely.
   return {

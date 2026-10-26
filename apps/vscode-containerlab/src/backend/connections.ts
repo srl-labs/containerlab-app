@@ -88,6 +88,11 @@ export class ConnectionManager implements vscode.Disposable {
   readonly onDidChange = this.changeEmitter.event;
   private readonly backends = new Map<string, ApiLabBackend>();
   private readonly topologies = new Map<string, { at: number; entries: TopologyEntry[] }>();
+  /** Topology lists being fetched; callers at the same time share the request. */
+  private readonly topologyRequests = new Map<
+    string,
+    { backend: ApiLabBackend; request: Promise<TopologyEntry[]> }
+  >();
   /** Why a connection does not answer: an unreachable host, or what Local is missing. */
   private readonly problems = new Map<string, string>();
   /** What the last check of this machine found. */
@@ -395,17 +400,28 @@ export class ConnectionManager implements vscode.Disposable {
     if (cached && Date.now() - cached.at < maxAgeMs) return cached.entries;
     // A host that does not answer is asked again by `retry`, not on every refresh.
     if (this.problems.has(connection.id)) return cached?.entries ?? [];
-    let entries: TopologyEntry[];
-    try {
-      entries = await backend.listTopologies();
-    } catch (error) {
-      if (errorStatus(error) === undefined && this.backends.get(connection.id) === backend) {
-        this.setProblem(connection, error instanceof Error ? error.message : String(error));
+    const pending = this.topologyRequests.get(connection.id);
+    if (pending?.backend === backend) return pending.request;
+    const request = backend.listTopologies().then(
+      (entries) => {
+        this.topologies.set(connection.id, { at: Date.now(), entries });
+        return entries;
+      },
+      (error: unknown) => {
+        if (errorStatus(error) === undefined && this.backends.get(connection.id) === backend) {
+          this.setProblem(connection, error instanceof Error ? error.message : String(error));
+        }
+        throw error;
       }
-      throw error;
-    }
-    this.topologies.set(connection.id, { at: Date.now(), entries });
-    return entries;
+    );
+    const settle = () => {
+      if (this.topologyRequests.get(connection.id)?.request === request) {
+        this.topologyRequests.delete(connection.id);
+      }
+    };
+    request.then(settle, settle);
+    this.topologyRequests.set(connection.id, { backend, request });
+    return request;
   }
 
   /** The cached topologies, without asking the server. */

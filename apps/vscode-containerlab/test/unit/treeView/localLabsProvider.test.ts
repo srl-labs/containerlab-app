@@ -229,4 +229,44 @@ describe("LocalLabTreeDataProvider", () => {
     expect(labs).to.have.lengthOf(1);
     expect(labs![0].label).to.equal("lab1.clab.yml");
   });
+
+  it("starts the file scan on prefetch and reuses it for the first listing", async () => {
+    const findFiles = sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([vscodeStub.Uri.file("/workspace/root.clab.yml")]);
+
+    const provider = new LocalLabTreeDataProvider();
+    provider.prefetch();
+    expect(findFiles.calledOnce).to.be.true;
+
+    const nodes = await provider.getChildren(undefined);
+    expect(nodes!.map((node) => node.label)).to.deep.equal(["root.clab.yml"]);
+    expect(findFiles.calledOnce).to.be.true;
+  });
+
+  it("resolves each lab path once until files change", async () => {
+    const onDidCreate = sinon.stub();
+    sinon.stub(vscodeStub.workspace, "createFileSystemWatcher").returns({
+      ...fileWatcherStub,
+      onDidCreate
+    });
+    sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([
+        vscodeStub.Uri.file("/workspace/a/lab1.clab.yml"),
+        vscodeStub.Uri.file("/workspace/b/lab2.clab.yml")
+      ]);
+    const realpathSync = sinon.stub(require("fs"), "realpathSync").callsFake((p: unknown) => p);
+    sinon.stub(require("fs"), "existsSync").returns(true);
+
+    const provider = new LocalLabTreeDataProvider();
+    const roots = (await provider.getChildren(undefined))!;
+    for (const folder of roots) await provider.getChildren(folder);
+    await provider.getChildren(undefined);
+    expect(realpathSync.callCount).to.equal(2);
+
+    onDidCreate.firstCall.args[0](vscodeStub.Uri.file("/workspace/c/lab3.clab.yml"));
+    await provider.getChildren(undefined);
+    expect(realpathSync.callCount).to.equal(5);
+  });
 });

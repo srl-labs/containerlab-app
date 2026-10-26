@@ -52,6 +52,9 @@ interface LabDiscoveryResult {
 
 type ContainerListEntry = c.ClabContainerTreeNode | c.ClabContainerGroupTreeNode;
 
+/** How often a share container without a known link may list the share sessions. */
+const SESSION_LIST_INTERVAL_MS = 15_000;
+
 interface ContainerMergeState {
   orderedEntries: ContainerListEntry[];
   containersToRefresh: Set<c.ClabContainerTreeNode>;
@@ -133,6 +136,8 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
   private treeFilter: string = "";
   private labNodeCache: Map<string, c.ClabLabTreeNode> = new Map();
   private labsSnapshot: Record<string, c.ClabLabTreeNode> | undefined;
+  private lastSshxListAt = 0;
+  private lastGottyListAt = 0;
 
   private context: vscode.ExtensionContext;
 
@@ -161,9 +166,16 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
   // a soft refresh will check for changes and only update if needed
   async softRefresh(element?: c.ClabLabTreeNode | c.ClabContainerTreeNode) {
     if (!element) {
-      // Discover labs without clearing caches first
+      // Discover labs without clearing caches first. Traffic counters change
+      // every second and the views do not show them; only other changes redraw.
       const discovery = await this.discoverLabs();
-      this.emitRefreshEvents(discovery);
+      if (
+        discovery.rootChanged ||
+        discovery.labsToRefresh.size > 0 ||
+        discovery.containersToRefresh.size > 0
+      ) {
+        this.emitRefreshEvents(discovery);
+      }
 
       // Always refresh the topology viewer to catch interface state changes
       await this.refreshTopoViewerIfOpen();
@@ -906,9 +918,9 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
       changed = true;
     }
 
+    // Traffic counters feed the TopoViewer, not the tree: no redraw for them.
     if (!this.areObjectValuesEqual(target.stats, source.stats)) {
       target.stats = source.stats ? { ...source.stats } : undefined;
-      changed = true;
     }
 
     if (!this.areObjectValuesEqual(target.netemState, source.netemState)) {
@@ -1215,53 +1227,66 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
     return undefined;
   }
 
+  /**
+   * Lists share sessions when a lab has a share container without a known
+   * link. Each list runs containerlab; a container whose link never shows
+   * up would run it on every refresh, so each list runs at most every
+   * SESSION_LIST_INTERVAL_MS.
+   */
   private async refreshSessionLists(allContainers: c.ClabJSON[]) {
+    const now = Date.now();
     const sshxLabs = new Set(
       allContainers.filter((container) => container.name.includes("sshx")).map((c) => c.lab_name)
     );
     const missingSessions = Array.from(sshxLabs).filter((lab) => !sshxSessions.has(lab));
-    if (missingSessions.length > 0) await refreshSshxSessions();
+    const refreshes: Promise<void>[] = [];
+    if (missingSessions.length > 0 && now - this.lastSshxListAt >= SESSION_LIST_INTERVAL_MS) {
+      this.lastSshxListAt = now;
+      refreshes.push(refreshSshxSessions());
+    }
 
     const gottyLabs = new Set(
       allContainers.filter((container) => container.name.includes("gotty")).map((c) => c.lab_name)
     );
     const missingGottySessions = Array.from(gottyLabs).filter((lab) => !gottySessions.has(lab));
-    if (missingGottySessions.length > 0) await refreshGottySessions();
+    if (missingGottySessions.length > 0 && now - this.lastGottyListAt >= SESSION_LIST_INTERVAL_MS) {
+      this.lastGottyListAt = now;
+      refreshes.push(refreshGottySessions());
+    }
+    await Promise.all(refreshes);
   }
 
   private buildLabsFromContainers(allContainers: c.ClabJSON[]): Record<string, c.ClabLabTreeNode> {
-    const labs: Record<string, c.ClabLabTreeNode> = {};
-    allContainers.forEach((container: c.ClabJSON) => {
+    // The containers of each lab, in one pass over all of them.
+    const containersByLab = new Map<string, { normPath: string; containers: c.ClabJSON[] }>();
+    for (const container of allContainers) {
       const connectionId = container.connectionId ?? LOCAL_CONNECTION.id;
       const normPath = container.absLabPath ?? utils.normalizeLabPath(container.labPath);
       // Lab hosts can have labs at the same paths as this machine.
       const key = connectionId === LOCAL_CONNECTION.id ? normPath : `${connectionId}|${normPath}`;
-      if (!(key in labs)) {
-        const sameConnection = allContainers.filter(
-          (entry) => (entry.connectionId ?? LOCAL_CONNECTION.id) === connectionId
-        );
-        labs[key] = c.onConnection(
-          this.createLabNode(container, sameConnection, normPath),
-          connectionId
-        );
+      const entry = containersByLab.get(key);
+      if (entry) {
+        entry.containers.push(container);
+      } else {
+        containersByLab.set(key, { normPath, containers: [container] });
       }
-    });
+    }
+    const labs: Record<string, c.ClabLabTreeNode> = {};
+    for (const [key, { normPath, containers }] of containersByLab) {
+      const connectionId = containers[0].connectionId ?? LOCAL_CONNECTION.id;
+      labs[key] = c.onConnection(this.createLabNode(containers, normPath), connectionId);
+    }
     return labs;
   }
 
-  private createLabNode(
-    container: c.ClabJSON,
-    allContainers: c.ClabJSON[],
-    normPath: string
-  ): c.ClabLabTreeNode {
+  /** A lab node from the lab's containers; the first one names the lab. */
+  private createLabNode(containersForThisLab: c.ClabJSON[], normPath: string): c.ClabLabTreeNode {
+    const container = containersForThisLab[0];
     const label = `${container.lab_name} (${container.owner})`;
     const labPathObj: c.LabPath = {
       absolute: normPath,
       relative: utils.getRelativeFolderPath(normPath)
     };
-    const containersForThisLab = allContainers.filter(
-      (c: c.ClabJSON) => (c.absLabPath ?? utils.normalizeLabPath(c.labPath)) === normPath
-    );
     const discoveredContainers = this.discoverContainers(
       containersForThisLab,
       labPathObj.absolute,
@@ -1364,15 +1389,20 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
     if (byConnection.size === 0) {
       return undefined;
     }
+    // Lab paths map to workspace files through each host's topology list;
+    // the hosts are asked at the same time.
+    await Promise.all(
+      Array.from(byConnection.keys()).map(async (connectionId) => {
+        const connection = connectionById(connectionId);
+        if (connection?.kind === "api") {
+          await getConnections()
+            ?.remoteTopologies(connection)
+            .catch(() => []);
+        }
+      })
+    );
     const containers: c.ClabJSON[] = [];
     for (const [connectionId, labs] of byConnection) {
-      const connection = connectionById(connectionId);
-      if (connection?.kind === "api") {
-        // Lab paths map to workspace files through the host's topology list.
-        await getConnections()
-          ?.remoteTopologies(connection)
-          .catch(() => []);
-      }
       for (const entries of Object.values(this.convertDetailedToSimpleFormat(labs, connectionId))) {
         containers.push(...entries);
       }

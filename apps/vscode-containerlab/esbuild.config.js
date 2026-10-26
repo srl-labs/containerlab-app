@@ -173,6 +173,7 @@ async function copyMapLibreWorker() {
     entryPoints: [srcPath],
     outfile: destPath,
     bundle: true,
+    minify: !process.argv.includes("--dev"),
     format: "esm",
     platform: "browser",
     target: "es2022"
@@ -204,6 +205,10 @@ async function buildCss() {
     /url\(("|')?\.\.\/base\/browser\/ui\/codicons\/codicon\/codicon\.ttf(")?\)/g,
     "url(webfonts/codicon.ttf)"
   );
+
+  if (!process.argv.includes("--dev")) {
+    css = (await esbuild.transform(css, { loader: "css", minify: true })).code;
+  }
 
   await fs.promises.writeFile(cssPath, css);
 }
