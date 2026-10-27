@@ -16,8 +16,8 @@ import type {
   InspectContainerInfo,
   LabBackend
 } from "@srl-labs/containerlab-lab-backend";
+import { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
 
-import { getLocalBackend } from "../backend/labBackends";
 import { outputChannel } from "../globals";
 import type { ClabDetailedJSON } from "../treeView/common";
 import type { ClabInterfaceSnapshot } from "../types/containerlab";
@@ -289,14 +289,15 @@ export class LabPoller {
   }
 
   /**
-   * Fetch lab data: containerlab's detailed inspect on this machine, the
-   * backend's inspect records otherwise.
+   * Fetch lab data: containerlab's detailed inspect for labs that containerlab
+   * on this machine runs (here or on a Kubernetes cluster), the backend's
+   * inspect records on a lab server.
    */
   private async fetchInspectData(): Promise<Record<string, ClabDetailedJSON[]> | undefined> {
     try {
       const backend = this.backend();
-      if (backend.kind === "local") {
-        return parseInspectData(await getLocalBackend().inspectDetails());
+      if (backend instanceof LocalLabBackend) {
+        return parseInspectData(await backend.inspectDetails());
       }
       return toDetailedLabs(await backend.inspectAll());
     } catch (err) {
@@ -363,18 +364,23 @@ export class LabPoller {
   }
 
   /**
-   * Interface data for a container with `containerlab inspect interfaces`.
-   * Only labs on this machine can be inspected this way.
+   * Interface data for a container with `containerlab inspect interfaces`, from
+   * the connection's own backend: this machine or a Kubernetes cluster that
+   * containerlab on this machine runs labs on. Lab servers are not asked.
    */
   private async fetchInterfaces(
     labPath: string,
     containerName: string
   ): Promise<ClabInspectInterfaceJSON[]> {
-    if (this.backend().kind !== "local") {
+    const backend = this.backend();
+    if (!(backend instanceof LocalLabBackend)) {
       return [];
     }
     try {
-      const parsed = await getLocalBackend().inspectInterfaces(labPath, containerName);
+      if (!(await backend.features()).interfaceInspect) {
+        return [];
+      }
+      const parsed = await backend.inspectInterfaces(labPath, containerName);
       return parsed.filter((entry) => isClabInspectInterfaceJSON(entry));
     } catch (err) {
       console.error(

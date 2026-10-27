@@ -11,6 +11,8 @@ import type {
   TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 
+import { describeLabHost } from "@srl-labs/containerlab-lab-backend";
+
 import { resolveLab } from "../../../backend/labBackends";
 import { runWithProgress } from "../../../commands/command";
 
@@ -34,7 +36,8 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "exec" ||
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
-    value === "inspectDetails"
+    value === "inspectDetails" ||
+    value === "hostInfo"
   );
 }
 
@@ -78,6 +81,8 @@ class LabOperationsService {
       }
       case "inspectDetails":
         return backend.inspectLabDetails(target);
+      case "hostInfo":
+        return describeLabHost(backend);
     }
   }
 

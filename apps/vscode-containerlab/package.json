@@ -1007,31 +1007,114 @@
             "type": "array",
             "default": [],
             "scope": "machine",
-            "markdownDescription": "Lab hosts to work with, Linux machines that run clab-api-server, each with a `url` (for example `https://lab-host:8090`), a `label`, and optionally a `username` and a `sessionDuration` such as `24h`. Their labs show next to the labs on this machine. Each machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.",
+            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes cluster (c9s)**: `\"kind\": \"local\", \"runtime\": \"c9s\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, `exposeType`, `persistence` and `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL).\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
             "items": {
               "type": "object",
-              "required": [
-                "url"
-              ],
-              "properties": {
-                "label": {
-                  "type": "string",
-                  "description": "Name shown in the Containerlab views."
+              "anyOf": [
+                {
+                  "type": "object",
+                  "title": "clab-api-server",
+                  "markdownDescription": "A Linux machine that runs clab-api-server. Sign in on [Manage Lab Hosts](command:containerlab.connection.manage); the token goes to VS Code's secret storage, never here.",
+                  "required": [
+                    "url"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views."
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "URL of clab-api-server on the lab host."
+                    },
+                    "username": {
+                      "type": "string",
+                      "description": "Linux user to sign in with."
+                    },
+                    "sessionDuration": {
+                      "type": "string",
+                      "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                    }
+                  },
+                  "additionalProperties": false
                 },
-                "url": {
-                  "type": "string",
-                  "description": "URL of clab-api-server on the lab host."
-                },
-                "username": {
-                  "type": "string",
-                  "description": "Linux user to sign in with."
-                },
-                "sessionDuration": {
-                  "type": "string",
-                  "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                {
+                  "type": "object",
+                  "title": "Kubernetes cluster (c9s)",
+                  "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with `-r c9s`, so this machine needs Linux (or WSL) and containerlab, not Docker.",
+                  "required": [
+                    "kind",
+                    "runtime",
+                    "kubeContext"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "local"
+                      ],
+                      "markdownDescription": "`local`: containerlab on this machine runs the labs."
+                    },
+                    "runtime": {
+                      "type": "string",
+                      "enum": [
+                        "c9s"
+                      ],
+                      "markdownDescription": "`c9s`: the labs run on a Kubernetes cluster with clabernetes."
+                    },
+                    "kubeContext": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig context of the cluster."
+                    },
+                    "kubeconfig": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig file that has `kubeContext`, for example `~/.kube/lab-prod.yaml`. When unset, the context is looked up in `KUBECONFIG` of the VS Code process, else in `~/.kube/config`."
+                    },
+                    "namespace": {
+                      "type": "string",
+                      "markdownDescription": "The namespace of every lab, if you may only use one. When unset, each lab gets its own namespace, `c9s-<lab>`, which needs the right to create namespaces."
+                    },
+                    "exposeType": {
+                      "type": "string",
+                      "enum": [
+                        "ClusterIP",
+                        "Headless",
+                        "LoadBalancer",
+                        "None"
+                      ],
+                      "markdownDescription": "How node ports are exposed by default (`--expose-type`). containerlab's default when unset."
+                    },
+                    "persistence": {
+                      "type": "boolean",
+                      "markdownDescription": "`false` turns persistent node volumes off by default (`--no-persistence`)."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views. \"Cluster <context> (c9s)\" when unset."
+                    }
+                  },
+                  "additionalProperties": false
                 }
-              },
-              "additionalProperties": false
+              ],
+              "defaultSnippets": [
+                {
+                  "label": "clab-api-server",
+                  "description": "A lab host that runs clab-api-server",
+                  "body": {
+                    "label": "$1",
+                    "url": "https://$2:8090"
+                  }
+                },
+                {
+                  "label": "Kubernetes cluster (c9s)",
+                  "description": "A cluster with clabernetes, reached through a kubeconfig context",
+                  "body": {
+                    "kind": "local",
+                    "runtime": "c9s",
+                    "kubeContext": "$1"
+                  }
+                }
+              ]
             }
           },
           "containerlab.localConnection": {
@@ -1320,7 +1403,8 @@
     "chokidar": "catalog:",
     "ovsx": "catalog:",
     "ws": "catalog:",
-    "@types/ws": "catalog:"
+    "@types/ws": "catalog:",
+    "@srl-labs/containerlab-app-contract": "workspace:*"
   },
   "private": true,
   "bugs": {

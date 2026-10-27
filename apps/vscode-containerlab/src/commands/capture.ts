@@ -25,6 +25,7 @@ import {
   DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY,
   WIRESHARK_VNC_CTR_NAME_PREFIX
 } from "../utils/consts";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 export { getHostname, setSessionHostname };
 
@@ -306,6 +307,7 @@ export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]
 ) {
+  if (!(await ensureHostSupports(connectionOf(node), "edgeshark", "Edgeshark capture"))) return;
   if (isRemoteNode(node)) {
     return captureRemote(node, allSelectedNodes, "packetflix");
   }
@@ -483,6 +485,8 @@ export async function captureEdgesharkVNC(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[]
 ) {
+  if (!(await ensureHostSupports(connectionOf(node), "wiresharkVnc", "Wireshark VNC capture")))
+    return;
   // Handle settings
   const wsConfig = vscode.workspace.getConfiguration("containerlab");
   const dockerImage = wsConfig.get<string>(

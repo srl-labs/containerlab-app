@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { backendFor, connectionOf, pickConnection } from "../backend/labBackends";
+import { ensureHostSupports } from "../backend/labHostSupport";
 import type { LabConnection } from "../backend/connections";
 
 import { execCommandInTerminal } from "./command";
@@ -59,9 +60,7 @@ async function manageRemoteEdgeshark(
       : `Removing Edgeshark from ${connection.label}`;
   try {
     const backend = backendFor(connection);
-    if (!backend.capabilities.edgesharkManagement) {
-      throw new Error(`${connection.label} does not manage Edgeshark.`);
-    }
+    if (!(await ensureHostSupports(connection, "edgesharkManagement", "Edgeshark"))) return;
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title },
       () => (action === "install" ? backend.edgesharkInstall() : backend.edgesharkUninstall())

@@ -1,4 +1,9 @@
+import * as os from "os";
+import * as path from "path";
+
 import * as vscode from "vscode";
+
+import { listKubeContexts, type KubeContextInfo } from "@srl-labs/containerlab-lab-backend/local";
 
 import { connectionOf, getConnections, remoteUri } from "../backend/labBackends";
 import type { ConnectionManager, LabConnection } from "../backend/connections";
@@ -34,11 +39,141 @@ function revealExplorer(): void {
 /**
  * Asks for a lab host and signs in to it: URL, name, user and password,
  * one step at a time. The host is saved even when the sign-in fails, so
- * the user can sign in again later.
+ * the user can sign in again later. Where containerlab runs, a Kubernetes
+ * cluster can be added instead.
  */
 export async function addConnection(): Promise<LabConnection | undefined> {
   const connections = manager();
   if (!connections) return undefined;
+  // containerlab on this machine runs a cluster's labs; it only runs on Linux.
+  if (!connections.localAvailable) return addApiConnection(connections);
+  const kind = await vscode.window.showQuickPick(
+    [
+      {
+        label: "$(cloud) clab-api-server",
+        description: "Sign in to a lab host",
+        value: "api" as const
+      },
+      {
+        label: "$(server-environment) Kubernetes cluster (c9s)",
+        description: "Run labs with clabernetes, from this machine",
+        value: "c9s" as const
+      }
+    ],
+    { title: "Add Lab Host", placeHolder: "Where do the labs run?" }
+  );
+  if (kind === undefined) return undefined;
+  if (kind.value === "c9s") return addClusterConnection(connections);
+  return addApiConnection(connections);
+}
+
+type ContextPick = vscode.QuickPickItem & { context?: KubeContextInfo; chooseFile?: true };
+
+function contextItems(contexts: KubeContextInfo[]): ContextPick[] {
+  return contexts.map((context) => ({
+    label: context.name,
+    description: context.current ? "current context" : context.cluster,
+    ...(context.namespace ? { detail: `Namespace ${context.namespace}` } : {}),
+    context
+  }));
+}
+
+/**
+ * The cluster's kubeconfig context: one of the default kubeconfig
+ * (`KUBECONFIG`, else `~/.kube/config`), or one of a file the user picks,
+ * which the lab host then keeps. Undefined when the user cancels.
+ */
+async function pickKubeContext(
+  title: string
+): Promise<{ context: KubeContextInfo; kubeconfig?: string } | undefined> {
+  const defaults = listKubeContexts();
+  const picked = await vscode.window.showQuickPick<ContextPick>(
+    [
+      ...contextItems(defaults),
+      ...(defaults.length > 0
+        ? [{ label: "", kind: vscode.QuickPickItemKind.Separator } as ContextPick]
+        : []),
+      {
+        label: "$(folder-opened) Choose kubeconfig file…",
+        description:
+          defaults.length > 0
+            ? "A context from another file"
+            : "No context in KUBECONFIG or ~/.kube/config",
+        chooseFile: true
+      }
+    ],
+    { title, placeHolder: "kubeconfig context of the cluster", ignoreFocusOut: true }
+  );
+  if (picked === undefined) return undefined;
+  if (picked.context) return { context: picked.context };
+  const files = await vscode.window.showOpenDialog({
+    title: "kubeconfig file of the cluster",
+    openLabel: "Use kubeconfig",
+    canSelectFiles: true,
+    canSelectFolders: false,
+    canSelectMany: false,
+    defaultUri: vscode.Uri.file(path.join(os.homedir(), ".kube"))
+  });
+  const kubeconfig = files?.[0]?.fsPath;
+  if (kubeconfig === undefined) return undefined;
+  const contexts = listKubeContexts({ kubeconfig });
+  if (contexts.length === 0) {
+    void vscode.window.showErrorMessage(
+      `${kubeconfig} has no kubeconfig context, or it does not load.`
+    );
+    return undefined;
+  }
+  const inFile =
+    contexts.length === 1
+      ? contextItems(contexts)[0]
+      : await vscode.window.showQuickPick(contextItems(contexts), {
+          title,
+          placeHolder: `Context in ${path.basename(kubeconfig)}`,
+          ignoreFocusOut: true
+        });
+  return inFile?.context ? { context: inFile.context, kubeconfig } : undefined;
+}
+
+/**
+ * Asks for a kubeconfig context and, optionally, the one namespace the user
+ * may use, and adds the cluster as a lab host. containerlab on this machine
+ * runs its labs with `-r c9s`.
+ */
+async function addClusterConnection(
+  connections: ConnectionManager
+): Promise<LabConnection | undefined> {
+  const title = "Add Kubernetes Cluster";
+  const picked = await pickKubeContext(`${title} (1/2)`);
+  if (picked === undefined) return undefined;
+  const namespace = await vscode.window.showInputBox({
+    title: `${title} (2/2)`,
+    prompt:
+      "Namespace for every lab, if you may only use one. Leave empty for a namespace per lab (c9s-<lab>).",
+    value: "",
+    ignoreFocusOut: true,
+    validateInput: (value) =>
+      value.trim() === "" || /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/.test(value.trim())
+        ? undefined
+        : "Enter a Kubernetes namespace name."
+  });
+  if (namespace === undefined) return undefined;
+  try {
+    const connection = await connections.addClusterConnection({
+      kubeContext: picked.context.name,
+      ...(picked.kubeconfig !== undefined ? { kubeconfig: picked.kubeconfig } : {}),
+      namespace: namespace.trim()
+    });
+    revealExplorer();
+    return connection;
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Adding the cluster failed: ${messageOf(error)}`);
+    return undefined;
+  }
+}
+
+async function addApiConnection(
+  connections: ConnectionManager
+): Promise<LabConnection | undefined> {
   const title = "Add Lab Host";
   const url = await vscode.window.showInputBox({
     title: `${title} (1/4)`,

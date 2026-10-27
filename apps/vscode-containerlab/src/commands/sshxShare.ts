@@ -2,8 +2,9 @@ import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
 import { outputChannel, sshxSessions, runningLabsProvider } from "../globals";
-import { backendOf } from "../backend/labBackends";
+import { backendOf, connectionOf } from "../backend/labBackends";
 import { refreshSshxSessions, refreshRunningLabsProvider } from "../services/sessionRefresh";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 /** Whether to also create a read-only link; undefined when cancelled. */
 async function askForReaders(node: ClabLabTreeNode): Promise<boolean | undefined> {
@@ -34,6 +35,7 @@ async function sshxStart(action: "attach" | "reattach", node: ClabLabTreeNode) {
     vscode.window.showErrorMessage(`No lab selected for SSHX ${action}.`);
     return;
   }
+  if (!(await ensureHostSupports(connectionOf(node), "shareTools", "SSHX"))) return;
   const enableReaders = await askForReaders(node);
   if (enableReaders === undefined) return;
   try {

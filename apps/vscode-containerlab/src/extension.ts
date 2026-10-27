@@ -6,6 +6,7 @@ import Docker from "dockerode";
 import { detectLocalEnvironment, findBinary } from "@srl-labs/containerlab-lab-backend/local";
 
 import {
+  clusterBackendOptions,
   connectionOf,
   disposeLabBackends,
   getConnections,
@@ -16,6 +17,7 @@ import {
   remoteUri
 } from "./backend/labBackends";
 import {
+  isClusterConnection,
   LOCAL_CONNECTION,
   type ConnectionManager,
   type LabConnection
@@ -345,6 +347,30 @@ async function checkLocalConnection(connections: ConnectionManager): Promise<boo
     ...(environment.username !== undefined ? { username: environment.username } : {})
   });
   return environment.available;
+}
+
+/**
+ * Whether containerlab reaches each Kubernetes cluster lab host: the context,
+ * clabernetes and the user's rights. What is missing shows on the cluster's root.
+ */
+async function checkClusterConnections(connections: ConnectionManager): Promise<void> {
+  await Promise.all(
+    connections
+      .list()
+      .filter(isClusterConnection)
+      .map(async (connection) => {
+        const environment = await detectLocalEnvironment(clusterBackendOptions(connection)).catch(
+          (err: unknown) => ({
+            available: false,
+            problems: [err instanceof Error ? err.message : String(err)]
+          })
+        );
+        connections.setProblem(
+          connection,
+          environment.available ? undefined : environment.problems.join(" ")
+        );
+      })
+  );
 }
 
 // Session refresh functions are available from ./services/sessionRefresh directly
@@ -832,6 +858,15 @@ async function startLocalServices(
     void checkLocalConnection(connections);
   }
   if (!e2eSmokeTest) {
+    void checkClusterConnections(connections);
+    // Clusters added or changed in the settings are checked again.
+    context.subscriptions.push(
+      connections.onDidChange((connection) => {
+        if (connection === undefined) void checkClusterConnections(connections);
+      })
+    );
+  }
+  if (!e2eSmokeTest) {
     // Share links of running labs; the explorer shows them once they are known.
     void Promise.all([refreshSshxSessions(), refreshGottySessions()]).then(() =>
       runningLabsProvider.softRefresh()
@@ -859,8 +894,11 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration("containerlab");
   const isSupportedPlatform = process.platform === "linux" || vscode.env.remoteName === "wsl";
 
-  // Lab hosts work from any platform; labs on this machine need Linux or WSL.
+  // clab-api-server lab hosts work from any platform. Labs on this machine and
+  // on Kubernetes clusters need containerlab here, which runs on Linux (or WSL) only.
   const connections = initConnections(context, { localSupported: isSupportedPlatform });
+  const ignoredClusters = connections.ignoredClusters();
+  if (ignoredClusters !== undefined) outputChannel.warn(ignoredClusters);
   context.subscriptions.push(connections, RemoteLabFileSystem.register(connections));
   await connections.restoreAll();
   registerConnectionCommands(context);
@@ -990,7 +1028,10 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "containerlab.connection.checkLocal",
       async (options?: unknown) => {
-        const ready = await checkLocalConnection(connections);
+        const [ready] = await Promise.all([
+          checkLocalConnection(connections),
+          checkClusterConnections(connections)
+        ]);
         await runningLabsProvider.refresh();
         localLabsProvider.forceRefresh();
         const quiet =
