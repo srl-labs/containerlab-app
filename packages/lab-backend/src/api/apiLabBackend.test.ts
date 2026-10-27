@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import undici, { Response } from "undici";
 
 import { ApiLabBackend } from "./apiLabBackend.ts";
@@ -276,4 +280,44 @@ test("lab stats need a server that lists node-stats", async (t) => {
     older.streamLabStats("demo", { signal: new AbortController().signal }),
     (error: Error & { status?: number }) => error.status === 501
   );
+});
+
+test("an events stream that is read later survives garbage collection", async (t) => {
+  // undici cancels the body of a garbage-collected Response while nothing reads it. The
+  // contract suite opens the events stream, deploys for half a minute and reads it after.
+  setFlagsFromString("--expose-gc");
+  const gc = runInNewContext("gc") as () => void;
+  let stream: http.ServerResponse | undefined;
+  let clientLeft = false;
+  const server = http.createServer((request, response) => {
+    if (request.url === "/health") {
+      response.end(JSON.stringify({ status: "healthy" }));
+      return;
+    }
+    stream = response;
+    response.writeHead(200, { "Content-Type": "application/x-ndjson" });
+    response.write("\n");
+    request.on("close", () => {
+      clientLeft = true;
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const abort = new AbortController();
+  t.after(() => {
+    abort.abort();
+    server.closeAllConnections();
+    server.close();
+  });
+  const { port } = server.address() as AddressInfo;
+  const backend = new ApiLabBackend({ baseUrl: `http://127.0.0.1:${port}`, token: "token" });
+
+  const events = await backend.events({ initialState: true }, abort.signal);
+  for (let round = 0; round < 5; round += 1) {
+    gc();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(clientLeft, false, "the events request is still open");
+  stream?.write(`${JSON.stringify({ type: "container", action: "start", actor_name: "lab-n1" })}\n`);
+  const first = await events[Symbol.asyncIterator]().next();
+  assert.deepEqual(first, { done: false, value: { type: "container", action: "start", actor_name: "lab-n1" } });
 });
