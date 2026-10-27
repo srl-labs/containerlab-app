@@ -1,11 +1,17 @@
 export { LocalLabBackend, parseRepositoryUrl } from "./localLabBackend.ts";
 export {
   DEFAULT_WIRESHARK_IMAGE,
+  expandKubeconfigPath,
+  parseLabRuntime,
   resolveLocalOptions,
+  type C9sHostOptions,
   type LocalLabBackendOptions,
   type ResolvedLocalOptions
 } from "./options.ts";
+export { listKubeContexts, type KubeContextInfo } from "./kube/kubeConfig.ts";
 export {
+  CONTAINERLAB_LINUX_ONLY,
+  containerlabPlatformProblem,
   defaultLocalWorkspaceRoot,
   detectLocalEnvironment,
   detectLocalUser,

@@ -1,5 +1,7 @@
 import { isRecord } from "../core/utilities/typeHelpers";
 
+import { parseLabHostInfo, type LabHostInfo } from "./labHostSupport";
+
 /**
  * Lab operations beyond the lifecycle that a lab host may lack, such as an
  * older clab-api-server or containerlab. Hosts hide what is false.
@@ -103,6 +105,8 @@ export interface ClabUiLabOperationsHost {
   saveSnapshots(request: LabSnapshotSaveRequest): Promise<LabSnapshotSaveResult>;
   saveConfigs(request: LabSaveConfigsRequest): Promise<LabSaveConfigsResult>;
   inspectDetails(): Promise<LabInspectDetailsResult>;
+  /** The runtime of the lab's host and what it offers; undefined when the host tells nothing. */
+  hostInfo(): Promise<LabHostInfo | undefined>;
 }
 
 export type LabOperationName = keyof ClabUiLabOperationsHost;
@@ -309,7 +313,8 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   exec: 10 * 60_000,
   saveSnapshots: 60 * 60_000,
   saveConfigs: 15 * 60_000,
-  inspectDetails: 2 * 60_000
+  inspectDetails: 2 * 60_000,
+  hostInfo: 30_000
 };
 
 interface PendingLabOperation {
@@ -377,6 +382,7 @@ export function createLabOperationsRequester(options: {
       parseExecResponse(await send("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await send("saveSnapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await send("saveConfigs", request)),
-    inspectDetails: async () => parseInspectDetails(await send("inspectDetails"))
+    inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
+    hostInfo: async () => parseLabHostInfo(await send("hostInfo"))
   };
 }

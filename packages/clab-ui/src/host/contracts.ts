@@ -1,3 +1,4 @@
+import type { LabHostInfo } from "./labHostSupport";
 import type {
   TopologyHostCommand,
   TopologyHostResponseMessage,
@@ -257,6 +258,11 @@ export interface ClabUiTopoViewerHost {
   runNodesAction?(action: TopoViewerNodesAction, nodeNames: string[]): void;
   /** Exec, snapshots, config save and inspect details; hosts that omit it hide them. */
   labOperations?: ClabUiLabOperationsHost;
+  /**
+   * The runtime of the lab's host and what it offers. The topology view hides
+   * what the host lacks; hosts that omit it, or resolve undefined, hide nothing.
+   */
+  labHost?(): Promise<LabHostInfo | undefined>;
   captureInterface(
     nodeName: string,
     interfaceName: string,

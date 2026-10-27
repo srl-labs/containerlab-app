@@ -16,6 +16,7 @@ import type {
   LabBackendCapabilities,
   LabBackendFeatures,
   LabEvent,
+  LabHostProfile,
   LabEventStreamOptions,
   LabLifecycleAction,
   LabStatsStreamOptions,
@@ -45,6 +46,7 @@ import type {
   SSHAccessResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { LocalCapture } from "./capture.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
@@ -90,15 +92,23 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   tailscaleStatus: false
 };
 
-const LOCAL_FEATURES: LabBackendFeatures = {
-  validate: true,
-  graphMermaid: true,
-  graphDot: true,
-  sshxReaders: true,
-  gottyOptions: true,
-  nodeStats: true,
-  terminalResume: true
-};
+/** What a local host can do, by its lab runtime. */
+function localFeatures(runtime: ResolvedLocalOptions["runtime"]): LabBackendFeatures {
+  const c9s = runtime === "c9s";
+  return {
+    validate: true,
+    graphMermaid: true,
+    graphDot: true,
+    // `tools sshx` and `tools gotty` run containers next to the lab.
+    sshxReaders: !c9s,
+    gottyOptions: !c9s,
+    nodeStats: !c9s,
+    terminalResume: true,
+    ...containerRuntimeFeatures(!c9s),
+    manifestExport: false,
+    c9sDeployOptions: c9s
+  };
+}
 
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@%+,-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
@@ -140,7 +150,12 @@ export class LocalLabBackend implements LabBackend {
   }
 
   get scope(): string {
-    return `local:${this.options.workspaceRoot}`;
+    const { c9s, workspaceRoot } = this.options;
+    // A cluster is another lab host than this machine, although the files are the same.
+    if (!c9s) return `local:${workspaceRoot}`;
+    // The same context name in another kubeconfig file can be another cluster.
+    const cluster = c9s.kubeconfig ? `${c9s.kubeContext ?? ""}@${c9s.kubeconfig}` : (c9s.kubeContext ?? "");
+    return `local-c9s:${cluster}:${workspaceRoot}`;
   }
 
   /** The Docker Engine API of the container runtime. */
@@ -201,6 +216,9 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async healthMetrics() {
+    if (this.options.runtime === "c9s") {
+      throw new LabBackendError("A cluster lab host has no host metrics; this machine's would mislead.", 501);
+    }
     const version = await this.version().then(
       (response) => /version: (\S+)/.exec(response.versionInfo)?.[1] ?? "unknown",
       () => "unknown"
@@ -326,7 +344,27 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    return LOCAL_FEATURES;
+    return localFeatures(this.options.runtime);
+  }
+
+  async hostProfile(): Promise<LabHostProfile> {
+    const { runtime, c9s } = this.options;
+    if (!c9s) return { runtime };
+    return {
+      runtime,
+      ...(c9s.kubeContext ? { kubeContext: c9s.kubeContext } : {}),
+      ...(c9s.kubeconfig ? { kubeconfig: c9s.kubeconfig } : {}),
+      namespaceMode: c9s.namespace ? "fixed" : "per-lab",
+      ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
+      ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
+      persistence: c9s.persistence !== false
+    };
+  }
+
+  exportManifests(): Promise<{ yaml: string }> {
+    return Promise.reject(
+      new LabBackendError("Kubernetes manifests need a c9s lab host.", 501)
+    );
   }
 
   async fcli(lab: LabTarget, command: string) {

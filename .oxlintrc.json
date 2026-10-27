@@ -361,6 +361,10 @@
                 "message": "Only packages/lab-backend runs processes: go through a LabBackend (LocalLabBackend for this machine)."
               },
               {
+                "name": "@kubernetes/client-node",
+                "message": "Only packages/lab-backend talks to Kubernetes: go through a LabBackend (LocalLabBackend with runtime c9s)."
+              },
+              {
                 "name": "@srl-labs/containerlab-lab-backend/api",
                 "importNames": [
                   "ClabApiClient"

@@ -3,7 +3,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveLocalOptions, type LocalLabBackendOptions } from "./options.ts";
+import type { KubeClusterProbe } from "./kube/clusterProbe.ts";
+import { detectC9sEnvironment } from "./kube/detect.ts";
+import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import { containerlabCommand, runCommand, stripAnsi } from "./process.ts";
 
 /** Whether containerlab can run labs on this machine for the current user. */
@@ -19,6 +21,33 @@ export interface LocalEnvironmentStatus {
   isRoot: boolean;
   inClabAdmins: boolean;
   inRuntimeGroup: boolean;
+  /** c9s: the kubeconfig context in use. */
+  kubeContext?: string;
+  /** c9s: the Kubernetes API server version. */
+  kubernetesVersion?: string;
+  /** c9s: the clabernetes manager version, when the user may read it. */
+  clabernetesVersion?: string;
+}
+
+/** Replacements for what detection talks to, for tests. */
+export interface DetectionOverrides {
+  /** The cluster of a c9s host. */
+  kubeProbe?: (options: Pick<ResolvedLocalOptions, "c9s" | "env">) => KubeClusterProbe;
+  /** The platform the app runs on; `process.platform` when unset. */
+  platform?: NodeJS.Platform;
+}
+
+/**
+ * containerlab is built for Linux only, so every local lab host needs Linux,
+ * also one whose labs run on a Kubernetes cluster: containerlab on this
+ * machine deploys them and reaches their nodes.
+ */
+export const CONTAINERLAB_LINUX_ONLY =
+  "containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM.";
+
+/** Why containerlab cannot run on a platform, or undefined on Linux. */
+export function containerlabPlatformProblem(platform: NodeJS.Platform = process.platform): string | undefined {
+  return platform === "linux" ? undefined : CONTAINERLAB_LINUX_ONLY;
 }
 
 async function isExecutable(file: string): Promise<boolean> {
@@ -88,15 +117,30 @@ export async function detectLocalUser(options: LocalLabBackendOptions = {}): Pro
  * without sudo. Never prompts for anything.
  */
 export async function detectLocalEnvironment(
-  options: LocalLabBackendOptions = {}
+  options: LocalLabBackendOptions = {},
+  overrides: DetectionOverrides = {}
 ): Promise<LocalEnvironmentStatus> {
-  const resolved = resolveLocalOptions(options);
+  let resolved: ResolvedLocalOptions;
+  try {
+    resolved = resolveLocalOptions(options);
+  } catch (error) {
+    return {
+      available: false,
+      problems: [error instanceof Error ? error.message : String(error)],
+      platform: overrides.platform ?? process.platform,
+      runtime: options.runtime?.trim() ?? "",
+      username: options.username?.trim() ?? "",
+      isRoot: false,
+      inClabAdmins: false,
+      inRuntimeGroup: false
+    };
+  }
   const problems: string[] = [];
   const { isRoot, inClabAdmins, inRuntimeGroup } = await detectLocalUser(options);
   const status: LocalEnvironmentStatus = {
     available: false,
     problems,
-    platform: process.platform,
+    platform: overrides.platform ?? process.platform,
     runtime: resolved.runtime,
     username: resolved.username,
     isRoot,
@@ -104,10 +148,13 @@ export async function detectLocalEnvironment(
     inRuntimeGroup
   };
 
-  if (process.platform !== "linux") {
-    problems.push("Labs on this computer need Linux. Connect to a clab-api-server instead.");
+  const platformProblem = containerlabPlatformProblem(status.platform);
+  if (platformProblem) {
+    problems.push(platformProblem);
     return status;
   }
+
+  const c9s = resolved.runtime === "c9s";
 
   status.containerlabPath = await findBinary(resolved.binaryPath, resolved.env);
   if (!status.containerlabPath) {
@@ -123,6 +170,17 @@ export async function detectLocalEnvironment(
     } else {
       problems.push(`containerlab at ${status.containerlabPath} does not run: ${result?.stderr.trim() || "no output"}`);
     }
+  }
+
+  if (c9s) {
+    // The cluster runs the labs: no Docker and no clab_admins group needed.
+    const cluster = await detectC9sEnvironment(resolved, status.containerlabVersion, overrides.kubeProbe);
+    problems.push(...cluster.problems);
+    if (cluster.kubeContext) status.kubeContext = cluster.kubeContext;
+    if (cluster.kubernetesVersion) status.kubernetesVersion = cluster.kubernetesVersion;
+    if (cluster.clabernetesVersion) status.clabernetesVersion = cluster.clabernetesVersion;
+    status.available = problems.length === 0;
+    return status;
   }
 
   if (!isRoot && !resolved.sudo) {

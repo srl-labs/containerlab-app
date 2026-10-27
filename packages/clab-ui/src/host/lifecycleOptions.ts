@@ -1,5 +1,22 @@
 import { isRecord } from "../core/utilities/typeHelpers";
 
+/** The lab runtime a lab host runs containerlab with (`containerlab -r`). */
+export type LabRuntimeKind = "docker" | "podman" | "c9s";
+
+/** How clabernetes exposes node ports (`--expose-type`). */
+export type C9sExposeType = "ClusterIP" | "Headless" | "LoadBalancer" | "None";
+
+export const C9S_EXPOSE_TYPES: readonly C9sExposeType[] = [
+  "None",
+  "ClusterIP",
+  "LoadBalancer",
+  "Headless"
+];
+
+export function isC9sExposeType(value: unknown): value is C9sExposeType {
+  return typeof value === "string" && (C9S_EXPOSE_TYPES as readonly string[]).includes(value);
+}
+
 /**
  * Extra containerlab options for deploy, redeploy and destroy.
  *
@@ -34,6 +51,16 @@ export interface LabLifecycleOptions {
   restoreAll?: string;
   /** Restore single nodes from snapshot files (`--restore node=path`); wins over `restoreAll`. */
   restore?: LabSnapshotRestore[];
+  /** c9s: the Kubernetes namespace of the lab (`--namespace`); default `c9s-<lab>`. */
+  namespace?: string;
+  /** c9s: how node ports are exposed (`--expose-type`). */
+  exposeType?: C9sExposeType;
+  /** c9s: no persistent volumes for node state (`--no-persistence`). */
+  noPersistence?: boolean;
+  /** c9s: the image pull secret of the lab's pods (`--image-pull-secret`). */
+  imagePullSecret?: string;
+  /** c9s: deploy the nodes without a Topology resource (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
 }
 
 /** One node restored from a VM snapshot file on deploy. */
@@ -48,6 +75,7 @@ export type LabLifecycleOptionField = keyof LabLifecycleOptions;
 /**
  * Options each action accepts, following containerlab and clab-api-server:
  * redeploy has no node filter, and the API does not take `maxWorkers` on destroy.
+ * `LAB_LIFECYCLE_OPTION_RUNTIMES` narrows them per lab runtime.
  */
 export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
   LabLifecycleOptionKind,
@@ -61,7 +89,12 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
     "exportTemplate",
     "restoreAll",
     "restore",
-    "varsFile"
+    "varsFile",
+    "namespace",
+    "exposeType",
+    "noPersistence",
+    "imagePullSecret",
+    "noTopologyCR"
   ],
   redeploy: [
     "maxWorkers",
@@ -70,19 +103,80 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
     "exportTemplate",
     "graceful",
     "keepMgmtNet",
-    "varsFile"
+    "varsFile",
+    "namespace",
+    "exposeType",
+    "noPersistence",
+    "imagePullSecret",
+    "noTopologyCR"
   ],
-  destroy: ["nodeFilter", "graceful", "keepMgmtNet", "varsFile"]
+  destroy: ["nodeFilter", "graceful", "keepMgmtNet", "varsFile", "namespace"]
 };
+
+const CONTAINER_RUNTIMES: readonly LabRuntimeKind[] = ["docker", "podman"];
+const C9S_RUNTIME: readonly LabRuntimeKind[] = ["c9s"];
+
+/**
+ * The lab runtimes that take an option; options not listed take every runtime.
+ * containerlab rejects the container-only flags under `-r c9s`, and the c9s
+ * flags mean nothing to Docker or Podman.
+ */
+export const LAB_LIFECYCLE_OPTION_RUNTIMES: Partial<
+  Record<LabLifecycleOptionField, readonly LabRuntimeKind[]>
+> = {
+  nodeFilter: CONTAINER_RUNTIMES,
+  graceful: CONTAINER_RUNTIMES,
+  restoreAll: CONTAINER_RUNTIMES,
+  restore: CONTAINER_RUNTIMES,
+  skipPostDeploy: CONTAINER_RUNTIMES,
+  skipLabdirAcl: CONTAINER_RUNTIMES,
+  exportTemplate: CONTAINER_RUNTIMES,
+  keepMgmtNet: CONTAINER_RUNTIMES,
+  namespace: C9S_RUNTIME,
+  exposeType: C9S_RUNTIME,
+  noPersistence: C9S_RUNTIME,
+  imagePullSecret: C9S_RUNTIME,
+  noTopologyCR: C9S_RUNTIME
+};
+
+/** The options an action takes on a lab runtime. */
+export function labLifecycleOptionFields(
+  kind: LabLifecycleOptionKind,
+  runtime: LabRuntimeKind = "docker"
+): readonly LabLifecycleOptionField[] {
+  return LAB_LIFECYCLE_OPTION_FIELDS[kind].filter(
+    (field) => LAB_LIFECYCLE_OPTION_RUNTIMES[field]?.includes(runtime) ?? true
+  );
+}
 
 const NODE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const EXPORT_TEMPLATE_PATTERN = /^[A-Za-z0-9_./~-]+$/;
 const VARS_FILE_PATTERN = /^[A-Za-z0-9_./@+-]+$/;
-const BOOLEAN_FIELDS = ["skipPostDeploy", "skipLabdirAcl", "graceful", "keepMgmtNet"] as const;
+/** A Kubernetes namespace or secret name: a DNS label (RFC 1123), as Kubernetes checks it. */
+const KUBE_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
+const KUBE_SECRET_NAME_PATTERN = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
+const BOOLEAN_FIELDS = [
+  "skipPostDeploy",
+  "skipLabdirAcl",
+  "graceful",
+  "keepMgmtNet",
+  "noPersistence",
+  "noTopologyCR"
+] as const;
 const MAX_PATH_LENGTH = 4096;
 
 export function isValidLifecycleNodeName(name: string): boolean {
   return NODE_NAME_PATTERN.test(name);
+}
+
+/** A Kubernetes namespace name. */
+export function isValidKubeNamespace(name: string): boolean {
+  return KUBE_NAME_PATTERN.test(name);
+}
+
+/** A Kubernetes Secret name. */
+export function isValidKubeSecretName(name: string): boolean {
+  return KUBE_SECRET_NAME_PATTERN.test(name);
 }
 
 export function isValidExportTemplate(template: string): boolean {
@@ -149,17 +243,25 @@ function readExportTemplate(value: unknown): string | undefined {
   return template.length > 0 && isValidExportTemplate(template) ? template : undefined;
 }
 
+function readKubeName(value: unknown, valid: (name: string) => boolean): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const name = value.trim();
+  return name.length > 0 && valid(name) ? name : undefined;
+}
+
 /**
- * Keep the options that the action accepts and that are well formed; drop the rest.
- * Returns undefined when nothing is left, so callers can tell "no options" apart.
+ * Keep the options that the action accepts on the lab runtime and that are
+ * well formed; drop the rest. Returns undefined when nothing is left, so
+ * callers can tell "no options" apart.
  */
 export function normalizeLabLifecycleOptions(
   kind: LabLifecycleOptionKind,
-  value: unknown
+  value: unknown,
+  runtime: LabRuntimeKind = "docker"
 ): LabLifecycleOptions | undefined {
   if (!isRecord(value)) return undefined;
   const raw = value;
-  const allowed = new Set<LabLifecycleOptionField>(LAB_LIFECYCLE_OPTION_FIELDS[kind]);
+  const allowed = new Set<LabLifecycleOptionField>(labLifecycleOptionFields(kind, runtime));
   const options: LabLifecycleOptions = {};
 
   if (allowed.has("nodeFilter")) {
@@ -182,6 +284,17 @@ export function normalizeLabLifecycleOptions(
     if (varsFile !== undefined) options.varsFile = varsFile;
   }
   if (allowed.has("restoreAll")) Object.assign(options, readSnapshotRestore(raw));
+  if (allowed.has("namespace")) {
+    const namespace = readKubeName(raw.namespace, isValidKubeNamespace);
+    if (namespace !== undefined) options.namespace = namespace;
+  }
+  if (allowed.has("exposeType") && isC9sExposeType(raw.exposeType)) {
+    options.exposeType = raw.exposeType;
+  }
+  if (allowed.has("imagePullSecret")) {
+    const secret = readKubeName(raw.imagePullSecret, isValidKubeSecretName);
+    if (secret !== undefined) options.imagePullSecret = secret;
+  }
 
   return Object.keys(options).length > 0 ? options : undefined;
 }
@@ -216,10 +329,19 @@ export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): 
   // `--restore-all` has an optional value, so it only takes one after `=`.
   if (options.restoreAll !== undefined) flags.push(`--restore-all=${options.restoreAll}`);
   for (const entry of options.restore ?? []) flags.push(`--restore=${entry.node}=${entry.path}`);
+  if (options.namespace !== undefined) flags.push("--namespace", options.namespace);
+  if (options.exposeType !== undefined) flags.push("--expose-type", options.exposeType);
+  if (options.noPersistence === true) flags.push("--no-persistence");
+  if (options.imagePullSecret !== undefined) flags.push("--image-pull-secret", options.imagePullSecret);
+  if (options.noTopologyCR === true) flags.push("--no-topology-cr");
   return flags;
 }
 
-/** clab-api-server query parameters for the options. */
+/**
+ * clab-api-server query parameters for the options. The c9s options have
+ * none: a clab-api-server with `CLAB_RUNTIME=c9s` sets namespaces, exposure
+ * and persistence itself.
+ */
 export function labLifecycleQueryParams(
   options: LabLifecycleOptions | undefined
 ): Array<[string, string]> {

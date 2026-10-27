@@ -13,6 +13,8 @@ import type {
   LabBackend,
   LabBackendCapabilities,
   LabBackendFeatures,
+  LabHostProfile,
+  LabRuntimeKind,
   LabEvent,
   LabEventStreamOptions,
   LabFileContent,
@@ -53,9 +55,10 @@ import type {
   ValidateTopologyResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { gottyOptionsError } from "../shareOptions.ts";
-import { buildWebSocketUrl, ClabApiClient } from "./clabApiClient.ts";
+import { buildWebSocketUrl, ClabApiClient, type ServerHealth } from "./clabApiClient.ts";
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import { apiFetch } from "./upstreamRequest.ts";
 import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
@@ -99,11 +102,21 @@ type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
 
 /** Servers get upgraded in place; look again after a minute. */
 const SERVER_FEATURES_TTL_MS = 60_000;
-const serverFeatureCache = new Map<string, { expires: number; features: Promise<ReadonlySet<string>> }>();
+
+/** What a server's `/health` says, with its feature list as a set. */
+interface ServerState {
+  features: ReadonlySet<string>;
+  runtime?: string;
+  namespaceMode?: string;
+  /** `/health` did not answer; the next call asks again. */
+  unreachable?: boolean;
+}
+
+const serverHealthCache = new Map<string, { expires: number; state: Promise<ServerState> }>();
 
 /** Forgets what servers listed, e.g. between tests that fake different servers at one URL. */
 export function clearServerFeatureCache(): void {
-  serverFeatureCache.clear();
+  serverHealthCache.clear();
 }
 
 function unsupported(what: string): LabBackendError {
@@ -113,8 +126,49 @@ function unsupported(what: string): LabBackendError {
   );
 }
 
-/** The features a clab-api-server lists on `GET /health`; older servers list none. */
-function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures {
+const SERVER_RUNTIMES: readonly LabRuntimeKind[] = ["docker", "podman", "c9s"];
+
+function isServerRuntime(value: string | undefined): value is LabRuntimeKind {
+  return value !== undefined && (SERVER_RUNTIMES as readonly string[]).includes(value);
+}
+
+/**
+ * The first clab-api-server release that reports its lab runtime on `/health`.
+ * Servers without the field are older than c9s support, so they run Docker.
+ */
+const MIN_CLAB_API_SERVER_RUNTIME_VERSION = "0.10.0";
+
+/**
+ * The lab host profile of a server from its `/health`. A server that reports
+ * no runtime predates c9s support: it keeps working for what Docker servers
+ * always did, and the profile asks to update it for anything that needs the
+ * runtime. Nothing c9s-specific is ever guessed for it.
+ */
+function hostProfileFromHealth(health: Pick<ServerHealth, "runtime" | "namespaceMode">): LabHostProfile {
+  if (health.runtime === undefined) {
+    return {
+      runtime: "docker",
+      updateRequired: `This clab-api-server does not report its lab runtime. Update it to ${MIN_CLAB_API_SERVER_RUNTIME_VERSION} or later.`
+    };
+  }
+  if (!isServerRuntime(health.runtime)) {
+    throw new LabBackendError(
+      `This clab-api-server runs labs with "${health.runtime}", which this app does not support. Update the app.`,
+      501
+    );
+  }
+  const profile: LabHostProfile = { runtime: health.runtime };
+  if (profile.runtime === "c9s" && (health.namespaceMode === "per-lab" || health.namespaceMode === "fixed")) {
+    profile.namespaceMode = health.namespaceMode;
+  }
+  return profile;
+}
+
+/** The features of a clab-api-server from its `/health`; older servers list none. */
+function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
+  const listed = state.features;
+  // Servers without a runtime predate c9s, so they run Docker or Podman.
+  const containerRuntime = state.runtime === undefined || state.runtime === "docker" || state.runtime === "podman";
   return {
     // Servers before the feature list had validate already, or answer 404.
     validate: true,
@@ -123,7 +177,11 @@ function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures
     sshxReaders: listed.has("sshx-readers"),
     gottyOptions: listed.has("gotty-options"),
     nodeStats: listed.has(SERVER_FEATURES.nodeStats),
-    terminalResume: listed.has(SERVER_FEATURES.terminalResume)
+    terminalResume: listed.has(SERVER_FEATURES.terminalResume),
+    ...containerRuntimeFeatures(containerRuntime),
+    // A c9s server picks namespaces, exposure and persistence itself, and has no manifest export.
+    manifestExport: false,
+    c9sDeployOptions: false
   };
 }
 
@@ -202,27 +260,41 @@ export class ApiLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    return featuresFromServerList(await this.serverFeatures());
+    return featuresFromServerHealth(await this.serverState());
+  }
+
+  async hostProfile(): Promise<LabHostProfile> {
+    const state = await this.serverState();
+    // An unreachable server is not an old one: let the error through.
+    return hostProfileFromHealth(state.unreachable ? await this.client.getServerHealth() : state);
   }
 
   inspectAll() {
     return this.client.listLabs(this.token);
   }
 
-  private serverFeatures(): Promise<ReadonlySet<string>> {
+  private serverState(): Promise<ServerState> {
     const key = this.client.getBaseUrl();
-    const cached = serverFeatureCache.get(key);
-    if (cached && cached.expires > Date.now()) return cached.features;
-    const features = this.client.getServerFeatures().then(
-      (list) => new Set(list),
-      (): ReadonlySet<string> => {
+    const cached = serverHealthCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.state;
+    const state = this.client.getServerHealth().then(
+      (health): ServerState => ({
+        features: new Set(health.features),
+        ...(health.runtime !== undefined ? { runtime: health.runtime } : {}),
+        ...(health.namespaceMode !== undefined ? { namespaceMode: health.namespaceMode } : {})
+      }),
+      (): ServerState => {
         // An unreachable server is asked again on the next call.
-        serverFeatureCache.delete(key);
-        return new Set();
+        serverHealthCache.delete(key);
+        return { features: new Set(), unreachable: true };
       }
     );
-    serverFeatureCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, features });
-    return features;
+    serverHealthCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, state });
+    return state;
+  }
+
+  private serverFeatures(): Promise<ReadonlySet<string>> {
+    return this.serverState().then((state) => state.features);
   }
 
   private async hasFeature(feature: ServerFeature): Promise<boolean> {
@@ -465,6 +537,12 @@ export class ApiLabBackend implements LabBackend {
 
   generateTopology(request: GenerateTopologyRequest) {
     return this.client.generateTopology(this.token, request);
+  }
+
+  exportManifests(): Promise<{ yaml: string }> {
+    return Promise.reject(
+      new LabBackendError("Kubernetes manifests are only exported by a c9s lab host on this machine.", 501)
+    );
   }
 
   nodeAction(labName: string, containerName: string, action: NodeLifecycleAction) {

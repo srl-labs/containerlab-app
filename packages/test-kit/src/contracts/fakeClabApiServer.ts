@@ -26,7 +26,18 @@ function sendJson(response: http.ServerResponse, status: number, payload: unknow
  * local folder. Enough to run the file part of the lab backend contract
  * through `ApiLabBackend` and its HTTP client.
  */
-export async function startFakeClabApiServer(workspaceRoot: string): Promise<FakeClabApiServer> {
+/** What the fake server says about itself on `/health`. */
+export interface FakeClabApiServerHealth {
+  /** Left out, like a server older than c9s support; `docker` by default. */
+  runtime?: "docker" | "podman" | "c9s" | null;
+  namespaceMode?: "per-lab" | "fixed";
+  features?: string[];
+}
+
+export async function startFakeClabApiServer(
+  workspaceRoot: string,
+  health: FakeClabApiServerHealth = {}
+): Promise<FakeClabApiServer> {
   const local = new LocalLabBackend({ workspaceRoot });
   const token = "contract-token";
   const watchers = new Set<AbortController>();
@@ -35,6 +46,17 @@ export async function startFakeClabApiServer(workspaceRoot: string): Promise<Fak
     void (async () => {
       const url = new URL(request.url ?? "/", "http://fake");
       const query = (key: string) => url.searchParams.get(key) ?? "";
+      if (request.method === "GET" && url.pathname === "/health") {
+        // Public, like clab-api-server's: the runtime and the optional features.
+        const runtime = health.runtime === undefined ? "docker" : health.runtime;
+        sendJson(response, 200, {
+          status: "healthy",
+          features: health.features ?? [],
+          ...(runtime !== null ? { runtime } : {}),
+          ...(health.namespaceMode ? { namespaceMode: health.namespaceMode } : {})
+        });
+        return;
+      }
       if (request.headers.authorization !== `Bearer ${token}`) {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
