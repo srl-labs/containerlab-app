@@ -5,10 +5,12 @@ import {
   buildLifecycleOptionsRequest,
   createLifecycleOptionsForm,
   isCleanupBlocked,
+  lifecycleKindTakes,
   maxWorkersError,
   varsFileError,
   restoreError
 } from "./lifecycleOptionsForm";
+import { kubeNameError } from "./C9sDeployFields";
 
 test("an untouched form runs the plain action without options", () => {
   assert.deepEqual(buildLifecycleOptionsRequest(createLifecycleOptionsForm("deploy")), {
@@ -100,4 +102,44 @@ test("a deploy can restore VM snapshots", () => {
   assert.equal(restoreError({ ...form, restoreSnapshots: false, restoreAll: "" }), undefined);
   // Switched off, the defaults stay out of the request.
   assert.equal(buildLifecycleOptionsRequest({ ...form, restoreSnapshots: false }).options, undefined);
+});
+
+test("on c9s the form sends the c9s options and drops the Docker-only ones", () => {
+  const form = {
+    ...createLifecycleOptionsForm("deploy", "c9s"),
+    nodeFilter: ["leaf1"],
+    skipPostDeploy: true,
+    namespace: "team-a",
+    exposeType: "LoadBalancer" as const,
+    noPersistence: true,
+    imagePullSecret: "regcred",
+    noTopologyCR: true
+  };
+  assert.deepEqual(buildLifecycleOptionsRequest(form), {
+    action: "deployLab",
+    options: {
+      noPersistence: true,
+      noTopologyCR: true,
+      namespace: "team-a",
+      exposeType: "LoadBalancer",
+      imagePullSecret: "regcred"
+    },
+    command:
+      "containerlab deploy -r c9s --namespace team-a --expose-type LoadBalancer --no-persistence --image-pull-secret regcred --no-topology-cr"
+  });
+  assert.equal(lifecycleKindTakes("deploy", "nodeFilter", "c9s"), false);
+  assert.equal(lifecycleKindTakes("destroy", "namespace", "c9s"), true);
+  assert.equal(lifecycleKindTakes("destroy", "exposeType", "c9s"), false);
+});
+
+test("on Docker the c9s fields never reach the request", () => {
+  const form = { ...createLifecycleOptionsForm("deploy"), namespace: "team-a", noTopologyCR: true };
+  assert.deepEqual(buildLifecycleOptionsRequest(form), { action: "deployLab", command: "containerlab deploy" });
+});
+
+test("Kubernetes names are checked before running", () => {
+  assert.equal(kubeNameError("", "namespace"), undefined);
+  assert.equal(kubeNameError("team-a", "namespace"), undefined);
+  assert.match(kubeNameError("Team_A", "namespace") ?? "", /Lowercase/);
+  assert.equal(kubeNameError("registry.example-cred", "secret"), undefined);
 });

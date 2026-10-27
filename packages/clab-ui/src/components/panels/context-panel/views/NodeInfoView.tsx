@@ -10,6 +10,7 @@ import {
   useNodeReadiness
 } from "../../../canvas/nodes/useNodeReadiness";
 import { extractNodeDisplayProps } from "../../../canvas/nodes/nodeDisplayProps";
+import { NodeKubernetesSection } from "../../kubernetes/NodeKubernetesSection";
 import { NodeResourcesSection } from "./NodeResourcesSection";
 
 export interface NodeInfoViewProps {
@@ -45,6 +46,8 @@ export const NodeInfoView: React.FC<NodeInfoViewProps> = ({ nodeData }) => {
         </Box>
         <ReadOnlyCopyField label="FQDN" value={fqdn} mono />
       </PanelSection>
+
+      <NodeKubernetesSection nodeName={nodeData.id} refreshKey={state} />
 
       <NodeResourcesSection containerName={containerName} nodeName={nodeData.id} />
     </Box>

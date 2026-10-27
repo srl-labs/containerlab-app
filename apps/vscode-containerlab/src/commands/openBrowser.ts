@@ -5,6 +5,7 @@ import type { ClabContainerTreeNode } from "../treeView/common";
 import { isRemoteNode, remoteBrowserPorts, remoteHostname } from "../backend/remoteNode";
 
 interface PortMapping {
+  hostIp?: string;
   containerPort: string;
   hostPort: string;
   protocol: string;
@@ -33,7 +34,9 @@ export async function openBrowser(node: ClabContainerTreeNode) {
     return;
   }
 
-  openPortInBrowser(mapping, node.name, remote ? remoteHostname(node) : undefined);
+  // A cluster's ports are on its load balancer or a port-forward on this machine.
+  const host = remote ? (mapping.hostIp ?? remoteHostname(node)) : undefined;
+  openPortInBrowser(mapping, node.name, host);
 }
 
 async function getRemotePorts(node: ClabContainerTreeNode): Promise<PortMapping[]> {

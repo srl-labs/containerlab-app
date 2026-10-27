@@ -1,5 +1,6 @@
 import { isRecord } from "../core/utilities/typeHelpers";
 
+import { parseNodeLocations, type LabNodeLocation } from "./kubernetes";
 import { parseLabHostInfo, type LabHostInfo } from "./labHostSupport";
 
 /**
@@ -107,6 +108,30 @@ export interface ClabUiLabOperationsHost {
   inspectDetails(): Promise<LabInspectDetailsResult>;
   /** The runtime of the lab's host and what it offers; undefined when the host tells nothing. */
   hostInfo(): Promise<LabHostInfo | undefined>;
+  /** Where the lab's nodes run on a c9s host; empty elsewhere. */
+  nodeLocations(): Promise<LabNodeLocation[]>;
+  /** The Kubernetes resources a c9s deploy creates (`deploy --emit-crs`). */
+  exportManifests(): Promise<{ yaml: string }>;
+  /** `containerlab validate` on the lab host, without showing anything. */
+  validate(): Promise<LabValidation>;
+}
+
+/** What `containerlab validate` says about the topology. */
+export interface LabValidation {
+  valid: boolean;
+  error?: string;
+}
+
+/** A validate result from a lab host. */
+export function parseHostValidation(value: unknown): LabValidation {
+  if (!isRecord(value)) return { valid: false, error: "The lab host sent no validation result." };
+  const error = typeof value.error === "string" && value.error.trim() ? value.error.trim() : undefined;
+  return { valid: value.valid === true, ...(error ? { error } : {}) };
+}
+
+/** Manifests from a lab host. */
+export function parseManifestExport(value: unknown): { yaml: string } {
+  return { yaml: isRecord(value) && typeof value.yaml === "string" ? value.yaml : "" };
 }
 
 export type LabOperationName = keyof ClabUiLabOperationsHost;
@@ -314,7 +339,10 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   saveSnapshots: 60 * 60_000,
   saveConfigs: 15 * 60_000,
   inspectDetails: 2 * 60_000,
-  hostInfo: 30_000
+  hostInfo: 30_000,
+  nodeLocations: 60_000,
+  exportManifests: 2 * 60_000,
+  validate: 2 * 60_000
 };
 
 interface PendingLabOperation {
@@ -383,6 +411,9 @@ export function createLabOperationsRequester(options: {
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await send("saveSnapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await send("saveConfigs", request)),
     inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
-    hostInfo: async () => parseLabHostInfo(await send("hostInfo"))
+    hostInfo: async () => parseLabHostInfo(await send("hostInfo")),
+    nodeLocations: async () => parseNodeLocations(await send("nodeLocations")),
+    exportManifests: async () => parseManifestExport(await send("exportManifests")),
+    validate: async () => parseHostValidation(await send("validate"))
   };
 }

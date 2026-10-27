@@ -49,6 +49,7 @@ export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./labFiles";
+export * from "./kubernetes";
 export * from "./labHostSupport";
 export * from "./labOperations";
 export * from "./lifecycleOptions";

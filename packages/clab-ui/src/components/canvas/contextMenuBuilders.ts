@@ -110,6 +110,8 @@ interface MenuBuilderContext {
   changeZOrder?: (id: string, action: ZOrderAction) => void;
   /** Files of the node on the lab host and the host's opener; absent when the host has none. */
   labFiles?: { files: NodeLabFile[]; open: (request: LabFileRequest) => void };
+  /** c9s: copies the kubectl command that opens a shell in the node; absent elsewhere. */
+  copyKubectlExec?: (nodeId: string) => void;
 }
 
 interface EdgeMenuBuilderContext {
@@ -705,6 +707,18 @@ export function buildNodeContextMenu(ctx: MenuBuilderContext): ContextMenuItem[]
     // Edit mode lists the files next to Edit Node.
     const filesItem = isEditMode || isNetworkNode ? undefined : buildNodeFilesItem(ctx);
     if (filesItem) items.push(filesItem);
+    if (ctx.copyKubectlExec && isDeployed && !isNetworkNode) {
+      const copy = ctx.copyKubectlExec;
+      items.push({
+        id: "copy-kubectl-exec",
+        label: "Copy kubectl exec command",
+        icon: React.createElement(ContentCopyIcon, { fontSize: "small" }),
+        onClick: () => {
+          copy(targetId);
+          closeContextMenu();
+        }
+      });
+    }
     items.push({
       id: "info-node",
       label: "Info",

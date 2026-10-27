@@ -14,6 +14,7 @@ import { controlRadius } from "../../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../../theme/typography";
 import { DialogTitleWithClose } from "../../ui/dialog/DialogChrome";
 
+import { ApplyPlanChanges } from "./ApplyPlanChanges";
 import {
   applyPlanChangeCount,
   applyPlanLosesState,
@@ -168,6 +169,19 @@ const PlanBody: React.FC<{ state: PlanState }> = ({ state }) => {
       <Alert severity="success" variant="outlined" data-testid="apply-plan-in-sync">
         Nothing to apply. The running lab already matches the topology.
       </Alert>
+    );
+  }
+
+  if (plan.changes && plan.changes.length > 0) {
+    // c9s: the resource changes, with the nodes that restart.
+    const changeCount = plan.changes.length;
+    return (
+      <>
+        <Typography variant="body2" sx={{ color: "text.secondary" }} data-testid="apply-plan-summary">
+          Applying makes {changeCount} {changeCount === 1 ? "change" : "changes"} to the Kubernetes resources of the lab.
+        </Typography>
+        <ApplyPlanChanges changes={plan.changes} {...(plan.namespace ? { namespace: plan.namespace } : {})} />
+      </>
     );
   }
 

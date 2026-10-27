@@ -107,13 +107,17 @@ export function initConnections(
 
 const TOPOLOGY_HOSTS_KEY = "containerlab.topologyLabHosts";
 let topologyHosts: vscode.Memento | undefined;
+/** Topologies of labs running on a cluster, as the cluster reports them (also `k8s://` paths). */
+const clusterTopologies = new Map<string, string>();
 
 /**
  * The local lab host a topology file on this machine runs on: this machine,
  * or the Kubernetes cluster it was deployed to last.
  */
 function labHostOfTopology(file: string): LabConnection {
-  const assigned = topologyHosts?.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {})[file];
+  const assigned =
+    clusterTopologies.get(file) ??
+    topologyHosts?.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {})[file];
   const connection = assigned !== undefined ? connections?.get(assigned) : undefined;
   return connection && isClusterConnection(connection) ? connection : LOCAL_CONNECTION;
 }
@@ -284,7 +288,11 @@ export function connectionDescription(connection: LabConnection): string {
   return connection.kind === "local" ? "this machine" : (connection.url ?? "");
 }
 
-/** The topology path containerlab reports for a c9s lab: `k8s://<namespace>/topologies/<lab>`. */
+/**
+ * The topology path containerlab reports for a c9s lab it did not deploy:
+ * `k8s://<namespace>/topologies/<lab>`. Labs containerlab deployed report
+ * their file.
+ */
 const KUBERNETES_LAB_PATH = /^k8s:\/\//i;
 
 /** A topology to fetch from Git or the web, e.g. `https://github.com/srl-labs/srlinux-getting-started`. */
@@ -395,7 +403,9 @@ export async function resolveLab(
   const given = connectionById(connectionId) ?? LOCAL_CONNECTION;
   // A topology on this machine runs where it was deployed: this machine or a cluster.
   const connection =
-    given.kind === "local" && !isClusterConnection(given) && !isUriString(labPath)
+    given.kind === "local" &&
+    !isClusterConnection(given) &&
+    (!isUriString(labPath) || KUBERNETES_LAB_PATH.test(labPath))
       ? labHostOfTopology(labPath)
       : given;
   if (isLabSourceUrl(labPath)) {
@@ -422,6 +432,14 @@ export async function resolveLab(
       target: { labName: nonEmpty(labName) ?? labNameForPath(labPath) }
     };
   }
+  if (isClusterConnection(connection)) {
+    // A cluster's lab reports the file it was deployed from, maybe on another
+    // machine; then the lab host goes by its name.
+    return {
+      backend: backendFor(connection),
+      target: { labName: nonEmpty(labName) ?? labNameForPath(labPath), path: labPath }
+    };
+  }
   // containerlab reads the lab name from the topology file.
   return { backend: backendFor(connection), target: { labName: "", path: labPath } };
 }
@@ -431,6 +449,11 @@ export async function resolveLab(
  * when the host lists it, the host's own path otherwise.
  */
 export function viewLabPath(connection: LabConnection, serverPath: string): string {
+  if (isClusterConnection(connection) && serverPath) {
+    // The topology file of a cluster's lab runs on that cluster, also when opened later.
+    clusterTopologies.set(serverPath, connection.id);
+    return serverPath;
+  }
   if (connection.kind !== "api" || !serverPath || isUriString(serverPath)) {
     return serverPath;
   }

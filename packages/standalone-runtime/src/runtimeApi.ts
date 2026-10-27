@@ -618,6 +618,9 @@ export type LabOperationRoute =
   | "snapshots"
   | "save"
   | "inspect-details"
+  | "node-locations"
+  | "manifests"
+  | "validate"
   | "nodes/start"
   | "nodes/stop"
   | "nodes/restart";
