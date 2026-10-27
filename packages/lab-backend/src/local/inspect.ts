@@ -11,7 +11,7 @@ interface ClabPort {
 }
 
 /** The JSON clab-api-server returns for one lab container. */
-interface ClabContainerRecord {
+export interface ClabContainerRecord {
   name: string;
   container_id: string;
   image: string;

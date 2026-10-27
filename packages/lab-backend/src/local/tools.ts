@@ -546,7 +546,7 @@ export async function containerLogs(options: ResolvedLocalOptions, containerName
   return { containerName, logs: result.stdout };
 }
 
-const PORT_DESCRIPTIONS: Record<number, string> = {
+export const PORT_DESCRIPTIONS: Record<number, string> = {
   22: "SSH",
   23: "Telnet",
   25: "SMTP",

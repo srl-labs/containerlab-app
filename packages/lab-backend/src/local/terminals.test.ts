@@ -5,7 +5,7 @@ import test from "node:test";
 import type Docker from "dockerode";
 
 import type { TerminalServerMessage, TerminalStream } from "../contract/backend.ts";
-import { LocalTerminals, Scrollback } from "./terminals.ts";
+import { dockerTerminalAccess, LocalTerminals, Scrollback } from "./terminals.ts";
 
 /** A docker exec whose shell echoes its input, and exits on "exit". */
 function echoDocker(): { docker: () => Docker; execs: () => number } {
@@ -65,7 +65,7 @@ async function settle(): Promise<void> {
 
 test("a resumable terminal keeps running after the client disconnects and replays its output", async () => {
   const { docker, execs } = echoDocker();
-  const terminals = new LocalTerminals(docker, "alice");
+  const terminals = new LocalTerminals(dockerTerminalAccess(docker), "alice");
   const { sessionId, resumable } = terminals.create(target, {
     protocol: "shell",
     cols: 80,
@@ -97,7 +97,7 @@ test("a resumable terminal keeps running after the client disconnects and replay
 
 test("a terminal that is not resumable ends when its client disconnects", async () => {
   const { docker } = echoDocker();
-  const terminals = new LocalTerminals(docker, "alice");
+  const terminals = new LocalTerminals(dockerTerminalAccess(docker), "alice");
   const { sessionId, resumable } = terminals.create(target, { protocol: "shell", cols: 80, rows: 24 });
   assert.equal(resumable, false);
   const stream = await terminals.attach(sessionId);
@@ -110,7 +110,7 @@ test("a terminal that is not resumable ends when its client disconnects", async 
 
 test("attaching again takes the session over from the previous client", async () => {
   const { docker } = echoDocker();
-  const terminals = new LocalTerminals(docker, "alice");
+  const terminals = new LocalTerminals(dockerTerminalAccess(docker), "alice");
   const { sessionId } = terminals.create(target, { protocol: "shell", cols: 80, rows: 24 });
   const first = await terminals.attach(sessionId);
   const closes: Array<{ reason: string; takenOver: boolean }> = [];
@@ -127,7 +127,7 @@ test("attaching again takes the session over from the previous client", async ()
 
 test("an explicit close ends the session", async () => {
   const { docker } = echoDocker();
-  const terminals = new LocalTerminals(docker, "alice");
+  const terminals = new LocalTerminals(dockerTerminalAccess(docker), "alice");
   const { sessionId } = terminals.create(target, { protocol: "shell", cols: 80, rows: 24 });
   const stream = await terminals.attach(sessionId);
   const { messages } = collect(stream);
