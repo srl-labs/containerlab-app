@@ -619,6 +619,7 @@ export type LabOperationRoute =
   | "save"
   | "inspect-details"
   | "node-locations"
+  | "capture-interfaces"
   | "manifests"
   | "validate"
   | "nodes/start"
@@ -1068,6 +1069,33 @@ export async function createWiresharkVncSessions(
     asJsonBody(input, endpointId),
     endpointId
   );
+}
+
+/** A capture of the lab's link interfaces, by node and interface, on a lab host with capture streams. */
+export interface StreamCaptureInput extends RuntimeTargetRequest {
+  targets: CaptureTarget[];
+  duration?: string;
+  title?: string;
+}
+
+/** A single-use `packetflix:` link to the capture, for Wireshark with cshargextcap. */
+export async function createCaptureTicket(
+  input: StreamCaptureInput
+): Promise<{ packetflixUri: string; expiresAt: string }> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson("/api/runtime/capture/tickets", asJsonBody(input, endpointId), endpointId);
+}
+
+/** A single-use URL that downloads the capture as `.pcapng` while it runs. */
+export async function createCaptureDownload(input: StreamCaptureInput): Promise<{ url: string; fileName: string }> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson("/api/runtime/capture/downloads", asJsonBody(input, endpointId), endpointId);
+}
+
+/** Wireshark on the app server's machine reading the capture (the desktop app). */
+export async function openLocalWiresharkCapture(input: StreamCaptureInput): Promise<{ title: string }> {
+  const endpointId = resolveTargetEndpointId(input);
+  return await requestJson("/api/runtime/capture/local-wireshark", asJsonBody(input, endpointId), endpointId);
 }
 
 export async function fetchWiresharkVncSessionReady(

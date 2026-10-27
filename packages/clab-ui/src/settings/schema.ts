@@ -104,6 +104,7 @@ const TITLES: Record<string, string> = {
   "capture.remoteHostname": "Capture hostname",
   "capture.packetflixPort": "Packetflix port",
   "capture.preferredAction": "Default capture method",
+  "capture.wireshark.path": "Wireshark program",
   "capture.wireshark.dockerImage": "Wireshark image",
   "capture.wireshark.pullPolicy": "Image pull policy",
   "capture.wireshark.theme": "Wireshark theme",

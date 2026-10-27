@@ -3,6 +3,7 @@ import React from "react";
 
 import { useClabUiHost } from "../../../host";
 import { useGraphStore } from "../../../stores/graphStore";
+import { hostCapturesLinks, useLabHostStore } from "../../../stores/labHostStore";
 
 import { CaptureMenuPanel } from "./CaptureMenuPanel";
 import { buildCaptureNodeTarget, type CaptureRequestGroup } from "./captureInterfaceOptions";
@@ -16,9 +17,10 @@ export const CanvasCapturePanel: React.FC<{ nodeId: string; onDone: () => void }
   const { topoViewer } = useClabUiHost();
   const nodes = useGraphStore((state) => state.nodes);
   const edges = useGraphStore((state) => state.edges);
+  const linksOnly = useLabHostStore((state) => hostCapturesLinks(state.info));
   const target = React.useMemo(
-    () => buildCaptureNodeTarget(nodeId, nodes, edges),
-    [nodeId, nodes, edges]
+    () => buildCaptureNodeTarget(nodeId, nodes, edges, { linksOnly }),
+    [nodeId, nodes, edges, linksOnly]
   );
   const containerName = target?.containerName;
   const [initialSelection] = React.useState(() =>

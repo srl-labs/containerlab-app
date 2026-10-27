@@ -1,5 +1,6 @@
 import {
   parseHostValidation,
+  parseLabCaptureInterfaces,
   parseManifestExport,
   parseNodeLocations,
   parseExecResponse,
@@ -38,6 +39,7 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
       return endpointId ? await loadLabHostInfo(endpointId) : undefined;
     },
     nodeLocations: async () => parseNodeLocations(await run("node-locations")),
+    captureInterfaces: async () => parseLabCaptureInterfaces(await run("capture-interfaces")),
     exportManifests: async () => parseManifestExport(await run("manifests")),
     validate: async () => parseHostValidation(await run("validate"))
   };

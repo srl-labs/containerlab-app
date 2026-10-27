@@ -52,6 +52,17 @@ export interface CaptureInterfacesDialogProps {
   onClose: () => void;
   /** Called with one group per capture session to open, in list order. */
   onCapture: (groups: CaptureRequestGroup[]) => void;
+  /**
+   * The lab host captures every pick as one stream (c9s): one group with all
+   * picked interfaces, whatever node they belong to, and no "open as" choice.
+   */
+  oneStream?: boolean;
+  /** Controls above the footer, e.g. where the capture goes and for how long. */
+  footerExtra?: React.ReactNode;
+  /** Replaces the submit button's text, e.g. "Download". */
+  submitLabel?: string;
+  /** Shown while the interfaces load; the list is empty meanwhile. */
+  loading?: boolean;
 }
 
 const LIST_MAX_HEIGHT = 320;
@@ -66,6 +77,19 @@ function selectAllState(
   const count = visible.filter((option) => selected.has(option.name)).length;
   if (count === 0) return "none";
   return count === visible.length ? "all" : "some";
+}
+
+function streamHint(selectedCount: number): string {
+  if (selectedCount === 0) return "Pick the interfaces to capture.";
+  return selectedCount === 1 ? "One interface in one capture." : `All ${selectedCount} interfaces in one capture.`;
+}
+
+function emptyListText(loading: boolean, oneStream: boolean, hasOptions: boolean, filter: string): string {
+  if (loading) return "Loading the lab's link interfaces…";
+  if (hasOptions) return `No interface matches "${filter.trim()}".`;
+  return oneStream
+    ? "No lab links to capture. Only interfaces of links between nodes can be captured here."
+    : "No interfaces found. Start the node to capture its traffic.";
 }
 
 function footerHint(selectedCount: number, summary: CaptureSummary, separate: boolean): string {
@@ -268,14 +292,19 @@ const CaptureFooter: React.FC<{
   onSeparateChange: (separate: boolean) => void;
   onClose: () => void;
   onSubmit: () => void;
-}> = ({ selectedCount, summary, separate, onSeparateChange, onClose, onSubmit }) => (
+  oneStream: boolean;
+  extra?: React.ReactNode;
+}> = ({ selectedCount, summary, separate, onSeparateChange, onClose, onSubmit, oneStream, extra }) => (
   <DialogActions sx={{ flexDirection: "column", alignItems: "stretch", gap: 1.25 }}>
-    <OpenAsToggle separate={separate} disabled={selectedCount < 2} onChange={onSeparateChange} />
+    {oneStream ? null : (
+      <OpenAsToggle separate={separate} disabled={selectedCount < 2} onChange={onSeparateChange} />
+    )}
+    {extra}
     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, color: "text.secondary" }}>
         <InfoOutlinedIcon sx={{ fontSize: 14, flexShrink: 0 }} />
         <Typography sx={{ fontSize: 12 }} data-testid="capture-interfaces-hint">
-          {footerHint(selectedCount, summary, separate)}
+          {oneStream ? streamHint(selectedCount) : footerHint(selectedCount, summary, separate)}
         </Typography>
       </Box>
       <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
@@ -356,7 +385,11 @@ export const CaptureInterfacesDialog: React.FC<CaptureInterfacesDialogProps> = (
   initialSelection,
   linksKnown = true,
   onClose,
-  onCapture
+  onCapture,
+  oneStream = false,
+  footerExtra,
+  submitLabel,
+  loading = false
 }) => {
   const [filter, setFilter] = React.useState("");
   const filterInputRef = React.useRef<HTMLInputElement | null>(null);
@@ -369,10 +402,14 @@ export const CaptureInterfacesDialog: React.FC<CaptureInterfacesDialogProps> = (
   const isFiltered = filter.trim().length > 0;
   const showLinkedPreset = linksKnown && linked.length > 0 && linked.length < options.length;
   const [separate, setSeparate] = React.useState(readSeparateCaptureSessions);
-  const groups = React.useMemo(
-    () => groupCaptureSelection(options, selected, { separate }),
-    [options, selected, separate]
-  );
+  const groups = React.useMemo((): CaptureRequestGroup[] => {
+    if (!oneStream) return groupCaptureSelection(options, selected, { separate });
+    const picked = options.filter((option) => selected.has(option.name));
+    return picked.length === 0
+      ? []
+      : [{ containerName: picked[0].containerName, interfaceNames: picked.map((option) => option.name), nodeNamespace: true }];
+  }, [oneStream, options, selected, separate]);
+  const summary = summarizeCapture(options, selected, groups, separate);
 
   const changeSeparate = React.useCallback((next: boolean) => {
     setSeparate(next);
@@ -446,9 +483,7 @@ export const CaptureInterfacesDialog: React.FC<CaptureInterfacesDialogProps> = (
                 sx={{ py: 4, textAlign: "center", fontSize: 13, color: "text.secondary" }}
                 data-testid="capture-interfaces-empty"
               >
-                {options.length === 0
-                  ? "No interfaces found. Start the node to capture its traffic."
-                  : `No interface matches "${filter.trim()}".`}
+                {emptyListText(loading, oneStream, options.length > 0, filter)}
               </Typography>
             ) : null}
           </Box>
@@ -456,11 +491,13 @@ export const CaptureInterfacesDialog: React.FC<CaptureInterfacesDialogProps> = (
       </DialogContent>
       <CaptureFooter
         selectedCount={selectedNames.length}
-        summary={summarizeCapture(options, selected, groups, separate)}
+        summary={submitLabel !== undefined && selectedNames.length > 0 ? { ...summary, submitLabel } : summary}
         separate={separate}
         onSeparateChange={changeSeparate}
         onClose={onClose}
         onSubmit={submit}
+        oneStream={oneStream}
+        extra={footerExtra}
       />
     </Dialog>
   );

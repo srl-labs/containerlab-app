@@ -132,6 +132,7 @@ function useEndpointAuth() {
       setDefaultApiUrl(payload.defaultClabApiUrl);
     }
     setLocalEndpoint(payload.localEndpoint ?? null, payload.localEndpoints);
+    useAuthStore.getState().setLocalWireshark(payload.localWireshark === true);
   }, [setDefaultApiUrl, setLocalEndpoint]);
 
   const refreshEndpoints = useCallback(async () => {

@@ -7,12 +7,15 @@ interface AuthState {
   localEndpoint: LocalEndpointStatus | null;
   /** Every local lab host the app server offers, such as Kubernetes clusters; the first is `localEndpoint`. */
   localEndpoints: LocalEndpointStatus[];
+  /** The app server opens captures in Wireshark on this machine (the desktop app). */
+  localWireshark: boolean;
   error: string | null;
   initialized: boolean;
   loading: boolean;
   clearError: () => void;
   setDefaultApiUrl: (defaultApiUrl: string) => void;
   setLocalEndpoint: (localEndpoint: LocalEndpointStatus | null, localEndpoints?: LocalEndpointStatus[]) => void;
+  setLocalWireshark: (localWireshark: boolean) => void;
   setError: (error: string | null) => void;
   setInitialized: (initialized: boolean) => void;
   setLoading: (loading: boolean) => void;
@@ -22,6 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   defaultApiUrl: "",
   localEndpoint: null,
   localEndpoints: [],
+  localWireshark: false,
   error: null,
   initialized: false,
   loading: true,
@@ -29,6 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setDefaultApiUrl: (defaultApiUrl) => set({ defaultApiUrl }),
   setLocalEndpoint: (localEndpoint, localEndpoints) =>
     set({ localEndpoint, localEndpoints: localEndpoints ?? (localEndpoint ? [localEndpoint] : []) }),
+  setLocalWireshark: (localWireshark) => set({ localWireshark }),
   setError: (error) => set({ error, loading: false }),
   setInitialized: (initialized) => set({ initialized }),
   setLoading: (loading) => set({ loading })

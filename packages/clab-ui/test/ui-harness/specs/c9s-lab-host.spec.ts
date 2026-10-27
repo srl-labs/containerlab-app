@@ -43,16 +43,46 @@ test.describe("A lab on a Kubernetes cluster (c9s)", () => {
     await topoViewerPage.waitForCanvasReady();
   });
 
-  test("hides capture and link impairments, and offers kubectl", async ({ page }) => {
+  test("hides link impairments, and offers capture and kubectl", async ({ page }) => {
     await setDeploymentState(page, "deployed");
     await openNodeContextMenu(page, "leaf1");
     await expect(page.getByTestId("context-menu-item-info-node")).toBeVisible();
-    await expect(page.getByTestId("context-menu-item-capture-node")).toHaveCount(0);
+    await expect(page.getByTestId("context-menu-item-capture-node")).toBeVisible();
     await expect(page.getByTestId("context-menu-item-copy-kubectl-exec")).toBeVisible();
     await page.getByTestId("context-menu-item-copy-kubectl-exec").click();
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe("kubectl --context kind-harness -n c9s-spine-leaf exec -it spine-leaf-leaf1-6d9f7c-x2k4q -c node-leaf1-1a2b3c -- sh");
+  });
+
+  test("captures lab links only: eth0 and lo are not offered", async ({ page }) => {
+    await page.evaluate(() => {
+      const dev = (window as { __DEV__?: BrowserDevApi }).__DEV__;
+      if (!dev) throw new Error("__DEV__ API not available");
+      dev.setDeploymentState?.("deployed");
+      // containerlab reports a c9s node's interfaces as Docker does: eth0, the lab links and lo.
+      const interfaces = [
+        { name: "eth0", state: "up" },
+        { name: "e1-49", alias: "ethernet-1/49", state: "up" },
+        { name: "lo", state: "unknown" }
+      ];
+      dev.emitHostMessage({
+        type: "node-data-updated",
+        data: { nodeUpdates: [{ containerLongName: "spine-leaf-leaf1", containerShortName: "leaf1", state: "running", interfaces }] }
+      });
+    });
+    await openNodeContextMenu(page, "leaf1");
+    await page.getByTestId("context-menu-item-capture-node").hover();
+    const rows = page.locator('[data-testid="capture-interface-row"]');
+    await expect(rows.first()).toBeVisible();
+    const names = await rows.evaluateAll((elements) => elements.map((element) => element.getAttribute("data-interface")));
+    expect(names).not.toContain("eth0");
+    expect(names).not.toContain("lo");
+    expect(names.length).toBeGreaterThan(0);
+    // Every row is a link end with its peer.
+    for (const name of names) {
+      await expect(page.locator(`[data-testid="capture-interface-row"][data-interface="${name}"]`)).toContainText(/spine|client/);
+    }
   });
 
   test("shows where a node runs in its info", async ({ page }) => {
