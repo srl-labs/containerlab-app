@@ -92,6 +92,7 @@ A template can hold a full node definition:
 | `capture.preferredAction` | `Wireshark VNC` | What the capture action does: `Wireshark VNC` or `Edgeshark`. |
 | `capture.remoteHostname` | empty | Host name or IP your machine uses to reach Edgeshark on the lab host. |
 | `capture.packetflixPort` | `5001` | Packetflix WebSocket port used by Edgeshark. |
+| `capture.wireshark.path` | empty | Wireshark for captures from a Kubernetes cluster on this machine; found on `PATH` or where it installs when empty. |
 | `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. |
 | `capture.wireshark.pullPolicy` | `always` | `always`, `missing`, or `never`. |
 | `capture.wireshark.theme` | `Follow VS Code theme` | Wireshark color scheme. |
