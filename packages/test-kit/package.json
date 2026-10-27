@@ -12,10 +12,12 @@
   "dependencies": {
     "@containerlab/clab-ui": "workspace:*",
     "@playwright/test": "catalog:",
-    "@srl-labs/containerlab-lab-backend": "workspace:*"
+    "@srl-labs/containerlab-lab-backend": "workspace:*",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tsgolint": "catalog:",
     "tsx": "catalog:",

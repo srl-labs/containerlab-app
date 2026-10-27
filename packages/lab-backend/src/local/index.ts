@@ -24,3 +24,9 @@ export { packetflixUri, groupCaptureTargets, prepareEdgesharkCompose } from "./c
 export { terminalShellCommand, terminalSshUsername } from "./terminals.ts";
 export { stripAnsi } from "./process.ts";
 export { declaredTopologyName } from "./topologyFiles.ts";
+export {
+  findWireshark,
+  launchLocalWireshark,
+  type LaunchLocalWiresharkOptions,
+  type LocalWiresharkSession
+} from "./localWireshark.ts";

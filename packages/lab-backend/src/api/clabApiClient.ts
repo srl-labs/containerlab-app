@@ -6,6 +6,7 @@ import {
 import type { Response } from "undici";
 
 import type {
+  CaptureInterface,
   CaptureCloseAllResponse,
   CapturePacketflixResponse,
   CaptureTarget,
@@ -54,6 +55,7 @@ import type {
   WorkspaceFileEntry
 } from "../contract/dto.ts";
 import type { RenderedTopology } from "../contract/backend.ts";
+import { parseCaptureInterfaces, type CaptureNodeTarget } from "../capture.ts";
 import { isNotFoundError, LabBackendError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
@@ -1203,6 +1205,49 @@ export class ClabApiClient {
     return (await res.json()) as CaptureWiresharkVncCreateResponse;
   }
 
+  /** The lab-link interfaces of a c9s lab, with their peers. */
+  async listCaptureInterfaces(token: string, labName: string): Promise<CaptureInterface[]> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/capture/interfaces`, token);
+    return parseCaptureInterfaces(await res.json());
+  }
+
+  /**
+   * Opens a capture as a chunked pcapng response
+   * (`GET /api/v1/labs/{lab}/capture/stream`). Returns the raw Response for streaming.
+   */
+  async openCaptureStream(
+    token: string,
+    labName: string,
+    request: CaptureStreamQuery,
+    requestOptions: StreamRequestOptions = {},
+  ): Promise<Response> {
+    return this.openStream(captureStreamPath(labName, request), token, requestOptions);
+  }
+
+  /** A single-use Packetflix ticket for a capture of the targets. */
+  async createCaptureTicket(
+    token: string,
+    labName: string,
+    payload: { targets: CaptureNodeTarget[]; duration?: string },
+  ): Promise<{ ticket: string; packetflixUri: string; expiresAt: string }> {
+    const res = await this.request(
+      "POST",
+      `/api/v1/labs/${enc(labName)}/capture/tickets`,
+      token,
+      JSON.stringify(payload),
+      "application/json",
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+    if (typeof body.packetflixUri !== "string" || typeof body.expiresAt !== "string") {
+      throw new LabBackendError("clab-api-server returned no capture ticket", 502);
+    }
+    return {
+      ticket: typeof body.ticket === "string" ? body.ticket : "",
+      packetflixUri: body.packetflixUri,
+      expiresAt: body.expiresAt,
+    };
+  }
+
   async getWiresharkVncSessionReady(
     token: string,
     sessionId: string,
@@ -1494,6 +1539,27 @@ export class ClabApiClient {
     }
     return res;
   }
+}
+
+/** What a capture stream asks of clab-api-server. */
+export interface CaptureStreamQuery {
+  targets: CaptureNodeTarget[];
+  duration?: string;
+  packetLimit?: number;
+  snapLength?: number;
+  /** Ask for `Content-Disposition: attachment`. */
+  download?: boolean;
+}
+
+/** `/api/v1/labs/{lab}/capture/stream?target=<node>:<iface>&…`, one `target` per interface. */
+export function captureStreamPath(labName: string, request: CaptureStreamQuery): string {
+  const params = new URLSearchParams();
+  for (const target of request.targets) params.append("target", `${target.node}:${target.interface}`);
+  if (request.duration !== undefined) params.set("duration", request.duration);
+  if (request.packetLimit !== undefined) params.set("packetLimit", String(request.packetLimit));
+  if (request.snapLength !== undefined) params.set("snapLength", String(request.snapLength));
+  if (request.download) params.set("download", "1");
+  return `/api/v1/labs/${enc(labName)}/capture/stream?${params.toString()}`;
 }
 
 function enc(value: string): string {

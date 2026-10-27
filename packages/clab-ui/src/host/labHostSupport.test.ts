@@ -18,7 +18,8 @@ const ALL_CAPABILITIES: LabBackendCapabilities = {
   wiresharkVnc: true,
   healthMetrics: true,
   sharedWorkspace: true,
-  tailscaleStatus: true
+  tailscaleStatus: true,
+  captureTickets: true
 };
 
 function features(containerRuntime: boolean): LabBackendFeatures {
@@ -32,7 +33,9 @@ function features(containerRuntime: boolean): LabBackendFeatures {
     terminalResume: true,
     ...containerRuntimeFeatures(containerRuntime),
     manifestExport: !containerRuntime,
-    c9sDeployOptions: !containerRuntime
+    c9sDeployOptions: !containerRuntime,
+    captureStream: !containerRuntime,
+    captureVnc: false
   };
 }
 
@@ -59,6 +62,24 @@ test("the runtime narrows the static capabilities, never widens them", () => {
   const local = effectiveSupport({ ...ALL_CAPABILITIES, tailscaleStatus: false, sshAccess: false }, features(true));
   assert.equal(local.tailscaleStatus, false);
   assert.equal(local.sshAccess, false);
+});
+
+test("capture: links to a stream need tickets and the stream; VNC comes from Edgeshark or the stream", () => {
+  const docker = effectiveSupport(ALL_CAPABILITIES, features(true));
+  assert.equal(docker.captureStream, false);
+  assert.equal(docker.captureTickets, false);
+  assert.equal(docker.wiresharkVnc, true);
+
+  const c9sApi = effectiveSupport(ALL_CAPABILITIES, features(false));
+  assert.equal(c9sApi.captureStream, true);
+  assert.equal(c9sApi.captureTickets, true);
+  assert.equal(c9sApi.wiresharkVnc, false, "no VNC without Docker next to the server");
+  assert.equal(effectiveSupport(ALL_CAPABILITIES, { ...features(false), captureVnc: true }).wiresharkVnc, true);
+
+  const c9sLocal = effectiveSupport({ ...ALL_CAPABILITIES, captureTickets: false }, features(false));
+  assert.equal(c9sLocal.captureStream, true);
+  assert.equal(c9sLocal.captureTickets, false, "this machine serves no packetflix links");
+  assert.equal(parseLabHostInfo({ profile: { runtime: "c9s" }, support: c9sLocal })?.support.captureStream, true);
 });
 
 test("host info from a transport keeps only well-formed values", () => {

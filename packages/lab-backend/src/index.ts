@@ -7,3 +7,4 @@ export { containerRuntimeFeatures, describeLabHost, effectiveSupport } from "./c
 export { parseBooleanEnv } from "./env.ts";
 export { isNetemCleared } from "./netem.ts";
 export { gottyOptionsError } from "./shareOptions.ts";
+export { captureDuration, describeCaptureGap } from "./capture.ts";

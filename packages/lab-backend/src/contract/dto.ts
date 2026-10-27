@@ -120,6 +120,58 @@ export interface CaptureTarget {
   nodeNamespace?: boolean;
 }
 
+/**
+ * A lab-link interface a lab host with `captureStream` can capture, as
+ * `containerlab capture --list` reports it.
+ */
+export interface CaptureInterface {
+  /** The node as the topology spells it. */
+  node: string;
+  /** The interface name in the node; what the capture's pcapng `if_name` carries. */
+  interface: string;
+  /** The vendor name the topology used, e.g. `ethernet-1/1` for SR Linux `e1-1`. */
+  alias?: string;
+  /** The node at the other end of the link; `host` for a host endpoint. */
+  peerNode: string;
+  /** The peer's interface as the link names it. */
+  peerInterface: string;
+}
+
+/**
+ * A capture that switched segments and missed packets in between. The
+ * stream goes on; clients show it as a status, not as an error.
+ */
+export interface CaptureGap {
+  node?: string;
+  interfaces?: string[];
+  /** RFC 3339 times on the pod clock, when known. */
+  from?: string;
+  to?: string;
+  reason?: string;
+}
+
+export interface CaptureStreamOptions {
+  targets: CaptureTarget[];
+  /** Go duration, e.g. `30s`. Without it the capture runs until `signal` aborts. */
+  duration?: string;
+  /** Packets across all targets after which the capture ends. */
+  packetLimit?: number;
+  /** Bytes kept of each packet, 64 to 1048576; the lab host's default when unset. */
+  snapLength?: number;
+  /** Ends the capture; the stream then ends cleanly. */
+  signal: AbortSignal;
+  /** Called when the lab host reports a gap; the stream goes on. */
+  onGap?: (gap: CaptureGap) => void;
+}
+
+/** A single-use link to the lab host's capture stream, for cshargextcap or Wireshark VNC. */
+export interface CaptureTicket {
+  /** `packetflix:ws[s]://…`; Wireshark opens it through cshargextcap. */
+  packetflixUri: string;
+  /** RFC 3339; the link must be opened before then. */
+  expiresAt: string;
+}
+
 export interface CapturePacketflixURI {
   containerName: string;
   interfaceNames: string[];

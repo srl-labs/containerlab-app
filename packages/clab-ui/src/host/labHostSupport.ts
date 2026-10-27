@@ -50,6 +50,11 @@ export interface LabBackendCapabilities {
   sharedWorkspace: boolean;
   /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
   tailscaleStatus: boolean;
+  /**
+   * Single-use `packetflix:` links to the lab host's own capture stream
+   * (clab-api-server). Needs the `captureStream` feature.
+   */
+  captureTickets: boolean;
 }
 
 /**
@@ -103,6 +108,16 @@ export interface LabBackendFeatures {
   manifestExport: boolean;
   /** The c9s deploy options of `LabLifecycleOptions` (namespace, exposure, persistence). */
   c9sDeployOptions: boolean;
+  /**
+   * Packet capture as one pcapng stream of lab-link interfaces, with their
+   * link peers (`captureInterfaces`, `openCaptureStream`): c9s lab hosts.
+   */
+  captureStream: boolean;
+  /**
+   * Wireshark VNC sessions fed by the lab host's capture stream instead of
+   * Edgeshark: a c9s clab-api-server that runs Docker next to it.
+   */
+  captureVnc: boolean;
 }
 
 /** What a lab host offers: its backend kind's capabilities narrowed by its runtime's features. */
@@ -124,8 +139,9 @@ export function effectiveSupport(
     importFromUrl: capabilities.importFromUrl,
     sharedWorkspace: capabilities.sharedWorkspace,
     edgesharkManagement: capabilities.edgesharkManagement && features.edgeshark,
-    // The Wireshark VNC containers read their capture from Edgeshark.
-    wiresharkVnc: capabilities.wiresharkVnc && features.edgeshark,
+    // The Wireshark VNC containers read their capture from Edgeshark, or from the host's capture stream.
+    wiresharkVnc: capabilities.wiresharkVnc && (features.edgeshark || features.captureVnc),
+    captureTickets: capabilities.captureTickets && features.captureStream,
     healthMetrics: capabilities.healthMetrics && features.hostMetrics,
     tailscaleStatus: capabilities.tailscaleStatus && features.tailscale
   };
@@ -179,6 +195,7 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "healthMetrics",
   "sharedWorkspace",
   "tailscaleStatus",
+  "captureTickets",
   "validate",
   "graphMermaid",
   "graphDot",
@@ -198,7 +215,9 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "shareTools",
   "hostCapture",
   "manifestExport",
-  "c9sDeployOptions"
+  "c9sDeployOptions",
+  "captureStream",
+  "captureVnc"
 ];
 
 const RUNTIMES: readonly LabRuntimeKind[] = ["docker", "podman", "c9s"];

@@ -5,7 +5,7 @@ import path from "node:path";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 import { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
 
-import { startFakeClabApiServer } from "./fakeClabApiServer";
+import { FAKE_CAPTURE_LAB, startFakeClabApiServer } from "./fakeClabApiServer";
 import { describeLabBackendContract } from "./labBackend";
 
 async function temporaryWorkspace(): Promise<{ root: string; remove(): Promise<void> }> {
@@ -69,11 +69,16 @@ if (process.env.CLAB_CONTRACT_LOCAL === "1") {
 describeLabBackendContract("API (fake c9s clab-api-server)", {
   async createFixture() {
     const workspace = await temporaryWorkspace();
-    const server = await startFakeClabApiServer(workspace.root, { runtime: "c9s", namespaceMode: "per-lab" });
+    const server = await startFakeClabApiServer(workspace.root, {
+      runtime: "c9s",
+      namespaceMode: "per-lab",
+      features: ["capture-stream"]
+    });
     return {
       backend: new ApiLabBackend({ baseUrl: server.url, token: server.token }),
       runsLabs: false,
       runtime: "c9s",
+      captureLab: FAKE_CAPTURE_LAB,
       async dispose() {
         await server.close();
         await workspace.remove();

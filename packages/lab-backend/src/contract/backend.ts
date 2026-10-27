@@ -19,6 +19,9 @@ import type { FileSystemAdapter } from "@containerlab/clab-ui/session";
 
 import type {
   CaptureCloseAllResponse,
+  CaptureInterface,
+  CaptureStreamOptions,
+  CaptureTicket,
   CapturePacketflixResponse,
   CaptureTarget,
   CaptureWiresharkVncCreateResponse,
@@ -429,6 +432,29 @@ export interface LabBackend {
   wiresharkVncReady(sessionId: string): Promise<CaptureWiresharkVncReadyResponse>;
   closeWiresharkVnc(sessionId: string): Promise<void>;
   closeAllWiresharkVnc(): Promise<CaptureCloseAllResponse>;
+  /**
+   * The lab-link interfaces of a running lab's nodes, with their peers.
+   * Rejects with 501 without the `captureStream` feature.
+   */
+  captureInterfaces(labName: string): Promise<CaptureInterface[]>;
+  /**
+   * Captures the targets into one pcapng stream: one section, one interface
+   * per target, named `<node>:<interface>`. Resolves once the capture runs;
+   * the stream ends at the duration or packet limit, or when `signal`
+   * aborts, always with a complete last block. Long captures are continuous;
+   * gaps go to `onGap`. On c9s, `containerName` of a target is the inspect
+   * name (`<lab>-<node>`). Rejects with 501 without `captureStream`.
+   */
+  openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>>;
+  /**
+   * A single-use `packetflix:` link to a capture of the targets, valid for a
+   * short time. Rejects with 501 without the `captureTickets` support.
+   */
+  createCaptureTicket(
+    labName: string,
+    targets: CaptureTarget[],
+    options?: { duration?: string }
+  ): Promise<CaptureTicket>;
   fetchWiresharkVnc(sessionId: string, request: WiresharkVncRequest): Promise<WiresharkVncResponse>;
   connectWiresharkVnc(
     sessionId: string,

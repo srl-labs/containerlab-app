@@ -80,6 +80,18 @@ function c9sEvents(topoFile: string): LabEvent[] {
   ];
 }
 
+/** An SHB and nothing else: the smallest pcapng file. */
+const CAPTURE = (() => {
+  const block = Buffer.alloc(28);
+  block.writeUInt32LE(0x0a0d0d0a, 0);
+  block.writeUInt32LE(28, 4);
+  block.writeUInt32LE(0x1a2b3c4d, 8);
+  block.writeUInt16LE(1, 12);
+  block.writeBigInt64LE(-1n, 16);
+  block.writeUInt32LE(28, 24);
+  return block;
+})();
+
 /**
  * A containerlab for a c9s host: inspect lists one lab, deploy --dry-run
  * plans, --emit-crs prints manifests, events prints c9s events. Every call's
@@ -98,13 +110,17 @@ async function fakeC9sHost(t: TestContext, deployedFrom?: string, namespace?: st
     c9sEvents(labFile).map((event) => JSON.stringify(event)).join("\n")
   );
   await fs.writeFile(path.join(directory, "plan.json"), JSON.stringify(PLAN));
+  await fs.writeFile(path.join(directory, "capture.pcapng"), CAPTURE);
   const binary = path.join(directory, "containerlab");
   await fs.writeFile(
     binary,
     `#!/bin/sh
 echo "$* | ns=$CLAB_KUBE_NAMESPACE ctx=$CLAB_KUBE_CONTEXT" >> "${directory}/calls"
 case "$*" in
+  *"inspect interfaces"*) echo '[{"name":"demo-n1","interfaces":[{"name":"eth1","alias":"","state":"up","type":"veth"}]}]' ;;
   *inspect*) cat "${directory}/inspect.json" ;;
+  *"capture"*"--list"*) echo '[{"node":"n1","interface":"eth1","alias":"","peer_node":"n2","peer_interface":"eth1"}]' ;;
+  *capture*) cat "${directory}/capture.pcapng" ;;
   *--dry-run*) cat "${directory}/plan.json" ;;
   *--emit-crs*) printf 'apiVersion: c9s.run/v1alpha1\\nkind: Topology\\n' ;;
   events*) cat "${directory}/events.json" ;;
@@ -286,4 +302,53 @@ test("c9s events reach clients as containerlab reports them", async (t) => {
   // containerlab reports Docker's actions, states and node labels, and the deployed file as `clab-topo-file`.
   assert.deepEqual(events, c9sEvents(host.topology));
   assert.equal((await host.calls())[0], "events -r c9s --format json --initial-state | ns= ctx=kind-c9s-app");
+});
+
+test("capture on a c9s host lists lab-link interfaces and streams containerlab capture", async (t) => {
+  const host = await fakeC9sHost(t);
+  const lab = backend(host);
+  assert.equal((await lab.features()).captureStream, true);
+  assert.equal(lab.capabilities.captureTickets, false);
+  assert.deepEqual(await lab.captureInterfaces("demo"), [
+    { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }
+  ]);
+  const chunks: Uint8Array[] = [];
+  const stream = await lab.openCaptureStream("demo", {
+    targets: [{ containerName: "demo-n1", interfaceName: "eth1" }],
+    duration: "5s",
+    signal: new AbortController().signal
+  });
+  for await (const chunk of stream) chunks.push(chunk);
+  assert.deepEqual(Buffer.concat(chunks), CAPTURE);
+  const calls = (await host.calls()).filter((call) => call.includes("capture"));
+  assert.deepEqual(calls, [
+    "-r c9s capture --name demo --list -f json | ns=team-a ctx=kind-c9s-app",
+    "-r c9s capture --name demo --target n1:eth1 --duration 5s -w - | ns=team-a ctx=kind-c9s-app"
+  ]);
+  const { command, env } = await lab.captureCommandLine("demo", [{ containerName: "demo-n1", interfaceName: "eth1" }]);
+  assert.equal(command, `${host.binary} -r c9s capture --name demo --target n1:eth1 -w -`);
+  assert.deepEqual(env, { CLAB_KUBE_CONTEXT: "kind-c9s-app", CLAB_KUBE_NAMESPACE: "team-a" });
+  await assert.rejects(lab.createCaptureTicket(), (error: Error & { status?: number }) => error.status === 501);
+});
+
+test("capture streams are a c9s feature; Docker hosts keep Edgeshark", async (t) => {
+  const host = await fakeC9sHost(t);
+  const docker = new LocalLabBackend({ binaryPath: host.binary, workspaceRoot: host.workspace });
+  assert.equal((await docker.features()).captureStream, false);
+  const notOnDocker = (error: Error & { status?: number }) => error.status === 501;
+  await assert.rejects(docker.captureInterfaces("demo"), notOnDocker);
+  await assert.rejects(
+    docker.openCaptureStream("demo", { targets: [], signal: new AbortController().signal }),
+    notOnDocker
+  );
+});
+
+test("inspect interfaces on a c9s host asks by lab and node name", async (t) => {
+  const host = await fakeC9sHost(t);
+  const lab = backend(host);
+  assert.equal((await lab.features()).interfaceInspect, true);
+  const interfaces = await lab.inspectInterfaces(host.topology, "demo-n1");
+  assert.equal((interfaces[0] as { name: string }).name, "demo-n1");
+  const call = (await host.calls()).find((entry) => entry.startsWith("inspect interfaces"));
+  assert.equal(call, "inspect interfaces -r c9s --name demo -f json -n n1 | ns=team-a ctx=kind-c9s-app");
 });

@@ -48,7 +48,9 @@ const TEST_LAB_HOST_FEATURES: LabBackendFeatures = {
   shareTools: true,
   hostCapture: true,
   manifestExport: false,
-  c9sDeployOptions: false
+  c9sDeployOptions: false,
+  captureStream: false,
+  captureVnc: false
 };
 
 /**
@@ -67,7 +69,8 @@ const TEST_LAB_HOST: LabHostInfo = {
     wiresharkVnc: true,
     healthMetrics: true,
     sharedWorkspace: true,
-    tailscaleStatus: true
+    tailscaleStatus: true,
+    captureTickets: false
   }
 };
 

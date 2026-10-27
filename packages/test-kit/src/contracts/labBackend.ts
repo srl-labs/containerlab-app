@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
 
+import WebSocket from "ws";
 import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
 import type {
   LabBackend,
@@ -11,6 +12,8 @@ import type {
   TerminalServerMessage,
   WorkspaceFileEvent
 } from "@srl-labs/containerlab-lab-backend";
+
+import { isIcmpFrame, parsePcapng, type ParsedPcapng } from "./pcapng";
 
 /** One lab backend under test, on a fake or on a real lab host. */
 export interface LabBackendContractFixture {
@@ -24,6 +27,11 @@ export interface LabBackendContractFixture {
   nodeImage?: string;
   /** The runtime the lab host must report; any known one when unset. */
   runtime?: LabRuntimeKind;
+  /**
+   * A lab that runs on the host, with nodes n1 and n2 linked n1:eth1 to
+   * n2:eth1 and pinging each other, to capture on (a fake lab host's).
+   */
+  captureLab?: string;
   dispose?(): Promise<void> | void;
 }
 
@@ -81,6 +89,98 @@ async function collectLifecycle(
   return { logs, last };
 }
 
+
+async function readAll(stream: AsyncIterable<Uint8Array>): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+/** One section, an interface per target named `<node>:<interface>`, ping packets, nothing cut off. */
+function assertLabLinkCapture(capture: ParsedPcapng, interfaceNames: string[]): void {
+  assert.equal(capture.sections, 1, "one pcapng section");
+  assert.equal(capture.trailing, 0, "the stream ends with a whole block");
+  assert.deepEqual(
+    capture.interfaces.map((entry) => entry.name),
+    interfaceNames
+  );
+  assert.ok(capture.interfaces.every((entry) => entry.linkType === 1), "Ethernet interfaces");
+  const icmp = capture.packets.filter((packet) => isIcmpFrame(packet.frame));
+  assert.ok(icmp.length > 0, `ICMP packets in ${capture.packets.length} packets`);
+  assert.ok(capture.packets.every((packet) => packet.interfaceId < interfaceNames.length));
+}
+
+/**
+ * Captures n1:eth1 and n2:eth1 of a running lab for `duration`, by the
+ * containers' inspect names, and checks the pcapng. Aborting a capture
+ * without a duration must end its stream cleanly too.
+ */
+async function assertCapturesLab(backend: LabBackend, labName: string, duration: string): Promise<void> {
+  const interfaces = await backend.captureInterfaces(labName);
+  const n1 = interfaces.find((entry) => entry.node === "n1" && entry.interface === "eth1");
+  assert.deepEqual(n1 && { peerNode: n1.peerNode, peerInterface: n1.peerInterface }, { peerNode: "n2", peerInterface: "eth1" });
+  const containers = await backend.inspectLab(labName);
+  const containerOf = (node: string) => {
+    const container = containers.find((candidate) => candidate.name.endsWith(`-${node}`));
+    assert.ok(container, `container of ${node}`);
+    return container.name;
+  };
+  const targets = [
+    { containerName: containerOf("n1"), interfaceName: "eth1" },
+    { containerName: containerOf("n2"), interfaceName: "eth1" }
+  ];
+  const started = Date.now();
+  const timed = await readAll(
+    await backend.openCaptureStream(labName, { targets, duration, signal: AbortSignal.timeout(120_000) })
+  );
+  assert.ok(Date.now() - started < 90_000, "the capture ended with its duration");
+  assertLabLinkCapture(parsePcapng(timed), ["n1:eth1", "n2:eth1"]);
+
+  const controller = new AbortController();
+  const chunks: Uint8Array[] = [];
+  const open = await backend.openCaptureStream(labName, { targets: targets.slice(0, 1), signal: controller.signal });
+  const stopper = setTimeout(() => controller.abort(), 3000);
+  for await (const chunk of open) chunks.push(chunk);
+  clearTimeout(stopper);
+  const aborted = parsePcapng(new Uint8Array(Buffer.concat(chunks)));
+  assert.equal(aborted.trailing, 0, "an aborted capture ends with a whole block");
+  assert.deepEqual(aborted.interfaces.map((entry) => entry.name), ["n1:eth1"]);
+}
+
+/** Redeems a capture ticket like cshargextcap: a websocket of binary pcapng messages; once only. */
+async function assertCaptureTicket(backend: LabBackend, labName: string): Promise<void> {
+  const containers = await backend.inspectLab(labName);
+  const n1 = containers.find((candidate) => candidate.name.endsWith("-n1"));
+  assert.ok(n1);
+  const ticket = await backend.createCaptureTicket(labName, [{ containerName: n1.name, interfaceName: "eth1" }], {
+    duration: "1s"
+  });
+  assert.match(ticket.packetflixUri, /^packetflix:wss?:\/\/[^/]+\/\S+\?container=/);
+  assert.ok(Date.parse(ticket.expiresAt) > Date.now(), "the ticket expires later");
+  const url = ticket.packetflixUri.slice("packetflix:".length).replace(/\?.*$/, "");
+  const received = await new Promise<Uint8Array>((resolve, reject) => {
+    const socket = new WebSocket(url, { rejectUnauthorized: false });
+    const messages: Buffer[] = [];
+    socket.on("message", (data: Buffer, isBinary: boolean) => {
+      if (!isBinary) reject(new Error("text message"));
+      messages.push(data);
+    });
+    socket.on("close", () => resolve(new Uint8Array(Buffer.concat(messages))));
+    socket.on("error", reject);
+  });
+  assertLabLinkCapture(parsePcapng(received), ["n1:eth1"]);
+  const again = await new Promise<number | undefined>((resolve) => {
+    const socket = new WebSocket(url, { rejectUnauthorized: false });
+    socket.on("unexpected-response", (_request, response) => resolve(response.statusCode));
+    socket.on("open", () => {
+      socket.close();
+      resolve(101);
+    });
+    socket.on("error", () => resolve(undefined));
+  });
+  assert.equal(again, 404, "a ticket is used once");
+}
+
 export function contractLabYaml(labName: string, image: string): string {
   return `name: ${labName}
 topology:
@@ -125,16 +225,29 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
           "snapshots",
           "nodePause",
           "fcli",
-          "interfaceInspect",
           "edgeshark",
           "edgesharkManagement",
-          "wiresharkVnc",
           "hostCapture",
           "shareTools"
         ] as const;
         for (const flag of containerOnly) {
           assert.equal(support[flag], profile.runtime !== "c9s", `${flag} on ${profile.runtime}`);
         }
+        // c9s captures through its own stream; Docker hosts keep Edgeshark.
+        assert.equal(support.captureStream, profile.runtime === "c9s", `captureStream on ${profile.runtime}`);
+        assert.equal(support.captureTickets, support.captureStream && backend.kind === "api");
+        assert.equal(support.wiresharkVnc, profile.runtime !== "c9s" || support.captureVnc);
+        if (profile.runtime !== "c9s") {
+          await rejectsWithStatus(backend.captureInterfaces("contract"), 501);
+          await rejectsWithStatus(
+            backend.openCaptureStream("contract", {
+              targets: [{ containerName: "contract-n1", interfaceName: "eth1" }],
+              signal: new AbortController().signal
+            }),
+            501
+          );
+        }
+        if (backend.kind === "local") await rejectsWithStatus(backend.createCaptureTicket("contract", []), 501);
         if (profile.runtime !== "c9s") {
           assert.equal(support.c9sDeployOptions, false);
           await rejectsWithStatus(backend.exportManifests({ labName: "contract" }), 501);
@@ -144,6 +257,28 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
           assert.equal(support.c9sDeployOptions, true);
         }
       }));
+
+    test("captures lab links as one pcapng stream", { timeout: 60_000 }, async (t) => {
+      const fixture = await options.createFixture();
+      try {
+        if (!fixture.captureLab) {
+          t.skip("the fixture has no running lab to capture on");
+          return;
+        }
+        await assertCapturesLab(fixture.backend, fixture.captureLab, "1s");
+        const support = effectiveSupport(fixture.backend.capabilities, await fixture.backend.features());
+        if (support.captureTickets) await assertCaptureTicket(fixture.backend, fixture.captureLab);
+        await rejectsWithStatus(
+          fixture.backend.openCaptureStream(fixture.captureLab, {
+            targets: [{ containerName: `${fixture.captureLab}-n1`, interfaceName: "eth9" }],
+            signal: new AbortController().signal
+          }),
+          400
+        );
+      } finally {
+        await fixture.dispose?.();
+      }
+    });
 
     test("writes, lists, renames and deletes workspace files", () =>
       withFixture(async ({ backend }, folder) => {
@@ -315,6 +450,15 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
 
           const logs = await backend.nodeLogs(labName, n1.name, { tail: "10" });
           assert.equal(logs.containerName, n1.name);
+
+          if ((await backend.features()).captureStream) {
+            // Two nodes ping across their link while it is captured for 5 s.
+            await backend.exec({ labName }, { command: "ip addr add 10.255.0.1/30 dev eth1", nodeNames: ["n1"] });
+            await backend.exec({ labName }, { command: "ip addr add 10.255.0.2/30 dev eth1", nodeNames: ["n2"] });
+            const ping = backend.exec({ labName }, { command: "ping -c 30 -i 0.3 10.255.0.2", nodeNames: ["n1"] });
+            await assertCapturesLab(backend, labName, "5s");
+            await ping;
+          }
 
           const destroy = await collectLifecycle(
             await backend.streamLifecycle("destroy", { labName }, { cleanup: true })

@@ -1059,10 +1059,16 @@ importers:
       '@srl-labs/containerlab-lab-backend':
         specifier: workspace:*
         version: link:../lab-backend
+      ws:
+        specifier: 'catalog:'
+        version: 8.21.3
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.5
+      '@types/ws':
+        specifier: 'catalog:'
+        version: 8.18.1
       oxlint:
         specifier: 'catalog:'
         version: 1.83.0(oxlint-tsgolint@7.0.2001)
