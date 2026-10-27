@@ -39,6 +39,7 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "inspectDetails" ||
     value === "hostInfo" ||
     value === "nodeLocations" ||
+    value === "captureInterfaces" ||
     value === "exportManifests" ||
     value === "validate"
   );
@@ -89,6 +90,8 @@ class LabOperationsService {
       case "nodeLocations":
         // The inspect records; on c9s they say where each node runs.
         return backend.inspectLab(target.labName || labNameForPath(labPath));
+      case "captureInterfaces":
+        return backend.captureInterfaces(target.labName || labNameForPath(labPath));
       case "exportManifests":
         return backend.exportManifests({
           ...target,

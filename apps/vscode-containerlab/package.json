@@ -1302,6 +1302,11 @@
             ],
             "description": "The preferred capture method when using the capture interface quick action on the interface tree item"
           },
+          "containerlab.capture.wireshark.path": {
+            "type": "string",
+            "default": "",
+            "description": "Wireshark for captures from Kubernetes (c9s) clusters on this machine, which pipe containerlab capture into wireshark -k -i -. Found on PATH (or in the usual install location) when empty."
+          },
           "containerlab.capture.wireshark.dockerImage": {
             "type": "string",
             "default": "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
