@@ -111,6 +111,7 @@ function useEndpointAuth() {
   const clearError = useAuthStore((state) => state.clearError);
   const setDefaultApiUrl = useAuthStore((state) => state.setDefaultApiUrl);
   const localEndpoint = useAuthStore((state) => state.localEndpoint);
+  const localEndpoints = useAuthStore((state) => state.localEndpoints);
   const setLocalEndpoint = useAuthStore((state) => state.setLocalEndpoint);
   const setError = useAuthStore((state) => state.setError);
   const setInitialized = useAuthStore((state) => state.setInitialized);
@@ -130,7 +131,7 @@ function useEndpointAuth() {
     if (typeof payload.defaultClabApiUrl === "string") {
       setDefaultApiUrl(payload.defaultClabApiUrl);
     }
-    setLocalEndpoint(payload.localEndpoint ?? null);
+    setLocalEndpoint(payload.localEndpoint ?? null, payload.localEndpoints);
   }, [setDefaultApiUrl, setLocalEndpoint]);
 
   const refreshEndpoints = useCallback(async () => {
@@ -228,14 +229,17 @@ function useEndpointAuth() {
     [addEndpointToStore, clearError, setError]
   );
 
-  /** Adds the "This computer" endpoint; it needs no URL or sign-in. */
-  const addLocalEndpoint = useCallback(async (): Promise<EndpointConfig> => {
+  /**
+   * Adds a local lab host: "This computer", or the one at `url` (`local://…`),
+   * such as a Kubernetes cluster. It needs no sign-in.
+   */
+  const addLocalEndpoint = useCallback(async (url?: string): Promise<EndpointConfig> => {
     clearError();
     const response = await runtimeFetch(standaloneServerUrl("/auth/endpoints/add"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ kind: "local" })
+      body: JSON.stringify(url ? { kind: "local", url } : { kind: "local" })
     });
     if (!response.ok) {
       const message = await readError(response, "Failed to use this computer");
@@ -244,7 +248,9 @@ function useEndpointAuth() {
     }
     const endpoint = withStatus(await readJson<EndpointConfig>(response));
     for (const existing of useEndpointStore.getState().endpoints.values()) {
-      if (existing.kind === "local" && existing.id !== endpoint.id) forgetEndpointFromStore(existing.id);
+      if (existing.kind === "local" && existing.url === endpoint.url && existing.id !== endpoint.id) {
+        forgetEndpointFromStore(existing.id);
+      }
     }
     addEndpointToStore(endpoint);
     return endpoint;
@@ -440,6 +446,7 @@ function useEndpointAuth() {
     addLocalEndpoint,
     defaultApiUrl,
     localEndpoint,
+    localEndpoints,
     endpointList,
     endpoints,
     error,

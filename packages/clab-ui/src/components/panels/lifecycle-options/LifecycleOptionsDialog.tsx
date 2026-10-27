@@ -15,7 +15,11 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
-import type { LabLifecycleOptionKind, LabLifecycleOptions } from "../../../host/lifecycleOptions";
+import type {
+  LabLifecycleOptionKind,
+  LabLifecycleOptions,
+  LabRuntimeKind
+} from "../../../host/lifecycleOptions";
 import type { DeploymentState } from "../../../core/types/topology";
 import { useGraphStore } from "../../../stores/graphStore";
 import { controlRadius } from "../../../theme/surfaces";
@@ -39,6 +43,8 @@ export interface LifecycleOptionsDialogProps {
   deploymentState: DeploymentState;
   /** The lab host can restore VM snapshots on deploy. */
   canRestoreSnapshots?: boolean;
+  /** The lab host's runtime; options containerlab rejects there are hidden. */
+  runtime?: LabRuntimeKind;
   onClose: () => void;
   onRun: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
@@ -157,13 +163,17 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   open,
   deploymentState,
   canRestoreSnapshots,
+  runtime = "docker",
   onClose,
   onRun
 }) => {
   const nodeNames = useTopologyNodeNames();
   const [form, setForm] = React.useState<LifecycleOptionsForm>(() =>
-    createLifecycleOptionsForm(initialKind(deploymentState))
+    createLifecycleOptionsForm(initialKind(deploymentState), runtime)
   );
+  React.useEffect(() => {
+    setForm((current) => (current.runtime === runtime ? current : { ...current, runtime }));
+  }, [runtime]);
   const update = React.useCallback(
     <K extends keyof LifecycleOptionsForm>(key: K, value: LifecycleOptionsForm[K]) =>
       setForm((current) => ({ ...current, [key]: value })),
@@ -171,7 +181,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   );
 
   const takes = (field: Parameters<typeof lifecycleKindTakes>[1]) =>
-    lifecycleKindTakes(form.kind, field);
+    lifecycleKindTakes(form.kind, field, form.runtime);
   const cleanupBlocked = isCleanupBlocked(form);
   const workersError = maxWorkersError(form.maxWorkers);
   const varsError = varsFileError(form.varsFile);
@@ -304,7 +314,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             />
           )}
           <SnapshotRestoreSection
-            canRestore={canRestoreSnapshots}
+            canRestore={canRestoreSnapshots === true && takes("restoreAll")}
             form={form}
             nodeNames={nodeNames}
             error={snapshotError}

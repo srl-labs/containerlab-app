@@ -1,4 +1,4 @@
-import type { EndpointSessionDuration } from "./types";
+import type { EndpointConfig, EndpointSessionDuration } from "./types";
 export type {
   EndpointConfig,
   EndpointImportResult,
@@ -36,4 +36,14 @@ export function splitSetupCommand(problem: string): { before: string; command?: 
   const match = /^(.*?(?:with|Run): )(.+?)((?:, then .*)?)$/.exec(problem);
   if (!match) return { before: problem, after: "" };
   return { before: match[1], command: match[2], after: match[3] };
+}
+
+/** A lab host's runtime as its badge reads, e.g. "Kubernetes · lab-prod/team-a"; nothing for Docker. */
+export function endpointRuntimeBadge(
+  endpoint: Pick<EndpointConfig, "runtime" | "kubeContext" | "namespace">
+): string | undefined {
+  if (endpoint.runtime === "podman") return "Podman";
+  if (endpoint.runtime !== "c9s") return undefined;
+  const where = [endpoint.kubeContext, endpoint.namespace].filter(Boolean).join("/");
+  return where ? `Kubernetes · ${where}` : "Kubernetes";
 }

@@ -1,18 +1,21 @@
 // Form state of the lifecycle options dialog and the request it produces.
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
 import {
-  LAB_LIFECYCLE_OPTION_FIELDS,
   isValidVarsFile,
+  labLifecycleOptionFields,
   labLifecycleCliFlags,
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
   type LabLifecycleOptionKind,
   type LabLifecycleOptions,
+  type LabRuntimeKind,
   type LabSnapshotRestore
 } from "../../../host/lifecycleOptions";
 
 export interface LifecycleOptionsForm {
   kind: LabLifecycleOptionKind;
+  /** The lab host's runtime: it decides which options containerlab takes. */
+  runtime: LabRuntimeKind;
   cleanup: boolean;
   nodeFilter: string[];
   maxWorkers: string;
@@ -36,9 +39,13 @@ export interface LifecycleOptionsRequest {
   command: string;
 }
 
-export function createLifecycleOptionsForm(kind: LabLifecycleOptionKind): LifecycleOptionsForm {
+export function createLifecycleOptionsForm(
+  kind: LabLifecycleOptionKind,
+  runtime: LabRuntimeKind = "docker"
+): LifecycleOptionsForm {
   return {
     kind,
+    runtime,
     cleanup: false,
     nodeFilter: [],
     maxWorkers: "",
@@ -56,9 +63,10 @@ export function createLifecycleOptionsForm(kind: LabLifecycleOptionKind): Lifecy
 
 export function lifecycleKindTakes(
   kind: LabLifecycleOptionKind,
-  field: LabLifecycleOptionField
+  field: LabLifecycleOptionField,
+  runtime: LabRuntimeKind = "docker"
 ): boolean {
-  return LAB_LIFECYCLE_OPTION_FIELDS[kind].includes(field);
+  return labLifecycleOptionFields(kind, runtime).includes(field);
 }
 
 /** containerlab refuses `destroy --cleanup` together with a node filter. */
@@ -101,9 +109,10 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     keepMgmtNet: form.keepMgmtNet,
     varsFile: form.varsFile,
     ...(form.restoreSnapshots ? { restoreAll: form.restoreAll, restore: form.restore } : {})
-  });
+  }, form.runtime);
   const [plainAction, cleanupAction] = ACTIONS[form.kind];
-  const command = ["containerlab", form.kind, ...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(options)]
+  const runtimeFlags = form.runtime === "docker" ? [] : ["-r", form.runtime];
+  const command = ["containerlab", form.kind, ...runtimeFlags, ...(cleanup ? ["-c"] : []), ...labLifecycleCliFlags(options)]
     .join(" ");
   return {
     action: cleanup ? cleanupAction : plainAction,

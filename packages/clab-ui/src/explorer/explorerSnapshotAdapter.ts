@@ -30,6 +30,8 @@ interface ExplorerTreeItemLike {
   id?: string;
   contextValue?: string;
   endpointId?: string;
+  /** VS Code's name for the lab host of a lab, node or interface. */
+  connectionId?: string;
   /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
   endpointKind?: "local" | "api";
   hasChildren?: boolean;
@@ -55,6 +57,11 @@ export interface ExplorerSnapshotOptions {
   isLocalCaptureAllowed: boolean;
   commandMetadata?: ExplorerCommandMetadata;
   hiddenCommandIds?: readonly string[];
+  /**
+   * Commands hidden on the items of one lab host, by endpoint id: what the
+   * host's runtime cannot do (`hiddenExplorerCommandsForSupport`).
+   */
+  hiddenCommandIdsByEndpoint?: ReadonlyMap<string, readonly string[]>;
   sectionOrder?: readonly ExplorerSectionId[];
   expandedBySection?: ExplorerUiState["expandedBySection"];
   /** Section titles that replace the defaults, e.g. once labs come from several hosts. */
@@ -559,11 +566,20 @@ function appendContributedActions(
   }
 }
 
+/** The lab host an item belongs to: its endpoint, or in VS Code its connection. */
+function hostOfItem(item: ExplorerTreeItemLike | undefined): string | undefined {
+  return item?.endpointId ?? item?.connectionId;
+}
+
 function filterHiddenActions(
   actions: ExplorerAction[],
-  options: ExplorerSnapshotOptions
+  options: ExplorerSnapshotOptions,
+  item?: ExplorerTreeItemLike
 ): ExplorerAction[] {
-  const hiddenCommandIds = options.hiddenCommandIds ?? [];
+  const hiddenCommandIds = [
+    ...(options.hiddenCommandIds ?? []),
+    ...(hostOfItem(item) !== undefined ? (options.hiddenCommandIdsByEndpoint?.get(hostOfItem(item) ?? "") ?? []) : [])
+  ];
   if (hiddenCommandIds.length === 0) {
     return actions;
   }
@@ -941,7 +957,7 @@ function getNodeActions(
 
   if (sectionId === "helpFeedback") {
     appendHelpFeedbackActions(actions, seen, registry, item);
-    return filterHiddenActions(applyCommandIcons(actions, commandIcons), options);
+    return filterHiddenActions(applyCommandIcons(actions, commandIcons), options, item);
   }
 
   appendNodeActionsForContext(
@@ -956,7 +972,7 @@ function getNodeActions(
     commandIcons
   );
 
-  return filterHiddenActions(applyCommandIcons(actions, commandIcons), options);
+  return filterHiddenActions(applyCommandIcons(actions, commandIcons), options, item);
 }
 
 function resolvePrimaryAction(

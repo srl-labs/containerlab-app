@@ -9,6 +9,7 @@ import {
 } from "@containerlab/clab-ui/host";
 
 import { requestLabOperation, type RuntimeTargetRequest } from "./runtimeApi";
+import { loadLabHostInfo } from "./stores/labHostStore";
 
 type TargetResolver = () => RuntimeTargetRequest | null;
 
@@ -28,7 +29,11 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
       parseExecResponse(await run("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await run("snapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await run("save", request)),
-    inspectDetails: async () => parseInspectDetails(await run("inspect-details"))
+    inspectDetails: async () => parseInspectDetails(await run("inspect-details")),
+    hostInfo: async () => {
+      const endpointId = getTarget()?.endpointId;
+      return endpointId ? await loadLabHostInfo(endpointId) : undefined;
+    }
   };
 }
 

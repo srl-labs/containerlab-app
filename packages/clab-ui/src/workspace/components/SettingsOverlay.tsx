@@ -115,6 +115,8 @@ interface SettingsOverlayProps {
   onAppearanceChange: (next: StandaloneAppearance) => void;
   /** Offered when the host can run labs on this machine. */
   localEndpoint?: LocalEndpointOffer;
+  /** More local lab hosts, such as Kubernetes clusters. */
+  extraLocalEndpoints?: readonly LocalEndpointOffer[];
   tabOrientation?: TabOrientation;
   onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -517,6 +519,7 @@ export function SettingsOverlay({
   onSaveTerminalPreferences,
   onAppearanceChange,
   localEndpoint,
+  extraLocalEndpoints,
   tabOrientation = "horizontal",
   onTabOrientationChange,
   terminalPreferences
@@ -714,6 +717,7 @@ export function SettingsOverlay({
               onUpdateEndpoint={onUpdateEndpoint}
               onSetEndpointSessionDuration={onSetEndpointSessionDuration}
               localEndpoint={localEndpoint}
+              extraLocalEndpoints={extraLocalEndpoints}
               onRequestedActionHandled={() => setRequestedEndpointAction(null)}
               requestedAction={requestedEndpointAction}
             />

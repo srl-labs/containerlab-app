@@ -9,6 +9,12 @@ import {
   type LabSnapshotNodeResult
 } from "../../src/host/labOperations";
 
+import {
+  containerRuntimeFeatures,
+  effectiveSupport,
+  type LabHostInfo
+} from "../../src/host/labHostSupport";
+
 import { readTopology, type DesiredLab } from "./fakeLab";
 
 /** Kinds the fake treats as vrnetlab VMs; snapshots skip the rest. */
@@ -32,6 +38,43 @@ function harnessSupport(): LabOperationSupport {
   if (stub === "old") return NO_LAB_OPERATIONS;
   if (typeof stub === "object" && stub !== null) return { ...ALL_SUPPORTED, ...stub };
   return ALL_SUPPORTED;
+}
+
+/**
+ * The fake lab host: Docker, unless a spec sets `window.__CLAB_UI_HARNESS_LAB_HOST__`
+ * to `"c9s"` (a Kubernetes cluster on this machine) to see what the view hides there.
+ */
+function harnessLabHost(): LabHostInfo {
+  const stub = (window as unknown as { __CLAB_UI_HARNESS_LAB_HOST__?: unknown }).__CLAB_UI_HARNESS_LAB_HOST__;
+  const c9s = stub === "c9s";
+  const capabilities = {
+    sshAccess: false,
+    deployFromUrl: true,
+    importFromUrl: true,
+    edgesharkManagement: true,
+    wiresharkVnc: true,
+    healthMetrics: true,
+    sharedWorkspace: false,
+    tailscaleStatus: false
+  };
+  const features = {
+    validate: true,
+    graphMermaid: true,
+    graphDot: true,
+    sshxReaders: !c9s,
+    gottyOptions: !c9s,
+    nodeStats: !c9s,
+    terminalResume: true,
+    ...containerRuntimeFeatures(!c9s),
+    manifestExport: c9s,
+    c9sDeployOptions: c9s
+  };
+  return {
+    profile: c9s
+      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true }
+      : { runtime: "docker" },
+    support: effectiveSupport(capabilities, features)
+  };
 }
 
 function containerName(lab: DesiredLab, node: string): string {
@@ -61,6 +104,10 @@ export function createFakeLabOperations(deps: {
   return {
     async support() {
       return harnessSupport();
+    },
+
+    async hostInfo() {
+      return harnessLabHost();
     },
 
     async exec(request) {

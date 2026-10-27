@@ -16,7 +16,10 @@ import {
   listFileExplorerDirectory,
   type FileExplorerEntry,
 } from "./runtimeApi";
+import { hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
+
 import { endpointDisplayAddress } from "./endpointAddress";
+import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type {
   ContainerState,
@@ -588,7 +591,9 @@ function buildEndpointRootItem(
 ): ExplorerTreeItem {
   const address = endpointDisplayAddress(endpoint);
   const endpointUrl = address.replace(/^https?:\/\//i, "");
-  const baseTooltip = `${address}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}`;
+  const baseTooltip = `${address}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}${
+    endpoint.updateRequired ? `\n${endpoint.updateRequired}` : ""
+  }`;
   const healthTooltip = endpointHealthTooltip(healthState);
   return {
     id: `${idPrefix}:${endpoint.id}`,
@@ -759,6 +764,21 @@ export function createStandaloneExplorerBridge(
     ...(options.repositoriesAvailable === false ? ["containerlab.lab.cloneRepo", "containerlab.lab.clonePopularRepo", "containerlab.lab.deployPopular"] : []),
     ...(options.archivesAvailable === false ? ["containerlab.file.downloadArchive", "containerlab.lab.downloadArchive"] : [])
   ];
+  /** What each connected lab host cannot do, from its runtime. */
+  const hiddenCommandsByEndpoint = (): Map<string, string[]> => {
+    const hidden = new Map<string, string[]>();
+    const hosts = useLabHostStore.getState().hosts;
+    for (const endpoint of options.getEndpoints()) {
+      if (!endpoint.connected) continue;
+      const info = hosts.get(endpoint.id);
+      if (info) {
+        hidden.set(endpoint.id, hiddenExplorerCommandsForSupport(info.support));
+      } else {
+        void loadLabHostInfo(endpoint.id);
+      }
+    }
+    return hidden;
+  };
   let explorerFilterText = "";
   let explorerUiState: ExplorerUiState = {};
   const explorerSubscribers = new Set<
@@ -999,7 +1019,8 @@ export function createStandaloneExplorerBridge(
         };
         return buildEndpointRootItem(endpoint, "endpoint", [placeholder]);
       }
-      const healthState = lifecycleActionsAvailable ? endpointHealthStateForTooltip(endpoint) : undefined;
+      const reportsHealth = useLabHostStore.getState().hosts.get(endpoint.id)?.support.healthMetrics !== false;
+      const healthState = lifecycleActionsAvailable && reportsHealth ? endpointHealthStateForTooltip(endpoint) : undefined;
       const runningItems = filterTreeItems(
         runningByEndpoint.get(endpoint.id) ?? [],
         filterText,
@@ -1348,6 +1369,7 @@ export function createStandaloneExplorerBridge(
         hideNonOwnedLabs: !explorerPreferences.showNonOwnedLabs,
         isLocalCaptureAllowed: true,
         hiddenCommandIds,
+        hiddenCommandIdsByEndpoint: hiddenCommandsByEndpoint(),
         commandMetadata: STANDALONE_EXPLORER_COMMAND_METADATA,
         sectionOrder: [
           RUNNING_LABS_SECTION_ID,
@@ -1377,6 +1399,10 @@ export function createStandaloneExplorerBridge(
   };
   const controller = createExplorerController(controllerOptions);
   scheduleHealthSnapshotRefresh = (delay) => controller.scheduleSnapshot(delay);
+  // A lab host that answers with its runtime hides what that runtime lacks.
+  useLabHostStore.subscribe((state, previous) => {
+    if (state.hosts !== previous.hosts) controller.scheduleSnapshot(0);
+  });
 
   return {
     createTopologyFile: () => executeExplorerCommand("containerlab.editor.topoViewerEditor", []),

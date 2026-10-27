@@ -12,6 +12,7 @@ import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/w
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
+import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import { openWorkspaceFileInTab, workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { createNodeStatsFeed } from "./standaloneNodeStats";
@@ -1604,6 +1605,15 @@ function setupStandaloneUiHost(): void {
           ? tailscaleStatus
           : undefined,
         ...(getStandaloneBackend().capabilities.lifecycle ? { labOperations } : { labOperations: undefined }),
+        // The runtime of the topology's lab host decides what the view offers.
+        ...(getStandaloneBackend().capabilities.lifecycle
+          ? {
+              labHost: async () => {
+                const endpointId = topologyManager.getCurrentEndpointId();
+                return endpointId ? await loadLabHostInfo(endpointId) : undefined;
+              },
+            }
+          : {}),
       },
       topology: {
         ...apiHost.topology,
@@ -1653,6 +1663,7 @@ function StandaloneApp() {
     error,
     exportEndpoints,
     localEndpoint,
+    localEndpoints,
     hasConnectedEndpoint,
     hasEndpointSession,
     importEndpoints,
@@ -1835,6 +1846,7 @@ function StandaloneApp() {
     () =>
       localEndpoint
         ? {
+            ...(localEndpoint.url ? { url: localEndpoint.url } : {}),
             available: localEndpoint.available,
             problems: localEndpoint.problems,
             ...(localEndpoint.containerlabVersion
@@ -1853,6 +1865,36 @@ function StandaloneApp() {
           }
         : undefined,
     [addLocalEndpoint, localEndpoint, refreshConfig],
+  );
+
+  // Images live in a container runtime: a cluster lab host has none to manage.
+  const labHosts = useLabHostStore((state) => state.hosts);
+  const imageEndpoints = useMemo(
+    () => endpointList.filter((endpoint) => labHosts.get(endpoint.id)?.support.imageManagement !== false),
+    [endpointList, labHosts],
+  );
+
+  // Kubernetes clusters and other local lab hosts after the first.
+  const extraLocalEndpointOffers = useMemo<LocalEndpointOffer[]>(
+    () =>
+      localEndpoints.slice(1).map((status) => ({
+        ...(status.url ? { url: status.url } : {}),
+        available: status.available,
+        problems: status.problems,
+        ...(status.containerlabVersion ? { containerlabVersion: status.containerlabVersion } : {}),
+        label: status.label,
+        addLabel: `Use ${status.label}`,
+        ...(status.setupUrl ? { setupUrl: status.setupUrl } : {}),
+        onAdd: async () => {
+          await addLocalEndpoint(status.url);
+          await refreshConfig().catch(() => {});
+          scheduleExplorerSnapshot(0);
+        },
+        onCheckAgain: async () => {
+          await refreshConfig(true);
+        }
+      })),
+    [addLocalEndpoint, localEndpoints, refreshConfig],
   );
 
   const handleExportEndpoints = useCallback(() => {
@@ -2058,12 +2100,12 @@ function StandaloneApp() {
                   open={imageManagerOpen}
                   runtime={standaloneRuntime!}
                   onClose={closeImageManager}
-                  endpointOptions={endpointList.map((endpoint) => ({
+                  endpointOptions={imageEndpoints.map((endpoint) => ({
                     id: endpoint.id,
                     label: endpoint.label,
                   }))}
                   initialEndpointId={
-                    endpointList.find(
+                    imageEndpoints.find(
                       (endpoint) => endpoint.status === "connected",
                     )?.id
                   }
@@ -2093,6 +2135,7 @@ function StandaloneApp() {
             onSaveTerminalPreferences={handleSaveTerminalPreferences}
             terminalPreferences={terminalPreferences}
             localEndpoint={localEndpointOffer}
+            extraLocalEndpoints={extraLocalEndpointOffers}
           />
       </>
     </>
@@ -2148,6 +2191,7 @@ function SettingsOverlayMounted(props: {
   onTabOrientationChange: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
   localEndpoint?: LocalEndpointOffer;
+  extraLocalEndpoints?: readonly LocalEndpointOffer[];
 }) {
   return (
     <MuiThemeProvider>
@@ -2174,6 +2218,7 @@ function SettingsOverlayMounted(props: {
           onSaveTerminalPreferences={props.onSaveTerminalPreferences}
           terminalPreferences={props.terminalPreferences}
           localEndpoint={props.localEndpoint}
+          extraLocalEndpoints={props.extraLocalEndpoints}
         />
       </Suspense>
     </MuiThemeProvider>

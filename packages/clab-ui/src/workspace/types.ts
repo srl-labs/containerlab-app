@@ -151,13 +151,28 @@ export interface LabState {
 }
 
 export type InterfaceNetemPatch = Partial<Pick<InterfaceState, "netemDelay" | "netemJitter" | "netemLoss" | "netemRate" | "netemCorruption">>;
-/** `api` is a clab-api-server; `local` runs labs with containerlab on the app's machine. */
+/**
+ * `api` is a clab-api-server; `local` runs labs with containerlab on the app's
+ * machine. The same as `EndpointKind` in the app contract, which a type test
+ * keeps identical; this published library cannot depend on that package.
+ */
 export type EndpointKind = "api" | "local";
+
+/** The lab runtime of a lab host, for its badge. */
+export type EndpointRuntime = "docker" | "podman" | "c9s";
 
 export interface EndpointConfig {
   id: string;
   /** Missing on endpoints from before endpoint kinds, which are all `api`. */
   kind?: EndpointKind;
+  /** What runs the host's labs, once the host answered. */
+  runtime?: EndpointRuntime;
+  /** c9s on this machine: the kubeconfig context. */
+  kubeContext?: string;
+  /** c9s: the namespace of every lab, when the host has one. */
+  namespace?: string;
+  /** The lab host is older than the app needs, and what to update. */
+  updateRequired?: string;
   url: string;
   label: string;
   username: string;
@@ -192,6 +207,8 @@ export interface EndpointConnectionIssue {
  * offer (the desktop app on Linux). It needs no URL or sign-in.
  */
 export interface LocalEndpointOffer {
+  /** The `local://…` address of this local lab host; the app's first one when unset. */
+  url?: string;
   /** containerlab and the container runtime are ready for this user. */
   available: boolean;
   /** What is missing, each with how to fix it. */

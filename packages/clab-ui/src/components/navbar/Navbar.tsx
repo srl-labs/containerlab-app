@@ -58,11 +58,13 @@ import {
   type LabLifecycleOptions,
   type TopoViewerLifecycleAction
 } from "../../host";
+import { hostLabOperationSupport, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { withShortcut } from "../../utils/shortcuts";
 import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDialogs";
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
+import { useLabHostLoader } from "./useLabHostLoader";
 
 import { useLockShake } from "./useLockShake";
 
@@ -275,7 +277,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
   const hasLabOperations = useClabUiHost().topoViewer.labOperations !== undefined;
-  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  useLabHostLoader();
+  const labHostInfo = useLabHostStore((state) => state.info);
+  const operationSupport = useLabOperationsStore((state) => state.support);
+  const labOperationSupport = React.useMemo(
+    () => hostLabOperationSupport(operationSupport, labHostInfo),
+    [operationSupport, labHostInfo]
+  );
   const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const lockButtonRef = React.useRef<HTMLButtonElement>(null);
   useLockShake(lockButtonRef);
@@ -763,6 +771,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   open
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
+                  runtime={labHostInfo?.profile.runtime}
                   onClose={handleCloseLifecycleOptions}
                   onRun={handleRunWithOptions}
                 />

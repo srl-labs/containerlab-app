@@ -30,6 +30,7 @@ import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 import { APP_DOCS_URL,
   ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
+  endpointRuntimeBadge,
   endpointSessionDurationLabel,
   isValidEndpointSessionDuration,
   splitSetupCommand,
@@ -83,6 +84,8 @@ interface EndpointManagerProps {
   ) => void;
   /** Offered when the host can run labs on this machine. */
   localEndpoint?: LocalEndpointOffer;
+  /** More local lab hosts, such as Kubernetes clusters, each offered until it is added. */
+  extraLocalEndpoints?: readonly LocalEndpointOffer[];
   /** Health stats of a signed-in lab host; the workspace host's when unset. */
   fetchHealthMetrics?: HealthMetricsFetcher;
   /** Signs out of a lab host but keeps it, so the user can sign in again later. */
@@ -228,6 +231,11 @@ function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
       />
     </Stack>
   );
+}
+
+/** A Kubernetes cluster has no host to measure: c9s hosts report no CPU, memory or disk usage. */
+function hasHostMetrics(endpoint: Pick<EndpointConfig, "runtime">): boolean {
+  return endpoint.runtime !== "c9s";
 }
 
 function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: EndpointHealthState }) {
@@ -407,7 +415,13 @@ function ManagedEndpointList(props: {
                     {endpoint.kind === "local"
                       ? `Runs labs as ${endpoint.username}, without signing in`
                       : endpoint.url}
+                    {endpointRuntimeBadge(endpoint) ? ` · ${endpointRuntimeBadge(endpoint)}` : ""}
                   </Typography>
+                  {endpoint.updateRequired ? (
+                    <Typography variant="caption" sx={{ color: "warning.main", display: "block" }}>
+                      {endpoint.updateRequired}
+                    </Typography>
+                  ) : null}
                   <Typography
                     variant="caption"
                     sx={{
@@ -470,7 +484,7 @@ function ManagedEndpointList(props: {
                   </IconButton>
                 </Stack>
               </Stack>
-              {props.healthStatsEnabled ? (
+              {props.healthStatsEnabled && hasHostMetrics(endpoint) ? (
                 <EndpointHealthStats
                   endpoint={endpoint}
                   state={props.endpointHealth[endpoint.id]}
@@ -1053,6 +1067,7 @@ export function EndpointManager({
   requestedAction,
   onSetEndpointSessionDuration,
   localEndpoint,
+  extraLocalEndpoints,
   fetchHealthMetrics,
   onSignOutEndpoint
 }: EndpointManagerProps) {
@@ -1071,7 +1086,7 @@ export function EndpointManager({
     [endpoints]
   );
   const connectedEndpointKey = sortedEndpoints
-    .filter((endpoint) => endpoint.status === "connected")
+    .filter((endpoint) => endpoint.status === "connected" && hasHostMetrics(endpoint))
     .map((endpoint) => endpoint.id)
     .join("|");
   // Keyed by the ids, so a fresh endpoints array with the same hosts loads no health stats again.
@@ -1139,8 +1154,12 @@ export function EndpointManager({
     },
     [busyKey]
   );
-  const offerLocalEndpoint =
-    localEndpoint !== undefined && !sortedEndpoints.some((endpoint) => endpoint.kind === "local");
+  const isLocalConnected = (offer: LocalEndpointOffer) =>
+    sortedEndpoints.some(
+      (endpoint) => endpoint.kind === "local" && (offer.url === undefined || endpoint.url === offer.url)
+    );
+  const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
+  const extraLocalOffers = (extraLocalEndpoints ?? []).filter((offer) => !isLocalConnected(offer));
 
   useRequestedEndpointActionDialog({
     onReconnectLocal: reconnectLocal,
@@ -1266,6 +1285,17 @@ export function EndpointManager({
           variant={mode}
         />
       ) : null}
+
+      {extraLocalOffers.map((offer) => (
+        <LocalEndpointCard
+          key={offer.url ?? offer.label}
+          busy={busyKey !== null}
+          offer={offer}
+          onAdd={() => runAction(`add-local:${offer.url ?? ""}`, offer.onAdd)}
+          onCheckAgain={() => runAction(`check-local:${offer.url ?? ""}`, offer.onCheckAgain)}
+          variant={mode}
+        />
+      ))}
 
       {/* On the login card the form is the card's content; in settings it is one card among the endpoints. */}
       <Paper

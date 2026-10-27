@@ -130,6 +130,8 @@ interface EdgeMenuBuilderContext {
   handleDeleteEdge: (id: string) => void;
   showLinkInfo?: (id: string) => void;
   showLinkImpairment?: (id: string) => void;
+  /** Whether the lab host has link impairments (netem); true when unset. */
+  canImpairLinks?: boolean;
 }
 
 type PaneMenuActions = Pick<
@@ -805,7 +807,7 @@ export function buildEdgeContextMenu(ctx: EdgeMenuBuilderContext): ContextMenuIt
     if (captureItems.length > 0) {
       items.push({ id: "divider-capture", label: "", divider: true });
     }
-    items.push(impairmentItem);
+    if (ctx.canImpairLinks !== false) items.push(impairmentItem);
   }
 
   if (isEditMode) {
