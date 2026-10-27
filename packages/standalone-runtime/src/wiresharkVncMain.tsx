@@ -6,7 +6,7 @@ import {
 } from "@containerlab/clab-ui/wireshark-vnc";
 import { createClabUiRuntime, createWindowClabUiHost } from "@containerlab/clab-ui/host";
 
-import { closeWiresharkVncSession, fetchWiresharkVncSessionReady } from "./runtimeApi";
+import { fetchWiresharkVncSessionReady } from "./runtimeApi";
 import { resolveStandaloneServerOrigin, standaloneServerUrl } from "./standaloneServerOrigin";
 import {
   buildEmbeddedWiresharkPageSearch,
@@ -51,11 +51,16 @@ function withEndpointParam(urlPath: string, endpointId?: string): string {
   return `${urlPath}${separator}endpointId=${encodeURIComponent(endpointId)}`;
 }
 
-function closeCaptureSessionBestEffort(sessionId: string, endpointId?: string): void {
-  const closePath = withEndpointParam(
-    standaloneServerUrl(`/api/runtime/capture/wireshark-vnc-sessions/${encodeURIComponent(sessionId)}/close`),
-    endpointId
-  );
+/**
+ * Closes the window's sessions with one request that outlives the page. The
+ * window closes them, not the frame of each session: as a browser quits, the
+ * requests of only some frames may still go out.
+ */
+function closeCaptureSessionsOnLeave(sessionIds: readonly string[], endpointId?: string): void {
+  const params = new URLSearchParams();
+  for (const sessionId of sessionIds) params.append("sessionId", sessionId);
+  if (endpointId) params.set("endpointId", endpointId);
+  const closePath = `${standaloneServerUrl("/api/runtime/capture/wireshark-vnc-sessions/close")}?${params.toString()}`;
 
   let beaconQueued = false;
   if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
@@ -104,7 +109,7 @@ function renderPending(showVolumeTip: boolean): void {
 
 /**
  * Several sessions: one tab each. Every tab embeds this page for its own
- * session, which then checks readiness and closes the session on unload.
+ * session, which then checks its readiness; this page closes them all.
  */
 function renderSessionTabs(query: WiresharkPageQuery): void {
   const labels = sessionTabLabels(query.sessions);
@@ -133,6 +138,18 @@ async function main(): Promise<void> {
   if (query.pending) {
     renderPending(showVolumeTip);
     return;
+  }
+  if (!query.embedded && query.sessions.length > 0) {
+    let closed = false;
+    const closeSessions = () => {
+      if (closed) return;
+      closed = true;
+      closeCaptureSessionsOnLeave(
+        query.sessions.map((session) => session.sessionId),
+        endpointId
+      );
+    };
+    window.addEventListener("pagehide", closeSessions);
   }
   if (query.sessions.length > 1) {
     renderSessionTabs(query);
@@ -203,20 +220,6 @@ async function main(): Promise<void> {
       }
     })
   });
-
-  let closeTriggered = false;
-  const closeSession = () => {
-    if (closeTriggered) {
-      return;
-    }
-    closeTriggered = true;
-    closeCaptureSessionBestEffort(sessionId, endpointId);
-    void closeWiresharkVncSession(sessionId, endpointId).catch(() => {});
-  };
-
-  window.addEventListener("pagehide", closeSession);
-  window.addEventListener("beforeunload", closeSession);
-  window.addEventListener("unload", closeSession);
 
   bootstrapWiresharkVncWebview(runtime);
 }
