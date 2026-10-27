@@ -7,8 +7,10 @@ export {
 export { createLocalUiStore, type LocalUiStoreOptions } from "./localUiStore.ts";
 export {
   createLocalEndpoint,
+  createLocalEndpoints,
   resolveLocalBackendConfig,
   type LocalBackendConfig,
+  type LocalClusterConfig,
   type LocalBackendConfigSource
 } from "./localEndpointConfig.ts";
 export { normalizeBasePath } from "./basePath.ts";

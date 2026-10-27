@@ -123,6 +123,7 @@ for (const changes of [
     });
     const cookie = extractSessionCookie(login);
     const endpointId = login.json().id as string;
+    const callsBeforeChange = fetchMock.calls.length;
     const response = await app.inject({
       method: "PATCH",
       url: `/auth/endpoints/${endpointId}`,
@@ -134,7 +135,7 @@ for (const changes of [
     assert.equal(response.json().status, "session_expired");
     assert.equal(
       fetchMock.calls.length,
-      1,
+      callsBeforeChange,
       "must not contact the new endpoint with the old token",
     );
     const request = await app.inject({
@@ -144,6 +145,22 @@ for (const changes of [
     assert.equal(request.statusCode, 401);
   });
 }
+
+test("a lab host reports its runtime when it is added, for its badge", async (t) => {
+  const { app, fetchMock } = await createTestContext(t);
+  fetchMock.on("POST", "https://cluster-host.test/login", () => jsonResponse({ token: "token" }));
+  fetchMock.on("GET", "https://cluster-host.test/health", () =>
+    jsonResponse({ status: "healthy", runtime: "c9s", namespaceMode: "per-lab", features: [] }),
+  );
+  const added = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    payload: { url: "https://cluster-host.test", username: "alice", password: "example" },
+  });
+  assert.equal(added.statusCode, 200, added.body);
+  assert.equal(added.json().runtime, "c9s");
+  assert.equal(added.json().status, "connected");
+});
 
 test("auth startup bounds an unresponsive endpoint and still reports healthy endpoints", async (t) => {
   const { app, fetchMock } = await createTestContext(t);
@@ -1602,6 +1619,10 @@ test("/api/lab/destroy/stream forwards DELETE lifecycle request with cleanup", a
 test("/api/lab/destroy/stream forwards only the options destroy takes", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  // Lifecycle options are checked against the host's runtime.
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -1646,6 +1667,10 @@ test("/api/lab/destroy/stream forwards only the options destroy takes", async (t
 test("/api/lab/deploy/stream forwards deploy options", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  // Lifecycle options are checked against the host's runtime.
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -2484,6 +2509,9 @@ test("prefixed terminal WebSockets forward authenticated upstream output", async
 test("/api/runtime/tailscale returns the Tailscale devices of the lab", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: [], runtime: "docker" }),
+  );
   const { cookie, endpointId } = await loginEndpoint(context, {
     url: "http://api.example.test",
   });
@@ -2652,7 +2680,43 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     gottyOptions: false,
     nodeStats: false,
     terminalResume: false,
+    imageManagement: true,
+    netem: true,
+    snapshots: true,
+    nodePause: true,
+    fcli: true,
+    interfaceInspect: true,
+    edgeshark: true,
+    hostMetrics: true,
+    tailscale: true,
+    shareTools: true,
+    hostCapture: true,
+    manifestExport: false,
+    c9sDeployOptions: false,
   });
+});
+
+test("/api/runtime/host reports the runtime and what a c9s clab-api-server offers", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["node-stats"], runtime: "c9s", namespaceMode: "per-lab" }),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/host?endpointId=${encodeURIComponent(endpointId)}`,
+    headers: { cookie },
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const host = response.json<{ profile: unknown; support: Record<string, boolean> }>();
+  assert.deepEqual(host.profile, { runtime: "c9s", namespaceMode: "per-lab" });
+  assert.equal(host.support.nodeStats, true);
+  assert.equal(host.support.sshAccess, true);
+  for (const flag of ["netem", "imageManagement", "edgesharkManagement", "wiresharkVnc", "healthMetrics", "tailscaleStatus"]) {
+    assert.equal(host.support[flag], false, flag);
+  }
 });
 
 test("share routes forward sshx readers and refuse unsafe GoTTY credentials", async (t) => {

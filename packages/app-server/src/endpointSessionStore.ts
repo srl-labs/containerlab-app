@@ -26,14 +26,27 @@ export interface EndpointSession {
   sessionId: string;
   endpoints: Map<string, EndpointEntry>;
   lastAccess: number;
-  /** The user removed the local endpoint, so it is not connected again by itself. */
-  localHidden?: boolean;
+  /**
+   * The local lab hosts (by `local://` URL) the user removed, so they are not
+   * connected again by themselves.
+   */
+  hiddenLocalUrls?: string[];
 }
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** The address a local endpoint shows in place of an API URL. */
+/** The address this machine's local endpoint shows in place of an API URL. */
 export const LOCAL_ENDPOINT_URL = "local://this-computer";
+
+/**
+ * The address of a local c9s lab host: one per kubeconfig context, and per
+ * kubeconfig file when the host names one (the same context name in two
+ * files can be two clusters).
+ */
+export function c9sLocalEndpointUrl(kubeContext: string | undefined, kubeconfig?: string): string {
+  const url = `local://c9s/${encodeURIComponent(kubeContext ?? "current-context")}`;
+  return kubeconfig ? `${url}?kubeconfig=${encodeURIComponent(kubeconfig)}` : url;
+}
 
 function cloneEntries(entries: Iterable<EndpointEntry>): Map<string, EndpointEntry> {
   return new Map(Array.from(entries, (entry) => [entry.id, { ...entry }]));
@@ -62,6 +75,8 @@ export interface EndpointSessionStoreOptions {
 interface PersistedEndpointSession {
   endpoints: EndpointEntry[];
   lastAccess: number;
+  hiddenLocalUrls?: string[];
+  /** Sessions from before several local lab hosts: the user removed this computer. */
   localHidden?: boolean;
   sessionId: string;
 }
@@ -105,7 +120,7 @@ function serializeSessions(sessions: Iterable<EndpointSession>): PersistedEndpoi
     sessions: Array.from(sessions, (session) => ({
       sessionId: session.sessionId,
       lastAccess: session.lastAccess,
-      ...(session.localHidden ? { localHidden: true } : {}),
+      ...(session.hiddenLocalUrls?.length ? { hiddenLocalUrls: [...session.hiddenLocalUrls] } : {}),
       endpoints: Array.from(session.endpoints.values(), (entry) => ({
         ...entry
       }))
@@ -147,11 +162,17 @@ function readPersistedSessions(persistenceFile: string | undefined): Map<string,
     const endpoints = persistedSession.endpoints
       .map(toEndpointEntry)
       .filter((entry): entry is EndpointEntry => entry !== null);
+    const hidden = Array.isArray(persistedSession.hiddenLocalUrls)
+      ? persistedSession.hiddenLocalUrls.filter((url): url is string => typeof url === "string")
+      : [];
+    if (persistedSession.localHidden === true && !hidden.includes(LOCAL_ENDPOINT_URL)) {
+      hidden.push(LOCAL_ENDPOINT_URL);
+    }
     const session: EndpointSession = {
       sessionId: persistedSession.sessionId,
       endpoints: cloneEntries(endpoints),
       lastAccess: persistedSession.lastAccess,
-      ...(persistedSession.localHidden === true ? { localHidden: true } : {})
+      ...(hidden.length > 0 ? { hiddenLocalUrls: hidden } : {})
     };
     if (!sessionIsExpired(session)) {
       sessions.set(session.sessionId, session);
@@ -248,10 +269,10 @@ export function createEndpointSessionStore(
       }
       if (removed?.kind === "local") {
         // Remember the choice: the session outlives its last endpoint for that.
-        session.localHidden = true;
+        session.hiddenLocalUrls = Array.from(new Set([...(session.hiddenLocalUrls ?? []), removed.url]));
       }
 
-      if (session.endpoints.size === 0 && !session.localHidden) {
+      if (session.endpoints.size === 0 && !session.hiddenLocalUrls?.length) {
         sessions.delete(sessionId);
         persistSessions();
         return { removed, sessionEmpty: true };
@@ -282,8 +303,9 @@ export function createEndpointSessionStore(
       const nextEndpoints = new Map(existing.endpoints);
       nextEndpoints.set(entry.id, { ...entry });
       existing.endpoints = nextEndpoints;
-      if (entry.kind === "local") {
-        delete existing.localHidden;
+      if (entry.kind === "local" && existing.hiddenLocalUrls) {
+        existing.hiddenLocalUrls = existing.hiddenLocalUrls.filter((url) => url !== entry.url);
+        if (existing.hiddenLocalUrls.length === 0) delete existing.hiddenLocalUrls;
       }
       touch(existing);
       persistSessions();

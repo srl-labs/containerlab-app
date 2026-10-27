@@ -19,7 +19,7 @@ import type { FastifyInstance } from "fastify";
 
 import {
   createContainerlabAppServer,
-  createLocalEndpoint,
+  createLocalEndpoints,
   parseBooleanEnv,
   resolveLocalBackendConfig,
   type LocalEndpointOptions
@@ -136,14 +136,14 @@ function resolveSessionPersistenceFile(): string {
   return path.join(electronApp.getPath("userData"), "endpoint-sessions.json");
 }
 
-let localBackend: LocalLabBackend | null = null;
+let localBackends: LocalLabBackend[] = [];
 
 /**
  * "This computer", on Linux: labs run with the containerlab CLI as the
  * desktop user, configured by `local-backend.json` in the app's data folder
  * and CONTAINERLAB_DESKTOP_* variables.
  */
-function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
+function createDesktopLocalEndpoints(): LocalEndpointOptions[] {
   let fileContent: string | undefined;
   try {
     fileContent = fs.readFileSync(path.join(electronApp.getPath("userData"), "local-backend.json"), "utf8");
@@ -158,18 +158,17 @@ function createDesktopLocalEndpoint(): LocalEndpointOptions | undefined {
     enableVariable: "CONTAINERLAB_DESKTOP_LOCAL",
     enabledByDefault: true
   });
-  if (!config.enabled) {
-    return undefined;
+  for (const problem of config.problems) {
+    console.warn(`local-backend.json: ${problem}`);
   }
-  const endpoint = createLocalEndpoint({
-    options: config.options,
+  const endpoints = createLocalEndpoints(config, {
     label: "This computer",
     setupUrl: "https://srl-labs.github.io/containerlab-app/docs/install/desktop/#run-labs-on-this-computer",
     // Like Local in VS Code: labs on this computer are there from the start.
     autoConnect: true
   });
-  localBackend = endpoint.backend;
-  return endpoint;
+  localBackends = endpoints.map((endpoint) => endpoint.backend);
+  return endpoints;
 }
 
 let appServer: FastifyInstance | null = null;
@@ -488,7 +487,7 @@ async function startLocalAppServer(): Promise<string> {
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
-    localEndpoint: createDesktopLocalEndpoint(),
+    localEndpoints: createDesktopLocalEndpoints(),
     logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG, false),
     sessionPersistenceFile: resolveSessionPersistenceFile(),
     staticClientRoot: resolveStaticClientRoot()
@@ -554,13 +553,13 @@ async function createMainWindow(): Promise<void> {
 async function stopLocalAppServer(): Promise<void> {
   const server = appServer;
   appServer = null;
-  const backend = localBackend;
-  localBackend = null;
+  const backends = localBackends;
+  localBackends = [];
   if (server) {
     // Terminal sessions and Wireshark containers of local labs end with the app.
     const closePromise = Promise.all([
       server.close().catch(() => undefined),
-      backend?.dispose()
+      ...backends.map((backend) => backend.dispose())
     ]).catch(() => undefined);
     await Promise.race([
       closePromise,

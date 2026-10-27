@@ -16,7 +16,7 @@ import type {
   ShareToolOptions,
   TerminalProtocol
 } from "@srl-labs/containerlab-lab-backend";
-import { gottyOptionsError } from "@srl-labs/containerlab-lab-backend";
+import { describeLabHost, gottyOptionsError } from "@srl-labs/containerlab-lab-backend";
 import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
 
 import type { EndpointListResolver, EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
@@ -719,7 +719,8 @@ export function registerRuntimeProxy(
 
       try {
         const { backend, endpoint } = resolved;
-        if (!backend.capabilities.tailscaleStatus) return reply.send({ supported: false });
+        const { support } = await describeLabHost(backend);
+        if (!support.tailscaleStatus) return reply.send({ supported: false });
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const status = await backend.tailscaleStatus(target.labName);
         return reply.send({ supported: true, status });
@@ -1182,6 +1183,17 @@ export function registerRuntimeProxy(
       }
     }
   );
+
+  app.get("/api/runtime/host", async (request, reply) => {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      return reply.send(await describeLabHost(resolved.backend));
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
 
   app.get("/api/runtime/features", async (request, reply) => {
     const resolved = resolveEndpoint(request, reply);
