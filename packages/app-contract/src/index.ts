@@ -54,6 +54,11 @@ export interface AppConfigResponse {
   localEndpoint?: LocalEndpointStatus;
   /** Every local lab host, e.g. this machine and Kubernetes clusters; the first is `localEndpoint`. */
   localEndpoints?: LocalEndpointStatus[];
+  /**
+   * The app server starts Wireshark on this machine for capture streams
+   * (`POST /api/runtime/capture/local-wireshark`): the desktop app.
+   */
+  localWireshark?: boolean;
 }
 
 export * from "./endpoints";

@@ -579,7 +579,7 @@ function normalizeCaptureTargets(rawTargets: unknown): CaptureTarget[] {
   return targets;
 }
 
-async function resolveCaptureTargets(
+export async function resolveCaptureTargets(
   backend: LabBackend,
   labName: string,
   rawTargets: unknown

@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 
 import type { EndpointListResolver, EndpointResolver } from "./endpointResolver.ts";
+import { registerCaptureStreamProxy, type LocalWiresharkOptions } from "./captureStreamProxy.ts";
 import { registerCaptureVncStreamProxy } from "./captureVncStreamProxy.ts";
 import { registerEventChannel } from "./eventChannel.ts";
 import { labEventStreams, registerEventsProxy } from "./eventsProxy.ts";
@@ -19,7 +20,8 @@ export function registerStandaloneProxies(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
   listEndpoints: EndpointListResolver,
-  topologySessions: StandaloneTopologySessionManager
+  topologySessions: StandaloneTopologySessionManager,
+  options: { localWireshark?: LocalWiresharkOptions } = {}
 ): void {
   registerEventsProxy(app, resolveEndpoint);
   registerEventChannel(app, {
@@ -36,5 +38,6 @@ export function registerStandaloneProxies(
   registerRuntimeStreamProxy(app, resolveEndpoint, topologySessions);
   registerLabOperationsProxy(app, resolveEndpoint, topologySessions);
   registerCaptureVncStreamProxy(app, resolveEndpoint);
+  registerCaptureStreamProxy(app, resolveEndpoint, topologySessions, options);
   registerTerminalStreamProxy(app, resolveEndpoint);
 }

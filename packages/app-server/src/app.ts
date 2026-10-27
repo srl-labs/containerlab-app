@@ -29,6 +29,7 @@ import {
   getSessionIdFromRequest,
   setSessionCookie,
 } from "./middleware.ts";
+import type { LocalWiresharkOptions } from "./captureStreamProxy.ts";
 import { registerStandaloneProxies } from "./registerProxies.ts";
 import { createStandaloneTopologySessionManager } from "./topologySessionManager.ts";
 import { normalizeBasePath } from "./basePath.ts";
@@ -73,6 +74,12 @@ export interface CreateStandaloneAppOptions {
   localEndpoint?: LocalEndpointOptions;
   /** Several local lab hosts, e.g. this machine and Kubernetes clusters; wins over `localEndpoint`. */
   localEndpoints?: LocalEndpointOptions[];
+  /**
+   * Start Wireshark on this machine for captures of lab hosts with capture
+   * streams. Only for a single-user app on the user's own machine, such as
+   * the desktop app: Wireshark opens where the server runs.
+   */
+  localWireshark?: LocalWiresharkOptions;
   logger?: boolean;
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
@@ -374,6 +381,7 @@ export async function createStandaloneApp(
         resolveEndpoint,
         listEndpoints,
         topologySessions,
+        options.localWireshark ? { localWireshark: options.localWireshark } : {},
       );
 
       scoped.get<{ Querystring: { fresh?: string } }>("/api/config", async (request, reply) => {
@@ -391,7 +399,11 @@ export async function createStandaloneApp(
           username: entry.username,
           sessionDuration: entry.sessionDuration,
         }));
-        const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
+        const payload: AppConfigResponse = {
+          endpoints,
+          defaultClabApiUrl,
+          ...(options.localWireshark ? { localWireshark: true } : {}),
+        };
         if (locals.length > 0) {
           const fresh = request.query.fresh === "1";
           const statuses = await Promise.all(
