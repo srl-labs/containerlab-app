@@ -114,7 +114,7 @@ Your positions and icons.
 
 You can keep editing while a lab runs. The play button then shows that the file differs from what is deployed. **Apply** lists what containerlab would change, and applies it when you confirm. See [Run a lab](../guides/labs.md).
 
-Labs open locked by default, so a stray drag changes nothing. Select the lock in the toolbar to start editing.
+Labs open locked by default, so a stray drag changes nothing. Select the lock in the toolbar to start editing. An empty lab opens unlocked.
 
 <div class="next" markdown>
 [:lucide-arrow-right: Install an app](index.md)

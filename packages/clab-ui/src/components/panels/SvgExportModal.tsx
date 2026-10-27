@@ -51,7 +51,7 @@ import {
 } from "../../utils/telemetryInterfaceLabels";
 import { log } from "../../utils/logger";
 import { getIconInk, useCanvasIconInk } from "../../icons/iconInk";
-import { ColorField, PREVIEW_GRID_BG_SX } from "../ui/form";
+import { ColorField, NumberTextField, PREVIEW_GRID_BG_SX } from "../ui/form";
 import { DialogTitleWithClose } from "../ui/dialog/DialogChrome";
 
 import {
@@ -794,9 +794,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
           <Divider />
           <Box sx={{ p: 2 }}>
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-              <TextField
+              <NumberTextField
                 label="Zoom"
-                type="number"
                 size="small"
                 value={borderZoom}
                 onChange={(e) =>
@@ -809,9 +808,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   }
                 }}
               />
-              <TextField
+              <NumberTextField
                 label="Padding"
-                type="number"
                 size="small"
                 value={borderPadding}
                 onChange={(e) => setBorderPadding(Math.max(0, parseFloat(e.target.value) || 0))}
@@ -1068,9 +1066,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   gap: 1.5
                 }}
               >
-                <TextField
+                <NumberTextField
                   label="Node size"
-                  type="number"
                   size="small"
                   value={grafanaNodeSizePx}
                   onChange={(e) =>
@@ -1085,9 +1082,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                     }
                   }}
                 />
-                <TextField
+                <NumberTextField
                   label="Interface size"
-                  type="number"
                   size="small"
                   value={grafanaInterfaceSizePercent}
                   onChange={(e) =>
@@ -1135,9 +1131,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                   gap: 1.5
                 }}
               >
-                <TextField
+                <NumberTextField
                   label="Green threshold"
-                  type="number"
                   size="small"
                   value={formatThresholdForUnit(trafficThresholds.green, trafficThresholdUnit)}
                   onChange={(e) => updateTrafficThreshold("green", e.target.value)}
@@ -1148,9 +1143,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                     }
                   }}
                 />
-                <TextField
+                <NumberTextField
                   label="Yellow threshold"
-                  type="number"
                   size="small"
                   value={formatThresholdForUnit(trafficThresholds.yellow, trafficThresholdUnit)}
                   onChange={(e) => updateTrafficThreshold("yellow", e.target.value)}
@@ -1161,9 +1155,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                     }
                   }}
                 />
-                <TextField
+                <NumberTextField
                   label="Orange threshold"
-                  type="number"
                   size="small"
                   value={formatThresholdForUnit(trafficThresholds.orange, trafficThresholdUnit)}
                   onChange={(e) => updateTrafficThreshold("orange", e.target.value)}
@@ -1174,9 +1167,8 @@ export const SvgExportModal: React.FC<SvgExportModalProps> = ({
                     }
                   }}
                 />
-                <TextField
+                <NumberTextField
                   label="Red threshold"
-                  type="number"
                   size="small"
                   value={formatThresholdForUnit(trafficThresholds.red, trafficThresholdUnit)}
                   onChange={(e) => updateTrafficThreshold("red", e.target.value)}

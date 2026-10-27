@@ -27,6 +27,14 @@ test("stats counters leave out page cache that can be reclaimed", () => {
   });
 });
 
+test("stats the engine could not collect give no counters", () => {
+  // Docker's answer for an SR Linux node, whose eth0 is renamed to mgmt0.
+  const failed = dockerStats({
+    message: "failed to retrieve the statistics for eth0 in netns /var/run/docker/netns/1: Link not found"
+  });
+  assert.equal(statsCounters(failed), undefined);
+});
+
 test("CPU usage is relative to one CPU and unknown across a restart", () => {
   const previous = { cpuNanos: 1e9, clockNanos: 1e10, cpuCount: 4, memoryBytes: 0, memoryLimitBytes: 0, pids: 0 };
   assert.equal(cpuPercent(previous, { ...previous, cpuNanos: 4e9, clockNanos: 1.2e10 }), 150);

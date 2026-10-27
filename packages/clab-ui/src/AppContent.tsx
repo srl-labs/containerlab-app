@@ -1111,9 +1111,11 @@ export const AppContent: React.FC<AppContentProps> = ({
     if (initializedPaletteTopology.current === topologyKey) return;
     initializedPaletteTopology.current = topologyKey;
 
-    useTopoViewerStore.setState({ isLocked: readPersistedDefaultLabLocked() });
+    // An empty lab has nothing to protect, so it opens ready for the palette.
+    const empty = useGraphStore.getState().nodes.length === 0;
+    useTopoViewerStore.setState({ isLocked: !empty && readPersistedDefaultLabLocked() });
 
-    if (useGraphStore.getState().nodes.length === 0 && readPersistedAutoOpenPalette()) {
+    if (empty && readPersistedAutoOpenPalette()) {
       // Keep the palette open through selection changes, but allow manual dismissal.
       handleOpenContextPanel("manual");
       setPaletteTabRequest({ tabId: "nodes" });

@@ -323,6 +323,25 @@ const InputEndAdornment: React.FC<InputEndAdornmentProps> = ({
   </InputAdornment>
 );
 
+/**
+ * What the user is typing into a number field. Callers often clamp each
+ * change; showing their clamped value mid-typing would turn the "3" of "380"
+ * into the minimum. The field shows the caller's value again on blur or Enter.
+ */
+export function useNumberDraft(value: string, enabled = true) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return {
+    value: enabled ? (draft ?? value) : value,
+    typed: (text: string) => {
+      if (enabled) setDraft(text);
+    },
+    reset: () => setDraft(null),
+    onKeyDown: (event: React.KeyboardEvent) => {
+      if (event.key === "Enter") setDraft(null);
+    }
+  };
+}
+
 export const InputField: React.FC<InputFieldProps> = ({
   id,
   value,
@@ -352,11 +371,12 @@ export const InputField: React.FC<InputFieldProps> = ({
     onChange
   });
   const isNumberField = type === "number";
+  const draft = useNumberDraft(value, isNumberField);
   const isPasswordField = type === "password";
   const safeStep = normalizeStep(step);
   const parsedValue = parseNumericValue(value);
   const precision = getPrecision(safeStep, min, max);
-  const handleStep = createStepHandler({
+  const stepValue = createStepHandler({
     isNumberField,
     disabled,
     min,
@@ -366,6 +386,10 @@ export const InputField: React.FC<InputFieldProps> = ({
     precision,
     onChange
   });
+  const handleStep = (direction: 1 | -1) => {
+    draft.reset();
+    stepValue(direction);
+  };
   const adornmentState = getAdornmentState({
     clearable,
     value,
@@ -391,7 +415,10 @@ export const InputField: React.FC<InputFieldProps> = ({
             suffix={suffix}
             suffixRightGap={adornmentState.suffixRightGap}
             showClear={adornmentState.showClear}
-            onClear={() => onChange("")}
+            onClear={() => {
+              draft.reset();
+              onChange("");
+            }}
             showReveal={adornmentState.showReveal}
             revealed={revealed}
             onToggleReveal={() => setRevealed((current) => !current)}
@@ -408,8 +435,11 @@ export const InputField: React.FC<InputFieldProps> = ({
         id={id}
         inputRef={autocomplete.inputRef}
         type={isPasswordField && revealed ? "text" : type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={draft.value}
+        onChange={(e) => {
+          draft.typed(e.target.value);
+          onChange(e.target.value);
+        }}
         label={label}
         placeholder={placeholder}
         disabled={disabled}
@@ -427,9 +457,15 @@ export const InputField: React.FC<InputFieldProps> = ({
             min,
             max,
             step,
-            onKeyDown: autocomplete.onKeyDown,
+            onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
+              draft.onKeyDown(event);
+              autocomplete.onKeyDown(event);
+            },
             onSelect: autocomplete.onSelect,
-            onBlur: autocomplete.onBlur
+            onBlur: () => {
+              draft.reset();
+              autocomplete.onBlur();
+            }
           },
           input: inputSlotProps
         }}

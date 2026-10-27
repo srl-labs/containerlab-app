@@ -6,6 +6,8 @@ import type { ShareOptionsResult, ShareTool } from "../../lab-tools/shareOptions
 import type { EndpointSelectionOption } from "./dialogs";
 
 export { defaultClosDraft } from "../../lab-tools/closGenerator";
+export type { ClosTopologyRequest } from "../../lab-tools/closGenerator";
+export { generateClosTopologyYaml } from "../../lab-tools/closTopology";
 export type { ShareOptionsResult } from "../../lab-tools/shareOptions";
 
 export interface GenerateTopologyDialogRequest {

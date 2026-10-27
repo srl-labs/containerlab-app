@@ -186,6 +186,33 @@ test.describe("Lab Settings Modal", () => {
     await expect(modal.getByRole("switch", { name: "Show rate labels", exact: true })).toBeChecked();
   });
 
+  test("number fields keep the typed digits and clamp on blur", async ({ page }) => {
+    const modal = await openModal(page);
+
+    await modal.locator(SEL_LAB_SETTINGS_TAB_APPEARANCE).click();
+    await page.waitForTimeout(200);
+
+    const styleSelect = modal
+      .locator('[data-testid="lab-settings-telemetry-style"] [role="combobox"]')
+      .first();
+    await styleSelect.click();
+    await chooseOption(page, /^Telemetry Style$/);
+
+    // Node size is 12 to 240: the "8" of "80" alone is below the minimum.
+    const nodeSize = modal.getByRole("spinbutton", { name: "Node size", exact: true });
+    await nodeSize.selectText();
+    await nodeSize.pressSequentially("80");
+    await expect(nodeSize).toHaveValue("80");
+    await nodeSize.blur();
+    await expect(nodeSize).toHaveValue("80");
+
+    await nodeSize.selectText();
+    await nodeSize.pressSequentially("5");
+    await expect(nodeSize).toHaveValue("5");
+    await nodeSize.press("Enter");
+    await expect(nodeSize).toHaveValue("12");
+  });
+
   test("Appearance settings persist after reload", async ({ page, topoViewerPage }) => {
     const modal = await openModal(page);
 

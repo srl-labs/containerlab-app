@@ -96,7 +96,6 @@ test("shared sidebar resizes independently of the floating palette and toolbar",
   await page.goto("/");
   await waitForWorkspace(page);
   await createTopologyFile(page, "rail", { fromEmptyState: true });
-  await page.getByRole("button", { name: "Unlock lab to edit", exact: true }).click();
   const sidebar = page.getByTestId("workspace-sidebar");
   // Empty labs open the palette on the right by default.
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
