@@ -72,7 +72,7 @@ export function createKubeClusterProbe(config: KubeConfig): KubeClusterProbe {
     async clabernetesVersion() {
       try {
         const deployments = await config.makeApiClient(AppsV1Api).listDeploymentForAllNamespaces({
-          labelSelector: "app.kubernetes.io/name=clabernetes"
+          labelSelector: "app.kubernetes.io/name=clabernetes-manager"
         });
         for (const deployment of deployments.items) {
           for (const container of deployment.spec?.template.spec?.containers ?? []) {
