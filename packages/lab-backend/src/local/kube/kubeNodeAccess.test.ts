@@ -27,10 +27,11 @@ const RECORD = {
   pod: "demo-n1-7c9d8f-abcde",
   container: "node-n1-1a2b3c",
   node_uid: "6f1e3c1a-0000-4000-8000-000000000001",
+  // containerlab's shape: the node's port, the Service port, lowercase protocol.
   exposed_ports: [
-    { exposePort: 22, destinationPort: 22, protocol: "TCP" },
-    { exposePort: 60080, destinationPort: 80, protocol: "TCP" },
-    { exposePort: 161, destinationPort: 161, protocol: "UDP" }
+    { port: 22, expose_port: 22, protocol: "tcp" },
+    { port: 80, expose_port: 60080, protocol: "tcp" },
+    { port: 161, expose_port: 161, protocol: "udp" }
   ],
   load_balancer_address: ""
 };

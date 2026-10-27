@@ -4,7 +4,7 @@ import type { ClabContainerRecord } from "../inspect.ts";
 import type { ResolvedLocalOptions } from "../options.ts";
 import { containerlabCommand, lastContainerlabError, runCommand, stripAnsi } from "../process.ts";
 
-/** A node port that clabernetes exposes (`Node.status.exposedPorts`). */
+/** A node port that clabernetes exposes (`exposed_ports` of `containerlab inspect`). */
 interface C9sExposedPort {
   /** The Service port, reachable on the load balancer address. */
   exposePort: number;
@@ -45,7 +45,8 @@ function exposedPorts(value: unknown): C9sExposedPort[] {
     if (typeof entry !== "object" || entry === null) continue;
     const record = entry as Record<string, unknown>;
     const exposePort = port(record.exposePort ?? record.expose_port);
-    const destinationPort = port(record.destinationPort ?? record.destination_port) ?? exposePort;
+    // containerlab writes `port` (the node's) and `expose_port`; clabernetes `destinationPort`.
+    const destinationPort = port(record.port ?? record.destinationPort ?? record.destination_port) ?? exposePort;
     if (exposePort === undefined || destinationPort === undefined) continue;
     const protocol = text(record.protocol).toUpperCase() === "UDP" ? "UDP" : "TCP";
     ports.push({ exposePort, destinationPort, protocol });

@@ -32,7 +32,7 @@ function ports(value: unknown): LabNodeExposedPort[] {
   for (const entry of value) {
     if (!isRecord(entry)) continue;
     const exposePort = Number(entry.exposePort ?? entry.expose_port);
-    const destinationPort = Number(entry.destinationPort ?? entry.destination_port ?? exposePort);
+    const destinationPort = Number(entry.port ?? entry.destinationPort ?? entry.destination_port ?? exposePort);
     if (!Number.isInteger(exposePort) || !Number.isInteger(destinationPort)) continue;
     result.push({ exposePort, destinationPort, protocol: text(entry.protocol).toUpperCase() === "UDP" ? "UDP" : "TCP" });
   }

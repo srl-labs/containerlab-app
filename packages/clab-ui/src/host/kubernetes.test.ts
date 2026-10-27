@@ -9,7 +9,7 @@ const RECORD = {
   namespace: "c9s-demo",
   pod: "demo-n1-7c9d8f-abcde",
   container: "node-n1-1a2b3c",
-  exposed_ports: [{ exposePort: 60080, destinationPort: 80, protocol: "TCP" }],
+  exposed_ports: [{ port: 80, expose_port: 60080, protocol: "tcp" }],
   load_balancer_address: "192.0.2.10"
 };
 
