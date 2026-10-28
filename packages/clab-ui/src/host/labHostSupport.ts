@@ -37,6 +37,12 @@ export interface LabHostProfile {
    * says what to update for the rest.
    */
   updateRequired?: string;
+  /**
+   * Why the lab host offers no Wireshark VNC although it could, e.g. a
+   * cluster used from this machine without Docker here. UIs show the choice
+   * disabled with this reason instead of hiding it.
+   */
+  wiresharkVncUnavailable?: string;
 }
 
 /**
@@ -269,6 +275,8 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
   if (typeof raw.labQuota === "boolean") profile.labQuota = raw.labQuota;
   const updateRequired = optionalString(raw.updateRequired);
   if (updateRequired) profile.updateRequired = updateRequired;
+  const wiresharkVncUnavailable = optionalString(raw.wiresharkVncUnavailable);
+  if (wiresharkVncUnavailable) profile.wiresharkVncUnavailable = wiresharkVncUnavailable;
   const supportRecord = value.support;
   const support = Object.fromEntries(
     BOOLEAN_KEYS.map((key) => [key, supportRecord[key] === true])

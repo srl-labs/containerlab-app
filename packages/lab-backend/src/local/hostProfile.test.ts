@@ -37,7 +37,9 @@ test("a c9s host turns the container runtime features off and reports its cluste
     namespaceMode: "fixed",
     namespace: "team-a",
     exposeType: "LoadBalancer",
-    persistence: false
+    persistence: false,
+    // No Docker on PATH: Wireshark VNC is shown, but disabled with the reason.
+    wiresharkVncUnavailable: "Wireshark in the browser needs Docker on this computer"
   });
   const support = effectiveSupport(backend.capabilities, await backend.features());
   for (const flag of [

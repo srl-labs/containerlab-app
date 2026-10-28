@@ -80,6 +80,14 @@ test("capture: links to a stream need tickets and the stream; VNC comes from Edg
   assert.equal(c9sLocal.captureStream, true);
   assert.equal(c9sLocal.captureTickets, false, "this machine serves no packetflix links");
   assert.equal(parseLabHostInfo({ profile: { runtime: "c9s" }, support: c9sLocal })?.support.captureStream, true);
+  // A cluster used from this machine: VNC from its stream when Docker runs here, else the reason.
+  assert.equal(effectiveSupport({ ...ALL_CAPABILITIES, captureTickets: false }, { ...features(false), captureVnc: true }).wiresharkVnc, true);
+  const withoutDocker = parseLabHostInfo({
+    profile: { runtime: "c9s", wiresharkVncUnavailable: "Wireshark in the browser needs Docker on this computer" },
+    support: c9sLocal
+  });
+  assert.equal(withoutDocker?.support.wiresharkVnc, false);
+  assert.equal(withoutDocker?.profile.wiresharkVncUnavailable, "Wireshark in the browser needs Docker on this computer");
 });
 
 test("host info from a transport keeps only well-formed values", () => {
