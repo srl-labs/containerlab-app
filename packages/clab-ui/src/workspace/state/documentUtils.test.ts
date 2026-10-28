@@ -127,6 +127,21 @@ test("shared source paths identify running labs without confusing duplicate name
   assert.equal(findLabStateForTopology({ ...sharedRef, absoluteYamlPath: "/srv/shared/Demo.clab.yml" }, labs), undefined);
 });
 
+test("a cluster lab that containerlab did not deploy matches its topology file by name", () => {
+  // containerlab -r c9s reports where the topology lives in the cluster, not the file it came from.
+  const labs = buildLabs("runtime-lab", "k8s://c9s-runtime-lab/topologies/runtime-lab");
+  const topologyRef = {
+    ...buildStandaloneTopologyRefFromPath("runtime-lab/runtime-lab.clab.yml", "runtime-lab", ENDPOINT_ID),
+    absoluteYamlPath: "/home/user/labs/runtime-lab/runtime-lab.clab.yml"
+  };
+  assert.equal(findLabStateForTopology(topologyRef, labs)?.name, "runtime-lab");
+  assert.equal(findLabStateForTopology({ ...topologyRef, absoluteYamlPath: undefined }, labs)?.name, "runtime-lab");
+  assert.equal(findLabStateForTopology({ ...topologyRef, labName: "other-lab" }, labs), undefined);
+  assert.equal(findLabStateForTopology({ ...topologyRef, endpointId: "other" }, labs), undefined);
+  // A Docker lab of the same name still needs its own file.
+  assert.equal(findLabStateForTopology(topologyRef, buildLabs("runtime-lab", "/srv/other/runtime-lab.clab.yml")), undefined);
+});
+
 test("collaborators open shared running sources in edit mode from either explorer path", () => {
   const labs = buildLabs();
   const topologyRef = {

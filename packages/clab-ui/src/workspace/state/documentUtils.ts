@@ -326,6 +326,26 @@ function labsMatchingTopologyPath(
   );
 }
 
+/**
+ * A c9s lab that containerlab deployed reports the file it was deployed from
+ * and matches like any lab. Only a lab created on the cluster by other means
+ * has no file: containerlab reports it by where it lives in the cluster,
+ * `k8s://<namespace>/topologies/<lab>`, and its name is all a topology file
+ * can match.
+ */
+function isClusterLab(lab: LabState): boolean {
+  const isClusterPath = (value: string | undefined) => /^k8s:\/\//i.test(value ?? "");
+  return isClusterPath(lab.topologyPath) || [...lab.containers.values()].some((container) => isClusterPath(container.labPath));
+}
+
+function uniqueClusterLabByName(
+  labs: Map<string, LabState>,
+  labName: string | undefined,
+  endpointId: string | undefined
+): LabState | undefined {
+  return uniqueLabByName([...labs.values()].filter(isClusterLab), labName, endpointId);
+}
+
 export function findLabStateForTopology(
   topologyRef: TopologyLookupRef,
   labs: Map<string, LabState>
@@ -337,7 +357,7 @@ export function findLabStateForTopology(
     return [...labs.values()].find((lab) => labMatchesEndpoint(lab, endpointId) && (
       normalizePathValue(lab.topologyPath) === absolutePath ||
       [...lab.containers.values()].some((container) => normalizePathValue(container.labPath) === absolutePath)
-    ));
+    )) ?? uniqueClusterLabByName(labs, topologyRef?.labName, endpointId);
   }
   if (!normalizedPath) {
     return uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
@@ -354,7 +374,7 @@ export function findLabStateForTopology(
   // A shared workspace path is a virtual mount, not a suffix of a host path.
   // Matching it by name can associate an unrelated personal lab with this file.
   return isSharedWorkspacePath(normalizedPath)
-    ? undefined
+    ? uniqueClusterLabByName(labs, topologyRef?.labName, endpointId)
     : uniqueLabByName(labs.values(), topologyRef?.labName, endpointId);
 }
 

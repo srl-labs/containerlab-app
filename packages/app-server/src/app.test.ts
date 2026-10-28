@@ -1785,6 +1785,34 @@ test("/api/lab/apply keeps editable topology lab name when runtime lab name diff
   });
 });
 
+test("/api/lab/apply dry run counts the Kubernetes resources a c9s apply would change", async (t) => {
+  const context = await createTestContext(t);
+  mockVlanMismatchTopology(context);
+  const { cookie, endpointId } = await loginEndpoint(context, {
+    url: "http://api.example.test",
+  });
+  const plans = [
+    { labName: "vlan", addedNodes: [], deletedNodes: [], changes: [{ action: "update", kind: "Topology", namespace: "c9s-vlan", name: "vlan" }] },
+    { labName: "vlan", addedNodes: [], deletedNodes: [], changes: [] }
+  ];
+  context.fetchMock.on(
+    "POST",
+    /^http:\/\/api\.example\.test\/api\/v1\/labs\/srlinux-vlan-handling-lab\/apply\?/,
+    () => jsonResponse(plans.shift()),
+  );
+
+  for (const expected of [true, false]) {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/lab/apply",
+      headers: { cookie },
+      payload: { topologyRef: vlanMismatchTopologyRef(endpointId), dryRun: true },
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().changesPending, expected);
+  }
+});
+
 test("/api/lab/apply/stream keeps editable topology lab name when runtime lab name differs", async (t) => {
   const context = await createTestContext(t);
   mockVlanMismatchTopology(context);
@@ -1956,6 +1984,47 @@ function mockLabOperationsServer(context: TestAppContext): void {
     ]),
   );
 }
+
+test("/api/runtime/lab-operations list node locations, validate, and refuse manifests off c9s", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  mockLabOperationsServer(context);
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  context.fetchMock.on("POST", /^http:\/\/api\.example\.test\/api\/v1\/labs\/demo\/validate/, (call) => {
+    assert.equal(call.url.searchParams.get("path"), "labs/demo.clab.yml");
+    return jsonResponse({ valid: false, path: "labs/demo.clab.yml", nodes: 2, links: 1, error: "macvlan is not supported" });
+  });
+  const topologyRef = demoTopologyRef(endpointId);
+
+  const locations = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/node-locations",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(locations.statusCode, 200, locations.body);
+  assert.deepEqual(
+    locations.json<Array<{ name: string }>>().map((node) => node.name),
+    ["clab-demo-leaf1", "clab-demo-leaf2"],
+  );
+
+  const validate = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/validate",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(validate.statusCode, 200, validate.body);
+  assert.equal(validate.json<{ valid: boolean }>().valid, false);
+
+  const manifests = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/lab-operations/manifests",
+    headers: { cookie },
+    payload: { topologyRef },
+  });
+  assert.equal(manifests.statusCode, 501, manifests.body);
+});
 
 test("/api/runtime/lab-operations stop several nodes in one call", async (t) => {
   const context = await createTestContext(t);

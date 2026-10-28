@@ -769,7 +769,9 @@ function applyResultHasPendingChanges(result: unknown): boolean | undefined {
     "startedNodes",
     "addedLinks",
     "deletedEndpoints",
-    "restartedNodes"
+    "restartedNodes",
+    // c9s: the Kubernetes resources an apply would create, update or recreate.
+    "changes"
   ];
   let sawList = false;
   for (const key of changeLists) {

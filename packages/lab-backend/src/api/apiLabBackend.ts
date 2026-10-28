@@ -9,6 +9,7 @@ import {
   type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 
+import { c9sPlanFields } from "../c9sPlan.ts";
 import type {
   LabBackend,
   LabBackendCapabilities,
@@ -218,6 +219,34 @@ function isMissingRoute(error: unknown): boolean {
 }
 
 /** A lab backend for one signed-in user of a clab-api-server. */
+/**
+ * A c9s clab-api-server reports an apply plan as Kubernetes resource changes
+ * (`runtimePlan`) and leaves its node lists empty; give the result the fields
+ * a local c9s host's plan has, so pending changes and the plan dialog read alike.
+ */
+function withRuntimePlan(response: LifecycleActionResult): LifecycleActionResult {
+  const result = response.result;
+  if (typeof result !== "object" || result === null) return response;
+  const record = result as Record<string, unknown>;
+  const plan = record.runtimePlan;
+  if (typeof plan !== "object" || plan === null) return response;
+  const fields = c9sPlanFields(plan as { namespace?: unknown; changes?: unknown });
+  const merged = (key: "addedNodes" | "deletedNodes" | "recreatedNodes") => [
+    ...new Set([...(Array.isArray(record[key]) ? (record[key] as string[]) : []), ...fields[key]])
+  ];
+  return {
+    ...response,
+    result: {
+      ...record,
+      ...fields,
+      deployedLab: record.deployedLab === true || fields.deployedLab,
+      addedNodes: merged("addedNodes"),
+      deletedNodes: merged("deletedNodes"),
+      recreatedNodes: merged("recreatedNodes")
+    }
+  };
+}
+
 export class ApiLabBackend implements LabBackend {
   readonly kind = "api";
   readonly capabilities = API_CAPABILITIES;
@@ -418,12 +447,14 @@ export class ApiLabBackend implements LabBackend {
       case "redeploy":
         return this.client.redeployLab(token, lab.labName, { ...lifecycle, includeLogs: true });
       case "apply":
-        return this.client.applyLab(
-          token,
-          lab.labName,
-          options.dryRun === true
-            ? { path: lab.path, dryRun: true }
-            : { path: lab.path, includeLogs: true }
+        return withRuntimePlan(
+          await this.client.applyLab(
+            token,
+            lab.labName,
+            options.dryRun === true
+              ? { path: lab.path, dryRun: true }
+              : { path: lab.path, includeLogs: true }
+          )
         );
       case "start":
       case "stop":

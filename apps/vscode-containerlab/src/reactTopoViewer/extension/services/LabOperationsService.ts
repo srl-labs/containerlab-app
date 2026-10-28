@@ -13,7 +13,7 @@ import type {
 
 import { describeLabHost } from "@srl-labs/containerlab-lab-backend";
 
-import { resolveLab } from "../../../backend/labBackends";
+import { labNameForPath, resolveLab } from "../../../backend/labBackends";
 import { runWithProgress } from "../../../commands/command";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -37,7 +37,10 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
     value === "inspectDetails" ||
-    value === "hostInfo"
+    value === "hostInfo" ||
+    value === "nodeLocations" ||
+    value === "exportManifests" ||
+    value === "validate"
   );
 }
 
@@ -83,6 +86,16 @@ class LabOperationsService {
         return backend.inspectLabDetails(target);
       case "hostInfo":
         return describeLabHost(backend);
+      case "nodeLocations":
+        // The inspect records; on c9s they say where each node runs.
+        return backend.inspectLab(target.labName || labNameForPath(labPath));
+      case "exportManifests":
+        return backend.exportManifests({
+          ...target,
+          labName: target.labName || labNameForPath(labPath)
+        });
+      case "validate":
+        return backend.validate({ ...target, labName: target.labName || labNameForPath(labPath) });
     }
   }
 

@@ -81,14 +81,14 @@ export function registerLabOperationsProxy(
   async function withLab<Body extends RuntimeTargetBody>(
     request: FastifyRequest<{ Body: Body }>,
     reply: FastifyReply,
-    run: (backend: LabBackend, labName: string, body: Partial<Body>) => Promise<unknown>
+    run: (backend: LabBackend, labName: string, body: Partial<Body>, path?: string) => Promise<unknown>
   ): Promise<FastifyReply> {
     const body: Partial<Body> = request.body ?? {};
     const resolved = resolveEndpoint(request, reply, resolveRequestedEndpointId(body));
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
     try {
       const target = await resolveLabTarget(resolved.endpoint, resolved.backend, sessions, body);
-      return reply.send(await run(resolved.backend, target.labName, body));
+      return reply.send(await run(resolved.backend, target.labName, body, target.yamlPath));
     } catch (error) {
       return handleRouteError(reply, error);
     }
@@ -149,6 +149,23 @@ export function registerLabOperationsProxy(
 
   app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/inspect-details", (request, reply) =>
     withLab(request, reply, (backend, labName) => backend.inspectLabDetails({ labName }))
+  );
+
+  // Where the nodes of a running lab are: on c9s their namespace, pod and exposed ports.
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/node-locations", (request, reply) =>
+    withLab(request, reply, (backend, labName) => backend.inspectLab(labName))
+  );
+
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/manifests", (request, reply) =>
+    withLab(request, reply, (backend, labName, _body, path) =>
+      backend.exportManifests({ labName, ...(path ? { path } : {}) })
+    )
+  );
+
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/validate", (request, reply) =>
+    withLab(request, reply, (backend, labName, _body, path) =>
+      backend.validate({ labName, ...(path ? { path } : {}) })
+    )
   );
 
   app.post<{ Params: { action: string }; Body: NodesBody }>(

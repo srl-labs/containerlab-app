@@ -1,4 +1,7 @@
 import {
+  parseHostValidation,
+  parseManifestExport,
+  parseNodeLocations,
   parseExecResponse,
   parseInspectDetails,
   parseLabOperationSupport,
@@ -33,7 +36,10 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
     hostInfo: async () => {
       const endpointId = getTarget()?.endpointId;
       return endpointId ? await loadLabHostInfo(endpointId) : undefined;
-    }
+    },
+    nodeLocations: async () => parseNodeLocations(await run("node-locations")),
+    exportManifests: async () => parseManifestExport(await run("manifests")),
+    validate: async () => parseHostValidation(await run("validate"))
   };
 }
 

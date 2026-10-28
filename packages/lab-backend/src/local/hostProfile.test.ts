@@ -57,6 +57,7 @@ test("a c9s host turns the container runtime features off and reports its cluste
     assert.equal(support[flag], false, flag);
   }
   assert.equal(support.c9sDeployOptions, true);
+  assert.equal(support.manifestExport, true);
   assert.equal(support.validate, true);
   assert.equal(backend.scope, "local-c9s:kind-c9s-app:/tmp/clab-c9s");
 });

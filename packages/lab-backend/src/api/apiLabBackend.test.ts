@@ -282,6 +282,45 @@ test("lab stats need a server that lists node-stats", async (t) => {
   );
 });
 
+test("a c9s server's apply plan reads like a local c9s host's: Kubernetes changes and node lists", async (t) => {
+  // clab-api-server answers a c9s dry run with runtimePlan and empty node lists.
+  const plan = {
+    dryRun: true,
+    deployedLab: false,
+    labName: "demo",
+    addedNodes: [],
+    deletedNodes: [],
+    recreatedNodes: [],
+    startedNodes: [],
+    addedLinks: [],
+    deletedEndpoints: [],
+    restartedNodes: [],
+    nodeChangeReasons: {},
+    runtimePlan: {
+      namespace: "c9s-alice-demo",
+      changes: [
+        { action: "update", kind: "Topology", namespace: "c9s-alice-demo", name: "demo" },
+        { action: "recreate", kind: "Node", namespace: "c9s-alice-demo", name: "n1" },
+        { action: "create", kind: "Node", namespace: "c9s-alice-demo", name: "n3" }
+      ]
+    }
+  };
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    const url = new URL(String(input));
+    if (url.pathname === "/health") return Promise.resolve(Response.json({ status: "healthy", runtime: "c9s", features: [] }));
+    return Promise.resolve(Response.json(plan));
+  });
+  const backend = new ApiLabBackend({ baseUrl: "https://api.test", token: "token" });
+  const { result } = await backend.runLifecycle("apply", { labName: "demo", path: "demo/demo.clab.yml" }, { dryRun: true });
+  const record = result as Record<string, unknown>;
+  assert.equal(record.namespace, "c9s-alice-demo");
+  assert.deepEqual(record.changes, plan.runtimePlan.changes);
+  assert.deepEqual(record.addedNodes, ["n3"]);
+  assert.deepEqual(record.recreatedNodes, ["n1"]);
+  assert.equal(record.deployedLab, false);
+  assert.deepEqual(record.runtimePlan, plan.runtimePlan);
+});
+
 test("an events stream that is read later survives garbage collection", async (t) => {
   // undici cancels the body of a garbage-collected Response while nothing reads it. The
   // contract suite opens the events stream, deploys for half a minute and reads it after.

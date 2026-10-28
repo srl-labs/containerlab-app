@@ -8,6 +8,10 @@ import {
   type TopoViewerNodeAction,
   type TopoViewerNodesAction
 } from "../../host";
+import { kubectlExecCommand } from "../../host/kubernetes";
+import type { ClabUiLabOperationsHost } from "../../host/labOperations";
+import type { LabHostProfile } from "../../host/labHostSupport";
+import { copyToClipboard } from "../../utils/clipboard";
 import { hostCanCapture, hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { trackNodeActions } from "../../stores/nodeLifecycleStore";
@@ -81,6 +85,8 @@ interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   renderCapturePanel?: typeof renderCapturePanel;
   /** Whether the lab host has link impairments (netem). */
   canImpairLinks: boolean;
+  /** c9s: copies the kubectl exec command of a node. */
+  copyKubectlExec?: (nodeId: string) => void;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
   menuPosition: { x: number; y: number };
@@ -155,6 +161,7 @@ function buildNodeItems(
     onNodesAction: params.onNodesAction,
     labOperations: params.labOperations,
     renderCapturePanel: params.renderCapturePanel,
+    ...(params.copyKubectlExec ? { copyKubectlExec: params.copyKubectlExec } : {}),
     closeContextMenu: params.handlers.closeContextMenu,
     editNode: params.editNode,
     editNetwork: params.editNetwork,
@@ -264,6 +271,25 @@ function runNodeAction(
   topoViewer.runNodeAction(action, nodeName);
 }
 
+/** Looks the node up in `containerlab inspect` and copies the kubectl command for its device container. */
+function copyKubectlExecHandler(
+  operations: ClabUiLabOperationsHost,
+  profile: Pick<LabHostProfile, "kubeContext" | "kubeconfig">
+): (nodeId: string) => void {
+  return (nodeId) => {
+    void operations.nodeLocations().then(async (locations) => {
+      const location = locations.find((entry) => entry.node === nodeId);
+      if (!location) return;
+      await copyToClipboard(
+        kubectlExecCommand(location, {
+          ...(profile.kubeContext ? { kubeContext: profile.kubeContext } : {}),
+          ...(profile.kubeconfig ? { kubeconfig: profile.kubeconfig } : {})
+        })
+      );
+    });
+  };
+}
+
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
@@ -315,6 +341,9 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
         : undefined,
       renderCapturePanel: hostCanCapture(labHostInfo) ? renderCapturePanel : undefined,
       canImpairLinks: hostSupports(labHostInfo, "netem"),
+      ...(labHostInfo?.profile.runtime === "c9s" && topoViewer.labOperations
+        ? { copyKubectlExec: copyKubectlExecHandler(topoViewer.labOperations, labHostInfo.profile) }
+        : {}),
       type,
       targetId,
       menuPosition,

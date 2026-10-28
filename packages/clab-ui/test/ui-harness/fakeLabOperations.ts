@@ -8,6 +8,7 @@ import {
   type LabOperationSupport,
   type LabSnapshotNodeResult
 } from "../../src/host/labOperations";
+import { parseNodeLocations } from "../../src/host/kubernetes";
 
 import {
   containerRuntimeFeatures,
@@ -108,6 +109,37 @@ export function createFakeLabOperations(deps: {
 
     async hostInfo() {
       return harnessLabHost();
+    },
+
+    async nodeLocations() {
+      if (harnessLabHost().profile.runtime !== "c9s") return [];
+      const current = lab();
+      return parseNodeLocations(
+        [...current.nodes.keys()].map((node) => ({
+          name: `${current.labName}-${node}`,
+          lab_name: current.labName,
+          namespace: `c9s-${current.labName}`,
+          pod: `${current.labName}-${node}-6d9f7c-x2k4q`,
+          container: `node-${node}-1a2b3c`,
+          exposed_ports: [{ exposePort: 22, destinationPort: 22, protocol: "TCP" }]
+        }))
+      );
+    },
+
+    async exportManifests() {
+      deps.record({ command: "labOperation", operation: "exportManifests" });
+      const current = lab();
+      return {
+        yaml: `apiVersion: c9s.run/v1alpha1\nkind: Topology\nmetadata:\n  name: ${current.labName}\n  namespace: c9s-${current.labName}\n`
+      };
+    },
+
+    async validate() {
+      deps.record({ command: "labOperation", operation: "validate" });
+      // A spec sets `window.__CLAB_UI_HARNESS_VALIDATE_ERROR__` to what containerlab rejects.
+      const error = (window as unknown as { __CLAB_UI_HARNESS_VALIDATE_ERROR__?: unknown })
+        .__CLAB_UI_HARNESS_VALIDATE_ERROR__;
+      return typeof error === "string" ? { valid: false, error } : { valid: true };
     },
 
     async exec(request) {

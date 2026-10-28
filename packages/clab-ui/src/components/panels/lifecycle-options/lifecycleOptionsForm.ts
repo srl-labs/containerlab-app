@@ -7,6 +7,7 @@ import {
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
   type LabLifecycleOptionKind,
+  type C9sExposeType,
   type LabLifecycleOptions,
   type LabRuntimeKind,
   type LabSnapshotRestore
@@ -30,6 +31,13 @@ export interface LifecycleOptionsForm {
   /** Directory with `<node>.tar` files; empty restores only the nodes listed in `restore`. */
   restoreAll: string;
   restore: LabSnapshotRestore[];
+  /** c9s: the lab's namespace; empty uses the host's. */
+  namespace: string;
+  /** c9s: empty uses the host's default. */
+  exposeType: "" | C9sExposeType;
+  noPersistence: boolean;
+  imagePullSecret: string;
+  noTopologyCR: boolean;
 }
 
 export interface LifecycleOptionsRequest {
@@ -57,7 +65,12 @@ export function createLifecycleOptionsForm(
     varsFile: "",
     restoreSnapshots: false,
     restoreAll: "snapshots",
-    restore: []
+    restore: [],
+    namespace: "",
+    exposeType: "",
+    noPersistence: false,
+    imagePullSecret: "",
+    noTopologyCR: false
   };
 }
 
@@ -108,7 +121,12 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
     graceful: form.graceful,
     keepMgmtNet: form.keepMgmtNet,
     varsFile: form.varsFile,
-    ...(form.restoreSnapshots ? { restoreAll: form.restoreAll, restore: form.restore } : {})
+    ...(form.restoreSnapshots ? { restoreAll: form.restoreAll, restore: form.restore } : {}),
+    namespace: form.namespace,
+    ...(form.exposeType ? { exposeType: form.exposeType } : {}),
+    noPersistence: form.noPersistence,
+    imagePullSecret: form.imagePullSecret,
+    noTopologyCR: form.noTopologyCR
   }, form.runtime);
   const [plainAction, cleanupAction] = ACTIONS[form.kind];
   const runtimeFlags = form.runtime === "docker" ? [] : ["-r", form.runtime];

@@ -15,6 +15,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
+import type { LabHostProfile } from "../../../host/labHostSupport";
 import type {
   LabLifecycleOptionKind,
   LabLifecycleOptions,
@@ -37,6 +38,7 @@ import {
   type LifecycleOptionsForm
 } from "./lifecycleOptionsForm";
 import { SnapshotRestoreFields } from "./SnapshotRestoreFields";
+import { C9sDeployFields, kubeNameError } from "./C9sDeployFields";
 
 export interface LifecycleOptionsDialogProps {
   open: boolean;
@@ -45,6 +47,8 @@ export interface LifecycleOptionsDialogProps {
   canRestoreSnapshots?: boolean;
   /** The lab host's runtime; options containerlab rejects there are hidden. */
   runtime?: LabRuntimeKind;
+  /** c9s: the lab host takes the c9s deploy options, with these defaults. */
+  c9sProfile?: LabHostProfile;
   onClose: () => void;
   onRun: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
@@ -164,6 +168,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   deploymentState,
   canRestoreSnapshots,
   runtime = "docker",
+  c9sProfile,
   onClose,
   onRun
 }) => {
@@ -185,6 +190,11 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   const cleanupBlocked = isCleanupBlocked(form);
   const workersError = maxWorkersError(form.maxWorkers);
   const varsError = varsFileError(form.varsFile);
+  const showC9s = c9sProfile !== undefined && takes("namespace");
+  const c9sError =
+    showC9s &&
+    (kubeNameError(form.namespace, "namespace") !== undefined ||
+      kubeNameError(form.imagePullSecret, "secret") !== undefined);
   const { request, snapshotError } = buildLifecycleRun(form, canRestoreSnapshots === true);
 
   const kindAvailable = isKindAvailable(form.kind, deploymentState);
@@ -194,7 +204,8 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
     !kindAvailable,
     workersError !== undefined,
     varsError !== undefined,
-    snapshotError !== undefined
+    snapshotError !== undefined,
+    c9sError
   ].some(Boolean);
 
   const handleRun = () => {
@@ -348,6 +359,16 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
               />
             )}
           </Box>
+        )}
+
+        {showC9s && (
+          <C9sDeployFields
+            form={form}
+            profile={c9sProfile}
+            namespaceOnly={!takes("exposeType")}
+            update={(key, value) => update(key, value as LifecycleOptionsForm[typeof key])}
+            renderCheckbox={(props) => <OptionCheckbox {...props} />}
+          />
         )}
 
         {takes("varsFile") && (
