@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   isPartialDestroy,
   labLifecycleCliFlags,
+  labLifecycleOptionFields,
   labLifecycleQueryParams,
   normalizeLabLifecycleOptions,
   restoresSnapshots
@@ -152,4 +153,82 @@ test("snapshot restore turns into flags and query parameters", () => {
   assert.equal(restoresSnapshots(options), true);
   assert.equal(restoresSnapshots({ restore: [] }), false);
   assert.equal(restoresSnapshots(undefined), false);
+});
+
+test("the runtime filter hides container-only options on c9s and c9s options elsewhere", () => {
+  assert.deepEqual(labLifecycleOptionFields("deploy", "c9s"), [
+    "maxWorkers",
+    "varsFile",
+    "namespace",
+    "exposeType",
+    "noPersistence",
+    "imagePullSecret",
+    "noTopologyCR"
+  ]);
+  assert.deepEqual(labLifecycleOptionFields("destroy", "c9s"), ["varsFile", "namespace"]);
+  assert.deepEqual(labLifecycleOptionFields("redeploy", "podman"), [
+    "maxWorkers",
+    "skipPostDeploy",
+    "skipLabdirAcl",
+    "exportTemplate",
+    "graceful",
+    "keepMgmtNet",
+    "varsFile"
+  ]);
+  assert.deepEqual(labLifecycleOptionFields("deploy"), labLifecycleOptionFields("deploy", "docker"));
+  assert.ok(!labLifecycleOptionFields("deploy", "docker").includes("namespace"));
+});
+
+const C9S_OPTIONS = {
+  ...EVERYTHING,
+  restoreAll: "snapshots",
+  namespace: " team-a ",
+  exposeType: "LoadBalancer",
+  noPersistence: true,
+  imagePullSecret: "regcred",
+  noTopologyCR: true
+};
+
+test("c9s keeps only the options containerlab takes under -r c9s", () => {
+  assert.deepEqual(normalizeLabLifecycleOptions("deploy", C9S_OPTIONS, "c9s"), {
+    maxWorkers: 4,
+    noPersistence: true,
+    noTopologyCR: true,
+    namespace: "team-a",
+    exposeType: "LoadBalancer",
+    imagePullSecret: "regcred"
+  });
+  assert.deepEqual(normalizeLabLifecycleOptions("destroy", C9S_OPTIONS, "c9s"), {
+    namespace: "team-a"
+  });
+  assert.equal(normalizeLabLifecycleOptions("deploy", { namespace: "team-a" }, "docker"), undefined);
+});
+
+test("malformed c9s options are dropped", () => {
+  assert.equal(
+    normalizeLabLifecycleOptions(
+      "deploy",
+      { namespace: "Team_A", exposeType: "NodePort", imagePullSecret: "-bad", noPersistence: "yes" },
+      "c9s"
+    ),
+    undefined
+  );
+  assert.equal(normalizeLabLifecycleOptions("deploy", { namespace: "a".repeat(64) }, "c9s"), undefined);
+});
+
+test("c9s options turn into containerlab flags and no API parameters", () => {
+  const options = normalizeLabLifecycleOptions("deploy", C9S_OPTIONS, "c9s");
+  assert.deepEqual(labLifecycleCliFlags(options), [
+    "--max-workers",
+    "4",
+    "--namespace",
+    "team-a",
+    "--expose-type",
+    "LoadBalancer",
+    "--no-persistence",
+    "--image-pull-secret",
+    "regcred",
+    "--no-topology-cr"
+  ]);
+  assert.deepEqual(labLifecycleQueryParams(options), [["maxWorkers", "4"]]);
 });

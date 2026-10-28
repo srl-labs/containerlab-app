@@ -1,6 +1,14 @@
 import type {
+  C9sExposeType,
+  LabBackendCapabilities,
+  LabBackendFeatures,
   LabExecRequest,
+  LabHostInfo,
+  LabHostNamespaceMode,
+  LabHostProfile,
+  LabHostSupport,
   LabLifecycleOptions,
+  LabRuntimeKind,
   LabOperationSupport,
   LabSnapshotSaveRequest,
   TailscaleStatus,
@@ -57,46 +65,16 @@ import type {
 
 export type LabBackendKind = "local" | "api";
 
-/** What a backend can do. Hosts hide the rest instead of letting it fail. */
-export interface LabBackendCapabilities {
-  /** Temporary SSH access to a node through a port the lab host forwards. */
-  sshAccess: boolean;
-  /** Deploy a lab straight from a Git or HTTP URL. */
-  deployFromUrl: boolean;
-  /** Copy a topology from a Git or HTTP URL into the workspace. */
-  importFromUrl: boolean;
-  /** Install and remove Edgeshark on the lab host. */
-  edgesharkManagement: boolean;
-  /** Wireshark in a browser window, through one VNC container per capture. */
-  wiresharkVnc: boolean;
-  /** CPU, memory and disk usage of the lab host. */
-  healthMetrics: boolean;
-  /** The `@shared/` workspace folder for labs that several users edit. */
-  sharedWorkspace: boolean;
-  /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
-  tailscaleStatus: boolean;
-}
-
-/**
- * Operations a lab host may lack although the backend kind has them, e.g. an
- * older clab-api-server. Hosts ask before offering them.
- */
-export interface LabBackendFeatures {
-  /** `containerlab validate`. */
-  validate: boolean;
-  /** `containerlab graph --mermaid`. */
-  graphMermaid: boolean;
-  /** `containerlab graph --dot`. */
-  graphDot: boolean;
-  /** Read-only sshx links. */
-  sshxReaders: boolean;
-  /** GoTTY credentials and shell. */
-  gottyOptions: boolean;
-  /** CPU and memory usage of a lab's nodes (`streamLabStats`). */
-  nodeStats: boolean;
-  /** Terminal sessions that keep running when the client disconnects, and replay their output. */
-  terminalResume: boolean;
-}
+export type {
+  C9sExposeType,
+  LabBackendCapabilities,
+  LabBackendFeatures,
+  LabHostInfo,
+  LabHostNamespaceMode,
+  LabHostProfile,
+  LabHostSupport,
+  LabRuntimeKind
+};
 
 export type LabLifecycleAction =
   | "deploy"
@@ -322,6 +300,8 @@ export interface LabBackend {
   versionCheck(): Promise<VersionCheckResponse>;
   healthMetrics(): Promise<HealthMetricsResponse>;
   features(): Promise<LabBackendFeatures>;
+  /** The runtime of the lab host and, for c9s, its cluster settings. */
+  hostProfile(): Promise<LabHostProfile>;
 
   // Labs
 
@@ -371,6 +351,11 @@ export interface LabBackend {
   ): Promise<GraphExportResponse>;
   /** `containerlab generate`: a Clos topology, returned and not written anywhere. */
   generateTopology(request: GenerateTopologyRequest): Promise<GenerateTopologyResponse>;
+  /**
+   * The Kubernetes resources a c9s deploy would create (`deploy --emit-crs`),
+   * as multi-document YAML. Rejects with 501 without `manifestExport`.
+   */
+  exportManifests(lab: LabTarget): Promise<{ yaml: string }>;
 
   // Lab operations. Hosts check labOperationSupport() before exec by label,
   // snapshots, save --copy, inspect details and deploy restore.

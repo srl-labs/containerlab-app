@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
 
+import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
 import type {
   LabBackend,
   LabEvent,
+  LabRuntimeKind,
   LifecycleStreamEvent,
   TerminalServerMessage,
   WorkspaceFileEvent
@@ -20,6 +22,8 @@ export interface LabBackendContractFixture {
   runsLabs: boolean;
   /** Image of the contract lab's nodes; it must have a shell. */
   nodeImage?: string;
+  /** The runtime the lab host must report; any known one when unset. */
+  runtime?: LabRuntimeKind;
   dispose?(): Promise<void> | void;
 }
 
@@ -109,6 +113,38 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
   }
 
   describe(`${name} lab backend contract`, () => {
+    test("reports its runtime, and offers nothing the runtime lacks", () =>
+      withFixture(async ({ backend, runtime }) => {
+        const profile = await backend.hostProfile();
+        assert.ok(["docker", "podman", "c9s"].includes(profile.runtime), profile.runtime);
+        if (runtime) assert.equal(profile.runtime, runtime);
+        const support = effectiveSupport(backend.capabilities, await backend.features());
+        const containerOnly = [
+          "imageManagement",
+          "netem",
+          "snapshots",
+          "nodePause",
+          "fcli",
+          "interfaceInspect",
+          "edgeshark",
+          "edgesharkManagement",
+          "wiresharkVnc",
+          "hostCapture",
+          "shareTools"
+        ] as const;
+        for (const flag of containerOnly) {
+          assert.equal(support[flag], profile.runtime !== "c9s", `${flag} on ${profile.runtime}`);
+        }
+        if (profile.runtime !== "c9s") {
+          assert.equal(support.c9sDeployOptions, false);
+          await rejectsWithStatus(backend.exportManifests({ labName: "contract" }), 501);
+        }
+        if (profile.runtime === "c9s" && backend.kind === "local") {
+          assert.ok(profile.namespaceMode, "a local c9s host knows its namespace mode");
+          assert.equal(support.c9sDeployOptions, true);
+        }
+      }));
+
     test("writes, lists, renames and deletes workspace files", () =>
       withFixture(async ({ backend }, folder) => {
         await backend.fs.mkdir(folder);

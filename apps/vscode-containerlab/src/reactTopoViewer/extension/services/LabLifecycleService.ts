@@ -13,6 +13,8 @@ import {
   type TailscaleStatus
 } from "@containerlab/clab-ui/host";
 
+import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
+
 import { resolveLab } from "../../../backend/labBackends";
 
 import { log } from "./logger";
@@ -136,8 +138,12 @@ class LabLifecycleService {
             relative: ""
           });
           const optionKind = LIFECYCLE_ACTION_OPTION_KIND[endpointName];
+          // Options the lab host's runtime does not take are dropped.
+          const runtime = optionKind
+            ? (await (await resolveLab(labPath)).backend.hostProfile()).runtime
+            : undefined;
           const lifecycleOptions = optionKind
-            ? normalizeLabLifecycleOptions(optionKind, rawOptions)
+            ? normalizeLabLifecycleOptions(optionKind, rawOptions, runtime)
             : undefined;
           if (optionKind && lifecycleOptions) {
             const { runClabAction } = await import("../../../commands/runClabAction");
@@ -170,7 +176,8 @@ class LabLifecycleService {
   /** Tailscale devices of the running lab; undefined when its lab host cannot report them. */
   async tailscaleStatus(labPath: string): Promise<TailscaleStatus | undefined> {
     const { backend, target } = await resolveLab(labPath);
-    if (!backend.capabilities.tailscaleStatus) return undefined;
+    if (!effectiveSupport(backend.capabilities, await backend.features()).tailscaleStatus)
+      return undefined;
     return backend.tailscaleStatus(target.labName);
   }
 }

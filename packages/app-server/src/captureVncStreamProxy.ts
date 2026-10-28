@@ -2,8 +2,20 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import WebSocket, { type RawData } from "ws";
 import { isValidCloseCode } from "@srl-labs/containerlab-lab-backend/api";
 
-import { getCaptureSessionEndpoint, setCaptureSessionEndpoint } from "./captureSessionStore.ts";
+import {
+  deleteCaptureSessionEndpoint,
+  getCaptureSessionEndpoint,
+  setCaptureSessionEndpoint
+} from "./captureSessionStore.ts";
 import type { EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
+
+/**
+ * How long a Wireshark VNC session outlives the last viewer connected to it. A
+ * viewer that reconnects within it keeps the session; after it, the session
+ * ends. Its window closes it when it closes, but a browser that quits right
+ * after, or crashes, may never send that request.
+ */
+const WIRESHARK_VNC_VIEWER_GRACE_MS = 30_000;
 
 type ResolvedCaptureEndpoint = ResolvedEndpoint;
 
@@ -66,12 +78,48 @@ function requestedWebSocketProtocols(request: FastifyRequest): string[] {
 
 export function registerCaptureVncStreamProxy(
   app: FastifyInstance,
-  resolveEndpoint: EndpointResolver
+  resolveEndpoint: EndpointResolver,
+  options: { viewerGraceMs?: number } = {}
 ): void {
   type CaptureWsRequest = FastifyRequest<{
     Params: { sessionId: string; "*"?: string };
     Querystring: { endpointId?: string };
   }>;
+
+  const viewerGraceMs = options.viewerGraceMs ?? WIRESHARK_VNC_VIEWER_GRACE_MS;
+  const viewers = new Map<string, { count: number; timer?: ReturnType<typeof setTimeout> }>();
+
+  const viewerConnected = (sessionId: string): void => {
+    const state = viewers.get(sessionId) ?? { count: 0 };
+    if (state.timer) clearTimeout(state.timer);
+    viewers.set(sessionId, { count: state.count + 1 });
+  };
+
+  const viewerLeft = (sessionId: string, resolved: ResolvedCaptureEndpoint): void => {
+    const state = viewers.get(sessionId);
+    if (!state) return;
+    state.count -= 1;
+    if (state.count > 0) return;
+    const timer = setTimeout(() => {
+      viewers.delete(sessionId);
+      // A session its window closed is no longer mapped to its lab host.
+      if (getCaptureSessionEndpoint(sessionId) === undefined) return;
+      deleteCaptureSessionEndpoint(sessionId);
+      resolved.backend.closeWiresharkVnc(sessionId).then(
+        () => app.log.info({ sessionId }, "closed a Wireshark VNC session that no viewer uses"),
+        (error: unknown) => app.log.warn({ err: error, sessionId }, "closing an unused Wireshark VNC session failed")
+      );
+    }, viewerGraceMs);
+    timer.unref?.();
+    viewers.set(sessionId, { count: 0, timer });
+  };
+
+  app.addHook("onClose", async () => {
+    for (const state of viewers.values()) {
+      if (state.timer) clearTimeout(state.timer);
+    }
+    viewers.clear();
+  });
 
   const createHandler = (
     suffixResolver: (request: CaptureWsRequest) => string
@@ -87,6 +135,7 @@ export function registerCaptureVncStreamProxy(
         return;
       }
       setCaptureSessionEndpoint(sessionId, resolved.endpoint.id);
+      viewerConnected(sessionId);
 
       const suffix = suffixResolver(request);
       const query = requestQueryString(request);
@@ -122,6 +171,7 @@ export function registerCaptureVncStreamProxy(
 
       socket.on("close", () => {
         upstream.close(1000, "Client closed");
+        viewerLeft(sessionId, resolved);
       });
 
       socket.on("error", (error: Error) => {

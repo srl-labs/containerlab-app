@@ -11,7 +11,11 @@ import {
   type LabOverviewHost
 } from "@containerlab/clab-ui/labs-overview/cards";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
-import type { HealthMetricsResponse, LabBackend } from "@srl-labs/containerlab-lab-backend";
+import {
+  effectiveSupport,
+  type HealthMetricsResponse,
+  type LabBackend
+} from "@srl-labs/containerlab-lab-backend";
 
 export interface OverviewContainer {
   nodeName: string;
@@ -160,11 +164,11 @@ export function overviewLabHosts<Connection extends OverviewConnection>(
 
 /** A lab host's CPU, memory and disk usage, or why there is none. */
 export async function overviewHostMetrics(
-  backendOf: () => Pick<LabBackend, "capabilities" | "healthMetrics">
+  backendOf: () => Pick<LabBackend, "capabilities" | "features" | "healthMetrics">
 ): Promise<{ metrics?: HealthMetricsResponse; error?: string }> {
   try {
     const backend = backendOf();
-    if (!backend.capabilities.healthMetrics) {
+    if (!effectiveSupport(backend.capabilities, await backend.features()).healthMetrics) {
       return { error: "This lab host does not report its resources." };
     }
     return { metrics: await backend.healthMetrics() };

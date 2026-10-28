@@ -4,7 +4,8 @@ import * as vscode from "vscode";
 import { isNetemCleared, type NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import { ClabInterfaceTreeNode } from "../treeView/common";
-import { backendOf } from "../backend/labBackends";
+import { backendOf, connectionOf } from "../backend/labBackends";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 // Common validation messages and patterns
 const ERR_EMPTY = "Input should not be empty";
@@ -29,6 +30,7 @@ export async function setImpairment(
   if (!impairmentsAvailable() || !impairment) {
     return;
   }
+  if (!(await ensureHostSupports(connectionOf(node), "netem", "Link impairments"))) return;
 
   const netemInterface = node.name.startsWith("clab-s-") && node.alias ? node.alias : node.name;
   if (isNetemCleared(impairment)) {

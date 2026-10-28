@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
-import type { EndpointKind, LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
+import type {
+  EndpointKind,
+  EndpointRuntimeInfo,
+  LocalEndpointStatus
+} from "@srl-labs/containerlab-app-contract";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 
@@ -14,12 +18,11 @@ import {
   buildEndpointId,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   isValidEndpointSessionDuration,
-  LOCAL_ENDPOINT_URL,
   normalizeEndpointSessionDuration
 } from "./endpointSessionStore.ts";
 import { clearLegacySessionCookies, clearSessionCookie, normalizeApiUrl } from "./middleware.ts";
 
-interface EndpointPublicInfo {
+interface EndpointPublicInfo extends EndpointRuntimeInfo {
   id: string;
   kind: EndpointKind;
   url: string;
@@ -31,7 +34,10 @@ interface EndpointPublicInfo {
 }
 
 interface AddEndpointBody {
-  /** `local` adds the "This computer" endpoint; it takes no URL or credentials. */
+  /**
+   * `local` adds a local lab host, the first one unless `url` names another
+   * (`local://…`); it takes no credentials.
+   */
   kind?: EndpointKind;
   label?: string;
   password: string;
@@ -64,12 +70,20 @@ interface UpdateEndpointBody {
 interface AuthRouteOptions {
   /** The backend of a signed-in endpoint; null for a local endpoint this app does not offer. */
   backendFor: (entry: EndpointEntry) => LabBackend | null;
-  localEndpoint?: { autoConnect?: boolean; status(): Promise<LocalEndpointStatus> };
+  /** The app's local lab hosts; the first is this machine's by default. */
+  localEndpoints: readonly AuthLocalEndpoint[];
   defaultApiUrl: string;
   disposeEndpointSessions: (endpointId: string) => void;
   ensureSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession;
   endpointSessions: EndpointSessionStore;
   resolveSession: (request: FastifyRequest, reply: FastifyReply) => EndpointSession | null;
+}
+
+/** A local lab host as the sign-in routes see it. */
+interface AuthLocalEndpoint {
+  url: string;
+  autoConnect?: boolean;
+  status(): Promise<LocalEndpointStatus>;
 }
 
 function defaultEndpointLabel(url: string, requestedLabel: string | undefined): string {
@@ -100,6 +114,21 @@ function toPublicInfo(
   };
 }
 
+/** The lab runtime of an endpoint for its badge; nothing when the host does not answer. */
+async function runtimeInfo(backend: LabBackend): Promise<EndpointRuntimeInfo> {
+  try {
+    const profile = await backend.hostProfile();
+    return {
+      runtime: profile.runtime,
+      ...(profile.kubeContext ? { kubeContext: profile.kubeContext } : {}),
+      ...(profile.namespace ? { namespace: profile.namespace } : {}),
+      ...(profile.updateRequired ? { updateRequired: profile.updateRequired } : {})
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function validateEndpoint(
   entry: EndpointEntry,
   backendFor: AuthRouteOptions["backendFor"]
@@ -109,7 +138,7 @@ async function validateEndpoint(
   if (!backend) return toPublicInfo(entry, "offline");
   try {
     await backend.version({ timeoutMs: 3000 });
-    return toPublicInfo(entry, "connected");
+    return { ...toPublicInfo(entry, "connected"), ...(await runtimeInfo(backend)) };
   } catch (error) {
     if (
       typeof error === "object" &&
@@ -248,30 +277,50 @@ async function reconnectEndpoint(
   return updated;
 }
 
+/** The local lab host at `url`, or the first one when no URL is given. */
+function findLocalEndpoint(
+  localEndpoints: readonly AuthLocalEndpoint[],
+  url: string | undefined
+): AuthLocalEndpoint | undefined {
+  const requested = url?.trim();
+  return requested ? localEndpoints.find((local) => local.url === requested) : localEndpoints[0];
+}
+
 /**
- * The session's local endpoint, added once: the app's own machine needs no
- * sign-in, and its labs belong to the app's OS user.
+ * A local lab host in the session, added once per host: the app's own machine
+ * (or a cluster it reaches) needs no sign-in, and its labs belong to the
+ * app's OS user.
  */
 async function addLocalEndpoint(
-  body: { label?: string },
+  body: { label?: string; url?: string },
   session: EndpointSession,
-  options: Pick<AuthRouteOptions, "endpointSessions" | "localEndpoint">,
+  options: Pick<AuthRouteOptions, "endpointSessions" | "localEndpoints">,
   endpointId?: string
 ): Promise<EndpointEntry> {
-  if (!options.localEndpoint) {
-    throw Object.assign(new Error("This app cannot run labs on its own machine."), { status: 400 });
+  const local = findLocalEndpoint(options.localEndpoints, body.url);
+  if (!local) {
+    throw Object.assign(
+      new Error(
+        options.localEndpoints.length === 0
+          ? "This app cannot run labs on its own machine."
+          : `This app has no local lab host ${body.url ?? ""}.`
+      ),
+      { status: 400 }
+    );
   }
-  const status = await options.localEndpoint.status();
+  const status = await local.status();
   if (!status.available) {
     throw Object.assign(new Error(status.problems.join(" ") || "containerlab cannot run here."), {
       status: 409
     });
   }
-  const existing = Array.from(session.endpoints.values()).find((entry) => entry.kind === "local");
+  const existing = Array.from(session.endpoints.values()).find(
+    (entry) => entry.kind === "local" && entry.url === local.url
+  );
   const entry: EndpointEntry = {
     id: existing?.id ?? endpointId ?? buildEndpointId(),
     kind: "local",
-    url: LOCAL_ENDPOINT_URL,
+    url: local.url,
     label: body.label?.trim() || existing?.label || status.label,
     token: "",
     username: status.username,
@@ -284,30 +333,35 @@ async function addLocalEndpoint(
 const pendingLocalConnects = new WeakMap<EndpointSession, Promise<void>>();
 
 /**
- * Connects the local endpoint the first time a session asks for its
+ * Connects the local lab hosts the first time a session asks for its
  * endpoints, when the app runs labs on its own machine by default and
- * containerlab is ready. A session whose user removed it is left alone.
+ * containerlab is ready there. A host the user removed is left alone.
  */
 export async function connectLocalEndpoint(
   request: FastifyRequest,
   reply: FastifyReply,
-  options: Pick<AuthRouteOptions, "endpointSessions" | "ensureSession" | "localEndpoint" | "resolveSession">
+  options: Pick<AuthRouteOptions, "endpointSessions" | "ensureSession" | "localEndpoints" | "resolveSession">
 ): Promise<void> {
-  if (!options.localEndpoint?.autoConnect) return;
   const existing = options.resolveSession(request, reply);
-  if (existing?.localHidden) return;
-  if (existing && Array.from(existing.endpoints.values()).some((entry) => entry.kind === "local")) {
-    return;
-  }
-  const status = await options.localEndpoint.status();
-  if (!status.available) return;
+  const candidates = options.localEndpoints.filter(
+    (local) =>
+      local.autoConnect === true &&
+      !existing?.hiddenLocalUrls?.includes(local.url) &&
+      !(existing && Array.from(existing.endpoints.values()).some((entry) => entry.kind === "local" && entry.url === local.url))
+  );
+  if (candidates.length === 0) return;
+  const ready = (
+    await Promise.all(candidates.map(async (local) => ((await local.status()).available ? local : undefined)))
+  ).filter((local): local is AuthLocalEndpoint => local !== undefined);
+  if (ready.length === 0) return;
   const session = existing ?? options.ensureSession(request, reply);
   let pending = pendingLocalConnects.get(session);
   if (!pending) {
-    pending = addLocalEndpoint({}, session, options)
-      .then(() => undefined)
-      .catch(() => undefined)
-      .finally(() => pendingLocalConnects.delete(session));
+    pending = (async () => {
+      for (const local of ready) {
+        await addLocalEndpoint({ url: local.url }, session, options).catch(() => undefined);
+      }
+    })().finally(() => pendingLocalConnects.delete(session));
     pendingLocalConnects.set(session, pending);
   }
   await pending;
@@ -326,7 +380,9 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       options.disposeEndpointSessions(entry.id);
       options.endpointSessions.upsertEndpoint(session.sessionId, entry);
       clearLegacySessionCookies(reply);
-      return reply.send(toPublicInfo(entry, "connected"));
+      // The runtime, so a freshly added lab host shows its badge right away.
+      const backend = options.backendFor(entry);
+      return reply.send({ ...toPublicInfo(entry, "connected"), ...(backend ? await runtimeInfo(backend) : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";
       return reply.status(authErrorStatusCode(error)).send({ error: message });

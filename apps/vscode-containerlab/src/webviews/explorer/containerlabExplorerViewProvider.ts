@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import {
+  hiddenExplorerCommandsForSupport,
   type ExplorerOutgoingMessage,
   type ExplorerSnapshotOptions,
   type ExplorerUiState
@@ -8,6 +9,7 @@ import { createExplorerController } from "@containerlab/clab-ui/host";
 
 import { hideNonOwnedLabsState } from "../../globals";
 import { getConnections } from "../../backend/labBackends";
+import { cachedLabHostInfo, onDidChangeLabHostInfo } from "../../backend/labHostSupport";
 import type {
   HelpFeedbackProvider,
   LocalLabTreeDataProvider,
@@ -85,6 +87,13 @@ export class ContainerlabExplorerViewProvider
         this.options.sectionLabels = getConnections()?.grouped
           ? { localLabs: "Undeployed Labs" }
           : undefined;
+        // Each lab host hides what its runtime cannot do, e.g. netem on a cluster.
+        const hidden = new Map<string, string[]>();
+        for (const connection of getConnections()?.list() ?? []) {
+          const info = cachedLabHostInfo(connection);
+          if (info) hidden.set(connection.id, hiddenExplorerCommandsForSupport(info.support));
+        }
+        this.options.hiddenCommandIdsByEndpoint = hidden;
         return this.options;
       },
       executeAction: async (binding) => {
@@ -138,6 +147,7 @@ export class ContainerlabExplorerViewProvider
       });
       this.disposables.push(disposable);
     }
+    this.disposables.push(onDidChangeLabHostInfo(() => this.scheduleSnapshot()));
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {

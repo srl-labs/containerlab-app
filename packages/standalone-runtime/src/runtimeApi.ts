@@ -752,6 +752,11 @@ export async function generateTopology(input: {
   );
 }
 
+/** The lab host's runtime and what it offers (`LabHostInfo`, unparsed). */
+export async function fetchLabHostInfo(endpointId: string): Promise<unknown> {
+  return await requestJson<unknown>("/api/runtime/host", withEndpointHeaders({}, endpointId), endpointId);
+}
+
 /** What the lab host offers beyond the basics; older clab-api-servers lack some. */
 export async function fetchBackendFeatures(endpointId?: string): Promise<LabBackendFeatures> {
   return await requestJson<LabBackendFeatures>(

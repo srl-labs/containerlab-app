@@ -250,3 +250,102 @@ test("the local UI store keeps custom nodes and icons like clab-api-server", asy
   await store.deleteGlobalIcon("my-router-1");
   await assert.rejects(store.deleteGlobalIcon("my-router-1"), /Icon not found/);
 });
+
+test("several local lab hosts live side by side, each with its own backend", async (t) => {
+  const dockerCalls: string[] = [];
+  const clusterCalls: string[] = [];
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-hosts-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
+  const ui = createLocalUiStore({ clabDirectory: workspaceRoot, workspaceRoot });
+  const cluster: LocalEndpointStatus = {
+    ...AVAILABLE,
+    label: "Cluster kind-c9s-app (c9s)",
+    runtime: "c9s",
+    kubeContext: "kind-c9s-app"
+  };
+  const clusterBackend = {
+    ...fakeLocalBackend(clusterCalls),
+    async hostProfile() {
+      return { runtime: "c9s", kubeContext: "kind-c9s-app", namespaceMode: "per-lab" };
+    }
+  } as unknown as LabBackend;
+  const app = await createStandaloneApp({
+    isDev: true,
+    logger: false,
+    viteDevUrl: "http://vite.test",
+    localEndpoints: [
+      { backend: fakeLocalBackend(dockerCalls), ui, status: async () => AVAILABLE, autoConnect: true },
+      { url: "local://c9s/kind-c9s-app", backend: clusterBackend, ui, status: async () => cluster, autoConnect: true }
+    ]
+  });
+  t.after(() => app.close());
+
+  const first = await app.inject("/api/config");
+  const cookie = sessionCookie(first.headers["set-cookie"]);
+  const config = first.json<{
+    endpoints: Array<{ id: string; url: string; label: string }>;
+    localEndpoint: LocalEndpointStatus;
+    localEndpoints: LocalEndpointStatus[];
+  }>();
+  assert.deepEqual(
+    config.endpoints.map((entry) => [entry.url, entry.label]),
+    [
+      ["local://this-computer", "This computer"],
+      ["local://c9s/kind-c9s-app", "Cluster kind-c9s-app (c9s)"]
+    ]
+  );
+  assert.deepEqual(config.localEndpoint, AVAILABLE);
+  assert.deepEqual(
+    config.localEndpoints.map((status) => [status.url, status.runtime]),
+    [
+      ["local://this-computer", undefined],
+      ["local://c9s/kind-c9s-app", "c9s"]
+    ]
+  );
+
+  const clusterId = config.endpoints[1].id;
+  await app.inject({ url: "/api/runtime/inspect/all", headers: { cookie, "x-endpoint-id": clusterId } });
+  assert.ok(clusterCalls.includes("inspectAll"));
+  assert.ok(!dockerCalls.includes("inspectAll"));
+
+  const listed = (await app.inject({ url: "/auth/endpoints", headers: { cookie } })).json<{
+    endpoints: Array<{ id: string; runtime?: string; kubeContext?: string }>;
+  }>();
+  assert.deepEqual(
+    listed.endpoints.find((entry) => entry.id === clusterId),
+    {
+      id: clusterId,
+      kind: "local",
+      url: "local://c9s/kind-c9s-app",
+      label: "Cluster kind-c9s-app (c9s)",
+      username: "alice",
+      sessionDuration: "24h",
+      status: "connected",
+      connected: true,
+      runtime: "c9s",
+      kubeContext: "kind-c9s-app"
+    }
+  );
+
+  // Removing the cluster leaves this computer, and the cluster stays removed.
+  await app.inject({ method: "DELETE", url: `/auth/endpoints/${clusterId}`, headers: { cookie } });
+  const after = (await app.inject({ url: "/api/config", headers: { cookie } })).json<{
+    endpoints: Array<{ url: string }>;
+  }>();
+  assert.deepEqual(after.endpoints.map((entry) => entry.url), ["local://this-computer"]);
+
+  const readded = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    headers: { cookie },
+    payload: { kind: "local", url: "local://c9s/kind-c9s-app" }
+  });
+  assert.equal(readded.statusCode, 200, readded.body);
+  const unknown = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    headers: { cookie },
+    payload: { kind: "local", url: "local://c9s/other" }
+  });
+  assert.equal(unknown.statusCode, 400);
+});

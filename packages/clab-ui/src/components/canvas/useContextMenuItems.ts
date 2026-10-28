@@ -8,6 +8,7 @@ import {
   type TopoViewerNodeAction,
   type TopoViewerNodesAction
 } from "../../host";
+import { hostCanCapture, hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { trackNodeActions } from "../../stores/nodeLifecycleStore";
 import { useLabFileOpener, useLabFileScope } from "../../hooks/editor/useLabFiles";
@@ -76,7 +77,10 @@ interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
   onNodesAction?: (action: TopoViewerNodesAction, nodeNames: string[]) => void;
   labOperations?: Parameters<typeof buildNodeContextMenu>[0]["labOperations"];
-  renderCapturePanel: typeof renderCapturePanel;
+  /** Absent when the lab host cannot capture packets. */
+  renderCapturePanel?: typeof renderCapturePanel;
+  /** Whether the lab host has link impairments (netem). */
+  canImpairLinks: boolean;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
   menuPosition: { x: number; y: number };
@@ -192,7 +196,8 @@ function buildEdgeItems(
     isEditMode: params.isEditMode,
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
-    renderLinkCapturePanel,
+    renderLinkCapturePanel: params.renderCapturePanel ? renderLinkCapturePanel : undefined,
+    canImpairLinks: params.canImpairLinks,
     closeContextMenu: params.handlers.closeContextMenu,
     editEdge: params.editEdge,
     handleDeleteEdge: params.handleDeleteEdge,
@@ -262,7 +267,12 @@ function runNodeAction(
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
-  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  const labHostInfo = useLabHostStore((state) => state.info);
+  const operationSupport = useLabOperationsStore((state) => state.support);
+  const labOperationSupport = useMemo(
+    () => hostLabOperationSupport(operationSupport, labHostInfo),
+    [operationSupport, labHostInfo]
+  );
   const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const hasLabOperations = topoViewer.labOperations !== undefined;
   const labFileScope = useLabFileScope();
@@ -303,7 +313,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
       labOperations: hasLabOperations
         ? { support: labOperationSupport, open: openLabOperation }
         : undefined,
-      renderCapturePanel,
+      renderCapturePanel: hostCanCapture(labHostInfo) ? renderCapturePanel : undefined,
+      canImpairLinks: hostSupports(labHostInfo, "netem"),
       type,
       targetId,
       menuPosition,
@@ -340,6 +351,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     topoViewer,
     hasLabOperations,
     labOperationSupport,
+    labHostInfo,
     openLabOperation,
     annotationHandlers,
     onOpenNodePalette,

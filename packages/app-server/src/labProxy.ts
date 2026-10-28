@@ -4,6 +4,7 @@
 
 import {
   normalizeLabLifecycleOptions,
+  type LabLifecycleOptionKind,
   type LabLifecycleOptions
 } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
@@ -366,6 +367,17 @@ async function openAndForwardLifecycleStream(
   }
 }
 
+/** The lifecycle options a lab host's runtime takes; the rest are dropped. */
+async function lifecycleOptionsForHost(
+  backend: LabBackend,
+  kind: LabLifecycleOptionKind,
+  raw: unknown
+): Promise<LabLifecycleOptions | undefined> {
+  if (raw === undefined || raw === null) return undefined;
+  const { runtime } = await backend.hostProfile();
+  return normalizeLabLifecycleOptions(kind, raw, runtime);
+}
+
 export function registerLabProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
@@ -452,6 +464,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "deploy", request.body.options);
         const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
@@ -464,7 +477,7 @@ export function registerLabProxy(
               { labName: target.labName, path: target.yamlPath },
               {
                 cleanup: request.body.cleanup === true,
-                lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
+                lifecycleOptions: hostLifecycleOptions
               }
             ),
           { preRunning }
@@ -488,6 +501,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "deploy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -497,7 +511,7 @@ export function registerLabProxy(
           {
             path: target.yamlPath,
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {
@@ -519,6 +533,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "destroy", request.body.options);
         const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
@@ -531,7 +546,7 @@ export function registerLabProxy(
               { labName: target.labName },
               {
                 cleanup: request.body.cleanup === true,
-                lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
+                lifecycleOptions: hostLifecycleOptions
               }
             ),
           { preRunning }
@@ -555,6 +570,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "destroy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -563,7 +579,7 @@ export function registerLabProxy(
           target.labName,
           {
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {
@@ -585,13 +601,14 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "redeploy", request.body.options);
         return await sendLifecycleJsonAction(reply, backend, target.labName, "redeploy", () =>
           backend.runLifecycle(
             "redeploy",
             { labName: target.labName },
             {
               cleanup: request.body.cleanup === true,
-              lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
+              lifecycleOptions: hostLifecycleOptions
             }
           )
         );
@@ -614,6 +631,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "redeploy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -622,7 +640,7 @@ export function registerLabProxy(
           target.labName,
           {
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {

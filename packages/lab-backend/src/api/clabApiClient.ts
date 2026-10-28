@@ -89,6 +89,15 @@ interface LoginRequest {
 type LifecycleEndpoint =
   "deploy" | "destroy" | "redeploy" | "apply" | "start" | "stop" | "restart";
 
+/** What `GET /health` tells about a clab-api-server. */
+export interface ServerHealth {
+  features: string[];
+  /** `docker`, `podman` or `c9s`; missing on servers older than c9s support. */
+  runtime?: string;
+  /** c9s: `per-lab` or `fixed`. */
+  namespaceMode?: string;
+}
+
 export class ClabApiClient {
   private readonly baseUrl: string;
 
@@ -1068,8 +1077,11 @@ export class ClabApiClient {
     return (await res.json()) as GenerateTopologyResponse;
   }
 
-  /** The optional features the server lists on its public health endpoint. */
-  async getServerFeatures(timeoutMs = 10_000): Promise<string[]> {
+  /**
+   * The public health endpoint: the optional features the server lists, and
+   * the lab runtime it runs (servers before c9s support leave it out).
+   */
+  async getServerHealth(timeoutMs = 10_000): Promise<ServerHealth> {
     const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs });
     if (!res.ok) {
       const err: HttpError = new Error(`GET /health failed (${res.status})`);
@@ -1077,10 +1089,18 @@ export class ClabApiClient {
       throw err;
     }
     const payload = (await res.json().catch(() => undefined)) as unknown;
-    const features = isRecord(payload) ? payload.features : undefined;
-    return Array.isArray(features)
-      ? features.filter((feature): feature is string => typeof feature === "string")
+    if (!isRecord(payload)) return { features: [] };
+    const features = Array.isArray(payload.features)
+      ? payload.features.filter((feature): feature is string => typeof feature === "string")
       : [];
+    const health: ServerHealth = { features };
+    if (typeof payload.runtime === "string" && payload.runtime.trim()) {
+      health.runtime = payload.runtime.trim();
+    }
+    if (typeof payload.namespaceMode === "string" && payload.namespaceMode.trim()) {
+      health.namespaceMode = payload.namespaceMode.trim();
+    }
+    return health;
   }
 
   async getVersion(

@@ -26,9 +26,13 @@ export interface SettingSchema {
   minimum?: number;
   maximum?: number;
   items?: SettingSchema;
-  properties?: Record<string, SettingSchema>;
+  /** Missing keys read as `undefined` in a JSON import of the manifest. */
+  properties?: Partial<Record<string, SettingSchema>>;
   required?: string[];
   additionalProperties?: boolean | SettingSchema;
+  /** The value matches one of these, e.g. the entry shapes of a list. */
+  anyOf?: SettingSchema[];
+  title?: string;
 }
 export type SettingsCategory =
   | "labHosts"
@@ -205,6 +209,17 @@ export function validateSetting(
   }
   if (schema.enum && !schema.enum.includes(String(value)))
     return `${label} must be one of: ${schema.enum.join(", ")}.`;
+  if (schema.anyOf && schema.anyOf.length > 0) {
+    const errors = schema.anyOf.map((option) =>
+      validateSetting(option, value, label),
+    );
+    if (errors.every((error) => error !== undefined)) {
+      const names = schema.anyOf.map(
+        (option, index) => option.title ?? `shape ${index + 1}`,
+      );
+      return `${label} matches none of: ${names.join(", ")}. ${errors[0]}`;
+    }
+  }
   return undefined;
 }
 export function validateSettingsChange(

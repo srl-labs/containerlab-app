@@ -4,8 +4,9 @@ import type { NetemSetRequest } from "@srl-labs/containerlab-lab-backend";
 
 import type { ClabContainerTreeNode } from "../treeView/common";
 import { outputChannel } from "../globals";
-import { backendOf } from "../backend/labBackends";
+import { backendOf, connectionOf } from "../backend/labBackends";
 import { NODE_IMPAIRMENTS_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 /**
  * Raw netem item from CLI JSON output
@@ -221,6 +222,7 @@ export async function manageNodeImpairments(
   node: ClabContainerTreeNode,
   context: vscode.ExtensionContext
 ) {
+  if (!(await ensureHostSupports(connectionOf(node), "netem", "Link impairments"))) return;
   const netemMap = await refreshNetemSettings(node);
   const panelLabel = getTreeItemLabelText(node.label);
 

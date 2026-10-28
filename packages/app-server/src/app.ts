@@ -21,6 +21,7 @@ import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   buildEndpointId,
   createEndpointSessionStore,
+  LOCAL_ENDPOINT_URL,
 } from "./endpointSessionStore.ts";
 import {
   getEndpointIdFromRequest,
@@ -34,9 +35,17 @@ import { normalizeBasePath } from "./basePath.ts";
 import type { ResolvedEndpoint } from "./endpointResolver.ts";
 import { apiUiStore, type EndpointUiStore } from "./uiStore.ts";
 
-/** A "This computer" endpoint that runs labs with containerlab on this machine. */
+/**
+ * A local lab host: containerlab on this machine with Docker or Podman, or
+ * with a Kubernetes cluster (c9s) it reaches through the user's kubeconfig.
+ */
 export interface LocalEndpointOptions {
-  /** The backend every local endpoint uses; it acts as the app's own OS user. */
+  /**
+   * The `local://…` address that tells local lab hosts apart; this machine's
+   * (`local://this-computer`) when unset.
+   */
+  url?: string;
+  /** The backend of the lab host; it acts as the app's own OS user. */
   backend: LabBackend;
   /** Custom node templates and icons of that user. */
   ui: EndpointUiStore;
@@ -62,6 +71,8 @@ export interface CreateStandaloneAppOptions {
    * should: every browser session would act as the server's OS user.
    */
   localEndpoint?: LocalEndpointOptions;
+  /** Several local lab hosts, e.g. this machine and Kubernetes clusters; wins over `localEndpoint`. */
+  localEndpoints?: LocalEndpointOptions[];
   logger?: boolean;
   sessionPersistenceFile?: string;
   staticClientRoot?: string;
@@ -303,9 +314,12 @@ export async function createStandaloneApp(
     return endpointSessions.replaceSession(sessionId, []);
   };
 
-  const local = options.localEndpoint;
+  const locals = (options.localEndpoints ?? (options.localEndpoint ? [options.localEndpoint] : [])).map(
+    (local) => ({ ...local, url: local.url ?? LOCAL_ENDPOINT_URL })
+  );
   const backendsFor = (endpoint: EndpointEntry): Omit<ResolvedEndpoint, "endpoint"> | null => {
     if (endpoint.kind === "local") {
+      const local = locals.find((candidate) => candidate.url === endpoint.url);
       return local ? { backend: local.backend, ui: local.ui } : null;
     }
     const backend = new ApiLabBackend({ baseUrl: endpoint.url, token: endpoint.token });
@@ -348,7 +362,7 @@ export async function createStandaloneApp(
     async (scoped: FastifyInstance) => {
       registerAuthRoutes(scoped, {
         backendFor,
-        localEndpoint: local,
+        localEndpoints: locals,
         defaultApiUrl: defaultClabApiUrl,
         disposeEndpointSessions: topologySessions.disposeSessionsForEndpoint,
         ensureSession,
@@ -366,7 +380,7 @@ export async function createStandaloneApp(
         await connectLocalEndpoint(request, reply, {
           endpointSessions,
           ensureSession,
-          localEndpoint: local,
+          localEndpoints: locals,
           resolveSession,
         });
         const endpoints = listEndpoints(request, reply).map((entry) => ({
@@ -378,10 +392,14 @@ export async function createStandaloneApp(
           sessionDuration: entry.sessionDuration,
         }));
         const payload: AppConfigResponse = { endpoints, defaultClabApiUrl };
-        if (local) {
-          payload.localEndpoint = await local.status({
-            fresh: request.query.fresh === "1",
-          });
+        if (locals.length > 0) {
+          const fresh = request.query.fresh === "1";
+          const statuses = await Promise.all(
+            locals.map(async (local) => ({ ...(await local.status({ fresh })), url: local.url })),
+          );
+          // The first host keeps its status as is, for apps that offer one.
+          payload.localEndpoint = await locals[0].status({ fresh });
+          payload.localEndpoints = statuses;
         }
         return reply.send(payload);
       });

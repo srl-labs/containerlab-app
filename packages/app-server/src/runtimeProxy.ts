@@ -16,7 +16,7 @@ import type {
   ShareToolOptions,
   TerminalProtocol
 } from "@srl-labs/containerlab-lab-backend";
-import { gottyOptionsError } from "@srl-labs/containerlab-lab-backend";
+import { describeLabHost, gottyOptionsError } from "@srl-labs/containerlab-lab-backend";
 import { getHttpErrorStatus } from "@srl-labs/containerlab-lab-backend/api";
 
 import type { EndpointListResolver, EndpointResolver, ResolvedEndpoint } from "./endpointResolver.ts";
@@ -719,7 +719,8 @@ export function registerRuntimeProxy(
 
       try {
         const { backend, endpoint } = resolved;
-        if (!backend.capabilities.tailscaleStatus) return reply.send({ supported: false });
+        const { support } = await describeLabHost(backend);
+        if (!support.tailscaleStatus) return reply.send({ supported: false });
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
         const status = await backend.tailscaleStatus(target.labName);
         return reply.send({ supported: true, status });
@@ -1183,6 +1184,17 @@ export function registerRuntimeProxy(
     }
   );
 
+  app.get("/api/runtime/host", async (request, reply) => {
+    const resolved = resolveEndpoint(request, reply);
+    if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
+
+    try {
+      return reply.send(await describeLabHost(resolved.backend));
+    } catch (error) {
+      return handleRouteError(reply, error);
+    }
+  });
+
   app.get("/api/runtime/features", async (request, reply) => {
     const resolved = resolveEndpoint(request, reply);
     if (!resolved) return reply.status(401).send({ error: "Not authenticated" });
@@ -1527,6 +1539,38 @@ export function registerRuntimeProxy(
   app.post<{ Params: { sessionId: string } }>(
     "/api/runtime/capture/wireshark-vnc-sessions/:sessionId/close",
     closeCaptureSession
+  );
+
+  // A Wireshark window closes all of its sessions with one request as it goes away: a
+  // request per session, sent from each of its frames, may not all leave a closing browser.
+  app.post<{ Querystring: { sessionId?: string | string[] } }>(
+    "/api/runtime/capture/wireshark-vnc-sessions/close",
+    async (request, reply) => {
+      const raw = request.query.sessionId;
+      const sessionIds = [
+        ...new Set((Array.isArray(raw) ? raw : [raw ?? ""]).map((value) => value.trim()))
+      ].filter((value) => value.length > 0);
+      if (sessionIds.length === 0) {
+        return reply.status(400).send({ error: "At least one sessionId is required" });
+      }
+      const results = await Promise.all(
+        sessionIds.map(async (sessionId) => {
+          const resolved = resolveEndpointForCaptureSession(request, reply, resolveEndpoint, sessionId);
+          if (!resolved) return { sessionId, error: "Not authenticated" };
+          try {
+            await resolved.backend.closeWiresharkVnc(sessionId);
+            deleteCaptureSessionEndpoint(sessionId);
+            return { sessionId };
+          } catch (error) {
+            return { sessionId, error: error instanceof Error ? error.message : String(error) };
+          }
+        })
+      );
+      return reply.send({
+        closed: results.filter((result) => !("error" in result)).map((result) => result.sessionId),
+        failed: results.filter((result) => "error" in result)
+      });
+    }
   );
 
   app.route<{ Params: { sessionId: string; "*": string } }>({

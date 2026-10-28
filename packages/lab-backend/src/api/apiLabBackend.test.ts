@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import test from "node:test";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import undici, { Response } from "undici";
 
 import { ApiLabBackend } from "./apiLabBackend.ts";
@@ -13,7 +17,7 @@ interface RecordedRequest {
 /** Answers like a clab-api-server that lists `features` on `/health`. */
 function mockServer(
   t: test.TestContext,
-  options: { features?: string[]; missingRoutes?: RegExp } = {}
+  options: { features?: string[]; missingRoutes?: RegExp; health?: Record<string, unknown> } = {}
 ): RecordedRequest[] {
   const requests: RecordedRequest[] = [];
   t.mock.method(undici, "fetch", (input: unknown, init: { method?: string; body?: string } = {}) => {
@@ -24,7 +28,11 @@ function mockServer(
       ...(init.body ? { body: JSON.parse(init.body) as unknown } : {})
     });
     if (url.pathname === "/health") {
-      const health = { status: "healthy", ...(options.features ? { features: options.features } : {}) };
+      const health = {
+        status: "healthy",
+        ...(options.features ? { features: options.features } : {}),
+        ...options.health
+      };
       return Promise.resolve(Response.json(health));
     }
     if (options.missingRoutes?.test(url.pathname)) {
@@ -37,6 +45,66 @@ function mockServer(
 
 const NEW_SERVER = ["validate", "graph-mermaid", "graph-dot", "sshx-readers", "gotty-options"];
 
+const DOCKER_RUNTIME_FEATURES = {
+  imageManagement: true,
+  netem: true,
+  snapshots: true,
+  nodePause: true,
+  fcli: true,
+  interfaceInspect: true,
+  edgeshark: true,
+  hostMetrics: true,
+  tailscale: true,
+  shareTools: true,
+  hostCapture: true,
+  manifestExport: false,
+  c9sDeployOptions: false
+};
+
+test("the lab runtime comes from /health; a server without one is an old Docker server", async (t) => {
+  mockServer(t, { features: NEW_SERVER, health: { runtime: "c9s", namespaceMode: "per-lab" } });
+  const c9s = new ApiLabBackend({ baseUrl: "https://c9s.test", token: "token" });
+  assert.deepEqual(await c9s.hostProfile(), { runtime: "c9s", namespaceMode: "per-lab" });
+  const features = await c9s.features();
+  for (const flag of ["imageManagement", "netem", "snapshots", "nodePause", "fcli", "interfaceInspect", "edgeshark"] as const) {
+    assert.equal(features[flag], false, flag);
+  }
+  assert.equal(features.c9sDeployOptions, false);
+  assert.equal(features.sshxReaders, true);
+
+  t.mock.restoreAll();
+  mockServer(t, { features: NEW_SERVER, health: { runtime: "podman" } });
+  const podman = new ApiLabBackend({ baseUrl: "https://podman.test", token: "token" });
+  assert.deepEqual(await podman.hostProfile(), { runtime: "podman" });
+  assert.equal((await podman.features()).netem, true);
+
+  t.mock.restoreAll();
+  mockServer(t, { features: NEW_SERVER });
+  const old = new ApiLabBackend({ baseUrl: "https://old-runtime.test", token: "token" });
+  const profile = await old.hostProfile();
+  assert.equal(profile.runtime, "docker");
+  assert.match(profile.updateRequired ?? "", /does not report its lab runtime\. Update it to 0\.10\.0 or later/);
+  // Docker keeps working on it; nothing c9s is offered.
+  assert.equal((await old.features()).imageManagement, true);
+  assert.equal((await old.features()).c9sDeployOptions, false);
+
+  t.mock.restoreAll();
+  mockServer(t, { health: { runtime: "lxd" } });
+  const unknown = new ApiLabBackend({ baseUrl: "https://lxd.test", token: "token" });
+  await assert.rejects(unknown.hostProfile(), /runs labs with "lxd"/);
+});
+
+test("an unreachable server is not taken for an old one", async (t) => {
+  t.mock.method(undici, "fetch", () => Promise.reject(new TypeError("fetch failed")));
+  const backend = new ApiLabBackend({ baseUrl: "https://down.test", token: "token" });
+  await assert.rejects(backend.hostProfile(), /fetch failed/);
+});
+
+test("Kubernetes manifests are not exported by a clab-api-server", async () => {
+  const backend = new ApiLabBackend({ baseUrl: "https://api.test", token: "token" });
+  await assert.rejects(backend.exportManifests(), (error: Error & { status?: number }) => error.status === 501);
+});
+
 test("features come from the server's health endpoint and older servers list none", async (t) => {
   mockServer(t, { features: NEW_SERVER });
   const current = new ApiLabBackend({ baseUrl: "https://api.test", token: "token" });
@@ -47,7 +115,8 @@ test("features come from the server's health endpoint and older servers list non
     sshxReaders: true,
     gottyOptions: true,
     nodeStats: false,
-    terminalResume: false
+    terminalResume: false,
+    ...DOCKER_RUNTIME_FEATURES
   });
 
   t.mock.restoreAll();
@@ -61,7 +130,8 @@ test("features come from the server's health endpoint and older servers list non
     sshxReaders: false,
     gottyOptions: false,
     nodeStats: false,
-    terminalResume: false
+    terminalResume: false,
+    ...DOCKER_RUNTIME_FEATURES
   });
 });
 
@@ -210,4 +280,44 @@ test("lab stats need a server that lists node-stats", async (t) => {
     older.streamLabStats("demo", { signal: new AbortController().signal }),
     (error: Error & { status?: number }) => error.status === 501
   );
+});
+
+test("an events stream that is read later survives garbage collection", async (t) => {
+  // undici cancels the body of a garbage-collected Response while nothing reads it. The
+  // contract suite opens the events stream, deploys for half a minute and reads it after.
+  setFlagsFromString("--expose-gc");
+  const gc = runInNewContext("gc") as () => void;
+  let stream: http.ServerResponse | undefined;
+  let clientLeft = false;
+  const server = http.createServer((request, response) => {
+    if (request.url === "/health") {
+      response.end(JSON.stringify({ status: "healthy" }));
+      return;
+    }
+    stream = response;
+    response.writeHead(200, { "Content-Type": "application/x-ndjson" });
+    response.write("\n");
+    request.on("close", () => {
+      clientLeft = true;
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const abort = new AbortController();
+  t.after(() => {
+    abort.abort();
+    server.closeAllConnections();
+    server.close();
+  });
+  const { port } = server.address() as AddressInfo;
+  const backend = new ApiLabBackend({ baseUrl: `http://127.0.0.1:${port}`, token: "token" });
+
+  const events = await backend.events({ initialState: true }, abort.signal);
+  for (let round = 0; round < 5; round += 1) {
+    gc();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(clientLeft, false, "the events request is still open");
+  stream?.write(`${JSON.stringify({ type: "container", action: "start", actor_name: "lab-n1" })}\n`);
+  const first = await events[Symbol.asyncIterator]().next();
+  assert.deepEqual(first, { done: false, value: { type: "container", action: "start", actor_name: "lab-n1" } });
 });

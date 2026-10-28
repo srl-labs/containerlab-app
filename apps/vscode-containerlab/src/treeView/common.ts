@@ -1,3 +1,5 @@
+import * as path from "path";
+
 import * as vscode from "vscode";
 
 import type { ClabInterfaceStats } from "../types/containerlab";
@@ -423,6 +425,10 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
       kind: "local" | "api";
       url?: string;
       username?: string;
+      runtime?: "c9s";
+      kubeContext?: string;
+      kubeconfig?: string;
+      namespace?: string;
     },
     section: "running" | "undeployed",
     state: ConnectionNodeState,
@@ -449,10 +455,18 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
         host = connection.url;
       }
     }
-    this.description = host;
-    const lines = [
-      connection.kind === "local" ? "Labs on this machine" : `Lab host ${connection.url ?? ""}`
-    ];
+    const cluster = connection.kind === "local" && connection.runtime === "c9s";
+    const clusterWhere = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
+    const kubeconfigFile =
+      connection.kubeconfig !== undefined ? ` · ${path.basename(connection.kubeconfig)}` : "";
+    this.description = cluster ? `Kubernetes · ${clusterWhere}${kubeconfigFile}` : host;
+    let heading = `Lab host ${connection.url ?? ""}`;
+    if (cluster)
+      heading = `Labs on Kubernetes cluster ${clusterWhere}, run by containerlab on this machine`;
+    else if (connection.kind === "local") heading = "Labs on this machine";
+    const lines = [heading];
+    if (cluster && connection.kubeconfig !== undefined)
+      lines.push(`kubeconfig ${connection.kubeconfig}`);
     if (connection.kind === "api") {
       const stateText: Record<ConnectionNodeState, string> = {
         connected: `Signed in as ${connection.username ?? "you"}`,

@@ -153,7 +153,9 @@ for (const mode of ["production", "development"] as const) {
         await expect(page.frameLocator("iframe").getByText("Mock Wireshark viewer")).toBeVisible();
         const closePromise = page.waitForRequest((request) => request.url().includes("/close?"));
         await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
-        expect(new URL((await closePromise).url()).pathname).toBe(`${capturePath}/close`);
+        const closeUrl = new URL((await closePromise).url());
+        expect(closeUrl.pathname).toBe(`${basePath}/api/runtime/capture/wireshark-vnc-sessions/close`);
+        expect(closeUrl.searchParams.getAll("sessionId")).toEqual(["capture-1"]);
       });
     });
   }

@@ -49,6 +49,7 @@ export * from "./applyPlan";
 export * from "./controllers";
 export * from "./contracts";
 export * from "./labFiles";
+export * from "./labHostSupport";
 export * from "./labOperations";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
@@ -541,6 +542,13 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
   const postMessage =
     options.postMessage ?? ((message: unknown) => resolvedVsCodeApi?.postMessage(message));
   const subscribe = createMessageSubscription(targetWindow);
+  const labOperations = createLabOperationsRequester({
+    postMessage,
+    subscribe,
+    requestMessage: MSG_LAB_OPERATION,
+    resultMessage: MSG_LAB_OPERATION_RESULT,
+    newId
+  });
 
   const explorer =
     options.explorer ??
@@ -604,13 +612,8 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       runNodesAction(action: TopoViewerNodesAction, nodeNames: string[]): void {
         postNodesAction(postMessage, action, nodeNames);
       },
-      labOperations: createLabOperationsRequester({
-        postMessage,
-        subscribe,
-        requestMessage: MSG_LAB_OPERATION,
-        resultMessage: MSG_LAB_OPERATION_RESULT,
-        newId
-      }),
+      labOperations,
+      labHost: () => labOperations.hostInfo(),
       captureInterface(
         nodeName: string,
         interfaceName: string,

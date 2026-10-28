@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { isPartialDestroy, type LabLifecycleOptions } from "@containerlab/clab-ui/host";
 
+import { connectionOf, isUriString, pickTopologyHost } from "../backend/labBackends";
 import type { ClabLabTreeNode } from "../treeView/common";
 import { getSelectedLabNode } from "../utils/utils";
 
@@ -23,6 +24,22 @@ export async function runClabAction(
   if (!node) {
     await notifyCurrentTopoViewerOfCommandFailure(action, new Error("No lab node selected"));
     return;
+  }
+  if (
+    action === "deploy" &&
+    connectionOf(node).kind === "local" &&
+    !isUriString(node.labPath.absolute)
+  ) {
+    // With Kubernetes clusters next to this machine, the user picks where it deploys.
+    const host = await pickTopologyHost(node.labPath.absolute, node.name ?? node.labPath.absolute);
+    if (!host) {
+      await notifyCurrentTopoViewerOfCommandFailure(
+        action,
+        new Error("Operation cancelled by user"),
+        node.labPath.absolute
+      );
+      return;
+    }
   }
 
   const execute = async () => {
