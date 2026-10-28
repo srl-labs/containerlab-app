@@ -566,6 +566,49 @@ test("processEvent marks die events as stopped until a removal event arrives", (
   assert.equal(useLabStore.getState().labs.size, 0);
 });
 
+test("interface removals after a destroy do not bring the lab back", () => {
+  const store = useLabStore.getState();
+  // A c9s destroy: containerlab reports the removed interfaces after the containers.
+  const node = (name: string) => ({
+    name: `new-lab-${name}`,
+    containerlab: "new-lab",
+    lab: "new-lab",
+    "clab-topo-file": "/labs/new-lab.clab.yml",
+    "clab-node-name": name
+  });
+  const iface = (name: string, ifname: string) => ({
+    name: `new-lab-${name}`,
+    lab: "new-lab",
+    ifname,
+    state: "up",
+    type: "veth"
+  });
+
+  for (const name of ["client1", "client2"]) {
+    store.processEvent(ENDPOINT_ID, {
+      type: "container",
+      action: "start",
+      attributes: { ...node(name), state: "running" }
+    });
+    store.processEvent(ENDPOINT_ID, { type: "interface", action: "create", attributes: iface(name, "eth1") });
+  }
+  for (const name of ["client1", "client2"]) {
+    for (const action of ["kill", "die", "destroy"]) {
+      store.processEvent(ENDPOINT_ID, { type: "container", action, attributes: { ...node(name), state: "exited" } });
+    }
+  }
+  assert.equal(useLabStore.getState().labs.size, 0);
+
+  for (const name of ["client1", "client2"]) {
+    for (const ifname of ["eth0", "eth1", "lo"]) {
+      store.processEvent(ENDPOINT_ID, { type: "interface", action: "delete", attributes: iface(name, ifname) });
+    }
+  }
+
+  assert.equal(useLabStore.getState().labs.size, 0);
+  assert.equal(useLabStore.getState().labsByEndpoint.get(ENDPOINT_ID)?.size ?? 0, 0);
+});
+
 test("processEvent keeps the docker status line and puts health events in it", () => {
   const store = useLabStore.getState();
   const containerEvent = (action: string, attributes: Record<string, string> = {}) =>
