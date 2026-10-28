@@ -15,6 +15,14 @@ export interface LabHostsSnapshot {
     problems: string[];
     containerlabVersion?: string;
   };
+  /** Opens "Add lab host" on this kind, e.g. the cluster form from the command palette; sent once. */
+  add?: "cluster" | "server";
+  /** Kubernetes cluster lab hosts: whether they can be added here, and the default kubeconfig. */
+  clusters?: {
+    /** Why clusters cannot be added here, e.g. containerlab needs Linux. */
+    unavailable?: string;
+    defaultKubeconfig?: string;
+  };
 }
 export interface SettingSchema {
   type: string;
@@ -87,7 +95,7 @@ const TITLES: Record<string, string> = {
   "destroy.extraArgs": "Destroy arguments",
   drawioDefaultTheme: "Draw.io theme",
   "gotty.port": "GoTTY port",
-  runtime: "Container runtime",
+  runtime: "Container runtime (this computer)",
   dockerSocketPath: "Container socket",
   refreshMode: "Refresh mode",
   pollInterval: "Polling interval",

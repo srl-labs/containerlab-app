@@ -796,8 +796,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
                   runtime={labHostInfo?.profile.runtime}
-                  {...(labHostInfo?.profile.runtime === "c9s" && labHostInfo.support.c9sDeployOptions
-                    ? { c9sProfile: labHostInfo.profile }
+                  {...(labHostInfo?.profile.runtime === "c9s"
+                    ? { c9sProfile: labHostInfo.profile, c9sReadOnly: !labHostInfo.support.c9sDeployOptions }
                     : {})}
                   onClose={handleCloseLifecycleOptions}
                   onRun={handleRunWithOptions}

@@ -47,8 +47,10 @@ export interface LifecycleOptionsDialogProps {
   canRestoreSnapshots?: boolean;
   /** The lab host's runtime; options containerlab rejects there are hidden. */
   runtime?: LabRuntimeKind;
-  /** c9s: the lab host takes the c9s deploy options, with these defaults. */
+  /** c9s: the lab host's deploy defaults, which the c9s options override. */
   c9sProfile?: LabHostProfile;
+  /** c9s: the lab host sets the c9s options itself (a lab server); they show read-only. */
+  c9sReadOnly?: boolean;
   onClose: () => void;
   onRun: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
@@ -169,6 +171,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   canRestoreSnapshots,
   runtime = "docker",
   c9sProfile,
+  c9sReadOnly = false,
   onClose,
   onRun
 }) => {
@@ -193,6 +196,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   const showC9s = c9sProfile !== undefined && takes("namespace");
   const c9sError =
     showC9s &&
+    !c9sReadOnly &&
     (kubeNameError(form.namespace, "namespace") !== undefined ||
       kubeNameError(form.imagePullSecret, "secret") !== undefined);
   const { request, snapshotError } = buildLifecycleRun(form, canRestoreSnapshots === true);
@@ -366,6 +370,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             form={form}
             profile={c9sProfile}
             namespaceOnly={!takes("exposeType")}
+            readOnly={c9sReadOnly}
             update={(key, value) => update(key, value as LifecycleOptionsForm[typeof key])}
             renderCheckbox={(props) => <OptionCheckbox {...props} />}
           />

@@ -28,7 +28,7 @@ import TerminalIcon from "@mui/icons-material/Terminal";
 import UploadIcon from "@mui/icons-material/Upload";
 
 import { subscribeEndpointUiAction, type EndpointUiAction } from "../state/endpointActions";
-import type { EdgeSharkStatusResponse } from "../types";
+import type { EdgeSharkStatusResponse, LabHostSetupProps } from "../types";
 import {
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
@@ -117,6 +117,8 @@ interface SettingsOverlayProps {
   localEndpoint?: LocalEndpointOffer;
   /** More local lab hosts, such as Kubernetes clusters. */
   extraLocalEndpoints?: readonly LocalEndpointOffer[];
+  /** How the app adds clusters, checks lab hosts, and why some kinds are not offered. */
+  labHostSetup?: LabHostSetupProps;
   tabOrientation?: TabOrientation;
   onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -163,7 +165,7 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "endpoints",
     label: "Lab hosts",
-    description: "This computer and the clab-api-server hosts you sign in to",
+    description: "Where your labs run: this computer, Kubernetes clusters and lab servers",
     icon: <DnsOutlinedIcon fontSize="small" />
   },
   {
@@ -520,6 +522,7 @@ export function SettingsOverlay({
   onAppearanceChange,
   localEndpoint,
   extraLocalEndpoints,
+  labHostSetup,
   tabOrientation = "horizontal",
   onTabOrientationChange,
   terminalPreferences
@@ -718,6 +721,7 @@ export function SettingsOverlay({
               onSetEndpointSessionDuration={onSetEndpointSessionDuration}
               localEndpoint={localEndpoint}
               extraLocalEndpoints={extraLocalEndpoints}
+              {...labHostSetup}
               onRequestedActionHandled={() => setRequestedEndpointAction(null)}
               requestedAction={requestedEndpointAction}
             />

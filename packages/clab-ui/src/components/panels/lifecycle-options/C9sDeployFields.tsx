@@ -1,6 +1,7 @@
 // The c9s options of deploy and redeploy: namespace, exposure, persistence, pull secret.
 import React from "react";
 import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
 
 import {
   C9S_EXPOSE_TYPES,
@@ -34,12 +35,53 @@ const EXPOSE_LABELS: Record<C9sExposeType, string> = {
   Headless: "Headless: DNS for each node"
 };
 
+function nodeStorageLabel(persistence: boolean | undefined): string {
+  if (persistence === undefined) return "Server default";
+  return persistence ? "Kept" : "Not kept";
+}
+
+/** What a lab server decides for c9s labs, shown instead of options it would ignore. */
+const C9sServerSettings: React.FC<{ profile?: LabHostProfile; namespaceOnly: boolean }> = ({ profile, namespaceOnly }) => {
+  const rows: Array<[string, string]> = [
+    ["Namespace", profile?.namespacePattern ?? "Chosen by the lab server"],
+    ...(namespaceOnly
+      ? []
+      : ([
+          ["Port exposure", profile?.exposeType ?? "clabernetes default"],
+          ["Node storage", nodeStorageLabel(profile?.persistence)],
+          ["Image pull secret", profile?.imagePullSecret ?? "None"]
+        ] as Array<[string, string]>))
+  ];
+  return (
+    <Box
+      data-testid="lifecycle-options-c9s-server"
+      sx={{ px: 1.5, py: 1, border: 1, borderColor: "divider", borderRadius: 1 }}
+    >
+      <Typography variant="subtitle2">Kubernetes settings, set by the lab server</Typography>
+      <Box component="dl" sx={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 2, rowGap: 0.25, m: 0, mt: 0.5 }}>
+        {rows.map(([label, value]) => (
+          <React.Fragment key={label}>
+            <Typography component="dt" variant="caption" sx={{ color: "text.secondary" }}>
+              {label}
+            </Typography>
+            <Typography component="dd" variant="caption" sx={{ m: 0 }}>
+              {value}
+            </Typography>
+          </React.Fragment>
+        ))}
+      </Box>
+    </Box>
+  );
+};
+
 export const C9sDeployFields: React.FC<{
   form: C9sDeployFormFields;
   /** The lab host's defaults, shown where the form leaves a field empty. */
   profile?: LabHostProfile;
   /** destroy takes only the namespace. */
   namespaceOnly: boolean;
+  /** A lab server sets the options itself: show its settings instead of fields. */
+  readOnly?: boolean;
   update: <K extends keyof C9sDeployFormFields>(key: K, value: C9sDeployFormFields[K]) => void;
   renderCheckbox: (props: {
     testId: string;
@@ -48,7 +90,8 @@ export const C9sDeployFields: React.FC<{
     checked: boolean;
     onChange: (checked: boolean) => void;
   }) => React.ReactNode;
-}> = ({ form, profile, namespaceOnly, update, renderCheckbox }) => {
+}> = ({ form, profile, namespaceOnly, readOnly = false, update, renderCheckbox }) => {
+  if (readOnly) return <C9sServerSettings profile={profile} namespaceOnly={namespaceOnly} />;
   const namespaceError = kubeNameError(form.namespace, "namespace");
   const secretError = kubeNameError(form.imagePullSecret, "secret");
   const defaultNamespace = profile?.namespace ?? "c9s-<lab>";
@@ -84,9 +127,14 @@ export const C9sDeployFields: React.FC<{
             label="Image pull secret"
             value={form.imagePullSecret}
             onChange={(value) => update("imagePullSecret", value)}
-            placeholder="None"
+            placeholder={profile?.imagePullSecret ?? "None"}
             error={secretError !== undefined}
-            helperText={secretError ?? "A Secret in the lab's namespace for private registries."}
+            helperText={
+              secretError ??
+              (profile?.imagePullSecret
+                ? `Empty uses the lab host's ${profile.imagePullSecret}.`
+                : "A Secret in the lab's namespace for private registries.")
+            }
           />
           {renderCheckbox({
             testId: "lifecycle-options-no-persistence",

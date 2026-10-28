@@ -1,4 +1,6 @@
 import type { TopologyRef } from "../session";
+import type { LabHostCheck } from "../host/labHostSupport";
+import type { C9sExposeType } from "../host/lifecycleOptions";
 
 /** Brand assets used by the shared workspace views; every host serves all of them. */
 export const WORKSPACE_ASSETS = [
@@ -169,8 +171,22 @@ export interface EndpointConfig {
   runtime?: EndpointRuntime;
   /** c9s on this machine: the kubeconfig context. */
   kubeContext?: string;
+  /** c9s on this machine: the kubeconfig file, when the host names one. */
+  kubeconfig?: string;
   /** c9s: the namespace of every lab, when the host has one. */
   namespace?: string;
+  /** c9s: the deploy defaults of the host; a lab server's are its policy. */
+  exposeType?: C9sExposeType;
+  persistence?: boolean;
+  imagePullSecret?: string;
+  /** c9s through a lab server: the cluster it runs labs on. */
+  cluster?: string;
+  /** c9s through a lab server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
+  namespacePattern?: string;
+  /** The checks of a lab host on this machine, from its last check. */
+  checks?: LabHostCheck[];
+  /** A Kubernetes cluster lab host the user may edit and remove in this app. */
+  editable?: boolean;
   /** The lab host is older than the app needs, and what to update. */
   updateRequired?: string;
   url: string;
@@ -213,6 +229,8 @@ export interface LocalEndpointOffer {
   available: boolean;
   /** What is missing, each with how to fix it. */
   problems: string[];
+  /** Every check of the last look, for "Check connection". */
+  checks?: LabHostCheck[];
   /** The containerlab version found on this machine. */
   containerlabVersion?: string;
   /** How the app names this machine; "This computer" when unset. */
@@ -225,6 +243,65 @@ export interface LocalEndpointOffer {
   /** Looks for containerlab again, after the user fixed a problem. */
   onCheckAgain?: () => Promise<void>;
 }
+/** A Kubernetes cluster lab host as the user sets it up: containerlab on this machine runs its labs. */
+export interface ClusterHostSettings {
+  label?: string;
+  /** The kubeconfig file; the app's default kubeconfig when unset. */
+  kubeconfig?: string;
+  kubeContext: string;
+  /** The namespace of every lab; one namespace per lab (`c9s-<lab>`) when unset. */
+  namespace?: string;
+  exposeType?: C9sExposeType;
+  /** False: nodes keep no state across restarts (`--no-persistence`). */
+  persistence?: boolean;
+  imagePullSecret?: string;
+}
+
+/** A context of a kubeconfig, for the context list of the cluster form. */
+export interface KubeContextChoice {
+  name: string;
+  cluster: string;
+  namespace?: string;
+  current: boolean;
+}
+
+/** The contexts of a kubeconfig file, or why it does not load. */
+export interface KubeconfigContextList {
+  kubeconfig: string;
+  contexts: KubeContextChoice[];
+  error?: string;
+}
+
+/**
+ * How an app adds, edits and checks Kubernetes cluster lab hosts. Apps that
+ * cannot (the web app, where the browser never handles a kubeconfig) leave
+ * it out and say why instead.
+ */
+export interface ClusterHostsSupport {
+  /** The kubeconfig a cluster without its own file reads, e.g. `~/.kube/config`. */
+  defaultKubeconfig?: string;
+  /** The contexts of a kubeconfig file; of the default one when unset. */
+  listContexts(kubeconfig?: string): Promise<KubeconfigContextList>;
+  /** The app's file dialog for a kubeconfig; undefined when cancelled. Without it the path is typed in. */
+  chooseKubeconfig?(): Promise<string | undefined>;
+  /** Runs the checks of settings that are not saved yet. */
+  check(settings: ClusterHostSettings): Promise<LabHostCheck[]>;
+  /** Saves a new cluster lab host, or the edited one with `endpointId`. */
+  save(settings: ClusterHostSettings, endpointId?: string): Promise<void>;
+}
+
+/** What an app adds to "Add lab host" beyond lab servers: clusters, checks, and why a kind is not offered. */
+export interface LabHostSetupProps {
+  /** Checks a lab host on this machine again and answers with each check ("Check connection"). */
+  onCheckEndpoint?: (endpointId: string) => Promise<LabHostCheck[]>;
+  /** How this app adds, edits and checks Kubernetes clusters; without it they cannot be added here. */
+  clusterHosts?: ClusterHostsSupport;
+  /** Why clusters cannot be added in this app, and what to do instead. */
+  clustersUnavailable?: string;
+  /** Why "This computer" cannot run labs in this app, when there is no local offer. */
+  thisComputerUnavailable?: string;
+}
+
 export type EndpointSessionDuration = string;
 export interface EndpointImportResult { added: number; duplicates: number; total: number; unchanged: number; updated: number; }
 export interface EndpointHealthMetrics {

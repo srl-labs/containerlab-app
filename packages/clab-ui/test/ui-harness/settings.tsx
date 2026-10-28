@@ -129,6 +129,64 @@ function labHostAction(payload: Record<string, unknown>): unknown {
         connected: true,
       });
       break;
+    case "labHosts.cluster.contexts":
+      // Two contexts in the default kubeconfig; a chosen file has one.
+      if (payload.kubeconfig === "/home/alice/.kube/lab.yaml") {
+        return { kubeconfig: payload.kubeconfig, contexts: [{ name: "lab-prod", cluster: "prod", current: true }] };
+      }
+      if (payload.kubeconfig !== undefined) {
+        return { kubeconfig: payload.kubeconfig, contexts: [], error: `No kubeconfig found (looked at ${String(payload.kubeconfig)}).` };
+      }
+      return {
+        kubeconfig: "/home/alice/.kube/config",
+        contexts: [
+          { name: "kind-c9s-app", cluster: "kind-c9s-app", current: true },
+          { name: "team-cluster", cluster: "team", namespace: "team-a", current: false },
+        ],
+      };
+    case "labHosts.cluster.chooseKubeconfig":
+      return { path: "/home/alice/.kube/lab.yaml" };
+    case "labHosts.cluster.check":
+    case "labHosts.check": {
+      // The namespace "team-a" lacks pods/exec; anything else is ready.
+      const settings = (payload.settings ?? labHost(payload.endpointId)) as { namespace?: string };
+      const denied = settings.namespace === "team-a";
+      return [
+        { id: "containerlab", label: "containerlab 0.83.0 or newer", status: "ok", message: "containerlab 0.83.0" },
+        { id: "kubeconfig", label: "kubeconfig loads and has the context", status: "ok", message: "Context kind-c9s-app" },
+        { id: "cluster", label: "The cluster answers", status: "ok", message: "Kubernetes v1.33.1" },
+        { id: "clabernetes", label: "clabernetes 0.11.0 or newer", status: "ok", message: "clabernetes 0.11.0" },
+        denied
+          ? {
+              id: "access:pods/exec",
+              label: "May create pods/exec in namespace team-a",
+              status: "failed",
+              message: "alice cannot create pods/exec in namespace team-a.",
+              fix: "A cluster admin binds clabernetes-lab-editor to you in team-a:",
+              command: "kubectl create rolebinding clab-lab-editor-alice --clusterrole clabernetes-lab-editor --user alice -n team-a",
+            }
+          : { id: "access:pods/exec", label: "May create pods/exec in lab namespaces", status: "ok" },
+      ];
+    }
+    case "labHosts.cluster.save": {
+      const settings = payload.settings as Record<string, unknown>;
+      const id = typeof payload.endpointId === "string" ? payload.endpointId : `c9s-${labHosts.hosts.length}`;
+      const host: EndpointConfig = {
+        id,
+        kind: "local",
+        runtime: "c9s",
+        url: `local://c9s/${String(settings.kubeContext)}`,
+        label: typeof settings.label === "string" ? settings.label : String(settings.kubeContext),
+        username: "alice",
+        sessionDuration: "",
+        status: "connected",
+        connected: true,
+        editable: true,
+        ...settings,
+      };
+      labHosts.hosts = [...labHosts.hosts.filter((entry) => entry.id !== id), host];
+      break;
+    }
     case "labHosts.metrics":
       return {
         serverInfo: { version: "0.2.1", uptime: "3h", startTime: "" },
@@ -157,7 +215,11 @@ function snapshot(): SettingsSnapshot {
     target,
     workspaceAvailable: true,
     workspaceName: "network-labs",
-    labHosts: { hosts: labHosts.hosts.map((host) => ({ ...host })), local: { ...labHosts.local } },
+    labHosts: {
+      hosts: labHosts.hosts.map((host) => ({ ...host })),
+      local: { ...labHosts.local },
+      clusters: { defaultKubeconfig: "/home/alice/.kube/config" },
+    },
     category: takeInitialCategory(),
     remoteName: "ssh-remote",
     version: manifest.version,
