@@ -75,6 +75,8 @@ To change how the app runs containerlab, create `~/.config/Containerlab/local-ba
 
 Set `"enabled": false` to turn **This computer** off entirely, or `"sudo": true` to run containerlab with `sudo -n`, which needs passwordless sudo. The same options are available as [environment variables](../reference/app-settings.md#desktop-app).
 
+To run labs on a Kubernetes cluster with clabernetes as well, list it under `clusters`; see [Labs on Kubernetes](../guides/kubernetes.md#desktop-app).
+
 ## Work with lab hosts
 
 To work with labs on other machines, or from macOS and Windows, set up a [lab host](lab-host.md) and [sign in to it](sign-in.md). On Linux, add lab hosts under **Settings** > **Lab hosts**; their labs show up next to **This computer**. On macOS and Windows the app starts on the sign-in screen.
