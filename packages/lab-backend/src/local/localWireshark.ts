@@ -9,10 +9,19 @@ import path from "node:path";
 import type { Readable, Writable } from "node:stream";
 
 import { LabBackendError } from "../contract/errors.ts";
+import { runCommand } from "./process.ts";
 
 export interface FindWiresharkOptions {
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
+  /**
+   * WSL only: the Windows program folders (`%ProgramFiles%`,
+   * `%ProgramFiles(x86)%`) as Linux paths. Asked from Windows through
+   * `cmd.exe` and `wslpath` when unset; tests pass them.
+   */
+  windowsProgramFolders?: () => Promise<string[]>;
+  /** `/proc/version`, which names Microsoft under WSL; read when unset and `env` is this process's. */
+  procVersion?: string;
 }
 
 async function isFile(candidate: string): Promise<boolean> {
@@ -59,8 +68,69 @@ export function wiresharkCandidates(options: FindWiresharkOptions = {}): string[
 }
 
 /**
+ * Whether this is Linux under WSL: `WSL_DISTRO_NAME` or `WSL_INTEROP` in the
+ * environment, or a kernel that names Microsoft. `/proc/version` is only read
+ * for this process's own environment; a given one describes another machine.
+ */
+async function isWsl(options: FindWiresharkOptions, env: NodeJS.ProcessEnv): Promise<boolean> {
+  if (env.WSL_DISTRO_NAME || env.WSL_INTEROP) return true;
+  let version = options.procVersion;
+  if (version === undefined && options.env === undefined) {
+    version = await fs.readFile("/proc/version", "utf8").catch(() => "");
+  }
+  return /microsoft/i.test(version ?? "");
+}
+
+/** Where Windows mounts C: when it cannot be asked (`/mnt/c` unless `wsl.conf` moves it). */
+const WSL_FALLBACK_PROGRAM_FOLDERS = ["/mnt/c/Program Files", "/mnt/c/Program Files (x86)"];
+
+/** The Windows program folders as Linux paths, asked from Windows through WSL interop. */
+async function askWindowsProgramFolders(env: NodeJS.ProcessEnv): Promise<string[]> {
+  try {
+    const echoed = await runCommand("cmd.exe", ["/d", "/c", "echo %ProgramFiles%&echo %ProgramFiles(x86)%"], {
+      env,
+      timeoutMs: 5000
+    });
+    const windowsPaths = echoed.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      // An unset variable echoes itself.
+      .filter((line) => /^[A-Za-z]:\\/.test(line));
+    const folders: string[] = [];
+    for (const windowsPath of windowsPaths) {
+      const converted = await runCommand("wslpath", ["-u", windowsPath], { env, timeoutMs: 5000 });
+      const folder = converted.stdout.trim();
+      if (converted.code === 0 && folder) folders.push(folder);
+    }
+    if (folders.length > 0) return folders;
+  } catch {
+    // No interop (disabled in wsl.conf): guess the default mount.
+  }
+  return WSL_FALLBACK_PROGRAM_FOLDERS;
+}
+
+let windowsProgramFoldersOnce: Promise<string[]> | undefined;
+
+/** Wireshark installed on Windows, as seen from WSL: `<program folder>/Wireshark/Wireshark.exe`. */
+async function windowsWiresharkFromWsl(
+  options: FindWiresharkOptions,
+  env: NodeJS.ProcessEnv
+): Promise<string | undefined> {
+  const folders = options.windowsProgramFolders
+    ? await options.windowsProgramFolders()
+    : await (windowsProgramFoldersOnce ??= askWindowsProgramFolders(env));
+  for (const folder of folders) {
+    const candidate = path.posix.join(folder, "Wireshark", "Wireshark.exe");
+    if (await isFile(candidate)) return candidate;
+  }
+  return undefined;
+}
+
+/**
  * The Wireshark executable: `binaryPath` when given (a path, or a name on
- * PATH), else the platform's install location, else `wireshark` on PATH.
+ * PATH), else the platform's install location, else `wireshark` on PATH,
+ * else, under WSL, Wireshark installed on Windows: WSL interop runs it, and
+ * it reads the capture from stdin like any other (`Wireshark.exe -k -i -`).
  */
 export async function findWireshark(
   binaryPath?: string,
@@ -76,7 +146,10 @@ export async function findWireshark(
   for (const candidate of wiresharkCandidates({ env, platform })) {
     if (await isFile(candidate)) return candidate;
   }
-  return (await onPath("wireshark", env, platform)) ?? (platform === "win32" ? onPath("Wireshark", env, platform) : undefined);
+  const found =
+    (await onPath("wireshark", env, platform)) ?? (platform === "win32" ? await onPath("Wireshark", env, platform) : undefined);
+  if (found || platform !== "linux" || !(await isWsl(options, env))) return found;
+  return windowsWiresharkFromWsl(options, env);
 }
 
 export interface LaunchLocalWiresharkOptions {

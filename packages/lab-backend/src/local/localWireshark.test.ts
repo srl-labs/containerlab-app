@@ -154,3 +154,55 @@ test("Wireshark is found where each platform installs it", async (t) => {
   await fs.writeFile(path.join(bundle, "Wireshark"), "");
   assert.equal(await findWireshark(undefined, { platform: "darwin", env: { HOME: root, PATH: "" } }), path.join(bundle, "Wireshark"));
 });
+
+test("under WSL, Wireshark installed on Windows is found through the program folders", async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "find-wireshark-wsl-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const programFiles = path.join(root, "Program Files");
+  const programFilesX86 = path.join(root, "Program Files (x86)");
+  await fs.mkdir(path.join(programFilesX86, "Wireshark"), { recursive: true });
+  await fs.writeFile(path.join(programFilesX86, "Wireshark", "Wireshark.exe"), "");
+  const windowsProgramFolders = () => Promise.resolve([programFiles, programFilesX86]);
+  const expected = path.join(programFilesX86, "Wireshark", "Wireshark.exe");
+
+  // WSL by its environment, or by its kernel.
+  assert.equal(
+    await findWireshark(undefined, { platform: "linux", env: { PATH: "", WSL_DISTRO_NAME: "Containerlab" }, windowsProgramFolders }),
+    expected
+  );
+  assert.equal(
+    await findWireshark(undefined, { platform: "linux", env: { PATH: "", WSL_INTEROP: "/run/WSL/1_interop" }, windowsProgramFolders }),
+    expected
+  );
+  assert.equal(
+    await findWireshark(undefined, {
+      platform: "linux",
+      env: { PATH: "" },
+      procVersion: "Linux version 6.6.87.2-microsoft-standard-WSL2",
+      windowsProgramFolders
+    }),
+    expected
+  );
+  // Not WSL: the Windows folders are not looked at.
+  assert.equal(
+    await findWireshark(undefined, { platform: "linux", env: { PATH: "" }, procVersion: "Linux version 6.8.0-generic", windowsProgramFolders }),
+    undefined
+  );
+  // A Linux Wireshark on PATH comes first.
+  const bin = path.join(root, "bin");
+  await fs.mkdir(bin);
+  await fs.writeFile(path.join(bin, "wireshark"), "", { mode: 0o755 });
+  assert.equal(
+    await findWireshark(undefined, { platform: "linux", env: { PATH: bin, WSL_DISTRO_NAME: "x" }, windowsProgramFolders }),
+    path.join(bin, "wireshark")
+  );
+  // Neither folder has Wireshark.
+  assert.equal(
+    await findWireshark(undefined, {
+      platform: "linux",
+      env: { PATH: "", WSL_DISTRO_NAME: "x" },
+      windowsProgramFolders: () => Promise.resolve([programFiles])
+    }),
+    undefined
+  );
+});
