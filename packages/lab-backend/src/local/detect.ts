@@ -220,6 +220,12 @@ export async function detectLocalEnvironment(
     return status;
   }
 
+  if (status.containerlabPath && !isRoot && !resolved.sudo) {
+    const check = await suidRootCheck(status.containerlabPath);
+    if (check.status === "failed") problems.push(`${check.message} Run: ${check.command}, or install containerlab normally.`);
+    checks.push(check);
+  }
+
   const groupsCheck = { id: "groups", label: `${resolved.username} may run containerlab without sudo` };
   if (!isRoot && !resolved.sudo) {
     const missing: string[] = [];
@@ -272,6 +278,32 @@ export async function detectLocalEnvironment(
 
   status.available = problems.length === 0;
   return status;
+}
+
+function shellQuote(value: string): string {
+  return /^[\w./+-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/**
+ * containerlab runs Docker labs as root: the user runs it as root or with
+ * sudo, or the binary is owned by root with the SUID bit, as the installer
+ * sets it up. A self-built binary is neither until it is changed.
+ */
+export async function suidRootCheck(binary: string): Promise<LabHostCheck> {
+  const check = { id: "suid", label: "containerlab runs as root (SUID)" };
+  const stat = await fs.stat(binary).catch(() => undefined);
+  if (!stat) return { ...check, status: "skipped", message: `${binary} cannot be read.` };
+  if (stat.uid === 0 && (stat.mode & 0o4000) !== 0) {
+    return { ...check, status: "ok", message: `${binary} is SUID root` };
+  }
+  const quoted = shellQuote(binary);
+  return {
+    ...check,
+    status: "failed",
+    message: `containerlab at ${binary} is not SUID root, so it cannot run Docker labs without sudo.`,
+    fix: "Make it SUID root, or install containerlab normally.",
+    command: `sudo chown root:root ${quoted} && sudo chmod 4755 ${quoted}`
+  };
 }
 
 /** The workspace root a local backend uses by default. */

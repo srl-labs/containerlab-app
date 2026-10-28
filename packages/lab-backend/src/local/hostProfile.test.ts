@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { effectiveSupport } from "../index.ts";
 import { LocalLabBackend } from "./localLabBackend.ts";
-import { containerlabPlatformProblem, detectLocalEnvironment } from "./detect.ts";
+import { containerlabPlatformProblem, detectLocalEnvironment, suidRootCheck } from "./detect.ts";
 import { expandKubeconfigPath, resolveLocalOptions } from "./options.ts";
 
 const ENV = { PATH: "/nonexistent", HOME: "/nonexistent" };
@@ -155,4 +156,16 @@ test("an unknown runtime is a detection problem, not a crash", async () => {
   const status = await detectLocalEnvironment({ runtime: "lxd", env: ENV });
   assert.equal(status.available, false);
   assert.deepEqual(status.problems, ['Unknown lab runtime "lxd". Use docker, podman or c9s.']);
+});
+
+test("a containerlab binary that is not SUID root is a failed check with the fix", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "clab-suid-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const binary = path.join(directory, "my containerlab");
+  await fs.writeFile(binary, "#!/bin/sh\n", { mode: 0o755 });
+  const check = await suidRootCheck(binary);
+  assert.equal(check.status, "failed");
+  assert.equal(check.message, `containerlab at ${binary} is not SUID root, so it cannot run Docker labs without sudo.`);
+  assert.equal(check.command, `sudo chown root:root '${binary}' && sudo chmod 4755 '${binary}'`);
+  assert.equal((await suidRootCheck(path.join(directory, "missing"))).status, "skipped");
 });
