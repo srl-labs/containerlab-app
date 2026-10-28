@@ -18,6 +18,7 @@ import {
 import type { ImagePullPolicy } from "../utils/consts";
 import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import { backendFor, backendOf, connectionOf, pickConnection } from "../backend/labBackends";
+import { isClusterConnection } from "../backend/connections";
 import { isRemoteNode, remoteHostname, remoteLabNameOf } from "../backend/remoteNode";
 import { startVncProxy } from "../backend/vncProxy";
 import {
@@ -249,7 +250,11 @@ function labNameOf(node: CaptureNode): { labName?: string } {
   return labName ? { labName } : {};
 }
 
-/** Wireshark VNC of a c9s clab-api-server: it feeds the session from its own capture stream. */
+/**
+ * Wireshark VNC of a c9s lab host: a clab-api-server feeds the session from
+ * its own capture stream; for a cluster on this machine the container runs on
+ * this machine's Docker and reads the capture from here.
+ */
 async function openStreamVnc(
   node: unknown,
   labName: string,
@@ -846,7 +851,8 @@ export async function killAllWiresharkVNCCtrs(target?: unknown) {
       ? connectionOf(target)
       : await pickConnection("Close Wireshark VNC sessions");
   if (!connection) return;
-  if (connection.kind === "api") {
+  // clab-api-server and clusters on this machine know their own sessions.
+  if (connection.kind === "api" || isClusterConnection(connection)) {
     try {
       const result = await backendFor(connection).closeAllWiresharkVnc();
       outputChannel.info(result.message);

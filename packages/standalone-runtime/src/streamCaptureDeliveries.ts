@@ -1,4 +1,4 @@
-import type { CaptureDelivery, LabHostSupport } from "@containerlab/clab-ui/host";
+import type { CaptureDelivery, LabHostInfo, LabHostSupport } from "@containerlab/clab-ui/host";
 
 export interface StreamCaptureEnvironment {
   /** The app server opens Wireshark on this machine (the desktop app). */
@@ -28,4 +28,15 @@ export function streamCaptureDeliveries(
   }
   deliveries.push("download");
   return deliveries;
+}
+
+/**
+ * Ways the lab host could offer but cannot now, with why: Wireshark VNC of a
+ * cluster used from this machine without Docker here. The dialog shows them disabled.
+ */
+export function unavailableStreamCaptureDeliveries(
+  info: Pick<LabHostInfo, "profile" | "support">
+): Partial<Record<CaptureDelivery, string>> {
+  const reason = info.support.wiresharkVnc ? undefined : info.profile.wiresharkVncUnavailable;
+  return reason ? { "wireshark-vnc": reason } : {};
 }

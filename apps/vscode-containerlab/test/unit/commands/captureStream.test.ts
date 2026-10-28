@@ -34,6 +34,40 @@ describe("stream capture deliveries", () => {
     ).to.deep.equal(["terminal", "save"]);
   });
 
+  it("on a cluster on this machine, keeps a found Wireshark first and Wireshark VNC next", () => {
+    const support = { captureTickets: false, wiresharkVnc: true };
+    expect(streamCaptureDeliveries(true, support, undefined, true)).to.deep.equal([
+      "terminal",
+      "vnc",
+      "save"
+    ]);
+    expect(streamCaptureDeliveries(true, support, "Edgeshark", true)).to.deep.equal([
+      "terminal",
+      "vnc",
+      "save"
+    ]);
+    expect(streamCaptureDeliveries(true, support, "Wireshark VNC", true)).to.deep.equal([
+      "vnc",
+      "terminal",
+      "save"
+    ]);
+  });
+
+  it("on a cluster on this machine without Wireshark, opens Wireshark VNC first", () => {
+    const support = { captureTickets: false, wiresharkVnc: true };
+    expect(streamCaptureDeliveries(true, support, undefined, false)).to.deep.equal([
+      "vnc",
+      "terminal",
+      "save"
+    ]);
+    // Edgeshark, the other choice of the setting, means the Wireshark on this machine.
+    expect(streamCaptureDeliveries(true, support, "Edgeshark", false)).to.deep.equal([
+      "terminal",
+      "vnc",
+      "save"
+    ]);
+  });
+
   it("opens a packetflix link first on a clab-api-server, then VNC, then saves", () => {
     expect(
       streamCaptureDeliveries(false, { captureTickets: true, wiresharkVnc: true }, undefined)
@@ -64,5 +98,9 @@ describe("stream capture deliveries", () => {
     expect(
       captureTerminalCommand("clab", "/Applications/Wire shark.app/Contents/MacOS/Wireshark")
     ).to.equal("clab | '/Applications/Wire shark.app/Contents/MacOS/Wireshark' -k -i -");
+    // A Windows Wireshark under WSL, run through interop.
+    expect(captureTerminalCommand("clab", "/mnt/c/Program Files/Wireshark/Wireshark.exe")).to.equal(
+      "clab | '/mnt/c/Program Files/Wireshark/Wireshark.exe' -k -i -"
+    );
   });
 });

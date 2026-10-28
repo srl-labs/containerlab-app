@@ -2,7 +2,8 @@
  * Captures on lab hosts that capture lab links as one stream (c9s): the
  * picker lists the lab-link interfaces, and the capture goes where the user
  * chose: Wireshark on this machine (desktop), Wireshark in a window (VNC on
- * a clab-api-server), a `packetflix:` link, or a `.pcapng` download.
+ * a clab-api-server, or for a cluster used from this machine a VNC container
+ * on this machine's Docker), a `packetflix:` link, or a `.pcapng` download.
  */
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 import {
@@ -25,7 +26,7 @@ import {
   type RuntimeTargetRequest
 } from "./runtimeApi";
 import { useAuthStore } from "./stores/authStore";
-import { streamCaptureDeliveries } from "./streamCaptureDeliveries";
+import { streamCaptureDeliveries, unavailableStreamCaptureDeliveries } from "./streamCaptureDeliveries";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import { resolveStandaloneServerOrigin } from "./standaloneServerOrigin";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
@@ -159,6 +160,7 @@ export async function openStreamCaptureDialog(request: StreamCaptureDialogReques
       nodes: request.nodes,
       ...(request.initialSelection ? { initialSelection: request.initialSelection } : {}),
       deliveries,
+      unavailable: unavailableStreamCaptureDeliveries(info),
       loadInterfaces: async () =>
         parseLabCaptureInterfaces(await requestLabOperation("capture-interfaces", { ...request.target })),
       onCapture: (capture) => {

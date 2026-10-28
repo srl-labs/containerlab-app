@@ -3,8 +3,11 @@
  * Kubernetes cluster (c9s) on this machine, or a c9s clab-api-server.
  *
  * - Cluster on this machine: an integrated terminal runs
- *   `containerlab -r c9s capture … -w - | wireshark -k -i -`, or the capture
- *   is saved as `.pcapng`.
+ *   `containerlab -r c9s capture … -w - | wireshark -k -i -` (the default
+ *   when Wireshark is found here, also a Windows Wireshark under WSL), or
+ *   Wireshark VNC in a webview, whose container runs on this machine's Docker
+ *   and reads the capture from here (the default without a Wireshark), or the
+ *   capture is saved as `.pcapng`.
  * - clab-api-server: a single-use `packetflix:` link opens Wireshark through
  *   cshargextcap (the default), or Wireshark VNC in a webview, or the capture
  *   is saved as `.pcapng`.
@@ -37,6 +40,9 @@ export interface StreamCaptureTarget {
   interface: string;
 }
 
+/** Wireshark VNC of a cluster on this machine: the container runs here, on Docker. */
+const LOCAL_VNC_DETAIL = "Wireshark in a VS Code tab, in a container on this computer's Docker";
+
 const DELIVERY_ITEMS: Record<StreamCaptureDelivery, { label: string; detail: string }> = {
   terminal: {
     label: "$(terminal) Wireshark",
@@ -63,14 +69,22 @@ const SAVE_DURATIONS = [
 
 /**
  * Where a capture can go, the default first. The `capture.preferredAction`
- * setting, when the user set it, picks between the link and VNC.
+ * setting, when the user set it, picks between the link (or, on a cluster on
+ * this machine, the local Wireshark) and VNC. On a cluster on this machine
+ * the local Wireshark comes first when it was found, else Wireshark VNC.
  */
 export function streamCaptureDeliveries(
   onThisMachine: boolean,
   support: Pick<LabHostInfo["support"], "captureTickets" | "wiresharkVnc">,
-  preferred: string | undefined
+  preferred: string | undefined,
+  localWireshark = true
 ): StreamCaptureDelivery[] {
-  if (onThisMachine) return ["terminal", "save"];
+  if (onThisMachine) {
+    if (!support.wiresharkVnc) return ["terminal", "save"];
+    const vncFirst =
+      preferred === "Wireshark VNC" || (!localWireshark && preferred !== "Edgeshark");
+    return vncFirst ? ["vnc", "terminal", "save"] : ["terminal", "vnc", "save"];
+  }
   const order: StreamCaptureDelivery[] =
     preferred === "Wireshark VNC" ? ["vnc", "packetflix"] : ["packetflix", "vnc"];
   const live = order.filter((delivery) =>
@@ -172,15 +186,47 @@ async function pickInterfaces(
   return picked.map((item) => ({ node, interface: item.entry.interface }));
 }
 
+/** How the host's ways to capture read in the picker. */
+interface DeliveryChoices {
+  deliveries: StreamCaptureDelivery[];
+  /** The lab host is a cluster on this machine. */
+  local: boolean;
+  /** Why Wireshark VNC is not offered, when the host could offer it. */
+  vncUnavailable?: string;
+}
+
+function deliveryItem(delivery: StreamCaptureDelivery, local: boolean) {
+  const item = DELIVERY_ITEMS[delivery];
+  return {
+    ...item,
+    ...(delivery === "vnc" && local ? { detail: LOCAL_VNC_DETAIL } : {}),
+    delivery
+  };
+}
+
 async function pickDelivery(
-  deliveries: StreamCaptureDelivery[],
+  choices: DeliveryChoices,
   title: string
 ): Promise<StreamCaptureDelivery | undefined> {
-  if (deliveries.length === 1) return deliveries[0];
-  const picked = await vscode.window.showQuickPick(
-    deliveries.map((delivery) => ({ ...DELIVERY_ITEMS[delivery], delivery })),
-    { title, placeHolder: "Open the capture in" }
-  );
+  const { deliveries, local, vncUnavailable } = choices;
+  if (deliveries.length === 1 && !vncUnavailable) return deliveries[0];
+  type Item = vscode.QuickPickItem & { delivery?: StreamCaptureDelivery };
+  const items: Item[] = deliveries.map((delivery) => deliveryItem(delivery, local));
+  // A quick pick has no disabled items: Wireshark VNC stays listed, with why it cannot open.
+  if (vncUnavailable) {
+    items.push({
+      label: DELIVERY_ITEMS.vnc.label,
+      description: "unavailable",
+      detail: vncUnavailable
+    });
+  }
+  const picked = await vscode.window.showQuickPick(items, {
+    title,
+    placeHolder: "Open the capture in"
+  });
+  if (picked && !picked.delivery && vncUnavailable) {
+    void vscode.window.showWarningMessage(vncUnavailable);
+  }
   return picked?.delivery;
 }
 
@@ -193,25 +239,47 @@ export function captureTerminalCommand(captureCommand: string, wireshark: string
   return `${captureCommand} | ${shellQuote(wireshark)} -k -i -`;
 }
 
+/** Wireshark on this machine: the configured path, the usual install locations, PATH, or Windows under WSL. */
+function findLocalWireshark(): Promise<string | undefined> {
+  return findWireshark(
+    vscode.workspace.getConfiguration("containerlab").get<string>("capture.wireshark.path", "") ||
+      undefined
+  );
+}
+
+/**
+ * No Wireshark here: the capture can still open in Wireshark VNC or be
+ * saved, or the user points the setting at Wireshark.
+ */
+async function wiresharkNotFound(
+  choices: DeliveryChoices,
+  open: (delivery: StreamCaptureDelivery) => Promise<void>
+): Promise<void> {
+  const vnc = "Open in Wireshark VNC";
+  const save = "Save .pcapng…";
+  const setPath = "Set Wireshark path";
+  const actions = [...(choices.deliveries.includes("vnc") ? [vnc] : []), save, setPath];
+  const reason = choices.vncUnavailable ? ` ${choices.vncUnavailable}.` : "";
+  const choice = await vscode.window.showWarningMessage(
+    `Wireshark was not found on this machine.${reason}`,
+    ...actions
+  );
+  if (choice === vnc) await open("vnc");
+  else if (choice === save) await open("save");
+  else if (choice === setPath)
+    await vscode.commands.executeCommand(
+      "workbench.action.openSettings",
+      "containerlab.capture.wireshark.path"
+    );
+}
+
 async function captureInTerminal(
   backend: LocalLabBackend,
   labName: string,
   targets: StreamCaptureTarget[],
-  label: string
+  label: string,
+  wireshark: string
 ): Promise<void> {
-  const wireshark = await findWireshark(
-    vscode.workspace.getConfiguration("containerlab").get<string>("capture.wireshark.path", "") ||
-      undefined
-  );
-  if (!wireshark) {
-    const save = "Save .pcapng instead";
-    const choice = await vscode.window.showErrorMessage(
-      "Wireshark was not found on this machine. Install it, or set containerlab.capture.wireshark.path.",
-      save
-    );
-    if (choice === save) await saveCapture(backend, labName, targets, label);
-    return;
-  }
   const { command, env } = await backend.captureCommandLine(labName, toCaptureTargets(targets));
   const terminal = vscode.window.createTerminal({
     name: `Capture ${label}`,
@@ -347,12 +415,16 @@ async function resolveTargets(
 /** The way the request names, if the host has it; else asked, or the host's default. */
 async function chooseDelivery(
   request: StreamCaptureRequest,
-  deliveries: StreamCaptureDelivery[],
+  choices: DeliveryChoices,
   label: string
 ): Promise<StreamCaptureDelivery | undefined> {
-  if (request.delivery && deliveries.includes(request.delivery)) return request.delivery;
-  if (request.askDelivery) return pickDelivery(deliveries, `Capture ${label}`);
-  return deliveries[0];
+  if (request.delivery && choices.deliveries.includes(request.delivery)) return request.delivery;
+  if (request.delivery === "vnc" && choices.vncUnavailable) {
+    void vscode.window.showWarningMessage(choices.vncUnavailable);
+    return undefined;
+  }
+  if (request.askDelivery) return pickDelivery(choices, `Capture ${label}`);
+  return choices.deliveries[0];
 }
 
 /** Captures on a lab host with capture streams; the host must be one (`streamCaptureHost`). */
@@ -366,17 +438,31 @@ export async function captureOnStreamHost(
     if (!resolved || resolved.targets.length === 0) return;
     const { labName, targets } = resolved;
     const label = targets.map((target) => `${target.node}:${target.interface}`).join(", ");
-    const deliveries = streamCaptureDeliveries(
-      host.connection.kind === "local",
-      host.info.support,
-      preferredAction()
-    );
-    const delivery = await chooseDelivery(request, deliveries, label);
-    if (delivery === "terminal")
-      await captureInTerminal(backend as LocalLabBackend, labName, targets, label);
-    else if (delivery === "packetflix") await openTicket(backend, labName, targets);
-    else if (delivery === "vnc") await request.openVnc?.(labName, targets);
-    else if (delivery === "save") await saveCapture(backend, labName, targets, label);
+    const local = host.connection.kind === "local";
+    const wireshark = local ? await findLocalWireshark() : undefined;
+    const vncUnavailable = host.info.support.wiresharkVnc
+      ? undefined
+      : host.info.profile.wiresharkVncUnavailable;
+    const choices: DeliveryChoices = {
+      deliveries: streamCaptureDeliveries(
+        local,
+        host.info.support,
+        preferredAction(),
+        wireshark !== undefined
+      ),
+      local,
+      ...(vncUnavailable ? { vncUnavailable } : {})
+    };
+    const open = async (delivery: StreamCaptureDelivery | undefined): Promise<void> => {
+      if (delivery === "terminal") {
+        if (wireshark)
+          await captureInTerminal(backend as LocalLabBackend, labName, targets, label, wireshark);
+        else await wiresharkNotFound(choices, open);
+      } else if (delivery === "packetflix") await openTicket(backend, labName, targets);
+      else if (delivery === "vnc") await request.openVnc?.(labName, targets);
+      else if (delivery === "save") await saveCapture(backend, labName, targets, label);
+    };
+    await open(await chooseDelivery(request, choices, label));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     void vscode.window.showErrorMessage(`Capture failed: ${message}`);
