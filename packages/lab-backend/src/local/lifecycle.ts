@@ -50,6 +50,9 @@ export function lifecycleLineStream(line: string): "stdout" | "stderr" {
     : "stdout";
 }
 
+/** The last output lines of a lifecycle command searched for its error. */
+const ERROR_TAIL_LINES = 40;
+
 const ACTION_VERBS: Record<LabLifecycleAction, string> = {
   deploy: "deploy",
   destroy: "destroy",
@@ -297,7 +300,7 @@ export class LocalLifecycle {
         .map(filterLifecycleLine)
         .filter((line): line is string => line !== undefined);
       if (result.code !== 0) {
-        const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
+        const detail = lastContainerlabError(result.stderr) ?? `exit status ${result.code}`;
         throw Object.assign(new LabBackendError(this.failure(action, labDisplayName(lab), detail), 500), { logs });
       }
       return {
@@ -335,8 +338,12 @@ export class LocalLifecycle {
 
     async function* events(): AsyncGenerator<LifecycleStreamEvent> {
       let lastError: string | undefined;
+      // containerlab's boxed error spans lines the log filter drops.
+      const tail: string[] = [];
       try {
         for await (const output of command.lines) {
+          tail.push(output.line);
+          if (tail.length > ERROR_TAIL_LINES) tail.shift();
           const line = filterLifecycleLine(output.line);
           if (!line) continue;
           lastError = lastContainerlabError(line) ?? lastError;
@@ -346,9 +353,10 @@ export class LocalLifecycle {
         if (exit.code === 0) {
           yield startStop && message ? { type: "done", message } : { type: "done" };
         } else if (!options.signal?.aborted) {
+          const detail = lastContainerlabError(tail.join("\n")) ?? lastError;
           yield {
             type: "error",
-            error: failure(lastError ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
+            error: failure(detail ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
           };
         }
       } finally {

@@ -73,6 +73,7 @@ import { LocalLifecycle } from "./lifecycle.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import {
   containerlabCommand,
+  lastContainerlabError,
   runChecked,
   runCommand,
   spawnLines,
@@ -870,9 +871,21 @@ export class LocalLabBackend implements LabBackend {
     running.add(command);
     void command.exit.then(() => running.delete(command));
     async function* lines(): AsyncGenerator<string> {
+      const stderr: string[] = [];
       try {
         for await (const output of command.lines) {
-          if (output.stream === "stdout") yield `${output.line}\n`;
+          if (output.stream === "stdout") {
+            yield `${output.line}\n`;
+          } else {
+            stderr.push(output.line);
+            if (stderr.length > 40) stderr.shift();
+          }
+        }
+        const exit = await command.exit;
+        if (exit.code !== 0 && exit.code !== null && !signal.aborted) {
+          // E.g. a binary that is neither run as root nor SUID root.
+          const detail = lastContainerlabError(stderr.join("\n")) ?? `exit status ${exit.code}`;
+          throw new LabBackendError(`containerlab events failed: ${detail}`, 500);
         }
       } finally {
         command.kill();

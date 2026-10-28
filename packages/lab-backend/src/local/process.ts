@@ -95,14 +95,36 @@ function commandFailureMessage(file: string, args: string[], result: CommandResu
   return `${[file, ...args.slice(0, 2)].join(" ")} failed (exit ${result.code ?? "signal"})${detail ? `: ${detail}` : ""}`;
 }
 
-/** The message of containerlab's last `ERRO`/`FATA` log line, if any. */
+/**
+ * The message of containerlab's last error: its last `ERRO`/`FATA` log line,
+ * or the boxed `ERROR` block it prints when a command fails, e.g.
+ *
+ * ```
+ *    ERROR
+ *
+ *   This containerlab command requires root privileges or root via SUID to run, ….
+ * ```
+ */
 export function lastContainerlabError(output: string): string | undefined {
-  const lines = output.split("\n").map((line) => line.trim());
+  const lines = stripAnsi(output).split("\n").map((line) => line.trim());
+  // containerlab prints the box last, when the command fails.
+  const header = lines.findLastIndex((line) => /^(?:ERROR|FATAL)$/.test(line));
+  const boxed = header >= 0 ? boxedErrorMessage(lines, header + 1) : undefined;
+  if (boxed !== undefined) return boxed;
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const match = /^(?:\d{2}:\d{2}:\d{2} )?(?:ERRO|FATA|ERROR|FATAL)\b\s*(.*)$/.exec(lines[index]);
     if (match?.[1]) return match[1];
   }
   return undefined;
+}
+
+/** The message under a boxed `ERROR` header: the wrapped lines up to the next blank line. */
+function boxedErrorMessage(lines: string[], start: number): string | undefined {
+  let index = start;
+  while (index < lines.length && lines[index] === "") index += 1;
+  const message: string[] = [];
+  for (; index < lines.length && lines[index] !== ""; index += 1) message.push(lines[index]);
+  return message.length > 0 ? message.join(" ") : undefined;
 }
 
 interface OutputLine {
