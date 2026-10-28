@@ -30,6 +30,7 @@ import { LocalLabTreeDataProvider } from "../../../src/treeView/localLabsProvide
 import type { ClabLabTreeNode } from "../../../src/treeView/common";
 import * as ins from "../../../src/treeView/inspector";
 import * as globals from "../../../src/globals";
+import * as labBackends from "../../../src/backend/labBackends";
 
 const vscodeStub = require("../../helpers/vscode-stub");
 
@@ -153,6 +154,48 @@ describe("LocalLabTreeDataProvider", () => {
     expect(node.label).to.equal("lab1.clab.yml");
     expect(node.labPath.absolute).to.equal(LAB_A);
     expect(node.description).to.equal("a");
+  });
+
+  // A topology opened or run from a cluster's section runs on that cluster.
+  it("lists topology files under each local host with that host's connection", async () => {
+    sinon
+      .stub(vscodeStub.workspace, "findFiles")
+      .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
+    const cluster = { id: "kind", label: "kind", kind: "local", runtime: "c9s", kubeContext: "kind" };
+    const local = { id: "local", label: "Local", kind: "local" };
+    sinon.stub(labBackends, "getConnections").returns({
+      grouped: true,
+      list: () => [local, cluster],
+      status: () => "connected",
+      problem: () => undefined
+    } as any);
+    // LAB_B runs on the cluster, so only Local lists it as undeployed.
+    sinon
+      .stub(ins, "labsOf")
+      .callsFake((id: string) =>
+        id === "kind" ? ({ b: [{ Labels: { "clab-topo-file": LAB_B } }] } as any) : undefined
+      );
+
+    const provider = new LocalLabTreeDataProvider();
+    const roots = (await provider.getChildren(undefined)) as any[];
+    const labsUnder = async (root: any) => {
+      const labs: ClabLabTreeNode[] = [];
+      for (const folder of (await provider.getChildren(root)) ?? []) {
+        expect((folder as any).connectionId).to.equal(root.connectionId);
+        labs.push(...((await provider.getChildren(folder)) as ClabLabTreeNode[]));
+      }
+      return labs;
+    };
+    const localLabs = await labsUnder(roots[0]);
+    const clusterLabs = await labsUnder(roots[1]);
+    expect(localLabs.map((node) => [node.labPath.absolute, node.connectionId])).to.deep.equal([
+      [LAB_A, "local"],
+      [LAB_B, "local"]
+    ]);
+    expect(clusterLabs.map((node) => [node.labPath.absolute, node.connectionId])).to.deep.equal([
+      [LAB_A, "kind"]
+    ]);
+    expect(clusterLabs[0].id).to.equal(`kind|lab:${LAB_A}`);
   });
 
   it("lists root-level labs before folders", async () => {

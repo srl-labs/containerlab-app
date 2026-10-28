@@ -114,33 +114,63 @@ let topologyHosts: vscode.Memento | undefined;
 const clusterTopologies = new Map<string, string>();
 
 /**
- * The local lab host a topology file on this machine runs on: this machine,
- * or the Kubernetes cluster it was deployed to last.
+ * The local lab host remembered for a topology file on this machine: the one
+ * it was opened from, acted on or deployed to last, else the cluster that
+ * runs it. Undefined while the file has no host yet.
  */
-function labHostOfTopology(file: string): LabConnection {
+export function knownTopologyHost(file: string): LabConnection | undefined {
   const assigned =
-    clusterTopologies.get(file) ??
-    topologyHosts?.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {})[file];
+    topologyHosts?.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {})[file] ??
+    clusterTopologies.get(file);
+  if (assigned === LOCAL_CONNECTION.id) return LOCAL_CONNECTION;
   const connection = assigned !== undefined ? connections?.get(assigned) : undefined;
-  return connection && isClusterConnection(connection) ? connection : LOCAL_CONNECTION;
+  return connection && isClusterConnection(connection) ? connection : undefined;
 }
 
-/** Remembers the local lab host a topology file runs on. */
-async function assignTopologyHost(file: string, connection: LabConnection): Promise<void> {
-  if (!topologyHosts) return;
-  const current = { ...topologyHosts.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {}) };
-  if (isClusterConnection(connection)) current[file] = connection.id;
-  else delete current[file];
-  await topologyHosts.update(TOPOLOGY_HOSTS_KEY, current);
+/** The local lab host a topology file on this machine runs on; this machine by default. */
+function labHostOfTopology(file: string): LabConnection {
+  return knownTopologyHost(file) ?? LOCAL_CONNECTION;
+}
+
+/** A topology file on this machine, as opposed to a lab server URI, a URL or a cluster's own lab. */
+function isLocalTopologyFile(file: string): boolean {
+  return file !== "" && !isUriString(file);
+}
+
+/**
+ * Remembers the lab host a topology file on this machine runs on: this
+ * machine or a Kubernetes cluster. Lab servers have their own files.
+ */
+export async function rememberTopologyHost(file: string, connection: LabConnection): Promise<void> {
+  if (!topologyHosts || !isLocalTopologyFile(file) || connection.kind !== "local") return;
+  const current = topologyHosts.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {});
+  if (current[file] === connection.id) return;
+  await topologyHosts.update(TOPOLOGY_HOSTS_KEY, { ...current, [file]: connection.id });
+}
+
+/**
+ * Remembers the host of a topology opened or acted on from a host's section
+ * of the explorer, so the viewer, the editor and the palette use it too.
+ */
+export async function rememberHostOf(node: {
+  connectionId?: string;
+  labPath?: { absolute: string };
+}): Promise<void> {
+  const file = node.labPath?.absolute;
+  const connection =
+    node.connectionId !== undefined ? connectionById(node.connectionId) : undefined;
+  if (file === undefined || !connection) return;
+  await rememberTopologyHost(file, connection);
 }
 
 /**
  * With Kubernetes clusters configured, asks where a topology on this machine
- * deploys: this machine or a cluster. Undefined when the user cancels.
+ * runs: this machine or a cluster. Undefined when the user cancels.
  */
 export async function pickTopologyHost(
   file: string,
-  labName: string
+  labName: string,
+  verb = "Deploy"
 ): Promise<LabConnection | undefined> {
   const clusters = (connections?.list() ?? []).filter(isClusterConnection);
   if (clusters.length === 0) return LOCAL_CONNECTION;
@@ -157,10 +187,10 @@ export async function pickTopologyHost(
       description: connectionDescription(connection),
       connection
     })),
-    { title: `Deploy ${labName} on`, placeHolder: "Where?" }
+    { title: `${verb} ${labName} on`, placeHolder: "Where?" }
   );
   if (!picked) return undefined;
-  await assignTopologyHost(file, picked.connection);
+  await rememberTopologyHost(file, picked.connection);
   return picked.connection;
 }
 
@@ -393,6 +423,18 @@ async function resolveRemoteFile(labPath: string, labName?: string): Promise<Res
 }
 
 /**
+ * The host a lab path runs on. A topology on this machine runs on the host
+ * given with it (a node of that host's section), else where it was opened or
+ * deployed last; a cluster's own lab on the cluster that reports it.
+ */
+function hostOfLabPath(labPath: string, connectionId: string | undefined): LabConnection {
+  const given = connectionById(connectionId) ?? LOCAL_CONNECTION;
+  if (given.kind !== "local" || isClusterConnection(given)) return given;
+  if (KUBERNETES_LAB_PATH.test(labPath)) return labHostOfTopology(labPath);
+  return connectionId !== undefined || isUriString(labPath) ? given : labHostOfTopology(labPath);
+}
+
+/**
  * Where a lab command goes. Local labs are addressed by their topology file
  * (containerlab finds the lab name in it); labs on a lab host by name, with
  * the workspace path of their topology when there is one. A source URL runs
@@ -403,14 +445,8 @@ export async function resolveLab(
   labName?: string,
   connectionId?: string
 ): Promise<ResolvedLab> {
-  const given = connectionById(connectionId) ?? LOCAL_CONNECTION;
-  // A topology on this machine runs where it was deployed: this machine or a cluster.
-  const connection =
-    given.kind === "local" &&
-    !isClusterConnection(given) &&
-    (!isUriString(labPath) || KUBERNETES_LAB_PATH.test(labPath))
-      ? labHostOfTopology(labPath)
-      : given;
+  const connection = hostOfLabPath(labPath, connectionId);
+  if (connectionId !== undefined) void rememberTopologyHost(labPath, connection);
   if (isLabSourceUrl(labPath)) {
     // containerlab and clab-api-server fetch the topology themselves.
     return {
