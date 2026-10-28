@@ -120,14 +120,16 @@ The capture dialog asks where the capture goes and when it stops:
 
 | App | Lab host | Choices, default first |
 | --- | --- | --- |
-| Desktop | cluster or clab-api-server | Wireshark on this computer, Wireshark VNC (clab-api-server with Docker), download `.pcapng` |
+| Desktop | cluster on this machine | Wireshark on this computer, Wireshark VNC (with Docker on this computer), download `.pcapng` |
+| Desktop | clab-api-server | Wireshark on this computer, Wireshark VNC (when the server runs Docker), download `.pcapng` |
+| Web | cluster of the web server (`WEB_LOCAL_LABS`) | Wireshark VNC (with Docker next to the web server), download `.pcapng` |
 | Web | clab-api-server | Wireshark VNC (when the server runs Docker), `packetflix:` link, download `.pcapng` |
-| VS Code | cluster on this machine | Wireshark in a terminal: `containerlab -r c9s capture … -w - \| wireshark -k -i -`; or save `.pcapng` |
+| VS Code | cluster on this machine | Wireshark in a terminal when Wireshark is found, Wireshark VNC (with Docker on this computer), save `.pcapng`; without Wireshark, Wireshark VNC comes first |
 | VS Code | clab-api-server | `packetflix:` link, Wireshark VNC, save `.pcapng` |
 
-- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app finds Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods.
+- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app finds Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. In WSL, a Wireshark installed on Windows is found too and opens on the Windows desktop. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods. When VS Code finds no Wireshark, it offers Wireshark VNC, saving a `.pcapng`, or setting the path.
 - A **`packetflix:` link** works once and only for a minute; it needs cshargextcap, like Edgeshark links.
-- **Wireshark VNC** runs on the clab-api-server host. Its link lasts as long as the window, so restarting the capture inside that Wireshark works; closing the window ends it. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it.
+- **Wireshark VNC** runs on the clab-api-server host, or, for a cluster used from this machine, in a container on this machine's Docker (or Podman), which reads the capture from the app over a link only that container gets. Its link lasts as long as the window, so restarting the capture inside that Wireshark works; closing the window ends the capture, removes the container and revokes the link. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it. Without Docker on this computer the choice stays in the list, greyed, with *Wireshark in the browser needs Docker on this computer*. `containerlab.capture.preferredAction` set to `Wireshark VNC` puts it first in VS Code.
 - A **download** needs a stop time. The file grows in your downloads while the capture runs.
 
 ## Images

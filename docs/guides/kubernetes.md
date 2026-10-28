@@ -161,7 +161,7 @@ Elsewhere, **Add lab host** shows **This computer** and **Kubernetes cluster** g
 - Nodes are pods. The node panel shows each node's namespace, pod, container, and exposed ports, and a `kubectl exec` command to copy; it names the lab host's context and kubeconfig file.
 - **Deploy with options** offers the c9s deploy options: **Namespace**, **Expose ports**, **No persistent volumes**, **Image pull secret**, and **Without a Topology resource**. Each shows the cluster's default; a plain deploy uses the defaults. On a lab server they show read-only, as set by the server.
 - What a cluster has no use for is hidden: image management, link impairments, VM snapshots, pausing nodes, fcli, Edgeshark, SSHX and GoTTY sharing, and host stats. Node stats need `metrics.k8s.io` in the cluster.
-- Packet captures come from clabernetes as one pcapng stream; see [Labs on a Kubernetes cluster](labs.md#labs-on-a-kubernetes-cluster) for where they open in each app.
+- Packet captures come from clabernetes as one pcapng stream; see [Labs on a Kubernetes cluster](labs.md#labs-on-a-kubernetes-cluster) for where they open in each app. Wireshark VNC of a cluster on this machine runs its container on this machine's Docker, not in the cluster: it needs Docker here, but no permission to create pods.
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run a lab](labs.md)
