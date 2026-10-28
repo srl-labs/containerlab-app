@@ -213,14 +213,15 @@ export class LocalLifecycle {
     return { args, cwd, labName: lab.labName, env };
   }
 
-  /** A c9s host's deploy defaults (exposure, persistence) where the options leave them open. */
+  /** A c9s host's deploy defaults (exposure, persistence, pull secret) where the options leave them open. */
   private withHostDefaults(options: LabLifecycleOptions | undefined): LabLifecycleOptions | undefined {
     const c9s = this.context.options.c9s;
     if (this.context.options.runtime !== "c9s" || !c9s) return options;
     return {
       ...options,
       ...(options?.exposeType === undefined && c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
-      ...(options?.noPersistence === undefined && c9s.persistence === false ? { noPersistence: true } : {})
+      ...(options?.noPersistence === undefined && c9s.persistence === false ? { noPersistence: true } : {}),
+      ...(options?.imagePullSecret === undefined && c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {})
     };
   }
 

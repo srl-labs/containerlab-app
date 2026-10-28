@@ -137,7 +137,8 @@ test("detection of a c9s host skips the Docker checks and asks the cluster", asy
         serverVersion: async () => "v1.33.1",
         hasTopologyResource: async () => true,
         clabernetesVersion: async () => "0.11.0",
-        canI: async () => true
+        canI: async () => true,
+        whoAmI: async () => "alice"
       })
     }
   );

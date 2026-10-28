@@ -1,6 +1,7 @@
 import {
   ApisApi,
   AppsV1Api,
+  AuthenticationV1Api,
   AuthorizationV1Api,
   CustomObjectsApi,
   VersionApi,
@@ -32,6 +33,11 @@ export interface KubeClusterProbe {
   clabernetesVersion(): Promise<string | undefined>;
   /** A SelfSubjectAccessReview. */
   canI(check: KubeAccessCheck): Promise<boolean>;
+  /**
+   * The user the cluster sees, from a SelfSubjectReview (Kubernetes 1.28+);
+   * undefined when the cluster cannot tell.
+   */
+  whoAmI(): Promise<string | undefined>;
 }
 
 function errorCode(error: unknown): number | undefined {
@@ -103,6 +109,16 @@ export function createKubeClusterProbe(config: KubeConfig): KubeClusterProbe {
         }
       });
       return review.status?.allowed === true;
+    },
+    async whoAmI() {
+      try {
+        const review = await config.makeApiClient(AuthenticationV1Api).createSelfSubjectReview({
+          body: { apiVersion: "authentication.k8s.io/v1", kind: "SelfSubjectReview" }
+        });
+        return review.status?.userInfo?.username || undefined;
+      } catch {
+        return undefined;
+      }
     }
   };
 }

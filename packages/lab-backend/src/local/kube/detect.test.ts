@@ -19,6 +19,7 @@ function fakeProbe(overrides: Partial<KubeClusterProbe> = {}, denied: string[] =
     clabernetesVersion: async () => "0.11.0",
     canI: async (check: KubeAccessCheck) =>
       !denied.includes(check.subresource ? `${check.resource}/${check.subresource}` : check.resource),
+    whoAmI: async () => "alice",
     ...overrides
   };
 }
@@ -26,13 +27,71 @@ function fakeProbe(overrides: Partial<KubeClusterProbe> = {}, denied: string[] =
 const HOST = { env: {}, c9s: {} };
 
 test("a ready cluster has no problems", async () => {
-  const status = await detectC9sEnvironment(HOST, "0.83.0", () => fakeProbe());
+  const { checks, ...status } = await detectC9sEnvironment(HOST, "0.83.0", () => fakeProbe());
   assert.deepEqual(status, {
     problems: [],
     kubeContext: "kind-c9s",
     kubernetesVersion: "v1.33.1",
     clabernetesVersion: "0.11.0"
   });
+  assert.deepEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ["containerlab", "ok"],
+      ["kubeconfig", "ok"],
+      ["cluster", "ok"],
+      ["clabernetes", "ok"],
+      ["access:topologies.c9s.run", "ok"],
+      ["access:pods/exec", "ok"],
+      ["access:pods/portforward", "ok"],
+      ["access:pods/log", "ok"],
+      ["access:namespaces", "ok"]
+    ]
+  );
+});
+
+test("a check that stops the rest marks the later checks as skipped", async () => {
+  const { checks } = await detectC9sEnvironment({ env: {}, c9s: { namespace: "team-a" } }, "0.83.0", () =>
+    fakeProbe({ serverVersion: () => Promise.reject(new Error("connect ECONNREFUSED")) })
+  );
+  assert.deepEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ["containerlab", "ok"],
+      ["kubeconfig", "ok"],
+      ["cluster", "failed"],
+      ["clabernetes", "skipped"],
+      ["access:topologies.c9s.run", "skipped"],
+      ["access:pods/exec", "skipped"],
+      ["access:pods/portforward", "skipped"],
+      ["access:pods/log", "skipped"]
+    ]
+  );
+  assert.equal(checks[2].message, "connect ECONNREFUSED");
+  assert.ok(checks[2].fix);
+});
+
+test("a missing permission comes with the binding command for the user the cluster sees", async () => {
+  const fixed = await detectC9sEnvironment({ env: {}, c9s: { namespace: "team-a" } }, "0.83.0", () =>
+    fakeProbe({}, ["pods/exec"])
+  );
+  const exec = fixed.checks.find((check) => check.id === "access:pods/exec");
+  assert.equal(exec?.status, "failed");
+  assert.equal(
+    exec?.command,
+    "kubectl create rolebinding clab-lab-editor-alice --clusterrole clabernetes-lab-editor --user alice -n team-a"
+  );
+  const perLab = await detectC9sEnvironment(HOST, "0.83.0", () =>
+    fakeProbe({ whoAmI: async () => "system:serviceaccount:labs:runner" }, ["topologies"])
+  );
+  assert.equal(
+    perLab.checks.find((check) => check.id === "access:topologies.c9s.run")?.command,
+    "kubectl create clusterrolebinding clab-lab-editor-system-serviceaccount-labs-runner --clusterrole clabernetes-lab-editor --serviceaccount labs:runner"
+  );
+  const unknown = await detectC9sEnvironment({ env: {}, c9s: { namespace: "team-a" } }, "0.83.0", () =>
+    fakeProbe({ whoAmI: async () => undefined }, ["pods/log"])
+  );
+  assert.match(unknown.checks.find((check) => check.id === "access:pods/log")?.command ?? "", /--user <your-user> -n team-a$/);
 });
 
 test("an old containerlab names the version it needs; a development build passes", async () => {

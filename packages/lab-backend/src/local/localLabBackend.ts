@@ -421,7 +421,8 @@ export class LocalLabBackend implements LabBackend {
       namespaceMode: c9s.namespace ? "fixed" : "per-lab",
       ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
       ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
-      persistence: c9s.persistence !== false
+      persistence: c9s.persistence !== false,
+      ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {})
     };
   }
 
@@ -439,6 +440,7 @@ export class LocalLabBackend implements LabBackend {
     if (lab.labName) args.push("--name", lab.labName);
     if (c9s.exposeType) args.push("--expose-type", c9s.exposeType);
     if (c9s.persistence === false) args.push("--no-persistence");
+    if (c9s.imagePullSecret) args.push("--image-pull-secret", c9s.imagePullSecret);
     const [file, commandArgs] = containerlabCommand(this.options, args);
     const result = await runChecked(file, commandArgs, {
       cwd: path.dirname(topology),

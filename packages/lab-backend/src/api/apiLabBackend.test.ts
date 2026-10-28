@@ -96,6 +96,53 @@ test("the lab runtime comes from /health; a server without one is an old Docker 
   await assert.rejects(unknown.hostProfile(), /runs labs with "lxd"/);
 });
 
+test("a c9s server with lab-host-info adds its cluster and deploy settings; a failing one leaves /health's profile", async (t) => {
+  const requests: RecordedRequest[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    const url = new URL(String(input));
+    requests.push({ url, method: "GET" });
+    if (url.pathname === "/health") {
+      return Promise.resolve(
+        Response.json({ features: [...NEW_SERVER, "lab-host-info"], runtime: "c9s", namespaceMode: "per-lab" })
+      );
+    }
+    return Promise.resolve(
+      Response.json({
+        runtime: "c9s",
+        c9s: {
+          context: "c9s-provisioner",
+          cluster: "c9s",
+          namespacePattern: "c9s-alice-{lab}",
+          sharedNamespacePattern: "c9s-shared-{lab}",
+          exposeType: "None",
+          persistence: true,
+          imagePullSecret: "",
+          labQuota: false,
+          metrics: false
+        }
+      })
+    );
+  });
+  const backend = new ApiLabBackend({ baseUrl: "https://c9s-info.test", token: "token" });
+  assert.deepEqual(await backend.hostProfile(), {
+    runtime: "c9s",
+    namespaceMode: "per-lab",
+    cluster: "c9s",
+    namespacePattern: "c9s-alice-{lab}",
+    sharedNamespacePattern: "c9s-shared-{lab}",
+    exposeType: "None",
+    persistence: true,
+    labQuota: false
+  });
+  await backend.hostProfile();
+  assert.equal(requests.filter((request) => request.url.pathname === "/api/v1/lab-host").length, 1, "cached");
+
+  t.mock.restoreAll();
+  mockServer(t, { features: [...NEW_SERVER, "lab-host-info"], health: { runtime: "c9s" }, missingRoutes: /lab-host/ });
+  const failing = new ApiLabBackend({ baseUrl: "https://c9s-info-old.test", token: "token" });
+  assert.deepEqual(await failing.hostProfile(), { runtime: "c9s" });
+});
+
 test("an unreachable server is not taken for an old one", async (t) => {
   t.mock.method(undici, "fetch", () => Promise.reject(new TypeError("fetch failed")));
   const backend = new ApiLabBackend({ baseUrl: "https://down.test", token: "token" });

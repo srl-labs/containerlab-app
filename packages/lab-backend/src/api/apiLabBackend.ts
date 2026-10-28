@@ -1,6 +1,7 @@
 import WebSocket, { type RawData } from "ws";
 import {
   hasLabNameGitTokens,
+  isC9sExposeType,
   restoresSnapshots,
   type LabExecRequest,
   type LabOperationSupport,
@@ -63,7 +64,7 @@ import { LabBackendError } from "../contract/errors.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { gottyOptionsError } from "../shareOptions.ts";
-import { buildWebSocketUrl, ClabApiClient, type ServerHealth } from "./clabApiClient.ts";
+import { buildWebSocketUrl, ClabApiClient, type ServerHealth, type ServerLabHost } from "./clabApiClient.ts";
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import { apiFetch } from "./upstreamRequest.ts";
 import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
@@ -103,7 +104,8 @@ const SERVER_FEATURES = {
   logStream: "log-stream",
   terminalResume: "terminal-resume",
   captureStream: "capture-stream",
-  wiresharkVnc: "wireshark-vnc"
+  wiresharkVnc: "wireshark-vnc",
+  labHostInfo: "lab-host-info"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -125,6 +127,7 @@ const serverHealthCache = new Map<string, { expires: number; state: Promise<Serv
 /** Forgets what servers listed, e.g. between tests that fake different servers at one URL. */
 export function clearServerFeatureCache(): void {
   serverHealthCache.clear();
+  serverLabHostCache.clear();
 }
 
 function unsupported(what: string): LabBackendError {
@@ -171,6 +174,27 @@ function hostProfileFromHealth(health: Pick<ServerHealth, "runtime" | "namespace
   }
   return profile;
 }
+
+/**
+ * A c9s server's profile with what `GET /api/v1/lab-host` adds: the cluster,
+ * the namespace patterns and the deploy settings, which are server policy.
+ */
+function withServerLabHost(profile: LabHostProfile, labHost: ServerLabHost): LabHostProfile {
+  const c9s = labHost.c9s;
+  if (profile.runtime !== "c9s" || labHost.runtime !== "c9s" || !c9s) return profile;
+  return {
+    ...profile,
+    ...(c9s.cluster ? { cluster: c9s.cluster } : {}),
+    ...(c9s.namespacePattern ? { namespacePattern: c9s.namespacePattern } : {}),
+    ...(c9s.sharedNamespacePattern ? { sharedNamespacePattern: c9s.sharedNamespacePattern } : {}),
+    ...(isC9sExposeType(c9s.exposeType) ? { exposeType: c9s.exposeType } : {}),
+    ...(c9s.persistence !== undefined ? { persistence: c9s.persistence } : {}),
+    ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+    ...(c9s.labQuota !== undefined ? { labQuota: c9s.labQuota } : {})
+  };
+}
+
+const serverLabHostCache = new Map<string, { expires: number; labHost: Promise<ServerLabHost | undefined> }>();
 
 /** The features of a clab-api-server from its `/health`; older servers list none. */
 function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
@@ -305,7 +329,23 @@ export class ApiLabBackend implements LabBackend {
   async hostProfile(): Promise<LabHostProfile> {
     const state = await this.serverState();
     // An unreachable server is not an old one: let the error through.
-    return hostProfileFromHealth(state.unreachable ? await this.client.getServerHealth() : state);
+    const profile = hostProfileFromHealth(state.unreachable ? await this.client.getServerHealth() : state);
+    if (profile.runtime !== "c9s" || !state.features.has(SERVER_FEATURES.labHostInfo)) return profile;
+    const labHost = await this.serverLabHost();
+    return labHost ? withServerLabHost(profile, labHost) : profile;
+  }
+
+  /** `GET /api/v1/lab-host`, cached like `/health`; undefined when it fails, which leaves `/health`'s profile. */
+  private serverLabHost(): Promise<ServerLabHost | undefined> {
+    const key = `${this.client.getBaseUrl()}\n${this.token}`;
+    const cached = serverLabHostCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.labHost;
+    const labHost = this.client.getLabHost(this.token).catch(() => {
+      serverLabHostCache.delete(key);
+      return undefined;
+    });
+    serverLabHostCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, labHost });
+    return labHost;
   }
 
   inspectAll() {

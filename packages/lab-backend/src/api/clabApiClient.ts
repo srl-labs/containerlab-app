@@ -100,6 +100,23 @@ export interface ServerHealth {
   namespaceMode?: string;
 }
 
+/** What `GET /api/v1/lab-host` says about the lab host behind a clab-api-server (`lab-host-info`). */
+export interface ServerLabHost {
+  runtime: string;
+  /** Only for runtime `c9s`: the cluster and the server's deploy settings. */
+  c9s?: {
+    context?: string;
+    cluster?: string;
+    namespacePattern?: string;
+    sharedNamespacePattern?: string;
+    exposeType?: string;
+    persistence?: boolean;
+    imagePullSecret?: string;
+    labQuota?: boolean;
+    metrics?: boolean;
+  };
+}
+
 export class ClabApiClient {
   private readonly baseUrl: string;
 
@@ -1103,6 +1120,28 @@ export class ClabApiClient {
       health.namespaceMode = payload.namespaceMode.trim();
     }
     return health;
+  }
+
+  /** The lab host's runtime and, on c9s, its cluster and deploy settings (`lab-host-info`). */
+  async getLabHost(token: string): Promise<ServerLabHost> {
+    const res = await this.get("/api/v1/lab-host", token);
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    if (!isRecord(payload) || typeof payload.runtime !== "string") {
+      throw new Error("GET /api/v1/lab-host answered without a runtime");
+    }
+    const result: ServerLabHost = { runtime: payload.runtime.trim() };
+    if (isRecord(payload.c9s)) {
+      const raw = payload.c9s;
+      const c9s: NonNullable<ServerLabHost["c9s"]> = {};
+      for (const key of ["context", "cluster", "namespacePattern", "sharedNamespacePattern", "exposeType", "imagePullSecret"] as const) {
+        if (typeof raw[key] === "string" && raw[key].trim()) c9s[key] = raw[key].trim();
+      }
+      for (const key of ["persistence", "labQuota", "metrics"] as const) {
+        if (typeof raw[key] === "boolean") c9s[key] = raw[key];
+      }
+      result.c9s = c9s;
+    }
+    return result;
   }
 
   async getVersion(

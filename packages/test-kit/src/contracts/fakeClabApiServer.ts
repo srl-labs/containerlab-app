@@ -42,7 +42,37 @@ export interface FakeClabApiServerHealth {
   runtime?: "docker" | "podman" | "c9s" | null;
   namespaceMode?: "per-lab" | "fixed";
   features?: string[];
+  /**
+   * What `GET /api/v1/lab-host` adds for a c9s server, served when `features`
+   * lists `lab-host-info`; these defaults otherwise.
+   */
+  c9s?: Partial<FakeServerC9sHost>;
 }
+
+/** The c9s part of `GET /api/v1/lab-host`. */
+interface FakeServerC9sHost {
+  context: string;
+  cluster: string;
+  namespacePattern: string;
+  sharedNamespacePattern: string;
+  exposeType: string;
+  persistence: boolean;
+  imagePullSecret: string;
+  labQuota: boolean;
+  metrics: boolean;
+}
+
+const FAKE_SERVER_C9S_HOST: FakeServerC9sHost = {
+  context: "c9s-provisioner",
+  cluster: "c9s",
+  namespacePattern: "c9s-alice-{lab}",
+  sharedNamespacePattern: "c9s-shared-{lab}",
+  exposeType: "None",
+  persistence: true,
+  imagePullSecret: "",
+  labQuota: false,
+  metrics: false
+};
 
 /**
  * A running c9s lab the fake captures on when `/health` lists
@@ -161,6 +191,14 @@ export async function startFakeClabApiServer(
         return;
       }
       const route = `${request.method} ${url.pathname}`;
+      if (route === "GET /api/v1/lab-host" && (health.features ?? []).includes("lab-host-info")) {
+        const runtime = health.runtime ?? "docker";
+        sendJson(response, 200, {
+          runtime,
+          ...(runtime === "c9s" ? { c9s: { ...FAKE_SERVER_C9S_HOST, ...health.c9s } } : {})
+        });
+        return;
+      }
       const capture = /^\/api\/v1\/labs\/([^/]+)(\/capture\/(interfaces|stream|tickets))?$/.exec(url.pathname);
       if (captureEnabled && capture) {
         const labName = decodeURIComponent(capture[1]);

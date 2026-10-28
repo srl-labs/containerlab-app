@@ -3,8 +3,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import type { LabHostCheck } from "@containerlab/clab-ui/host";
+
 import type { KubeClusterProbe } from "./kube/clusterProbe.ts";
-import { detectC9sEnvironment } from "./kube/detect.ts";
+import { containerlabCheck, detectC9sEnvironment } from "./kube/detect.ts";
 import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
 import { containerlabCommand, runCommand, stripAnsi } from "./process.ts";
 
@@ -13,6 +15,8 @@ export interface LocalEnvironmentStatus {
   available: boolean;
   /** What is missing, each with a hint how to fix it. */
   problems: string[];
+  /** Every check in order, for "Check connection"; the ones after a failure that stops the rest are `skipped`. */
+  checks: LabHostCheck[];
   platform: NodeJS.Platform;
   runtime: string;
   username: string;
@@ -44,6 +48,8 @@ export interface DetectionOverrides {
  */
 export const CONTAINERLAB_LINUX_ONLY =
   "containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM.";
+
+const INSTALL_CONTAINERLAB = 'curl -sL https://containerlab.dev/setup | sudo -E bash -s "all"';
 
 /** Why containerlab cannot run on a platform, or undefined on Linux. */
 export function containerlabPlatformProblem(platform: NodeJS.Platform = process.platform): string | undefined {
@@ -124,9 +130,11 @@ export async function detectLocalEnvironment(
   try {
     resolved = resolveLocalOptions(options);
   } catch (error) {
+    const problem = error instanceof Error ? error.message : String(error);
     return {
       available: false,
-      problems: [error instanceof Error ? error.message : String(error)],
+      problems: [problem],
+      checks: [{ id: "settings", label: "Lab host settings", status: "failed", message: problem }],
       platform: overrides.platform ?? process.platform,
       runtime: options.runtime?.trim() ?? "",
       username: options.username?.trim() ?? "",
@@ -136,10 +144,12 @@ export async function detectLocalEnvironment(
     };
   }
   const problems: string[] = [];
+  const checks: LabHostCheck[] = [];
   const { isRoot, inClabAdmins, inRuntimeGroup } = await detectLocalUser(options);
   const status: LocalEnvironmentStatus = {
     available: false,
     problems,
+    checks,
     platform: overrides.platform ?? process.platform,
     runtime: resolved.runtime,
     username: resolved.username,
@@ -148,19 +158,25 @@ export async function detectLocalEnvironment(
     inRuntimeGroup
   };
 
+  const c9s = resolved.runtime === "c9s";
   const platformProblem = containerlabPlatformProblem(status.platform);
   if (platformProblem) {
     problems.push(platformProblem);
+    checks.push({
+      id: "platform",
+      label: "This computer runs Linux",
+      status: "failed",
+      message: platformProblem,
+      fix: "Use a lab server (clab-api-server), or run the app in WSL or a Linux VM."
+    });
     return status;
   }
 
-  const c9s = resolved.runtime === "c9s";
-
   status.containerlabPath = await findBinary(resolved.binaryPath, resolved.env);
+  let containerlabProblem: string | undefined;
   if (!status.containerlabPath) {
-    problems.push(
-      "containerlab is not installed. Install it with: curl -sL https://containerlab.dev/setup | sudo -E bash -s \"all\""
-    );
+    containerlabProblem = `containerlab is not installed. Install it with: ${INSTALL_CONTAINERLAB}`;
+    problems.push(containerlabProblem);
   } else {
     const [file, args] = containerlabCommand({ ...resolved, binaryPath: status.containerlabPath }, ["version"]);
     const result = await runCommand(file, args, { env: resolved.env, timeoutMs: 15_000 }).catch(() => undefined);
@@ -168,14 +184,35 @@ export async function detectLocalEnvironment(
     if (version) {
       status.containerlabVersion = version;
     } else {
-      problems.push(`containerlab at ${status.containerlabPath} does not run: ${result?.stderr.trim() || "no output"}`);
+      containerlabProblem = `containerlab at ${status.containerlabPath} does not run: ${result?.stderr.trim() || "no output"}`;
+      problems.push(containerlabProblem);
     }
+  }
+  if (containerlabProblem !== undefined) {
+    checks.push({
+      ...(c9s ? containerlabCheck(undefined, containerlabProblem) : { id: "containerlab", label: "containerlab is installed", status: "failed" as const }),
+      message: status.containerlabPath
+        ? containerlabProblem
+        : `containerlab was not found (looked for ${resolved.binaryPath}).`,
+      fix: status.containerlabPath
+        ? "Reinstall containerlab, or point the app to a working binary."
+        : "Install containerlab, or point the app to its binary (containerlab.binaryPath in VS Code).",
+      ...(status.containerlabPath ? {} : { command: INSTALL_CONTAINERLAB })
+    });
+  } else if (!c9s) {
+    checks.push({
+      id: "containerlab",
+      label: "containerlab is installed",
+      status: "ok",
+      message: `containerlab ${status.containerlabVersion ?? ""} at ${status.containerlabPath}`
+    });
   }
 
   if (c9s) {
     // The cluster runs the labs: no Docker and no clab_admins group needed.
     const cluster = await detectC9sEnvironment(resolved, status.containerlabVersion, overrides.kubeProbe);
     problems.push(...cluster.problems);
+    checks.push(...cluster.checks);
     if (cluster.kubeContext) status.kubeContext = cluster.kubeContext;
     if (cluster.kubernetesVersion) status.kubernetesVersion = cluster.kubernetesVersion;
     if (cluster.clabernetesVersion) status.clabernetesVersion = cluster.clabernetesVersion;
@@ -183,29 +220,54 @@ export async function detectLocalEnvironment(
     return status;
   }
 
+  const groupsCheck = { id: "groups", label: `${resolved.username} may run containerlab without sudo` };
   if (!isRoot && !resolved.sudo) {
+    const missing: string[] = [];
     if (!inClabAdmins) {
+      missing.push("clab_admins");
       problems.push(
         `${resolved.username} is not in the clab_admins group. Run: sudo usermod -aG clab_admins ${resolved.username}, then log in again.`
       );
     }
     if (!inRuntimeGroup) {
+      missing.push("docker");
       problems.push(
         `${resolved.username} is not in the docker group. Run: sudo usermod -aG docker ${resolved.username}, then log in again.`
       );
     }
+    checks.push(
+      missing.length === 0
+        ? { ...groupsCheck, status: "ok", message: `In clab_admins${resolved.runtime === "docker" ? " and docker" : ""}` }
+        : {
+            ...groupsCheck,
+            status: "failed",
+            message: `${resolved.username} is not in ${missing.join(" and ")}.`,
+            fix: "Add the groups, then log in again.",
+            command: missing.map((group) => `sudo usermod -aG ${group} ${resolved.username}`).join(" && ")
+          }
+    );
+  } else {
+    checks.push({ ...groupsCheck, status: "ok", message: isRoot ? "Runs as root" : "Runs containerlab with sudo" });
   }
 
   const runtime = await runCommand(resolved.runtime, ["version", "--format", "{{.Server.Version}}"], {
     env: resolved.env,
     timeoutMs: 15_000
   }).catch(() => undefined);
+  const runtimeCheck = { id: "runtime", label: `${resolved.runtime === "podman" ? "Podman" : "Docker"} answers` };
   if (!runtime || runtime.code !== 0) {
-    problems.push(
-      runtime
-        ? `${resolved.runtime} is not reachable: ${runtime.stderr.trim().split("\n")[0]}`
-        : `${resolved.runtime} is not installed.`
-    );
+    const problem = runtime
+      ? `${resolved.runtime} is not reachable: ${runtime.stderr.trim().split("\n")[0]}`
+      : `${resolved.runtime} is not installed.`;
+    problems.push(problem);
+    checks.push({
+      ...runtimeCheck,
+      status: "failed",
+      message: problem,
+      fix: runtime ? `Start ${resolved.runtime}, and check its socket.` : `Install ${resolved.runtime}.`
+    });
+  } else {
+    checks.push({ ...runtimeCheck, status: "ok", message: `${resolved.runtime} ${runtime.stdout.trim()}` });
   }
 
   status.available = problems.length === 0;

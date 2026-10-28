@@ -165,21 +165,21 @@ test("c9s labs are inspected with containerlab, not Docker", async (t) => {
   ]);
 });
 
-test("deploy passes the host's exposure and persistence unless the options set them", async (t) => {
+test("deploy passes the host's exposure, persistence and pull secret unless the options set them", async (t) => {
   const host = await fakeC9sHost(t);
-  const lab = backend(host, { exposeType: "LoadBalancer", persistence: false });
+  const lab = backend(host, { exposeType: "LoadBalancer", persistence: false, imagePullSecret: "regcred" });
   await lab.runLifecycle("deploy", { labName: "demo", path: "demo/demo.clab.yml" });
   await lab.runLifecycle(
     "deploy",
     { labName: "demo", path: "demo/demo.clab.yml" },
-    { lifecycleOptions: { exposeType: "ClusterIP", namespace: "team-b", noPersistence: false } }
+    { lifecycleOptions: { exposeType: "ClusterIP", namespace: "team-b", noPersistence: false, imagePullSecret: "other" } }
   );
   const deploys = (await host.calls()).filter((call) => call.startsWith("deploy"));
   const topology = path.join(host.workspace, "demo", "demo.clab.yml");
   assert.deepEqual(deploys, [
     // The running lab's namespace comes along; a namespace option wins over it.
-    `deploy -r c9s --name demo --expose-type LoadBalancer --no-persistence -t ${topology} | ns=team-a ctx=kind-c9s-app`,
-    `deploy -r c9s --name demo --namespace team-b --expose-type ClusterIP -t ${topology} | ns=team-a ctx=kind-c9s-app`
+    `deploy -r c9s --name demo --expose-type LoadBalancer --no-persistence --image-pull-secret regcred -t ${topology} | ns=team-a ctx=kind-c9s-app`,
+    `deploy -r c9s --name demo --namespace team-b --expose-type ClusterIP --image-pull-secret other -t ${topology} | ns=team-a ctx=kind-c9s-app`
   ]);
 });
 

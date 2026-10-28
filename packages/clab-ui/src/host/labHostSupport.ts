@@ -18,9 +18,19 @@ export interface LabHostProfile {
   namespaceMode?: LabHostNamespaceMode;
   /** c9s with `namespaceMode: "fixed"`: the namespace of every lab. */
   namespace?: string;
-  /** c9s on this machine: the deploy defaults of the host. */
+  /** c9s: the deploy defaults of the host; a clab-api-server's are its policy. */
   exposeType?: C9sExposeType;
   persistence?: boolean;
+  /** c9s: the image pull secret every lab's pods get. */
+  imagePullSecret?: string;
+  /** c9s through a clab-api-server: the cluster it runs labs on. */
+  cluster?: string;
+  /** c9s through a clab-api-server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
+  namespacePattern?: string;
+  /** c9s through a clab-api-server: the namespace of a shared lab, e.g. `c9s-shared-{lab}`. */
+  sharedNamespacePattern?: string;
+  /** c9s through a clab-api-server: every lab namespace gets a resource quota. */
+  labQuota?: boolean;
   /**
    * The lab host is older than this app needs, e.g. a clab-api-server that
    * does not report its runtime. What it can do runs as before; the message
@@ -252,6 +262,11 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
     profile.exposeType = exposeType;
   }
   if (typeof raw.persistence === "boolean") profile.persistence = raw.persistence;
+  for (const key of ["imagePullSecret", "cluster", "namespacePattern", "sharedNamespacePattern"] as const) {
+    const text = optionalString(raw[key]);
+    if (text) profile[key] = text;
+  }
+  if (typeof raw.labQuota === "boolean") profile.labQuota = raw.labQuota;
   const updateRequired = optionalString(raw.updateRequired);
   if (updateRequired) profile.updateRequired = updateRequired;
   const supportRecord = value.support;
@@ -265,6 +280,30 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
 export function labHostRuntimeLabel(profile: LabHostProfile, labNamespace?: string): string {
   if (profile.runtime !== "c9s") return profile.runtime === "podman" ? "Podman" : "Docker";
   const namespace = labNamespace ?? profile.namespace;
-  const where = [profile.kubeContext, namespace].filter(Boolean).join("/");
+  const where = [profile.kubeContext ?? profile.cluster, namespace].filter(Boolean).join("/");
   return where ? `Kubernetes · ${where}` : "Kubernetes";
+}
+
+/**
+ * One check of a lab host, as "Check connection" lists it: what was checked,
+ * whether it passed, what was found and, for a failure, what to do.
+ */
+export interface LabHostCheck {
+  /** Stable id, e.g. `containerlab`, `kubeconfig`, `cluster`, `clabernetes`, `access:pods/exec`. */
+  id: string;
+  /** What is checked, e.g. "containerlab 0.83.0 or newer". */
+  label: string;
+  /** `skipped` when an earlier check failed and this one could not run. */
+  status: "ok" | "failed" | "skipped";
+  /** What was found: a version, or what went wrong. */
+  message?: string;
+  /** What to do about a failure. */
+  fix?: string;
+  /** A command that fixes the failure, shown to copy, e.g. `kubectl create rolebinding …`. */
+  command?: string;
+}
+
+/** The first check that failed, for a lab host's status line. */
+export function firstFailedCheck(checks: readonly LabHostCheck[] | undefined): LabHostCheck | undefined {
+  return checks?.find((check) => check.status === "failed");
 }

@@ -23,6 +23,8 @@ export interface C9sHostOptions {
   exposeType?: C9sExposeType;
   /** Persistent volumes for node state; on unless false (`--no-persistence`). */
   persistence?: boolean;
+  /** A Secret in the lab's namespace for private registries (`--image-pull-secret`). */
+  imagePullSecret?: string;
 }
 
 /**
@@ -125,12 +127,14 @@ function resolveC9sOptions(options: C9sHostOptions | undefined): C9sHostOptions 
   const kubeconfig = configured ? expandKubeconfigPath(configured) : undefined;
   const namespace = trimmed(options?.namespace);
   const exposeType = options?.exposeType;
+  const imagePullSecret = trimmed(options?.imagePullSecret);
   return {
     ...(kubeContext ? { kubeContext } : {}),
     ...(kubeconfig ? { kubeconfig } : {}),
     ...(namespace ? { namespace } : {}),
     ...(isC9sExposeType(exposeType) ? { exposeType } : {}),
-    ...(options?.persistence === false ? { persistence: false } : {})
+    ...(options?.persistence === false ? { persistence: false } : {}),
+    ...(imagePullSecret ? { imagePullSecret } : {})
   };
 }
 
