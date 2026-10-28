@@ -33,7 +33,6 @@ import type {
   CaptureInterface,
   CaptureStreamOptions,
   CaptureTarget,
-  CaptureTicket,
   GenerateTopologyRequest,
   GraphExportFormat,
   ImportTopologyFromUrlResponse,
@@ -108,8 +107,6 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   sharedWorkspace: false,
   // containerlab has no command that reports it.
   tailscaleStatus: false,
-  // Tickets are links to a server's capture stream; this machine serves none.
-  captureTickets: false,
   lifecycleTimeout: true
 };
 
@@ -774,12 +771,6 @@ export class LocalLabBackend implements LabBackend {
       )
     );
     return { command: this.commandLine(args), env: clusterEnv };
-  }
-
-  createCaptureTicket(): Promise<CaptureTicket> {
-    return Promise.reject(
-      new LabBackendError("Capture links are served by clab-api-server; this machine has none.", 501)
-    );
   }
 
   wiresharkVncReady(sessionId: string) {

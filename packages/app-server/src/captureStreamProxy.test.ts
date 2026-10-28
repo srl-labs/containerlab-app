@@ -20,7 +20,6 @@ function fakeC9sBackend(calls: { method: string; options?: Omit<CaptureStreamOpt
   return {
     kind: "local",
     scope: "local-c9s:test",
-    capabilities: { captureTickets: false },
     async inspectAll() {
       return { demo: RECORDS };
     },
@@ -33,10 +32,6 @@ function fakeC9sBackend(calls: { method: string; options?: Omit<CaptureStreamOpt
     async captureInterfaces(labName: string) {
       calls.push({ method: `captureInterfaces ${labName}` });
       return [{ node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }];
-    },
-    async createCaptureTicket(labName: string, targets: unknown, options: unknown) {
-      calls.push({ method: `createCaptureTicket ${labName} ${JSON.stringify(targets)} ${JSON.stringify(options)}` });
-      return { packetflixUri: "packetflix:ws://lab.test/t?container=%7B%7D", expiresAt: "2026-10-27T14:01:00Z" };
     },
     async openCaptureStream(labName: string, options: CaptureStreamOptions) {
       const { signal, onGap: _onGap, ...rest } = options;
@@ -139,25 +134,6 @@ test("a capture download is a single-use URL that streams the pcapng as an attac
 
   const again = await app.inject({ url: created2.json<{ url: string }>().url, headers: { cookie } });
   assert.equal(again.statusCode, 404, "used once");
-});
-
-test("capture tickets pass the lab host's packetflix link through", async (t) => {
-  const { app, calls, cookie, endpointId } = await createApp(t);
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/runtime/capture/tickets",
-    headers: { cookie },
-    payload: { endpointId, topologyRef: TOPOLOGY, targets: [{ containerName: "demo-n1", interfaceName: "eth1" }], duration: "1m" }
-  });
-  assert.equal(response.statusCode, 201, response.body);
-  assert.deepEqual(response.json(), {
-    packetflixUri: "packetflix:ws://lab.test/t?container=%7B%7D",
-    expiresAt: "2026-10-27T14:01:00Z"
-  });
-  assert.equal(
-    calls[0].method,
-    'createCaptureTicket demo [{"containerName":"demo-n1","interfaceName":"eth1"}] {"duration":"1m"}'
-  );
 });
 
 test("local Wireshark is only offered by an app that enables it, and gets the stream", async (t) => {

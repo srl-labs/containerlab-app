@@ -308,7 +308,6 @@ test("capture on a c9s host lists lab-link interfaces and streams containerlab c
   const host = await fakeC9sHost(t);
   const lab = backend(host);
   assert.equal((await lab.features()).captureStream, true);
-  assert.equal(lab.capabilities.captureTickets, false);
   assert.deepEqual(await lab.captureInterfaces("demo"), [
     { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }
   ]);
@@ -328,7 +327,6 @@ test("capture on a c9s host lists lab-link interfaces and streams containerlab c
   const { command, env } = await lab.captureCommandLine("demo", [{ containerName: "demo-n1", interfaceName: "eth1" }]);
   assert.equal(command, `${host.binary} -r c9s capture --name demo --target n1:eth1 -w -`);
   assert.deepEqual(env, { CLAB_KUBE_CONTEXT: "kind-c9s-app", CLAB_KUBE_NAMESPACE: "team-a" });
-  await assert.rejects(lab.createCaptureTicket(), (error: Error & { status?: number }) => error.status === 501);
 });
 
 test("capture streams are a c9s feature; Docker hosts keep Edgeshark", async (t) => {

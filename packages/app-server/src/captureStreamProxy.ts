@@ -1,6 +1,6 @@
 /**
- * Captures of lab hosts with `captureStream` (c9s): single-use `packetflix:` links, `.pcapng` downloads, and, in
- * the desktop app, Wireshark on this machine reading the stream.
+ * Captures of lab hosts with `captureStream` (c9s): `.pcapng` downloads and, in the desktop app, Wireshark on
+ * this machine reading the stream.
  *
  * A download is two requests: a POST that checks the request and returns a
  * single-use URL, then a GET of that URL that the browser saves as a file.
@@ -110,21 +110,6 @@ export function registerCaptureStreamProxy(
       ...(packetLimit !== undefined ? { packetLimit } : {})
     };
   }
-
-  app.post<{ Body: CaptureBody }>("/api/runtime/capture/tickets", async (request, reply) => {
-    try {
-      const capture = await resolveCapture(request, reply);
-      if (!capture) return reply.status(401).send({ error: "Not authenticated" });
-      const ticket = await capture.backend.createCaptureTicket(
-        capture.labName,
-        capture.targets,
-        capture.duration !== undefined ? { duration: capture.duration } : {}
-      );
-      return reply.status(201).send(ticket);
-    } catch (error) {
-      return handleRouteError(reply, error);
-    }
-  });
 
   app.post<{ Body: CaptureBody }>("/api/runtime/capture/downloads", async (request, reply) => {
     try {

@@ -1269,30 +1269,6 @@ export class ClabApiClient {
     return this.openStream(captureStreamPath(labName, request), token, requestOptions);
   }
 
-  /** A single-use Packetflix ticket for a capture of the targets. */
-  async createCaptureTicket(
-    token: string,
-    labName: string,
-    payload: { targets: CaptureNodeTarget[]; duration?: string },
-  ): Promise<{ ticket: string; packetflixUri: string; expiresAt: string }> {
-    const res = await this.request(
-      "POST",
-      `/api/v1/labs/${enc(labName)}/capture/tickets`,
-      token,
-      JSON.stringify(payload),
-      "application/json",
-    );
-    const body = (await res.json()) as Record<string, unknown>;
-    if (typeof body.packetflixUri !== "string" || typeof body.expiresAt !== "string") {
-      throw new LabBackendError("clab-api-server returned no capture ticket", 502);
-    }
-    return {
-      ticket: typeof body.ticket === "string" ? body.ticket : "",
-      packetflixUri: body.packetflixUri,
-      expiresAt: body.expiresAt,
-    };
-  }
-
   async getWiresharkVncSessionReady(
     token: string,
     sessionId: string,

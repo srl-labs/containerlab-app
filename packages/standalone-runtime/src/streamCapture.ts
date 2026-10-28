@@ -3,7 +3,7 @@
  * picker lists the lab-link interfaces, and the capture goes where the user
  * chose: Wireshark on this machine (desktop), Wireshark in a window (VNC on
  * a clab-api-server, or for a cluster used from this machine a VNC container
- * on this machine's Docker), a `packetflix:` link, or a `.pcapng` download.
+ * on this machine's Docker), or a `.pcapng` download.
  */
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 import {
@@ -12,7 +12,6 @@ import {
   parseLabCaptureInterfaces
 } from "@containerlab/clab-ui/host";
 import {
-  loadCapturePreferences,
   resolveStandaloneTheme,
   runtimeUiActions,
   type RuntimeStreamCapture
@@ -20,7 +19,6 @@ import {
 
 import {
   createCaptureDownload,
-  createCaptureTicket,
   openLocalWiresharkCapture,
   requestLabOperation,
   type RuntimeTargetRequest
@@ -81,14 +79,6 @@ function runStreamCapture(
           ),
         notifyError
       );
-    case "packetflix":
-      return createCaptureTicket(request).then((ticket) => {
-        window.open(ticket.packetflixUri, "_blank", "noopener,noreferrer");
-        runtimeUiActions.notify(
-          "Opening Wireshark through its packetflix: link. It needs cshargextcap; the link works once and only for a minute.",
-          "info"
-        );
-      }, notifyError);
     case "download":
       return createCaptureDownload(request).then((download) => {
         startDownload(download.url, download.fileName);
@@ -147,9 +137,7 @@ export async function openStreamCaptureDialog(request: StreamCaptureDialogReques
   const info = endpointId !== undefined ? await loadLabHostInfo(endpointId) : undefined;
   if (info?.support.captureStream !== true) return false;
   const deliveries = streamCaptureDeliveries(info.support, {
-    localWireshark: useAuthStore.getState().localWireshark,
-    desktop: window.containerlabDesktop !== undefined,
-    preferLinks: loadCapturePreferences(endpointId).preferredAction === "edgeshark"
+    localWireshark: useAuthStore.getState().localWireshark
   });
   runtimeUiActions.openCapture({
     ...request.target,

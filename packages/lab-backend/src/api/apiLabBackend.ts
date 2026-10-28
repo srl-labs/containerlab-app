@@ -45,7 +45,6 @@ import type {
   CaptureInterface,
   CaptureStreamOptions,
   CaptureTarget,
-  CaptureTicket,
   ExecResponse,
   InspectContainerInfo,
   GenerateTopologyRequest,
@@ -91,7 +90,6 @@ const API_CAPABILITIES: LabBackendCapabilities = {
   healthMetrics: true,
   sharedWorkspace: true,
   tailscaleStatus: true,
-  captureTickets: true,
   // clab-api-server has no timeout parameter on deploy, redeploy or destroy.
   lifecycleTimeout: false
 };
@@ -784,21 +782,6 @@ export class ApiLabBackend implements LabBackend {
     );
     if (!response.body) throw new LabBackendError("clab-api-server sent no capture stream", 502);
     return pcapngBlocks(captureBody(response.body, options.signal));
-  }
-
-  async createCaptureTicket(
-    labName: string,
-    targets: CaptureTarget[],
-    options: { duration?: string } = {}
-  ): Promise<CaptureTicket> {
-    await this.requireCaptureStream();
-    const nodeTargets = captureNodeTargets(labName, targets, await this.inspectLab(labName));
-    const { duration } = captureLimits(options);
-    const ticket = await this.client.createCaptureTicket(this.token, labName, {
-      targets: nodeTargets,
-      ...(duration !== undefined ? { duration } : {})
-    });
-    return { packetflixUri: ticket.packetflixUri, expiresAt: ticket.expiresAt };
   }
 
   wiresharkVncReady(sessionId: string) {

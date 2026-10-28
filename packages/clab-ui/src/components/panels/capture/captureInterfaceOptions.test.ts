@@ -221,7 +221,6 @@ test("capture commands show on c9s hosts through their capture stream", () => {
     healthMetrics: true,
     sharedWorkspace: false,
     tailscaleStatus: false,
-    captureTickets: false,
     lifecycleTimeout: true
   };
   const base = {

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import { describe, test } from "node:test";
 
-import WebSocket from "ws";
 import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
 import type {
   LabBackend,
@@ -147,40 +146,6 @@ async function assertCapturesLab(backend: LabBackend, labName: string, duration:
   assert.deepEqual(aborted.interfaces.map((entry) => entry.name), ["n1:eth1"]);
 }
 
-/** Redeems a capture ticket like cshargextcap: a websocket of binary pcapng messages; once only. */
-async function assertCaptureTicket(backend: LabBackend, labName: string): Promise<void> {
-  const containers = await backend.inspectLab(labName);
-  const n1 = containers.find((candidate) => candidate.name.endsWith("-n1"));
-  assert.ok(n1);
-  const ticket = await backend.createCaptureTicket(labName, [{ containerName: n1.name, interfaceName: "eth1" }], {
-    duration: "1s"
-  });
-  assert.match(ticket.packetflixUri, /^packetflix:wss?:\/\/[^/]+\/\S+\?container=/);
-  assert.ok(Date.parse(ticket.expiresAt) > Date.now(), "the ticket expires later");
-  const url = ticket.packetflixUri.slice("packetflix:".length).replace(/\?.*$/, "");
-  const received = await new Promise<Uint8Array>((resolve, reject) => {
-    const socket = new WebSocket(url, { rejectUnauthorized: false });
-    const messages: Buffer[] = [];
-    socket.on("message", (data: Buffer, isBinary: boolean) => {
-      if (!isBinary) reject(new Error("text message"));
-      messages.push(data);
-    });
-    socket.on("close", () => resolve(new Uint8Array(Buffer.concat(messages))));
-    socket.on("error", reject);
-  });
-  assertLabLinkCapture(parsePcapng(received), ["n1:eth1"]);
-  const again = await new Promise<number | undefined>((resolve) => {
-    const socket = new WebSocket(url, { rejectUnauthorized: false });
-    socket.on("unexpected-response", (_request, response) => resolve(response.statusCode));
-    socket.on("open", () => {
-      socket.close();
-      resolve(101);
-    });
-    socket.on("error", () => resolve(undefined));
-  });
-  assert.equal(again, 404, "a ticket is used once");
-}
-
 export function contractLabYaml(labName: string, image: string): string {
   return `name: ${labName}
 topology:
@@ -235,7 +200,6 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
         }
         // c9s captures through its own stream; Docker hosts keep Edgeshark.
         assert.equal(support.captureStream, profile.runtime === "c9s", `captureStream on ${profile.runtime}`);
-        assert.equal(support.captureTickets, support.captureStream && backend.kind === "api");
         assert.equal(support.wiresharkVnc, profile.runtime !== "c9s" || support.captureVnc);
         if (profile.runtime !== "c9s") {
           await rejectsWithStatus(backend.captureInterfaces("contract"), 501);
@@ -247,7 +211,6 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
             501
           );
         }
-        if (backend.kind === "local") await rejectsWithStatus(backend.createCaptureTicket("contract", []), 501);
         if (profile.runtime !== "c9s") {
           assert.equal(support.c9sDeployOptions, false);
           await rejectsWithStatus(backend.exportManifests({ labName: "contract" }), 501);
@@ -266,8 +229,6 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
           return;
         }
         await assertCapturesLab(fixture.backend, fixture.captureLab, "1s");
-        const support = effectiveSupport(fixture.backend.capabilities, await fixture.backend.features());
-        if (support.captureTickets) await assertCaptureTicket(fixture.backend, fixture.captureLab);
         await rejectsWithStatus(
           fixture.backend.openCaptureStream(fixture.captureLab, {
             targets: [{ containerName: `${fixture.captureLab}-n1`, interfaceName: "eth9" }],

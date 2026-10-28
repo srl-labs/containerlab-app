@@ -21,7 +21,6 @@ import type {
   CaptureCloseAllResponse,
   CaptureInterface,
   CaptureStreamOptions,
-  CaptureTicket,
   CapturePacketflixResponse,
   CaptureTarget,
   CaptureWiresharkVncCreateResponse,
@@ -446,15 +445,6 @@ export interface LabBackend {
    * name (`<lab>-<node>`). Rejects with 501 without `captureStream`.
    */
   openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>>;
-  /**
-   * A single-use `packetflix:` link to a capture of the targets, valid for a
-   * short time. Rejects with 501 without the `captureTickets` support.
-   */
-  createCaptureTicket(
-    labName: string,
-    targets: CaptureTarget[],
-    options?: { duration?: string }
-  ): Promise<CaptureTicket>;
   fetchWiresharkVnc(sessionId: string, request: WiresharkVncRequest): Promise<WiresharkVncResponse>;
   connectWiresharkVnc(
     sessionId: string,

@@ -58,7 +58,6 @@ function harnessLabHost(): LabHostInfo {
     healthMetrics: true,
     sharedWorkspace: false,
     tailscaleStatus: false,
-    captureTickets: false,
     lifecycleTimeout: true
   };
   const features = {
