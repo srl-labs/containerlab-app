@@ -253,7 +253,7 @@ function labNameOf(node: CaptureNode): { labName?: string } {
 /**
  * Wireshark VNC of a c9s lab host: a clab-api-server feeds the session from
  * its own capture stream; for a cluster on this machine the container runs on
- * this machine's Docker and reads the capture from here.
+ * this machine's Docker and the extension writes the capture into its pipe.
  */
 async function openStreamVnc(
   node: unknown,

@@ -67,7 +67,9 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
   },
   "packages/app-contract": {},
   "packages/lab-backend": {
-    entry: ["src/**/*.test.ts"]
+    entry: ["src/**/*.test.ts"],
+    // The capture pipe tests make named pipes like the Wireshark VNC image does.
+    ignoreBinaries: ["mkfifo"]
   },
   "packages/clab-viewer": {
     entry: ["src/index.ts"]

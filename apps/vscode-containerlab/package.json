@@ -1381,7 +1381,7 @@
           "containerlab.capture.wireshark.dockerImage": {
             "type": "string",
             "default": "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
-            "description": "The docker image to use for Wireshark/Edgeshark VNC capture. Requires full image name + tag"
+            "description": "The docker image to use for Wireshark/Edgeshark VNC capture. Requires full image name + tag. For Kubernetes (c9s) clusters on this machine it needs the capture pipe mode (CLABWIRE_CAPTURE_PIPE) of wireshark-vnc-docker."
           },
           "containerlab.capture.wireshark.pullPolicy": {
             "type": "string",

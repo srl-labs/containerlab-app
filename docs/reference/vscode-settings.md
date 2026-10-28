@@ -93,7 +93,7 @@ A template can hold a full node definition:
 | `capture.remoteHostname` | empty | Host name or IP your machine uses to reach Edgeshark on the lab host. |
 | `capture.packetflixPort` | `5001` | Packetflix WebSocket port used by Edgeshark. |
 | `capture.wireshark.path` | empty | Wireshark for captures from Kubernetes (c9s) lab hosts, which pipe the capture into `wireshark -k -i -`; found on `PATH` or where it installs when empty. |
-| `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. |
+| `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. For a Kubernetes cluster on this machine it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`) of wireshark-vnc-docker. |
 | `capture.wireshark.pullPolicy` | `always` | `always`, `missing`, or `never`. |
 | `capture.wireshark.theme` | `Follow VS Code theme` | Wireshark color scheme. |
 | `capture.wireshark.stayOpenInBackground` | `true` | Keep sessions alive in background tabs. Uses more memory. |

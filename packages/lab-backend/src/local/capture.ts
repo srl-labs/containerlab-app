@@ -22,7 +22,7 @@ import { LabBackendError } from "../contract/errors.ts";
 import type { CaptureNodeTarget } from "../capture.ts";
 import { wrapWebSocket } from "../webSocket.ts";
 import { containerRuntimeCli, type ResolvedLocalOptions } from "./options.ts";
-import { PacketflixTicketServer, type OpenGrantedCapture, type PacketflixListenAddress } from "./packetflixServer.ts";
+import { CAPTURE_PIPE_ENV, capturePipePath, feedCapturePipe, type CapturePipeFeed } from "./capturePipe.ts";
 import { runChecked, runCommand } from "./process.ts";
 
 const EDGESHARK_COMPOSE_URL =
@@ -136,8 +136,10 @@ interface VncSession extends CaptureWiresharkVncSession {
   port: number;
   /** The container runtime that runs the container. */
   runtime: string;
-  /** The capture ticket the container redeems (c9s); revoked when the session closes. */
-  ticket?: string;
+  /** What writes the capture into the container's pipe (c9s); stopped when the session closes. */
+  feed?: CapturePipeFeed;
+  /** Why the session's capture failed; its container is gone then. */
+  failure?: string;
 }
 
 /** The Wireshark VNC container of one session. */
@@ -145,54 +147,27 @@ interface VncContainerSpec {
   labName: string;
   containerName: string;
   interfaceNames: string[];
-  packetflixLink: string;
+  /** `PACKETFLIX_LINK` (Edgeshark) or `CLABWIRE_CAPTURE_PIPE` (c9s), as `NAME=value`. */
+  captureEnv: string;
   theme?: string;
   runArgs: string[];
   labDirectory?: string;
 }
 
-/** The gateway of a container runtime's default network, e.g. `172.17.0.1` for Docker's bridge. */
-async function defaultNetworkGateway(runtime: string): Promise<string | undefined> {
-  const network = runtime === "podman" ? "podman" : "bridge";
-  const result = await runCommand(
-    runtime,
-    ["network", "inspect", network, "--format", "{{range .IPAM.Config}}{{.Gateway}} {{end}}"],
-    { timeoutMs: 10_000 }
-  ).catch(() => undefined);
-  if (result?.code !== 0) return undefined;
-  return result.stdout.split(/\s+/).find((address) => net.isIPv4(address));
-}
-
-/** Whether this machine has the address, so a server can bind it. */
-function canBind(address: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.listen(0, address, () => server.close(() => resolve(true)));
-  });
-}
-
-/**
- * Where the Packetflix server of a c9s host listens so that Wireshark VNC
- * containers reach it: the gateway of the runtime's default network when
- * this machine has it (Docker and rootful Podman on Linux), else loopback,
- * which Docker Desktop forwards `host.docker.internal` to.
- */
-async function packetflixListenAddress(runtime: string): Promise<PacketflixListenAddress> {
-  const gateway = await defaultNetworkGateway(runtime);
-  if (gateway && (await canBind(gateway))) return { bind: gateway, urlHost: gateway };
-  return { bind: "127.0.0.1", urlHost: runtime === "podman" ? "host.containers.internal" : "host.docker.internal" };
-}
+/** Opens the capture of one node's targets; it ends when `signal` aborts. */
+export type OpenNodeCapture = (
+  targets: CaptureNodeTarget[],
+  signal: AbortSignal
+) => Promise<AsyncIterable<Uint8Array>>;
 
 function publicVncSession(session: VncSession): CaptureWiresharkVncSession {
-  const { containerId: _id, port: _port, runtime: _runtime, ticket: _ticket, ...publicSession } = session;
+  const { containerId: _id, port: _port, runtime: _runtime, feed: _feed, failure: _failure, ...publicSession } = session;
   return publicSession;
 }
 
 /** Edgeshark, Packetflix links and Wireshark VNC containers on this machine. */
 export class LocalCapture {
   private readonly vncSessions = new Map<string, VncSession>();
-  private readonly packetflixServer: PacketflixTicketServer;
   private runtimeProbe: { at: number; runtime: Promise<string | undefined> } | undefined;
 
   private readonly options: ResolvedLocalOptions;
@@ -201,11 +176,6 @@ export class LocalCapture {
   constructor(options: ResolvedLocalOptions, docker: () => Docker) {
     this.options = options;
     this.docker = docker;
-    this.packetflixServer = new PacketflixTicketServer(async () => {
-      const runtime = await this.vncRuntime();
-      if (!runtime) throw new LabBackendError(WIRESHARK_VNC_NEEDS_DOCKER, 501);
-      return packetflixListenAddress(runtime);
-    });
   }
 
   /**
@@ -347,7 +317,7 @@ export class LocalCapture {
         labName,
         containerName: group.containerName,
         interfaceNames: group.interfaceNames,
-        packetflixLink: packetflixUri(captureHost, 5001, group, inode),
+        captureEnv: `PACKETFLIX_LINK=${packetflixUri(captureHost, 5001, group, inode)}`,
         ...(theme !== undefined ? { theme } : {}),
         runArgs: network ? [] : ["--add-host", "host.docker.internal:host-gateway"],
         ...(labDirectory ? { labDirectory } : {})
@@ -362,15 +332,16 @@ export class LocalCapture {
 
   /**
    * Wireshark VNC of a c9s lab host on this machine: one container per node
-   * on this machine's Docker or Podman. Its Wireshark captures from the
-   * Packetflix server here with a session ticket, and each capture it starts
-   * runs `containerlab -r c9s capture` through `open`. Closing the session
-   * revokes the ticket, which ends its captures, and removes the container.
+   * on this machine's Docker or Podman, whose Wireshark reads a named pipe
+   * (wireshark-vnc-docker's `CLABWIRE_CAPTURE_PIPE` mode). This machine runs
+   * `containerlab -r c9s capture` of the node's targets through `open` and
+   * writes it into the pipe with `<runtime> exec`, each time Wireshark opens
+   * the pipe. Closing the session ends the capture and removes the container.
    */
   async createStreamVnc(
     labName: string,
     targets: readonly CaptureNodeTarget[],
-    open: OpenGrantedCapture,
+    open: OpenNodeCapture,
     theme?: string
   ): Promise<CaptureWiresharkVncCreateResponse> {
     const runtime = await this.vncRuntime();
@@ -380,28 +351,50 @@ export class LocalCapture {
     const started: VncSession[] = [];
     try {
       for (const [node, nodeTargets] of byNode) {
-        const { ticket, packetflixUri: link } = await this.packetflixServer.mint({ labName, targets: nodeTargets, open });
-        try {
-          const session = await this.startVncContainer(runtime, {
-            labName,
-            containerName: `${labName}-${node}`,
-            interfaceNames: nodeTargets.map((target) => target.interface),
-            packetflixLink: link,
-            ...(theme !== undefined ? { theme } : {}),
-            runArgs: []
-          });
-          session.ticket = ticket;
-          started.push(session);
-        } catch (error) {
-          this.packetflixServer.revoke(ticket);
-          throw error;
-        }
+        const containerName = `${labName}-${node}`;
+        const session = await this.startVncContainer(runtime, {
+          labName,
+          containerName,
+          interfaceNames: nodeTargets.map((target) => target.interface),
+          captureEnv: `${CAPTURE_PIPE_ENV}=${capturePipePath(containerName)}`,
+          ...(theme !== undefined ? { theme } : {}),
+          runArgs: []
+        });
+        started.push(session);
+        await this.requireCapturePipe(session);
+        this.feedVnc(session, (signal) => open(nodeTargets, signal));
       }
     } catch (error) {
-      await Promise.all(started.map((session) => this.closeVnc(session.sessionId).catch(() => {})));
+      await Promise.all(started.map((session) => this.endVnc(session)));
       throw error;
     }
     return { sessions: started.map(publicVncSession) };
+  }
+
+  /** Refuses a Wireshark VNC image without the capture pipe mode; it would show Wireshark without a capture. */
+  private async requireCapturePipe(session: VncSession): Promise<void> {
+    const result = await runCommand(
+      session.runtime,
+      ["exec", session.containerId, "grep", "-q", CAPTURE_PIPE_ENV, "/startapp.sh"],
+      { env: this.options.env, timeoutMs: 30_000 }
+    ).catch(() => undefined);
+    if (result?.code === 1) {
+      throw new LabBackendError(
+        `${this.options.wiresharkImage} has no capture pipe (${CAPTURE_PIPE_ENV}). Wireshark VNC of a Kubernetes lab host needs a wireshark-vnc-docker release with it.`,
+        501
+      );
+    }
+  }
+
+  /** Feeds the session's pipe; a capture that fails ends the container, and the session reports why. */
+  private feedVnc(session: VncSession, open: (signal: AbortSignal) => Promise<AsyncIterable<Uint8Array>>): void {
+    const feed = feedCapturePipe({ runtime: session.runtime, containerId: session.containerId, env: this.options.env, open });
+    session.feed = feed;
+    void feed.done.then(async (error) => {
+      if (!error || this.vncSessions.get(session.sessionId) !== session) return;
+      session.failure = error.message;
+      await this.removeVncContainer(session);
+    });
   }
 
   private async startVncContainer(runtime: string, spec: VncContainerSpec): Promise<VncSession> {
@@ -423,7 +416,7 @@ export class LocalCapture {
       ...spec.runArgs,
       ...(spec.labDirectory ? ["-v", `${spec.labDirectory}:/pcaps`] : []),
       "-e",
-      `PACKETFLIX_LINK=${spec.packetflixLink}`,
+      spec.captureEnv,
       ...(spec.theme === "dark" ? ["-e", "DARK_MODE=1"] : []),
       this.options.wiresharkImage
     ];
@@ -455,6 +448,7 @@ export class LocalCapture {
 
   async vncReady(sessionId: string): Promise<CaptureWiresharkVncReadyResponse> {
     const session = this.vncSession(sessionId);
+    if (session.failure !== undefined) throw new LabBackendError(`The capture of this Wireshark stopped: ${session.failure}`, 500);
     try {
       const response = await fetch(`http://127.0.0.1:${session.port}/`, {
         signal: AbortSignal.timeout(2000)
@@ -465,11 +459,15 @@ export class LocalCapture {
     }
   }
 
-  /** Revokes the session's ticket, which ends its captures, and removes its container. */
+  private async removeVncContainer(session: VncSession): Promise<void> {
+    await runCommand(session.runtime, ["rm", "-f", session.containerId], { env: this.options.env }).catch(() => undefined);
+  }
+
+  /** Ends the session's capture and removes its container. */
   private async endVnc(session: VncSession): Promise<void> {
     this.vncSessions.delete(session.sessionId);
-    if (session.ticket) this.packetflixServer.revoke(session.ticket);
-    await runCommand(session.runtime, ["rm", "-f", session.containerId], { env: this.options.env }).catch(() => undefined);
+    session.feed?.stop();
+    await this.removeVncContainer(session);
   }
 
   async closeVnc(sessionId: string): Promise<void> {
@@ -511,7 +509,9 @@ export class LocalCapture {
   }
 
   async dispose(): Promise<void> {
+    const feeds = [...this.vncSessions.values()].flatMap((session) => (session.feed ? [session.feed.done] : []));
     await this.closeAllVnc().catch(() => {});
-    this.packetflixServer.close();
+    // The captures end with containerlab's last block; wait for them.
+    await Promise.all(feeds);
   }
 }
