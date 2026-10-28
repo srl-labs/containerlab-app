@@ -45,12 +45,13 @@ The arrow next to the play button opens the rest:
 | **Run Command…**, **Save Configs…**, **Save VM Snapshots…**, **Inspect Details** | Work with the running lab; see [Lab operations](#lab-operations). |
 | **Validate** | Run `containerlab validate` on the topology file without deploying it. |
 | **Run with options…** | Any of the above with extra containerlab flags. |
+| **Lab settings…** | The flags this lab's deploys, redeploys, applies, and destroys use on this lab host. |
 
 In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanupWarning` is on.
 
 ## Run with options
 
-**Run with options…** deploys, redeploys, or destroys with flags you pick for this run only. The dialog shows the resulting `containerlab` command as you go.
+**Run with options…** deploys, redeploys, or destroys with flags you pick. It starts from the lab's settings, and with **Remember as lab settings** on (the default) a deploy or redeploy keeps its flags as the lab's settings for later runs. The dialog shows the resulting `containerlab` command as you go.
 
 ![Run with options](../images/app/lifecycle-options-dark.webp#only-dark){ .shot .narrow }
 ![Run with options](../images/app/lifecycle-options-light.webp#only-light){ .shot .narrow }
@@ -58,6 +59,7 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 | Option | Deploy | Redeploy | Destroy | Flag |
 | --- | :---: | :---: | :---: | --- |
 | Clean up | ✓ | ✓ | ✓ | `-c` |
+| Timeout | ✓ | ✓ | ✓ | `--timeout` |
 | Nodes | ✓ | | ✓ | `--node-filter` |
 | Graceful shutdown | | ✓ | ✓ | `--graceful` |
 | Keep management network | | ✓ | ✓ | `--keep-mgmt-net` |
@@ -70,9 +72,17 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 
 The template variables file is relative to the topology file. Leave it empty to use `<topology>_vars.yml` next to the topology, as containerlab does. Destroy and redeploy need the same file as the deploy when the template depends on it. On a lab host, `--vars` needs a clab-api-server with template support; older servers ignore it.
 
+**Timeout** is how long containerlab waits for the lab runtime, as a duration such as `30m` or `1h`. containerlab's default is 2m on Docker and Podman and 10m on a Kubernetes cluster, where nodes first pull their images; raise it when big images pull slowly. A lab server runs containerlab with its own timeouts and takes none, so the field is not offered there.
+
 Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
 
 **Restore VM snapshots** boots vrnetlab nodes from snapshots saved with **Save VM Snapshots…**: every node with a `<node>.tar` in the snapshot directory starts from it, and a node snapshot file you add wins for its node. Relative paths start at the topology file's folder. containerlab 0.72 or later is needed.
+
+## Lab settings
+
+**Lab settings…** shows the flags this lab remembers on this lab host: timeout, max workers, the template variables file, the export template and skip options on Docker and Podman, and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Under them, **Lab host defaults** lists what an empty field gets. Every **Deploy**, **Redeploy**, **Apply**, and **Destroy** of the lab without options of its own uses them; destroy takes only its part, such as the timeout and the namespace. Flags of one run, such as nodes, clean up, and snapshot restore, are never remembered. **Clear settings** forgets them.
+
+Settings belong to one topology file on one lab host: the same file on another host has its own. VS Code keeps them in its global state; the web and desktop apps keep them in the browser's local storage.
 
 ## Lab operations
 
@@ -135,6 +145,8 @@ The capture dialog asks where the capture goes and when it stops:
 ## Images
 
 **Manage Images**, in the header of the explorer's running labs section, lists the images your labs and templates use, pulls missing ones, and removes those you no longer need.
+
+A Kubernetes lab host has no images to manage: the cluster's nodes pull the images themselves. Manage Images is hidden on such a host, and in the header when every lab host is a cluster; asking for it anyway says so. For a private registry, set an [image pull secret](kubernetes.md#what-changes-on-a-cluster).
 
 ![Image manager](../images/app/image-manager-dark.webp#only-dark){ .shot }
 ![Image manager](../images/app/image-manager-light.webp#only-light){ .shot }
