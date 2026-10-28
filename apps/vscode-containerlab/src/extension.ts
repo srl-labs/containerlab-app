@@ -3,14 +3,12 @@ import * as os from "os";
 
 import * as vscode from "vscode";
 import Docker from "dockerode";
-import { detectLocalEnvironment, findBinary } from "@srl-labs/containerlab-lab-backend/local";
+import { findBinary } from "@srl-labs/containerlab-lab-backend/local";
 
 import {
-  clusterBackendOptions,
   connectionOf,
   disposeLabBackends,
   getConnections,
-  getLocalBackend,
   initConnections,
   labPathOf,
   pickConnection,
@@ -22,6 +20,7 @@ import {
   type ConnectionManager,
   type LabConnection
 } from "./backend/connections";
+import { checkLocalLabHost } from "./backend/labHostChecks";
 import { RemoteLabFileSystem } from "./backend/remoteFileSystem";
 
 import * as cmd from "./commands";
@@ -330,23 +329,8 @@ async function prepareLocalContainerlab(
  */
 async function checkLocalConnection(connections: ConnectionManager): Promise<boolean> {
   if (!connections.localAvailable) return false;
-  const environment = await detectLocalEnvironment(getLocalBackend().options).catch(
-    (err: unknown) => ({
-      available: false,
-      problems: [err instanceof Error ? err.message : String(err)],
-      containerlabVersion: undefined,
-      username: undefined
-    })
-  );
-  connections.setLocalStatus({
-    available: environment.available,
-    problems: environment.problems,
-    ...(environment.containerlabVersion !== undefined
-      ? { containerlabVersion: environment.containerlabVersion }
-      : {}),
-    ...(environment.username !== undefined ? { username: environment.username } : {})
-  });
-  return environment.available;
+  await checkLocalLabHost(connections, LOCAL_CONNECTION);
+  return connections.local?.available === true;
 }
 
 /**
@@ -358,18 +342,7 @@ async function checkClusterConnections(connections: ConnectionManager): Promise<
     connections
       .list()
       .filter(isClusterConnection)
-      .map(async (connection) => {
-        const environment = await detectLocalEnvironment(clusterBackendOptions(connection)).catch(
-          (err: unknown) => ({
-            available: false,
-            problems: [err instanceof Error ? err.message : String(err)]
-          })
-        );
-        connections.setProblem(
-          connection,
-          environment.available ? undefined : environment.problems.join(" ")
-        );
-      })
+      .map((connection) => checkLocalLabHost(connections, connection))
   );
 }
 

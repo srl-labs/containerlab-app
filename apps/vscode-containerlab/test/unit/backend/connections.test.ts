@@ -80,15 +80,14 @@ describe("lab host settings", () => {
 
   it("reads a cluster entry as a local connection with runtime c9s", () => {
     const cluster = clusterConnectionFromSetting({
-      kind: "local",
-      runtime: "c9s",
+      kind: "kubernetes",
       kubeContext: " kind-c9s-app ",
       namespace: "team-a",
       exposeType: "LoadBalancer",
       persistence: false
     });
     expect(cluster).to.deep.include({
-      label: "Cluster kind-c9s-app (c9s)",
+      label: "kind-c9s-app",
       kind: "local",
       runtime: "c9s",
       kubeContext: "kind-c9s-app",
@@ -99,6 +98,10 @@ describe("lab host settings", () => {
     expect(cluster?.id).to.match(/^c9s-[0-9a-f]{12}$/);
     expect(isClusterConnection(cluster!)).to.equal(true);
     expect(isClusterConnection(LOCAL_CONNECTION)).to.equal(false);
+    // Entries of earlier builds keep working.
+    expect(
+      clusterConnectionFromSetting({ kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app", namespace: "team-a", exposeType: "LoadBalancer", persistence: false })
+    ).to.deep.equal(cluster);
   });
 
   it("ignores cluster entries without a context, and unknown expose types", () => {
@@ -129,7 +132,7 @@ describe("lab host settings", () => {
     expect(list.map((connection) => [connection.kind, connection.label])).to.deep.equal([
       ["local", "Local"],
       ["api", "Lab host"],
-      ["local", "Cluster kind-c9s-app (c9s)"]
+      ["local", "kind-c9s-app"]
     ]);
     expect(manager.status(list[2])).to.equal("connected");
     expect(manager.grouped).to.equal(true);
@@ -145,7 +148,7 @@ describe("lab host settings", () => {
     });
     expect(settings.connections).to.deep.equal([
       { url: "https://lab-host:8090" },
-      { kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app", namespace: "team-a" }
+      { kind: "kubernetes", kubeContext: "kind-c9s-app", namespace: "team-a" }
     ]);
     expect(cluster.namespace).to.equal("team-a");
     await manager.removeConnection(cluster);
@@ -212,16 +215,16 @@ describe("lab host settings", () => {
     const manager = new ConnectionManager(fakeContext());
     const a = await manager.addClusterConnection({ kubeContext: "kind", kubeconfig: "/k/a.yaml" });
     const b = await manager.addClusterConnection({ kubeContext: "kind", kubeconfig: "/k/b.yaml" });
-    // Adding the same file again replaces its entry.
     await manager.addClusterConnection({
       kubeContext: "kind",
       kubeconfig: "/k/a.yaml",
       label: "A"
     });
+    // Adding the same file again replaces its entry where it is.
     expect(settings.connections).to.deep.equal([
       { kind: "local", runtime: "c9s", kubeContext: "kind" },
-      { kind: "local", runtime: "c9s", kubeContext: "kind", kubeconfig: "/k/b.yaml" },
-      { kind: "local", runtime: "c9s", kubeContext: "kind", kubeconfig: "/k/a.yaml", label: "A" }
+      { kind: "kubernetes", label: "A", kubeContext: "kind", kubeconfig: "/k/a.yaml" },
+      { kind: "kubernetes", kubeContext: "kind", kubeconfig: "/k/b.yaml" }
     ]);
     expect(manager.list().filter(isClusterConnection)).to.have.length(3);
     await manager.removeConnection(b);
@@ -294,54 +297,57 @@ describe("lab host settings", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it("offers the default kubeconfig's contexts and a kubeconfig file, and keeps the file", async () => {
+    it("asks where labs should run; a cluster opens the cluster form", async () => {
       useSettings({ connections: [] });
-      const manager = initConnections(fakeContext());
-      const pickedLists: string[][] = [];
-      window.showQuickPick = async (items: any[]) => {
-        pickedLists.push(items.map((item) => item.label));
-        if (pickedLists.length === 1) return items.find((item) => item.value === "c9s");
-        if (pickedLists.length === 2) return items.find((item) => item.chooseFile);
-        return items.find((item) => item.label === "kind-c9s-app");
+      initConnections(fakeContext());
+      const executed: unknown[][] = [];
+      const commands = vscodeStub.commands as { executeCommand: (...args: unknown[]) => Promise<unknown> };
+      const originalExecute = commands.executeCommand;
+      commands.executeCommand = async (...args: unknown[]) => {
+        executed.push(args);
+        return undefined;
       };
-      window.showOpenDialog = async () => [{ fsPath: path.join(dir, "other") }];
-      window.showInputBox = async () => "";
-      const connection = await addConnection();
-      expect(pickedLists[1]).to.deep.equal([
-        "default-ctx",
-        "",
-        "$(folder-opened) Choose kubeconfig file…"
+      let labels: string[] = [];
+      window.showQuickPick = async (items: any[]) => {
+        labels = items.map((item) => item.label);
+        return items.find((item) => item.value === "cluster");
+      };
+      try {
+        expect(await addConnection()).to.equal(undefined);
+      } finally {
+        commands.executeCommand = originalExecute;
+      }
+      expect(labels).to.deep.equal([
+        "$(device-desktop) This computer",
+        "$(server-environment) Kubernetes cluster",
+        "$(cloud) Lab server"
       ]);
-      expect(pickedLists[2]).to.deep.equal(["kind-c9s-app", "second"]);
-      expect(connection).to.deep.include({
-        kubeContext: "kind-c9s-app",
-        kubeconfig: path.join(dir, "other")
-      });
-      expect(settings.connections).to.deep.equal([
-        {
-          kind: "local",
-          runtime: "c9s",
-          kubeContext: "kind-c9s-app",
-          kubeconfig: path.join(dir, "other")
-        }
-      ]);
-      await manager.removeConnection(connection!);
+      expect(executed).to.deep.include(["containerlab.settings.open", "labHosts", "cluster"]);
     });
 
-    it("stores no file for a context of the default kubeconfig", async () => {
-      useSettings({ connections: [] });
-      let step = 0;
-      window.showQuickPick = async (items: any[]) => {
-        step++;
-        return step === 1
-          ? items.find((item) => item.value === "c9s")
-          : items.find((item) => item.label === "default-ctx");
-      };
-      window.showInputBox = async () => "team-a";
-      await addConnection();
+    it("saves the cluster form as a kubernetes entry with its file and defaults, edited in place", async () => {
+      useSettings({ connections: [{ url: "https://lab-host:8090" }] });
+      const manager = initConnections(fakeContext());
+      const cluster = await manager.saveClusterConnection({
+        kubeContext: "kind-c9s-app",
+        kubeconfig: path.join(dir, "other"),
+        exposeType: "LoadBalancer",
+        persistence: false,
+        imagePullSecret: "regcred"
+      });
+      expect(cluster).to.deep.include({ kubeContext: "kind-c9s-app", imagePullSecret: "regcred", persistence: false });
+      useSettings({ connections: [...(settings.connections as unknown[]), { url: "https://other:8090" }] });
+      const edited = await manager.saveClusterConnection(
+        { kubeContext: "second", kubeconfig: path.join(dir, "other"), namespace: "team-a", label: "Lab" },
+        cluster
+      );
       expect(settings.connections).to.deep.equal([
-        { kind: "local", runtime: "c9s", kubeContext: "default-ctx", namespace: "team-a" }
+        { url: "https://lab-host:8090" },
+        { kind: "kubernetes", label: "Lab", kubeContext: "second", kubeconfig: path.join(dir, "other"), namespace: "team-a" },
+        { url: "https://other:8090" }
       ]);
+      await manager.removeConnection(edited);
+      expect(settings.connections).to.deep.equal([{ url: "https://lab-host:8090" }, { url: "https://other:8090" }]);
     });
   });
 });

@@ -78,7 +78,10 @@ export function clusterBackendOptions(connection: LabConnection): LocalLabBacken
       ...(connection.kubeconfig !== undefined ? { kubeconfig: connection.kubeconfig } : {}),
       ...(connection.namespace !== undefined ? { namespace: connection.namespace } : {}),
       ...(connection.exposeType !== undefined ? { exposeType: connection.exposeType } : {}),
-      ...(connection.persistence === false ? { persistence: false } : {})
+      ...(connection.persistence === false ? { persistence: false } : {}),
+      ...(connection.imagePullSecret !== undefined
+        ? { imagePullSecret: connection.imagePullSecret }
+        : {})
     }
   };
 }

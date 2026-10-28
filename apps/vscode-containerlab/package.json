@@ -971,7 +971,15 @@
           "containerlab.runtime": {
             "type": "string",
             "default": "docker",
-            "description": "Container runtime to use (docker, podman)."
+            "enum": [
+              "docker",
+              "podman"
+            ],
+            "enumDescriptions": [
+              "Labs on this computer run in Docker.",
+              "Labs on this computer run in Podman."
+            ],
+            "markdownDescription": "The container runtime of labs on **this computer** (Local). A Kubernetes cluster is a lab host of its own: add it with [Add Lab Host](command:containerlab.connection.add) → Kubernetes cluster."
           },
           "containerlab.dockerSocketPath": {
             "type": "string",
@@ -1007,7 +1015,7 @@
             "type": "array",
             "default": [],
             "scope": "machine",
-            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes cluster (c9s)**: `\"kind\": \"local\", \"runtime\": \"c9s\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, `exposeType`, `persistence` and `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL).\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
+            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes cluster**: `\"kind\": \"kubernetes\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, the deploy defaults `exposeType`, `persistence` and `imagePullSecret`, and a `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL). [Add Lab Host](command:containerlab.connection.add) → Kubernetes cluster fills it in and checks the cluster.\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
             "items": {
               "type": "object",
               "anyOf": [
@@ -1040,7 +1048,67 @@
                 },
                 {
                   "type": "object",
-                  "title": "Kubernetes cluster (c9s)",
+                  "title": "Kubernetes cluster",
+                  "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with your kubeconfig, so this machine needs Linux (or WSL) and containerlab, not Docker.",
+                  "required": [
+                    "kind",
+                    "kubeContext"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "kubernetes"
+                      ],
+                      "markdownDescription": "`kubernetes`: the labs run on a Kubernetes cluster with clabernetes."
+                    },
+                    "kubeContext": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig context of the cluster."
+                    },
+                    "kubeconfig": {
+                      "type": "string",
+                      "markdownDescription": "The kubeconfig file that has `kubeContext`, for example `~/.kube/lab-prod.yaml`. When unset, the context is looked up in `KUBECONFIG` of the VS Code process, else in `~/.kube/config`."
+                    },
+                    "namespace": {
+                      "type": "string",
+                      "markdownDescription": "The namespace of every lab, if you may only use one. When unset, each lab gets its own namespace, `c9s-<lab>`, which needs the right to create namespaces."
+                    },
+                    "exposeType": {
+                      "type": "string",
+                      "enum": [
+                        "ClusterIP",
+                        "Headless",
+                        "LoadBalancer",
+                        "None"
+                      ],
+                      "enumDescriptions": [
+                        "A Service per node, reachable inside the cluster.",
+                        "DNS names for each node inside the cluster, without a virtual IP.",
+                        "A load balancer address per node, reachable from outside the cluster.",
+                        "No Services: reach nodes through VS Code (terminals, port forwards)."
+                      ],
+                      "markdownDescription": "How node ports are exposed by default (`--expose-type`). clabernetes' default when unset."
+                    },
+                    "persistence": {
+                      "type": "boolean",
+                      "markdownDescription": "`false`: nodes keep no storage, so every restart starts them from their startup config (`--no-persistence`)."
+                    },
+                    "imagePullSecret": {
+                      "type": "string",
+                      "markdownDescription": "A Secret in the lab's namespace for private registries (`--image-pull-secret`), used by every deploy."
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "Name shown in the Containerlab views. The context when unset."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "title": "Kubernetes cluster (older form)",
+                  "deprecationMessage": "Use \"kind\": \"kubernetes\" without \"runtime\"; this form keeps working.",
                   "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with `-r c9s`, so this machine needs Linux (or WSL) and containerlab, not Docker.",
                   "required": [
                     "kind",
@@ -1087,6 +1155,9 @@
                     "persistence": {
                       "type": "boolean",
                       "markdownDescription": "`false` turns persistent node volumes off by default (`--no-persistence`)."
+                    },
+                    "imagePullSecret": {
+                      "type": "string"
                     },
                     "label": {
                       "type": "string",
