@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import fs from "node:fs";
-import path from "node:path";
 import * as vscode from "vscode";
-import WebSocket from "ws";
 
-// Captures through a clab-api-server that runs labs on Kubernetes (CLAB_RUNTIME=c9s): a
-// packetflix: link from a capture ticket, and Wireshark VNC in a panel. Opt-in: set
+// Captures through a clab-api-server that runs labs on Kubernetes (CLAB_RUNTIME=c9s): Wireshark
+// VNC in a panel. Opt-in: set
 // CLAB_E2E_C9S_API_URL, CLAB_E2E_C9S_API_USER and CLAB_E2E_C9S_API_PASSWORD, and
 // CLAB_E2E_C9S_API_KUBECONFIG and CLAB_E2E_C9S_API_CONTEXT for a kubectl that may exec into
 // the lab's pods (the test pings across the link). The server must run on this machine, so the
@@ -84,26 +81,6 @@ function podOf(node: string): { pod: string; container: string } {
   return { pod, container };
 }
 
-/**
- * Redeems a Packetflix link the way Wireshark's cshargextcap does: a websocket whose binary
- * messages are the pcapng stream. Reads it for `ms`; the HTTP status when it is refused.
- */
-function redeem(link: string, ms: number): Promise<{ status: number; bytes: Buffer }> {
-  const url = link.replace(/^packetflix:/, "");
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-    const socket = new WebSocket(url);
-    socket.on("upgrade", () => setTimeout(() => socket.close(1000), ms));
-    socket.on("message", (data: Buffer) => chunks.push(Buffer.from(data)));
-    socket.on("close", () => resolve({ status: 101, bytes: Buffer.concat(chunks) }));
-    socket.on("unexpected-response", (_request, response) => {
-      resolve({ status: response.statusCode ?? 0, bytes: Buffer.alloc(0) });
-      socket.terminate();
-    });
-    socket.on("error", () => resolve({ status: 0, bytes: Buffer.concat(chunks) }));
-  });
-}
-
 function wiresharkTabs(): vscode.Tab[] {
   return vscode.window.tabGroups.all
     .flatMap((group) => group.tabs)
@@ -112,11 +89,6 @@ function wiresharkTabs(): vscode.Tab[] {
 
 (apiUrl && kubeconfig ? suite : suite.skip)("Captures through a c9s clab-api-server", function () {
   this.timeout(15 * 60_000);
-  const workspace = process.env.VSCODE_CONTAINERLAB_E2E_WORKSPACE ?? "";
-  const linkCapture = path.join(workspace, `${labName}-packetflix.pcapng`);
-  const opened: string[] = [];
-  const env = vscode.env as unknown as Record<string, unknown>;
-  const openExternal = env.openExternal;
   let api: ExtensionApi;
   let connection: Connection;
   let folder: vscode.Uri;
@@ -124,11 +96,6 @@ function wiresharkTabs(): vscode.Tab[] {
   let ping: ReturnType<typeof spawn> | undefined;
 
   suiteSetup(async () => {
-    // packetflix: links go to Wireshark through the OS; here they are kept for the test.
-    env.openExternal = async (uri: vscode.Uri) => {
-      opened.push(uri.toString(true));
-      return true;
-    };
     const extension = vscode.extensions.getExtension<ExtensionApi>("srl-labs.vscode-containerlab");
     assert.ok(extension);
     api = await extension.activate();
@@ -139,7 +106,6 @@ function wiresharkTabs(): vscode.Tab[] {
   });
 
   suiteTeardown(async () => {
-    env.openExternal = openExternal;
     ping?.kill();
     for (const tab of wiresharkTabs()) await vscode.window.tabGroups.close(tab);
     const topologies = kubectl(["get", "topologies.c9s.run", "-A", "-o", "name"]).split("\n");
@@ -195,29 +161,6 @@ function wiresharkTabs(): vscode.Tab[] {
     );
   });
 
-  test("opens a capture ticket's packetflix: link, which streams the link once", async () => {
-    await vscode.commands.executeCommand("containerlab.interface.capture", await eth1OfN1());
-    const link = await eventually("the packetflix: link", () => opened.find((uri) => uri.startsWith("packetflix:")));
-    assert.match(link, /^packetflix:ws:\/\/[^/]+\/api\/v1\/capture\/packetflix\/[A-Za-z0-9_-]{43}\?container=/);
-    const container = JSON.parse(new URL(link.replace(/^packetflix:/, "")).searchParams.get("container") ?? "{}") as {
-      type?: string;
-      "network-interfaces"?: string[];
-    };
-    assert.equal(container.type, "c9s-lab");
-    assert.deepEqual(container["network-interfaces"], ["n1:eth1"]);
-
-    const capture = await redeem(link, 5000);
-    assert.equal(capture.status, 101);
-    fs.writeFileSync(linkCapture, capture.bytes);
-    assert.equal(capture.bytes.readUInt32LE(0), 0x0a0d0d0a, "a pcapng section header");
-    assert.ok(capture.bytes.includes(Buffer.from("n1:eth1")), "the interface is named <node>:<interface>");
-    assert.ok(capture.bytes.length > 1000, `only ${capture.bytes.length} bytes`);
-    console.log(`packetflix capture: ${linkCapture} (${capture.bytes.length} bytes)`);
-
-    // A ticket is single use.
-    assert.equal((await redeem(link, 0)).status, 404);
-  });
-
   test("opens Wireshark VNC in a panel and ends its session when the panel closes", async () => {
     const before = docker(["ps", "-a", "--filter", "name=clab_ws_vnc_", "--format", "{{.Names}}"]).split("\n");
     await vscode.commands.executeCommand("containerlab.interface.captureWithEdgesharkVNC", await eth1OfN1());
@@ -235,18 +178,11 @@ function wiresharkTabs(): vscode.Tab[] {
       },
       120_000
     );
-    // The session's Packetflix link, which Wireshark in the container uses for its capture.
-    const containerEnv = docker(["inspect", "-f", "{{range .Config.Env}}{{println .}}{{end}}", vncContainer]);
-    const link = /PACKETFLIX_LINK=(packetflix:\S+)/.exec(containerEnv)?.[1];
-    assert.ok(link, "the container has a Packetflix link");
-    const local = link.replace(/^packetflix:ws:\/\/[^/]+/, `packetflix:${apiUrl.replace(/^http/, "ws")}`);
-    assert.equal((await redeem(local, 0)).status, 101, "the session's ticket works while the panel is open");
 
     for (const tab of wiresharkTabs()) await vscode.window.tabGroups.close(tab);
     await eventually("the Wireshark VNC container to go", () =>
       docker(["ps", "-a", "--filter", `name=${vncContainer}`, "--format", "{{.Names}}"]) === "" ? true : undefined
     );
-    assert.equal((await redeem(local, 0)).status, 404, "closing the panel revokes the session's ticket");
   });
 
   test("destroys the lab", async () => {

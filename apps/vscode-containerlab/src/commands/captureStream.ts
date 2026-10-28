@@ -5,9 +5,9 @@
  * - Cluster on this machine: an integrated terminal runs
  *   `containerlab -r c9s capture … -w - | wireshark -k -i -`, or the capture
  *   is saved as `.pcapng`.
- * - clab-api-server: a single-use `packetflix:` link opens Wireshark through
- *   cshargextcap (the default), or Wireshark VNC in a webview, or the capture
- *   is saved as `.pcapng`.
+ * - clab-api-server: Wireshark on this machine reads the server's capture
+ *   stream (`wireshark -k -i -`, the default), or Wireshark VNC in a webview,
+ *   or the capture is saved as `.pcapng`.
  */
 import * as fs from "fs";
 import * as path from "path";
@@ -22,14 +22,18 @@ import {
   type LabBackend,
   type LabHostInfo
 } from "@srl-labs/containerlab-lab-backend";
-import { findWireshark, type LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
+import {
+  findWireshark,
+  launchLocalWireshark,
+  type LocalLabBackend
+} from "@srl-labs/containerlab-lab-backend/local";
 
 import { outputChannel } from "../globals";
 import { backendFor, connectionOf } from "../backend/labBackends";
 import { isClusterConnection, type LabConnection } from "../backend/connections";
 import { labHostInfo } from "../backend/labHostSupport";
 
-export type StreamCaptureDelivery = "terminal" | "packetflix" | "vnc" | "save";
+export type StreamCaptureDelivery = "terminal" | "wireshark" | "vnc" | "save";
 
 /** One interface of a capture: the node as the topology names it, and the interface. */
 export interface StreamCaptureTarget {
@@ -42,9 +46,9 @@ const DELIVERY_ITEMS: Record<StreamCaptureDelivery, { label: string; detail: str
     label: "$(terminal) Wireshark",
     detail: "containerlab capture … -w - | wireshark -k -i - in a terminal; Ctrl+C stops it"
   },
-  packetflix: {
-    label: "$(link-external) Wireshark (packetflix link)",
-    detail: "Opens your Wireshark through cshargextcap; the link works once"
+  wireshark: {
+    label: "$(pulse) Wireshark",
+    detail: "Wireshark on this computer reads the lab host's capture stream"
   },
   vnc: {
     label: "$(browser) Wireshark VNC",
@@ -63,19 +67,18 @@ const SAVE_DURATIONS = [
 
 /**
  * Where a capture can go, the default first. The `capture.preferredAction`
- * setting, when the user set it, picks between the link and VNC.
+ * setting, when the user set it, picks between Wireshark on this machine and
+ * VNC.
  */
 export function streamCaptureDeliveries(
   onThisMachine: boolean,
-  support: Pick<LabHostInfo["support"], "captureTickets" | "wiresharkVnc">,
+  support: Pick<LabHostInfo["support"], "wiresharkVnc">,
   preferred: string | undefined
 ): StreamCaptureDelivery[] {
   if (onThisMachine) return ["terminal", "save"];
   const order: StreamCaptureDelivery[] =
-    preferred === "Wireshark VNC" ? ["vnc", "packetflix"] : ["packetflix", "vnc"];
-  const live = order.filter((delivery) =>
-    delivery === "vnc" ? support.wiresharkVnc : support.captureTickets
-  );
+    preferred === "Wireshark VNC" ? ["vnc", "wireshark"] : ["wireshark", "vnc"];
+  const live = order.filter((delivery) => delivery !== "vnc" || support.wiresharkVnc);
   return [...live, "save"];
 }
 
@@ -297,14 +300,46 @@ async function saveCapture(
   );
 }
 
-async function openTicket(
+/** Wireshark on this machine reading the lab host's capture stream; closing Wireshark ends the capture. */
+async function captureInLocalWireshark(
   backend: LabBackend,
   labName: string,
-  targets: StreamCaptureTarget[]
+  targets: StreamCaptureTarget[],
+  label: string
 ): Promise<void> {
-  const ticket = await backend.createCaptureTicket(labName, toCaptureTargets(targets));
-  outputChannel.info(`Capture link for ${labName}, valid until ${ticket.expiresAt}`);
-  await vscode.env.openExternal(vscode.Uri.parse(ticket.packetflixUri, true));
+  const wireshark = await findWireshark(
+    vscode.workspace.getConfiguration("containerlab").get<string>("capture.wireshark.path", "") ||
+      undefined
+  );
+  if (!wireshark) {
+    const save = "Save .pcapng instead";
+    const choice = await vscode.window.showErrorMessage(
+      "Wireshark was not found on this machine. Install it, or set containerlab.capture.wireshark.path.",
+      save
+    );
+    if (choice === save) await saveCapture(backend, labName, targets, label);
+    return;
+  }
+  const controller = new AbortController();
+  const stream = await backend.openCaptureStream(labName, {
+    targets: toCaptureTargets(targets),
+    signal: controller.signal,
+    onGap: (gap) =>
+      vscode.window.setStatusBarMessage(`$(warning) ${describeCaptureGap(gap)}`, 15_000)
+  });
+  try {
+    const session = await launchLocalWireshark(stream, {
+      title: `${labName}: ${label}`,
+      binaryPath: wireshark,
+      stopCapture: () => controller.abort()
+    });
+    outputChannel.info(`Wireshark (pid ${session.pid ?? "?"}) captures ${label} of ${labName}`);
+  } catch (error) {
+    // Nobody reads the capture: end it on the lab host.
+    controller.abort();
+    await stream[Symbol.asyncIterator]().return?.();
+    throw error;
+  }
 }
 
 export interface StreamCaptureRequest {
@@ -374,7 +409,8 @@ export async function captureOnStreamHost(
     const delivery = await chooseDelivery(request, deliveries, label);
     if (delivery === "terminal")
       await captureInTerminal(backend as LocalLabBackend, labName, targets, label);
-    else if (delivery === "packetflix") await openTicket(backend, labName, targets);
+    else if (delivery === "wireshark")
+      await captureInLocalWireshark(backend, labName, targets, label);
     else if (delivery === "vnc") await request.openVnc?.(labName, targets);
     else if (delivery === "save") await saveCapture(backend, labName, targets, label);
   } catch (error) {

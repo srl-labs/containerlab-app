@@ -33,7 +33,6 @@ import type {
   CaptureInterface,
   CaptureStreamOptions,
   CaptureTarget,
-  CaptureTicket,
   GenerateTopologyRequest,
   GraphExportFormat,
   ImportTopologyFromUrlResponse,
@@ -101,9 +100,7 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   healthMetrics: true,
   sharedWorkspace: false,
   // containerlab has no command that reports it.
-  tailscaleStatus: false,
-  // Tickets are links to a server's capture stream; this machine serves none.
-  captureTickets: false
+  tailscaleStatus: false
 };
 
 /** What a local host can do, by its lab runtime; c9s has node stats when metrics.k8s.io answers. */
@@ -739,12 +736,6 @@ export class LocalLabBackend implements LabBackend {
       )
     );
     return { command: this.commandLine(args), env: clusterEnv };
-  }
-
-  createCaptureTicket(): Promise<CaptureTicket> {
-    return Promise.reject(
-      new LabBackendError("Capture links are served by clab-api-server; this machine has none.", 501)
-    );
   }
 
   wiresharkVncReady(sessionId: string) {

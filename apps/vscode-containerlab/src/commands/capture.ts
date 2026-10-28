@@ -376,7 +376,7 @@ export async function captureInterfaceWithPacketflix(
   node: ClabInterfaceTreeNode,
   allSelectedNodes?: ClabInterfaceTreeNode[] // [CHANGED]
 ) {
-  if (await captureOnStream(node, allSelectedNodes, "packetflix")) return;
+  if (await captureOnStream(node, allSelectedNodes, "wireshark")) return;
   if (!(await ensureHostSupports(connectionOf(node), "edgeshark", "Edgeshark capture"))) return;
   if (isRemoteNode(node)) {
     return captureRemote(node, allSelectedNodes, "packetflix");

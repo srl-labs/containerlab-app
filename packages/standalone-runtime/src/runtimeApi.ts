@@ -1078,14 +1078,6 @@ export interface StreamCaptureInput extends RuntimeTargetRequest {
   title?: string;
 }
 
-/** A single-use `packetflix:` link to the capture, for Wireshark with cshargextcap. */
-export async function createCaptureTicket(
-  input: StreamCaptureInput
-): Promise<{ packetflixUri: string; expiresAt: string }> {
-  const endpointId = resolveTargetEndpointId(input);
-  return await requestJson("/api/runtime/capture/tickets", asJsonBody(input, endpointId), endpointId);
-}
-
 /** A single-use URL that downloads the capture as `.pcapng` while it runs. */
 export async function createCaptureDownload(input: StreamCaptureInput): Promise<{ url: string; fileName: string }> {
   const endpointId = resolveTargetEndpointId(input);

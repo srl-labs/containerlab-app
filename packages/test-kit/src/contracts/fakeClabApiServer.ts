@@ -1,8 +1,5 @@
-import { createHash, randomBytes } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-
-import { WebSocketServer } from "ws";
 
 import { errorStatus } from "@srl-labs/containerlab-lab-backend";
 import { LocalLabBackend } from "@srl-labs/containerlab-lab-backend/local";
@@ -54,8 +51,6 @@ const CAPTURE_INTERFACES = [
   { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" },
   { node: "n2", interface: "eth1", peerNode: "n1", peerInterface: "eth1" }
 ];
-
-const TICKET_TTL_MS = 60_000;
 
 interface CaptureRequest {
   targets: string[];
@@ -116,19 +111,6 @@ export async function startFakeClabApiServer(
   const token = "contract-token";
   const watchers = new Set<AbortController>();
   const captureEnabled = (health.features ?? []).includes("capture-stream");
-  /** Tickets by their SHA-256, like the server keeps them. */
-  const tickets = new Map<string, { targets: string[]; expiresAt: number; durationMs?: number }>();
-  const hashTicket = (ticket: string) => createHash("sha256").update(ticket).digest("hex");
-  /** The valid ticket of a Packetflix path, used up on the way. */
-  const ticketFromPath = (pathname: string, redeem = false) => {
-    const match = /^\/api\/v1\/capture\/packetflix\/([^/]+)(?:\/capture)?$/.exec(pathname);
-    if (!match) return undefined;
-    const key = hashTicket(match[1]);
-    const ticket = tickets.get(key);
-    if (!ticket || ticket.expiresAt < Date.now()) return undefined;
-    if (redeem) tickets.delete(key);
-    return ticket;
-  };
 
   const server = http.createServer((request, response) => {
     void (async () => {
@@ -145,23 +127,12 @@ export async function startFakeClabApiServer(
         });
         return;
       }
-      const discover = /^\/api\/v1\/capture\/packetflix\/([^/]+)\/discover\/mobyshark$/.exec(url.pathname);
-      if (captureEnabled && discover && request.method === "GET") {
-        // cshargextcap asks before it connects; this does not use up the ticket.
-        sendJson(response, 200, { containers: [] });
-        return;
-      }
-      if (captureEnabled && /^\/api\/v1\/capture\/packetflix\//.test(url.pathname)) {
-        // The websocket is served on upgrade; a plain request is refused.
-        sendJson(response, ticketFromPath(url.pathname) ? 400 : 404, { error: "websocket upgrade required" });
-        return;
-      }
       if (request.headers.authorization !== `Bearer ${token}`) {
         sendJson(response, 401, { error: "Unauthorized" });
         return;
       }
       const route = `${request.method} ${url.pathname}`;
-      const capture = /^\/api\/v1\/labs\/([^/]+)(\/capture\/(interfaces|stream|tickets))?$/.exec(url.pathname);
+      const capture = /^\/api\/v1\/labs\/([^/]+)(\/capture\/(interfaces|stream))?$/.exec(url.pathname);
       if (captureEnabled && capture) {
         const labName = decodeURIComponent(capture[1]);
         if (labName !== FAKE_CAPTURE_LAB) {
@@ -208,30 +179,6 @@ export async function startFakeClabApiServer(
             disconnected.signal
           );
           response.end();
-          return;
-        }
-        if (action === "tickets" && request.method === "POST") {
-          const body = JSON.parse((await readBody(request)).toString("utf8")) as {
-            targets?: { node?: string; interface?: string }[];
-            duration?: string;
-          };
-          const targets = (body.targets ?? []).map((target) => `${target.node ?? ""}:${target.interface ?? ""}`);
-          const durationMs = parseDuration(body.duration);
-          const problem = checkTargets(targets) ?? (durationMs === "invalid" ? "invalid duration" : undefined);
-          if (problem) {
-            sendJson(response, 400, { error: problem });
-            return;
-          }
-          const ticket = randomBytes(32).toString("base64url");
-          const expiresAt = Date.now() + TICKET_TTL_MS;
-          tickets.set(hashTicket(ticket), { targets, expiresAt, ...(typeof durationMs === "number" ? { durationMs } : {}) });
-          const container = JSON.stringify({ name: labName, type: "c9s-lab", "network-interfaces": targets });
-          const host = request.headers.host ?? "127.0.0.1";
-          sendJson(response, 201, {
-            ticket,
-            packetflixUri: `packetflix:ws://${host}/api/v1/capture/packetflix/${ticket}?container=${encodeURIComponent(container)}`,
-            expiresAt: new Date(expiresAt).toISOString()
-          });
           return;
         }
       }
@@ -332,28 +279,6 @@ export async function startFakeClabApiServer(
     });
   });
 
-  // The Packetflix websocket: no bearer token, the single-use ticket is the credential.
-  const sockets = new WebSocketServer({ noServer: true });
-  server.on("upgrade", (request, socket, head) => {
-    const pathname = new URL(request.url ?? "/", "http://fake").pathname;
-    const ticket = captureEnabled ? ticketFromPath(pathname, true) : undefined;
-    if (!ticket) {
-      socket.end("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{\"error\":\"unknown, used or expired ticket\"}");
-      return;
-    }
-    sockets.handleUpgrade(request, socket, head, (ws) => {
-      const closed = new AbortController();
-      ws.on("close", () => closed.abort());
-      void writeCapture(
-        { targets: ticket.targets, ...(ticket.durationMs !== undefined ? { durationMs: ticket.durationMs } : {}) },
-        (data) => ws.send(data, { binary: true }),
-        closed.signal
-      ).then(() => {
-        if (!closed.signal.aborted) ws.close(1000, "capture ended");
-      });
-    });
-  });
-
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
   return {
@@ -361,8 +286,6 @@ export async function startFakeClabApiServer(
     token,
     async close() {
       for (const watcher of watchers) watcher.abort();
-      for (const client of sockets.clients) client.terminate();
-      sockets.close();
       server.closeAllConnections();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await local.dispose();

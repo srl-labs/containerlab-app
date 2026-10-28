@@ -50,11 +50,6 @@ export interface LabBackendCapabilities {
   sharedWorkspace: boolean;
   /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
   tailscaleStatus: boolean;
-  /**
-   * Single-use `packetflix:` links to the lab host's own capture stream
-   * (clab-api-server). Needs the `captureStream` feature.
-   */
-  captureTickets: boolean;
 }
 
 /**
@@ -141,7 +136,6 @@ export function effectiveSupport(
     edgesharkManagement: capabilities.edgesharkManagement && features.edgeshark,
     // The Wireshark VNC containers read their capture from Edgeshark, or from the host's capture stream.
     wiresharkVnc: capabilities.wiresharkVnc && (features.edgeshark || features.captureVnc),
-    captureTickets: capabilities.captureTickets && features.captureStream,
     healthMetrics: capabilities.healthMetrics && features.hostMetrics,
     tailscaleStatus: capabilities.tailscaleStatus && features.tailscale
   };
@@ -195,7 +189,6 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "healthMetrics",
   "sharedWorkspace",
   "tailscaleStatus",
-  "captureTickets",
   "validate",
   "graphMermaid",
   "graphDot",

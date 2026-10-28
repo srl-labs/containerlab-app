@@ -121,13 +121,12 @@ The capture dialog asks where the capture goes and when it stops:
 | App | Lab host | Choices, default first |
 | --- | --- | --- |
 | Desktop | cluster or clab-api-server | Wireshark on this computer, Wireshark VNC (clab-api-server with Docker), download `.pcapng` |
-| Web | clab-api-server | Wireshark VNC (when the server runs Docker), `packetflix:` link, download `.pcapng` |
+| Web | clab-api-server | Wireshark VNC (when the server runs Docker), download `.pcapng` |
 | VS Code | cluster on this machine | Wireshark in a terminal: `containerlab -r c9s capture … -w - \| wireshark -k -i -`; or save `.pcapng` |
-| VS Code | clab-api-server | `packetflix:` link, Wireshark VNC, save `.pcapng` |
+| VS Code | clab-api-server | Wireshark on this computer, Wireshark VNC, save `.pcapng` |
 
-- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app finds Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods.
-- A **`packetflix:` link** works once and only for a minute; it needs cshargextcap, like Edgeshark links.
-- **Wireshark VNC** runs on the clab-api-server host. Its link lasts as long as the window, so restarting the capture inside that Wireshark works; closing the window ends it. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it.
+- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app and VS Code find Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods.
+- **Wireshark VNC** runs on the clab-api-server host. The capture lasts as long as the window; closing the window ends it. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it.
 - A **download** needs a stop time. The file grows in your downloads while the capture runs.
 
 ## Images

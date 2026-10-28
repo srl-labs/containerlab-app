@@ -16,15 +16,13 @@ export interface LabCaptureInterface {
 
 /**
  * How a capture stream reaches the user: Wireshark in a browser window (VNC on
- * the lab host), Wireshark on this machine, a `packetflix:` link for the
- * user's own Wireshark with cshargextcap, or a `.pcapng` file.
+ * the lab host), Wireshark on this machine, or a `.pcapng` file.
  */
-export type CaptureDelivery = "wireshark-vnc" | "local-wireshark" | "packetflix" | "download";
+export type CaptureDelivery = "wireshark-vnc" | "local-wireshark" | "download";
 
 export const CAPTURE_DELIVERY_LABELS: Record<CaptureDelivery, string> = {
   "wireshark-vnc": "Wireshark in a window",
   "local-wireshark": "Wireshark on this computer",
-  packetflix: "Wireshark (packetflix link)",
   download: "Download .pcapng"
 };
 

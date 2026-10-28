@@ -56,8 +56,7 @@ function harnessLabHost(): LabHostInfo {
     wiresharkVnc: true,
     healthMetrics: true,
     sharedWorkspace: false,
-    tailscaleStatus: false,
-    captureTickets: false
+    tailscaleStatus: false
   };
   const features = {
     validate: true,

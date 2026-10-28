@@ -2790,7 +2790,7 @@ test("/api/runtime/host reports the runtime and what a c9s clab-api-server offer
   }
 });
 
-test("/api/runtime/host offers capture streams, links and VNC of a c9s clab-api-server that lists them", async (t) => {
+test("/api/runtime/host offers capture streams and VNC of a c9s clab-api-server that lists them", async (t) => {
   const context = await createTestContext(t);
   mockLoginAndTopology(context);
   context.fetchMock.on("GET", "http://api.example.test/health", () =>
@@ -2803,7 +2803,7 @@ test("/api/runtime/host offers capture streams, links and VNC of a c9s clab-api-
     headers: { cookie },
   });
   const host = response.json<{ support: Record<string, boolean> }>();
-  for (const flag of ["captureStream", "captureTickets", "captureVnc", "wiresharkVnc"]) {
+  for (const flag of ["captureStream", "captureVnc", "wiresharkVnc"]) {
     assert.equal(host.support[flag], true, flag);
   }
   assert.equal(host.support.edgeshark, false);

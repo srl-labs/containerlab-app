@@ -164,14 +164,6 @@ export interface CaptureStreamOptions {
   onGap?: (gap: CaptureGap) => void;
 }
 
-/** A single-use link to the lab host's capture stream, for cshargextcap or Wireshark VNC. */
-export interface CaptureTicket {
-  /** `packetflix:ws[s]://…`; Wireshark opens it through cshargextcap. */
-  packetflixUri: string;
-  /** RFC 3339; the link must be opened before then. */
-  expiresAt: string;
-}
-
 export interface CapturePacketflixURI {
   containerName: string;
   interfaceNames: string[];

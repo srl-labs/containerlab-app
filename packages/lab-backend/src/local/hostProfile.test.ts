@@ -57,10 +57,9 @@ test("a c9s host turns the container runtime features off and reports its cluste
   }
   assert.equal(support.c9sDeployOptions, true);
   assert.equal(support.manifestExport, true);
-  // `inspect interfaces -r c9s` and `capture` work on a cluster; links to a capture need a server.
+  // `inspect interfaces -r c9s` and `capture` work on a cluster.
   assert.equal(support.interfaceInspect, true);
   assert.equal(support.captureStream, true);
-  assert.equal(support.captureTickets, false);
   assert.equal(support.captureVnc, false);
   assert.equal(support.validate, true);
   assert.equal(backend.scope, "local-c9s:kind-c9s-app:/tmp/clab-c9s");

@@ -69,8 +69,7 @@ const TEST_LAB_HOST: LabHostInfo = {
     wiresharkVnc: true,
     healthMetrics: true,
     sharedWorkspace: true,
-    tailscaleStatus: true,
-    captureTickets: false
+    tailscaleStatus: true
   }
 };
 

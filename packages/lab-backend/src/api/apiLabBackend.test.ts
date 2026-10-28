@@ -336,7 +336,7 @@ function block(type: number, bodyBytes: number): Uint8Array {
 
 const LAB_RECORDS = [{ name: "demo-n1", nodeName: "n1", lab_name: "demo" }, { name: "demo-n2", lab_name: "demo" }];
 
-/** A c9s clab-api-server with capture: `/health`, the lab's records, tickets and a capture stream. */
+/** A c9s clab-api-server with capture: `/health`, the lab's records and a capture stream. */
 function mockCaptureServer(
   t: test.TestContext,
   stream: (signal: AbortSignal | undefined) => ReadableStream<Uint8Array>
@@ -354,18 +354,6 @@ function mockCaptureServer(
         Response.json([{ node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }])
       );
     }
-    if (url.pathname === "/api/v1/labs/demo/capture/tickets") {
-      return Promise.resolve(
-        Response.json(
-          {
-            ticket: "t0k3n",
-            packetflixUri: "packetflix:wss://api.test/api/v1/capture/packetflix/t0k3n?container=%7B%7D",
-            expiresAt: "2026-10-27T14:01:00Z"
-          },
-          { status: 201 }
-        )
-      );
-    }
     if (url.pathname === "/api/v1/labs/demo/capture/stream") {
       return Promise.resolve(new Response(stream(init.signal), { headers: { "content-type": "application/x-pcapng" } }));
     }
@@ -381,7 +369,6 @@ test("a c9s server with capture-stream captures; wireshark-vnc there means VNC f
   assert.equal(features.captureStream, true);
   assert.equal(features.captureVnc, true);
   assert.equal(features.edgeshark, false);
-  assert.equal(backend.capabilities.captureTickets, true);
 
   t.mock.restoreAll();
   mockServer(t, { features: ["wireshark-vnc"], health: { runtime: "docker" } });
@@ -390,38 +377,12 @@ test("a c9s server with capture-stream captures; wireshark-vnc there means VNC f
   await assert.rejects(docker.captureInterfaces("demo"), (error: Error & { status?: number }) => error.status === 501);
 });
 
-test("capture interfaces and tickets go to the lab's capture routes with node targets", async (t) => {
-  const requests = mockCaptureServer(t, () => new ReadableStream());
-  const backend = new ApiLabBackend({ baseUrl: "https://capture-tickets.test", token: "token" });
+test("capture interfaces come from the lab's capture route", async (t) => {
+  mockCaptureServer(t, () => new ReadableStream());
+  const backend = new ApiLabBackend({ baseUrl: "https://capture-interfaces.test", token: "token" });
   assert.deepEqual(await backend.captureInterfaces("demo"), [
     { node: "n1", interface: "eth1", peerNode: "n2", peerInterface: "eth1" }
   ]);
-  const ticket = await backend.createCaptureTicket(
-    "demo",
-    [
-      { containerName: "demo-n1", interfaceName: "eth1" },
-      { containerName: "demo-n2", interfaceName: "eth1" }
-    ],
-    { duration: "30s" }
-  );
-  // The link is opaque: it goes to cshargextcap as the server made it.
-  assert.deepEqual(ticket, {
-    packetflixUri: "packetflix:wss://api.test/api/v1/capture/packetflix/t0k3n?container=%7B%7D",
-    expiresAt: "2026-10-27T14:01:00Z"
-  });
-  const post = requests.find((request) => request.url.pathname.endsWith("/capture/tickets"));
-  assert.equal(post?.method, "POST");
-  assert.deepEqual(post?.body, {
-    targets: [
-      { node: "n1", interface: "eth1" },
-      { node: "n2", interface: "eth1" }
-    ],
-    duration: "30s"
-  });
-  await assert.rejects(
-    backend.createCaptureTicket("demo", [{ containerName: "demo-n1", interfaceName: "eth1" }], { duration: "soon" }),
-    (error: Error & { status?: number }) => error.status === 400
-  );
 });
 
 test("a capture stream yields whole pcapng blocks and an abort ends it cleanly", async (t) => {

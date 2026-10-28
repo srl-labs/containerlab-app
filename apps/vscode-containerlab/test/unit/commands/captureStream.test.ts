@@ -30,26 +30,33 @@ import {
 describe("stream capture deliveries", () => {
   it("pipes into Wireshark in a terminal on a cluster on this machine, or saves", () => {
     expect(
-      streamCaptureDeliveries(true, { captureTickets: false, wiresharkVnc: false }, undefined)
+      streamCaptureDeliveries(true, { wiresharkVnc: false }, undefined)
     ).to.deep.equal(["terminal", "save"]);
   });
 
-  it("opens a packetflix link first on a clab-api-server, then VNC, then saves", () => {
-    expect(
-      streamCaptureDeliveries(false, { captureTickets: true, wiresharkVnc: true }, undefined)
-    ).to.deep.equal(["packetflix", "vnc", "save"]);
-    expect(
-      streamCaptureDeliveries(false, { captureTickets: true, wiresharkVnc: true }, "Edgeshark")
-    ).to.deep.equal(["packetflix", "vnc", "save"]);
+  it("opens Wireshark on this machine first on a clab-api-server, then VNC, then saves", () => {
+    expect(streamCaptureDeliveries(false, { wiresharkVnc: true }, undefined)).to.deep.equal([
+      "wireshark",
+      "vnc",
+      "save"
+    ]);
+    expect(streamCaptureDeliveries(false, { wiresharkVnc: true }, "Edgeshark")).to.deep.equal([
+      "wireshark",
+      "vnc",
+      "save"
+    ]);
   });
 
   it("respects a capture.preferredAction of Wireshark VNC, and offers only what the host has", () => {
-    expect(
-      streamCaptureDeliveries(false, { captureTickets: true, wiresharkVnc: true }, "Wireshark VNC")
-    ).to.deep.equal(["vnc", "packetflix", "save"]);
-    expect(
-      streamCaptureDeliveries(false, { captureTickets: true, wiresharkVnc: false }, "Wireshark VNC")
-    ).to.deep.equal(["packetflix", "save"]);
+    expect(streamCaptureDeliveries(false, { wiresharkVnc: true }, "Wireshark VNC")).to.deep.equal([
+      "vnc",
+      "wireshark",
+      "save"
+    ]);
+    expect(streamCaptureDeliveries(false, { wiresharkVnc: false }, "Wireshark VNC")).to.deep.equal([
+      "wireshark",
+      "save"
+    ]);
   });
 
   it("pipes the capture's stdout into wireshark -k -i -", () => {

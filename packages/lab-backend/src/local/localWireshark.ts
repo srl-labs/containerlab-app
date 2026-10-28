@@ -1,7 +1,7 @@
 /**
  * Wireshark on this machine, reading a capture stream on stdin
- * (`wireshark -k -i -`). The desktop app's way to show captures: it cannot
- * open `packetflix:` links.
+ * (`wireshark -k -i -`): how the desktop app and VS Code show a capture
+ * stream live.
  */
 import { spawn, type ChildProcessByStdio } from "node:child_process";
 import fs from "node:fs/promises";
