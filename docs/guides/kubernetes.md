@@ -1,5 +1,5 @@
 ---
-description: Run labs as pods on a Kubernetes cluster with clabernetes, from your own machine or through a lab host.
+description: Run labs as pods on a Kubernetes cluster with clabernetes, from your own machine or through a lab server.
 ---
 
 # Labs on Kubernetes
@@ -11,7 +11,9 @@ With [clabernetes](https://containerlab.dev/manual/clabernetes/) (c9s), a lab ru
 
 Only containerlab talks to clabernetes. Who runs containerlab, and with which Kubernetes identity, depends on how you reach the cluster:
 
-| | Cluster on this machine | Through a lab host |
+Every app adds both the same way: **Add lab host** asks *Where should labs run?* and offers **This computer** (Docker or Podman), **Kubernetes cluster** (your kubeconfig; containerlab runs on this computer), and **Lab server** (`clab-api-server`, which may run Docker or Kubernetes). A choice that cannot work in the app stays in the list, greyed, with the reason and what to do instead.
+
+| | Kubernetes cluster | Lab server that runs Kubernetes |
 | --- | --- | --- |
 | containerlab runs | on your machine, started by the app | inside `clab-api-server` |
 | Kubernetes identity | whoever your kubeconfig signs in as | `clab:<user>`, the signed-in Linux user, impersonated by the server |
@@ -52,80 +54,95 @@ The context is the lab host's `kubeContext`, else the kubeconfig's current conte
 
 Pick a fixed namespace when you may only use one. **Destroy** with cleanup deletes a lab's own `c9s-<lab>` namespace; a fixed namespace stays.
 
-### What the app checks
+### Add a cluster
 
-Before it offers a cluster, the app checks it and shows each problem on the lab host, with what to do:
-
-1. containerlab is 0.83.0 or later. Development builds pass.
-2. The kubeconfig loads and has the context: *The kubeconfig has no context "X". Pick one of: …*
-3. The cluster answers: *The cluster of context "X" does not answer: …*
-4. clabernetes is installed: *clabernetes is not installed in the cluster of context "X" … Install clabernetes 0.11.0 or later.*
-5. clabernetes is 0.11.0 or later, when your account may read its manager. containerlab checks the version again before it changes the cluster.
-6. Your account may create Topologies, `pods/exec` and `pods/portforward`, read `pods/log`, and, with a namespace per lab, create namespaces: *Your account cannot create pods/exec in namespace X. Bind clabernetes-lab-editor in X.*
-
-Fix what is listed and check again: **Check again** on the lab host under **Settings** > **Lab hosts** in the desktop app, or **Containerlab: Check Labs on This Machine** in VS Code.
-
-### VS Code
+In VS Code and the desktop app:
 
 <div class="steps" markdown>
 
-1. **Run Containerlab: Add Lab Host…** from the command palette and choose **Kubernetes cluster (c9s)**.
+1. **Open Add lab host.** In VS Code: **Containerlab: Add Lab Host…** from the command palette, or **Settings** > **Lab hosts**. In the desktop app: **Settings** > **Lab hosts**, or **Add Lab Host** in the explorer. Choose **Kubernetes cluster**.
 
-2. **Pick the context.** The list shows the contexts of your default kubeconfig (`KUBECONFIG`, else `~/.kube/config`). For a context in another file, choose **Choose kubeconfig file…**, select the file, and pick one of its contexts; the lab host keeps the file.
+2. **Pick the kubeconfig and context.** The form starts with your default kubeconfig (`KUBECONFIG`, else `~/.kube/config`) and its current context. **Choose file…** picks another file; the lab host keeps its path. The **Context** list shows each context with its cluster and marks the current one.
 
-3. **Enter a namespace**, or leave it empty for a namespace per lab.
+3. **Choose the namespaces**: one per lab (`c9s-<lab>`), or one fixed namespace for every lab.
+
+4. **Set the deploy defaults** every deploy on this cluster uses unless **Deploy with options** changes them:
+    - **Port exposure**: *None* (reach nodes through the app: terminals and port forwards), *ClusterIP* (a Service per node inside the cluster), *Headless* (DNS names per node), or *LoadBalancer* (an address per node from outside the cluster). Empty keeps clabernetes' default.
+    - **Persistent node storage**: on, nodes keep their saved configuration and files when their pod is replaced and across **Destroy** without cleanup; off, every restart starts them from their startup config.
+    - **Image pull secret**: a Secret in the lab's namespace for private registries.
+
+5. **Check connection**, then **Add cluster**.
 
 </div>
 
-The cluster shows in the explorer next to **Local**, with **Kubernetes** and its context in the description. When you deploy a topology from this machine, VS Code asks where: this machine or a cluster. It remembers the answer for that topology.
+The cluster shows next to **This computer** (**Local** in VS Code), with *Kubernetes · `<context>` · one namespace per lab* (or the namespace) under its name. **Edit** opens the same form; **Remove** forgets the cluster and leaves its labs running.
 
-The cluster is kept in the `containerlab.connections` setting, next to the clab-api-server lab hosts:
+When you deploy a topology from this computer in VS Code and clusters exist, VS Code asks where: this computer or a cluster. It remembers the answer for that topology.
+
+### Check connection
+
+**Check connection**, in the form and on every lab host on this computer, runs these checks and lists each with ✓, ✗, or – (not run, because an earlier one failed), what it found, and how to fix a failure:
+
+1. containerlab is 0.83.0 or later. Development builds pass.
+2. The kubeconfig loads and has the context.
+3. The cluster answers.
+4. clabernetes 0.11.0 or later is installed. When your account may not read its manager, the check passes and containerlab checks the version before it changes the cluster.
+5. Your account may create Topologies, `pods/exec` and `pods/portforward`, read `pods/log`, and, with a namespace per lab, create namespaces.
+
+A missing right comes with the command a cluster admin runs, for the user the cluster sees you as, for example:
+
+```bash
+kubectl create rolebinding clab-lab-editor-alice --clusterrole clabernetes-lab-editor --user alice -n team-a
+```
+
+A lab host whose checks fail stays in the list with the failed checks, so you can fix or edit it.
+
+### Where it is kept
+
+VS Code keeps a cluster in the `containerlab.connections` setting, next to the lab servers:
 
 ```json
 "containerlab.connections": [
   {
-    "kind": "local",
-    "runtime": "c9s",
+    "kind": "kubernetes",
     "kubeContext": "lab-prod",
     "kubeconfig": "~/.kube/lab-prod.yaml",
     "namespace": "team-a",
+    "exposeType": "None",
+    "imagePullSecret": "regcred",
     "label": "Lab prod"
   }
 ]
 ```
 
-Only `kind`, `runtime` and `kubeContext` are required; the others are described in the [settings reference](../reference/vscode-settings.md#lab-hosts). `containerlab.binaryPath` names the containerlab to run.
+Only `kind` and `kubeContext` are required; see the [settings reference](../reference/vscode-settings.md#lab-hosts). Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. `containerlab.runtime` (`docker` or `podman`) is the runtime of this computer only; `containerlab.binaryPath` names the containerlab to run.
 
-### Desktop app
-
-List clusters under `clusters` in `~/.config/Containerlab/local-backend.json`:
+The desktop app keeps clusters under `clusters` in `~/.config/Containerlab/local-backend.json` and writes the file itself when you add, edit, or remove one:
 
 ```json
 {
   "clusters": [
     { "kubeContext": "lab-prod", "kubeconfig": "~/.kube/lab-prod.yaml", "namespace": "team-a", "label": "Lab prod" },
-    { "kubeContext": "kind-dev" }
+    { "kubeContext": "kind-dev", "persistence": false }
   ]
 }
 ```
 
-Each entry takes `kubeContext` and optionally `kubeconfig`, `namespace`, `exposeType`, `persistence`, and `label`. Restart the app after a change. A cluster that passes the checks shows up next to **This computer**; one that does not is listed under **Settings** > **Lab hosts** with what is missing.
+To make the app's own lab host a cluster instead of this computer's Docker, start it with `CONTAINERLAB_DESKTOP_RUNTIME=c9s` and `CONTAINERLAB_DESKTOP_KUBE_CONTEXT`; see the [desktop settings](../reference/app-settings.md#desktop-app). That host is set by the environment and cannot be edited in the app.
 
-To make the app's own lab host a cluster instead of this computer's Docker, start it with `CONTAINERLAB_DESKTOP_RUNTIME=c9s` and `CONTAINERLAB_DESKTOP_KUBE_CONTEXT`; see the [desktop settings](../reference/app-settings.md#desktop-app).
+### Web app
 
-### Web app, for one user
+The browser never receives or uploads a kubeconfig, so **Add lab host** in the web app shows **Kubernetes cluster** greyed, with how the server adds one. The web app normally reaches clusters [through a lab server](#run-labs-through-a-lab-server). For a personal setup its server can run labs itself: `WEB_LOCAL_LABS=true` with `WEB_LOCAL_RUNTIME=c9s`, and `WEB_LOCAL_KUBECONFIG` and `WEB_LOCAL_KUBE_CONTEXT` for the cluster (`WEB_LOCAL_KUBE_NAMESPACE`, `WEB_LOCAL_C9S_EXPOSE_TYPE`, `WEB_LOCAL_C9S_PERSISTENCE` and `WEB_LOCAL_C9S_IMAGE_PULL_SECRET` set the defaults). The cluster then shows in the list with its details and **Check connection**. In a pod without a kubeconfig, it uses the pod's ServiceAccount. Everyone who can open the app works with that one identity, without signing in. See the [web settings](../reference/app-settings.md#web-app).
 
-The web app normally reaches clusters [through a lab host](#run-labs-through-a-lab-host). For a personal setup it can run labs itself: `WEB_LOCAL_LABS=true` with `WEB_LOCAL_RUNTIME=c9s`, and `WEB_LOCAL_KUBECONFIG` and `WEB_LOCAL_KUBE_CONTEXT` for the cluster. In a pod without a kubeconfig, it uses the pod's ServiceAccount. Everyone who can open the app then works with that one identity, without signing in. See the [web settings](../reference/app-settings.md#web-app).
+## Run labs through a lab server
 
-## Run labs through a lab host
-
-With `CLAB_RUNTIME=c9s`, `clab-api-server` runs the labs of everyone who signs in on one cluster. Users sign in with their Linux account as on any [lab host](../install/sign-in.md) and never get a kubeconfig; the browser never talks to Kubernetes.
+With `CLAB_RUNTIME=c9s`, `clab-api-server` runs the labs of everyone who signs in on one cluster. Add it with **Add lab host** > **Lab server** and sign in with your Linux account as on any [lab server](../install/sign-in.md); you never get a kubeconfig, and the browser never talks to Kubernetes.
 
 - The server holds one kubeconfig, for its own ServiceAccount, which may only set up lab namespaces and act as users.
 - On a user's first deploy of a lab, the server creates the namespace `c9s-<user>-<lab>` and binds `clabernetes-lab-editor` in it to `clab:<user>`.
 - Every lab action then runs as `clab:<user>` in the group `clab:users`; members of `SUPERUSER_GROUP` also get `clab:admins`. A user can do through the server what `kubectl` would let that user do.
 
-The lab host shows **Kubernetes** in its description. A clab-api-server that does not report its runtime is older than c9s support and shows *Update it to 0.10.0 or later*.
+Once you are signed in, the lab host shows what the server runs: *Lab server · Kubernetes · cluster `<cluster>` · namespaces `c9s-<user>-{lab}`*, and the server's deploy settings, *Set by the lab server: ports exposed: None · node storage kept · no image pull secret*. These are the server's policy: **Deploy with options** shows them read-only instead of fields the server would ignore. A server without the `lab-host-info` feature shows only *Kubernetes*; one that does not report its runtime at all is older than c9s support and shows *Update it to 0.10.0 or later*.
 
 To set up the server, its ServiceAccount, and the roles, see [Running on Kubernetes](https://github.com/srl-labs/clab-api-server/blob/main/docs/kubernetes.md) in the clab-api-server repository.
 
@@ -137,16 +154,16 @@ containerlab runs on Linux only, so a cluster on this machine needs Linux too, e
 - **Windows**: VS Code connected to WSL, or the Linux desktop app inside WSL.
 - **macOS**: a Linux VM.
 
-Elsewhere, the apps do not offer a cluster on this machine: VS Code's **Add Lab Host** adds clab-api-servers only and leaves configured clusters out, and the desktop app skips the `clusters` of `local-backend.json`. Both say *containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM.* (VS Code in its output channel, the desktop app in its log). Reach the cluster [through a lab host](#run-labs-through-a-lab-host) instead.
+Elsewhere, **Add lab host** shows **This computer** and **Kubernetes cluster** greyed with *containerlab runs on Linux only*, and how to go on: use a lab server, or open the window in WSL. Clusters already configured are left out (VS Code says so in its output channel, the desktop app in its log). Reach the cluster [through a lab server](#run-labs-through-a-lab-server) instead.
 
 ## What changes on a cluster
 
 - Nodes are pods. The node panel shows each node's namespace, pod, container, and exposed ports, and a `kubectl exec` command to copy; it names the lab host's context and kubeconfig file.
-- **Run with options** offers the c9s deploy options: **Namespace**, **Expose ports**, **No persistent volumes**, and **Image pull secret**.
+- **Deploy with options** offers the c9s deploy options: **Namespace**, **Expose ports**, **No persistent volumes**, **Image pull secret**, and **Without a Topology resource**. Each shows the cluster's default; a plain deploy uses the defaults. On a lab server they show read-only, as set by the server.
 - What a cluster has no use for is hidden: image management, link impairments, VM snapshots, pausing nodes, fcli, Edgeshark, SSHX and GoTTY sharing, and host stats. Node stats need `metrics.k8s.io` in the cluster.
 - Packet captures come from clabernetes as one pcapng stream; see [Labs on a Kubernetes cluster](labs.md#labs-on-a-kubernetes-cluster) for where they open in each app.
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run a lab](labs.md)
-[:lucide-arrow-right: Set up a lab host](../install/lab-host.md)
+[:lucide-arrow-right: Set up a lab server](../install/lab-host.md)
 </div>

@@ -19,7 +19,7 @@ description: Settings, users, and REST API of clab-api-server.
 | `JWT_EXPIRATION` | `24h` | Longest session, for example `24h` or `7d`. |
 | `API_USER_GROUP` | `clab_api` | Linux group allowed to sign in. |
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group that sees and manages every lab. |
-| `CLAB_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` to run every user's labs on a [Kubernetes cluster](../guides/kubernetes.md#run-labs-through-a-lab-host). |
+| `CLAB_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` to run every user's labs on a [Kubernetes cluster](../guides/kubernetes.md#run-labs-through-a-lab-server). |
 | `CLAB_SHARED_LABS_ROOT` | unset | Directory for [shared labs](../guides/shared-labs.md). Unset turns them off. |
 | `CORS_ALLOWED_ORIGINS` | unset | Browser origins allowed to call the API directly. The web and desktop apps do not need this. |
 | `TERMINAL_IDLE_TIMEOUT` | `30m` | How long a browser terminal keeps running after its last window disconnected. Only terminals that asked to be resumable wait; older apps and other API clients end theirs when they disconnect. |
