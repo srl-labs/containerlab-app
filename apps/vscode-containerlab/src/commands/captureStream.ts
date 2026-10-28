@@ -86,8 +86,7 @@ export function streamCaptureDeliveries(
   // On a cluster here, a terminal pipes containerlab capture into Wireshark; else the app does.
   const wireshark: StreamCaptureDelivery = onThisMachine ? "terminal" : "wireshark";
   if (!support.wiresharkVnc) return [wireshark, "save"];
-  const vncFirst =
-    preferred === "Wireshark VNC" || (!localWireshark && preferred !== "Edgeshark");
+  const vncFirst = preferred === "Wireshark VNC" || (!localWireshark && preferred !== "Edgeshark");
   return vncFirst ? ["vnc", wireshark, "save"] : [wireshark, "vnc", "save"];
 }
 
