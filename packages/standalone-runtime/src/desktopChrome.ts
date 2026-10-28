@@ -17,6 +17,8 @@ const FONT_FAMILY =
 interface DesktopBridge {
   platform: string;
   setTitleBarOverlay(options: { color: string; symbolColor: string; height: number }): void;
+  /** The native file dialog for a kubeconfig; the path the user picked, if any. */
+  chooseKubeconfigFile?(): Promise<string | undefined>;
 }
 
 declare global {

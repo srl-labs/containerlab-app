@@ -150,8 +150,15 @@ test("local-backend.json lists clusters next to this computer", () => {
   const config = resolveLocalBackendConfig("linux", {}, file);
   assert.equal(config.enabled, true);
   assert.deepEqual(config.clusters, [
-    { label: "Lab prod", options: { runtime: "c9s", c9s: { kubeContext: "lab-prod", namespace: "labs", persistence: false } } },
-    { options: { runtime: "c9s", c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP" } } }
+    {
+      label: "Lab prod",
+      options: { runtime: "c9s", c9s: { kubeContext: "lab-prod", namespace: "labs", persistence: false } },
+      settings: { kubeContext: "lab-prod", label: "Lab prod", namespace: "labs", persistence: false }
+    },
+    {
+      options: { runtime: "c9s", c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP" } },
+      settings: { kubeContext: "kind-dev", exposeType: "ClusterIP" }
+    }
   ]);
   assert.deepEqual(config.problems, [
     "clusters[2] names no kubeContext.",

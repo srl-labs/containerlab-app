@@ -56,6 +56,16 @@ function createWebLocalEndpoints() {
   });
 }
 
+/**
+ * Why "Add lab host" offers no Kubernetes cluster here: the browser never
+ * handles a kubeconfig, so only the server's configuration adds one.
+ */
+const WEB_CLUSTERS_UNAVAILABLE =
+  "In the web app, a Kubernetes cluster comes from the server's configuration (WEB_LOCAL_LABS=true, WEB_LOCAL_RUNTIME=c9s, WEB_LOCAL_KUBECONFIG, WEB_LOCAL_KUBE_CONTEXT); the browser never handles a kubeconfig. Or add a lab server that runs Kubernetes.";
+
+const WEB_LOCAL_UNAVAILABLE =
+  "The web app runs labs on its own server only when its administrator sets WEB_LOCAL_LABS=true with Docker or Podman. Add a lab server instead.";
+
 async function start(): Promise<void> {
   const localEndpoints = createWebLocalEndpoints();
   const app = await createContainerlabAppServer({
@@ -64,6 +74,8 @@ async function start(): Promise<void> {
     https: WEB_TLS.https,
     isDev: IS_DEV,
     localEndpoints,
+    clustersUnavailable: WEB_CLUSTERS_UNAVAILABLE,
+    localUnavailable: WEB_LOCAL_UNAVAILABLE,
     logger: true,
     staticClientRoot: resolveStaticClientRoot(),
     viteDevUrl: VITE_DEV_URL

@@ -83,7 +83,27 @@ interface AuthRouteOptions {
 interface AuthLocalEndpoint {
   url: string;
   autoConnect?: boolean;
+  /** A cluster the user added in the app: listed even while its checks fail, to fix or remove it. */
+  cluster?: unknown;
   status(): Promise<LocalEndpointStatus>;
+}
+
+/**
+ * What a local lab host's own check says for its list entry: its runtime and
+ * c9s settings, and its checks when it cannot run labs.
+ */
+function localStatusInfo(status: LocalEndpointStatus): EndpointRuntimeInfo {
+  return {
+    ...(status.runtime ? { runtime: status.runtime } : {}),
+    ...(status.kubeContext ? { kubeContext: status.kubeContext } : {}),
+    ...(status.kubeconfig ? { kubeconfig: status.kubeconfig } : {}),
+    ...(status.namespace ? { namespace: status.namespace } : {}),
+    ...(status.exposeType ? { exposeType: status.exposeType } : {}),
+    ...(status.persistence !== undefined ? { persistence: status.persistence } : {}),
+    ...(status.imagePullSecret ? { imagePullSecret: status.imagePullSecret } : {}),
+    ...(status.editable === true ? { editable: true } : {}),
+    ...(!status.available && status.checks ? { checks: status.checks } : {})
+  };
 }
 
 function defaultEndpointLabel(url: string, requestedLabel: string | undefined): string {
@@ -122,6 +142,11 @@ async function runtimeInfo(backend: LabBackend): Promise<EndpointRuntimeInfo> {
       runtime: profile.runtime,
       ...(profile.kubeContext ? { kubeContext: profile.kubeContext } : {}),
       ...(profile.namespace ? { namespace: profile.namespace } : {}),
+      ...(profile.cluster ? { cluster: profile.cluster } : {}),
+      ...(profile.namespacePattern ? { namespacePattern: profile.namespacePattern } : {}),
+      ...(profile.exposeType ? { exposeType: profile.exposeType } : {}),
+      ...(profile.persistence !== undefined ? { persistence: profile.persistence } : {}),
+      ...(profile.imagePullSecret ? { imagePullSecret: profile.imagePullSecret } : {}),
       ...(profile.updateRequired ? { updateRequired: profile.updateRequired } : {})
     };
   } catch {
@@ -131,11 +156,19 @@ async function runtimeInfo(backend: LabBackend): Promise<EndpointRuntimeInfo> {
 
 async function validateEndpoint(
   entry: EndpointEntry,
-  backendFor: AuthRouteOptions["backendFor"]
+  options: Pick<AuthRouteOptions, "backendFor" | "localEndpoints">
 ): Promise<EndpointPublicInfo> {
   if (entry.kind === "api" && !entry.token) return toPublicInfo(entry, "session_expired");
-  const backend = backendFor(entry);
+  const backend = options.backendFor(entry);
   if (!backend) return toPublicInfo(entry, "offline");
+  const local = entry.kind === "local" ? options.localEndpoints.find((candidate) => candidate.url === entry.url) : undefined;
+  if (local) {
+    // A local host answers without a sign-in; its own check tells whether it can run labs.
+    const status = await local.status().catch(() => undefined);
+    if (status) {
+      return { ...toPublicInfo(entry, status.available ? "connected" : "offline"), ...localStatusInfo(status) };
+    }
+  }
   try {
     await backend.version({ timeoutMs: 3000 });
     return { ...toPublicInfo(entry, "connected"), ...(await runtimeInfo(backend)) };
@@ -155,10 +188,10 @@ async function validateEndpoint(
 
 async function listEndpointInfos(
   session: EndpointSession,
-  backendFor: AuthRouteOptions["backendFor"]
+  options: Pick<AuthRouteOptions, "backendFor" | "localEndpoints">
 ): Promise<EndpointPublicInfo[]> {
   return await Promise.all(
-    Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry, backendFor))
+    Array.from(session.endpoints.values(), (entry) => validateEndpoint(entry, options))
   );
 }
 
@@ -309,7 +342,7 @@ async function addLocalEndpoint(
     );
   }
   const status = await local.status();
-  if (!status.available) {
+  if (!status.available && local.cluster === undefined) {
     throw Object.assign(new Error(status.problems.join(" ") || "containerlab cannot run here."), {
       status: 409
     });
@@ -350,8 +383,11 @@ export async function connectLocalEndpoint(
       !(existing && Array.from(existing.endpoints.values()).some((entry) => entry.kind === "local" && entry.url === local.url))
   );
   if (candidates.length === 0) return;
+  // A cluster the user added stays listed while its checks fail, so it can be fixed there.
   const ready = (
-    await Promise.all(candidates.map(async (local) => ((await local.status()).available ? local : undefined)))
+    await Promise.all(
+      candidates.map(async (local) => (local.cluster !== undefined || (await local.status()).available ? local : undefined))
+    )
   ).filter((local): local is AuthLocalEndpoint => local !== undefined);
   if (ready.length === 0) return;
   const session = existing ?? options.ensureSession(request, reply);
@@ -373,7 +409,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       if (request.body.kind === "local") {
         const session = options.ensureSession(request, reply);
         const entry = await addLocalEndpoint(request.body, session, options);
-        return reply.send(await validateEndpoint(entry, options.backendFor));
+        return reply.send(await validateEndpoint(entry, options));
       }
       const entry = await authenticateEndpoint(request.body, options.defaultApiUrl);
       const session = options.ensureSession(request, reply);
@@ -415,7 +451,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ endpoints: [] });
     }
 
-    return reply.send({ endpoints: await listEndpointInfos(session, options.backendFor) });
+    return reply.send({ endpoints: await listEndpointInfos(session, options) });
   });
 
   app.get<{ Params: { id: string } }>("/auth/endpoints/:id/metrics", async (request, reply) => {
@@ -470,14 +506,14 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       const local = options.resolveSession(request, reply)?.endpoints.get(endpointId);
       if (local?.kind === "local") {
         // Nothing to sign in to: report whether containerlab answers again.
-        return reply.send(await validateEndpoint(local, options.backendFor));
+        return reply.send(await validateEndpoint(local, options));
       }
       if (request.body.kind === "local") {
         // A saved local endpoint whose server session is gone comes back under its id.
         try {
           const session = options.ensureSession(request, reply);
           const entry = await addLocalEndpoint(request.body, session, options, endpointId);
-          return reply.send(await validateEndpoint(entry, options.backendFor));
+          return reply.send(await validateEndpoint(entry, options));
         } catch (error) {
           const message = error instanceof Error ? error.message : "Reconnect failed";
           return reply.status(authErrorStatusCode(error)).send({ error: message });
@@ -555,7 +591,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
               : existing.sessionDuration
         };
         options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-        return reply.send(await validateEndpoint(updated, options.backendFor));
+        return reply.send(await validateEndpoint(updated, options));
       }
 
       const nextUrl =
@@ -590,7 +626,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
 
       options.disposeEndpointSessions(endpointId);
       options.endpointSessions.upsertEndpoint(session.sessionId, updated);
-      return reply.send(await validateEndpoint(updated, options.backendFor));
+      return reply.send(await validateEndpoint(updated, options));
     }
   );
 
@@ -601,7 +637,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       return reply.send({ authenticated: false, endpoints: [] });
     }
 
-    const endpoints = await listEndpointInfos(session, options.backendFor);
+    const endpoints = await listEndpointInfos(session, options);
     return reply.send({
       authenticated: endpoints.some((endpoint) => endpoint.connected),
       endpoints

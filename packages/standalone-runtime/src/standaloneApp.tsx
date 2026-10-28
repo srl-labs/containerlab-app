@@ -11,8 +11,20 @@ import {
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
-import type { LocalEndpointOffer } from "@containerlab/clab-ui/workspace/types";
+import type {
+  ClusterHostsSupport,
+  LabHostSetupProps,
+  LocalEndpointOffer
+} from "@containerlab/clab-ui/workspace/types";
+import {
+  checkClusterSettings,
+  checkLocalLabHost,
+  deleteCluster,
+  kubeconfigContexts,
+  saveCluster
+} from "./standaloneLabHostSetup";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
+import { useAuthStore } from "./stores/authStore";
 import { openWorkspaceFileInTab, workspaceHost } from "./workspaceHost";
 import { getStandaloneBackend, runtimeFetch } from "./backend";
 import { createNodeStatsFeed } from "./standaloneNodeStats";
@@ -1689,10 +1701,12 @@ function StandaloneApp() {
     logout,
     reconnectEndpoint,
     refreshConfig,
+    refreshEndpoints,
     removeEndpoint,
     updateEndpoint,
     setEndpointSessionDuration,
   } = useAuth();
+  const labHostConfig = useAuthStore((state) => state.labHostSetup);
   const [appearance, setAppearance] = useState<StandaloneAppearance>(readStandaloneAppearance);
   const [theme, setTheme] = useState<"light" | "dark">(() => currentTheme);
   const [tabOrientation, setTabOrientation] = useState<TabOrientation>(
@@ -1860,20 +1874,27 @@ function StandaloneApp() {
     [addEndpoint, refreshConfig],
   );
 
+  // "This computer" is the app server's local host with Docker or Podman; a cluster is not this computer.
+  const thisComputer = useMemo(
+    () =>
+      localEndpoints.find((status) => status.runtime !== "c9s") ??
+      (localEndpoint && localEndpoint.runtime !== "c9s" ? localEndpoint : undefined),
+    [localEndpoint, localEndpoints],
+  );
   const localEndpointOffer = useMemo<LocalEndpointOffer | undefined>(
     () =>
-      localEndpoint
+      thisComputer
         ? {
-            ...(localEndpoint.url ? { url: localEndpoint.url } : {}),
-            available: localEndpoint.available,
-            problems: localEndpoint.problems,
-            ...(localEndpoint.containerlabVersion
-              ? { containerlabVersion: localEndpoint.containerlabVersion }
+            ...(thisComputer.url ? { url: thisComputer.url } : {}),
+            available: thisComputer.available,
+            problems: thisComputer.problems,
+            ...(thisComputer.containerlabVersion
+              ? { containerlabVersion: thisComputer.containerlabVersion }
               : {}),
-            label: localEndpoint.label,
-            ...(localEndpoint.setupUrl ? { setupUrl: localEndpoint.setupUrl } : {}),
+            label: thisComputer.label,
+            ...(thisComputer.setupUrl ? { setupUrl: thisComputer.setupUrl } : {}),
             onAdd: async () => {
-              await addLocalEndpoint();
+              await addLocalEndpoint(thisComputer.url);
               await refreshConfig().catch(() => {});
               scheduleExplorerSnapshot(0);
             },
@@ -1882,7 +1903,7 @@ function StandaloneApp() {
             }
           }
         : undefined,
-    [addLocalEndpoint, localEndpoint, refreshConfig],
+    [addLocalEndpoint, thisComputer, refreshConfig],
   );
 
   // Images live in a container runtime: a cluster lab host has none to manage.
@@ -1892,10 +1913,10 @@ function StandaloneApp() {
     [endpointList, labHosts],
   );
 
-  // Kubernetes clusters and other local lab hosts after the first.
+  // Kubernetes clusters the app server runs labs on.
   const extraLocalEndpointOffers = useMemo<LocalEndpointOffer[]>(
     () =>
-      localEndpoints.slice(1).map((status) => ({
+      localEndpoints.filter((status) => status.url !== thisComputer?.url).map((status) => ({
         ...(status.url ? { url: status.url } : {}),
         available: status.available,
         problems: status.problems,
@@ -1912,7 +1933,7 @@ function StandaloneApp() {
           await refreshConfig(true);
         }
       })),
-    [addLocalEndpoint, localEndpoints, refreshConfig],
+    [addLocalEndpoint, localEndpoints, refreshConfig, thisComputer],
   );
 
   const handleExportEndpoints = useCallback(() => {
@@ -1942,12 +1963,58 @@ function StandaloneApp() {
 
   const handleRemoveEndpoint = useCallback(
     async (endpointId: string) => {
+      const endpoint = endpointList.find((entry) => entry.id === endpointId);
+      // A cluster the user added in the app is forgotten there too.
+      if (endpoint?.kind === "local" && endpoint.editable === true) {
+        await deleteCluster(endpoint.url);
+      }
       await closeEndpointTabsAndActivateNext(endpointId);
       await removeEndpoint(endpointId);
+      await refreshConfig().catch(() => {});
       scheduleExplorerSnapshot(0);
     },
-    [removeEndpoint],
+    [endpointList, refreshConfig, removeEndpoint],
   );
+
+  // Kubernetes clusters the app server manages (the desktop app), checks, and why a kind is not offered.
+  const labHostSetup = useMemo<LabHostSetupProps>(() => {
+    const clusterHosts: ClusterHostsSupport | undefined = labHostConfig.clusterHosts
+      ? {
+          ...(labHostConfig.clusterHosts.defaultKubeconfig
+            ? { defaultKubeconfig: labHostConfig.clusterHosts.defaultKubeconfig }
+            : {}),
+          listContexts: kubeconfigContexts,
+          ...(window.containerlabDesktop?.chooseKubeconfigFile
+            ? { chooseKubeconfig: () => window.containerlabDesktop?.chooseKubeconfigFile?.() ?? Promise.resolve(undefined) }
+            : {}),
+          check: checkClusterSettings,
+          save: async (settings, endpointId) => {
+            const previous = endpointId ? endpointList.find((entry) => entry.id === endpointId) : undefined;
+            const url = await saveCluster(settings, previous?.url);
+            if (previous && previous.url !== url) {
+              await closeEndpointTabsAndActivateNext(previous.id);
+              await removeEndpoint(previous.id);
+            }
+            await addLocalEndpoint(url);
+            await refreshConfig().catch(() => {});
+            await refreshEndpoints().catch(() => {});
+            scheduleExplorerSnapshot(0);
+          },
+        }
+      : undefined;
+    return {
+      onCheckEndpoint: async (endpointId) => {
+        const endpoint = endpointList.find((entry) => entry.id === endpointId);
+        if (!endpoint) return [];
+        const checks = await checkLocalLabHost(endpoint.url);
+        await refreshEndpoints().catch(() => {});
+        return checks;
+      },
+      ...(clusterHosts ? { clusterHosts } : {}),
+      ...(labHostConfig.clustersUnavailable ? { clustersUnavailable: labHostConfig.clustersUnavailable } : {}),
+      ...(labHostConfig.localUnavailable ? { thisComputerUnavailable: labHostConfig.localUnavailable } : {}),
+    };
+  }, [addLocalEndpoint, endpointList, labHostConfig, refreshConfig, refreshEndpoints, removeEndpoint]);
 
   const showAppearance = useCallback((next: StandaloneAppearance) => {
     currentTheme = applyStandaloneAppearance(next);
@@ -2154,6 +2221,7 @@ function StandaloneApp() {
             terminalPreferences={terminalPreferences}
             localEndpoint={localEndpointOffer}
             extraLocalEndpoints={extraLocalEndpointOffers}
+            labHostSetup={labHostSetup}
           />
       </>
     </>
@@ -2210,6 +2278,7 @@ function SettingsOverlayMounted(props: {
   terminalPreferences: TerminalPreferences;
   localEndpoint?: LocalEndpointOffer;
   extraLocalEndpoints?: readonly LocalEndpointOffer[];
+  labHostSetup?: LabHostSetupProps;
 }) {
   return (
     <MuiThemeProvider>
@@ -2237,6 +2306,7 @@ function SettingsOverlayMounted(props: {
           terminalPreferences={props.terminalPreferences}
           localEndpoint={props.localEndpoint}
           extraLocalEndpoints={props.extraLocalEndpoints}
+          labHostSetup={props.labHostSetup}
         />
       </Suspense>
     </MuiThemeProvider>

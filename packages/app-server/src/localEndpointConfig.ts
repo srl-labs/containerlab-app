@@ -8,7 +8,7 @@ import {
   type C9sHostOptions,
   type LocalLabBackendOptions
 } from "@srl-labs/containerlab-lab-backend/local";
-import type { LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
+import type { ClusterHostSettings, LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
 
 import type { LocalEndpointOptions } from "./app.ts";
 import { c9sLocalEndpointUrl, LOCAL_ENDPOINT_URL } from "./endpointSessionStore.ts";
@@ -16,9 +16,11 @@ import { createLocalUiStore } from "./localUiStore.ts";
 
 /** A Kubernetes cluster with clabernetes as another local lab host (`clusters` in the settings file). */
 export interface LocalClusterConfig {
-  /** How the app names the cluster; "Cluster <context> (c9s)" when unset. */
+  /** How the app names the cluster; the context when unset. */
   label?: string;
   options: LocalLabBackendOptions;
+  /** The entry as the settings file has it, for the app's cluster form. */
+  settings: ClusterHostSettings;
 }
 
 /** Whether an app runs labs on its own machine, and with which backend options. */
@@ -91,7 +93,54 @@ function readC9sOptions(raw: Record<string, unknown>, where: string): C9sHostOpt
     c9s.exposeType = exposeType as C9sHostOptions["exposeType"];
   }
   if (raw.persistence === false) c9s.persistence = false;
+  const imagePullSecret = stringValue(raw.imagePullSecret);
+  if (imagePullSecret) c9s.imagePullSecret = imagePullSecret;
   return c9s;
+}
+
+/**
+ * A cluster lab host's settings from the settings file or the app's cluster
+ * form, as the user wrote them (a `~` kubeconfig stays), or a problem.
+ */
+export function readClusterSettings(raw: unknown, where = "The cluster"): ClusterHostSettings | string {
+  if (!isObject(raw)) return `${where} is not an object.`;
+  const c9s = readC9sOptions(raw, where);
+  if (typeof c9s === "string") return c9s;
+  if (!c9s.kubeContext) return `${where} names no kubeContext.`;
+  const label = stringValue(raw.label);
+  const kubeconfig = stringValue(raw.kubeconfig);
+  return {
+    kubeContext: c9s.kubeContext,
+    ...(label ? { label } : {}),
+    ...(kubeconfig ? { kubeconfig } : {}),
+    ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
+    ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
+    ...(c9s.persistence === false ? { persistence: false } : {}),
+    ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {})
+  };
+}
+
+/** The backend options of a cluster lab host. */
+export function clusterBackendOptions(settings: ClusterHostSettings): LocalLabBackendOptions {
+  return {
+    runtime: "c9s",
+    c9s: {
+      kubeContext: settings.kubeContext,
+      ...(settings.kubeconfig ? { kubeconfig: expandKubeconfigPath(settings.kubeconfig) } : {}),
+      ...(settings.namespace ? { namespace: settings.namespace } : {}),
+      ...(settings.exposeType ? { exposeType: settings.exposeType } : {}),
+      ...(settings.persistence === false ? { persistence: false } : {}),
+      ...(settings.imagePullSecret ? { imagePullSecret: settings.imagePullSecret } : {})
+    }
+  };
+}
+
+/**
+ * The settings file with `clusters` replaced, keeping everything else; for
+ * the clusters the user adds, edits and removes in the app.
+ */
+export function writeLocalBackendClusters(fileContent: string | undefined, clusters: readonly ClusterHostSettings[]): string {
+  return `${JSON.stringify({ ...readSettingsFile(fileContent), clusters }, null, 2)}\n`;
 }
 
 function readClusters(value: unknown, problems: string[]): LocalClusterConfig[] {
@@ -107,17 +156,16 @@ function readClusters(value: unknown, problems: string[]): LocalClusterConfig[] 
       problems.push(`${where} is not an object.`);
       return;
     }
-    const c9s = readC9sOptions(entry, where);
-    if (typeof c9s === "string") {
-      problems.push(c9s);
+    const settings = readClusterSettings(entry, where);
+    if (typeof settings === "string") {
+      problems.push(settings);
       return;
     }
-    if (!c9s.kubeContext) {
-      problems.push(`${where} names no kubeContext.`);
-      return;
-    }
-    const label = stringValue(entry.label);
-    clusters.push({ ...(label ? { label } : {}), options: { runtime: "c9s", c9s } });
+    clusters.push({
+      ...(settings.label ? { label: settings.label } : {}),
+      options: clusterBackendOptions(settings),
+      settings
+    });
   });
   return clusters;
 }
@@ -192,6 +240,8 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
       else problems.push(`${envPrefix}C9S_EXPOSE_TYPE "${exposeType}" is none of ClusterIP, Headless, LoadBalancer, None.`);
     }
     if (persistence !== undefined && !parseBooleanEnv(persistence, true)) c9s.persistence = false;
+    const imagePullSecret = stringValue(env[`${envPrefix}C9S_IMAGE_PULL_SECRET`]);
+    if (imagePullSecret) c9s.imagePullSecret = imagePullSecret;
     options.c9s = c9s;
   }
   const clusters = readClusters(file.clusters, problems);
@@ -214,15 +264,15 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
 }
 
 /** The `local://` address of a local lab host. */
-function localEndpointUrl(options: LocalLabBackendOptions): string {
+export function localEndpointUrl(options: LocalLabBackendOptions): string {
   return parseLabRuntime(options.runtime) === "c9s"
     ? c9sLocalEndpointUrl(options.c9s?.kubeContext, options.c9s?.kubeconfig)
     : LOCAL_ENDPOINT_URL;
 }
 
-/** How the apps name a cluster lab host, e.g. "Cluster lab-prod (c9s)". */
+/** How the apps name a cluster lab host without a label: its context, e.g. "kind-c9s-app". */
 function clusterLabel(options: LocalLabBackendOptions): string {
-  return `Cluster ${options.c9s?.kubeContext ?? "current context"} (c9s)`;
+  return options.c9s?.kubeContext ?? "Kubernetes cluster";
 }
 
 const STATUS_TTL_MS = 15_000;
@@ -241,6 +291,8 @@ export function createLocalEndpoint(input: {
   /** Docs page that explains how to set this machine up. */
   setupUrl?: string;
   autoConnect?: boolean;
+  /** A cluster the user manages in the app: its settings, for the edit form. */
+  cluster?: ClusterHostSettings;
 }): LocalEndpointOptions & { backend: LocalLabBackend; url: string } {
   const backend = new LocalLabBackend(input.options);
   const { runtime, c9s } = backend.options;
@@ -250,6 +302,7 @@ export function createLocalEndpoint(input: {
     backend,
     ui: createLocalUiStore({ workspaceRoot: backend.options.workspaceRoot }),
     autoConnect: input.autoConnect,
+    ...(input.cluster ? { cluster: input.cluster } : {}),
     status(request) {
       if (!cached || request?.fresh === true || Date.now() - cached.at > STATUS_TTL_MS) {
         cached = {
@@ -260,8 +313,14 @@ export function createLocalEndpoint(input: {
             label: input.label,
             username: environment.username,
             runtime,
+            checks: environment.checks,
             ...(c9s?.kubeContext ? { kubeContext: c9s.kubeContext } : {}),
             ...(c9s?.namespace ? { namespace: c9s.namespace } : {}),
+            ...(c9s?.exposeType ? { exposeType: c9s.exposeType } : {}),
+            ...(c9s ? { persistence: c9s.persistence !== false } : {}),
+            ...(c9s?.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+            // Only a cluster the user set up in the app shows its kubeconfig path, to edit it.
+            ...(input.cluster ? { editable: true, ...(input.cluster.kubeconfig ? { kubeconfig: input.cluster.kubeconfig } : {}) } : {}),
             ...(environment.containerlabVersion !== undefined
               ? { containerlabVersion: environment.containerlabVersion }
               : {}),
@@ -280,11 +339,17 @@ export function createLocalEndpoint(input: {
  */
 export function createLocalEndpoints(
   config: LocalBackendConfig,
-  input: { label: string; setupUrl?: string; autoConnect?: boolean }
+  input: {
+    label: string;
+    setupUrl?: string;
+    autoConnect?: boolean;
+    /** The clusters of the settings file are edited in the app (the desktop app). */
+    clustersEditable?: boolean;
+  }
 ): Array<LocalEndpointOptions & { backend: LocalLabBackend; url: string }> {
   const endpoints: Array<LocalEndpointOptions & { backend: LocalLabBackend; url: string }> = [];
   const urls = new Set<string>();
-  const add = (options: LocalLabBackendOptions, label: string) => {
+  const add = (options: LocalLabBackendOptions, label: string, cluster?: ClusterHostSettings) => {
     const url = localEndpointUrl(options);
     // One lab host per cluster context.
     if (urls.has(url)) return;
@@ -295,7 +360,8 @@ export function createLocalEndpoints(
         url,
         label,
         ...(input.setupUrl !== undefined ? { setupUrl: input.setupUrl } : {}),
-        ...(input.autoConnect !== undefined ? { autoConnect: input.autoConnect } : {})
+        ...(input.autoConnect !== undefined ? { autoConnect: input.autoConnect } : {}),
+        ...(cluster && input.clustersEditable === true ? { cluster } : {})
       })
     );
   };
@@ -303,7 +369,7 @@ export function createLocalEndpoints(
     add(config.options, parseLabRuntime(config.options.runtime) === "c9s" ? clusterLabel(config.options) : input.label);
   }
   for (const cluster of config.clusters) {
-    add({ ...config.options, ...cluster.options }, cluster.label ?? clusterLabel(cluster.options));
+    add({ ...config.options, ...cluster.options }, cluster.label ?? clusterLabel(cluster.options), cluster.settings);
   }
   return endpoints;
 }

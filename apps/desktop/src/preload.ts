@@ -6,5 +6,9 @@ contextBridge.exposeInMainWorld("containerlabDesktop", {
   platform: process.platform,
   setTitleBarOverlay(options: { color: string; symbolColor: string; height: number }): void {
     ipcRenderer.send("containerlab:set-titlebar-overlay", options);
+  },
+  /** The path of a kubeconfig file the user picks, for a Kubernetes cluster lab host. */
+  chooseKubeconfigFile(): Promise<string | undefined> {
+    return ipcRenderer.invoke("containerlab:choose-kubeconfig") as Promise<string | undefined>;
   }
 });

@@ -5,10 +5,14 @@ export {
   type LocalEndpointOptions
 } from "./app.ts";
 export { createLocalUiStore, type LocalUiStoreOptions } from "./localUiStore.ts";
+export type { ClusterHostsOptions } from "./labHostRoutes.ts";
 export {
+  clusterBackendOptions,
   createLocalEndpoint,
   createLocalEndpoints,
+  localEndpointUrl,
   resolveLocalBackendConfig,
+  writeLocalBackendClusters,
   type LocalBackendConfig,
   type LocalClusterConfig,
   type LocalBackendConfigSource
