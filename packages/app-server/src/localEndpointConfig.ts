@@ -43,7 +43,7 @@ export interface LocalBackendConfigSource {
   /**
    * Prefix of the variables that override the file: `<prefix>CLAB_BINARY`,
    * `<prefix>RUNTIME`, `<prefix>DOCKER_SOCKET`, `<prefix>WORKSPACE`,
-   * `<prefix>SUDO`, and for `RUNTIME=c9s` `<prefix>KUBE_CONTEXT`,
+   * `<prefix>WIRESHARK_IMAGE`, `<prefix>SUDO`, and for `RUNTIME=c9s` `<prefix>KUBE_CONTEXT`,
    * `<prefix>KUBECONFIG`, `<prefix>KUBE_NAMESPACE`, `<prefix>C9S_EXPOSE_TYPE`
    * and `<prefix>C9S_PERSISTENCE`.
    */
@@ -206,7 +206,8 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
     ["binaryPath", env[`${envPrefix}CLAB_BINARY`]],
     ["runtime", env[`${envPrefix}RUNTIME`]],
     ["dockerSocketPath", env[`${envPrefix}DOCKER_SOCKET`]],
-    ["workspaceRoot", env[`${envPrefix}WORKSPACE`]]
+    ["workspaceRoot", env[`${envPrefix}WORKSPACE`]],
+    ["wiresharkImage", env[`${envPrefix}WIRESHARK_IMAGE`]]
   ];
   for (const [key, value] of fromEnv) {
     const trimmed = value?.trim() ?? "";

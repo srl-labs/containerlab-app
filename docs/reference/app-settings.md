@@ -41,6 +41,7 @@ These run labs on the web app's own host, without `clab-api-server`; see [Run la
 | `WEB_LOCAL_C9S_IMAGE_PULL_SECRET` | unset | With `c9s`: the image pull secret of every lab's pods. |
 | `WEB_LOCAL_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket. |
 | `WEB_LOCAL_WORKSPACE` | `~/.clab` of the container user | Folder for the topologies. Mount it at the same path as on the host. |
+| `WEB_LOCAL_WIRESHARK_IMAGE` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image of the Wireshark VNC containers. With `c9s` it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`). |
 | `WEB_LOCAL_SUDO` | `false` | Run containerlab with `sudo -n`. |
 
 ## Desktop app
@@ -64,6 +65,7 @@ Set these in the environment that starts the app.
 | `CONTAINERLAB_DESKTOP_C9S_IMAGE_PULL_SECRET` | unset | With `c9s`: the image pull secret of every lab's pods. |
 | `CONTAINERLAB_DESKTOP_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket for **This computer**. |
 | `CONTAINERLAB_DESKTOP_WORKSPACE` | `~/.clab` | Folder for the topologies of **This computer**. |
+| `CONTAINERLAB_DESKTOP_WIRESHARK_IMAGE` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image of the Wireshark VNC containers, also of the clusters. With `c9s` it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`). |
 | `CONTAINERLAB_DESKTOP_SUDO` | `false` | Run containerlab with `sudo -n`. Needs passwordless sudo. |
 
 The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer). Kubernetes clusters next to **This computer** are kept under `clusters` in that file; add, edit, and remove them under **Settings** > **Lab hosts**, and the app writes the file. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster). Like **This computer**, clusters need Linux.

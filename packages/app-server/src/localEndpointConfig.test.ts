@@ -65,10 +65,19 @@ test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => 
   const enabled = resolve({
     ...web,
     platform: "linux",
-    env: { WEB_LOCAL_LABS: "true", WEB_LOCAL_WORKSPACE: "/home/alice/.clab", WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab" }
+    env: {
+      WEB_LOCAL_LABS: "true",
+      WEB_LOCAL_WORKSPACE: "/home/alice/.clab",
+      WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab",
+      WEB_LOCAL_WIRESHARK_IMAGE: "ghcr.io/srl-labs/wireshark-vnc-docker:dev"
+    }
   });
   assert.equal(enabled.enabled, true);
-  assert.deepEqual(enabled.options, { binaryPath: "/usr/local/bin/containerlab", workspaceRoot: "/home/alice/.clab" });
+  assert.deepEqual(enabled.options, {
+    binaryPath: "/usr/local/bin/containerlab",
+    workspaceRoot: "/home/alice/.clab",
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:dev"
+  });
 });
 
 test("the desktop app's own host can be a cluster: CONTAINERLAB_DESKTOP_RUNTIME=c9s", () => {
