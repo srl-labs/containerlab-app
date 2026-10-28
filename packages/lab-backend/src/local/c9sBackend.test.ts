@@ -352,3 +352,14 @@ test("inspect interfaces on a c9s host asks by lab and node name", async (t) => 
   const call = (await host.calls()).find((entry) => entry.startsWith("inspect interfaces"));
   assert.equal(call, "inspect interfaces -r c9s --name demo -f json -n n1 | ns=team-a ctx=kind-c9s-app");
 });
+
+test("a c9s host has no images to manage and says why, without running a `c9s` command", async (t) => {
+  const host = await fakeC9sHost(t);
+  const lab = backend(host);
+  const refused = (error: Error & { status?: number }) =>
+    error.status === 501 && /not supported on a Kubernetes lab host/.test(error.message) && !/c9s was not found/.test(error.message);
+  await assert.rejects(lab.listImages(), refused);
+  await assert.rejects(lab.pullImage("alpine:3"), refused);
+  await assert.rejects(lab.removeImage("alpine:3"), refused);
+  assert.equal((await lab.features()).imageManagement, false);
+});

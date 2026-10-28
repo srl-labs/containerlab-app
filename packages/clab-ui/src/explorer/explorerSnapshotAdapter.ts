@@ -59,7 +59,9 @@ export interface ExplorerSnapshotOptions {
   hiddenCommandIds?: readonly string[];
   /**
    * Commands hidden on the items of one lab host, by endpoint id: what the
-   * host's runtime cannot do (`hiddenExplorerCommandsForSupport`).
+   * host's runtime cannot do (`hiddenExplorerCommandsForSupport`). Actions of
+   * no host (section toolbars) hide what every host listed here hides; list a
+   * host whose support is not known yet with no commands.
    */
   hiddenCommandIdsByEndpoint?: ReadonlyMap<string, readonly string[]>;
   sectionOrder?: readonly ExplorerSectionId[];
@@ -571,14 +573,29 @@ function hostOfItem(item: ExplorerTreeItemLike | undefined): string | undefined 
   return item?.endpointId ?? item?.connectionId;
 }
 
+/**
+ * Commands no lab host can run: hidden on every host in
+ * `hiddenCommandIdsByEndpoint`. Section actions belong to no host, so they
+ * hide these, e.g. Manage Images when every host is a cluster.
+ */
+function commandsHiddenOnEveryHost(options: ExplorerSnapshotOptions): string[] {
+  const byHost = [...(options.hiddenCommandIdsByEndpoint?.values() ?? [])];
+  const [first, ...rest] = byHost;
+  if (!first) return [];
+  return first.filter((commandId) => rest.every((hidden) => hidden.includes(commandId)));
+}
+
 function filterHiddenActions(
   actions: ExplorerAction[],
   options: ExplorerSnapshotOptions,
   item?: ExplorerTreeItemLike
 ): ExplorerAction[] {
+  const host = hostOfItem(item);
   const hiddenCommandIds = [
     ...(options.hiddenCommandIds ?? []),
-    ...(hostOfItem(item) !== undefined ? (options.hiddenCommandIdsByEndpoint?.get(hostOfItem(item) ?? "") ?? []) : [])
+    ...(host !== undefined
+      ? (options.hiddenCommandIdsByEndpoint?.get(host) ?? [])
+      : commandsHiddenOnEveryHost(options))
   ];
   if (hiddenCommandIds.length === 0) {
     return actions;

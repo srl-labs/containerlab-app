@@ -21,7 +21,7 @@ import type {
 import { LabBackendError } from "../contract/errors.ts";
 import type { CaptureNodeTarget } from "../capture.ts";
 import { wrapWebSocket } from "../webSocket.ts";
-import type { ResolvedLocalOptions } from "./options.ts";
+import { containerRuntimeCli, type ResolvedLocalOptions } from "./options.ts";
 import { PacketflixTicketServer, type OpenGrantedCapture, type PacketflixListenAddress } from "./packetflixServer.ts";
 import { runChecked, runCommand } from "./process.ts";
 
@@ -282,7 +282,7 @@ export class LocalCapture {
     const file = await this.composeFile();
     try {
       await runChecked(
-        this.options.runtime,
+        containerRuntimeCli(this.options, "Edgeshark needs Docker or Podman; a Kubernetes lab host has none."),
         ["compose", "-f", file, ...(action === "up" ? ["up", "-d"] : ["down"])],
         { env: { ...this.options.env, DOCKER_DEFAULT_PLATFORM: "" }, timeoutMs: 10 * 60_000 }
       );
@@ -343,7 +343,7 @@ export class LocalCapture {
     const inode = await hostNetworkNamespaceInode();
     const sessions: CaptureWiresharkVncSession[] = [];
     for (const group of groupCaptureTargets(targets)) {
-      const session = await this.startVncContainer(this.options.runtime, {
+      const session = await this.startVncContainer(containerRuntimeCli(this.options), {
         labName,
         containerName: group.containerName,
         interfaceNames: group.interfaceNames,
@@ -353,7 +353,7 @@ export class LocalCapture {
         ...(labDirectory ? { labDirectory } : {})
       });
       if (network) {
-        await runCommand(this.options.runtime, ["network", "connect", network, session.containerId]);
+        await runCommand(containerRuntimeCli(this.options), ["network", "connect", network, session.containerId]);
       }
       sessions.push(publicVncSession(session));
     }

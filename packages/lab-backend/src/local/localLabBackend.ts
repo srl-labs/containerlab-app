@@ -70,7 +70,12 @@ import {
   type LocalLabRef
 } from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
-import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
+import {
+  containerRuntimeCli,
+  resolveLocalOptions,
+  type LocalLabBackendOptions,
+  type ResolvedLocalOptions
+} from "./options.ts";
 import {
   containerlabCommand,
   lastContainerlabError,
@@ -548,7 +553,7 @@ export class LocalLabBackend implements LabBackend {
       if (this.options.runtime === "c9s") {
         throw new LabBackendError("Nodes on a c9s lab host cannot be paused.", 501);
       }
-      await runChecked(this.options.runtime, [action, container.name], { env: this.options.env });
+      await runChecked(containerRuntimeCli(this.options), [action, container.name], { env: this.options.env });
       return;
     }
     const topology = await this.requireRunningTopology(labName);

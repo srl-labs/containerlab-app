@@ -91,7 +91,8 @@ export class ContainerlabExplorerViewProvider
         const hidden = new Map<string, string[]>();
         for (const connection of getConnections()?.list() ?? []) {
           const info = cachedLabHostInfo(connection);
-          if (info) hidden.set(connection.id, hiddenExplorerCommandsForSupport(info.support));
+          // A host not known yet hides nothing, so section actions stay until it is.
+          hidden.set(connection.id, info ? hiddenExplorerCommandsForSupport(info.support) : []);
         }
         this.options.hiddenCommandIdsByEndpoint = hidden;
         return this.options;

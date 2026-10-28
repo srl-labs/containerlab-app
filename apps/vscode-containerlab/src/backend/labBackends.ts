@@ -285,8 +285,13 @@ export function backendOf(target: unknown): LabBackend {
  * the one; otherwise the user picks, signed-out lab hosts included (they
  * are asked to sign in).
  */
-export async function pickConnection(title: string): Promise<LabConnection | undefined> {
-  const all = connections?.list() ?? [LOCAL_CONNECTION];
+export async function pickConnection(
+  title: string,
+  offered: (connection: LabConnection) => boolean = () => true
+): Promise<LabConnection | undefined> {
+  const listed = connections?.list() ?? [LOCAL_CONNECTION];
+  // Offer the hosts that can; with none, the first, which says why it cannot.
+  const all = listed.filter(offered).length > 0 ? listed.filter(offered) : listed.slice(0, 1);
   if (all.length <= 1) return all[0] ?? LOCAL_CONNECTION;
   const picked = await vscode.window.showQuickPick(
     all.map((connection) => ({
@@ -427,7 +432,7 @@ async function resolveRemoteFile(labPath: string, labName?: string): Promise<Res
  * given with it (a node of that host's section), else where it was opened or
  * deployed last; a cluster's own lab on the cluster that reports it.
  */
-function hostOfLabPath(labPath: string, connectionId: string | undefined): LabConnection {
+export function hostOfLabPath(labPath: string, connectionId?: string): LabConnection {
   const given = connectionById(connectionId) ?? LOCAL_CONNECTION;
   if (given.kind !== "local" || isClusterConnection(given)) return given;
   if (KUBERNETES_LAB_PATH.test(labPath)) return labHostOfTopology(labPath);

@@ -196,6 +196,21 @@ export function containerRuntimeFeatures(
   };
 }
 
+/**
+ * Why a Kubernetes lab host has no image management. Hosts show it instead of
+ * the image manager, and lab hosts answer image requests (501) with it.
+ */
+export const KUBERNETES_IMAGE_MANAGEMENT_MESSAGE =
+  "Image management is not supported on a Kubernetes lab host: the cluster's nodes pull the images themselves. " +
+  "For a private registry, set an image pull secret.";
+
+/** Why a lab host offers no image management, for hosts that tell the user. */
+export function imageManagementUnavailableMessage(profile: LabHostProfile | undefined): string {
+  return profile?.runtime === "c9s"
+    ? KUBERNETES_IMAGE_MANAGEMENT_MESSAGE
+    : "This lab host does not offer image management.";
+}
+
 /** The lab host of a topology or explorer item, as hosts hand it to the UI. */
 export interface LabHostInfo {
   profile: LabHostProfile;

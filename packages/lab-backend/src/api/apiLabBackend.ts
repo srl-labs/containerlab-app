@@ -2,6 +2,7 @@ import WebSocket, { type RawData } from "ws";
 import {
   hasLabNameGitTokens,
   isC9sExposeType,
+  KUBERNETES_IMAGE_MANAGEMENT_MESSAGE,
   restoresSnapshots,
   type LabExecRequest,
   type LabOperationSupport,
@@ -836,15 +837,25 @@ export class ApiLabBackend implements LabBackend {
     );
   }
 
-  listImages() {
+  /** A clab-api-server that runs labs on a cluster has no images to manage; say why. */
+  private async requireImageManagement(): Promise<void> {
+    if (!(await this.features()).imageManagement) {
+      throw new LabBackendError(KUBERNETES_IMAGE_MANAGEMENT_MESSAGE, 501);
+    }
+  }
+
+  async listImages() {
+    await this.requireImageManagement();
     return this.client.listRuntimeImages(this.token);
   }
 
-  pullImage(image: string) {
+  async pullImage(image: string) {
+    await this.requireImageManagement();
     return this.client.pullRuntimeImage(this.token, image);
   }
 
-  removeImage(reference: string, force = false) {
+  async removeImage(reference: string, force = false) {
+    await this.requireImageManagement();
     return this.client.removeRuntimeImage(this.token, reference, force);
   }
 

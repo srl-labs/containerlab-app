@@ -392,3 +392,27 @@ test("buildExplorerSnapshot offers validate, text graph exports and the Clos gen
     assert.ok(labCommands.includes(commandId), commandId);
   }
 });
+
+test("section actions hide what no lab host can do, and stay while one can", async () => {
+  const providers = {
+    runningProvider: provider([]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+  const toolbar = async (byHost: Array<[string, string[]]>) => {
+    const { snapshot } = await buildExplorerSnapshot(providers, "", {
+      hideNonOwnedLabs: false,
+      isLocalCaptureAllowed: true,
+      hiddenCommandIdsByEndpoint: new Map(byHost)
+    });
+    const running = snapshot.sections.find((section) => section.id === "runningLabs");
+    return running?.toolbarActions.map((action) => action.commandId) ?? [];
+  };
+  const cluster: [string, string[]] = ["cluster", ["containerlab.images.manage"]];
+
+  assert.ok(!(await toolbar([cluster])).includes("containerlab.images.manage"));
+  assert.ok((await toolbar([cluster, ["docker", []]])).includes("containerlab.images.manage"));
+  // A host whose support is not known yet hides nothing.
+  assert.ok((await toolbar([cluster, ["pending", []]])).includes("containerlab.images.manage"));
+  assert.ok((await toolbar([])).includes("containerlab.images.manage"));
+});

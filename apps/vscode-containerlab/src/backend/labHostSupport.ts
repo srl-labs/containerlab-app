@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { imageManagementUnavailableMessage } from "@containerlab/clab-ui/host";
 import {
   describeLabHost,
   type LabHostInfo,
@@ -63,6 +64,12 @@ export async function ensureHostSupports(
 ): Promise<boolean> {
   const info = await loadLabHostInfo(connection);
   if (!info || info.support[flag]) return true;
+  if (flag === "imageManagement") {
+    void vscode.window.showWarningMessage(
+      `${connection.label}: ${imageManagementUnavailableMessage(info.profile)}`
+    );
+    return false;
+  }
   const runtime = info.profile.runtime === "c9s" ? "Kubernetes (c9s)" : info.profile.runtime;
   void vscode.window.showWarningMessage(
     `${action} is not available on ${connection.label}, which runs labs on ${runtime}.`

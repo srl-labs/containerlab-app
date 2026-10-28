@@ -157,7 +157,10 @@ import {
 } from "./streamCapture";
 import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
-import type { LabFileRequest } from "@containerlab/clab-ui/host";
+import {
+  imageManagementUnavailableMessage,
+  type LabFileRequest,
+} from "@containerlab/clab-ui/host";
 import {
   controlNodesLifecycle,
   createStandaloneLabOperations,
@@ -1912,6 +1915,16 @@ function StandaloneApp() {
     () => endpointList.filter((endpoint) => labHosts.get(endpoint.id)?.support.imageManagement !== false),
     [endpointList, labHosts],
   );
+  // Without a host that has images, say why instead of asking the server's default host.
+  const imagesUnavailable = useMemo(
+    () =>
+      imageEndpoints.length > 0 || endpointList.length === 0
+        ? undefined
+        : imageManagementUnavailableMessage(
+            endpointList.map((endpoint) => labHosts.get(endpoint.id)?.profile).find(Boolean),
+          ),
+    [imageEndpoints, endpointList, labHosts],
+  );
 
   // Kubernetes clusters the app server runs labs on.
   const extraLocalEndpointOffers = useMemo<LocalEndpointOffer[]>(
@@ -2185,6 +2198,7 @@ function StandaloneApp() {
                   open={imageManagerOpen}
                   runtime={standaloneRuntime!}
                   onClose={closeImageManager}
+                  {...(imagesUnavailable ? { unavailableMessage: imagesUnavailable } : {})}
                   endpointOptions={imageEndpoints.map((endpoint) => ({
                     id: endpoint.id,
                     label: endpoint.label,

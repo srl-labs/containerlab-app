@@ -774,6 +774,8 @@ export function createStandaloneExplorerBridge(
       if (info) {
         hidden.set(endpoint.id, hiddenExplorerCommandsForSupport(info.support));
       } else {
+        // Not known yet: it hides nothing, so section actions stay until it is.
+        hidden.set(endpoint.id, []);
         void loadLabHostInfo(endpoint.id);
       }
     }

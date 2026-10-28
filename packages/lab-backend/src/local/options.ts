@@ -1,7 +1,12 @@
 import os from "node:os";
 import path from "node:path";
 
-import { isC9sExposeType, type C9sExposeType, type LabRuntimeKind } from "@containerlab/clab-ui/host";
+import {
+  isC9sExposeType,
+  KUBERNETES_IMAGE_MANAGEMENT_MESSAGE,
+  type C9sExposeType,
+  type LabRuntimeKind
+} from "@containerlab/clab-ui/host";
 
 import { LabBackendError } from "../contract/errors.ts";
 
@@ -179,6 +184,25 @@ export function resolveLocalOptions(options: LocalLabBackendOptions = {}): Resol
     env: c9s ? c9sEnvironment(env, c9s) : env,
     username: options.username?.trim() || defaultUsername()
   };
+}
+
+/**
+ * The container CLI of a Docker or Podman lab host. The lab runtime is what
+ * containerlab takes with `-r`; only Docker and Podman are also a command
+ * here. A c9s host runs labs on a cluster and has no container runtime to
+ * call, so this refuses (501) with `unsupported` instead of running `c9s`.
+ */
+export function containerRuntimeCli(
+  options: Pick<ResolvedLocalOptions, "runtime">,
+  unsupported = "This needs Docker or Podman; a Kubernetes lab host has no container runtime here."
+): "docker" | "podman" {
+  if (options.runtime === "docker" || options.runtime === "podman") return options.runtime;
+  throw new LabBackendError(unsupported, 501);
+}
+
+/** The container CLI for image management; a Kubernetes lab host refuses with why. */
+export function imageRuntimeCli(options: Pick<ResolvedLocalOptions, "runtime">): "docker" | "podman" {
+  return containerRuntimeCli(options, KUBERNETES_IMAGE_MANAGEMENT_MESSAGE);
 }
 
 function defaultPodmanSocket(): string {
