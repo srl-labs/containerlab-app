@@ -9,6 +9,7 @@ import {
   type LabSnapshotNodeResult
 } from "../../src/host/labOperations";
 import { parseNodeLocations } from "../../src/host/kubernetes";
+import type { LabSettings } from "../../src/host/lifecycleOptions";
 
 import {
   containerRuntimeFeatures,
@@ -57,7 +58,8 @@ function harnessLabHost(): LabHostInfo {
     healthMetrics: true,
     sharedWorkspace: false,
     tailscaleStatus: false,
-    captureTickets: false
+    captureTickets: false,
+    lifecycleTimeout: true
   };
   const features = {
     validate: true,
@@ -105,10 +107,20 @@ export function createFakeLabOperations(deps: {
     return readTopology(yaml);
   };
   const delay = () => new Promise((resolve) => setTimeout(resolve, 150));
+  let labSettings: LabSettings | undefined;
 
   return {
     async support() {
       return harnessSupport();
+    },
+
+    async labSettings() {
+      return labSettings;
+    },
+
+    async saveLabSettings(settings) {
+      deps.record({ command: "labOperation", operation: "saveLabSettings", settings });
+      labSettings = settings;
     },
 
     async hostInfo() {

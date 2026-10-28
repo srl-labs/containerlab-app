@@ -17,6 +17,7 @@ import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
 
 import type { LabConnection } from "../../../backend/connections";
 import { labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { lifecycleOptionsWithLabSettings } from "../../../backend/labSettings";
 import { topologyHostFor } from "../../../backend/topologyHost";
 import type { LifecycleCommandType } from "../../../commands/graph";
 
@@ -212,7 +213,16 @@ class LabLifecycleService {
     const host = await topologyHostFor(labPath, labNameForPath(labPath), "Apply");
     if (!host) throw new Error("Operation cancelled by user");
     const { backend, target } = await resolveLab(labPath, undefined, host.id);
-    const plan = await backend.runLifecycle("apply", target, { dryRun: true });
+    // The plan uses the lab's settings, e.g. its namespace, as the apply will.
+    const lifecycleOptions = lifecycleOptionsWithLabSettings("apply", undefined, {
+      connectionId: host.id,
+      labPath,
+      runtime: (await backend.hostProfile()).runtime
+    });
+    const plan = await backend.runLifecycle("apply", target, {
+      dryRun: true,
+      ...(lifecycleOptions ? { lifecycleOptions } : {})
+    });
     return plan.result;
   }
 

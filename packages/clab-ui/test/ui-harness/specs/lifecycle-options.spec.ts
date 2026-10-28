@@ -148,3 +148,48 @@ test.describe("Run with options", () => {
     expect(await lifecycleMessages(page)).toEqual([]);
   });
 });
+
+test.describe("Lab settings", () => {
+  test.beforeEach(async ({ topoViewerPage }) => {
+    await topoViewerPage.resetFiles();
+    await topoViewerPage.gotoFile(SPINE_LEAF_FILE);
+    await topoViewerPage.waitForCanvasReady();
+  });
+
+  test("a deploy with options remembers them, and Lab settings shows and clears them", async ({ page }) => {
+    await setDeploymentState(page, "undeployed");
+    await openOptionsDialog(page);
+    await page.locator("#lifecycle-options-timeout").fill("30");
+    await expect(page.getByTestId("lifecycle-options-run")).toBeDisabled();
+    await page.locator("#lifecycle-options-timeout").fill("30m");
+    await page.locator("#lifecycle-options-max-workers").fill("2");
+    await pickNode(page, "spine1");
+    await expect(checkbox(page, "lifecycle-options-remember")).toBeChecked();
+    await expect(page.getByTestId("lifecycle-options-command")).toHaveText(
+      "containerlab deploy --timeout 30m --node-filter spine1 --max-workers 2"
+    );
+    await page.getByTestId("lifecycle-options-run").click();
+    expect(await lifecycleMessages(page)).toEqual([
+      { command: "deployLab", options: { timeout: "30m", nodeFilter: ["spine1"], maxWorkers: 2 } }
+    ]);
+
+    // The node filter belongs to that run; timeout and workers stay with the lab.
+    const ok = page.getByTestId("lifecycle-ok-btn");
+    await expect(ok).toBeVisible({ timeout: 30_000 });
+    await ok.click();
+    await expect(page.getByTestId("lifecycle-progress-modal")).toHaveCount(0);
+    await page.getByTestId("navbar-deploy-menu").click();
+    await page.getByTestId("navbar-deploy-item-lab-settings").click();
+    await expect(page.locator(SEL_DIALOG)).toBeVisible();
+    await expect(page.locator("#lifecycle-options-timeout")).toHaveValue("30m");
+    await expect(page.locator("#lifecycle-options-max-workers")).toHaveValue("2");
+    await expect(page.getByTestId("lifecycle-options-nodes")).toHaveCount(0);
+    await expect(page.getByTestId("lab-settings-host-defaults")).toContainText("2m (containerlab default)");
+    await page.getByTestId("lab-settings-clear").click();
+    await expect(page.locator(SEL_DIALOG)).toHaveCount(0);
+
+    await page.getByTestId("navbar-deploy-menu").click();
+    await page.getByTestId("navbar-deploy-item-lab-settings").click();
+    await expect(page.locator("#lifecycle-options-timeout")).toHaveValue("");
+  });
+});

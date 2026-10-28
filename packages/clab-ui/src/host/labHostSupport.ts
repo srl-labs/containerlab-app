@@ -71,6 +71,11 @@ export interface LabBackendCapabilities {
    * (clab-api-server). Needs the `captureStream` feature.
    */
   captureTickets: boolean;
+  /**
+   * containerlab's `--timeout` on deploy, redeploy and destroy. A
+   * clab-api-server takes none: it runs containerlab with its own timeouts.
+   */
+  lifecycleTimeout: boolean;
 }
 
 /**
@@ -154,6 +159,7 @@ export function effectiveSupport(
     deployFromUrl: capabilities.deployFromUrl,
     importFromUrl: capabilities.importFromUrl,
     sharedWorkspace: capabilities.sharedWorkspace,
+    lifecycleTimeout: capabilities.lifecycleTimeout,
     edgesharkManagement: capabilities.edgesharkManagement && features.edgeshark,
     // The Wireshark VNC containers read their capture from Edgeshark, or from the host's capture stream.
     wiresharkVnc: capabilities.wiresharkVnc && (features.edgeshark || features.captureVnc),
@@ -227,6 +233,7 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "sharedWorkspace",
   "tailscaleStatus",
   "captureTickets",
+  "lifecycleTimeout",
   "validate",
   "graphMermaid",
   "graphDot",

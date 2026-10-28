@@ -19,7 +19,8 @@ const ALL_CAPABILITIES: LabBackendCapabilities = {
   healthMetrics: true,
   sharedWorkspace: true,
   tailscaleStatus: true,
-  captureTickets: true
+  captureTickets: true,
+  lifecycleTimeout: true
 };
 
 function features(containerRuntime: boolean): LabBackendFeatures {

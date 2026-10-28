@@ -3,6 +3,7 @@ import {
   hasLabNameGitTokens,
   isC9sExposeType,
   KUBERNETES_IMAGE_MANAGEMENT_MESSAGE,
+  labSettingsOptions,
   restoresSnapshots,
   type LabExecRequest,
   type LabOperationSupport,
@@ -90,7 +91,9 @@ const API_CAPABILITIES: LabBackendCapabilities = {
   healthMetrics: true,
   sharedWorkspace: true,
   tailscaleStatus: true,
-  captureTickets: true
+  captureTickets: true,
+  // clab-api-server has no timeout parameter on deploy, redeploy or destroy.
+  lifecycleTimeout: false
 };
 
 /** Features clab-api-server lists in `/health`, by the operation that needs them. */
@@ -502,9 +505,11 @@ export class ApiLabBackend implements LabBackend {
           await this.client.applyLab(
             token,
             lab.labName,
-            options.dryRun === true
-              ? { path: lab.path, dryRun: true }
-              : { path: lab.path, includeLogs: true }
+            {
+              path: lab.path,
+              ...(options.dryRun === true ? { dryRun: true } : { includeLogs: true }),
+              lifecycleOptions: labSettingsOptions("apply", options.lifecycleOptions)
+            }
           )
         );
       case "start":
@@ -524,7 +529,14 @@ export class ApiLabBackend implements LabBackend {
       this.token,
       action,
       lab.labName,
-      { path: lab.path, cleanup: options.cleanup, lifecycleOptions: options.lifecycleOptions },
+      {
+        path: lab.path,
+        cleanup: options.cleanup,
+        lifecycleOptions:
+          action === "apply"
+            ? labSettingsOptions("apply", options.lifecycleOptions)
+            : options.lifecycleOptions
+      },
       { signal: options.signal }
     );
     if (!response.body) {

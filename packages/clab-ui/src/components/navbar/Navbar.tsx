@@ -67,6 +67,7 @@ import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDial
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
 import { useLabHostLoader } from "./useLabHostLoader";
+import { useLifecycleDialogState } from "./useLifecycleDialogState";
 
 import { useLockShake } from "./useLockShake";
 
@@ -456,24 +457,30 @@ export const Navbar: React.FC<NavbarProps> = ({
     validateTopology?.();
   }, [validateTopology]);
 
-  const [lifecycleOptionsOpen, setLifecycleOptionsOpen] = React.useState(false);
+  const {
+    dialog: lifecycleDialog,
+    open: openLifecycleDialog,
+    close: handleCloseLifecycleOptions,
+    saveSettings: handleSaveLabSettings
+  } = useLifecycleDialogState(labOperations);
 
   const handleOpenLifecycleOptions = React.useCallback(() => {
     setDeployMenuPosition(null);
-    setLifecycleOptionsOpen(true);
-  }, []);
+    openLifecycleDialog("run");
+  }, [openLifecycleDialog]);
 
-  const handleCloseLifecycleOptions = React.useCallback(() => {
-    setLifecycleOptionsOpen(false);
-  }, []);
+  const handleOpenLabSettings = React.useCallback(() => {
+    setDeployMenuPosition(null);
+    openLifecycleDialog("settings");
+  }, [openLifecycleDialog]);
 
   const handleRunWithOptions = React.useCallback(
     (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => {
-      setLifecycleOptionsOpen(false);
+      handleCloseLifecycleOptions();
       setProcessing(true, action.startsWith("destroy") ? "destroy" : "deploy", options?.nodeFilter);
       deploymentCommands.onRunWithOptions(action, options);
     },
-    [setProcessing, deploymentCommands]
+    [setProcessing, deploymentCommands, handleCloseLifecycleOptions]
   );
 
   // Primary action: apply the on-disk topology (deploys when absent,
@@ -786,15 +793,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </ListItemIcon>
                 <ListItemText>Run with options…</ListItemText>
               </MenuItem>
+              {labOperations ? (
+                <MenuItem
+                  onClick={handleOpenLabSettings}
+                  disabled={isProcessing || !isTopologyActive}
+                  data-testid="navbar-deploy-item-lab-settings"
+                >
+                  <ListItemIcon>
+                    <SettingsOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText>Lab settings…</ListItemText>
+                </MenuItem>
+              ) : null}
               {extraDeployMenuItems ? <Divider /> : null}
               {extraDeployMenuItems}
             </Menu>
-            {lifecycleOptionsOpen && (
+            {lifecycleDialog && (
               <React.Suspense fallback={null}>
                 <LazyLifecycleOptionsDialog
                   open
+                  mode={lifecycleDialog.mode}
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
+                  canSetTimeout={labHostInfo?.support.lifecycleTimeout === true}
+                  {...(lifecycleDialog.settings ? { labSettings: lifecycleDialog.settings } : {})}
+                  {...(labOperations ? { onSaveSettings: handleSaveLabSettings } : {})}
                   runtime={labHostInfo?.profile.runtime}
                   {...(labHostInfo?.profile.runtime === "c9s"
                     ? { c9sProfile: labHostInfo.profile, c9sReadOnly: !labHostInfo.support.c9sDeployOptions }

@@ -363,3 +363,20 @@ test("a c9s host has no images to manage and says why, without running a `c9s` c
   await assert.rejects(lab.removeImage("alpine:3"), refused);
   assert.equal((await lab.features()).imageManagement, false);
 });
+
+test("the lab's settings reach deploy, apply and its plan, and destroy takes its part", async (t) => {
+  const host = await fakeC9sHost(t);
+  const lab = backend(host);
+  const settings = { timeout: "30m", maxWorkers: 3, namespace: "team-b", noTopologyCR: true };
+  const target = { labName: "demo", path: "demo/demo.clab.yml" };
+  await lab.runLifecycle("deploy", target, { lifecycleOptions: settings });
+  await lab.runLifecycle("apply", target, { dryRun: true, lifecycleOptions: settings });
+  await lab.runLifecycle("destroy", { labName: "demo" }, { lifecycleOptions: { timeout: "30m", namespace: "team-b" } });
+  const calls = (await host.calls()).filter((call) => !call.startsWith("inspect"));
+  const topology = path.join(host.workspace, "demo", "demo.clab.yml");
+  assert.deepEqual(calls, [
+    `deploy -r c9s --name demo --timeout 30m --max-workers 3 --namespace team-b --no-topology-cr -t ${topology} | ns=team-a ctx=kind-c9s-app`,
+    `deploy -r c9s --dry-run --timeout 30m --max-workers 3 --namespace team-b --no-topology-cr --format json -t ${topology} | ns=team-a ctx=kind-c9s-app`,
+    `destroy -r c9s --timeout 30m --namespace team-b -t ${topology} | ns=team-a ctx=kind-c9s-app`
+  ]);
+});

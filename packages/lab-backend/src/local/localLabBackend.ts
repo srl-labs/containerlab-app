@@ -109,7 +109,8 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   // containerlab has no command that reports it.
   tailscaleStatus: false,
   // Tickets are links to a server's capture stream; this machine serves none.
-  captureTickets: false
+  captureTickets: false,
+  lifecycleTimeout: true
 };
 
 /**

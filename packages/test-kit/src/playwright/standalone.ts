@@ -70,7 +70,8 @@ const TEST_LAB_HOST: LabHostInfo = {
     healthMetrics: true,
     sharedWorkspace: true,
     tailscaleStatus: true,
-    captureTickets: false
+    captureTickets: false,
+    lifecycleTimeout: true
   }
 };
 

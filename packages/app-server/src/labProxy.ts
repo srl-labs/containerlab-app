@@ -3,7 +3,9 @@
  */
 
 import {
+  labSettingsOptions,
   normalizeLabLifecycleOptions,
+  normalizeLabSettings,
   type LabLifecycleOptionKind,
   type LabLifecycleOptions
 } from "@containerlab/clab-ui/host";
@@ -43,6 +45,8 @@ interface LabActionBody extends LabTarget {
 
 interface LabApplyBody extends LabTarget {
   dryRun?: boolean;
+  /** The lab's settings (`LabSettings`) for apply and its plan; checked before use. */
+  options?: unknown;
 }
 
 interface LabStatusBody extends LabTarget {}
@@ -367,6 +371,13 @@ async function openAndForwardLifecycleStream(
   }
 }
 
+/** The lab settings an apply takes on a lab host's runtime; the rest are dropped. */
+async function applyOptionsForHost(backend: LabBackend, raw: unknown): Promise<LabLifecycleOptions | undefined> {
+  if (raw === undefined || raw === null) return undefined;
+  const { runtime } = await backend.hostProfile();
+  return labSettingsOptions("apply", normalizeLabSettings(raw, runtime), runtime);
+}
+
 /** The lifecycle options a lab host's runtime takes; the rest are dropped. */
 async function lifecycleOptionsForHost(
   backend: LabBackend,
@@ -670,11 +681,12 @@ export function registerLabProxy(
           yamlPath: target.yamlPath
         };
 
+        const applyOptions = await applyOptionsForHost(backend, request.body.options);
         if (request.body.dryRun === true) {
           const lifecycle = await backend.runLifecycle(
             "apply",
             { labName: target.labName, path: target.yamlPath },
-            { dryRun: true }
+            { dryRun: true, ...(applyOptions ? { lifecycleOptions: applyOptions } : {}) }
           );
           const changesPending = applyResultHasPendingChanges(lifecycle.result);
           if (changesPending !== undefined) {
@@ -696,10 +708,11 @@ export function registerLabProxy(
           target.runtimeLabName,
           "apply",
           async () => {
-            const lifecycle = await backend.runLifecycle("apply", {
-              labName: target.labName,
-              path: target.yamlPath
-            });
+            const lifecycle = await backend.runLifecycle(
+              "apply",
+              { labName: target.labName, path: target.yamlPath },
+              applyOptions ? { lifecycleOptions: applyOptions } : {}
+            );
             sessions.setDirtyForTopology(dirtyTarget, false);
             return lifecycle;
           },
@@ -727,6 +740,7 @@ export function registerLabProxy(
           preferTopologyLabName: true
         });
         const preRunning = await backend.isLabRunning(target.runtimeLabName).catch(() => undefined);
+        const applyOptions = await applyOptionsForHost(backend, request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -734,7 +748,8 @@ export function registerLabProxy(
           "apply",
           target.labName,
           {
-            path: target.yamlPath
+            path: target.yamlPath,
+            ...(applyOptions ? { lifecycleOptions: applyOptions } : {})
           },
           { labName: target.runtimeLabName, preRunning }
         );

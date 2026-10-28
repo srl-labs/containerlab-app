@@ -1,6 +1,11 @@
 import path from "node:path";
 
-import { labLifecycleCliFlags, topologyFileStem, type LabLifecycleOptions } from "@containerlab/clab-ui/host";
+import {
+  labLifecycleCliFlags,
+  labSettingsOptions,
+  topologyFileStem,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 
 import { c9sPlanFields } from "../c9sPlan.ts";
 import type {
@@ -192,7 +197,12 @@ export class LocalLifecycle {
         break;
       case "apply":
         if (options.dryRun) args.push("--dry-run");
-        if (runtime === "c9s") args.push(...labLifecycleCliFlags(this.withHostDefaults(undefined)));
+        // A lab's settings (timeout, workers, c9s options) hold for apply as for deploy.
+        args.push(
+          ...labLifecycleCliFlags(
+            this.withHostDefaults(labSettingsOptions("apply", options.lifecycleOptions, runtime))
+          )
+        );
         break;
       case "start":
       case "stop":
@@ -283,11 +293,11 @@ export class LocalLifecycle {
     options: LifecycleRunOptions = {}
   ): Promise<LifecycleActionResult> {
     if (action === "apply" && options.dryRun) {
-      return { result: await this.plan(lab), logs: [] };
+      return { result: await this.plan(lab, options.lifecycleOptions), logs: [] };
     }
     const release = this.acquire(lab, action);
     try {
-      const plan = action === "apply" ? await this.plan(lab) : undefined;
+      const plan = action === "apply" ? await this.plan(lab, options.lifecycleOptions) : undefined;
       const prepared = await this.prepare(action, lab, options);
       const [file, args] = containerlabCommand(this.context.options, prepared.args);
       const result = await runCommand(file, args, {
@@ -368,8 +378,13 @@ export class LocalLifecycle {
   }
 
   /** `containerlab apply --dry-run`: what applying the topology would change. */
-  async plan(lab: LabTarget) {
-    const prepared = await this.prepare("apply", lab, { dryRun: true }, ["--format", "json"]);
+  async plan(lab: LabTarget, lifecycleOptions?: LabLifecycleOptions) {
+    const prepared = await this.prepare(
+      "apply",
+      lab,
+      { dryRun: true, ...(lifecycleOptions ? { lifecycleOptions } : {}) },
+      ["--format", "json"]
+    );
     const [file, args] = containerlabCommand(this.context.options, prepared.args);
     const result = await runCommand(file, args, { cwd: prepared.cwd, env: prepared.env });
     if (result.code !== 0) {

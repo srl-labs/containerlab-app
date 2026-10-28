@@ -11,6 +11,7 @@ import {
 } from "@srl-labs/containerlab-lab-backend/local";
 
 import { containerlabBinaryPath } from "../globals";
+import { initLabSettings } from "./labSettings";
 
 import {
   ConnectionManager,
@@ -105,6 +106,7 @@ export function initConnections(
 ): ConnectionManager {
   connections ??= new ConnectionManager(context, options);
   topologyHosts = context.workspaceState;
+  initLabSettings(context.globalState);
   return connections;
 }
 

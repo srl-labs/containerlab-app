@@ -1,8 +1,10 @@
 import * as vscode from "vscode";
 import { isPartialDestroy, type LabLifecycleOptions } from "@containerlab/clab-ui/host";
 
-import { LOCAL_CONNECTION } from "../backend/connections";
+import { isClusterConnection, LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 import { connectionById, isLabSourceUrl, labNameForPath } from "../backend/labBackends";
+import { labHostInfo } from "../backend/labHostSupport";
+import { lifecycleOptionsWithLabSettings } from "../backend/labSettings";
 import { topologyHostFor } from "../backend/topologyHost";
 import type { ClabLabTreeNode } from "../treeView/common";
 import { getSelectedLabNode } from "../utils/utils";
@@ -27,6 +29,25 @@ const ACTION_VERBS: Record<LabLifecycleAction, { title: string; progress: string
     stop: { title: "Stop", progress: "Stopping", done: "Stopped" },
     restart: { title: "Restart", progress: "Restarting", done: "Restarted" }
   };
+
+/** Without options of its own, deploy, redeploy, destroy and apply use the lab's settings on the host. */
+async function withLabSettings(
+  action: LabLifecycleAction,
+  lifecycleOptions: LabLifecycleOptions | undefined,
+  host: LabConnection,
+  labPath: string
+): Promise<LabLifecycleOptions | undefined> {
+  if (action !== "deploy" && action !== "redeploy" && action !== "destroy" && action !== "apply") {
+    return lifecycleOptions;
+  }
+  const runtime =
+    (await labHostInfo(host))?.profile.runtime ?? (isClusterConnection(host) ? "c9s" : "docker");
+  return lifecycleOptionsWithLabSettings(action, lifecycleOptions, {
+    connectionId: host.id,
+    labPath,
+    runtime
+  });
+}
 
 export async function runClabAction(
   action: LabLifecycleAction,
@@ -54,6 +75,7 @@ export async function runClabAction(
     );
     return;
   }
+  const options = await withLabSettings(action, lifecycleOptions, host, labPath);
   const where = isLabSourceUrl(labPath) ? labPath : labName;
   const spinnerMsg = {
     progressMsg: `${ACTION_VERBS[action].progress} ${where} on ${host.label}...`,
@@ -63,7 +85,7 @@ export async function runClabAction(
   const execute = async () => {
     const handlers = createTopoViewerLifecycleHandlers(action, {
       // Destroying some nodes leaves the rest of the lab running.
-      labKeepsRunning: action === "destroy" && isPartialDestroy(lifecycleOptions),
+      labKeepsRunning: action === "destroy" && isPartialDestroy(options),
       labPath
     });
     const cmd = new ClabCommand(
@@ -74,11 +96,11 @@ export async function runClabAction(
       handlers.onFailure,
       handlers.onOutputLine
     );
-    if (cleanup || lifecycleOptions) {
+    if (cleanup || options) {
       await cmd.run({
         connectionId: host.id,
         ...(cleanup ? { cleanup } : {}),
-        ...(lifecycleOptions ? { lifecycleOptions } : {})
+        ...(options ? { lifecycleOptions: options } : {})
       });
     } else {
       await cmd.run({ connectionId: host.id });

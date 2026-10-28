@@ -514,7 +514,12 @@ export class ClabApiClient {
   async applyLab(
     token: string,
     labName: string,
-    options: { path?: string; dryRun?: boolean; includeLogs?: boolean } = {},
+    options: {
+      path?: string;
+      dryRun?: boolean;
+      includeLogs?: boolean;
+      lifecycleOptions?: LabLifecycleOptions;
+    } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.path) {
@@ -526,6 +531,7 @@ export class ClabApiClient {
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     const query = params.toString();
     const res = await this.request(
       "POST",

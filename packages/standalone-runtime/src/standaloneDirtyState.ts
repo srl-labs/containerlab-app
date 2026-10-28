@@ -8,9 +8,15 @@ import { runtimeFetch } from "./backend";
  * snapshots carry the same flag.
  */
 import { useTopoViewerStore } from "@containerlab/clab-ui";
-import { applyPlanHasChanges, parseApplyPlan, type ApplyPlan } from "@containerlab/clab-ui/host";
+import {
+  applyPlanHasChanges,
+  parseApplyPlan,
+  type ApplyPlan,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
 
+import { lifecycleOptionsWithLabSettings } from "./standaloneLabSettings";
 import { standaloneServerUrl } from "./standaloneServerOrigin";
 
 export interface DirtyStateTarget {
@@ -36,9 +42,12 @@ function setTopologyDirtyState(dirty: boolean | undefined): void {
 async function requestDryRunApply(
   target: DirtyStateTarget
 ): Promise<{ result?: unknown; changesPending?: unknown; error?: unknown }> {
-  const payload: { dryRun: true; sessionId?: string; topologyRef: TopologyRef } = {
+  // The plan uses the lab's settings, e.g. its namespace, as the apply will.
+  const options = lifecycleOptionsWithLabSettings("apply", undefined, { topologyRef: target.topologyRef });
+  const payload: { dryRun: true; sessionId?: string; topologyRef: TopologyRef; options?: LabLifecycleOptions } = {
     dryRun: true,
-    topologyRef: target.topologyRef
+    topologyRef: target.topologyRef,
+    ...(options ? { options } : {})
   };
   if (target.sessionId) {
     payload.sessionId = target.sessionId;
