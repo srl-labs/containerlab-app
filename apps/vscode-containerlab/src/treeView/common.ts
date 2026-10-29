@@ -424,17 +424,7 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
   public readonly state: ConnectionNodeState;
 
   constructor(
-    connection: {
-      id: string;
-      label: string;
-      kind: "local" | "api";
-      url?: string;
-      username?: string;
-      runtime?: "c9s";
-      kubeContext?: string;
-      kubeconfig?: string;
-      namespace?: string;
-    },
+    connection: ConnectionNodeConnection,
     section: "running" | "undeployed",
     state: ConnectionNodeState,
     public readonly children: vscode.TreeItem[],
@@ -453,25 +443,13 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     this.state = state;
     this.contextValue = "containerlabEndpoint";
     this.id = `connection:${section}:${connection.id}`;
-    // This computer shows its container runtime; a lab host its address.
-    const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
-    let host = runtime === "podman" ? "Podman" : "Docker";
-    if (connection.url !== undefined) {
-      try {
-        host = new URL(connection.url).host;
-      } catch {
-        host = connection.url;
-      }
-    }
-    const cluster = connection.kind === "local" && connection.runtime === "c9s";
+    this.description = connectionDescription(connection);
+    const cluster = this.endpointCluster;
     const clusterWhere = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
-    const kubeconfigFile =
-      connection.kubeconfig !== undefined ? ` · ${path.basename(connection.kubeconfig)}` : "";
-    this.description = cluster ? `Kubernetes · ${clusterWhere}${kubeconfigFile}` : host;
-    let heading = `Lab host ${connection.url ?? ""}`;
+    let heading = `API Server ${connection.url ?? ""}`;
     if (cluster)
-      heading = `Labs on Kubernetes cluster ${clusterWhere}, run by containerlab on this machine`;
-    else if (connection.kind === "local") heading = "Labs on this machine";
+      heading = `Labs on Kubernetes cluster ${clusterWhere}, run by containerlab on this computer`;
+    else if (connection.kind === "local") heading = "Labs on this computer";
     const lines = [heading];
     if (cluster && connection.kubeconfig !== undefined)
       lines.push(`kubeconfig ${connection.kubeconfig}`);
@@ -487,6 +465,44 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     if (problem !== undefined && problem !== "") lines.push(problem);
     this.tooltip = lines.join("\n");
   }
+}
+
+/** What the explorer shows of a lab host. */
+interface ConnectionNodeConnection {
+  id: string;
+  label: string;
+  kind: "local" | "api";
+  url?: string;
+  username?: string;
+  runtime?: "c9s";
+  kubeContext?: string;
+  kubeconfig?: string;
+  namespace?: string;
+}
+
+/**
+ * The line next to a lab host's name in the explorer: This computer's
+ * container runtime, a cluster's context and namespace, an API Server's
+ * address, e.g. "API Server · lab:8090".
+ */
+function connectionDescription(connection: ConnectionNodeConnection): string {
+  if (connection.kind === "local" && connection.runtime === "c9s") {
+    const where = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
+    const file =
+      connection.kubeconfig !== undefined ? ` · ${path.basename(connection.kubeconfig)}` : "";
+    return `Kubernetes · ${where}${file}`;
+  }
+  if (connection.url === undefined) {
+    const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
+    return runtime === "podman" ? "Podman" : "Docker";
+  }
+  let host = connection.url;
+  try {
+    host = new URL(connection.url).host;
+  } catch {
+    // Not a URL: shown as it is.
+  }
+  return `API Server · ${host}`;
 }
 
 /** A line below a connection that has no labs to show, e.g. while signed out. */
