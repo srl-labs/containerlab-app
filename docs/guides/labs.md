@@ -122,11 +122,24 @@ Right-click a running node and choose **Capture**, or right-click a link to capt
 
 On Docker and Podman lab hosts, captures come from Edgeshark: a `packetflix:` link that your Wireshark opens through cshargextcap, or Wireshark VNC in a browser window.
 
+### Default capture method
+
+Where a capture opens is a setting: `containerlab.capture.preferredAction` in VS Code, **Settings → Capture → Capture defaults** per lab host in the web and desktop apps.
+
+| Method | Docker or Podman lab host | Kubernetes (c9s) lab host |
+| --- | --- | --- |
+| **Automatic** (default) | Wireshark VNC, else Edgeshark | Wireshark on this computer when the app can open it (desktop, VS Code with Wireshark found), else Wireshark VNC, else a `.pcapng` |
+| **Wireshark on this computer** | Edgeshark's `packetflix:` link, which starts it | The capture stream into `wireshark -k -i -` (desktop and VS Code; greyed out in the web app) |
+| **Wireshark VNC** | Wireshark VNC fed by Edgeshark | Wireshark VNC fed by the capture stream |
+| **Edgeshark** | The `packetflix:` link | Greyed out: not supported on Kubernetes |
+
+When the lab host lacks the method you picked, for example Edgeshark on a cluster, Wireshark VNC without Docker, or Wireshark that is not installed, the capture opens the automatic way and says why: VS Code once per session, the capture dialog of the web and desktop apps under its choices. The earlier values `Wireshark VNC` and `Edgeshark` keep working. On a Kubernetes lab host the Edgeshark controls of the web and desktop settings are greyed out too.
+
 ### Labs on a Kubernetes cluster
 
 On a Kubernetes cluster (c9s), clabernetes captures in each lab pod and containerlab merges the interfaces into one pcapng stream, one interface per pick, named `<node>:<interface>`. Only the interfaces of links between nodes can be captured, not the management interface. The picker lists them with the node and interface at the other end, and the vendor name (e.g. `ethernet-1/1`) when the topology used one. A capture longer than an hour stays one file; if clabernetes misses packets while it switches, you see a status line, and the capture goes on.
 
-The capture dialog asks where the capture goes and when it stops:
+The capture dialog asks where the capture goes and when it stops. With the **Automatic** default it starts with:
 
 | App | Lab host | Choices, default first |
 | --- | --- | --- |
@@ -138,7 +151,7 @@ The capture dialog asks where the capture goes and when it stops:
 | VS Code | clab-api-server | Wireshark on this computer when Wireshark is found, Wireshark VNC (when the server runs Docker), save `.pcapng`; without Wireshark, Wireshark VNC comes first |
 
 - **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app and VS Code find Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. In WSL, a Wireshark installed on Windows is found too and opens on the Windows desktop. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods. When VS Code finds no Wireshark, it offers Wireshark VNC, saving a `.pcapng`, or setting the path.
-- **Wireshark VNC** runs on the clab-api-server host, or, for a cluster used from this machine, in a container on this machine's Docker (or Podman). The app runs `containerlab -r c9s capture … -w -` and writes the capture into a named pipe in that container, which its Wireshark reads; the container needs no way back to the app. The capture lasts as long as the window, and restarting it inside that Wireshark starts a new one; closing the window ends the capture and removes the container. This needs a [wireshark-vnc-docker](https://github.com/srl-labs/wireshark-vnc-docker) image with its `CLABWIRE_CAPTURE_PIPE` mode; the current `:latest` has it. With an older image, opening it fails and says so. `containerlab.capture.wireshark.dockerImage` (VS Code), `CONTAINERLAB_DESKTOP_WIRESHARK_IMAGE` (desktop) or `WEB_LOCAL_WIRESHARK_IMAGE` (web) pick another image. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it. Without Docker on this computer the choice stays in the list, greyed, with *Wireshark in the browser needs Docker on this computer*. `containerlab.capture.preferredAction` set to `Wireshark VNC` puts it first in VS Code.
+- **Wireshark VNC** runs on the clab-api-server host, or, for a cluster used from this machine, in a container on this machine's Docker (or Podman). The app runs `containerlab -r c9s capture … -w -` and writes the capture into a named pipe in that container, which its Wireshark reads; the container needs no way back to the app. The capture lasts as long as the window, and restarting it inside that Wireshark starts a new one; closing the window ends the capture and removes the container. This needs a [wireshark-vnc-docker](https://github.com/srl-labs/wireshark-vnc-docker) image with its `CLABWIRE_CAPTURE_PIPE` mode; the current `:latest` has it. With an older image, opening it fails and says so. `containerlab.capture.wireshark.dockerImage` (VS Code), `CONTAINERLAB_DESKTOP_WIRESHARK_IMAGE` (desktop) or `WEB_LOCAL_WIRESHARK_IMAGE` (web) pick another image. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it. Without Docker on this computer the choice stays in the list, greyed, with *Wireshark in the browser needs Docker on this computer*. The [default capture method](#default-capture-method) **Wireshark VNC** puts it first.
 - A **download** needs a stop time. The file grows in your downloads while the capture runs.
 
 ## Images

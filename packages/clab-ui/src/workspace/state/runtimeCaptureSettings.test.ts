@@ -68,7 +68,7 @@ test.after(() => {
 
 test("normalizeCapturePreferences falls back to default action for invalid input", () => {
   const normalized = normalizeCapturePreferences({ preferredAction: "invalid" });
-  assert.equal(normalized.preferredAction, "wireshark-vnc");
+  assert.equal(normalized.preferredAction, "auto");
 });
 
 test("capture preferences are persisted and resolved per endpoint", () => {
@@ -114,4 +114,11 @@ test("session hostname override is scoped per endpoint with default fallback", (
   setSessionHostnameOverride(undefined);
   assert.equal(getSessionHostnameOverride("endpoint-a"), undefined);
   assert.equal(getSessionHostnameOverride("endpoint-b"), undefined);
+});
+
+test("capture preferences keep Automatic and Wireshark on this computer", () => {
+  persistCapturePreferences({ preferredAction: "local-wireshark" }, "endpoint-desktop");
+  persistCapturePreferences({ preferredAction: "auto" }, "endpoint-auto");
+  assert.equal(loadCapturePreferences("endpoint-desktop").preferredAction, "local-wireshark");
+  assert.equal(loadCapturePreferences("endpoint-auto").preferredAction, "auto");
 });

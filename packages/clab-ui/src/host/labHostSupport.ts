@@ -196,6 +196,9 @@ export function containerRuntimeFeatures(
   };
 }
 
+/** The reason the UI gives for an option a Kubernetes (c9s) lab host lacks; it shows greyed out. */
+export const NOT_ON_KUBERNETES = "Not supported on Kubernetes (c9s)";
+
 /**
  * Why a Kubernetes lab host has no image management. Hosts show it instead of
  * the image manager, and lab hosts answer image requests (501) with it.

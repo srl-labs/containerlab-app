@@ -180,6 +180,11 @@ const StreamCaptureDialogContent: React.FC<{ request: RuntimeCaptureRequest; str
               {error}
             </Box>
           ) : null}
+          {stream.notice !== undefined ? (
+            <Box sx={{ fontSize: 12, color: "text.secondary" }} data-testid="capture-delivery-notice">
+              {stream.notice}
+            </Box>
+          ) : null}
           <StreamCaptureControls
             deliveries={stream.deliveries}
             {...(stream.unavailable ? { unavailable: stream.unavailable } : {})}

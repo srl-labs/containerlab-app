@@ -114,7 +114,6 @@ import {
   pullRuntimeImage,
   isFileLabTab,
   getSessionHostnameOverride,
-  loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
   reconcileUiIcons,
@@ -151,6 +150,7 @@ import {
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import {
+  edgesharkCaptureRouteFor,
   hostCapturesStreams,
   openStreamCaptureDialog,
   streamCaptureSelection,
@@ -1011,7 +1011,7 @@ function openCanvasCaptures(requests: WiresharkCaptureRequest[]): void {
     return;
   }
 
-  if (loadCapturePreferences(target.endpointId).preferredAction === "edgeshark") {
+  if (edgesharkCaptureRouteFor(target.endpointId) === "edgeshark") {
     for (const capture of captures) {
       void openPacketflixCapture(target, capture.targets);
     }

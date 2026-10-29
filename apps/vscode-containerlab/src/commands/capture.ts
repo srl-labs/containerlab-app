@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { isInternalInterfaceName, nodeNamespaceInterfaceName } from "@containerlab/clab-ui/session";
+import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
 
 import { outputChannel, dockerClient, extensionContext, username } from "../globals";
 import * as utils from "../utils";
@@ -26,7 +27,7 @@ import {
   DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY,
   WIRESHARK_VNC_CTR_NAME_PREFIX
 } from "../utils/consts";
-import { ensureHostSupports } from "../backend/labHostSupport";
+import { ensureHostSupports, labHostInfo } from "../backend/labHostSupport";
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 
 import {
@@ -58,18 +59,23 @@ export async function captureInterface(
 
   if (await captureOnStream(node, allSelectedNodes)) return;
 
-  // Settings override
-  const preferredCaptureMethod = vscode.workspace
-    .getConfiguration("containerlab")
-    .get<string>("capture.preferredAction");
-  switch (preferredCaptureMethod) {
-    case "Edgeshark":
-      return captureInterfaceWithPacketflix(node, allSelectedNodes);
-    case "Wireshark VNC":
-      return captureEdgesharkVNC(node, allSelectedNodes);
-  }
-
-  // Default to VNC capture
+  // Docker and Podman: Wireshark VNC or Edgeshark, whose packetflix link opens Wireshark here.
+  const info = await labHostInfo(connectionOf(node));
+  const plan = captureRoutePlan(
+    parseCaptureMethod(
+      vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction")
+    ),
+    {
+      stream: false,
+      localWireshark: false,
+      // A lab host that cannot be asked is let through: it refuses itself.
+      wiresharkVnc: info?.support.wiresharkVnc ?? true,
+      edgeshark: info?.support.edgeshark ?? true
+    }
+  );
+  if (plan.notice) void vscode.window.showInformationMessage(plan.notice);
+  if (plan.routes[0] === "edgeshark") return captureInterfaceWithPacketflix(node, allSelectedNodes);
+  // Wireshark VNC, or the warning of a lab host that has neither.
   return captureEdgesharkVNC(node, allSelectedNodes);
 }
 

@@ -1,4 +1,7 @@
-export type CapturePreferredAction = "wireshark-vnc" | "edgeshark";
+import { CAPTURE_METHODS, type CaptureMethod } from "../../host/captureMethod";
+
+/** The default capture method of an endpoint; see `captureRoutePlan` for where it opens. */
+export type CapturePreferredAction = CaptureMethod;
 
 export interface CapturePreferences {
   preferredAction: CapturePreferredAction;
@@ -12,7 +15,7 @@ interface CaptureSettingsStorage {
 }
 
 const DEFAULT_CAPTURE_PREFERENCES: CapturePreferences = {
-  preferredAction: "wireshark-vnc"
+  preferredAction: "auto"
 };
 
 let defaultSessionHostnameOverride = "";
@@ -32,10 +35,9 @@ export function normalizeCapturePreferences(value: unknown): CapturePreferences 
     return { ...DEFAULT_CAPTURE_PREFERENCES };
   }
 
-  const preferredAction =
-    value.preferredAction === "edgeshark" || value.preferredAction === "wireshark-vnc"
-      ? value.preferredAction
-      : DEFAULT_CAPTURE_PREFERENCES.preferredAction;
+  const preferredAction = (CAPTURE_METHODS as readonly unknown[]).includes(value.preferredAction)
+    ? (value.preferredAction as CaptureMethod)
+    : DEFAULT_CAPTURE_PREFERENCES.preferredAction;
 
   return { preferredAction };
 }

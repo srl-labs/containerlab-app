@@ -89,7 +89,7 @@ A template can hold a full node definition:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `capture.preferredAction` | `Wireshark VNC` | What the capture action does: `Wireshark VNC` or `Edgeshark`. |
+| `capture.preferredAction` | `Automatic` | Where a capture opens: `Automatic`, `Wireshark on this computer`, `Wireshark VNC` or `Edgeshark`. When the lab host lacks the pick, the capture opens the automatic way and says why; see [Default capture method](../guides/labs.md#default-capture-method). |
 | `capture.remoteHostname` | empty | Host name or IP your machine uses to reach Edgeshark on the lab host. |
 | `capture.packetflixPort` | `5001` | Packetflix WebSocket port used by Edgeshark. |
 | `capture.wireshark.path` | empty | Wireshark for captures from Kubernetes (c9s) lab hosts, which pipe the capture into `wireshark -k -i -`; found on `PATH` or where it installs when empty. |

@@ -31,6 +31,8 @@ import {
   type LocalLabBackend
 } from "@srl-labs/containerlab-lab-backend/local";
 
+import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
+
 import { outputChannel } from "../globals";
 import { backendFor, connectionOf } from "../backend/labBackends";
 import { isClusterConnection, type LabConnection } from "../backend/connections";
@@ -71,31 +73,67 @@ const SAVE_DURATIONS = [
   { label: "Until I stop it", value: undefined }
 ];
 
+/** Where a capture can go on a lab host with capture streams, the default first. */
+export interface StreamCaptureDeliveries {
+  deliveries: StreamCaptureDelivery[];
+  /** The default capture method is not available here: why, and what opens instead. */
+  notice?: string;
+}
+
 /**
- * Where a capture can go, the default first. The `capture.preferredAction`
- * setting, when the user set it, picks between Wireshark on this machine and
- * VNC; else Wireshark on this machine comes first when it was found here,
- * else Wireshark VNC.
+ * Where a capture can go, the default first, from the `capture.preferredAction`
+ * setting (`Automatic` by default: Wireshark on this machine when found, else
+ * Wireshark VNC, else saving). Wireshark on this machine stays listed when it
+ * was not found: picking it says so and offers the rest.
  */
 export function streamCaptureDeliveries(
   onThisMachine: boolean,
-  support: Pick<LabHostInfo["support"], "wiresharkVnc">,
+  info: {
+    support: Pick<LabHostInfo["support"], "wiresharkVnc">;
+    profile?: Pick<LabHostInfo["profile"], "wiresharkVncUnavailable">;
+  },
   preferred: string | undefined,
   localWireshark = true
-): StreamCaptureDelivery[] {
+): StreamCaptureDeliveries {
   // On a cluster here, a terminal pipes containerlab capture into Wireshark; else the app does.
   const wireshark: StreamCaptureDelivery = onThisMachine ? "terminal" : "wireshark";
-  if (!support.wiresharkVnc) return [wireshark, "save"];
-  const vncFirst = preferred === "Wireshark VNC" || (!localWireshark && preferred !== "Edgeshark");
-  return vncFirst ? ["vnc", wireshark, "save"] : [wireshark, "vnc", "save"];
+  const vncUnavailable = info.profile?.wiresharkVncUnavailable;
+  const plan = captureRoutePlan(parseCaptureMethod(preferred), {
+    stream: true,
+    localWireshark,
+    localWiresharkUnavailable: "Wireshark was not found on this computer",
+    wiresharkVnc: info.support.wiresharkVnc,
+    ...(vncUnavailable ? { wiresharkVncUnavailable: vncUnavailable } : {}),
+    edgeshark: false
+  });
+  const deliveries = plan.routes.flatMap((route): StreamCaptureDelivery[] => {
+    if (route === "local-wireshark") return [wireshark];
+    if (route === "wireshark-vnc") return ["vnc"];
+    return route === "download" ? ["save"] : [];
+  });
+  // Not found here: still offered before saving, where picking it explains and offers the rest.
+  if (!deliveries.includes(wireshark)) deliveries.splice(deliveries.indexOf("save"), 0, wireshark);
+  return { deliveries, ...(plan.notice ? { notice: plan.notice } : {}) };
 }
 
-/** The capture setting only when the user set it; its default predates capture streams. */
 function preferredAction(): string | undefined {
-  const inspected = vscode.workspace
-    .getConfiguration("containerlab")
-    .inspect<string>("capture.preferredAction");
-  return inspected?.workspaceFolderValue ?? inspected?.workspaceValue ?? inspected?.globalValue;
+  return vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction");
+}
+
+/** Notices already shown in this session: a fallback is explained once, not on every capture. */
+const shownNotices = new Set<string>();
+
+function showFallbackNotice(notice: string | undefined): void {
+  if (!notice || shownNotices.has(notice)) return;
+  shownNotices.add(notice);
+  const change = "Change default";
+  void vscode.window.showInformationMessage(notice, change).then((choice) => {
+    if (choice === change)
+      void vscode.commands.executeCommand(
+        "workbench.action.openSettings",
+        "containerlab.capture.preferredAction"
+      );
+  });
 }
 
 /** Whether the node's lab host captures lab links as one stream; undefined when it cannot be asked. */
@@ -460,13 +498,14 @@ export async function captureOnStreamHost(
     const vncUnavailable = host.info.support.wiresharkVnc
       ? undefined
       : host.info.profile.wiresharkVncUnavailable;
+    const { deliveries, notice } = streamCaptureDeliveries(
+      local,
+      host.info,
+      preferredAction(),
+      wireshark !== undefined
+    );
     const choices: DeliveryChoices = {
-      deliveries: streamCaptureDeliveries(
-        local,
-        host.info.support,
-        preferredAction(),
-        wireshark !== undefined
-      ),
+      deliveries,
       local,
       ...(vncUnavailable ? { vncUnavailable } : {})
     };
@@ -479,6 +518,8 @@ export async function captureOnStreamHost(
       } else if (delivery === "vnc") await request.openVnc?.(labName, targets);
       else if (delivery === "save") await saveCapture(backend, labName, targets, label);
     };
+    // Asked or named explicitly, the user decides; else the default may have fallen back.
+    if (!request.askDelivery && !request.delivery) showFallbackNotice(notice);
     await open(await chooseDelivery(request, choices, label));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
