@@ -32,7 +32,7 @@ import { SettingCard } from "./SettingCard";
 import { LabHostsPanel } from "./LabHostsPanel";
 import { ExtensionLabHostPage, extensionLabHosts } from "./ExtensionLabHostPage";
 import { ADD_HOST_PAGE, hostPageId, hostPageKey, labHostNavigationItems } from "./labHostEntries";
-import { LAB_HOST_KIND_LABELS, labHostKind } from "../workspace/endpoints";
+import { endpointKindLabel } from "../workspace/endpoints";
 import type {
   SettingsChange,
   SettingsSnapshot,
@@ -213,7 +213,7 @@ export function SettingsApp({
   let title = active.label;
   let description = active.description;
   const pageHost = hosts.find((host) => host.id === pageHostId);
-  if (pageHost) description = `${LAB_HOST_KIND_LABELS[labHostKind(pageHost)]} · settings for labs on this lab host`;
+  if (pageHost) description = `${endpointKindLabel(pageHost)} · settings for labs on this lab host`;
   if (query.length > 0) {
     title = "Search results";
     description = `${visible.length} settings match “${search.trim()}”`;

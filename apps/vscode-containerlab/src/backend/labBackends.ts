@@ -10,6 +10,7 @@ import {
   type LocalLabBackendOptions
 } from "@srl-labs/containerlab-lab-backend/local";
 
+import { labHostKindLabel, type LabRuntimeKind } from "@containerlab/clab-ui/host";
 import { containerlabBinaryPath } from "../globals";
 import { initLabSettings } from "./labSettings";
 
@@ -336,17 +337,42 @@ export async function pickConnection(
   return picked.connection;
 }
 
-/** Where a connection's labs run, as the views describe it. */
+/** The runtime an API Server told; labHostSupport, which asks the servers, sets how to look it up. */
+let serverRuntimeOf: (connection: LabConnection) => LabRuntimeKind | undefined = () => undefined;
+
+export function setServerRuntimeLookup(
+  lookup: (connection: LabConnection) => LabRuntimeKind | undefined
+): void {
+  serverRuntimeOf = lookup;
+}
+
+/**
+ * A connection's kind and runtime, then where its labs run, as the lab host
+ * pickers describe it, e.g. "API Server · c9s · https://lab:8090" or
+ * "Kubernetes · c9s · prod/labs · b.yaml".
+ */
 export function connectionDescription(connection: LabConnection): string {
   if (isClusterConnection(connection)) {
     const where = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
-    const description = where ? `Kubernetes · ${where}` : "Kubernetes";
     // Two kubeconfig files can name their contexts alike.
-    return connection.kubeconfig !== undefined
-      ? `${description} · ${path.basename(connection.kubeconfig)}`
-      : description;
+    const file =
+      connection.kubeconfig !== undefined ? path.basename(connection.kubeconfig) : undefined;
+    return [labHostKindLabel({ kind: "cluster" }), where, file].filter(Boolean).join(" · ");
   }
-  return connection.kind === "local" ? "this machine" : (connection.url ?? "");
+  if (connection.kind === "local") {
+    const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
+    return labHostKindLabel({
+      kind: "this-computer",
+      runtime: runtime === "podman" ? "podman" : "docker"
+    });
+  }
+  const runtime = serverRuntimeOf(connection);
+  return [
+    labHostKindLabel({ kind: "server", ...(runtime !== undefined ? { runtime } : {}) }),
+    connection.url
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /**

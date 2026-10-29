@@ -7,8 +7,10 @@ import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import {
-  labHostIdentityKindLabel,
+  labHostKindLabel,
+  labHostShortLabel,
   labHostStatusWord,
+  labHostTagLabel,
   type LabHostIdentity
 } from "../../host/labHostIdentity";
 
@@ -28,7 +30,7 @@ function ChipTooltip(props: { host: LabHostIdentity; clickable: boolean }) {
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
         {host.label}
       </Typography>
-      <Typography variant="caption">{labHostIdentityKindLabel(host, true)}</Typography>
+      <Typography variant="caption">{labHostKindLabel(host)}</Typography>
       {(host.details ?? []).map((line) => (
         <Typography key={line} variant="caption" sx={{ overflowWrap: "anywhere" }}>
           {line}
@@ -45,8 +47,9 @@ function ChipTooltip(props: { host: LabHostIdentity; clickable: boolean }) {
 }
 
 /**
- * `● kind-c9s-app · Kubernetes`: where the open lab runs. Narrow toolbars
- * keep the dot and a shortened name; the kind moves into the tooltip.
+ * `● c9s-dev · API Server · c9s`: where the open lab runs. Narrow toolbars
+ * keep the dot, a shortened name and "API · c9s"; the tiniest the dot and
+ * "API · c9s". The tooltip has the rest.
  */
 export function LabHostChip(props: {
   host: LabHostIdentity;
@@ -91,9 +94,18 @@ export function LabHostChip(props: {
         variant="caption"
         noWrap
         data-testid="lab-host-chip-kind"
-        sx={{ color: "text.secondary", [narrow]: { display: "none" } }}
+        sx={{ color: "text.secondary", flex: "0 0 auto", [narrow]: { display: "none" } }}
       >
-        · {labHostIdentityKindLabel(host)}
+        · {labHostTagLabel(host)}
+      </Typography>
+      <Typography
+        component="span"
+        variant="caption"
+        noWrap
+        data-testid="lab-host-chip-runtime"
+        sx={{ display: "none", color: "text.secondary", flex: "0 0 auto", [narrow]: { display: "inline" } }}
+      >
+        {labHostShortLabel(host)}
       </Typography>
     </>
   );
@@ -110,7 +122,7 @@ export function LabHostChip(props: {
     borderColor: "divider",
     "&:hover": onOpen ? { bgcolor: "action.hover" } : undefined
   } as const;
-  const label = `Lab host ${host.label}, ${labHostIdentityKindLabel(host, true)}${status ? `, ${status}` : ""}`;
+  const label = `Lab host ${host.label}, ${labHostKindLabel(host)}${status ? `, ${status}` : ""}`;
   return (
     <Tooltip title={<ChipTooltip host={host} clickable={onOpen !== undefined} />} placement="bottom-start" enterDelay={300}>
       {onOpen ? (

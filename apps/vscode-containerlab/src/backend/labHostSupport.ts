@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { imageManagementUnavailableMessage } from "@containerlab/clab-ui/host";
+import { imageManagementUnavailableMessage, type LabRuntimeKind } from "@containerlab/clab-ui/host";
 import {
   describeLabHost,
   type LabHostInfo,
@@ -7,7 +7,7 @@ import {
 } from "@srl-labs/containerlab-lab-backend";
 
 import type { LabConnection } from "./connections";
-import { backendFor } from "./labBackends";
+import { backendFor, setServerRuntimeLookup } from "./labBackends";
 
 /** Lab hosts get upgraded in place; ask again after a minute. */
 const HOST_INFO_TTL_MS = 60_000;
@@ -25,6 +25,18 @@ export function cachedLabHostInfo(connection: LabConnection): LabHostInfo | unde
   if (!cached || Date.now() - cached.at > HOST_INFO_TTL_MS) void loadLabHostInfo(connection);
   return cached?.info;
 }
+
+/** A connection with the runtime its API Server told, for the explorer root's tag. */
+export function withServerRuntime<T extends LabConnection>(
+  connection: T
+): T & { serverRuntime?: LabRuntimeKind } {
+  if (connection.kind !== "api") return connection;
+  const runtime = cachedLabHostInfo(connection)?.profile.runtime;
+  return runtime !== undefined ? { ...connection, serverRuntime: runtime } : connection;
+}
+
+// The lab host pickers name an API Server's runtime once it told it.
+setServerRuntimeLookup((connection) => cachedLabHostInfo(connection)?.profile.runtime);
 
 /** The runtime and support of a connection's lab host; undefined while it cannot be asked. */
 export function labHostInfo(connection: LabConnection): Promise<LabHostInfo | undefined> {

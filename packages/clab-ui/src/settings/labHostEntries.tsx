@@ -4,7 +4,7 @@ import React from "react";
 import AddIcon from "@mui/icons-material/Add";
 
 import type { LabHostIdentity } from "../host/labHostIdentity";
-import { labHostIdentityKindLabel } from "../host/labHostIdentity";
+import { labHostTagLabel } from "../host/labHostIdentity";
 import type { LabHostSettingsSubject } from "../host/labHostSettings";
 import { labHostKind } from "../workspace/endpoints";
 import type { EndpointConfig } from "../workspace/types";
@@ -100,7 +100,7 @@ export function labHostNavigationItems(endpoints: readonly HostEntry[]): Setting
         icon: null,
         group: "Lab hosts",
         status: endpoint.status,
-        tag: labHostIdentityKindLabel(identity)
+        tag: labHostTagLabel(identity)
       } satisfies SettingsNavigationItem;
     }),
     {

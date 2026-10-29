@@ -3,7 +3,14 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { labHostIdentityKindLabel, labHostStatusWord, parseLabHostIdentity } from "../../host/labHostIdentity";
+import {
+  labHostKindLabel,
+  labHostShortLabel,
+  labHostStatusWord,
+  labHostTag,
+  labHostTagLabel,
+  parseLabHostIdentity
+} from "../../host/labHostIdentity";
 
 import { LabHostChip } from "./LabHostChip";
 
@@ -12,9 +19,9 @@ test("the chip names the lab host and its kind, with its status", () => {
     <LabHostChip host={{ id: "c9s-1", label: "kind-c9s-app", kind: "cluster", runtime: "c9s", status: "connected" }} />
   );
   assert.match(html, /kind-c9s-app/);
-  assert.match(html, /· Kubernetes/);
+  assert.match(html, /· Kubernetes · c9s/);
   assert.match(html, /data-status="connected"/);
-  assert.match(html, /aria-label="Lab host kind-c9s-app, Kubernetes"/);
+  assert.match(html, /aria-label="Lab host kind-c9s-app, Kubernetes · c9s"/);
   assert.doesNotMatch(html, /<button/, "without onOpen it is no button");
 });
 
@@ -28,14 +35,30 @@ test("the chip opens the lab host's settings when the app can", () => {
   assert.match(html, /<button/);
   assert.match(html, /aria-label="Lab host lab-server:18190, API Server · c9s, Session expired"/);
   assert.match(html, /data-status="session_expired"/);
+  assert.match(html, /· API Server · c9s/);
+  // Narrow toolbars keep the kind and runtime, shortened.
+  assert.match(html, /data-testid="lab-host-chip-runtime"[^>]*>API · c9s</);
 });
 
-test("kind labels: This computer shows its runtime, an API Server its runtime next to its kind", () => {
-  assert.equal(labHostIdentityKindLabel({ kind: "this-computer", label: "This computer", runtime: "podman" }), "Podman");
-  assert.equal(labHostIdentityKindLabel({ kind: "this-computer", label: "This computer" }), "Docker");
-  assert.equal(labHostIdentityKindLabel({ kind: "cluster", label: "kind-c9s-app", runtime: "c9s" }, true), "Kubernetes");
-  assert.equal(labHostIdentityKindLabel({ kind: "server", label: "lab", runtime: "docker" }), "API Server");
-  assert.equal(labHostIdentityKindLabel({ kind: "server", label: "lab", runtime: "docker" }, true), "API Server · Docker");
+test("one label names a lab host's kind and runtime everywhere", () => {
+  assert.equal(labHostKindLabel({ kind: "server", runtime: "c9s" }), "API Server · c9s");
+  assert.equal(labHostKindLabel({ kind: "server", runtime: "docker" }), "API Server · Docker");
+  assert.equal(labHostKindLabel({ kind: "server" }), "API Server", "until the API Server told its runtime");
+  assert.equal(labHostKindLabel({ kind: "this-computer", runtime: "podman" }), "This computer · Podman");
+  assert.equal(labHostKindLabel({ kind: "this-computer" }), "This computer · Docker");
+  assert.equal(labHostKindLabel({ kind: "cluster" }), "Kubernetes · c9s");
+  // Next to its name, This computer's tag leaves out what its name says.
+  assert.equal(labHostTagLabel({ kind: "this-computer", label: "This computer", runtime: "podman" }), "Podman");
+  assert.equal(labHostTagLabel({ kind: "this-computer", label: "Workstation" }), "This computer · Docker");
+  assert.equal(labHostTagLabel({ kind: "server", label: "lab", runtime: "c9s" }), "API Server · c9s");
+  assert.equal(labHostShortLabel({ kind: "server", runtime: "podman" }), "API · Podman");
+  assert.equal(labHostShortLabel({ kind: "server" }), "API Server");
+  assert.equal(labHostShortLabel({ kind: "this-computer", runtime: "podman" }), "Podman");
+  assert.deepEqual(labHostTag({ kind: "cluster", label: "kind-c9s-app" }), {
+    label: "Kubernetes · c9s",
+    short: "K8s · c9s",
+    title: "Kubernetes · c9s"
+  });
 });
 
 test("status words follow the explorer roots", () => {

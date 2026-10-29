@@ -31,11 +31,11 @@ test("lab hosts read by where their labs run", async () => {
   assert.equal(labHostSubtitle({ kind: "local", runtime: "podman" }), "This computer · Podman");
   assert.equal(
     labHostSubtitle({ kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app" }),
-    "Kubernetes · kind-c9s-app · one namespace per lab"
+    "Kubernetes · c9s · kind-c9s-app · one namespace per lab"
   );
   assert.equal(
     labHostSubtitle({ kind: "local", runtime: "c9s", kubeContext: "prod", namespace: "team-a" }),
-    "Kubernetes · prod · namespace team-a"
+    "Kubernetes · c9s · prod · namespace team-a"
   );
   assert.equal(labHostSubtitle({ kind: "api", runtime: "c9s", cluster: "c9s" }), "API Server · c9s · cluster c9s");
   assert.equal(labHostSubtitle({ kind: "api" }), "API Server");
@@ -64,7 +64,7 @@ test("a Kubernetes lab host on the app's machine reads as Kubernetes before its 
   // A cluster listed before its runtime is known, or kept in the browser from an earlier session.
   const cluster = { kind: "local" as const, url: "local://c9s/kind-c9s-app?kubeconfig=%2Fhome%2Fclab%2Fapp.kubeconfig" };
   assert.equal(labHostKind(cluster), "cluster");
-  assert.equal(labHostSubtitle(cluster), "Kubernetes · current context · one namespace per lab");
+  assert.equal(labHostSubtitle(cluster), "Kubernetes · c9s · current context · one namespace per lab");
   assert.equal(labHostKind({ kind: "local", url: "local://this-computer" }), "this-computer");
   // Listed, it is no "This computer": that one can still be added.
   assert.equal(isLocalOfferListed([cluster], {}), false);

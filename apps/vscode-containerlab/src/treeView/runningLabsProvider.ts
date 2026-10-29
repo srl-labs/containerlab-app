@@ -15,6 +15,7 @@ import {
 import { refreshSshxSessions, refreshGottySessions } from "../services/sessionRefresh";
 import { getCurrentTopoViewer } from "../commands/graph";
 import { connectionById, getConnections, viewLabPath } from "../backend/labBackends";
+import { withServerRuntime } from "../backend/labHostSupport";
 import { LOCAL_CONNECTION, isClusterConnection, type LabConnection } from "../backend/connections";
 import type {
   ClabInterfaceSnapshot,
@@ -370,7 +371,7 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
         children = [new c.ClabConnectionMessageNode(connection.id, "running", "No running labs")];
       }
       return new c.ClabConnectionTreeNode(
-        connection,
+        withServerRuntime(connection),
         "running",
         status,
         children,

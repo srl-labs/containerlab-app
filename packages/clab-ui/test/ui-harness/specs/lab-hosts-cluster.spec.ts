@@ -60,7 +60,7 @@ test("adds a Kubernetes lab host with its kubeconfig context, checks it and edit
   );
   await expect(settings.getByTestId("lab-host-cluster-connection")).toContainText("context kind-c9s-app");
   const card = page.getByTestId(/^lab-host-c9s-/);
-  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · kind-c9s-app · one namespace per lab");
+  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · c9s · kind-c9s-app · one namespace per lab");
   if (SCREENSHOTS) {
     await card.scrollIntoViewIfNeeded();
     await card.screenshot({ path: `${SCREENSHOTS}/ux-vscode-cluster-card.png` });
@@ -79,7 +79,7 @@ test("adds a Kubernetes lab host with its kubeconfig context, checks it and edit
   await expect(edit.getByLabel("kubeconfig file")).toHaveValue("/home/alice/.kube/lab.yaml");
   await expect(edit.getByRole("combobox", { name: "Context" })).toHaveText(/lab-prod/);
   await edit.getByRole("button", { name: "Save" }).click();
-  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · lab-prod · one namespace per lab");
+  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · c9s · lab-prod · one namespace per lab");
   await expect(settings.getByTestId("lab-host-cluster-connection")).toContainText("context lab-prod");
   await expect(settings.getByTestId("lab-host-setting-exposeType").getByRole("combobox", { name: "Port exposure" })).toHaveText(
     /LoadBalancer/

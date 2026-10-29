@@ -48,7 +48,7 @@ import {
   labHostSettingsSubject
 } from "../../settings/labHostEntries";
 import type { SettingsNavigationItem } from "../../settings/SettingsNavigation";
-import { LAB_HOST_KIND_LABELS, labHostKind } from "../endpoints";
+import { endpointKindLabel } from "../endpoints";
 import { LabHostPage } from "./LabHostPage";
 import { EndpointManager } from "./EndpointManager";
 import {
@@ -689,7 +689,7 @@ export function SettingsOverlay({
   ];
   const active = sections.find((section) => section.key === activeSection) ?? sections[0];
   const sectionDescription = hostEndpoint
-    ? `${LAB_HOST_KIND_LABELS[labHostKind(hostEndpoint)]} · settings for labs on this lab host`
+    ? `${endpointKindLabel(hostEndpoint)} · settings for labs on this lab host`
     : active.description;
   return (
     <Dialog

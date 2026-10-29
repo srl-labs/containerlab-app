@@ -1,31 +1,28 @@
-import { endpointRuntimeBadge, labHostKind } from "@containerlab/clab-ui/workspace/state";
+import { endpointKindLabel, labHostKind } from "@containerlab/clab-ui/workspace/state";
 import type { EndpointConfig } from "./stores/endpointStore";
 
 type EndpointAddress = Pick<EndpointConfig, "kind" | "url">;
-
-const SERVER_RUNTIMES: Record<NonNullable<EndpointConfig["runtime"]>, string> = {
-  docker: "Docker",
-  podman: "Podman",
-  c9s: "c9s"
-};
+type EndpointWhere = EndpointAddress & Partial<Pick<EndpointConfig, "runtime" | "kubeContext" | "namespace">>;
 
 /**
- * How the endpoint's location reads in the UI: "This computer" with its
- * runtime, a cluster's "Kubernetes · lab-prod", or "API Server" with its
- * runtime and URL.
+ * Where a lab host's labs go, after its kind: a cluster's context and
+ * namespace ("kind-c9s-app/team-a"), an API Server's URL; nothing for This
+ * computer.
  */
-export function endpointDisplayAddress(
-  endpoint: EndpointAddress & Partial<Pick<EndpointConfig, "runtime" | "kubeContext" | "namespace">>
-): string {
+export function endpointWhere(endpoint: EndpointWhere): string | undefined {
   const kind = labHostKind(endpoint);
-  // A cluster whose check has not answered yet is still Kubernetes, never "This computer · Docker".
-  if (kind === "cluster") return endpointRuntimeBadge({ ...endpoint, runtime: "c9s" }) ?? "Kubernetes";
-  if (kind === "this-computer") {
-    return `This computer · ${endpoint.runtime === "podman" ? "Podman" : "Docker"}`;
-  }
-  // An API Server names its kind and runtime, e.g. "API Server · c9s · https://lab:8090".
-  const runtime = endpoint.runtime ? SERVER_RUNTIMES[endpoint.runtime] : undefined;
-  return ["API Server", runtime, endpoint.url].filter(Boolean).join(" · ");
+  if (kind === "cluster") return [endpoint.kubeContext, endpoint.namespace].filter(Boolean).join("/") || undefined;
+  if (kind === "this-computer") return undefined;
+  return endpoint.url;
+}
+
+/**
+ * How the endpoint's location reads in the UI: its kind and runtime, then
+ * where its labs go, e.g. "This computer · Docker", "Kubernetes · c9s ·
+ * lab-prod" or "API Server · c9s · https://lab:8090".
+ */
+export function endpointDisplayAddress(endpoint: EndpointWhere): string {
+  return [endpointKindLabel(endpoint), endpointWhere(endpoint)].filter(Boolean).join(" · ");
 }
 
 /** The host that reaches the endpoint's labs, e.g. for published node ports. */

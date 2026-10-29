@@ -33,7 +33,7 @@ import { APP_DOCS_URL,
   ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
-  LAB_HOST_KIND_LABELS,
+  endpointKindLabel,
   CLUSTERS_UNSUPPORTED,
   clusterChoiceUnavailable,
   clusterSettingsOf,
@@ -497,7 +497,7 @@ function ManagedEndpointList(props: {
                   alignItems: "flex-start"
                 }}
               >
-                <Box sx={{ color: "text.secondary", display: "inline-flex", mt: 0.25, flexShrink: 0 }} title={LAB_HOST_KIND_LABELS[kind]}>
+                <Box sx={{ color: "text.secondary", display: "inline-flex", mt: 0.25, flexShrink: 0 }} title={endpointKindLabel(endpoint)}>
                   <LabHostKindIcon kind={kind} />
                 </Box>
                 <Box sx={{ minWidth: 0, flex: 1 }}>

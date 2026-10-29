@@ -1,3 +1,4 @@
+import type { LabHostTag } from "../../host/labHostIdentity";
 import type { TopologyRef } from "../../session";
 
 import type { EndpointConfig,ContainerState,InterfaceState,LabState } from "../types";
@@ -51,6 +52,8 @@ export interface ExplorerTreeItem {
   endpointId?: string;
   /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
   endpointKind?: "local" | "api";
+  /** A lab host root: its kind and runtime as a tag, e.g. "API Server · c9s". */
+  endpointTag?: LabHostTag;
   topologyRef?: TopologyRef;
   resourceKind?: "file" | "directory";
   resourcePath?: string;

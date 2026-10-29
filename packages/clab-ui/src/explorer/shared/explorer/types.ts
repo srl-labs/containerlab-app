@@ -1,3 +1,5 @@
+import type { LabHostTag } from "../../../host/labHostIdentity";
+
 export type ExplorerSectionId = "runningLabs" | "localLabs" | "fileExplorer" | "helpFeedback";
 
 export const EXPLORER_SECTION_IDS: ExplorerSectionId[] = [
@@ -42,6 +44,8 @@ export interface ExplorerNode {
   endpointId?: string;
   /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
   endpointKind?: "local" | "api";
+  /** A lab host root: its kind and runtime, e.g. "API Server · c9s", shown as a tag next to its name. */
+  endpointTag?: LabHostTag;
   state?: string;
   statusIndicator?: "green" | "red" | "yellow" | "blue" | "gray";
   statusDescription?: string;
