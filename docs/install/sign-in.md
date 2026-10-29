@@ -18,12 +18,12 @@ The web app, and the desktop app on macOS and Windows, start on **Sign in to a l
 
 | Field | Fill in |
 | --- | --- |
-| **Lab host URL** | The API server URL, for example `https://lab1.example.com:8090` |
+| **Lab host URL** | The API Server URL, for example `https://lab1.example.com:8090` |
 | **Name** | A short name for the explorer, for example `lab1`. Defaults to the host name |
 | **Username**, **Password** | Your Linux account on the lab host |
 | **Stay signed in for** | How long the session lasts: `24h`, `7d`, `1h30m` |
 
-The password goes to the API server once, in exchange for a session token. The app keeps the token, not the password.
+The password goes to the API Server once, in exchange for a session token. The app keeps the token, not the password.
 
 ## Several lab hosts
 
@@ -41,7 +41,7 @@ Under **Lab host profiles**, **Export** your list of lab hosts and **Import** it
 
 <div class="steps" markdown>
 
-1. **Is the API server reachable from where the app runs?** For the web app, that is the web app's container, not your browser.
+1. **Is the API Server reachable from where the app runs?** For the web app, that is the web app's container, not your browser.
 
     ```bash
     curl -k https://lab1.example.com:8090/health

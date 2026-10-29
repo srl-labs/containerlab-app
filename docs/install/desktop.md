@@ -42,7 +42,7 @@ The macOS and Windows builds are not signed yet, so the system may warn you the 
 
 ## Run labs on this computer
 
-On Linux, the app runs labs with the containerlab CLI and Docker of the computer it runs on. No API server, no sign-in: the app opens on the labs of **This computer**.
+On Linux, the app runs labs with the containerlab CLI and Docker of the computer it runs on. No API Server, no sign-in: the app opens on the labs of **This computer**.
 
 <div class="steps" markdown>
 
@@ -75,7 +75,7 @@ To change how the app runs containerlab, create `~/.config/Containerlab/local-ba
 
 Set `"enabled": false` to turn **This computer** off entirely, or `"sudo": true` to run containerlab with `sudo -n`, which needs passwordless sudo. The same options are available as [environment variables](../reference/app-settings.md#desktop-app).
 
-To run labs on a Kubernetes cluster with clabernetes as well, choose **Add lab host** > **Kubernetes cluster** under **Settings** > **Lab hosts**; the app keeps it under `clusters` in the same file. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
+To run labs on a Kubernetes cluster with clabernetes as well, choose **Add lab host** > **Kubernetes** under **Settings** > **Lab hosts**; the app keeps it under `clusters` in the same file. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
 
 ## Work with lab hosts
 

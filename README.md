@@ -66,18 +66,18 @@ docker run -d --name containerlab-app \
 
 Open **`https://<web-app-host>:3001`**, or **`https://localhost:3001`** when browsing on that host. The app generates a self-signed HTTPS certificate by default, so your browser may ask you to accept it.
 
-At login, enter the API URL for your lab host and its Linux username and password. If the API server runs on the same host as the web app, use `https://localhost:8090`. Otherwise, use an address such as `https://lab-host.example.com:8090`.
+At login, enter the API URL for your lab host and its Linux username and password. If the API Server runs on the same host as the web app, use `https://localhost:8090`. Otherwise, use an address such as `https://lab-host.example.com:8090`.
 
 > [!NOTE]
 > In the web app's API address, `localhost` refers to the server running the web app. A remote API address must be reachable from that server, even when you open the app in a browser on another machine.
 
 The container image supports Linux AMD64 and ARM64. Certificate and port options are listed under [configuration](#configuration).
 
-For a personal setup without an API server, the web app can also run labs on its own host with `WEB_LOCAL_LABS=true`. Anyone who can open the app then runs labs as root on that host, so keep it on a trusted network; see [Run labs on the web app's host](https://srl-labs.github.io/containerlab-app/docs/install/web/#run-labs-on-the-web-apps-host).
+For a personal setup without an API Server, the web app can also run labs on its own host with `WEB_LOCAL_LABS=true`. Anyone who can open the app then runs labs as root on that host, so keep it on a trusted network; see [Run labs on the web app's host](https://srl-labs.github.io/containerlab-app/docs/install/web/#run-labs-on-the-web-apps-host).
 
 ## Desktop app
 
-Use the Containerlab interface in its own application window on your workstation. On Linux it runs labs on the computer itself, like the VS Code extension, with no API server and no sign-in. It can also connect to your lab hosts, so your labs can run on another machine while you work from Linux, macOS, or Windows.
+Use the Containerlab interface in its own application window on your workstation. On Linux it runs labs on the computer itself, like the VS Code extension, with no API Server and no sign-in. It can also connect to your lab hosts, so your labs can run on another machine while you work from Linux, macOS, or Windows.
 
 Download a package from the [latest desktop release](https://github.com/srl-labs/containerlab-app/releases/latest):
 
@@ -96,9 +96,9 @@ On Linux with containerlab and Docker set up, launch the app: it opens on the la
 
 ## Lab hosts
 
-A lab host runs `clab-api-server`, which manages labs on a Linux host with your container runtime. Every app can sign in to it: the web app always, the desktop app and the VS Code extension for labs on another machine. That host can be your Linux workstation, a VM, or a remote server. On macOS and Windows, run the API server in the Linux environment where your labs run.
+A lab host runs `clab-api-server`, which manages labs on a Linux host with your container runtime. Every app can sign in to it: the web app always, the desktop app and the VS Code extension for labs on another machine. That host can be your Linux workstation, a VM, or a remote server. On macOS and Windows, run the API Server in the Linux environment where your labs run.
 
-If your lab host already has an API server, you only need its URL and an allowed Linux account. To set one up, run these commands on the lab host:
+If your lab host already has an API Server, you only need its URL and an allowed Linux account. To set one up, run these commands on the lab host:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/srl-labs/clab-api-server/main/install.sh | sudo bash -s -- install
@@ -109,11 +109,11 @@ sudo systemctl enable --now clab-api-server
 
 Replace `<username>` with an existing Linux user on that host. Sign in to the app with that user's Linux password. By default, members of `clab_api` can sign in, and members of `clab_admins` have elevated permissions.
 
-The API server uses HTTPS on port `8090` by default. See the [API server setup guide](https://github.com/srl-labs/clab-api-server/blob/main/README.md) for configuration, alternative installation methods, and changing the lab storage directory.
+The API Server uses HTTPS on port `8090` by default. See the [API Server setup guide](https://github.com/srl-labs/clab-api-server/blob/main/README.md) for configuration, alternative installation methods, and changing the lab storage directory.
 
 ### Good to know
 
-- **Your login belongs to your lab host.** Use the Linux account allowed to access its API server; there is no separate app account to create.
+- **Your login belongs to your lab host.** Use the Linux account allowed to access its API Server; there is no separate app account to create.
 - **Your lab files stay with your labs.** Topologies created through web or desktop are saved on the API host, in your user's `~/.clab` directory by default. VS Code works with files in the workspace you opened.
 - **One app can reach several hosts.** Web and desktop let you add multiple API endpoints, each with its own login, so you can work with different lab environments from one app.
 

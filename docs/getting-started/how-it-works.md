@@ -17,10 +17,10 @@ Labs always run on Linux, next to Docker. The apps differ only in how they get t
 
 Every app reaches labs in one of two ways, and shows the labs of both side by side:
 
-- **containerlab on the machine the app runs on.** No server and no sign-in: the app runs containerlab as you. VS Code calls it **Local**, the desktop app **This computer**.
-- **`clab-api-server` on a lab host.** You sign in with a Linux account on the [lab host](../install/lab-host.md), and the API server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once.
+- **containerlab on the machine the app runs on.** No server and no sign-in: the app runs containerlab as you. The apps call it **This computer**.
+- **`clab-api-server` on a lab host.** You sign in with a Linux account on the [lab host](../install/lab-host.md), and the API Server deploys labs, opens terminals, and captures packets there. One app can sign in to several lab hosts at once.
 
-**VS Code** runs containerlab on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window. [Lab hosts](../install/vscode.md#work-with-labs-on-a-lab-host) show up next to Local.
+**VS Code** runs containerlab on whatever machine the extension runs on. With Remote SSH, that is the remote server, and your laptop only shows the window. [Lab hosts](../install/vscode.md#work-with-labs-on-a-lab-host) show up next to This computer.
 
 **The desktop app** on Linux opens on [the labs of this computer](../install/desktop.md#run-labs-on-this-computer), like VS Code. On macOS and Windows, and for labs elsewhere, it signs in to lab hosts.
 
@@ -32,11 +32,11 @@ Every app reaches labs in one of two ways, and shows the labs of both side by si
 
 | | containerlab on this machine | `clab-api-server` on a lab host |
 | --- | --- | --- |
-| VS Code | **Local**: Linux, WSL, Remote SSH | Lab hosts, from any OS |
+| VS Code | **This computer**: Linux, WSL, Remote SSH | Lab hosts, from any OS |
 | Desktop app | **This computer**: Linux | Lab hosts, from any OS |
 | Web app | Its own host, when turned on | Lab hosts |
 
-Both ways run the same lab actions. A few depend on the API server:
+Both ways run the same lab actions. A few depend on the API Server:
 
 | Feature | containerlab on this machine | `clab-api-server` |
 | --- | :---: | :---: |

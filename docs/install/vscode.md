@@ -63,14 +63,14 @@ The extension can also manage labs on a [lab host](lab-host.md) that runs `clab-
 
 1. **Open the Lab Hosts page.** Select the server button in the explorer title bar, or run **Containerlab: Manage Lab Hosts** from the command palette.
 
-2. **Add the lab host** with its API server URL, for example `https://lab1.example.com:8090`, a name, and your Linux account on it. The account must be in the `clab_api` or `clab_admins` group, as for the [desktop and web apps](sign-in.md). The host is saved once the sign-in works.
+2. **Add the lab host** with its API Server URL, for example `https://lab1.example.com:8090`, a name, and your Linux account on it. The account must be in the `clab_api` or `clab_admins` group, as for the [desktop and web apps](sign-in.md). The host is saved once the sign-in works.
 
-3. **Find its labs in the explorer.** Running Labs and Undeployed Labs each list **Local** and every lab host, with a dot for its status. Every action runs on the host the lab belongs to.
+3. **Find its labs in the explorer.** Running Labs and Undeployed Labs each list **This computer** and every lab host, with a dot for its status. Every action runs on the host the lab belongs to.
 
 </div>
 
-![Lab hosts next to Local in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-dark.webp#only-dark){ .shot }
-![Lab hosts next to Local in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-light.webp#only-light){ .shot }
+![Lab hosts next to This computer in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-dark.webp#only-dark){ .shot }
+![Lab hosts next to This computer in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-light.webp#only-light){ .shot }
 
 The Lab Hosts page shows each host's status, CPU, memory, and disk, and signs in, signs out, edits, or removes it. In the explorer, right-click a lab host for the same actions and more: deploy a lab file, clone a repository, manage images, install Edgeshark, or open its files. **Containerlab: Add Lab Host…** adds one from the command palette, step by step.
 
@@ -88,14 +88,14 @@ On a lab host:
 
 - **Files** live in your workspace on the host (`~/.clab`). The explorer lists the topologies there; they open as `clab-api://` files in the normal text editor and in the topology editor, and save back to the host. **Open Files in Explorer** adds the whole workspace to the Explorer view.
 - **Deploy, destroy, apply, start, stop, save** and the other lab actions run on the host, with the output in the **Containerlab** output channel.
-- **Shell, SSH, and telnet** open as VS Code terminals connected through the API server. **Logs** open in an editor.
+- **Shell, SSH, and telnet** open as VS Code terminals connected through the API Server. **Logs** open in an editor.
 - **Packet capture** runs Wireshark in a container on the host and shows it in a VS Code tab; Edgeshark links point at the host.
 - **Clone repository** and **Deploy lab file** with a Git URL clone into the host's workspace. The host takes GitHub and GitLab URLs.
 - **Image completion** in topology files and the topology editor offers the host's images.
 
-**Add Lab Host** asks where labs should run: **This computer**, **Kubernetes cluster**, or **Lab server**. To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes cluster**: the cluster form opens on the Lab Hosts page, with **Check connection**. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
+**Add Lab Host** asks where labs should run: **This computer**, **Kubernetes**, or **API Server**. To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes**: the cluster form opens on the Lab Hosts page, with **Check connection**. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
 
-**Local** is listed when containerlab can run where VS Code runs. When something is missing there, its dot turns red and its tooltip says what to fix; **Check Again** looks again once you fixed it. To work with lab hosts only, hide **Local** on the Lab Hosts page, or turn off `containerlab.localConnection`. Like the desktop app, the extension accepts the API server's self-signed certificate; start VS Code with `CLAB_API_TLS_VERIFY=true` to require a trusted one.
+**This computer** is listed when containerlab can run where VS Code runs. When something is missing there, its dot turns red and its tooltip says what to fix; **Check Again** looks again once you fixed it. To work with lab hosts only, hide **This computer** on the Lab Hosts page, or turn off `containerlab.localConnection`. Like the desktop app, the extension accepts the API Server's self-signed certificate; start VS Code with `CLAB_API_TLS_VERIFY=true` to require a trusted one.
 
 ## Only in VS Code
 

@@ -24,15 +24,15 @@ The **Lab Hosts** page of the settings tab manages these; see [Work with labs on
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `connections` | `[]` | Lab hosts. A `clab-api-server` entry has `url`, and optionally `label`, `username`, and `sessionDuration`; passwords and tokens are never stored here. A [Kubernetes cluster](../guides/kubernetes.md#add-a-cluster) entry has `"kind": "kubernetes"` and `kubeContext`, and optionally `kubeconfig` (the file with the context; a leading `~` is your home folder), `namespace` (one for every lab instead of `c9s-<lab>`), the deploy defaults `exposeType` (`ClusterIP`, `Headless`, `LoadBalancer`, or `None`), `persistence` (`false` keeps no node storage) and `imagePullSecret`, and `label`. **Add Lab Host** > **Kubernetes cluster** writes it for you. Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. Clusters need Linux or WSL, where containerlab runs. |
-| `localConnection` | `true` | Show **Local**, the labs on the machine VS Code runs on, next to the lab hosts. |
+| `connections` | `[]` | Lab hosts. A `clab-api-server` entry has `url`, and optionally `label`, `username`, and `sessionDuration`; passwords and tokens are never stored here. A [Kubernetes](../guides/kubernetes.md#add-a-cluster) entry has `"kind": "kubernetes"` and `kubeContext`, and optionally `kubeconfig` (the file with the context; a leading `~` is your home folder), `namespace` (one for every lab instead of `c9s-<lab>`), the deploy defaults `exposeType` (`ClusterIP`, `Headless`, `LoadBalancer`, or `None`), `persistence` (`false` keeps no node storage) and `imagePullSecret`, and `label`. **Add Lab Host** > **Kubernetes** writes it for you. Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. Clusters need Linux or WSL, where containerlab runs. |
+| `localConnection` | `true` | Show **This computer**, the labs on the machine VS Code runs on, next to the lab hosts. |
 
 ## Runtime
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `binaryPath` | empty | Absolute path to `containerlab`. Empty looks it up in `PATH`. |
-| `runtime` | `docker` | Container runtime of labs on this computer (**Local**): `docker` or `podman`. A Kubernetes cluster is a lab host of its own; add it with **Add Lab Host** > **Kubernetes cluster**. |
+| `runtime` | `docker` | Container runtime of labs on **This computer**: `docker` or `podman`. A Kubernetes cluster is a lab host of its own; add it with **Add Lab Host** > **Kubernetes**. |
 | `dockerSocketPath` | `/var/run/docker.sock` | Docker or Podman socket, e.g. `/run/user/1000/podman/podman.sock`. |
 | `refreshMode` | `events` | `events` follows `containerlab events` live. `polling` runs `containerlab inspect` every `pollInterval`. |
 | `pollInterval` | `5000` | Polling interval in ms. |
