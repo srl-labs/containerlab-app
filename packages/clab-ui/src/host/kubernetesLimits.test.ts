@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KUBERNETES_LIMITS, runtimeLimit, unsupportedReason } from "./kubernetesLimits";
+import { KUBERNETES_LIMITS, pullSecretNamespaceNote, runtimeLimit, unsupportedReason } from "./kubernetesLimits";
 
 test("Docker, Podman and an unknown lab host have no limits", () => {
   for (const runtime of ["docker", "podman"] as const) {
@@ -20,4 +20,13 @@ test("a Kubernetes lab host greys out what it refuses and hints at what it does 
   // Partly supported options stay editable: no reason to grey them out.
   assert.equal(unsupportedReason(c9s, "nodeBinds"), undefined);
   for (const limit of Object.values(KUBERNETES_LIMITS)) assert.match(limit.reason, /Kubernetes \(c9s\)/);
+});
+
+test("a pull secret needs a namespace that holds it, which one namespace per lab only has if the cluster copies it", () => {
+  assert.equal(pullSecretNamespaceNote(undefined, undefined), undefined, "no secret, nothing to say");
+  assert.equal(pullSecretNamespaceNote("  ", undefined), undefined);
+  assert.equal(pullSecretNamespaceNote("regcred", "team-a"), undefined, "a fixed namespace can hold the Secret");
+  const note = pullSecretNamespaceNote(" regcred ", " ");
+  assert.match(note ?? "", /^regcred must exist in the lab's namespace c9s-<lab>, which deploy creates\./);
+  assert.match(note ?? "", /copy it into new namespaces/);
 });

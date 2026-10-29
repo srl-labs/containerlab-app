@@ -29,6 +29,7 @@ import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlined";
 
+import { PER_LAB_PULL_SECRET_NOTE } from "../../host/kubernetesLimits";
 import type { LabHostCheck } from "../../host/labHostSupport";
 import { C9S_EXPOSE_TYPES, isValidKubeNamespace, isValidKubeSecretName, type C9sExposeType } from "../../host/lifecycleOptions";
 import { C9S_EXPOSE_DESCRIPTIONS, LAB_HOST_KIND_LABELS, type LabHostKind } from "../endpoints";
@@ -554,7 +555,12 @@ export function ClusterHostDialog(props: {
             onChange={(event) => update("imagePullSecret", event.target.value)}
             placeholder="None"
             error={pullSecretError !== undefined}
-            helperText={pullSecretError ?? "Optional: a Secret in the lab's namespace for private registries."}
+            helperText={
+              pullSecretError ??
+              (form.namespaceMode === "per-lab"
+                ? `Optional: a Secret for private registries. ${PER_LAB_PULL_SECRET_NOTE}`
+                : "Optional: a Secret in that namespace for private registries.")
+            }
             fullWidth
             slotProps={{ inputLabel: { shrink: true }, htmlInput: { spellCheck: false } }}
           />

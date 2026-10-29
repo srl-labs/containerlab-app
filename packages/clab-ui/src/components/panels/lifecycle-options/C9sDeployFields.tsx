@@ -9,6 +9,7 @@ import {
   isValidKubeSecretName,
   type C9sExposeType
 } from "../../../host/lifecycleOptions";
+import { pullSecretNamespaceNote } from "../../../host/kubernetesLimits";
 import type { LabHostProfile } from "../../../host/labHostSupport";
 import { InputField, SelectField } from "../../ui/form";
 
@@ -95,6 +96,10 @@ export const C9sDeployFields: React.FC<{
   const namespaceError = kubeNameError(form.namespace, "namespace");
   const secretError = kubeNameError(form.imagePullSecret, "secret");
   const defaultNamespace = profile?.namespace ?? "c9s-<lab>";
+  const secretNote = pullSecretNamespaceNote(
+    form.imagePullSecret.trim() || profile?.imagePullSecret,
+    form.namespace.trim() || profile?.namespace
+  );
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }} data-testid="lifecycle-options-c9s">
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
@@ -131,6 +136,7 @@ export const C9sDeployFields: React.FC<{
             error={secretError !== undefined}
             helperText={
               secretError ??
+              secretNote ??
               (profile?.imagePullSecret
                 ? `Empty uses the lab host's ${profile.imagePullSecret}.`
                 : "A Secret in the lab's namespace for private registries.")

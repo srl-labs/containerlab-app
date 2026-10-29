@@ -113,3 +113,34 @@ export function unsupportedReason(
   const limit = runtimeLimit(profile, key);
   return limit?.level === "unsupported" ? limit.reason : undefined;
 }
+
+/**
+ * Why a cluster used from this machine may not pull with an image pull secret
+ * when every lab gets its own namespace. containerlab only names the Secret
+ * on the lab (`spec.imagePull.pullSecrets`, containerlab
+ * `labruntime/clabernetes/topology.go`) and creates no Secret; clabernetes
+ * copies none either: a node whose Secret is missing waits with
+ * `ImagePullSecretMissing` until it appears (clabernetes
+ * `controllers/node/directstatus.go`), and its image pull guide mirrors one
+ * Secret into the lab namespaces with tools such as kubernetes-reflector.
+ * Deploy creates the namespace `c9s-<lab>`, so the Secret is only there when
+ * the cluster copies it. A fixed namespace, or a lab server (it copies its
+ * Secret into each lab namespace), has no such gap.
+ */
+export const PER_LAB_PULL_SECRET_NOTE =
+  "With one namespace per lab, deploy creates c9s-<lab> and only names the Secret there. " +
+  "Have the cluster copy it into new namespaces (e.g. kubernetes-reflector), or use a fixed namespace that holds it.";
+
+/**
+ * The note on an image pull secret of one lab: set when a secret applies and
+ * the lab gets its own namespace at deploy (no namespace of its own or of the
+ * lab host); undefined otherwise.
+ */
+export function pullSecretNamespaceNote(secret: string | undefined, namespace: string | undefined): string | undefined {
+  const name = secret?.trim() ?? "";
+  if (name === "" || (namespace?.trim() ?? "") !== "") return undefined;
+  return (
+    `${name} must exist in the lab's namespace c9s-<lab>, which deploy creates. ` +
+    "Set a namespace that holds it, or have the cluster copy it into new namespaces (e.g. kubernetes-reflector)."
+  );
+}

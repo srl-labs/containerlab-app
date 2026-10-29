@@ -12,7 +12,7 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { SettingsField } from "../../../settings/SettingsField";
-import { unsupportedReason } from "../../../host/kubernetesLimits";
+import { pullSecretNamespaceNote, unsupportedReason } from "../../../host/kubernetesLimits";
 import type { LabHostProfile } from "../../../host/labHostSupport";
 import { C9S_EXPOSE_TYPES, type C9sExposeType } from "../../../host/lifecycleOptions";
 import {
@@ -210,6 +210,10 @@ const KubernetesRows: React.FC<{
 }> = ({ form, profile, update, readOnly }) => {
   const exposeDefault = profile?.exposeType ?? "clabernetes default";
   const persistenceOff = profile?.persistence === false;
+  const secretNote = pullSecretNamespaceNote(
+    form.imagePullSecret.trim() || profile?.imagePullSecret,
+    form.namespace.trim() || profile?.namespace
+  );
   return (
     <>
       <TextRow
@@ -249,7 +253,7 @@ const KubernetesRows: React.FC<{
       <TextRow
         id="lab-deploy-image-pull-secret"
         title="Image pull secret"
-        description={`A Secret in the lab's namespace for private registries. Lab host default: ${profile?.imagePullSecret ?? "none"}.`}
+        description={`A Secret in the lab's namespace for private registries. Lab host default: ${profile?.imagePullSecret ?? "none"}.${secretNote ? ` ${secretNote}` : ""}`}
         value={form.imagePullSecret}
         placeholder={profile?.imagePullSecret ?? "None"}
         error={kubeNameError(form.imagePullSecret, "secret")}
