@@ -313,7 +313,7 @@ function useKubeContexts(support: ClusterHostsSupport, kubeconfig: string, open:
 
 function saveLabel(saving: boolean, editing: boolean): string {
   if (saving) return "Saving…";
-  return editing ? "Save" : "Add cluster";
+  return editing ? "Save" : "Add lab host";
 }
 
 /**
@@ -397,7 +397,7 @@ export function ClusterHostDialog(props: {
   return (
     <Dialog open={open} onClose={props.onClose} fullWidth maxWidth="sm" aria-labelledby="cluster-host-dialog-title">
       <DialogTitle id="cluster-host-dialog-title">
-        {editing ? `Edit ${editing.settings.label ?? editing.settings.kubeContext}` : "Add Kubernetes cluster"}
+        {editing ? `Edit ${editing.settings.label ?? editing.settings.kubeContext}` : "Add Kubernetes lab host"}
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2.25}>

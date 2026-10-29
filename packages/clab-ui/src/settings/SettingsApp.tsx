@@ -41,7 +41,7 @@ import type {
 const LAB_HOSTS_CATEGORY: SettingsNavigationItem = {
   key: "labHosts",
   label: "Lab Hosts",
-  description: "Labs on this machine and on the hosts that run clab-api-server",
+  description: "Where your labs run: this computer, Kubernetes and API Servers",
   icon: <DnsOutlinedIcon fontSize="small" />,
 };
 /** Searches that should lead to the Lab Hosts page instead of raw settings. */
@@ -492,7 +492,7 @@ export function SettingsApp({
               </Button>
             }
           >
-            Manage Local and lab hosts on the Lab Hosts page.
+            Manage this computer and the other lab hosts on the Lab Hosts page.
           </Alert>
         )}
         {showLabHosts && labHosts && (

@@ -108,7 +108,7 @@ test("a cluster needs Linux too: containerlab on this computer drives it", () =>
       assert.equal(config.enabled, false);
       assert.deepEqual(config.clusters, []);
       assert.deepEqual(config.problems, [
-        "Kubernetes clusters are left out: containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM."
+        "Kubernetes lab hosts are left out: containerlab runs on Linux only. Use an API Server, or run the app in WSL or a Linux VM."
       ]);
       assert.deepEqual(createLocalEndpoints(config, { label: "This computer" }), []);
     }

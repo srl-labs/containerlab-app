@@ -22,7 +22,7 @@ type LabHost = LabHostsSnapshot["hosts"][number];
 
 /** Why this window offers no clusters: containerlab here deploys a cluster's labs, and it needs Linux. */
 const CLUSTERS_NEED_LINUX =
-  "containerlab runs on Linux only, and it deploys a cluster's labs from this computer. Use a lab server that runs Kubernetes, or open this window in WSL.";
+  "containerlab runs on Linux only, and it deploys a cluster's labs from this computer. Use an API Server that runs Kubernetes, or open this window in WSL.";
 
 /** A path in the home folder as `~/…`, the way users write a kubeconfig path. */
 function homeRelative(file: string): string {

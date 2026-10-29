@@ -1014,7 +1014,7 @@ export async function activate(context: vscode.ExtensionContext) {
           void vscode.window.showInformationMessage("containerlab is ready on this machine.");
         } else {
           void vscode.window.showWarningMessage(
-            `Labs on this machine: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
+            `This computer: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
           );
         }
       }

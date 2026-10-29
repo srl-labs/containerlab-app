@@ -35,7 +35,7 @@ export interface LabHostProfile {
    * The timeout containerlab gets on a deploy, redeploy, apply or destroy
    * without one, as a duration such as `10m`: containerlab's default for the
    * runtime on this machine, a clab-api-server's own (`GET /api/v1/lab-host`).
-   * Unset on a lab server that does not report it.
+   * Unset on an API Server that does not report it.
    */
   defaultTimeout?: string;
   /**

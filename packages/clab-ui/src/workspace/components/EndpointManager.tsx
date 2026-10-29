@@ -116,7 +116,7 @@ function withUnavailable(unavailable: string | undefined): { unavailable?: strin
 }
 
 /** Why an app without cluster support cannot add one. */
-const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes clusters. Use a lab server that runs Kubernetes.";
+const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes lab hosts. Use an API Server that runs Kubernetes.";
 
 /** The settings of an editable cluster lab host, for its edit form. */
 function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
@@ -150,7 +150,7 @@ function ThisComputerPanel(props: {
   if (!props.offer) {
     return (
       <Alert severity="info" variant="outlined">
-        {props.unavailable ?? "This app does not run labs on its own computer. Add a lab server instead."}
+        {props.unavailable ?? "This app does not run labs on its own computer. Add an API Server instead."}
       </Alert>
     );
   }
@@ -159,7 +159,7 @@ function ThisComputerPanel(props: {
   );
 }
 
-/** "Kubernetes cluster" in "Add lab host": the cluster form, clusters the app was set up with, or why not here. */
+/** "Kubernetes" in "Add lab host": the cluster form, clusters the app was set up with, or why not here. */
 function ClusterPanel(props: {
   busy: boolean;
   canAdd: boolean;
@@ -193,7 +193,7 @@ function ClusterPanel(props: {
       ))}
       {props.canAdd ? (
         <Button variant="contained" onClick={props.onAddCluster} disabled={props.busy} sx={{ alignSelf: "flex-start" }}>
-          Add Kubernetes cluster…
+          Add Kubernetes lab host…
         </Button>
       ) : null}
     </Stack>
@@ -540,7 +540,7 @@ function ManagedEndpointList(props: {
                   ) : null}
                   {serverDefaults ? (
                     <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-                      Set by the lab server: {serverDefaults}
+                      Set by the API Server: {serverDefaults}
                     </Typography>
                   ) : null}
                   {endpoint.updateRequired ? (
@@ -1358,7 +1358,7 @@ export function EndpointManager({
   const isLocalConnected = (offer: LocalEndpointOffer) => isLocalOfferListed(sortedEndpoints, offer);
   const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
   const extraLocalOffers = (extraLocalEndpoints ?? []).filter((offer) => !isLocalConnected(offer));
-  // This computer first while it is not listed, else a lab server.
+  // This computer first while it is not listed, else an API Server.
   const addKind: LabHostKind = chosenAddKind ?? (offerLocalEndpoint ? "this-computer" : "server");
   const addChoices: LabHostChoice[] = [
     {

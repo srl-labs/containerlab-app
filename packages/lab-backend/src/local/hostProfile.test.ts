@@ -116,7 +116,7 @@ test("a c9s host's kubeconfig may start with ~ and tells apart clusters with the
 test("containerlab runs on Linux only, also for a host whose labs run on a cluster", async () => {
   assert.equal(containerlabPlatformProblem("linux"), undefined);
   for (const platform of ["darwin", "win32"] as const) {
-    assert.match(containerlabPlatformProblem(platform) ?? "", /^containerlab runs on Linux only\. Use a clab-api-server lab host, or run the app in WSL or a Linux VM\.$/);
+    assert.match(containerlabPlatformProblem(platform) ?? "", /^containerlab runs on Linux only\. Use an API Server, or run the app in WSL or a Linux VM\.$/);
     for (const runtime of ["docker", "c9s"]) {
       const status = await detectLocalEnvironment(
         { runtime, env: ENV, c9s: { kubeContext: "kind-c9s-app" } },

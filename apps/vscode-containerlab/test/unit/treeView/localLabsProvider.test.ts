@@ -162,7 +162,7 @@ describe("LocalLabTreeDataProvider", () => {
       .stub(vscodeStub.workspace, "findFiles")
       .resolves([vscodeStub.Uri.file(LAB_B), vscodeStub.Uri.file(LAB_A)]);
     const cluster = { id: "kind", label: "kind", kind: "local", runtime: "c9s", kubeContext: "kind" };
-    const local = { id: "local", label: "Local", kind: "local" };
+    const local = { id: "local", label: "This computer", kind: "local" };
     sinon.stub(labBackends, "getConnections").returns({
       grouped: true,
       list: () => [local, cluster],

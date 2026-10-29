@@ -57,14 +57,14 @@ function createWebLocalEndpoints() {
 }
 
 /**
- * Why "Add lab host" offers no Kubernetes cluster here: the browser never
+ * Why "Add lab host" offers no Kubernetes lab host here: the browser never
  * handles a kubeconfig, so only the server's configuration adds one.
  */
 const WEB_CLUSTERS_UNAVAILABLE =
-  "In the web app, a Kubernetes cluster comes from the server's configuration (WEB_LOCAL_LABS=true, WEB_LOCAL_RUNTIME=c9s, WEB_LOCAL_KUBECONFIG, WEB_LOCAL_KUBE_CONTEXT); the browser never handles a kubeconfig. Or add a lab server that runs Kubernetes.";
+  "In the web app, a Kubernetes lab host comes from the server's configuration (WEB_LOCAL_LABS=true, WEB_LOCAL_RUNTIME=c9s, WEB_LOCAL_KUBECONFIG, WEB_LOCAL_KUBE_CONTEXT); the browser never handles a kubeconfig. Or add an API Server that runs Kubernetes.";
 
 const WEB_LOCAL_UNAVAILABLE =
-  "The web app runs labs on its own server only when its administrator sets WEB_LOCAL_LABS=true with Docker or Podman. Add a lab server instead.";
+  "The web app runs labs on its own server only when its administrator sets WEB_LOCAL_LABS=true with Docker or Podman. Add an API Server instead.";
 
 async function start(): Promise<void> {
   const localEndpoints = createWebLocalEndpoints();

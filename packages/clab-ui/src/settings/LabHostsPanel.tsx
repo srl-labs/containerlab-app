@@ -10,7 +10,7 @@ import type { LabHostsSnapshot } from "./schema";
 type Request = (payload: Record<string, unknown>) => Promise<unknown>;
 
 /**
- * This computer, Kubernetes clusters and lab servers, managed the way the
+ * This computer, Kubernetes lab hosts and API Servers, managed the way the
  * desktop and web apps manage them: add, check, sign in, edit, sign out,
  * remove. Every action goes to the extension, which answers with the new
  * state or, for checks and contexts, with what it found.
@@ -32,8 +32,8 @@ export function LabHostsPanel({
             ...(local.containerlabVersion !== undefined
               ? { containerlabVersion: local.containerlabVersion }
               : {}),
-            label: "Local",
-            addLabel: "Show local",
+            label: "This computer",
+            addLabel: "Show this computer",
             onAdd: async () => {
               await request({ action: "labHosts.showLocal" });
             },
@@ -101,7 +101,7 @@ export function LabHostsPanel({
         localEndpoint={localOffer}
         thisComputerUnavailable={
           local === undefined
-            ? "containerlab runs on Linux only. Use a lab server, or open this window in WSL."
+            ? "containerlab runs on Linux only. Use an API Server, or open this window in WSL."
             : undefined
         }
         clusterHosts={clusterHosts}

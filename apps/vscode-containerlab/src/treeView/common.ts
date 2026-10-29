@@ -411,8 +411,8 @@ export function onConnection<T extends vscode.TreeItem & { connectionId?: string
 export type ConnectionNodeState = "connected" | "saved" | "session_expired" | "offline";
 
 /**
- * A connection at the root of a view once lab hosts are configured: Local
- * or a lab host, with its labs below it.
+ * A connection at the root of a view once lab hosts are configured: This
+ * computer or a lab host, with its labs below it.
  */
 export class ClabConnectionTreeNode extends vscode.TreeItem {
   public readonly connectionId: string;
@@ -453,7 +453,9 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     this.state = state;
     this.contextValue = "containerlabEndpoint";
     this.id = `connection:${section}:${connection.id}`;
-    let host = "this machine";
+    // This computer shows its container runtime; a lab host its address.
+    const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
+    let host = runtime === "podman" ? "Podman" : "Docker";
     if (connection.url !== undefined) {
       try {
         host = new URL(connection.url).host;

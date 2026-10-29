@@ -13,7 +13,7 @@ import {
   type OverviewTopologyFile
 } from "../../../src/webviews/labsOverview/labsOverviewCards";
 
-const LOCAL = { id: "local", label: "Local" };
+const LOCAL = { id: "local", label: "This computer" };
 const HOST = { id: "lab-host", label: "lab-host.example" };
 const NOW = Date.parse("2026-10-26T12:00:00Z");
 
@@ -90,14 +90,14 @@ describe("overviewLabHosts", () => {
         connection.id === "local" ? "connected" : "saved"
     };
     expect(overviewLabHosts(connections, LOCAL)).to.deep.equal([
-      { id: "local", label: "Local", status: "connected" },
+      { id: "local", label: "This computer", status: "connected" },
       { id: "lab-host", label: "lab-host.example", status: "saved" }
     ]);
   });
 
-  it("is just Local before the connections load", () => {
+  it("is just This computer before the connections load", () => {
     expect(overviewLabHosts(undefined, LOCAL)).to.deep.equal([
-      { id: "local", label: "Local", status: "connected" }
+      { id: "local", label: "This computer", status: "connected" }
     ]);
   });
 });

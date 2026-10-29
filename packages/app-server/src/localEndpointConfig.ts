@@ -253,7 +253,7 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
   // containerlab on this machine deploys and reaches them, so it needs Linux too.
   const platformProblem = containerlabPlatformProblem(source.platform);
   if (enabled && platformProblem && (parseLabRuntime(options.runtime) === "c9s" || clusters.length > 0)) {
-    problems.push(`Kubernetes clusters are left out: ${platformProblem}`);
+    problems.push(`Kubernetes lab hosts are left out: ${platformProblem}`);
   }
   const usable = enabled && platformProblem === undefined;
   return {
@@ -273,7 +273,7 @@ export function localEndpointUrl(options: LocalLabBackendOptions): string {
 
 /** How the apps name a cluster lab host without a label: its context, e.g. "kind-c9s-app". */
 function clusterLabel(options: LocalLabBackendOptions): string {
-  return options.c9s?.kubeContext ?? "Kubernetes cluster";
+  return options.c9s?.kubeContext ?? "Kubernetes";
 }
 
 const STATUS_TTL_MS = 15_000;

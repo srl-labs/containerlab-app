@@ -95,7 +95,7 @@ describe("deploy command", () => {
     expect(action).to.equal("deploy");
     expect(commandNode).to.equal(node);
     // The notification names the lab and where it runs.
-    expect(spinnerMsg.progressMsg).to.equal("Deploying lab.yml on Local...");
+    expect(spinnerMsg.progressMsg).to.equal("Deploying lab.yml on This computer...");
 
     expect(graphStub.createdHandlers).to.have.lengthOf(1);
     const { commandType, handlers } = graphStub.createdHandlers[0];

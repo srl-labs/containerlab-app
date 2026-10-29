@@ -78,14 +78,14 @@ export function isLocalOfferListed(
 /** What each kind is called. */
 export const LAB_HOST_KIND_LABELS: Record<LabHostKind, string> = {
   "this-computer": "This computer",
-  cluster: "Kubernetes cluster",
-  server: "Lab server"
+  cluster: "Kubernetes",
+  server: "API Server"
 };
 
 const RUNTIME_NAMES: Record<NonNullable<EndpointConfig["runtime"]>, string> = {
   docker: "Docker",
   podman: "Podman",
-  c9s: "Kubernetes"
+  c9s: "c9s"
 };
 
 /** How a cluster lab host places labs, e.g. "one namespace per lab" or "namespace team-a". */
@@ -96,7 +96,7 @@ function clusterNamespaceLabel(namespace: string | undefined): string {
 /**
  * The line under a lab host's name: where its labs run, e.g.
  * "This computer · Docker", "Kubernetes · kind-c9s-app · one namespace per lab"
- * or "Lab server · Kubernetes · cluster c9s".
+ * or "API Server · c9s · cluster c9s".
  */
 export function labHostSubtitle(
   endpoint: Pick<EndpointConfig, "kind" | "runtime" | "kubeContext" | "namespace" | "cluster">
@@ -109,7 +109,7 @@ export function labHostSubtitle(
     return ["Kubernetes", endpoint.kubeContext ?? "current context", clusterNamespaceLabel(endpoint.namespace)].join(" · ");
   }
   const runtime = endpoint.runtime ? RUNTIME_NAMES[endpoint.runtime] : undefined;
-  return ["Lab server", runtime, endpoint.cluster ? `cluster ${endpoint.cluster}` : undefined]
+  return ["API Server", runtime, endpoint.cluster ? `cluster ${endpoint.cluster}` : undefined]
     .filter(Boolean)
     .join(" · ");
 }
@@ -123,7 +123,7 @@ export const C9S_EXPOSE_DESCRIPTIONS: Record<C9sExposeType, string> = {
 };
 
 /**
- * A lab server's c9s deploy settings in a line, e.g. "Ports: None · node
+ * An API Server's c9s deploy settings in a line, e.g. "Ports: None · node
  * storage kept · no image pull secret". Empty when it reports none.
  */
 export function c9sDefaultsSummary(

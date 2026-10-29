@@ -118,7 +118,7 @@ describe("lab host settings", () => {
     expect(cluster?.exposeType).to.equal(undefined);
   });
 
-  it("lists Local, clusters and clab-api-servers side by side", () => {
+  it("lists This computer, clusters and clab-api-servers side by side", () => {
     useSettings({
       connections: [
         { url: "https://lab-host:8090", label: "Lab host" },
@@ -130,7 +130,7 @@ describe("lab host settings", () => {
     const manager = new ConnectionManager(fakeContext());
     const list = manager.list();
     expect(list.map((connection) => [connection.kind, connection.label])).to.deep.equal([
-      ["local", "Local"],
+      ["local", "This computer"],
       ["api", "Lab host"],
       ["local", "kind-c9s-app"]
     ]);
@@ -297,7 +297,7 @@ describe("lab host settings", () => {
     const manager = new ConnectionManager(fakeContext(), { localSupported: false });
     expect(manager.list().map((connection) => connection.kind)).to.deep.equal(["api"]);
     expect(manager.ignoredClusters()).to.equal(
-      "2 Kubernetes cluster lab hosts are left out: containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM."
+      "2 Kubernetes lab hosts are left out: containerlab runs on Linux only. Use an API Server, or run the app in WSL or a Linux VM."
     );
     let error: unknown;
     await manager.addClusterConnection({ kubeContext: "kind" }).catch((caught: unknown) => {
@@ -370,8 +370,8 @@ describe("lab host settings", () => {
       }
       expect(labels).to.deep.equal([
         "$(device-desktop) This computer",
-        "$(server-environment) Kubernetes cluster",
-        "$(cloud) Lab server"
+        "$(server-environment) Kubernetes",
+        "$(cloud) API Server"
       ]);
       expect(executed).to.deep.include(["containerlab.settings.open", "labHosts", "cluster"]);
     });

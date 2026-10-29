@@ -139,7 +139,7 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "endpoints",
     label: "Lab hosts",
-    description: "Where your labs run: this computer, Kubernetes clusters and lab servers",
+    description: "Where your labs run: this computer, Kubernetes and API Servers",
     icon: <DnsOutlinedIcon fontSize="small" />
   },
   {

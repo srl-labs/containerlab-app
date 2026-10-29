@@ -263,7 +263,7 @@ export class LocalLabBackend implements LabBackend {
 
   async healthMetrics() {
     if (this.options.runtime === "c9s") {
-      throw new LabBackendError("A cluster lab host has no host metrics; this machine's would mislead.", 501);
+      throw new LabBackendError("A Kubernetes lab host has no host metrics; this machine's would mislead.", 501);
     }
     const version = await this.version().then(
       (response) => /version: (\S+)/.exec(response.versionInfo)?.[1] ?? "unknown",

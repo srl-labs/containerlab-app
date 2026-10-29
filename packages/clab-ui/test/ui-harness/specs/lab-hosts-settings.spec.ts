@@ -7,15 +7,15 @@ const hostCard = (page: Page, label: string) =>
     .filter({ has: page.getByText(label, { exact: true }) })
     .filter({ has: page.getByRole("button", { name: `Remove ${label}` }) });
 
-test("lists Local first, then the lab hosts, each with its status", async ({ page }) => {
+test("lists This computer first, then the lab hosts, each with its status", async ({ page }) => {
   await page.goto("/settings.html?category=labHosts");
   await expect(page.getByRole("heading", { name: "Lab Hosts" })).toBeVisible();
   // The settings scope and the modified filters belong to the other pages.
   await expect(page.getByRole("combobox", { name: "Save settings to" })).toHaveCount(0);
   const labels = page.locator(".MuiPaper-root .MuiTypography-subtitle1");
-  await expect(labels.first()).toHaveText("Local");
-  await expect(hostCard(page, "Local")).toContainText("containerlab 0.78.0 is ready.");
-  await expect(hostCard(page, "Local")).toContainText("CPU");
+  await expect(labels.first()).toHaveText("This computer");
+  await expect(hostCard(page, "This computer")).toContainText("containerlab 0.78.0 is ready.");
+  await expect(hostCard(page, "This computer")).toContainText("CPU");
   await expect(hostCard(page, "lab1")).toContainText("Signed Out");
   await expect(hostCard(page, "lab1")).toContainText("https://lab1.example.com:8090");
 });
@@ -54,14 +54,14 @@ test("adds a lab host only once its sign-in works", async ({ page }) => {
   await expect(page.getByRole("navigation").getByRole("button", { name: /Lab Hosts/ })).toContainText("3");
 });
 
-test("hides Local and shows it again", async ({ page }) => {
+test("hides This computer and shows it again", async ({ page }) => {
   await page.goto("/settings.html?category=labHosts");
-  await page.getByRole("button", { name: "Remove Local" }).click();
-  const dialog = page.getByRole("dialog", { name: "Hide Local" });
-  await expect(dialog).toContainText("Show local brings them back.");
+  await page.getByRole("button", { name: "Remove This computer" }).click();
+  const dialog = page.getByRole("dialog", { name: "Hide This computer" });
+  await expect(dialog).toContainText("Show this computer brings them back.");
   await dialog.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(hostCard(page, "Local")).toHaveCount(0);
+  await expect(hostCard(page, "This computer")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Show local" }).click();
-  await expect(hostCard(page, "Local")).toContainText("Connected");
+  await page.getByRole("button", { name: "Show this computer" }).click();
+  await expect(hostCard(page, "This computer")).toContainText("Connected");
 });

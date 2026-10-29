@@ -82,7 +82,7 @@ test("validates mappings and template structure without stripping advanced field
     undefined,
   );
 });
-test("lab host entries are clab-api-servers or Kubernetes clusters", () => {
+test("lab host entries are clab-api-servers or Kubernetes lab hosts", () => {
   const connections = catalog.find(
     (setting) => setting.key === "containerlab.connections",
   )!;
@@ -125,7 +125,7 @@ test("lab host entries are clab-api-servers or Kubernetes clusters", () => {
   ])
     assert.match(
       validateSettingsChange(connections, [invalid]) ?? "",
-      /matches none of: clab-api-server, Kubernetes cluster, Kubernetes cluster \(older form\)/,
+      /matches none of: clab-api-server, Kubernetes, Kubernetes \(older form\)/,
       JSON.stringify(invalid),
     );
 });

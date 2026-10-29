@@ -737,7 +737,7 @@ function CreateTopologyLocationField(props: {
   sharedAvailable: boolean;
 }) {
   let description = props.location === "shared"
-    ? "Everyone signed in to this API server can edit, deploy, and destroy this lab."
+    ? "Everyone signed in to this API Server can edit, deploy, and destroy this lab."
     : "Saved in your personal workspace.";
   if (props.location === "shared" && !props.sharedAvailable) {
     description = "Shared is no longer available on this server. Choose Personal to save in your workspace.";

@@ -551,7 +551,7 @@
       },
       {
         "command": "containerlab.connection.checkLocal",
-        "title": "Check Labs on This Machine",
+        "title": "Check This Computer",
         "category": "Containerlab"
       }
     ],
@@ -979,7 +979,7 @@
               "Labs on this computer run in Docker.",
               "Labs on this computer run in Podman."
             ],
-            "markdownDescription": "The container runtime of labs on **this computer** (Local). A Kubernetes cluster is a lab host of its own: add it with [Add Lab Host](command:containerlab.connection.add) → Kubernetes cluster."
+            "markdownDescription": "The container runtime of labs on **This computer**. A Kubernetes cluster is a lab host of its own: add it with [Add Lab Host](command:containerlab.connection.add) → Kubernetes."
           },
           "containerlab.dockerSocketPath": {
             "type": "string",
@@ -1015,7 +1015,7 @@
             "type": "array",
             "default": [],
             "scope": "machine",
-            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes cluster**: `\"kind\": \"kubernetes\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, the deploy defaults `exposeType`, `persistence` and `imagePullSecret`, and a `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL). [Add Lab Host](command:containerlab.connection.add) → Kubernetes cluster fills it in and checks the cluster.\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
+            "markdownDescription": "Lab hosts to work with. Their labs show next to the labs on this machine.\n\n- **clab-api-server**: `url` (for example `https://lab-host:8090`), optionally `label`, `username` and `sessionDuration` such as `24h`. Passwords are not stored here: [Manage Lab Hosts](command:containerlab.connection.manage) signs in and keeps the token in VS Code's secret storage.\n- **Kubernetes**: `\"kind\": \"kubernetes\"` and the `kubeContext`, optionally the `kubeconfig` file that has it, a `namespace` for every lab, the deploy defaults `exposeType`, `persistence` and `imagePullSecret`, and a `label`. containerlab on this machine runs the labs on the cluster, so it needs Linux (or WSL). [Add Lab Host](command:containerlab.connection.add) → Kubernetes fills it in and checks the cluster.\n\nEach machine has its own list: a remote window (SSH, WSL, Dev Container) keeps its lab hosts in its Remote settings.",
             "items": {
               "type": "object",
               "anyOf": [
@@ -1048,7 +1048,7 @@
                 },
                 {
                   "type": "object",
-                  "title": "Kubernetes cluster",
+                  "title": "Kubernetes",
                   "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with your kubeconfig, so this machine needs Linux (or WSL) and containerlab, not Docker.",
                   "required": [
                     "kind",
@@ -1107,7 +1107,7 @@
                 },
                 {
                   "type": "object",
-                  "title": "Kubernetes cluster (older form)",
+                  "title": "Kubernetes (older form)",
                   "deprecationMessage": "Use \"kind\": \"kubernetes\" without \"runtime\"; this form keeps working.",
                   "markdownDescription": "A Kubernetes cluster with clabernetes. containerlab on this machine runs its labs with `-r c9s`, so this machine needs Linux (or WSL) and containerlab, not Docker.",
                   "required": [
@@ -1161,7 +1161,7 @@
                     },
                     "label": {
                       "type": "string",
-                      "description": "Name shown in the Containerlab views. \"Cluster <context> (c9s)\" when unset."
+                      "description": "Name shown in the Containerlab views. The context when unset."
                     }
                   },
                   "additionalProperties": false
@@ -1177,7 +1177,7 @@
                   }
                 },
                 {
-                  "label": "Kubernetes cluster (c9s)",
+                  "label": "Kubernetes (c9s)",
                   "description": "A cluster with clabernetes, reached through a kubeconfig context",
                   "body": {
                     "kind": "local",
@@ -1192,7 +1192,7 @@
             "type": "boolean",
             "default": true,
             "scope": "machine",
-            "description": "Show \"Local\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
+            "description": "Show \"This computer\", the labs on this machine, next to the lab hosts. Turn it off to work with lab hosts only."
           }
         }
       },

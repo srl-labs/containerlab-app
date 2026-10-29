@@ -69,7 +69,11 @@ interface ConnectionSetting {
  */
 export type ConnectionStatus = "connected" | "saved" | "session_expired" | "offline";
 
-export const LOCAL_CONNECTION: LabConnection = { id: "local", label: "Local", kind: "local" };
+export const LOCAL_CONNECTION: LabConnection = {
+  id: "local",
+  label: "This computer",
+  kind: "local"
+};
 
 /** How long a sign-in lasts unless the lab host says otherwise, as in the desktop app. */
 export const DEFAULT_SESSION_DURATION = "24h";
@@ -226,7 +230,7 @@ function tokenKey(url: string): string {
 }
 
 /**
- * The connections the extension runs labs through: "Local" (this machine)
+ * The connections the extension runs labs through: "This computer" (this machine)
  * and the lab hosts (clab-api-servers) in the `containerlab.connections`
  * setting. The views show the labs of all of them side by side.
  */
@@ -311,10 +315,10 @@ export class ConnectionManager implements vscode.Disposable {
       .get<ConnectionSetting[]>("connections", []);
     const count = (Array.isArray(settings) ? settings : []).filter(isClusterSetting).length;
     if (count === 0) return undefined;
-    return `${count === 1 ? "1 Kubernetes cluster lab host is" : `${count} Kubernetes cluster lab hosts are`} left out: ${CONTAINERLAB_LINUX_ONLY}`;
+    return `${count === 1 ? "1 Kubernetes lab host is" : `${count} Kubernetes lab hosts are`} left out: ${CONTAINERLAB_LINUX_ONLY}`;
   }
 
-  /** Local first (unless turned off), then the configured lab hosts. */
+  /** This computer first (unless turned off), then the configured lab hosts. */
   list(): LabConnection[] {
     const connections: LabConnection[] = [];
     if (this.localEnabled()) {
@@ -741,7 +745,7 @@ export class ConnectionManager implements vscode.Disposable {
   ): Promise<LabConnection> {
     if (!this.localSupported) throw new Error(CONTAINERLAB_LINUX_ONLY);
     const kubeContext = settings.kubeContext.trim();
-    if (!kubeContext) throw new Error("A cluster lab host needs a kubeconfig context.");
+    if (!kubeContext) throw new Error("A Kubernetes lab host needs a kubeconfig context.");
     const kubeconfig = settings.kubeconfig?.trim();
     const id = clusterConnectionId(
       kubeContext,

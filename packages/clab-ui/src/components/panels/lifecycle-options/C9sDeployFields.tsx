@@ -41,10 +41,10 @@ function nodeStorageLabel(persistence: boolean | undefined): string {
   return persistence ? "Kept" : "Not kept";
 }
 
-/** What a lab server decides for c9s labs, shown instead of options it would ignore. */
+/** What an API Server decides for c9s labs, shown instead of options it would ignore. */
 export const C9sServerSettings: React.FC<{ profile?: LabHostProfile; namespaceOnly: boolean }> = ({ profile, namespaceOnly }) => {
   const rows: Array<[string, string]> = [
-    ["Namespace", profile?.namespacePattern ?? "Chosen by the lab server"],
+    ["Namespace", profile?.namespacePattern ?? "Chosen by the API Server"],
     ...(namespaceOnly
       ? []
       : ([
@@ -58,7 +58,7 @@ export const C9sServerSettings: React.FC<{ profile?: LabHostProfile; namespaceOn
       data-testid="lifecycle-options-c9s-server"
       sx={{ px: 1.5, py: 1, border: 1, borderColor: "divider", borderRadius: 1 }}
     >
-      <Typography variant="subtitle2">Kubernetes settings, set by the lab server</Typography>
+      <Typography variant="subtitle2">Kubernetes settings, set by the API Server</Typography>
       <Box component="dl" sx={{ display: "grid", gridTemplateColumns: "auto 1fr", columnGap: 2, rowGap: 0.25, m: 0, mt: 0.5 }}>
         {rows.map(([label, value]) => (
           <React.Fragment key={label}>
@@ -81,7 +81,7 @@ export const C9sDeployFields: React.FC<{
   profile?: LabHostProfile;
   /** destroy takes only the namespace. */
   namespaceOnly: boolean;
-  /** A lab server sets the options itself: show its settings instead of fields. */
+  /** An API Server sets the options itself: show its settings instead of fields. */
   readOnly?: boolean;
   update: <K extends keyof C9sDeployFormFields>(key: K, value: C9sDeployFormFields[K]) => void;
   renderCheckbox: (props: {

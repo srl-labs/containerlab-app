@@ -57,9 +57,9 @@ function nodeStorageDefault(persistence: boolean | undefined): string {
 
 type Update = LabDeploySettingsState["update"];
 
-/** Why the Timeout is greyed out: a lab server older than the `timeout` parameter. */
+/** Why the Timeout is greyed out: an API Server older than the `timeout` parameter. */
 const LAB_SERVER_WITHOUT_TIMEOUT =
-  "Not offered by this lab server: it runs containerlab with its own timeouts. Update clab-api-server to set one.";
+  "Not offered by this API Server: it runs containerlab with its own timeouts. Update clab-api-server to set one.";
 
 const TextRow: React.FC<{
   id: string;
@@ -331,8 +331,8 @@ export const DeployTab: React.FC<DeployTabProps> = ({
               <SubsectionHeading>Kubernetes (c9s)</SubsectionHeading>
               {c9sReadOnly ? (
                 <SettingsField
-                  title="Set by the lab server"
-                  description="The lab server decides these for every lab; they cannot be changed per lab."
+                  title="Set by the API Server"
+                  description="The API Server decides these for every lab; they cannot be changed per lab."
                   wide
                 >
                   <C9sServerSettings profile={profile} namespaceOnly={false} />

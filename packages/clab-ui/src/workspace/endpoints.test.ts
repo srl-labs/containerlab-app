@@ -37,8 +37,8 @@ test("lab hosts read by where their labs run", async () => {
     labHostSubtitle({ kind: "local", runtime: "c9s", kubeContext: "prod", namespace: "team-a" }),
     "Kubernetes · prod · namespace team-a"
   );
-  assert.equal(labHostSubtitle({ kind: "api", runtime: "c9s", cluster: "c9s" }), "Lab server · Kubernetes · cluster c9s");
-  assert.equal(labHostSubtitle({ kind: "api" }), "Lab server");
+  assert.equal(labHostSubtitle({ kind: "api", runtime: "c9s", cluster: "c9s" }), "API Server · c9s · cluster c9s");
+  assert.equal(labHostSubtitle({ kind: "api" }), "API Server");
   assert.equal(
     c9sDefaultsSummary({ exposeType: "None", persistence: true }),
     "ports exposed: None · node storage kept · no image pull secret"
