@@ -34,6 +34,8 @@ interface ExplorerTreeItemLike {
   connectionId?: string;
   /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
   endpointKind?: "local" | "api";
+  /** A `local` lab host root that is a Kubernetes cluster used from this machine, not this machine. */
+  endpointCluster?: boolean;
   hasChildren?: boolean;
   state?: string;
   status?: string;
@@ -840,6 +842,8 @@ function appendEndpointActions(
   const normalizedState = String(item.state ?? "").toLowerCase();
   const connected = normalizedState === "connected";
   const local = item.endpointKind === "local";
+  // This machine is hidden; a cluster used from it is removed, like a lab server.
+  const thisComputer = local && item.endpointCluster !== true;
   if (connected) {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.generate", [item]);
@@ -853,7 +857,7 @@ function appendEndpointActions(
   let reconnectLabel = connected ? "Sign In Again" : "Sign In";
   if (local) reconnectLabel = "Check Again";
   pushAction(actions, seen, registry, "containerlab.endpoint.reconnect", [item], reconnectLabel);
-  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], local ? "Hide" : "Remove", true);
+  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], thisComputer ? "Hide" : "Remove", true);
   if (!local) {
     pushAction(actions, seen, registry, "containerlab.endpoint.copyUrl", [item]);
   }

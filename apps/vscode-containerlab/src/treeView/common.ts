@@ -419,6 +419,8 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
   /** Read by the explorer: the root's id, kind and status. */
   public readonly endpointId: string;
   public readonly endpointKind: "local" | "api";
+  /** A Kubernetes cluster used from this machine: removed, not hidden like this machine. */
+  public readonly endpointCluster: boolean;
   public readonly state: ConnectionNodeState;
 
   constructor(
@@ -447,6 +449,7 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     this.connectionId = connection.id;
     this.endpointId = connection.id;
     this.endpointKind = connection.kind;
+    this.endpointCluster = connection.kind === "local" && connection.runtime === "c9s";
     this.state = state;
     this.contextValue = "containerlabEndpoint";
     this.id = `connection:${section}:${connection.id}`;

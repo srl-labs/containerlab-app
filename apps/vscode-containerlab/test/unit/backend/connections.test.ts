@@ -35,7 +35,7 @@ import {
   connectionDescription,
   initConnections
 } from "../../../src/backend/labBackends";
-import { addConnection } from "../../../src/commands/connections";
+import { addConnection, removeConnection } from "../../../src/commands/connections";
 
 const vscodeStub = require("../../helpers/vscode-stub");
 
@@ -154,6 +154,57 @@ describe("lab host settings", () => {
     await manager.removeConnection(cluster);
     expect(settings.connections).to.deep.equal([{ url: "https://lab-host:8090" }]);
     manager.dispose();
+  });
+
+  describe("Remove and hide", () => {
+    const window = vscodeStub.window;
+    const saved = { showWarningMessage: window.showWarningMessage, showQuickPick: window.showQuickPick };
+    afterEach(() => Object.assign(window, saved));
+
+    function answer(choice: string): string[] {
+      const asked: string[] = [];
+      window.showWarningMessage = async (message: string, options: any, ...items: string[]) => {
+        asked.push(`${message} | ${options?.detail ?? ""}`);
+        return items.includes(choice) ? choice : undefined;
+      };
+      return asked;
+    }
+
+    it("removing a cluster from its explorer item removes only the cluster, and keeps This computer", async () => {
+      useSettings({
+        localConnection: true,
+        connections: [{ kind: "kubernetes", kubeContext: "kind-c9s-app" }, { url: "https://lab-host:8090" }]
+      });
+      const manager = initConnections(fakeContext());
+      const cluster = manager.list().find(isClusterConnection);
+      expect(cluster).to.not.equal(undefined);
+      const asked = answer("Remove");
+      await removeConnection({ connectionId: cluster!.id });
+      expect(settings.localConnection).to.equal(true);
+      expect(settings.connections).to.deep.equal([{ url: "https://lab-host:8090" }]);
+      expect(asked[0]).to.match(/^Remove kind-c9s-app\? \| Its labs keep running in the cluster/);
+      expect(manager.list().map((connection) => connection.id)).to.include(LOCAL_CONNECTION.id);
+      manager.dispose();
+    });
+
+    it("hides This computer, and Add Lab Host > This computer brings it back while a cluster is listed", async () => {
+      useSettings({ localConnection: true, connections: [{ kind: "kubernetes", kubeContext: "kind-c9s-app" }] });
+      const manager = initConnections(fakeContext());
+      answer("Hide");
+      await removeConnection({ connectionId: LOCAL_CONNECTION.id });
+      expect(settings.localConnection).to.equal(false);
+      expect(settings.connections).to.deep.equal([{ kind: "kubernetes", kubeContext: "kind-c9s-app" }]);
+
+      let offered: any;
+      window.showQuickPick = async (items: any[]) => {
+        offered = items.find((item) => item.value === "this-computer");
+        return offered;
+      };
+      expect(await addConnection()).to.equal(LOCAL_CONNECTION);
+      expect(offered.unavailable).to.equal(undefined);
+      expect(settings.localConnection).to.equal(true);
+      manager.dispose();
+    });
   });
 
   it("describes where a connection's labs run", () => {

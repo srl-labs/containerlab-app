@@ -34,6 +34,7 @@ import { APP_DOCS_URL,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
   LAB_HOST_KIND_LABELS,
+  isLocalOfferListed,
   labHostKind,
   labHostSubtitle,
   type ClusterHostSettings,
@@ -1354,10 +1355,7 @@ export function EndpointManager({
     },
     [busyKey]
   );
-  const isLocalConnected = (offer: LocalEndpointOffer) =>
-    sortedEndpoints.some(
-      (endpoint) => endpoint.kind === "local" && (offer.url === undefined || endpoint.url === offer.url)
-    );
+  const isLocalConnected = (offer: LocalEndpointOffer) => isLocalOfferListed(sortedEndpoints, offer);
   const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
   const extraLocalOffers = (extraLocalEndpoints ?? []).filter((offer) => !isLocalConnected(offer));
   // This computer first while it is not listed, else a lab server.

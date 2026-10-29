@@ -216,6 +216,11 @@ export function isClusterConnection(connection: LabConnection): boolean {
   return connection.kind === "local" && connection.runtime === "c9s";
 }
 
+/** Whether a connection is this machine with Docker or Podman, which is hidden instead of removed. */
+export function isThisComputer(connection: LabConnection): boolean {
+  return connection.kind === "local" && !isClusterConnection(connection);
+}
+
 function tokenKey(url: string): string {
   return `containerlab.connection.token:${url}`;
 }

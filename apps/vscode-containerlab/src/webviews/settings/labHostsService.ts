@@ -111,7 +111,7 @@ export function labHostsSnapshot(): LabHostsSnapshot | undefined {
     ...(connections.localAvailable
       ? {
           local: {
-            shown: connections.list().some((connection) => connection.kind === "local"),
+            shown: connections.list().some((connection) => connection.id === LOCAL_CONNECTION.id),
             available: local?.available ?? true,
             problems: local?.problems ?? [],
             ...(local?.containerlabVersion !== undefined

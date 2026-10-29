@@ -15,7 +15,7 @@ import {
 import { refreshSshxSessions, refreshGottySessions } from "../services/sessionRefresh";
 import { getCurrentTopoViewer } from "../commands/graph";
 import { connectionById, getConnections, viewLabPath } from "../backend/labBackends";
-import { LOCAL_CONNECTION } from "../backend/connections";
+import { LOCAL_CONNECTION, isClusterConnection, type LabConnection } from "../backend/connections";
 import type {
   ClabInterfaceSnapshot,
   ClabInterfaceSnapshotEntry,
@@ -364,13 +364,7 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
         ];
       } else if (status === "offline") {
         children = [
-          new c.ClabConnectionMessageNode(
-            connection.id,
-            "running",
-            connection.kind === "local"
-              ? "Containerlab is not ready on this machine"
-              : "Not reachable"
-          )
+          new c.ClabConnectionMessageNode(connection.id, "running", offlineMessage(connection))
         ];
       } else if (own.length === 0 && !this.treeFilter) {
         children = [new c.ClabConnectionMessageNode(connection.id, "running", "No running labs")];
@@ -1731,4 +1725,13 @@ export class RunningLabTreeDataProvider implements vscode.TreeDataProvider<
   private getResourceUri(resource: string) {
     return vscode.Uri.file(this.context.asAbsolutePath(path.join("resources", resource)));
   }
+}
+
+/** Why a lab host's labs are not listed: containerlab here, the cluster, or the server. */
+function offlineMessage(connection: LabConnection): string {
+  if (isClusterConnection(connection))
+    return "The cluster is not ready: see its checks on the Lab Hosts page";
+  return connection.kind === "local"
+    ? "Containerlab is not ready on this machine"
+    : "Not reachable";
 }

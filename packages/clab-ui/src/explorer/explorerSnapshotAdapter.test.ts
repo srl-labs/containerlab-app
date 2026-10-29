@@ -466,3 +466,26 @@ test("a Kubernetes lab host's items show what it lacks greyed out, with why", as
   // Docker and Podman grey nothing out.
   assert.equal(greyedExplorerCommandsForHost({ profile: { runtime: "docker" } }).size, 0);
 });
+
+test("This computer is hidden, a cluster used from it is removed", async () => {
+  const root = (label: string, endpointCluster: boolean) => ({
+    label,
+    contextValue: "containerlabEndpoint",
+    state: "connected",
+    endpointId: label,
+    endpointKind: "local",
+    ...(endpointCluster ? { endpointCluster } : {}),
+    collapsibleState: 0
+  });
+  const providers = {
+    runningProvider: provider([root("Local", false), root("kind-c9s-app", true)]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+  const { snapshot } = await buildExplorerSnapshot(providers, "", { hideNonOwnedLabs: false, isLocalCaptureAllowed: true });
+  const [local, cluster] = snapshot.sections.find((section) => section.id === "runningLabs")?.nodes ?? [];
+  const removeLabel = (node: typeof local) =>
+    node?.actions.find((action) => action.commandId === "containerlab.endpoint.remove")?.label;
+  assert.equal(removeLabel(local), "Hide");
+  assert.equal(removeLabel(cluster), "Remove");
+});

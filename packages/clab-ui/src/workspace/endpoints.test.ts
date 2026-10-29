@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { splitSetupCommand } from "./endpoints";
+import { isLocalOfferListed, splitSetupCommand } from "./endpoints";
 
 test("setup problems show their command apart from the explanation", () => {
   assert.deepEqual(
@@ -44,4 +44,17 @@ test("lab hosts read by where their labs run", async () => {
     "ports exposed: None · node storage kept · no image pull secret"
   );
   assert.equal(c9sDefaultsSummary({}), "");
+});
+
+test("a listed cluster does not stand in for a hidden This computer", () => {
+  const cluster = { kind: "local" as const, runtime: "c9s" as const, url: "local://cluster/kind-c9s-app" };
+  const thisComputer = { kind: "local" as const, runtime: "docker" as const, url: "local://this-computer" };
+  // VS Code offers This computer without an address.
+  assert.equal(isLocalOfferListed([cluster], {}), false);
+  assert.equal(isLocalOfferListed([cluster, thisComputer], {}), true);
+  // Offers with an address match that host only.
+  assert.equal(isLocalOfferListed([cluster], { url: "local://this-computer" }), false);
+  assert.equal(isLocalOfferListed([cluster], { url: "local://cluster/kind-c9s-app" }), true);
+  // Not answered yet: a local host without a runtime is this computer.
+  assert.equal(isLocalOfferListed([{ kind: "local", url: "local://this-computer" }], {}), true);
 });

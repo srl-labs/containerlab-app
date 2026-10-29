@@ -603,6 +603,7 @@ function buildEndpointRootItem(
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
     endpointKind: endpoint.kind === "local" ? "local" : "api",
+    ...(endpoint.kind === "local" && endpoint.runtime === "c9s" ? { endpointCluster: true } : {}),
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,

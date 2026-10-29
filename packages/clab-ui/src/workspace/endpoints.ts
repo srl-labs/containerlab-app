@@ -59,6 +59,22 @@ export function labHostKind(endpoint: Pick<EndpointConfig, "kind" | "runtime">):
   return endpoint.runtime === "c9s" ? "cluster" : "this-computer";
 }
 
+/**
+ * Whether a local lab host offer is listed already. An offer with an address
+ * is that host; one without is this computer, which a cluster used from this
+ * computer never stands in for.
+ */
+export function isLocalOfferListed(
+  endpoints: readonly Pick<EndpointConfig, "kind" | "runtime" | "url">[],
+  offer: { url?: string }
+): boolean {
+  return endpoints.some((endpoint) =>
+    offer.url !== undefined
+      ? endpoint.kind === "local" && endpoint.url === offer.url
+      : labHostKind(endpoint) === "this-computer"
+  );
+}
+
 /** What each kind is called. */
 export const LAB_HOST_KIND_LABELS: Record<LabHostKind, string> = {
   "this-computer": "This computer",
