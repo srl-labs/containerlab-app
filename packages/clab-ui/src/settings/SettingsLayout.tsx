@@ -107,7 +107,7 @@ export function SettingsLayout({
             borderColor: "divider",
             bgcolor: "transparent",
             "@container settings-layout (min-width: 720px)": {
-              width: 208,
+              width: 232,
               borderBottom: 0,
               borderRight: 1,
               borderColor: "divider",

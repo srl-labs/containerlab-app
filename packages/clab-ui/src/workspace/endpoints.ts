@@ -1,5 +1,5 @@
 import type { C9sExposeType } from "../host/lifecycleOptions";
-import type { EndpointConfig, EndpointSessionDuration } from "./types";
+import type { ClusterHostSettings, EndpointConfig, EndpointSessionDuration } from "./types";
 export type {
   ClusterHostSettings,
   EndpointConfig,
@@ -171,4 +171,19 @@ export function c9sDefaultsSummary(
     parts.push(endpoint.imagePullSecret ? `image pull secret ${endpoint.imagePullSecret}` : "no image pull secret");
   }
   return parts.join(" · ");
+}
+
+/** The settings of a Kubernetes lab host, for its cluster form and its page. */
+export function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
+  return {
+    label: endpoint.label,
+    kubeContext: endpoint.kubeContext ?? "",
+    ...(endpoint.kubeconfig ? { kubeconfig: endpoint.kubeconfig } : {}),
+    ...(endpoint.namespace ? { namespace: endpoint.namespace } : {}),
+    ...(endpoint.exposeType ? { exposeType: endpoint.exposeType } : {}),
+    ...(endpoint.persistence === false ? { persistence: false } : {}),
+    ...(endpoint.imagePullSecret ? { imagePullSecret: endpoint.imagePullSecret } : {}),
+    ...(endpoint.deployTimeout ? { deployTimeout: endpoint.deployTimeout } : {}),
+    ...(endpoint.noTopologyCR === true ? { noTopologyCR: true } : {})
+  };
 }

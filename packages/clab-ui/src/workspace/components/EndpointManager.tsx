@@ -36,6 +36,7 @@ import { APP_DOCS_URL,
   LAB_HOST_KIND_LABELS,
   CLUSTERS_UNSUPPORTED,
   clusterChoiceUnavailable,
+  clusterSettingsOf,
   isLocalOfferListed,
   unlistedLocalOffers,
   labHostKind,
@@ -112,25 +113,17 @@ interface EndpointManagerProps extends LabHostSetupProps {
   fetchHealthMetrics?: HealthMetricsFetcher;
   /** Signs out of a lab host but keeps it, so the user can sign in again later. */
   onSignOutEndpoint?: (endpointId: string) => Promise<void>;
+  /**
+   * What the settings show: the lab host cards (a host's page), "Add lab
+   * host" (its own page), or both (the default).
+   */
+  show?: "all" | "hosts" | "add";
 }
 
 function withUnavailable(unavailable: string | undefined): { unavailable?: string } {
   return unavailable === undefined ? {} : { unavailable };
 }
 
-
-/** The settings of an editable cluster lab host, for its edit form. */
-function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
-  return {
-    label: endpoint.label,
-    kubeContext: endpoint.kubeContext ?? "",
-    ...(endpoint.kubeconfig ? { kubeconfig: endpoint.kubeconfig } : {}),
-    ...(endpoint.namespace ? { namespace: endpoint.namespace } : {}),
-    ...(endpoint.exposeType ? { exposeType: endpoint.exposeType } : {}),
-    ...(endpoint.persistence === false ? { persistence: false } : {}),
-    ...(endpoint.imagePullSecret ? { imagePullSecret: endpoint.imagePullSecret } : {})
-  };
-}
 
 /** "This computer" in "Add lab host": its offer, why it cannot run labs, or that it is listed. */
 function ThisComputerPanel(props: {
@@ -915,7 +908,7 @@ function useRequestedEndpointActionDialog(input: {
       setRemoveEndpointId,
       sortedEndpoints
     } = input;
-    if (!requestedAction || requestedAction.action === "add") {
+    if (!requestedAction || requestedAction.action === "add" || requestedAction.action === "settings") {
       return;
     }
 
@@ -1257,8 +1250,11 @@ export function EndpointManager({
   clusterHosts,
   clustersUnavailable,
   thisComputerUnavailable,
-  requestedAddKind
+  requestedAddKind,
+  show = "all"
 }: EndpointManagerProps) {
+  const showHosts = show !== "add";
+  const showAdd = show !== "hosts";
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [chosenAddKind, setAddKind] = useState<LabHostKind | null>(null);
   const [clusterDialog, setClusterDialog] = useState<{ open: boolean; editing?: { endpointId: string; settings: ClusterHostSettings } }>({ open: false });
@@ -1467,9 +1463,9 @@ export function EndpointManager({
 
   return (
     <Stack spacing={2.5}>
-      {mode === "manage" ? transferActions : null}
+      {mode === "manage" && showAdd ? transferActions : null}
 
-      {showManagedEndpoints(mode, sortedEndpoints.length) ? (
+      {showHosts && showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
           busyKey={busyKey}
           endpointHealth={endpointHealth}
@@ -1508,6 +1504,7 @@ export function EndpointManager({
       ) : null}
 
       {/* On the login card the form is the card's content; in settings it is one card among the endpoints. */}
+      {showAdd ? (
       <Paper
         variant="outlined"
         sx={mode === "initial" ? {
@@ -1676,6 +1673,7 @@ export function EndpointManager({
           ) : null}
         </Stack>
       </Paper>
+      ) : null}
 
       {mode === "initial" && transferActions ? (
         <Stack
@@ -1695,6 +1693,8 @@ export function EndpointManager({
           open={clusterDialog.open}
           support={clusterHosts}
           {...(clusterDialog.editing ? { editing: clusterDialog.editing } : {})}
+          // A host's page edits its deploy defaults itself.
+          connectionOnly={show === "hosts" && clusterDialog.editing !== undefined}
           onClose={() => setClusterDialog({ open: false })}
         />
       ) : null}

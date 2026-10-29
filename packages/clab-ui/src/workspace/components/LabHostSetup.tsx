@@ -243,6 +243,9 @@ interface ClusterForm {
   exposeType: "" | C9sExposeType;
   persistence: boolean;
   imagePullSecret: string;
+  /** Deploy defaults the lab host's page edits; the form keeps them as they are. */
+  deployTimeout: string;
+  noTopologyCR: boolean;
 }
 
 function formFrom(settings: Partial<ClusterHostSettings> | undefined): ClusterForm {
@@ -254,7 +257,9 @@ function formFrom(settings: Partial<ClusterHostSettings> | undefined): ClusterFo
     namespace: settings?.namespace ?? "",
     exposeType: settings?.exposeType ?? EXPOSE_DEFAULT,
     persistence: settings?.persistence !== false,
-    imagePullSecret: settings?.imagePullSecret ?? ""
+    imagePullSecret: settings?.imagePullSecret ?? "",
+    deployTimeout: settings?.deployTimeout ?? "",
+    noTopologyCR: settings?.noTopologyCR === true
   };
 }
 
@@ -267,7 +272,9 @@ function settingsFrom(form: ClusterForm): ClusterHostSettings {
     ...(namespace ? { namespace } : {}),
     ...(form.exposeType ? { exposeType: form.exposeType } : {}),
     ...(form.persistence ? {} : { persistence: false }),
-    ...(form.imagePullSecret.trim() ? { imagePullSecret: form.imagePullSecret.trim() } : {})
+    ...(form.imagePullSecret.trim() ? { imagePullSecret: form.imagePullSecret.trim() } : {}),
+    ...(form.deployTimeout.trim() ? { deployTimeout: form.deployTimeout.trim() } : {}),
+    ...(form.noTopologyCR ? { noTopologyCR: true } : {})
   };
 }
 
@@ -328,6 +335,11 @@ export function ClusterHostDialog(props: {
   onClose: () => void;
   /** After a save. */
   onSaved?: () => void;
+  /**
+   * Only the connection (name, kubeconfig, context, namespaces): the lab
+   * host's page edits its deploy defaults itself. They are kept as they are.
+   */
+  connectionOnly?: boolean;
 }) {
   const { open, support, editing } = props;
   const [form, setForm] = useState<ClusterForm>(() => formFrom(editing?.settings));
@@ -516,6 +528,8 @@ export function ClusterHostDialog(props: {
             ) : null}
           </Box>
 
+          {props.connectionOnly ? null : (
+            <>
           <Typography variant="subtitle2" sx={{ mb: -1 }}>
             Deploy defaults
           </Typography>
@@ -565,6 +579,8 @@ export function ClusterHostDialog(props: {
             slotProps={{ inputLabel: { shrink: true }, htmlInput: { spellCheck: false } }}
           />
 
+            </>
+          )}
           <Box>
             <Button
               variant="outlined"
