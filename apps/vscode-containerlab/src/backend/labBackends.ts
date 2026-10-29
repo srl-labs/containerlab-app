@@ -45,6 +45,9 @@ function localBackendOptions(): LocalLabBackendOptions {
     workspaceRoot: workspaceFolder ?? path.join(os.homedir(), ".clab"),
     deployExtraArgs: splitArgs(config.get<string>("deploy.extraArgs", "")),
     destroyExtraArgs: splitArgs(config.get<string>("destroy.extraArgs", "")),
+    ...(nonEmpty(config.get<string>("deploy.timeout", "")?.trim())
+      ? { deployTimeout: config.get<string>("deploy.timeout", "").trim() }
+      : {}),
     packetflixPort: config.get<number>("capture.packetflixPort", 5001),
     wiresharkImage: config.get<string>("capture.wireshark.dockerImage", ""),
     edgesharkExtraEnv: extraEnv
@@ -71,8 +74,14 @@ const clusterBackends = new Map<string, { key: string; backend: LocalLabBackend 
 
 /** containerlab on this machine running labs on a cluster connection's Kubernetes cluster. */
 export function clusterBackendOptions(connection: LabConnection): LocalLabBackendOptions {
+  // containerlab on this computer, with the cluster's own deploy settings and Wireshark VNC image.
+  const { deployTimeout: _thisComputerTimeout, ...thisComputer } = localBackendOptions();
   return {
-    ...localBackendOptions(),
+    ...thisComputer,
+    deployExtraArgs: splitArgs(connection.deployExtraArgs ?? ""),
+    destroyExtraArgs: splitArgs(connection.destroyExtraArgs ?? ""),
+    wiresharkImage: connection.wiresharkImage ?? "",
+    ...(connection.deployTimeout !== undefined ? { deployTimeout: connection.deployTimeout } : {}),
     runtime: "c9s",
     c9s: {
       ...(connection.kubeContext !== undefined ? { kubeContext: connection.kubeContext } : {}),
@@ -82,9 +91,21 @@ export function clusterBackendOptions(connection: LabConnection): LocalLabBacken
       ...(connection.persistence === false ? { persistence: false } : {}),
       ...(connection.imagePullSecret !== undefined
         ? { imagePullSecret: connection.imagePullSecret }
-        : {})
+        : {}),
+      ...(connection.noTopologyCR === true ? { noTopologyCR: true } : {})
     }
   };
+}
+
+/**
+ * Where captures of a lab host open: This computer's `capture.preferredAction`,
+ * a Kubernetes lab host's or an API Server's own choice (Automatic unless set).
+ */
+export function captureMethodSetting(connection: LabConnection): string | undefined {
+  if (connection.kind === "local" && !isClusterConnection(connection)) {
+    return vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction");
+  }
+  return connection.captureMethod;
 }
 
 /** The backend of a cluster connection, rebuilt when its settings change. */

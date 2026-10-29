@@ -12,6 +12,7 @@ import {
 } from "../../src/settings/schema";
 import { MuiThemeProvider } from "../../src/theme/MuiThemeProvider";
 import type { EndpointConfig } from "../../src/workspace/types";
+import type { LabHostSettingRows } from "../../src/host/labHostSettings";
 import { applyThemeVars } from "../../src/theme/devTheme";
 import manifest from "../../../../apps/vscode-containerlab/package.json";
 
@@ -71,6 +72,88 @@ const labHosts: { hosts: EndpointConfig[]; local: NonNullable<LabHostsSnapshot["
   ],
   local: { shown: true, available: true, problems: [], containerlabVersion: "0.78.0" },
 };
+// ?hosts=all adds a Kubernetes lab host and a c9s API Server, as in a full setup.
+if (new URLSearchParams(location.search).get("hosts") === "all") {
+  labHosts.hosts.push(
+    {
+      id: "c9s-kind",
+      kind: "local",
+      runtime: "c9s",
+      url: "local://c9s/kind-c9s-app",
+      label: "kind-c9s-app",
+      kubeContext: "kind-c9s-app",
+      kubeconfig: "~/.kube/config",
+      username: "alice",
+      sessionDuration: "",
+      status: "connected",
+      connected: true,
+      editable: true,
+    },
+    {
+      id: "api-c9s",
+      kind: "api",
+      runtime: "c9s",
+      url: "http://localhost:18190",
+      label: "localhost:18190",
+      username: "c9sdemo",
+      sessionDuration: "24h",
+      status: "connected",
+      connected: true,
+      cluster: "c9s-provisioner",
+      namespacePattern: "c9s-c9sdemo-{lab}",
+      exposeType: "None",
+      persistence: true,
+      defaultTimeout: "10m",
+    },
+  );
+}
+/** Each lab host's own settings, as the extension keeps them; This computer's are under "local". */
+const hostValues: Record<string, Record<string, unknown>> = { local: { runtime: "docker" } };
+const HOST_DEFAULTS: Record<"this-computer" | "cluster" | "server", Record<string, string>> = {
+  "this-computer": {
+    runtime: "Docker",
+    socket: "/var/run/docker.sock",
+    binaryPath: "containerlab on PATH",
+    timeout: "2m (containerlab default)",
+    deployArgs: "None",
+    destroyArgs: "None",
+    captureMethod: "Automatic",
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+    wiresharkPullPolicy: "always",
+    vncHostname: "localhost",
+    captureHostname: "Found automatically",
+    packetflixPort: "5001",
+    edgesharkEnv: "HTTP_PROXY=, http_proxy=",
+  },
+  cluster: {
+    timeout: "10m (containerlab default)",
+    exposeType: "clabernetes default",
+    persistence: "On",
+    imagePullSecret: "None",
+    noTopologyCR: "Off",
+    deployArgs: "None",
+    destroyArgs: "None",
+    captureMethod: "Automatic",
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+  },
+  server: { captureMethod: "Automatic" },
+};
+function hostSettings(): Record<string, LabHostSettingRows> {
+  const result: Record<string, LabHostSettingRows> = {};
+  for (const host of [{ id: "local", kind: "local" as const }, ...labHosts.hosts]) {
+    let kind: keyof typeof HOST_DEFAULTS = host.kind === "api" ? "server" : "cluster";
+    if (host.id === "local") kind = "this-computer";
+    const values = hostValues[host.id] ?? {};
+    const rows: LabHostSettingRows = {};
+    for (const [id, defaultLabel] of Object.entries(HOST_DEFAULTS[kind])) {
+      const value = values[id] as string | number | boolean | undefined;
+      rows[id as keyof LabHostSettingRows] = { ...(value !== undefined ? { value } : {}), defaultLabel };
+    }
+    if (kind === "cluster") rows.binaryPath = { shown: "containerlab on PATH" };
+    result[host.id] = rows;
+  }
+  return result;
+}
 function labHost(id: unknown): EndpointConfig {
   const host = labHosts.hosts.find((entry) => entry.id === id);
   if (!host) throw new Error(`No lab host ${String(id)}`);
@@ -187,6 +270,13 @@ function labHostAction(payload: Record<string, unknown>): unknown {
       labHosts.hosts = [...labHosts.hosts.filter((entry) => entry.id !== id), host];
       break;
     }
+    case "labHosts.setting": {
+      const id = String(payload.endpointId);
+      const values = (hostValues[id] ??= {});
+      if (payload.reset === true) delete values[String(payload.setting)];
+      else values[String(payload.setting)] = payload.value;
+      break;
+    }
     case "labHosts.metrics":
       return {
         serverInfo: { version: "0.2.1", uptime: "3h", startTime: "" },
@@ -219,6 +309,7 @@ function snapshot(): SettingsSnapshot {
       hosts: labHosts.hosts.map((host) => ({ ...host })),
       local: { ...labHosts.local },
       clusters: { defaultKubeconfig: "/home/alice/.kube/config" },
+      settings: hostSettings(),
     },
     category: takeInitialCategory(),
     remoteName: "ssh-remote",

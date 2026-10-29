@@ -16,6 +16,7 @@ import {
 } from "./backend/labBackends";
 import {
   isClusterConnection,
+  migrateHostSettings,
   LOCAL_CONNECTION,
   type ConnectionManager,
   type LabConnection
@@ -873,6 +874,9 @@ export async function activate(context: vscode.ExtensionContext) {
   const ignoredClusters = connections.ignoredClusters();
   if (ignoredClusters !== undefined) outputChannel.warn(ignoredClusters);
   context.subscriptions.push(connections, RemoteLabFileSystem.register(connections));
+  await migrateHostSettings(context).catch((error: unknown) =>
+    outputChannel.warn(`Lab host settings were not migrated: ${String(error)}`)
+  );
   await connections.restoreAll();
   registerConnectionCommands(context);
   const hasLabServers = connections.list().some((connection) => connection.kind === "api");

@@ -8,6 +8,7 @@ import type {
 } from "@srl-labs/containerlab-app-contract";
 import { errorStatus, type TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
+import { migrateConnectionEntries, type LegacyHostSettings } from "./hostSettings";
 import {
   CONTAINERLAB_LINUX_ONLY,
   expandKubeconfigPath
@@ -40,6 +41,17 @@ export interface LabConnection {
   persistence?: boolean;
   /** c9s: the image pull secret of every lab's pods by default. */
   imagePullSecret?: string;
+  /** c9s: containerlab's timeout of deploys that set none. */
+  deployTimeout?: string;
+  /** c9s: deploy without clabernetes' Topology resource by default. */
+  noTopologyCR?: boolean;
+  /** c9s: arguments for every deploy and redeploy, and every destroy. */
+  deployExtraArgs?: string;
+  destroyExtraArgs?: string;
+  /** c9s: the Wireshark VNC image of its captures. */
+  wiresharkImage?: string;
+  /** Kubernetes and API Servers: where captures open; This computer's is `capture.preferredAction`. */
+  captureMethod?: string;
   /** The clab-api-server URL; only for API connections. */
   url?: string;
   /** User name to sign in with, from the settings or the last sign-in. */
@@ -57,6 +69,12 @@ interface ConnectionSetting {
   exposeType?: unknown;
   persistence?: unknown;
   imagePullSecret?: unknown;
+  deployTimeout?: unknown;
+  noTopologyCR?: unknown;
+  deployExtraArgs?: unknown;
+  destroyExtraArgs?: unknown;
+  wiresharkImage?: unknown;
+  captureMethod?: unknown;
   label?: unknown;
   url?: unknown;
   username?: unknown;
@@ -151,6 +169,7 @@ function clusterSettingEntry(settings: ClusterHostSettings): ConnectionSetting {
   const kubeconfig = text(settings.kubeconfig);
   const namespace = text(settings.namespace);
   const imagePullSecret = text(settings.imagePullSecret);
+  const deployTimeout = text(settings.deployTimeout);
   return {
     kind: "kubernetes",
     ...(label !== undefined ? { label } : {}),
@@ -161,8 +180,28 @@ function clusterSettingEntry(settings: ClusterHostSettings): ConnectionSetting {
       ? { exposeType: settings.exposeType }
       : {}),
     ...(settings.persistence === false ? { persistence: false } : {}),
-    ...(imagePullSecret !== undefined ? { imagePullSecret } : {})
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {}),
+    ...(deployTimeout !== undefined ? { deployTimeout } : {}),
+    ...(settings.noTopologyCR === true ? { noTopologyCR: true } : {})
   };
+}
+
+/** The settings of a lab host's entry that only its page edits, which the cluster form keeps. */
+const PAGE_FIELDS = [
+  "deployExtraArgs",
+  "destroyExtraArgs",
+  "wiresharkImage",
+  "captureMethod"
+] as const;
+
+/** The strings a lab host's page keeps in its entry, as a connection has them. */
+function pageSettings(setting: ConnectionSetting): Partial<LabConnection> {
+  const result: Partial<LabConnection> = {};
+  for (const field of PAGE_FIELDS) {
+    const value = settingString(setting[field]);
+    if (value !== undefined) result[field] = value;
+  }
+  return result;
 }
 
 /** A cluster lab host from its `containerlab.connections` entry. */
@@ -176,7 +215,9 @@ export function clusterConnectionFromSetting(
   const namespace = settingString(setting.namespace);
   const exposeType = settingString(setting.exposeType);
   const imagePullSecret = settingString(setting.imagePullSecret);
+  const deployTimeout = settingString(setting.deployTimeout);
   return {
+    ...pageSettings(setting),
     id: clusterConnectionId(kubeContext, kubeconfig),
     label: settingString(setting.label) ?? kubeContext,
     kind: "local",
@@ -188,7 +229,9 @@ export function clusterConnectionFromSetting(
       ? { exposeType: exposeType as LabConnection["exposeType"] }
       : {}),
     ...(setting.persistence === false ? { persistence: false } : {}),
-    ...(imagePullSecret !== undefined ? { imagePullSecret } : {})
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {}),
+    ...(deployTimeout !== undefined ? { deployTimeout } : {}),
+    ...(setting.noTopologyCR === true ? { noTopologyCR: true } : {})
   };
 }
 
@@ -211,8 +254,19 @@ export function clusterSettingsOf(connection: LabConnection): ClusterHostSetting
     ...(connection.persistence === false ? { persistence: false } : {}),
     ...(connection.imagePullSecret !== undefined
       ? { imagePullSecret: connection.imagePullSecret }
-      : {})
+      : {}),
+    ...(connection.deployTimeout !== undefined ? { deployTimeout: connection.deployTimeout } : {}),
+    ...(connection.noTopologyCR === true ? { noTopologyCR: true } : {})
   };
+}
+
+/** Where a Kubernetes lab host's or an API Server's entry is in the settings; -1 when it is not. */
+function entryIndex(entries: readonly ConnectionSetting[], connection: LabConnection): number {
+  return entries.findIndex((setting) =>
+    connection.kind === "local"
+      ? clusterConnectionFromSetting(setting)?.id === connection.id
+      : typeof setting.url === "string" && normalizeUrl(setting.url) === connection.url
+  );
 }
 
 /** Whether a connection is a Kubernetes cluster that containerlab on this machine runs labs on. */
@@ -354,6 +408,7 @@ export class ConnectionManager implements vscode.Disposable {
           ? setting.sessionDuration.trim()
           : undefined;
       connections.push({
+        ...pageSettings(setting),
         id,
         label,
         kind: "api",
@@ -706,6 +761,8 @@ export class ConnectionManager implements vscode.Disposable {
     const next = (Array.isArray(current) ? current : []).map((entry) =>
       typeof entry.url === "string" && normalizeUrl(entry.url) === connection.url
         ? {
+            // What the lab host's page set stays.
+            ...pageSettings(entry),
             label: changes.label,
             url: normalized,
             ...(changes.username !== "" ? { username: changes.username } : {}),
@@ -754,13 +811,17 @@ export class ConnectionManager implements vscode.Disposable {
     const config = vscode.workspace.getConfiguration("containerlab");
     const current = config.get<ConnectionSetting[]>("connections", []);
     const entries = Array.isArray(current) ? current : [];
-    const entry = clusterSettingEntry({ ...settings, kubeContext });
     const replaced = new Set([id, ...(previous ? [previous.id] : [])]);
     // The edited entry keeps its place in the list; a new one goes last.
     const index = entries.findIndex((setting) => {
       const cluster = clusterConnectionFromSetting(setting);
       return cluster !== undefined && replaced.has(cluster.id);
     });
+    // What the lab host's page set, and the cluster form does not show, stays.
+    const entry = {
+      ...(index < 0 ? {} : pageSettings(entries[index])),
+      ...clusterSettingEntry({ ...settings, kubeContext })
+    };
     const next = entries.filter((setting) => {
       const cluster = clusterConnectionFromSetting(setting);
       return cluster === undefined || !replaced.has(cluster.id);
@@ -775,6 +836,29 @@ export class ConnectionManager implements vscode.Disposable {
     if (!connection) throw new Error("The cluster could not be saved.");
     this.changeEmitter.fire(undefined);
     return connection;
+  }
+
+  /** The `containerlab.connections` entry of a Kubernetes lab host or an API Server. */
+  entryOf(connection: LabConnection): Record<string, unknown> | undefined {
+    const configured = vscode.workspace
+      .getConfiguration("containerlab")
+      .get<ConnectionSetting[]>("connections", []);
+    const entries = Array.isArray(configured) ? configured : [];
+    return entries[entryIndex(entries, connection)] as Record<string, unknown> | undefined;
+  }
+
+  /** Changes a lab host's entry, e.g. one setting from its settings page. */
+  async updateEntry(
+    connection: LabConnection,
+    change: (entry: Record<string, unknown>) => Record<string, unknown>
+  ): Promise<void> {
+    const config = vscode.workspace.getConfiguration("containerlab");
+    const current = config.get<ConnectionSetting[]>("connections", []);
+    const entries = Array.isArray(current) ? [...current] : [];
+    const index = entryIndex(entries, connection);
+    if (index < 0) throw new Error("This lab host is no longer configured.");
+    entries[index] = change(entries[index] as Record<string, unknown>) as ConnectionSetting;
+    await config.update("connections", entries, vscode.ConfigurationTarget.Global);
   }
 
   async removeConnection(connection: LabConnection): Promise<void> {
@@ -811,4 +895,41 @@ export class ConnectionManager implements vscode.Disposable {
       .getConfiguration("containerlab")
       .update("localConnection", enabled, vscode.ConfigurationTarget.Global);
   }
+}
+
+const HOST_SETTINGS_MIGRATED_KEY = "containerlab.hostSettingsMigrated";
+
+/**
+ * Once: the values the user set for `deploy.extraArgs`, `destroy.extraArgs`,
+ * `capture.preferredAction` and `capture.wireshark.dockerImage` applied to
+ * every lab host before each had its own; they now are This computer's, so
+ * they are copied into the Kubernetes lab hosts and API Servers they applied
+ * to (`migrateConnectionEntries`).
+ */
+export async function migrateHostSettings(context: vscode.ExtensionContext): Promise<void> {
+  if (context.globalState.get<boolean>(HOST_SETTINGS_MIGRATED_KEY) === true) return;
+  const config = vscode.workspace.getConfiguration("containerlab");
+  const user = (key: string): string | undefined => {
+    const value = config.inspect<string>(key)?.globalValue;
+    return typeof value === "string" ? value : undefined;
+  };
+  const legacy: LegacyHostSettings = {};
+  const deployArgs = user("deploy.extraArgs");
+  const destroyArgs = user("destroy.extraArgs");
+  const captureMethod = user("capture.preferredAction");
+  const wiresharkImage = user("capture.wireshark.dockerImage");
+  if (deployArgs !== undefined) legacy.deployArgs = deployArgs;
+  if (destroyArgs !== undefined) legacy.destroyArgs = destroyArgs;
+  if (captureMethod !== undefined) legacy.captureMethod = captureMethod;
+  if (wiresharkImage !== undefined) legacy.wiresharkImage = wiresharkImage;
+  const entries = config.inspect<unknown[]>("connections")?.globalValue;
+  const migrated = Array.isArray(entries)
+    ? migrateConnectionEntries(entries, legacy, (entry) =>
+        isClusterSetting(entry as ConnectionSetting)
+      )
+    : undefined;
+  if (migrated !== undefined) {
+    await config.update("connections", migrated, vscode.ConfigurationTarget.Global);
+  }
+  await context.globalState.update(HOST_SETTINGS_MIGRATED_KEY, true);
 }

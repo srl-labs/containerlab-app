@@ -934,7 +934,7 @@
           "containerlab.binaryPath": {
             "type": "string",
             "default": "",
-            "markdownDescription": "The absolute file path to the Containerlab binary."
+            "markdownDescription": "**This computer**: the containerlab binary; looked up on `PATH` when empty. Kubernetes lab hosts use it too: containerlab on this computer deploys their labs."
           },
           "containerlab.skipCleanupWarning": {
             "type": "boolean",
@@ -944,12 +944,18 @@
           "containerlab.deploy.extraArgs": {
             "type": "string",
             "default": "",
-            "description": "Additional command-line options appended to all 'containerlab deploy' and 'containerlab redeploy' commands."
+            "markdownDescription": "**This computer**: arguments added to every `containerlab deploy` and `redeploy`. A Kubernetes lab host has its own, in Settings → its lab host page."
+          },
+          "containerlab.deploy.timeout": {
+            "type": "string",
+            "default": "",
+            "pattern": "^$|^([0-9]+(\\.[0-9]+)?(ms|s|m|h))+$",
+            "markdownDescription": "**This computer**: containerlab's timeout for deploys, redeploys and applies that set none, for example `5m` (`--timeout`). containerlab's default (2m) when empty. A lab's own timeout (Lab settings → Deploy) wins."
           },
           "containerlab.destroy.extraArgs": {
             "type": "string",
             "default": "",
-            "description": "Additional command-line options appended to all 'containerlab destroy' commands."
+            "markdownDescription": "**This computer**: arguments added to every `containerlab destroy`. A Kubernetes lab host has its own, in Settings → its lab host page."
           },
           "containerlab.drawioDefaultTheme": {
             "type": "string",
@@ -984,7 +990,7 @@
           "containerlab.dockerSocketPath": {
             "type": "string",
             "default": "/var/run/docker.sock",
-            "description": "Path to the Docker or Podman socket (e.g., /run/user/1000/podman/podman.sock for Podman)."
+            "markdownDescription": "**This computer**: the Docker or Podman API socket, for example `/run/user/1000/podman/podman.sock` for Podman."
           },
           "containerlab.refreshMode": {
             "type": "string",
@@ -1042,6 +1048,16 @@
                     "sessionDuration": {
                       "type": "string",
                       "description": "How long a sign-in lasts, for example 24h or 7d. The lab host's default when unset."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
                     }
                   },
                   "additionalProperties": false
@@ -1101,6 +1117,36 @@
                     "label": {
                       "type": "string",
                       "description": "Name shown in the Containerlab views. The context when unset."
+                    },
+                    "deployTimeout": {
+                      "type": "string",
+                      "markdownDescription": "containerlab's timeout for deploys that set none, for example `20m` (`--timeout`). containerlab's default (10m) when unset."
+                    },
+                    "noTopologyCR": {
+                      "type": "boolean",
+                      "markdownDescription": "`true`: deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`)."
+                    },
+                    "deployExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab deploy` and `redeploy` of this lab host."
+                    },
+                    "destroyExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab destroy` of this lab host."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
+                    },
+                    "wiresharkImage": {
+                      "type": "string",
+                      "markdownDescription": "The Wireshark VNC image for captures of this lab host, with its tag."
                     }
                   },
                   "additionalProperties": false
@@ -1162,6 +1208,36 @@
                     "label": {
                       "type": "string",
                       "description": "Name shown in the Containerlab views. The context when unset."
+                    },
+                    "deployTimeout": {
+                      "type": "string",
+                      "markdownDescription": "containerlab's timeout for deploys that set none, for example `20m` (`--timeout`). containerlab's default (10m) when unset."
+                    },
+                    "noTopologyCR": {
+                      "type": "boolean",
+                      "markdownDescription": "`true`: deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`)."
+                    },
+                    "deployExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab deploy` and `redeploy` of this lab host."
+                    },
+                    "destroyExtraArgs": {
+                      "type": "string",
+                      "markdownDescription": "Arguments added to every `containerlab destroy` of this lab host."
+                    },
+                    "captureMethod": {
+                      "type": "string",
+                      "enum": [
+                        "Automatic",
+                        "Wireshark on this computer",
+                        "Wireshark VNC",
+                        "Edgeshark"
+                      ],
+                      "markdownDescription": "Where a capture of this lab host opens; Automatic when unset."
+                    },
+                    "wiresharkImage": {
+                      "type": "string",
+                      "markdownDescription": "The Wireshark VNC image for captures of this lab host, with its tag."
                     }
                   },
                   "additionalProperties": false
@@ -1220,7 +1296,7 @@
             "default": 0,
             "minimum": 0,
             "maximum": 24,
-            "description": "Interface font size in pixels (10\u201324). Set to 0 to follow VS Code. Does not change topology labels or terminal output."
+            "description": "Interface font size in pixels (10–24). Set to 0 to follow VS Code. Does not change topology labels or terminal output."
           },
           "containerlab.appearance.fontFamily": {
             "type": "string",
@@ -1355,12 +1431,12 @@
           "containerlab.capture.remoteHostname": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Hostname or IP address for **Edgeshark packet capture** connections. Can be either DNS resolvable hostname, or an IPv4/6 address. This setting tells Edgeshark where to connect for capturing packets.\n\n**Note:** A configured hostname for *this session of VS Code* takes precedence. (Command palette: **Containerlab: Configure session hostname**)"
+            "markdownDescription": "**This computer**: the hostname or IP address Edgeshark's packetflix links name. Found automatically when empty."
           },
           "containerlab.capture.packetflixPort": {
             "type": "number",
             "default": 5001,
-            "markdownDescription": "Port for the **Packetflix WebSocket endpoint** used by Edgeshark packet capture. This is where Edgeshark connects to stream captured packets.",
+            "markdownDescription": "**This computer**: the port of Edgeshark's packetflix endpoint.",
             "minimum": 1,
             "maximum": 65535
           },
@@ -1379,7 +1455,7 @@
               "Wireshark in a VS Code tab, in a container on the lab host (or on this computer's Docker for a cluster used from here).",
               "A packetflix link that Wireshark on this computer opens through Edgeshark. Docker and Podman lab hosts only."
             ],
-            "description": "Where a capture opens. When the lab host lacks the method you pick, the capture opens the automatic way and says why."
+            "markdownDescription": "**This computer**: where a capture opens. Kubernetes lab hosts and API Servers have their own, in Settings → their lab host page. When the lab host lacks the method you pick, the capture opens the automatic way and says why."
           },
           "containerlab.capture.wireshark.path": {
             "type": "string",
@@ -1389,7 +1465,7 @@
           "containerlab.capture.wireshark.dockerImage": {
             "type": "string",
             "default": "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
-            "description": "The docker image to use for Wireshark/Edgeshark VNC capture. Requires full image name + tag. For Kubernetes (c9s) clusters on this machine it needs the capture pipe mode (CLABWIRE_CAPTURE_PIPE) of wireshark-vnc-docker."
+            "markdownDescription": "**This computer**: the Wireshark VNC image, with its tag. A Kubernetes lab host has its own, in Settings → its lab host page."
           },
           "containerlab.capture.wireshark.pullPolicy": {
             "type": "string",
@@ -1399,7 +1475,7 @@
               "missing",
               "never"
             ],
-            "description": "The pull policy of the Wireshark docker image"
+            "markdownDescription": "**This computer**: when the Wireshark VNC image is pulled."
           },
           "containerlab.capture.wireshark.theme": {
             "type": "string",
@@ -1419,12 +1495,12 @@
           "containerlab.capture.wireshark.vncCaptureHostname": {
             "type": "string",
             "default": "",
-            "markdownDescription": "Override the hostname used in the generation for packetflix URI for VNC captures only."
+            "markdownDescription": "**This computer**: the host Wireshark VNC captures name in their packetflix link; localhost when empty."
           },
           "containerlab.capture.edgeshark.extraEnvironmentVars": {
             "type": "string",
             "default": "HTTP_PROXY=, http_proxy=",
-            "description": "Comma-separated environment variables to inject into edgeshark containers (e.g., 'HTTP_PROXY=, http_proxy=, NO_PROXY=localhost'). Each variable will be added to the environment section of both gostwire and packetflix services."
+            "markdownDescription": "**This computer**: comma-separated variables for the Edgeshark containers (e.g. `HTTP_PROXY=, http_proxy=, NO_PROXY=localhost`)."
           }
         }
       }

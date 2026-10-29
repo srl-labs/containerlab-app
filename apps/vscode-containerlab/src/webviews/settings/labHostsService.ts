@@ -4,6 +4,13 @@ import * as path from "path";
 import * as vscode from "vscode";
 import type { ClusterHostSettings } from "@srl-labs/containerlab-app-contract";
 import type { LabHostsSnapshot } from "@containerlab/clab-ui/settings/schema";
+import {
+  LAB_HOST_SETTINGS,
+  type LabHostSettingId,
+  type LabHostSettingRows,
+  type LabHostSettingValue,
+  type LabHostSettingsKind
+} from "@containerlab/clab-ui/host";
 import { defaultKubeconfigFile, readKubeContexts } from "@srl-labs/containerlab-lab-backend/local";
 
 import { backendFor, connectionById, getConnections } from "../../backend/labBackends";
@@ -17,6 +24,14 @@ import {
 } from "../../backend/connections";
 import { cachedLabHostInfo } from "../../backend/labHostSupport";
 import { checkClusterSettings, checkLocalLabHost } from "../../backend/labHostChecks";
+import {
+  entryRows,
+  hostSettingKey,
+  thisComputerRows,
+  toStoredValue,
+  withEntrySetting,
+  type InspectedSetting
+} from "../../backend/hostSettings";
 
 type LabHost = LabHostsSnapshot["hosts"][number];
 
@@ -75,11 +90,40 @@ function hostDetails(
     ...(profile.exposeType !== undefined ? { exposeType: profile.exposeType } : {}),
     ...(profile.persistence !== undefined ? { persistence: profile.persistence } : {}),
     ...(profile.imagePullSecret !== undefined ? { imagePullSecret: profile.imagePullSecret } : {}),
+    ...(profile.defaultTimeout !== undefined ? { defaultTimeout: profile.defaultTimeout } : {}),
     ...(profile.updateRequired !== undefined ? { updateRequired: profile.updateRequired } : {})
   };
 }
 
-/** This computer, the Kubernetes clusters and the lab servers, for the Lab Hosts page of the settings. */
+/** What VS Code knows about one of This computer's settings. */
+function inspectSetting(key: string): InspectedSetting {
+  const inspected = vscode.workspace.getConfiguration("containerlab").inspect(key);
+  return {
+    ...(inspected?.globalValue !== undefined ? { userValue: inspected.globalValue } : {}),
+    ...(inspected?.defaultValue !== undefined ? { defaultValue: inspected.defaultValue } : {})
+  };
+}
+
+/** Each lab host's settings for its page: This computer's settings, the others' entries. */
+function hostSettings(connections: ConnectionManager): Record<string, LabHostSettingRows> {
+  const settings: Record<string, LabHostSettingRows> = {};
+  if (connections.localAvailable) settings[LOCAL_CONNECTION.id] = thisComputerRows(inspectSetting);
+  const binaryPath = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<string>("binaryPath", "");
+  for (const connection of connections.list()) {
+    if (isClusterConnection(connection)) {
+      settings[connection.id] = entryRows("cluster", connections.entryOf(connection), {
+        binaryPath
+      });
+    } else if (connection.kind === "api") {
+      settings[connection.id] = entryRows("server", connections.entryOf(connection));
+    }
+  }
+  return settings;
+}
+
+/** This computer, the Kubernetes lab hosts and the API Servers, for the Lab Hosts page of the settings. */
 export function labHostsSnapshot(): LabHostsSnapshot | undefined {
   const connections = getConnections();
   if (!connections) return undefined;
@@ -103,6 +147,7 @@ export function labHostsSnapshot(): LabHostsSnapshot | undefined {
         ...hostDetails(connections, connection, status === "connected")
       };
     }),
+    settings: hostSettings(connections),
     clusters: connections.localAvailable
       ? { defaultKubeconfig: homeRelative(defaultKubeconfigFile()) }
       : {
@@ -232,6 +277,40 @@ const ACTIONS: Record<string, LabHostsAction> = {
       previous
     );
     void checkLocalLabHost(connections, saved);
+  },
+  // One setting of a lab host's page; `reset` makes it follow the default again.
+  "labHosts.setting": async (connections, payload) => {
+    const id = text(payload.setting) as LabHostSettingId;
+    const definition = LAB_HOST_SETTINGS[id] as
+      (typeof LAB_HOST_SETTINGS)[LabHostSettingId] | undefined;
+    if (definition === undefined) throw new Error("Unknown lab host setting.");
+    const connection =
+      text(payload.endpointId) === LOCAL_CONNECTION.id ? LOCAL_CONNECTION : labHost(payload);
+    let kind: LabHostSettingsKind = "this-computer";
+    if (isClusterConnection(connection)) kind = "cluster";
+    else if (connection.kind === "api") kind = "server";
+    const key = hostSettingKey(kind, id);
+    if (key === undefined)
+      throw new Error(`${definition.title} is not a setting of this lab host.`);
+    const value = payload.reset === true ? undefined : (payload.value as LabHostSettingValue);
+    const error = value === undefined ? undefined : definition.validate?.(value);
+    if (error) throw new Error(`${definition.title}: ${error}`);
+    const stored = toStoredValue(id, value);
+    if (kind === "this-computer") {
+      await vscode.workspace
+        .getConfiguration("containerlab")
+        .update(key, stored, vscode.ConfigurationTarget.Global);
+      return;
+    }
+    await connections.updateEntry(connection, (entry) => withEntrySetting(entry, key, stored));
+  },
+  // Edgeshark on this computer, from This computer's page.
+  "labHosts.edgeshark": async (_connections, payload) => {
+    await vscode.commands.executeCommand(
+      payload.operation === "uninstall"
+        ? "containerlab.uninstall.edgeshark"
+        : "containerlab.install.edgeshark"
+    );
   },
   "labHosts.showLocal": async (connections) => {
     await connections.setLocalEnabled(true);

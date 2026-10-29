@@ -1,4 +1,5 @@
 /** Host-neutral settings schema and validation, shared by the form and extension host. */
+import type { LabHostSettingRows } from "../host/labHostSettings";
 import type { EndpointConfig } from "../workspace/types";
 
 /**
@@ -15,6 +16,8 @@ export interface LabHostsSnapshot {
     problems: string[];
     containerlabVersion?: string;
   };
+  /** Each lab host's settings for its page, by host id; This computer's under its id too. */
+  settings?: Record<string, LabHostSettingRows>;
   /** Opens "Add lab host" on this kind, e.g. the cluster form from the command palette; sent once. */
   add?: "cluster" | "server";
   /** Kubernetes cluster lab hosts: whether they can be added here, and the default kubeconfig. */
@@ -92,6 +95,7 @@ const TITLES: Record<string, string> = {
   binaryPath: "Containerlab binary",
   skipCleanupWarning: "Skip cleanup confirmation",
   "deploy.extraArgs": "Deploy arguments",
+  "deploy.timeout": "Deploy timeout",
   "destroy.extraArgs": "Destroy arguments",
   drawioDefaultTheme: "Draw.io theme",
   "gotty.port": "GoTTY port",
@@ -133,8 +137,28 @@ const RELOAD_KEYS = new Set([
   "pollInterval",
   "enableInterfaceStats",
 ]);
+/**
+ * This computer's settings: they show on its page under Lab hosts, next to
+ * the same settings of every other lab host, not in the app's categories.
+ */
+export const THIS_COMPUTER_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "runtime",
+  "dockerSocketPath",
+  "binaryPath",
+  "deploy.timeout",
+  "deploy.extraArgs",
+  "destroy.extraArgs",
+  "capture.preferredAction",
+  "capture.wireshark.dockerImage",
+  "capture.wireshark.pullPolicy",
+  "capture.wireshark.vncCaptureHostname",
+  "capture.remoteHostname",
+  "capture.packetflixPort",
+  "capture.edgeshark.extraEnvironmentVars"
+]);
+
 function categoryFor(key: string): SettingsCategory {
-  if (key === "connections" || key === "localConnection") return "labHosts";
+  if (key === "connections" || key === "localConnection" || THIS_COMPUTER_SETTING_KEYS.has(key)) return "labHosts";
   if (key.startsWith("appearance.")) return "appearance";
   if (key.startsWith("capture.")) return "capture";
   if (key.startsWith("editor.") || key === "drawioDefaultTheme")
@@ -145,12 +169,6 @@ function categoryFor(key: string): SettingsCategory {
     key.startsWith("gotty.")
   )
     return "terminal";
-  if (
-    key.startsWith("deploy.") ||
-    key.startsWith("destroy.") ||
-    key === "skipCleanupWarning"
-  )
-    return "labs";
   return "general";
 }
 export function createSettingsCatalog(

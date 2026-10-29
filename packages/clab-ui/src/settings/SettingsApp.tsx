@@ -19,12 +19,10 @@ import SearchIcon from "@mui/icons-material/Search";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
-import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
 import TerminalIcon from "@mui/icons-material/Terminal";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
-import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import { type SettingsNavigationItem } from "./SettingsNavigation";
@@ -32,63 +30,60 @@ import { floatingRadius } from "../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../theme/typography";
 import { SettingCard } from "./SettingCard";
 import { LabHostsPanel } from "./LabHostsPanel";
+import { ExtensionLabHostPage, extensionLabHosts } from "./ExtensionLabHostPage";
+import { ADD_HOST_PAGE, hostPageId, hostPageKey, labHostNavigationItems } from "./labHostEntries";
+import { LAB_HOST_KIND_LABELS, labHostKind } from "../workspace/endpoints";
 import type {
   SettingsChange,
   SettingsSnapshot,
   SettingsTarget,
 } from "./schema";
 
-const LAB_HOSTS_CATEGORY: SettingsNavigationItem = {
-  key: "labHosts",
-  label: "Lab Hosts",
-  description: "Where your labs run: this computer, Kubernetes and API Servers",
-  icon: <DnsOutlinedIcon fontSize="small" />,
-};
 /** Searches that should lead to the Lab Hosts page instead of raw settings. */
 const LAB_HOSTS_SEARCH =
-  /\b(lab ?hosts?|hosts?|servers?|connections?|clab-api|sign|local)\b/i;
+  /\b(lab ?hosts?|hosts?|servers?|connections?|clab-api|sign|local|runtime|socket|binary|kube\w*|namespaces?|timeout|edgeshark|packetflix|docker|podman|this computer)\b/i;
 const CATEGORIES: SettingsNavigationItem[] = [
   {
     key: "general",
-    label: "General & Runtime",
+    label: "General",
     description: "Your Containerlab environment",
     icon: <SettingsOutlinedIcon fontSize="small" />,
+    group: "App",
   },
   {
     key: "appearance",
     label: "Appearance",
     description: "Make yourself at home",
     icon: <PaletteOutlinedIcon fontSize="small" />,
-  },
-  {
-    key: "labs",
-    label: "Lab Actions",
-    description: "Deploy, destroy, and cleanup",
-    icon: <ScienceOutlinedIcon fontSize="small" />,
+    group: "App",
   },
   {
     key: "topology",
-    label: "Topology",
+    label: "Topology editor",
     description: "Canvas and node templates",
     icon: <AccountTreeOutlinedIcon fontSize="small" />,
+    group: "App",
   },
   {
     key: "terminal",
     label: "Terminal",
     description: "Shells, SSH, and node actions",
     icon: <TerminalIcon fontSize="small" />,
+    group: "App",
   },
   {
     key: "capture",
-    label: "Packet Capture",
-    description: "Wireshark and Edgeshark",
+    label: "Capture",
+    description: "Wireshark on this computer, for every lab host",
     icon: <HubOutlinedIcon fontSize="small" />,
+    group: "App",
   },
   {
     key: "about",
     label: "About",
     description: "Versions and settings details",
     icon: <InfoOutlinedIcon fontSize="small" />,
+    group: "Other",
   },
 ];
 export function SettingsApp({
@@ -183,27 +178,42 @@ export function SettingsApp({
         (definition) => definition.category !== "labHosts",
       )
     : snapshot.definitions;
+  const hosts = labHosts ? extensionLabHosts(labHosts) : [];
+  // The app's categories that have settings, the lab hosts, then About.
+  const appCategories = CATEGORIES.filter(
+    (item) => item.key === "about" || definitions.some((definition) => definition.category === item.key),
+  );
   const navigation = labHosts
-    ? [LAB_HOSTS_CATEGORY, ...CATEGORIES]
-    : CATEGORIES;
-  const showLabHosts =
-    labHosts !== undefined &&
-    category === "labHosts" &&
-    query.length === 0 &&
-    filter === "all";
+    ? [
+        ...appCategories.filter((item) => item.key !== "about"),
+        ...labHostNavigationItems(hosts),
+        ...appCategories.filter((item) => item.key === "about"),
+      ]
+    : appCategories;
+  // "Lab Hosts" of earlier builds and commands: "Add lab host" when asked to add, else the first host.
+  let page = category;
+  if (category === "labHosts") {
+    page = labHosts?.add !== undefined || hosts.length === 0 ? ADD_HOST_PAGE : hostPageKey(hosts[0].id);
+  }
+  const pageHostId = hostPageId(page);
+  const onLabHostPage =
+    labHosts !== undefined && (page === ADD_HOST_PAGE || pageHostId !== undefined);
+  const showLabHosts = onLabHostPage && query.length === 0 && filter === "all";
   const { visible, currentModified, allModified } = filterSettings(
     definitions,
     snapshot.values,
-    category,
+    page,
     search,
     filter,
   );
   const active =
-    navigation.find((item) => item.key === category) ?? CATEGORIES[0];
+    navigation.find((item) => item.key === page) ?? CATEGORIES[0];
   const showAllCategories =
     filter === "modified-all" || (query.length > 0 && filter === "all");
   let title = active.label;
   let description = active.description;
+  const pageHost = hosts.find((host) => host.id === pageHostId);
+  if (pageHost) description = `${LAB_HOST_KIND_LABELS[labHostKind(pageHost)]} · settings for labs on this lab host`;
   if (query.length > 0) {
     title = "Search results";
     description = `${visible.length} settings match “${search.trim()}”`;
@@ -217,14 +227,14 @@ export function SettingsApp({
       (definition) => definition.category === item.key,
     ).length;
     if (item.key === "about") count = undefined;
-    if (item.key === "labHosts") count = labHosts?.hosts.length;
+    if (item.group === "Lab hosts") count = undefined;
     return { ...item, count };
   });
   return (
     <>
       <SettingsLayout
         items={categories}
-        active={category}
+        active={page}
         onSelect={(key) => {
           setCategory(key);
           setSearch("");
@@ -343,7 +353,7 @@ export function SettingsApp({
           </Stack>
         }
         sectionActions={
-          category === "appearance" && !showAllCategories ? (
+          page === "appearance" && !showAllCategories ? (
             <Button
               size="small"
               variant="text"
@@ -483,24 +493,27 @@ export function SettingsApp({
                 variant="text"
                 size="small"
                 onClick={() => {
-                  setCategory("labHosts");
+                  setCategory(hosts.length > 0 ? hostPageKey(hosts[0].id) : ADD_HOST_PAGE);
                   setSearch("");
                   setFilter("all");
                 }}
               >
-                Open Lab Hosts
+                Open Lab hosts
               </Button>
             }
           >
-            Manage this computer and the other lab hosts on the Lab Hosts page.
+            Settings that depend on where labs run are on each lab host&apos;s page, under Lab hosts in the menu.
           </Alert>
         )}
-        {showLabHosts && labHosts && (
+        {showLabHosts && labHosts && page === ADD_HOST_PAGE && (
           <LabHostsPanel labHosts={labHosts} request={labHostsRequest} />
+        )}
+        {showLabHosts && labHosts && pageHostId !== undefined && (
+          <ExtensionLabHostPage key={pageHostId} labHosts={labHosts} hostId={pageHostId} request={labHostsRequest} />
         )}
         {!visible.length &&
           !showLabHosts &&
-          (query || category !== "about" || filter !== "all") && (
+          (query || page !== "about" || filter !== "all") && (
             <Box
               sx={{
                 display: "flex",
@@ -535,7 +548,7 @@ export function SettingsApp({
               </Button>
             </Box>
           )}
-        {!query && category === "about" && filter === "all" && (
+        {!query && page === "about" && filter === "all" && (
           <Box sx={{ display: "grid", gap: 1.5 }}>
             <Typography component="h3" variant="subtitle1">
               Containerlab for VS Code
