@@ -380,7 +380,7 @@ export class LocalCapture {
     ).catch(() => undefined);
     if (result?.code === 1) {
       throw new LabBackendError(
-        `${this.options.wiresharkImage} has no capture pipe (${CAPTURE_PIPE_ENV}). Wireshark VNC of a Kubernetes lab host needs a wireshark-vnc-docker release with it.`,
+        `${this.options.wiresharkImage} has no capture pipe (${CAPTURE_PIPE_ENV}). Wireshark VNC of a Kubernetes lab host needs an image with the capture pipe mode; the current ghcr.io/srl-labs/wireshark-vnc-docker:latest has it.`,
         501
       );
     }

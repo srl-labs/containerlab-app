@@ -69,14 +69,14 @@ test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => 
       WEB_LOCAL_LABS: "true",
       WEB_LOCAL_WORKSPACE: "/home/alice/.clab",
       WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab",
-      WEB_LOCAL_WIRESHARK_IMAGE: "ghcr.io/srl-labs/wireshark-vnc-docker:dev"
+      WEB_LOCAL_WIRESHARK_IMAGE: "registry.example.com/wireshark-vnc:custom"
     }
   });
   assert.equal(enabled.enabled, true);
   assert.deepEqual(enabled.options, {
     binaryPath: "/usr/local/bin/containerlab",
     workspaceRoot: "/home/alice/.clab",
-    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:dev"
+    wiresharkImage: "registry.example.com/wireshark-vnc:custom"
   });
 });
 
