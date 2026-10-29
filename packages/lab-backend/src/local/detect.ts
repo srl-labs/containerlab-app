@@ -47,7 +47,7 @@ export interface DetectionOverrides {
  * machine deploys them and reaches their nodes.
  */
 export const CONTAINERLAB_LINUX_ONLY =
-  "containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM.";
+  "containerlab runs on Linux only. Use an API Server, or run the app in WSL or a Linux VM.";
 
 const INSTALL_CONTAINERLAB = 'curl -sL https://containerlab.dev/setup | sudo -E bash -s "all"';
 
@@ -167,7 +167,7 @@ export async function detectLocalEnvironment(
       label: "This computer runs Linux",
       status: "failed",
       message: platformProblem,
-      fix: "Use a lab server (clab-api-server), or run the app in WSL or a Linux VM."
+      fix: "Use an API Server (clab-api-server), or run the app in WSL or a Linux VM."
     });
     return status;
   }

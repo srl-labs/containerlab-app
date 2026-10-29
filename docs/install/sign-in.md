@@ -11,23 +11,23 @@ You need a lab host running [`clab-api-server`](lab-host.md), and a Linux accoun
 
 ## Sign in
 
-The web app, and the desktop app on macOS and Windows, start on **Sign in to a lab host**. On Linux the desktop app starts on the labs of [this computer](desktop.md#run-labs-on-this-computer); add lab hosts under **Settings** > **Lab hosts**.
+The web app, and the desktop app on macOS and Windows, start on **Sign in to a lab host**. On Linux the desktop app starts on the labs of [this computer](desktop.md#run-labs-on-this-computer); add lab hosts under **Settings** > **Add lab host**.
 
 ![Sign in to a lab host](../images/app/sign-in-dark.webp#only-dark){ .shot .narrow }
 ![Sign in to a lab host](../images/app/sign-in-light.webp#only-light){ .shot .narrow }
 
 | Field | Fill in |
 | --- | --- |
-| **Lab host URL** | The API server URL, for example `https://lab1.example.com:8090` |
+| **Lab host URL** | The API Server URL, for example `https://lab1.example.com:8090` |
 | **Name** | A short name for the explorer, for example `lab1`. Defaults to the host name |
 | **Username**, **Password** | Your Linux account on the lab host |
 | **Stay signed in for** | How long the session lasts: `24h`, `7d`, `1h30m` |
 
-The password goes to the API server once, in exchange for a session token. The app keeps the token, not the password.
+The password goes to the API Server once, in exchange for a session token. The app keeps the token, not the password.
 
 ## Several lab hosts
 
-Add more under **Settings** > **Lab hosts**. Each one keeps its own session, so you can, say, work on a shared lab host and your own VM at the same time. The same page shows each host's status, CPU, memory, and disk, and lets you edit, sign in again, or remove it.
+Add more under **Settings** > **Add lab host**. Each one keeps its own session, so you can, say, work on a shared lab host and your own VM at the same time. Each lab host has its own page under **Settings** > **Lab hosts**: it shows the host's status, CPU, memory, and disk, lets you edit, sign in again, or remove it, and holds the host's settings, such as its default capture method. An open lab names its lab host at the left of its toolbar; click it for that page.
 
 - The explorer groups labs and files by lab host.
 - An action runs on the lab host that owns the lab or file. When that is unclear, the app asks.
@@ -41,7 +41,7 @@ Under **Lab host profiles**, **Export** your list of lab hosts and **Import** it
 
 <div class="steps" markdown>
 
-1. **Is the API server reachable from where the app runs?** For the web app, that is the web app's container, not your browser.
+1. **Is the API Server reachable from where the app runs?** For the web app, that is the web app's container, not your browser.
 
     ```bash
     curl -k https://lab1.example.com:8090/health

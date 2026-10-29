@@ -162,6 +162,69 @@ test("a lab host reports its runtime when it is added, for its badge", async (t)
   assert.equal(added.json().status, "connected");
 });
 
+test("signing in to an API Server again answers with what it reports, so its page keeps its values", async (t) => {
+  const { app, fetchMock } = await createTestContext(t);
+  const url = "https://c9s-signin.test";
+  fetchMock.on("POST", `${url}/login`, () => jsonResponse({ token: "token" }));
+  fetchMock.on("GET", `${url}/api/v1/version`, () => jsonResponse({ version: "test" }));
+  fetchMock.on("GET", `${url}/health`, () =>
+    jsonResponse({ status: "healthy", runtime: "c9s", namespaceMode: "per-lab", features: ["lab-host-info"] }),
+  );
+  fetchMock.on("GET", `${url}/api/v1/lab-host`, () =>
+    jsonResponse({
+      runtime: "c9s",
+      defaultTimeout: "10m",
+      capture: { wiresharkVnc: false, wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest", wiresharkPullPolicy: "always" },
+      c9s: {
+        context: "c9s-provisioner",
+        cluster: "c9s",
+        namespacePattern: "c9s-alice-{lab}",
+        sharedNamespacePattern: "c9s-shared-{lab}",
+        exposeType: "None",
+        persistence: true,
+        imagePullSecret: "",
+        labQuota: false,
+        noTopologyCR: false,
+        metrics: true,
+      },
+    }),
+  );
+  const expected = {
+    runtime: "c9s",
+    defaultTimeout: "10m",
+    cluster: "c9s",
+    namespacePattern: "c9s-alice-{lab}",
+    exposeType: "None",
+    persistence: true,
+    noTopologyCR: false,
+    capture: { wiresharkVnc: false, wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest", wiresharkPullPolicy: "always" },
+  };
+  const added = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    payload: { url, username: "alice", password: "example" },
+  });
+  assert.equal(added.statusCode, 200, added.body);
+  assert.partialDeepStrictEqual(added.json(), expected);
+  const cookie = extractSessionCookie(added);
+  const endpointId = added.json().id as string;
+
+  // The client replaces its entry with these answers: each carries what the list has.
+  const reconnected = await app.inject({
+    method: "POST",
+    url: `/auth/endpoints/${endpointId}/reconnect`,
+    headers: { cookie },
+    payload: { url, username: "alice", password: "example" },
+  });
+  assert.equal(reconnected.statusCode, 200, reconnected.body);
+  assert.partialDeepStrictEqual(reconnected.json(), { ...expected, status: "connected" });
+  const listed = await app.inject({ url: "/auth/endpoints", headers: { cookie } });
+  assert.partialDeepStrictEqual(listed.json().endpoints[0], expected);
+  const login = await app.inject({ method: "POST", url: "/auth/login", payload: { url, username: "alice", password: "example" } });
+  assert.equal(login.statusCode, 200, login.body);
+  assert.partialDeepStrictEqual(login.json().endpoint, expected);
+});
+
 test("auth startup bounds an unresponsive endpoint and still reports healthy endpoints", async (t) => {
   const { app, fetchMock } = await createTestContext(t);
   let cookie = "";

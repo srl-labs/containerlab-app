@@ -100,7 +100,14 @@ describe("lab host settings", () => {
     expect(isClusterConnection(LOCAL_CONNECTION)).to.equal(false);
     // Entries of earlier builds keep working.
     expect(
-      clusterConnectionFromSetting({ kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app", namespace: "team-a", exposeType: "LoadBalancer", persistence: false })
+      clusterConnectionFromSetting({
+        kind: "local",
+        runtime: "c9s",
+        kubeContext: "kind-c9s-app",
+        namespace: "team-a",
+        exposeType: "LoadBalancer",
+        persistence: false
+      })
     ).to.deep.equal(cluster);
   });
 
@@ -118,7 +125,7 @@ describe("lab host settings", () => {
     expect(cluster?.exposeType).to.equal(undefined);
   });
 
-  it("lists Local, clusters and clab-api-servers side by side", () => {
+  it("lists This computer, clusters and clab-api-servers side by side", () => {
     useSettings({
       connections: [
         { url: "https://lab-host:8090", label: "Lab host" },
@@ -130,7 +137,7 @@ describe("lab host settings", () => {
     const manager = new ConnectionManager(fakeContext());
     const list = manager.list();
     expect(list.map((connection) => [connection.kind, connection.label])).to.deep.equal([
-      ["local", "Local"],
+      ["local", "This computer"],
       ["api", "Lab host"],
       ["local", "kind-c9s-app"]
     ]);
@@ -158,7 +165,10 @@ describe("lab host settings", () => {
 
   describe("Remove and hide", () => {
     const window = vscodeStub.window;
-    const saved = { showWarningMessage: window.showWarningMessage, showQuickPick: window.showQuickPick };
+    const saved = {
+      showWarningMessage: window.showWarningMessage,
+      showQuickPick: window.showQuickPick
+    };
     afterEach(() => Object.assign(window, saved));
 
     function answer(choice: string): string[] {
@@ -173,7 +183,10 @@ describe("lab host settings", () => {
     it("removing a cluster from its explorer item removes only the cluster, and keeps This computer", async () => {
       useSettings({
         localConnection: true,
-        connections: [{ kind: "kubernetes", kubeContext: "kind-c9s-app" }, { url: "https://lab-host:8090" }]
+        connections: [
+          { kind: "kubernetes", kubeContext: "kind-c9s-app" },
+          { url: "https://lab-host:8090" }
+        ]
       });
       const manager = initConnections(fakeContext());
       const cluster = manager.list().find(isClusterConnection);
@@ -188,12 +201,17 @@ describe("lab host settings", () => {
     });
 
     it("hides This computer, and Add Lab Host > This computer brings it back while a cluster is listed", async () => {
-      useSettings({ localConnection: true, connections: [{ kind: "kubernetes", kubeContext: "kind-c9s-app" }] });
+      useSettings({
+        localConnection: true,
+        connections: [{ kind: "kubernetes", kubeContext: "kind-c9s-app" }]
+      });
       const manager = initConnections(fakeContext());
       answer("Hide");
       await removeConnection({ connectionId: LOCAL_CONNECTION.id });
       expect(settings.localConnection).to.equal(false);
-      expect(settings.connections).to.deep.equal([{ kind: "kubernetes", kubeContext: "kind-c9s-app" }]);
+      expect(settings.connections).to.deep.equal([
+        { kind: "kubernetes", kubeContext: "kind-c9s-app" }
+      ]);
 
       let offered: any;
       window.showQuickPick = async (items: any[]) => {
@@ -214,11 +232,12 @@ describe("lab host settings", () => {
       kubeContext: "prod",
       namespace: "labs"
     })!;
-    expect(connectionDescription(cluster)).to.equal("Kubernetes · prod/labs");
-    expect(connectionDescription(LOCAL_CONNECTION)).to.equal("this machine");
+    expect(connectionDescription(cluster)).to.equal("Kubernetes · c9s · prod/labs");
+    expect(connectionDescription(LOCAL_CONNECTION)).to.equal("This computer · Docker");
+    // An API Server names its runtime once it told it.
     expect(
       connectionDescription({ id: "a", label: "a", kind: "api", url: "https://h:8090" })
-    ).to.equal("https://h:8090");
+    ).to.equal("API Server · https://h:8090");
   });
 
   it("keeps the id of a cluster without a kubeconfig, and tells files with the same context apart", () => {
@@ -253,7 +272,7 @@ describe("lab host settings", () => {
     })!;
     expect(fromHome.id).to.equal(absolute.id);
     expect(new Set([plain.id, fromHome.id, other.id]).size).to.equal(3);
-    expect(connectionDescription(other)).to.equal("Kubernetes · kind · b.yaml");
+    expect(connectionDescription(other)).to.equal("Kubernetes · c9s · kind · b.yaml");
     expect(clusterBackendOptions(other).c9s).to.deep.equal({
       kubeContext: "kind",
       kubeconfig: "/k/b.yaml"
@@ -297,7 +316,7 @@ describe("lab host settings", () => {
     const manager = new ConnectionManager(fakeContext(), { localSupported: false });
     expect(manager.list().map((connection) => connection.kind)).to.deep.equal(["api"]);
     expect(manager.ignoredClusters()).to.equal(
-      "2 Kubernetes cluster lab hosts are left out: containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM."
+      "2 Kubernetes lab hosts are left out: containerlab runs on Linux only. Use an API Server, or run the app in WSL or a Linux VM."
     );
     let error: unknown;
     await manager.addClusterConnection({ kubeContext: "kind" }).catch((caught: unknown) => {
@@ -352,7 +371,9 @@ describe("lab host settings", () => {
       useSettings({ connections: [] });
       initConnections(fakeContext());
       const executed: unknown[][] = [];
-      const commands = vscodeStub.commands as { executeCommand: (...args: unknown[]) => Promise<unknown> };
+      const commands = vscodeStub.commands as {
+        executeCommand: (...args: unknown[]) => Promise<unknown>;
+      };
       const originalExecute = commands.executeCommand;
       commands.executeCommand = async (...args: unknown[]) => {
         executed.push(args);
@@ -370,8 +391,8 @@ describe("lab host settings", () => {
       }
       expect(labels).to.deep.equal([
         "$(device-desktop) This computer",
-        "$(server-environment) Kubernetes cluster",
-        "$(cloud) Lab server"
+        "$(server-environment) Kubernetes",
+        "$(cloud) API Server"
       ]);
       expect(executed).to.deep.include(["containerlab.settings.open", "labHosts", "cluster"]);
     });
@@ -386,19 +407,39 @@ describe("lab host settings", () => {
         persistence: false,
         imagePullSecret: "regcred"
       });
-      expect(cluster).to.deep.include({ kubeContext: "kind-c9s-app", imagePullSecret: "regcred", persistence: false });
-      useSettings({ connections: [...(settings.connections as unknown[]), { url: "https://other:8090" }] });
+      expect(cluster).to.deep.include({
+        kubeContext: "kind-c9s-app",
+        imagePullSecret: "regcred",
+        persistence: false
+      });
+      useSettings({
+        connections: [...(settings.connections as unknown[]), { url: "https://other:8090" }]
+      });
       const edited = await manager.saveClusterConnection(
-        { kubeContext: "second", kubeconfig: path.join(dir, "other"), namespace: "team-a", label: "Lab" },
+        {
+          kubeContext: "second",
+          kubeconfig: path.join(dir, "other"),
+          namespace: "team-a",
+          label: "Lab"
+        },
         cluster
       );
       expect(settings.connections).to.deep.equal([
         { url: "https://lab-host:8090" },
-        { kind: "kubernetes", label: "Lab", kubeContext: "second", kubeconfig: path.join(dir, "other"), namespace: "team-a" },
+        {
+          kind: "kubernetes",
+          label: "Lab",
+          kubeContext: "second",
+          kubeconfig: path.join(dir, "other"),
+          namespace: "team-a"
+        },
         { url: "https://other:8090" }
       ]);
       await manager.removeConnection(edited);
-      expect(settings.connections).to.deep.equal([{ url: "https://lab-host:8090" }, { url: "https://other:8090" }]);
+      expect(settings.connections).to.deep.equal([
+        { url: "https://lab-host:8090" },
+        { url: "https://other:8090" }
+      ]);
     });
   });
 });

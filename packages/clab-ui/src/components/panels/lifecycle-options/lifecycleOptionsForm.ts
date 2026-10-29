@@ -87,21 +87,21 @@ export function createLifecycleOptionsForm(
 /**
  * What an empty Timeout uses on a lab host: the default it reports, or
  * containerlab's for the runtime while the host has not answered. Undefined
- * for a lab server that does not report its default.
+ * for an API Server that does not report its default.
  */
 function hostTimeoutDefault(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): string | undefined {
   if (profile?.defaultTimeout !== undefined) return profile.defaultTimeout;
   return profile === undefined ? containerlabDefaultTimeout(runtime) : undefined;
 }
 
-/** How the Timeout field names the lab host's default: `10m`, or the lab server's when it does not say. */
+/** How the Timeout field names the lab host's default: `10m`, or the API Server's when it does not say. */
 export function timeoutDefaultLabel(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): {
   placeholder: string;
   text: string;
 } {
   const value = hostTimeoutDefault(runtime, profile);
   return value === undefined
-    ? { placeholder: "Server default", text: "the lab server's default" }
+    ? { placeholder: "Server default", text: "the API Server's default" }
     : { placeholder: value, text: value };
 }
 

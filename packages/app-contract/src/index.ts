@@ -38,6 +38,23 @@ export interface ClusterHostSettings {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** containerlab's `--timeout` of deploys that set none, e.g. `20m`; containerlab's default when unset. */
+  deployTimeout?: string;
+  /** Deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
+}
+
+/** How an API Server captures packets, as `GET /api/v1/lab-host` reports it. */
+export interface EndpointCaptureInfo {
+  /** The server runs Wireshark VNC sessions for the user's labs. */
+  wiresharkVnc?: boolean;
+  /** The container image of a Wireshark VNC session. */
+  wiresharkImage?: string;
+  wiresharkPullPolicy?: "always" | "missing" | "never";
+  /** Docker and Podman: the port of Edgeshark's packetflix endpoint on the server. */
+  packetflixPort?: number;
+  /** Docker and Podman: the names of the Edgeshark containers' extra variables, without values. */
+  edgesharkEnv?: string[];
 }
 
 /** What runs a lab host's labs, for its badge. Missing until the host answered. */
@@ -53,10 +70,18 @@ export interface EndpointRuntimeInfo {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** c9s on this machine: the timeout of deploys that set none. */
+  deployTimeout?: string;
+  /** c9s: deploys without a Topology resource, on this machine by choice, through an API Server as it reports. */
+  noTopologyCR?: boolean;
+  /** The timeout containerlab gets on a deploy without one, e.g. an API Server's own `10m`. */
+  defaultTimeout?: string;
   /** c9s through a lab server: the cluster it runs labs on. */
   cluster?: string;
   /** c9s through a lab server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
   namespacePattern?: string;
+  /** An API Server: how it captures packets. */
+  capture?: EndpointCaptureInfo;
   /** A lab host on the app's machine: its checks, when it cannot run labs. */
   checks?: LabHostCheck[];
   /** A cluster the user added in the app, which they may edit and remove there. */

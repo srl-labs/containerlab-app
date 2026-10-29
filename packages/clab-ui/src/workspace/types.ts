@@ -1,5 +1,5 @@
 import type { TopologyRef } from "../session";
-import type { LabHostCheck } from "../host/labHostSupport";
+import type { LabHostCaptureInfo, LabHostCheck } from "../host/labHostSupport";
 import type { C9sExposeType } from "../host/lifecycleOptions";
 
 /** Brand assets used by the shared workspace views; every host serves all of them. */
@@ -179,10 +179,18 @@ export interface EndpointConfig {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** c9s on this machine: the timeout of deploys that set none. */
+  deployTimeout?: string;
+  /** c9s: deploys without a Topology resource, on this machine by choice, through an API Server as it reports. */
+  noTopologyCR?: boolean;
+  /** The timeout containerlab gets on a deploy without one, e.g. an API Server's own `10m`. */
+  defaultTimeout?: string;
   /** c9s through a lab server: the cluster it runs labs on. */
   cluster?: string;
   /** c9s through a lab server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
   namespacePattern?: string;
+  /** An API Server: how it captures packets, as it reports it. */
+  capture?: LabHostCaptureInfo;
   /** The checks of a lab host on this machine, from its last check. */
   checks?: LabHostCheck[];
   /** A Kubernetes cluster lab host the user may edit and remove in this app. */
@@ -255,6 +263,10 @@ export interface ClusterHostSettings {
   /** False: nodes keep no state across restarts (`--no-persistence`). */
   persistence?: boolean;
   imagePullSecret?: string;
+  /** containerlab's `--timeout` of deploys that set none, e.g. `20m`; containerlab's default when unset. */
+  deployTimeout?: string;
+  /** Deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
 }
 
 /** A context of a kubeconfig, for the context list of the cluster form. */

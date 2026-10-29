@@ -3,10 +3,27 @@
  * static capabilities; its lab runtime (Docker, Podman, c9s) decides the
  * features. Every host gates its UI on `effectiveSupport` of both.
  */
+import { parseLabHostIdentity, type LabHostIdentity } from "./labHostIdentity";
 import type { C9sExposeType, LabRuntimeKind } from "./lifecycleOptions";
 
 /** c9s: one namespace per lab (`c9s-<lab>`), or every lab in one namespace. */
 export type LabHostNamespaceMode = "per-lab" | "fixed";
+
+/** When an API Server pulls the Wireshark VNC image: before every session, when missing, never. */
+export type WiresharkPullPolicy = "always" | "missing" | "never";
+
+/** How a clab-api-server captures packets, as `GET /api/v1/lab-host` reports it. */
+export interface LabHostCaptureInfo {
+  /** The server runs Wireshark VNC sessions for the user's labs. */
+  wiresharkVnc?: boolean;
+  /** The container image of a Wireshark VNC session, with its tag. */
+  wiresharkImage?: string;
+  wiresharkPullPolicy?: WiresharkPullPolicy;
+  /** Docker and Podman: the port of Edgeshark's packetflix endpoint on the server. */
+  packetflixPort?: number;
+  /** Docker and Podman: the names of the variables the Edgeshark containers get, without their values. */
+  edgesharkEnv?: string[];
+}
 
 /** What runs labs on a lab host. */
 export interface LabHostProfile {
@@ -31,11 +48,15 @@ export interface LabHostProfile {
   sharedNamespacePattern?: string;
   /** c9s through a clab-api-server: every lab namespace gets a resource quota. */
   labQuota?: boolean;
+  /** c9s through a clab-api-server: labs deploy without clabernetes' Topology resource. */
+  noTopologyCR?: boolean;
+  /** A clab-api-server: how it captures packets (`GET /api/v1/lab-host`). */
+  capture?: LabHostCaptureInfo;
   /**
    * The timeout containerlab gets on a deploy, redeploy, apply or destroy
    * without one, as a duration such as `10m`: containerlab's default for the
    * runtime on this machine, a clab-api-server's own (`GET /api/v1/lab-host`).
-   * Unset on a lab server that does not report it.
+   * Unset on an API Server that does not report it.
    */
   defaultTimeout?: string;
   /**
@@ -224,6 +245,8 @@ export function imageManagementUnavailableMessage(profile: LabHostProfile | unde
 export interface LabHostInfo {
   profile: LabHostProfile;
   support: LabHostSupport;
+  /** Which lab host it is, for the toolbar's lab host chip; hosts that omit it show none. */
+  host?: LabHostIdentity;
 }
 
 const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
@@ -274,6 +297,67 @@ function optionalString(value: unknown): string | undefined {
  * Lab host info from a host transport. Anything missing or malformed is
  * unsupported, so a host that sends nothing hides what depends on it.
  */
+/** What a lab host list entry keeps of a host's profile. */
+export type LabHostProfileDetails = Pick<
+  LabHostProfile,
+  | "runtime"
+  | "kubeContext"
+  | "namespace"
+  | "cluster"
+  | "namespacePattern"
+  | "exposeType"
+  | "persistence"
+  | "imagePullSecret"
+  | "defaultTimeout"
+  | "noTopologyCR"
+  | "capture"
+  | "updateRequired"
+>;
+
+/**
+ * What the lab host lists of every app keep of a host's profile, for its
+ * badge, card and settings page: one pick, so no app drops what an API
+ * Server reports.
+ */
+export function labHostProfileDetails(profile: LabHostProfile): LabHostProfileDetails {
+  const details: LabHostProfileDetails = { runtime: profile.runtime };
+  for (const key of ["kubeContext", "namespace", "cluster", "namespacePattern", "imagePullSecret", "defaultTimeout", "updateRequired"] as const) {
+    const value = profile[key];
+    if (value !== undefined && value !== "") details[key] = value;
+  }
+  if (profile.exposeType !== undefined) details.exposeType = profile.exposeType;
+  if (profile.persistence !== undefined) details.persistence = profile.persistence;
+  if (profile.noTopologyCR !== undefined) details.noTopologyCR = profile.noTopologyCR;
+  if (profile.capture !== undefined) details.capture = profile.capture;
+  return details;
+}
+
+const PULL_POLICIES: readonly WiresharkPullPolicy[] = ["always", "missing", "never"];
+
+/**
+ * How a clab-api-server captures packets, from the `capture` of
+ * `GET /api/v1/lab-host` or a host transport; undefined without one.
+ */
+export function parseLabHostCaptureInfo(value: unknown): LabHostCaptureInfo | undefined {
+  if (!isObject(value)) return undefined;
+  const capture: LabHostCaptureInfo = {};
+  if (typeof value.wiresharkVnc === "boolean") capture.wiresharkVnc = value.wiresharkVnc;
+  const image = optionalString(value.wiresharkImage);
+  if (image !== undefined && image !== "") capture.wiresharkImage = image;
+  const policy = optionalString(value.wiresharkPullPolicy)?.toLowerCase();
+  const knownPolicy = PULL_POLICIES.find((candidate) => candidate === policy);
+  if (knownPolicy !== undefined) capture.wiresharkPullPolicy = knownPolicy;
+  // The server nests Edgeshark (`edgeshark.packetflixPort`); hosts pass it on flat.
+  const edgeshark = isObject(value.edgeshark) ? value.edgeshark : value;
+  const port = edgeshark.packetflixPort;
+  if (typeof port === "number" && Number.isInteger(port) && port > 0 && port <= 65535) capture.packetflixPort = port;
+  const env = isObject(value.edgeshark) ? edgeshark.extraEnvVars : value.edgesharkEnv;
+  if (Array.isArray(env)) {
+    capture.edgesharkEnv = env.filter((name): name is string => typeof name === "string" && name.trim() !== "").map((name) => name.trim());
+  }
+  return Object.keys(capture).length > 0 ? capture : undefined;
+}
+
 export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
   if (!isObject(value) || !isObject(value.profile) || !isObject(value.support)) return undefined;
   const runtime = value.profile.runtime;
@@ -297,6 +381,9 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
     if (text) profile[key] = text;
   }
   if (typeof raw.labQuota === "boolean") profile.labQuota = raw.labQuota;
+  if (typeof raw.noTopologyCR === "boolean") profile.noTopologyCR = raw.noTopologyCR;
+  const capture = parseLabHostCaptureInfo(raw.capture);
+  if (capture) profile.capture = capture;
   const updateRequired = optionalString(raw.updateRequired);
   if (updateRequired) profile.updateRequired = updateRequired;
   const wiresharkVncUnavailable = optionalString(raw.wiresharkVncUnavailable);
@@ -305,7 +392,8 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
   const support = Object.fromEntries(
     BOOLEAN_KEYS.map((key) => [key, supportRecord[key] === true])
   ) as unknown as LabHostSupport;
-  return { profile, support };
+  const host = parseLabHostIdentity(value.host);
+  return { profile, support, ...(host ? { host } : {}) };
 }
 
 /** How the UI names a lab host's runtime, e.g. "Kubernetes · lab-prod/c9s-demo". */

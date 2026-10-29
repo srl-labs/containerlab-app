@@ -1,6 +1,7 @@
 import * as path from "path";
 
 import * as vscode from "vscode";
+import { labHostTag, type LabHostTag, type LabRuntimeKind } from "@containerlab/clab-ui/host";
 
 import type { ClabInterfaceStats } from "../types/containerlab";
 
@@ -411,8 +412,8 @@ export function onConnection<T extends vscode.TreeItem & { connectionId?: string
 export type ConnectionNodeState = "connected" | "saved" | "session_expired" | "offline";
 
 /**
- * A connection at the root of a view once lab hosts are configured: Local
- * or a lab host, with its labs below it.
+ * A connection at the root of a view once lab hosts are configured: This
+ * computer or a lab host, with its labs below it.
  */
 export class ClabConnectionTreeNode extends vscode.TreeItem {
   public readonly connectionId: string;
@@ -421,20 +422,12 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
   public readonly endpointKind: "local" | "api";
   /** A Kubernetes cluster used from this machine: removed, not hidden like this machine. */
   public readonly endpointCluster: boolean;
+  /** The lab host's kind and runtime, e.g. "API Server · c9s", as a tag next to its name. */
+  public readonly endpointTag: LabHostTag;
   public readonly state: ConnectionNodeState;
 
   constructor(
-    connection: {
-      id: string;
-      label: string;
-      kind: "local" | "api";
-      url?: string;
-      username?: string;
-      runtime?: "c9s";
-      kubeContext?: string;
-      kubeconfig?: string;
-      namespace?: string;
-    },
+    connection: ConnectionNodeConnection,
     section: "running" | "undeployed",
     state: ConnectionNodeState,
     public readonly children: vscode.TreeItem[],
@@ -453,23 +446,14 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     this.state = state;
     this.contextValue = "containerlabEndpoint";
     this.id = `connection:${section}:${connection.id}`;
-    let host = "this machine";
-    if (connection.url !== undefined) {
-      try {
-        host = new URL(connection.url).host;
-      } catch {
-        host = connection.url;
-      }
-    }
-    const cluster = connection.kind === "local" && connection.runtime === "c9s";
+    this.endpointTag = connectionTag(connection);
+    this.description = connectionDescription(connection);
+    const cluster = this.endpointCluster;
     const clusterWhere = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
-    const kubeconfigFile =
-      connection.kubeconfig !== undefined ? ` · ${path.basename(connection.kubeconfig)}` : "";
-    this.description = cluster ? `Kubernetes · ${clusterWhere}${kubeconfigFile}` : host;
-    let heading = `Lab host ${connection.url ?? ""}`;
+    let heading = `API Server ${connection.url ?? ""}`;
     if (cluster)
-      heading = `Labs on Kubernetes cluster ${clusterWhere}, run by containerlab on this machine`;
-    else if (connection.kind === "local") heading = "Labs on this machine";
+      heading = `Labs on Kubernetes cluster ${clusterWhere}, run by containerlab on this computer`;
+    else if (connection.kind === "local") heading = "Labs on this computer";
     const lines = [heading];
     if (cluster && connection.kubeconfig !== undefined)
       lines.push(`kubeconfig ${connection.kubeconfig}`);
@@ -484,6 +468,63 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     }
     if (problem !== undefined && problem !== "") lines.push(problem);
     this.tooltip = lines.join("\n");
+  }
+}
+
+/** What the explorer shows of a lab host. */
+interface ConnectionNodeConnection {
+  id: string;
+  label: string;
+  kind: "local" | "api";
+  url?: string;
+  username?: string;
+  /** Local connections: `c9s` for a cluster. */
+  runtime?: "c9s";
+  /** An API Server: the runtime it runs labs with, once it told. */
+  serverRuntime?: LabRuntimeKind;
+  kubeContext?: string;
+  kubeconfig?: string;
+  namespace?: string;
+}
+
+/** The kind and runtime of a lab host, e.g. "API Server · c9s" or "Docker" next to This computer. */
+function connectionTag(connection: ConnectionNodeConnection): LabHostTag {
+  if (connection.kind === "api") {
+    return labHostTag({
+      kind: "server",
+      label: connection.label,
+      ...(connection.serverRuntime !== undefined ? { runtime: connection.serverRuntime } : {})
+    });
+  }
+  if (connection.runtime === "c9s") {
+    return labHostTag({ kind: "cluster", label: connection.label, runtime: "c9s" });
+  }
+  const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
+  return labHostTag({
+    kind: "this-computer",
+    label: connection.label,
+    runtime: runtime === "podman" ? "podman" : "docker"
+  });
+}
+
+/**
+ * The line next to a lab host's name and tag in the explorer: where its labs
+ * go, a cluster's context, namespace and kubeconfig file, an API Server's
+ * address; nothing for This computer, whose tag says it all.
+ */
+function connectionDescription(connection: ConnectionNodeConnection): string | undefined {
+  if (connection.kind === "local" && connection.runtime === "c9s") {
+    const where = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
+    const file =
+      connection.kubeconfig !== undefined ? path.basename(connection.kubeconfig) : undefined;
+    return [where, file].filter(Boolean).join(" · ") || undefined;
+  }
+  if (connection.url === undefined) return undefined;
+  try {
+    return new URL(connection.url).host;
+  } catch {
+    // Not a URL: shown as it is.
+    return connection.url;
   }
 }
 

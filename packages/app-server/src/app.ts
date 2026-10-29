@@ -412,14 +412,24 @@ export async function createStandaloneApp(
           localEndpoints: locals,
           resolveSession,
         });
-        const endpoints = listEndpoints(request, reply).map((entry) => ({
-          id: entry.id,
-          kind: entry.kind,
-          url: entry.url,
-          label: entry.label,
-          username: entry.username,
-          sessionDuration: entry.sessionDuration,
-        }));
+        const fresh = request.query.fresh === "1";
+        const statuses = await Promise.all(
+          locals.map(async (local) => ({ ...(await local.status({ fresh })), url: local.url })),
+        );
+        // A local host's runtime comes along, so a cluster never reads as this computer before its check.
+        const endpoints = listEndpoints(request, reply).map((entry) => {
+          const runtime =
+            entry.kind === "local" ? statuses.find((status) => status.url === entry.url)?.runtime : undefined;
+          return {
+            id: entry.id,
+            kind: entry.kind,
+            url: entry.url,
+            label: entry.label,
+            username: entry.username,
+            sessionDuration: entry.sessionDuration,
+            ...(runtime ? { runtime } : {}),
+          };
+        });
         const payload: AppConfigResponse = {
           endpoints,
           defaultClabApiUrl,
@@ -434,10 +444,6 @@ export async function createStandaloneApp(
           ...(options.clustersUnavailable ? { clustersUnavailable: options.clustersUnavailable } : {}),
         };
         if (locals.length > 0) {
-          const fresh = request.query.fresh === "1";
-          const statuses = await Promise.all(
-            locals.map(async (local) => ({ ...(await local.status({ fresh })), url: local.url })),
-          );
           // The first host keeps its status as is, for apps that offer one.
           payload.localEndpoint = await locals[0].status({ fresh });
           payload.localEndpoints = statuses;

@@ -8,6 +8,7 @@ import {
   type ExplorerSnapshotMessage,
   type ExplorerUiState
 } from "./shared/explorer/types";
+import type { LabHostTag } from "../host/labHostIdentity";
 
 interface ExplorerTreeProvider {
   getChildren(element?: unknown):
@@ -36,6 +37,8 @@ interface ExplorerTreeItemLike {
   endpointKind?: "local" | "api";
   /** A `local` lab host root that is a Kubernetes cluster used from this machine, not this machine. */
   endpointCluster?: boolean;
+  /** A lab host root: its kind and runtime as a tag. */
+  endpointTag?: LabHostTag;
   hasChildren?: boolean;
   state?: string;
   status?: string;
@@ -1160,6 +1163,7 @@ async function buildNode(
     contextValue,
     endpointId: item.endpointId,
     ...(item.endpointKind !== undefined ? { endpointKind: item.endpointKind } : {}),
+    ...(item.endpointTag !== undefined ? { endpointTag: item.endpointTag } : {}),
     state: item.state,
     statusIndicator,
     statusDescription: description,

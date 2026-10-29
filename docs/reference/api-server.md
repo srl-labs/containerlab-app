@@ -2,7 +2,7 @@
 description: Settings, users, and REST API of clab-api-server.
 ---
 
-# API server settings
+# API Server settings
 
 `clab-api-server` reads its settings from environment variables. With the systemd install they live in `/etc/clab-api-server/clab-api-server.env`; restart the service after a change.
 { .lead }
@@ -19,7 +19,7 @@ description: Settings, users, and REST API of clab-api-server.
 | `JWT_EXPIRATION` | `24h` | Longest session, for example `24h` or `7d`. |
 | `API_USER_GROUP` | `clab_api` | Linux group allowed to sign in. |
 | `SUPERUSER_GROUP` | `clab_admins` | Linux group that sees and manages every lab. |
-| `CLAB_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` to run every user's labs on a [Kubernetes cluster](../guides/kubernetes.md#run-labs-through-a-lab-server). |
+| `CLAB_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` to run every user's labs on a [Kubernetes cluster](../guides/kubernetes.md#run-labs-through-an-api-server). |
 | `CLAB_SHARED_LABS_ROOT` | unset | Directory for [shared labs](../guides/shared-labs.md). Unset turns them off. |
 | `CORS_ALLOWED_ORIGINS` | unset | Browser origins allowed to call the API directly. The web and desktop apps do not need this. |
 | `TERMINAL_IDLE_TIMEOUT` | `30m` | How long a browser terminal keeps running after its last window disconnected. Only terminals that asked to be resumable wait; older apps and other API clients end theirs when they disconnect. |
@@ -38,7 +38,7 @@ sudo usermod -aG clab_api alice
 
 ## Shared labs
 
-`CLAB_SHARED_LABS_ROOT` should be a dedicated absolute path, separate from home directories, such as `/var/lib/containerlab/shared-labs`. If the API server runs in a container, mount the directory at the same path inside and outside.
+`CLAB_SHARED_LABS_ROOT` should be a dedicated absolute path, separate from home directories, such as `/var/lib/containerlab/shared-labs`. If the API Server runs in a container, mount the directory at the same path inside and outside.
 
 Every signed-in user can read, edit, deploy, and destroy labs in it. There are no per-group permissions.
 

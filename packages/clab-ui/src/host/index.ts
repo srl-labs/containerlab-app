@@ -54,6 +54,8 @@ export * from "./captureStream";
 export * from "./kubernetes";
 export * from "./kubernetesLimits";
 export * from "./labHostSupport";
+export * from "./labHostIdentity";
+export * from "./labHostSettings";
 export * from "./labOperations";
 export * from "./lifecycleOptions";
 export * from "./runtimeContext";
@@ -618,6 +620,9 @@ export function createWindowClabUiHost(options: WindowHostOptions = {}): ClabUiH
       },
       labOperations,
       labHost: () => labOperations.hostInfo(),
+      openLabHostSettings(hostId: string): void {
+        postMessage({ command: "clab-open-lab-host-settings", hostId });
+      },
       captureInterface(
         nodeName: string,
         interfaceName: string,

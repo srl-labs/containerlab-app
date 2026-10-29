@@ -73,7 +73,10 @@ function SectionTreeNode({
           "&:hover .explorer-node-actions-trigger, &:focus-within .explorer-node-actions-trigger": {
             opacity: 1,
             pointerEvents: "auto"
-          }
+          },
+          // A lab host root's quick actions take room only while they show, so its name and tag keep it.
+          "&:hover .explorer-endpoint-quick-actions, &:focus-within .explorer-endpoint-quick-actions, &:has([data-menu-open='true']) .explorer-endpoint-quick-actions":
+            { display: "inline-flex" }
         }}
       >
         <Box

@@ -144,6 +144,84 @@ test("a c9s server with lab-host-info adds its cluster and deploy settings; a fa
   assert.deepEqual(await failing.hostProfile(), { runtime: "c9s" });
 });
 
+/** `GET /api/v1/lab-host` as clab-api-server answers it, with Docker and with c9s. */
+const SERVER_LAB_HOSTS = {
+  docker: {
+    runtime: "docker",
+    defaultTimeout: "5m",
+    capture: {
+      wiresharkVnc: true,
+      wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+      wiresharkPullPolicy: "missing",
+      edgeshark: { packetflixPort: 5101, extraEnvVars: ["HTTP_PROXY", "NO_PROXY"] }
+    }
+  },
+  c9s: {
+    runtime: "c9s",
+    defaultTimeout: "10m",
+    capture: {
+      wiresharkVnc: true,
+      wiresharkImage: "registry.example/wireshark-vnc:1.2",
+      wiresharkPullPolicy: "never"
+    },
+    c9s: {
+      context: "c9s-provisioner",
+      cluster: "c9s",
+      namespacePattern: "c9s-alice-{lab}",
+      sharedNamespacePattern: "c9s-shared-{lab}",
+      exposeType: "LoadBalancer",
+      persistence: false,
+      imagePullSecret: "regcred",
+      labQuota: true,
+      noTopologyCR: false,
+      metrics: true
+    }
+  }
+} as const;
+
+test("a server's lab host adds its capture settings and, on c9s, its Topology resource", async (t) => {
+  for (const runtime of ["docker", "c9s"] as const) {
+    t.mock.restoreAll();
+    t.mock.method(undici, "fetch", (input: unknown) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/health") {
+        return Promise.resolve(Response.json({ features: [...NEW_SERVER, "lab-host-info"], runtime, namespaceMode: "per-lab" }));
+      }
+      return Promise.resolve(Response.json(SERVER_LAB_HOSTS[runtime]));
+    });
+    const backend = new ApiLabBackend({ baseUrl: `https://${runtime}-capture.test`, token: "token" });
+    const profile = await backend.hostProfile();
+    if (runtime === "docker") {
+      assert.deepEqual(profile, {
+        runtime: "docker",
+        defaultTimeout: "5m",
+        capture: {
+          wiresharkVnc: true,
+          wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+          wiresharkPullPolicy: "missing",
+          packetflixPort: 5101,
+          edgesharkEnv: ["HTTP_PROXY", "NO_PROXY"]
+        }
+      });
+    } else {
+      assert.deepEqual(profile, {
+        runtime: "c9s",
+        namespaceMode: "per-lab",
+        defaultTimeout: "10m",
+        capture: { wiresharkVnc: true, wiresharkImage: "registry.example/wireshark-vnc:1.2", wiresharkPullPolicy: "never" },
+        cluster: "c9s",
+        namespacePattern: "c9s-alice-{lab}",
+        sharedNamespacePattern: "c9s-shared-{lab}",
+        exposeType: "LoadBalancer",
+        persistence: false,
+        imagePullSecret: "regcred",
+        labQuota: true,
+        noTopologyCR: false
+      });
+    }
+  }
+});
+
 test("an unreachable server is not taken for an old one", async (t) => {
   t.mock.method(undici, "fetch", () => Promise.reject(new TypeError("fetch failed")));
   const backend = new ApiLabBackend({ baseUrl: "https://down.test", token: "token" });

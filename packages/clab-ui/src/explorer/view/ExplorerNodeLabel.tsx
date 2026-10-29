@@ -223,6 +223,46 @@ function EndpointStatus({ node, status }: Readonly<EndpointStatusProps>) {
   );
 }
 
+/**
+ * A lab host root's kind and runtime next to its name, e.g. "API Server · c9s",
+ * shortened to "API · c9s" in a pane narrower than 360px. It never shrinks:
+ * the address after it is cut off first, and the name keeps its room.
+ */
+function EndpointTag({ tag }: Readonly<{ tag: NonNullable<ExplorerNode["endpointTag"]> }>) {
+  return (
+    <Box
+      component="span"
+      title={tag.title}
+      aria-label={tag.title}
+      data-testid="explorer-endpoint-tag"
+      sx={{
+        flex: "0 0 auto",
+        ml: "8px",
+        px: "5px",
+        border: 1,
+        borderColor: "divider",
+        borderRadius: "4px",
+        color: "text.secondary",
+        fontSize: 10.5,
+        lineHeight: "16px",
+        whiteSpace: "nowrap",
+        "& .explorer-endpoint-tag-short": { display: "none" },
+        "@container (max-width: 360px)": {
+          "& .explorer-endpoint-tag-full": { display: "none" },
+          "& .explorer-endpoint-tag-short": { display: "inline" }
+        }
+      }}
+    >
+      <span className="explorer-endpoint-tag-full" aria-hidden="true">
+        {tag.label}
+      </span>
+      <span className="explorer-endpoint-tag-short" aria-hidden="true">
+        {tag.short}
+      </span>
+    </Box>
+  );
+}
+
 interface ExplorerNodeTrailingContentProps {
   node: ExplorerNode;
   showFavoriteIcon: boolean;
@@ -332,8 +372,9 @@ function ExplorerEndpointQuickActions({
   actions,
   onInvokeAction
 }: Readonly<ExplorerEndpointQuickActionsProps>) {
+  // Hidden until the row is hovered or focused (see SectionTree), without holding room.
   return (
-    <>
+    <Box component="span" className="explorer-endpoint-quick-actions" sx={{ display: "none", flex: "0 0 auto" }}>
       <ExplorerEndpointActionButton
         action={actions.newTopologyAction}
         ariaLabel="New topology file"
@@ -352,7 +393,7 @@ function ExplorerEndpointQuickActions({
         icon={RefreshRoundedIcon}
         onInvokeAction={onInvokeAction}
       />
-    </>
+    </Box>
   );
 }
 
@@ -426,6 +467,7 @@ function ExplorerNodeTextBlock({
             })}
           />
           {endpointStatus && <EndpointStatus node={node} status={endpointStatus} />}
+          {isEndpointRoot && node.endpointTag ? <EndpointTag tag={node.endpointTag} /> : null}
           <Typography
             variant="caption"
             noWrap

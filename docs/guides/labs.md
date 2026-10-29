@@ -71,15 +71,15 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 
 The template variables file is relative to the topology file. Leave it empty to use `<topology>_vars.yml` next to the topology, as containerlab does. Destroy and redeploy need the same file as the deploy when the template depends on it. On a lab host, `--vars` needs a clab-api-server with template support; older servers ignore it.
 
-**Timeout** is how long containerlab waits for the lab runtime, as a duration such as `30m` or `1h`. containerlab's default is 2m on Docker and Podman and 10m on a Kubernetes cluster, where nodes first pull their images; raise it when big images pull slowly. A lab server takes a timeout of at most 2h when it lists the `lab-lifecycle-timeout` feature (clab-api-server with the c9s runtime support); its default, 5m with Docker and Podman and 10m on a cluster, shows in the field, or *the lab server's default* when the server does not report it. Older servers run containerlab with their own timeouts and take none, so the field is not offered there.
+**Timeout** is how long containerlab waits for the lab runtime, as a duration such as `30m` or `1h`. containerlab's default is 2m on Docker and Podman and 10m on a Kubernetes cluster, where nodes first pull their images; raise it when big images pull slowly. An API Server takes a timeout of at most 2h when it lists the `lab-lifecycle-timeout` feature (clab-api-server with the c9s runtime support); its default, 5m with Docker and Podman and 10m on a cluster, shows in the field, or *the API Server's default* when the server does not report it. Older servers run containerlab with their own timeouts and take none, so the field is not offered there.
 
-Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
+Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after the lab host's **Deploy arguments** and **Destroy arguments** (`deploy.extraArgs` and `destroy.extraArgs` for This computer). The desktop and web apps do not accept an absolute path for the export template.
 
 **Restore VM snapshots** boots vrnetlab nodes from snapshots saved with **Save VM Snapshots…**: every node with a `<node>.tar` in the snapshot directory starts from it, and a node snapshot file you add wins for its node. Relative paths start at the topology file's folder. containerlab 0.72 or later is needed.
 
 ## Deploy settings
 
-**Lab Settings** → **Deploy** holds the flags this lab's deploys use on its lab host: timeout, max workers, and the template variables file; the export template and skip options on Docker and Podman (greyed out on a Kubernetes cluster, which refuses them); and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Each field says what the lab host's default is, and a tag next to it shows whether the lab has its own value (**This lab**) or uses that default (**Lab host default**). On a lab server the Kubernetes options are its own and show read-only, and the timeout is greyed out unless the server takes one (`lab-lifecycle-timeout`).
+**Lab Settings** → **Deploy** holds the flags this lab's deploys use on its lab host: timeout, max workers, and the template variables file; the export template and skip options on Docker and Podman (greyed out on a Kubernetes cluster, which refuses them); and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Each field says what the lab host's default is, and a tag next to it shows whether the lab has its own value (**This lab**) or uses that default (**Lab host default**). On an API Server the Kubernetes options are its own and show read-only, and the timeout is greyed out unless the server takes one (`lab-lifecycle-timeout`).
 
 Every **Deploy**, **Redeploy**, **Apply**, and **Destroy** of the lab without options of its own uses them; destroy takes only its part, such as the timeout and the namespace. Flags of one run, such as nodes, clean up, and snapshot restore, are never remembered. **Clear all** empties every field, and **Apply** saves the tab. Deploy settings stay editable in a locked lab: they do not change the topology.
 
@@ -125,7 +125,7 @@ On Docker and Podman lab hosts, captures come from Edgeshark: a `packetflix:` li
 
 ### Default capture method
 
-Where a capture opens is a setting: `containerlab.capture.preferredAction` in VS Code, **Settings → Capture → Capture defaults** per lab host in the web and desktop apps.
+Where a capture opens is a setting of each lab host: **Default capture method** on the lab host's page under **Settings** > **Lab hosts**, in every app. In VS Code, This computer keeps it in `containerlab.capture.preferredAction`, a Kubernetes lab host or an API Server as `captureMethod` in its `containerlab.connections` entry. Click the lab host's name at the left of a lab's toolbar to get there.
 
 | Method | Docker or Podman lab host | Kubernetes (c9s) lab host |
 | --- | --- | --- |

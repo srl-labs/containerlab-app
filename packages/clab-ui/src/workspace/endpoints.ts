@@ -1,5 +1,6 @@
+import { LAB_HOST_KIND_NAMES, labHostKindLabel } from "../host/labHostIdentity";
 import type { C9sExposeType } from "../host/lifecycleOptions";
-import type { EndpointConfig, EndpointSessionDuration } from "./types";
+import type { ClusterHostSettings, EndpointConfig, EndpointSessionDuration } from "./types";
 export type {
   ClusterHostSettings,
   EndpointConfig,
@@ -40,23 +41,22 @@ export function splitSetupCommand(problem: string): { before: string; command?: 
   return { before: match[1], command: match[2], after: match[3] };
 }
 
-/** A lab host's runtime as its badge reads, e.g. "Kubernetes · lab-prod/team-a"; nothing for Docker. */
-export function endpointRuntimeBadge(
-  endpoint: Pick<EndpointConfig, "runtime" | "kubeContext" | "namespace">
-): string | undefined {
-  if (endpoint.runtime === "podman") return "Podman";
-  if (endpoint.runtime !== "c9s") return undefined;
-  const where = [endpoint.kubeContext, endpoint.namespace].filter(Boolean).join("/");
-  return where ? `Kubernetes · ${where}` : "Kubernetes";
-}
-
 /** Where a lab host runs labs, as the lab host list and "Add lab host" name it. */
 export type LabHostKind = "this-computer" | "cluster" | "server";
 
-/** A lab host's kind: a clab-api-server, a Kubernetes cluster used from this machine, or this machine. */
-export function labHostKind(endpoint: Pick<EndpointConfig, "kind" | "runtime">): LabHostKind {
+/** The address scheme of a Kubernetes lab host on the app's machine: `local://c9s/<context>`. */
+const CLUSTER_URL_PREFIX = "local://c9s/";
+
+/**
+ * A lab host's kind: a clab-api-server, a Kubernetes cluster used from this
+ * machine, or this machine. A cluster's address says it is one, so it is
+ * never taken for this computer while its runtime is not known yet (a list
+ * from before its check, or one kept in the browser).
+ */
+export function labHostKind(endpoint: Pick<EndpointConfig, "kind" | "runtime"> & { url?: string }): LabHostKind {
   if (endpoint.kind !== "local") return "server";
-  return endpoint.runtime === "c9s" ? "cluster" : "this-computer";
+  if (endpoint.runtime === "c9s" || endpoint.url?.startsWith(CLUSTER_URL_PREFIX) === true) return "cluster";
+  return "this-computer";
 }
 
 /**
@@ -75,18 +75,39 @@ export function isLocalOfferListed(
   );
 }
 
-/** What each kind is called. */
-export const LAB_HOST_KIND_LABELS: Record<LabHostKind, string> = {
-  "this-computer": "This computer",
-  cluster: "Kubernetes cluster",
-  server: "Lab server"
-};
+/** Local lab host offers (e.g. clusters the app was set up with) that are not listed, to add again. */
+export function unlistedLocalOffers<T extends { url?: string }>(
+  endpoints: readonly Pick<EndpointConfig, "kind" | "runtime" | "url">[],
+  offers: readonly T[]
+): T[] {
+  return offers.filter((offer) => !isLocalOfferListed(endpoints, offer));
+}
 
-const RUNTIME_NAMES: Record<NonNullable<EndpointConfig["runtime"]>, string> = {
-  docker: "Docker",
-  podman: "Podman",
-  c9s: "Kubernetes"
-};
+/** Why an app without cluster support cannot add one. */
+export const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes lab hosts. Use an API Server that runs Kubernetes.";
+
+/**
+ * Why "Kubernetes" cannot be chosen in "Add lab host"; undefined when it can:
+ * the app adds clusters, or it has configured clusters that are not listed
+ * (e.g. one the user removed), which can be added again from there.
+ */
+export function clusterChoiceUnavailable(
+  support: object | undefined,
+  reason: string | undefined,
+  configuredClusters: number
+): string | undefined {
+  if (support !== undefined && reason === undefined) return undefined;
+  if (configuredClusters > 0) return undefined;
+  return reason ?? CLUSTERS_UNSUPPORTED;
+}
+
+/** What each kind is called. */
+export const LAB_HOST_KIND_LABELS: Readonly<Record<LabHostKind, string>> = LAB_HOST_KIND_NAMES;
+
+/** A lab host's kind and runtime, e.g. "API Server · c9s" (see `labHostKindLabel`). */
+export function endpointKindLabel(endpoint: Pick<EndpointConfig, "kind" | "runtime"> & { url?: string }): string {
+  return labHostKindLabel({ kind: labHostKind(endpoint), ...(endpoint.runtime ? { runtime: endpoint.runtime } : {}) });
+}
 
 /** How a cluster lab host places labs, e.g. "one namespace per lab" or "namespace team-a". */
 function clusterNamespaceLabel(namespace: string | undefined): string {
@@ -95,23 +116,19 @@ function clusterNamespaceLabel(namespace: string | undefined): string {
 
 /**
  * The line under a lab host's name: where its labs run, e.g.
- * "This computer · Docker", "Kubernetes · kind-c9s-app · one namespace per lab"
- * or "Lab server · Kubernetes · cluster c9s".
+ * "This computer · Docker", "Kubernetes · c9s · kind-c9s-app · one namespace per lab"
+ * or "API Server · c9s · cluster c9s".
  */
 export function labHostSubtitle(
-  endpoint: Pick<EndpointConfig, "kind" | "runtime" | "kubeContext" | "namespace" | "cluster">
+  endpoint: Pick<EndpointConfig, "kind" | "runtime" | "kubeContext" | "namespace" | "cluster"> & { url?: string }
 ): string {
   const kind = labHostKind(endpoint);
-  if (kind === "this-computer") {
-    return `This computer · ${endpoint.runtime === "podman" ? "Podman" : "Docker"}`;
-  }
+  const label = endpointKindLabel(endpoint);
+  if (kind === "this-computer") return label;
   if (kind === "cluster") {
-    return ["Kubernetes", endpoint.kubeContext ?? "current context", clusterNamespaceLabel(endpoint.namespace)].join(" · ");
+    return [label, endpoint.kubeContext ?? "current context", clusterNamespaceLabel(endpoint.namespace)].join(" · ");
   }
-  const runtime = endpoint.runtime ? RUNTIME_NAMES[endpoint.runtime] : undefined;
-  return ["Lab server", runtime, endpoint.cluster ? `cluster ${endpoint.cluster}` : undefined]
-    .filter(Boolean)
-    .join(" · ");
+  return [label, endpoint.cluster ? `cluster ${endpoint.cluster}` : undefined].filter(Boolean).join(" · ");
 }
 
 /** How node ports of a c9s lab are exposed, in a few words each. */
@@ -123,7 +140,7 @@ export const C9S_EXPOSE_DESCRIPTIONS: Record<C9sExposeType, string> = {
 };
 
 /**
- * A lab server's c9s deploy settings in a line, e.g. "Ports: None · node
+ * An API Server's c9s deploy settings in a line, e.g. "Ports: None · node
  * storage kept · no image pull secret". Empty when it reports none.
  */
 export function c9sDefaultsSummary(
@@ -136,4 +153,19 @@ export function c9sDefaultsSummary(
     parts.push(endpoint.imagePullSecret ? `image pull secret ${endpoint.imagePullSecret}` : "no image pull secret");
   }
   return parts.join(" · ");
+}
+
+/** The settings of a Kubernetes lab host, for its cluster form and its page. */
+export function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
+  return {
+    label: endpoint.label,
+    kubeContext: endpoint.kubeContext ?? "",
+    ...(endpoint.kubeconfig ? { kubeconfig: endpoint.kubeconfig } : {}),
+    ...(endpoint.namespace ? { namespace: endpoint.namespace } : {}),
+    ...(endpoint.exposeType ? { exposeType: endpoint.exposeType } : {}),
+    ...(endpoint.persistence === false ? { persistence: false } : {}),
+    ...(endpoint.imagePullSecret ? { imagePullSecret: endpoint.imagePullSecret } : {}),
+    ...(endpoint.deployTimeout ? { deployTimeout: endpoint.deployTimeout } : {}),
+    ...(endpoint.noTopologyCR === true ? { noTopologyCR: true } : {})
+  };
 }

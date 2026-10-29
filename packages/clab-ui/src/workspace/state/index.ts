@@ -17,4 +17,4 @@ export * from "./runtimeUiStore";
 export type * from "../types";
 export * from "../health";
 export * from "./themePreferences";
-export { endpointRuntimeBadge } from "../endpoints";
+export { endpointKindLabel, labHostKind } from "../endpoints";

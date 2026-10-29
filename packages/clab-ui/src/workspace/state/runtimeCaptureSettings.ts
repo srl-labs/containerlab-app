@@ -109,6 +109,26 @@ export function persistCapturePreferences(
   return normalized;
 }
 
+/**
+ * The capture method a lab host has of its own; undefined when it follows
+ * the default (`loadCapturePreferences()` without a host).
+ */
+export function loadOwnCaptureMethod(endpointId: string): CapturePreferredAction | undefined {
+  const normalizedEndpointId = normalizeEndpointId(endpointId);
+  if (!normalizedEndpointId) return undefined;
+  return loadCaptureSettingsStorage().preferencesByEndpoint[normalizedEndpointId]?.preferredAction;
+}
+
+/** Forgets a lab host's own capture method, so it follows the default again. */
+export function clearCapturePreferences(endpointId: string): void {
+  const normalizedEndpointId = normalizeEndpointId(endpointId);
+  if (!normalizedEndpointId) return;
+  const settings = loadCaptureSettingsStorage();
+  if (!(normalizedEndpointId in settings.preferencesByEndpoint)) return;
+  delete settings.preferencesByEndpoint[normalizedEndpointId];
+  persistCaptureSettingsStorage(settings);
+}
+
 function normalizeSessionHostnameOverride(next: string | undefined | null): string {
   return typeof next === "string" ? next.trim() : "";
 }

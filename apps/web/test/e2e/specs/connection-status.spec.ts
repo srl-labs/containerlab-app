@@ -121,6 +121,8 @@ test("an expired sign-in pauses live events and asks to sign in again", async ({
   await expect(signIn.getByRole("textbox", { name: "Password" })).toBeVisible();
   await signIn.getByRole("button", { name: "Cancel", exact: true }).click();
   const settings = page.getByTestId("standalone-settings-dialog");
+  // Signing in opens the lab host's own page in the settings.
+  await expect(settings.getByTestId(`standalone-settings-nav-host:${HOST_B.id}`)).toHaveAttribute("aria-current", "page");
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await expect(settings).toBeHidden();
 

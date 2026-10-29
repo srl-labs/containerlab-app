@@ -6,6 +6,7 @@ import * as utils from "../utils/utils";
 import { favoriteLabs, outputChannel } from "../globals";
 import { FilterUtils } from "../helpers/filterUtils";
 import { getConnections, remoteUri } from "../backend/labBackends";
+import { withServerRuntime } from "../backend/labHostSupport";
 import { LOCAL_CONNECTION, type LabConnection } from "../backend/connections";
 
 import * as c from "./common";
@@ -207,7 +208,7 @@ export class LocalLabTreeDataProvider implements vscode.TreeDataProvider<
           ];
         }
         return new c.ClabConnectionTreeNode(
-          connection,
+          withServerRuntime(connection),
           "undeployed",
           status,
           children,

@@ -1,3 +1,4 @@
+import { isValidLifecycleTimeout } from "@containerlab/clab-ui/host";
 import { parseBooleanEnv } from "@srl-labs/containerlab-lab-backend";
 import {
   containerlabPlatformProblem,
@@ -95,6 +96,7 @@ function readC9sOptions(raw: Record<string, unknown>, where: string): C9sHostOpt
   if (raw.persistence === false) c9s.persistence = false;
   const imagePullSecret = stringValue(raw.imagePullSecret);
   if (imagePullSecret) c9s.imagePullSecret = imagePullSecret;
+  if (raw.noTopologyCR === true) c9s.noTopologyCR = true;
   return c9s;
 }
 
@@ -109,6 +111,10 @@ export function readClusterSettings(raw: unknown, where = "The cluster"): Cluste
   if (!c9s.kubeContext) return `${where} names no kubeContext.`;
   const label = stringValue(raw.label);
   const kubeconfig = stringValue(raw.kubeconfig);
+  const deployTimeout = stringValue(raw.deployTimeout);
+  if (deployTimeout && !isValidLifecycleTimeout(deployTimeout)) {
+    return `${where}: deployTimeout "${deployTimeout}" is no duration such as 30m.`;
+  }
   return {
     kubeContext: c9s.kubeContext,
     ...(label ? { label } : {}),
@@ -116,7 +122,9 @@ export function readClusterSettings(raw: unknown, where = "The cluster"): Cluste
     ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
     ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
     ...(c9s.persistence === false ? { persistence: false } : {}),
-    ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {})
+    ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+    ...(deployTimeout ? { deployTimeout } : {}),
+    ...(c9s.noTopologyCR ? { noTopologyCR: true } : {})
   };
 }
 
@@ -130,8 +138,10 @@ export function clusterBackendOptions(settings: ClusterHostSettings): LocalLabBa
       ...(settings.namespace ? { namespace: settings.namespace } : {}),
       ...(settings.exposeType ? { exposeType: settings.exposeType } : {}),
       ...(settings.persistence === false ? { persistence: false } : {}),
-      ...(settings.imagePullSecret ? { imagePullSecret: settings.imagePullSecret } : {})
-    }
+      ...(settings.imagePullSecret ? { imagePullSecret: settings.imagePullSecret } : {}),
+      ...(settings.noTopologyCR ? { noTopologyCR: true } : {})
+    },
+    ...(settings.deployTimeout ? { deployTimeout: settings.deployTimeout } : {})
   };
 }
 
@@ -253,7 +263,7 @@ export function resolveLocalBackendConfig(source: LocalBackendConfigSource): Loc
   // containerlab on this machine deploys and reaches them, so it needs Linux too.
   const platformProblem = containerlabPlatformProblem(source.platform);
   if (enabled && platformProblem && (parseLabRuntime(options.runtime) === "c9s" || clusters.length > 0)) {
-    problems.push(`Kubernetes clusters are left out: ${platformProblem}`);
+    problems.push(`Kubernetes lab hosts are left out: ${platformProblem}`);
   }
   const usable = enabled && platformProblem === undefined;
   return {
@@ -273,7 +283,7 @@ export function localEndpointUrl(options: LocalLabBackendOptions): string {
 
 /** How the apps name a cluster lab host without a label: its context, e.g. "kind-c9s-app". */
 function clusterLabel(options: LocalLabBackendOptions): string {
-  return options.c9s?.kubeContext ?? "Kubernetes cluster";
+  return options.c9s?.kubeContext ?? "Kubernetes";
 }
 
 const STATUS_TTL_MS = 15_000;
@@ -320,6 +330,8 @@ export function createLocalEndpoint(input: {
             ...(c9s?.exposeType ? { exposeType: c9s.exposeType } : {}),
             ...(c9s ? { persistence: c9s.persistence !== false } : {}),
             ...(c9s?.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+            ...(c9s?.noTopologyCR ? { noTopologyCR: true } : {}),
+            ...(input.options.deployTimeout ? { deployTimeout: input.options.deployTimeout } : {}),
             // Only a cluster the user set up in the app shows its kubeconfig path, to edit it.
             ...(input.cluster ? { editable: true, ...(input.cluster.kubeconfig ? { kubeconfig: input.cluster.kubeconfig } : {}) } : {}),
             ...(environment.containerlabVersion !== undefined

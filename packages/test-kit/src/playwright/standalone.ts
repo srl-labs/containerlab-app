@@ -146,6 +146,10 @@ export async function mockStandaloneApi(
     route.fulfill({ json: { customNodes: [], defaultNode: "" } })
   );
   await page.route("**/api/runtime/ui/icons/list**", (route) => route.fulfill({ json: { icons: [] } }));
+  // A Docker lab host's settings page reads its Edgeshark status.
+  await page.route("**/api/runtime/capture/edgeshark/status**", (route) =>
+    route.fulfill({ json: { running: true, version: "test", packetflixPort: 5001, runtime: "docker" } })
+  );
   await page.route("**/auth/endpoints/*/metrics", (route) =>
     route.fulfill({
       json: {

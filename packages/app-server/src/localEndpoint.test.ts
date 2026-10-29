@@ -349,3 +349,53 @@ test("several local lab hosts live side by side, each with its own backend", asy
   });
   assert.equal(unknown.statusCode, 400);
 });
+
+test("an app whose only local host is a cluster lists it as Kubernetes, and offers it again once removed", async (t) => {
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "local-cluster-only-"));
+  t.after(() => fs.rm(workspaceRoot, { recursive: true, force: true }));
+  const ui = createLocalUiStore({ clabDirectory: workspaceRoot, workspaceRoot });
+  const url = "local://c9s/kind-c9s-app?kubeconfig=%2Fhome%2Falice%2Fapp.kubeconfig";
+  const cluster: LocalEndpointStatus = { ...AVAILABLE, label: "kind-c9s-app", runtime: "c9s", kubeContext: "kind-c9s-app" };
+  const app = await createStandaloneApp({
+    isDev: true,
+    logger: false,
+    viteDevUrl: "http://vite.test",
+    localUnavailable: "The web app runs labs on its own server only with Docker or Podman.",
+    localEndpoints: [{ url, backend: fakeLocalBackend([]), ui, status: async () => cluster, autoConnect: true }]
+  });
+  t.after(() => app.close());
+
+  const first = await app.inject("/api/config");
+  const cookie = sessionCookie(first.headers["set-cookie"]);
+  const config = first.json<{
+    endpoints: Array<{ id: string; kind: string; url: string; runtime?: string }>;
+    localEndpoints: LocalEndpointStatus[];
+    localUnavailable?: string;
+  }>();
+  // The runtime comes with the list, so the app never shows the cluster as "This computer · Docker".
+  assert.deepEqual(
+    config.endpoints.map((entry) => [entry.kind, entry.url, entry.runtime]),
+    [["local", url, "c9s"]]
+  );
+  assert.ok(config.localUnavailable, "This computer is not offered");
+
+  await app.inject({ method: "DELETE", url: `/auth/endpoints/${config.endpoints[0].id}`, headers: { cookie } });
+  const removed = (await app.inject({ url: "/api/config", headers: { cookie } })).json<{
+    endpoints: unknown[];
+    localEndpoints: LocalEndpointStatus[];
+  }>();
+  assert.deepEqual(removed.endpoints, []);
+  // Still offered, under Kubernetes, to add again.
+  assert.deepEqual(
+    removed.localEndpoints.map((status) => [status.url, status.runtime]),
+    [[url, "c9s"]]
+  );
+  const readded = await app.inject({
+    method: "POST",
+    url: "/auth/endpoints/add",
+    headers: { cookie },
+    payload: { kind: "local", url }
+  });
+  assert.equal(readded.statusCode, 200, readded.body);
+  assert.equal(readded.json<{ runtime?: string }>().runtime, "c9s");
+});

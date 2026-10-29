@@ -108,7 +108,7 @@ test("a cluster needs Linux too: containerlab on this computer drives it", () =>
       assert.equal(config.enabled, false);
       assert.deepEqual(config.clusters, []);
       assert.deepEqual(config.problems, [
-        "Kubernetes clusters are left out: containerlab runs on Linux only. Use a clab-api-server lab host, or run the app in WSL or a Linux VM."
+        "Kubernetes lab hosts are left out: containerlab runs on Linux only. Use an API Server, or run the app in WSL or a Linux VM."
       ]);
       assert.deepEqual(createLocalEndpoints(config, { label: "This computer" }), []);
     }
@@ -150,7 +150,7 @@ test("local-backend.json lists clusters next to this computer", () => {
     binaryPath: "/opt/containerlab",
     clusters: [
       { kubeContext: "lab-prod", label: "Lab prod", namespace: "labs", persistence: false },
-      { kubeContext: "kind-dev", exposeType: "ClusterIP" },
+      { kubeContext: "kind-dev", exposeType: "ClusterIP", deployTimeout: "20m", noTopologyCR: true },
       { label: "no context" },
       { kubeContext: "x", exposeType: "NodePort" },
       "nonsense"
@@ -165,8 +165,12 @@ test("local-backend.json lists clusters next to this computer", () => {
       settings: { kubeContext: "lab-prod", label: "Lab prod", namespace: "labs", persistence: false }
     },
     {
-      options: { runtime: "c9s", c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP" } },
-      settings: { kubeContext: "kind-dev", exposeType: "ClusterIP" }
+      options: {
+        runtime: "c9s",
+        c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP", noTopologyCR: true },
+        deployTimeout: "20m"
+      },
+      settings: { kubeContext: "kind-dev", exposeType: "ClusterIP", deployTimeout: "20m", noTopologyCR: true }
     }
   ]);
   assert.deepEqual(config.problems, [

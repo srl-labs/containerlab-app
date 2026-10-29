@@ -68,6 +68,7 @@ import { withShortcut } from "../../utils/shortcuts";
 import { LabOperationsDialogs } from "../panels/lab-operations/LabOperationsDialogs";
 
 import { labOperationMenuItems } from "./LabOperationMenuItems";
+import { LabHostChip } from "./LabHostChip";
 import { useLabHostLoader } from "./useLabHostLoader";
 import { useLifecycleDialogState } from "./useLifecycleDialogState";
 
@@ -291,7 +292,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isDirty = useIsDirty();
   const { toggleLock, setProcessing } = useTopoViewerActions();
   const deploymentCommands = useDeploymentCommands();
-  const labOperations = useClabUiHost().topoViewer.labOperations;
+  const { labOperations, openLabHostSettings } = useClabUiHost().topoViewer;
   const hasLabOperations = labOperations !== undefined;
   const [manifestRequest, setManifestRequest] = React.useState<Promise<{ yaml: string }> | null>(null);
   const labName = useTopoViewerStore((state) => state.labName);
@@ -609,6 +610,18 @@ export const Navbar: React.FC<NavbarProps> = ({
         disableGutters
         sx={{ minHeight: 0, p: 0.5, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "2px", "& > *": { flexShrink: 0 } }}
       >
+        {labHostInfo?.host ? (
+          <>
+            <LabHostChip
+              host={labHostInfo.host}
+              container={TOOLBAR_CONTAINER}
+              {...(openLabHostSettings
+                ? { onOpen: () => openLabHostSettings(labHostInfo.host?.id ?? "") }
+                : {})}
+            />
+            <Divider orientation="vertical" flexItem sx={TOOLBAR_DIVIDER_SX} />
+          </>
+        ) : null}
         {lifecycleActionsAvailable && (
           <>
             {/* Apply topology (deploys when absent, reconciles when running) */}

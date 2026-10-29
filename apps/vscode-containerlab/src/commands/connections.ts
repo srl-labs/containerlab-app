@@ -44,12 +44,12 @@ type AddChoice = vscode.QuickPickItem & {
 
 /** Why this window cannot run labs here, for the choices that need containerlab on this machine. */
 const NEEDS_LINUX =
-  "containerlab runs on Linux only. Use a lab server, or open this window in WSL.";
+  "containerlab runs on Linux only. Use an API Server, or open this window in WSL.";
 
 /**
- * "Add Lab Host": where labs should run. This computer shows Local again; a
- * Kubernetes cluster opens the cluster form on the Lab Hosts page; a lab
- * server asks for its URL and signs in. Choices that cannot work in this
+ * "Add Lab Host": where labs should run. This computer shows it again;
+ * Kubernetes opens the cluster form on the Lab Hosts page; an API Server
+ * asks for its URL and signs in. Choices that cannot work in this
  * window stay in the list and say why.
  */
 export async function addConnection(): Promise<LabConnection | undefined> {
@@ -72,13 +72,13 @@ export async function addConnection(): Promise<LabConnection | undefined> {
       ...thisComputer
     },
     {
-      label: "$(server-environment) Kubernetes cluster",
+      label: "$(server-environment) Kubernetes",
       description: "With your kubeconfig; containerlab runs here",
       value: "cluster",
       ...(connections.localAvailable ? {} : { detail: NEEDS_LINUX, unavailable: NEEDS_LINUX })
     },
     {
-      label: "$(cloud) Lab server",
+      label: "$(cloud) API Server",
       description: "clab-api-server; it may run Docker or Kubernetes",
       value: "server"
     }
@@ -108,10 +108,10 @@ export async function addConnection(): Promise<LabConnection | undefined> {
 async function addApiConnection(
   connections: ConnectionManager
 ): Promise<LabConnection | undefined> {
-  const title = "Add Lab Server";
+  const title = "Add API Server";
   const url = await vscode.window.showInputBox({
     title: `${title} (1/4)`,
-    prompt: "URL of clab-api-server on the lab server",
+    prompt: "URL of the API Server (clab-api-server)",
     placeHolder: "https://lab-host:8090",
     ignoreFocusOut: true,
     validateInput: (value) =>
@@ -129,7 +129,7 @@ async function addApiConnection(
   if (label === undefined) return undefined;
   const username = await vscode.window.showInputBox({
     title: `${title} (3/4)`,
-    prompt: "Your Linux user on the lab server",
+    prompt: "Your Linux user on the API Server",
     ignoreFocusOut: true
   });
   if (username === undefined || username.trim() === "") return undefined;
@@ -192,7 +192,7 @@ async function pickLabHost(
   const picked = await vscode.window.showQuickPick(
     hosts.map((connection) => ({
       label: connection.label,
-      description: isClusterConnection(connection) ? "Kubernetes cluster" : connection.url,
+      description: isClusterConnection(connection) ? "Kubernetes" : connection.url,
       ...(isClusterConnection(connection)
         ? {}
         : { detail: connections.status(connection) === "connected" ? "Signed in" : "Signed out" }),
@@ -227,7 +227,7 @@ async function hideThisComputer(connections: ConnectionManager): Promise<void> {
     {
       modal: true,
       detail:
-        'Add Lab Host > This computer, or "Labs on this machine" in the Containerlab settings, shows them again.'
+        'Add Lab Host > This computer, or the "This computer" setting of Containerlab, shows them again.'
     },
     "Hide"
   );
@@ -263,7 +263,7 @@ export async function removeConnection(target?: unknown): Promise<void> {
 
 /**
  * The explorer's primary action on a lab host that is signed out: sign in.
- * On Local it checks containerlab again.
+ * On This computer it checks containerlab again.
  */
 export async function reconnect(target?: unknown): Promise<void> {
   if (target !== undefined && connectionOf(target).kind === "local") {

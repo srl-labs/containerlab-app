@@ -33,8 +33,12 @@ import { APP_DOCS_URL,
   ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
-  LAB_HOST_KIND_LABELS,
+  endpointKindLabel,
+  CLUSTERS_UNSUPPORTED,
+  clusterChoiceUnavailable,
+  clusterSettingsOf,
   isLocalOfferListed,
+  unlistedLocalOffers,
   labHostKind,
   labHostSubtitle,
   type ClusterHostSettings,
@@ -54,7 +58,7 @@ import type { EndpointUiAction } from "../state/endpointActions";
 import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../state/endpointStatus";
 import { downloadJsonFile, pickJsonFile } from "../../utils/jsonFile";
 import { firstFailedCheck } from "../../host/labHostSupport";
-import type { ClusterHostsSupport, LabHostSetupProps } from "../types";
+import type { LabHostSetupProps } from "../types";
 import {
   ClusterHostDialog,
   LabHostCheckDialog,
@@ -109,27 +113,17 @@ interface EndpointManagerProps extends LabHostSetupProps {
   fetchHealthMetrics?: HealthMetricsFetcher;
   /** Signs out of a lab host but keeps it, so the user can sign in again later. */
   onSignOutEndpoint?: (endpointId: string) => Promise<void>;
+  /**
+   * What the settings show: the lab host cards (a host's page), "Add lab
+   * host" (its own page), or both (the default).
+   */
+  show?: "all" | "hosts" | "add";
 }
 
 function withUnavailable(unavailable: string | undefined): { unavailable?: string } {
   return unavailable === undefined ? {} : { unavailable };
 }
 
-/** Why an app without cluster support cannot add one. */
-const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes clusters. Use a lab server that runs Kubernetes.";
-
-/** The settings of an editable cluster lab host, for its edit form. */
-function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
-  return {
-    label: endpoint.label,
-    kubeContext: endpoint.kubeContext ?? "",
-    ...(endpoint.kubeconfig ? { kubeconfig: endpoint.kubeconfig } : {}),
-    ...(endpoint.namespace ? { namespace: endpoint.namespace } : {}),
-    ...(endpoint.exposeType ? { exposeType: endpoint.exposeType } : {}),
-    ...(endpoint.persistence === false ? { persistence: false } : {}),
-    ...(endpoint.imagePullSecret ? { imagePullSecret: endpoint.imagePullSecret } : {})
-  };
-}
 
 /** "This computer" in "Add lab host": its offer, why it cannot run labs, or that it is listed. */
 function ThisComputerPanel(props: {
@@ -150,7 +144,7 @@ function ThisComputerPanel(props: {
   if (!props.offer) {
     return (
       <Alert severity="info" variant="outlined">
-        {props.unavailable ?? "This app does not run labs on its own computer. Add a lab server instead."}
+        {props.unavailable ?? "This app does not run labs on its own computer. Add an API Server instead."}
       </Alert>
     );
   }
@@ -159,7 +153,7 @@ function ThisComputerPanel(props: {
   );
 }
 
-/** "Kubernetes cluster" in "Add lab host": the cluster form, clusters the app was set up with, or why not here. */
+/** "Kubernetes" in "Add lab host": the cluster form, clusters the app was set up with, or why not here. */
 function ClusterPanel(props: {
   busy: boolean;
   canAdd: boolean;
@@ -193,7 +187,7 @@ function ClusterPanel(props: {
       ))}
       {props.canAdd ? (
         <Button variant="contained" onClick={props.onAddCluster} disabled={props.busy} sx={{ alignSelf: "flex-start" }}>
-          Add Kubernetes cluster…
+          Add Kubernetes lab host…
         </Button>
       ) : null}
     </Stack>
@@ -503,7 +497,7 @@ function ManagedEndpointList(props: {
                   alignItems: "flex-start"
                 }}
               >
-                <Box sx={{ color: "text.secondary", display: "inline-flex", mt: 0.25, flexShrink: 0 }} title={LAB_HOST_KIND_LABELS[kind]}>
+                <Box sx={{ color: "text.secondary", display: "inline-flex", mt: 0.25, flexShrink: 0 }} title={endpointKindLabel(endpoint)}>
                   <LabHostKindIcon kind={kind} />
                 </Box>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
@@ -540,7 +534,7 @@ function ManagedEndpointList(props: {
                   ) : null}
                   {serverDefaults ? (
                     <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
-                      Set by the lab server: {serverDefaults}
+                      Set by the API Server: {serverDefaults}
                     </Typography>
                   ) : null}
                   {endpoint.updateRequired ? (
@@ -695,17 +689,6 @@ function HostProblems(props: { endpoint: EndpointConfig; failed: boolean; localE
 function thisComputerChoiceUnavailable(offer: LocalEndpointOffer | undefined, reason: string | undefined): string | undefined {
   if (!offer) return reason ?? "Not offered by this app";
   return offer.available ? undefined : (offer.problems[0] ?? "Not ready");
-}
-
-function clusterChoiceUnavailable(
-  support: ClusterHostsSupport | undefined,
-  reason: string | undefined,
-  configuredClusters: number
-): string | undefined {
-  if (support !== undefined && reason === undefined) return undefined;
-  // Clusters the app was set up with can still be added from the list.
-  if (configuredClusters > 0) return undefined;
-  return reason ?? CLUSTERS_UNSUPPORTED;
 }
 
 /** The lines of the remove dialog: what is asked, and what happens to the labs. */
@@ -925,7 +908,7 @@ function useRequestedEndpointActionDialog(input: {
       setRemoveEndpointId,
       sortedEndpoints
     } = input;
-    if (!requestedAction || requestedAction.action === "add") {
+    if (!requestedAction || requestedAction.action === "add" || requestedAction.action === "settings") {
       return;
     }
 
@@ -1267,8 +1250,11 @@ export function EndpointManager({
   clusterHosts,
   clustersUnavailable,
   thisComputerUnavailable,
-  requestedAddKind
+  requestedAddKind,
+  show = "all"
 }: EndpointManagerProps) {
+  const showHosts = show !== "add";
+  const showAdd = show !== "hosts";
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [chosenAddKind, setAddKind] = useState<LabHostKind | null>(null);
   const [clusterDialog, setClusterDialog] = useState<{ open: boolean; editing?: { endpointId: string; settings: ClusterHostSettings } }>({ open: false });
@@ -1357,8 +1343,8 @@ export function EndpointManager({
   );
   const isLocalConnected = (offer: LocalEndpointOffer) => isLocalOfferListed(sortedEndpoints, offer);
   const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
-  const extraLocalOffers = (extraLocalEndpoints ?? []).filter((offer) => !isLocalConnected(offer));
-  // This computer first while it is not listed, else a lab server.
+  const extraLocalOffers = unlistedLocalOffers(sortedEndpoints, extraLocalEndpoints ?? []);
+  // This computer first while it is not listed, else an API Server.
   const addKind: LabHostKind = chosenAddKind ?? (offerLocalEndpoint ? "this-computer" : "server");
   const addChoices: LabHostChoice[] = [
     {
@@ -1477,9 +1463,25 @@ export function EndpointManager({
 
   return (
     <Stack spacing={2.5}>
-      {mode === "manage" ? transferActions : null}
+      {mode === "manage" && showAdd ? transferActions : null}
 
-      {showManagedEndpoints(mode, sortedEndpoints.length) ? (
+      {/* A host's page has no add form: what its actions report shows above its card. */}
+      {showAdd ? null : (
+        <>
+          {visibleError ? (
+            <Alert severity="error" variant="outlined" onClose={() => setError(null)}>
+              {visibleError}
+            </Alert>
+          ) : null}
+          {notice ? (
+            <Alert severity="success" variant="outlined" onClose={() => setNotice(null)}>
+              {notice}
+            </Alert>
+          ) : null}
+        </>
+      )}
+
+      {showHosts && showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
           busyKey={busyKey}
           endpointHealth={endpointHealth}
@@ -1518,6 +1520,7 @@ export function EndpointManager({
       ) : null}
 
       {/* On the login card the form is the card's content; in settings it is one card among the endpoints. */}
+      {showAdd ? (
       <Paper
         variant="outlined"
         sx={mode === "initial" ? {
@@ -1531,6 +1534,8 @@ export function EndpointManager({
         }}
       >
         <Stack spacing={2.5}>
+          {/* On its own settings page, the page's title asks it already. */}
+          {show === "add" ? null : (
           <Box sx={mode === "initial" ? { textAlign: "center" } : undefined}>
             <Typography
               variant="subtitle1"
@@ -1548,6 +1553,7 @@ export function EndpointManager({
               {mode === "initial" ? endpointAddDescription(mode) : "Where should labs run?"}
             </Typography>
           </Box>
+          )}
 
           {mode === "manage" ? (
             <LabHostChoices choices={addChoices} selected={addKind} onSelect={setAddKind} />
@@ -1686,6 +1692,7 @@ export function EndpointManager({
           ) : null}
         </Stack>
       </Paper>
+      ) : null}
 
       {mode === "initial" && transferActions ? (
         <Stack
@@ -1705,6 +1712,8 @@ export function EndpointManager({
           open={clusterDialog.open}
           support={clusterHosts}
           {...(clusterDialog.editing ? { editing: clusterDialog.editing } : {})}
+          // A host's page edits its deploy defaults itself.
+          connectionOnly={show === "hosts" && clusterDialog.editing !== undefined}
           onClose={() => setClusterDialog({ open: false })}
         />
       ) : null}

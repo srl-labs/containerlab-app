@@ -49,6 +49,29 @@ export interface FakeClabApiServerHealth {
    * it with `lab-lifecycle-timeout`: 10m on c9s, 5m with Docker and Podman.
    */
   defaultTimeout?: string;
+  /** What `GET /api/v1/lab-host` reports in `capture`; clab-api-server's defaults otherwise. */
+  capture?: Partial<FakeServerCapture>;
+}
+
+/** The `capture` of `GET /api/v1/lab-host`, as clab-api-server reports it. */
+interface FakeServerCapture {
+  wiresharkVnc: boolean;
+  wiresharkImage: string;
+  wiresharkPullPolicy: string;
+  /** Docker and Podman only. */
+  edgeshark?: { packetflixPort: number; extraEnvVars: string[] };
+}
+
+/** clab-api-server's capture defaults: Wireshark VNC next to Docker and Podman labs, with Edgeshark. */
+function fakeServerCapture(runtime: string, overrides: Partial<FakeServerCapture> | undefined): FakeServerCapture {
+  const containers = runtime !== "c9s";
+  return {
+    wiresharkVnc: containers,
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+    wiresharkPullPolicy: "always",
+    ...(containers ? { edgeshark: { packetflixPort: 5001, extraEnvVars: [] } } : {}),
+    ...overrides
+  };
 }
 
 /** The c9s part of `GET /api/v1/lab-host`. */
@@ -61,6 +84,7 @@ interface FakeServerC9sHost {
   persistence: boolean;
   imagePullSecret: string;
   labQuota: boolean;
+  noTopologyCR: boolean;
   metrics: boolean;
 }
 
@@ -73,6 +97,7 @@ const FAKE_SERVER_C9S_HOST: FakeServerC9sHost = {
   persistence: true,
   imagePullSecret: "",
   labQuota: false,
+  noTopologyCR: false,
   metrics: false
 };
 
@@ -173,6 +198,7 @@ export async function startFakeClabApiServer(
         sendJson(response, 200, {
           runtime,
           ...(timeouts ? { defaultTimeout: health.defaultTimeout ?? (runtime === "c9s" ? "10m" : "5m") } : {}),
+          capture: fakeServerCapture(runtime, health.capture),
           ...(runtime === "c9s" ? { c9s: { ...FAKE_SERVER_C9S_HOST, ...health.c9s } } : {})
         });
         return;

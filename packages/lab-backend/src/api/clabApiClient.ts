@@ -1,6 +1,8 @@
 import {
   labLifecycleQueryParams,
   lifecycleTimeoutMs,
+  parseLabHostCaptureInfo,
+  type LabHostCaptureInfo,
   type LabLifecycleOptions,
   type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
@@ -138,8 +140,12 @@ export interface ServerLabHost {
     persistence?: boolean;
     imagePullSecret?: string;
     labQuota?: boolean;
+    /** Labs deploy without clabernetes' Topology resource; false on servers that report it. */
+    noTopologyCR?: boolean;
     metrics?: boolean;
   };
+  /** How the server captures packets, with every runtime; missing on older servers. */
+  capture?: LabHostCaptureInfo;
 }
 
 export class ClabApiClient {
@@ -1176,11 +1182,13 @@ export class ClabApiClient {
       for (const key of ["context", "cluster", "namespacePattern", "sharedNamespacePattern", "exposeType", "imagePullSecret"] as const) {
         if (typeof raw[key] === "string" && raw[key].trim()) c9s[key] = raw[key].trim();
       }
-      for (const key of ["persistence", "labQuota", "metrics"] as const) {
+      for (const key of ["persistence", "labQuota", "noTopologyCR", "metrics"] as const) {
         if (typeof raw[key] === "boolean") c9s[key] = raw[key];
       }
       result.c9s = c9s;
     }
+    const capture = parseLabHostCaptureInfo(payload.capture);
+    if (capture) result.capture = capture;
     return result;
   }
 

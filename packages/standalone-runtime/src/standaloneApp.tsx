@@ -1,5 +1,7 @@
 import {
   applyStandaloneAppearance,
+  dispatchEndpointUiAction,
+  labHostKind,
   persistStandaloneAppearance,
   persistTabOrientation,
   readPersistedTabOrientation,
@@ -9,6 +11,7 @@ import {
   type TabOrientation
 } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import type {
@@ -1643,7 +1646,14 @@ function setupStandaloneUiHost(): void {
           ? {
               labHost: async () => {
                 const endpointId = topologyManager.getCurrentEndpointId();
-                return endpointId ? await loadLabHostInfo(endpointId) : undefined;
+                if (!endpointId) return undefined;
+                const info = await loadLabHostInfo(endpointId);
+                // Which lab host it is, for the toolbar's chip.
+                const endpoint = useEndpointStore.getState().endpoints.get(endpointId);
+                return info && endpoint ? { ...info, host: labHostIdentityOf(endpoint) } : info;
+              },
+              openLabHostSettings: (hostId: string) => {
+                dispatchEndpointUiAction({ action: "settings", endpointId: hostId });
               },
             }
           : {}),
@@ -1880,8 +1890,8 @@ function StandaloneApp() {
   // "This computer" is the app server's local host with Docker or Podman; a cluster is not this computer.
   const thisComputer = useMemo(
     () =>
-      localEndpoints.find((status) => status.runtime !== "c9s") ??
-      (localEndpoint && localEndpoint.runtime !== "c9s" ? localEndpoint : undefined),
+      localEndpoints.find((status) => labHostKind({ kind: "local", ...status }) === "this-computer") ??
+      (localEndpoint && labHostKind({ kind: "local", ...localEndpoint }) === "this-computer" ? localEndpoint : undefined),
     [localEndpoint, localEndpoints],
   );
   const localEndpointOffer = useMemo<LocalEndpointOffer | undefined>(

@@ -2,21 +2,21 @@ import { test, expect } from "@playwright/test";
 
 const SCREENSHOTS = process.env.LAB_HOST_SCREENSHOTS;
 
-test("adds a Kubernetes cluster with its kubeconfig context, checks it and edits it", async ({ page }) => {
-  await page.goto("/settings.html?category=labHosts");
+test("adds a Kubernetes lab host with its kubeconfig context, checks it and edits it", async ({ page }) => {
+  await page.goto("/settings.html?category=add");
   const choices = page.getByRole("radiogroup", { name: "Where should labs run?" });
-  await expect(choices.getByRole("radio")).toHaveText([/This computer/, /Kubernetes cluster/, /Lab server/]);
-  // Local is listed, so a lab server is the first choice; the server form shows.
-  await expect(choices.getByRole("radio", { name: "Lab server" })).toHaveAttribute("aria-checked", "true");
+  await expect(choices.getByRole("radio")).toHaveText([/This computer/, /Kubernetes/, /API Server/]);
+  // This computer is listed, so an API Server is the first choice; the server form shows.
+  await expect(choices.getByRole("radio", { name: "API Server" })).toHaveAttribute("aria-checked", "true");
   await expect(page.getByLabel("Lab host URL", { exact: true })).toBeVisible();
 
-  await choices.getByRole("radio", { name: "Kubernetes cluster" }).click();
+  await choices.getByRole("radio", { name: "Kubernetes" }).click();
   if (SCREENSHOTS) {
-    await page.getByRole("button", { name: "Add Kubernetes cluster…" }).scrollIntoViewIfNeeded();
+    await page.getByRole("button", { name: "Add Kubernetes lab host…" }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${SCREENSHOTS}/ux-vscode-add-choices.png` });
   }
-  await page.getByRole("button", { name: "Add Kubernetes cluster…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Add Kubernetes cluster" });
+  await page.getByRole("button", { name: "Add Kubernetes lab host…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add Kubernetes lab host" });
   if (SCREENSHOTS) {
     await expect(dialog.getByRole("combobox", { name: "Context" })).toHaveText(/kind-c9s-app/);
     await dialog.screenshot({ path: `${SCREENSHOTS}/ux-vscode-cluster-form.png` });
@@ -45,11 +45,22 @@ test("adds a Kubernetes cluster with its kubeconfig context, checks it and edits
   await dialog.getByRole("combobox", { name: "Port exposure" }).click();
   await page.getByRole("option", { name: "LoadBalancer" }).click();
   await expect(dialog.getByText("A load balancer address per node")).toBeVisible();
-  await dialog.getByRole("button", { name: "Add cluster" }).click();
+  await dialog.getByRole("button", { name: "Add lab host" }).click();
   await expect(dialog).toBeHidden();
 
+  // The new lab host gets its page in the settings menu.
+  const entry = page.getByRole("navigation", { name: "Settings categories" }).getByRole("button", { name: "Lab cluster" });
+  await expect(entry).toContainText("Kubernetes");
+  await entry.click();
+  const settings = page.getByTestId("lab-host-settings-page");
+  await expect(settings).toHaveAttribute("data-kind", "cluster");
+  // The deploy defaults of the form are on its page.
+  await expect(settings.getByTestId("lab-host-setting-exposeType").getByRole("combobox", { name: "Port exposure" })).toHaveText(
+    /LoadBalancer/
+  );
+  await expect(settings.getByTestId("lab-host-cluster-connection")).toContainText("context kind-c9s-app");
   const card = page.getByTestId(/^lab-host-c9s-/);
-  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · kind-c9s-app · one namespace per lab");
+  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · c9s · kind-c9s-app · one namespace per lab");
   if (SCREENSHOTS) {
     await card.scrollIntoViewIfNeeded();
     await card.screenshot({ path: `${SCREENSHOTS}/ux-vscode-cluster-card.png` });
@@ -62,10 +73,15 @@ test("adds a Kubernetes cluster with its kubeconfig context, checks it and edits
 
   await card.getByRole("button", { name: "Edit Lab cluster" }).click();
   const edit = page.getByRole("dialog", { name: "Edit Lab cluster" });
-  await expect(edit.getByRole("combobox", { name: "Port exposure" })).toHaveText(/LoadBalancer/);
+  // Its page edits the deploy defaults; the form only changes the connection.
+  await expect(edit.getByRole("combobox", { name: "Port exposure" })).toHaveCount(0);
   await edit.getByRole("button", { name: "Choose file…" }).click();
   await expect(edit.getByLabel("kubeconfig file")).toHaveValue("/home/alice/.kube/lab.yaml");
   await expect(edit.getByRole("combobox", { name: "Context" })).toHaveText(/lab-prod/);
   await edit.getByRole("button", { name: "Save" }).click();
-  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · lab-prod · one namespace per lab");
+  await expect(card.getByTestId("lab-host-subtitle")).toHaveText("Kubernetes · c9s · lab-prod · one namespace per lab");
+  await expect(settings.getByTestId("lab-host-cluster-connection")).toContainText("context lab-prod");
+  await expect(settings.getByTestId("lab-host-setting-exposeType").getByRole("combobox", { name: "Port exposure" })).toHaveText(
+    /LoadBalancer/
+  );
 });

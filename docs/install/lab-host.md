@@ -4,7 +4,7 @@ description: Install clab-api-server on a Linux machine, so every app can work w
 
 # Set up a lab host
 
-A lab host is a Linux machine that runs `clab-api-server`. The VS Code extension, the desktop app, and the web app sign in to it and work with its labs from anywhere. The API server ships containerlab built in, so there is nothing else to install.
+A lab host is a Linux machine that runs `clab-api-server`. The VS Code extension, the desktop app, and the web app sign in to it and work with its labs from anywhere. The API Server ships containerlab built in, so there is nothing else to install.
 { .lead }
 
 You need one to work with labs on another machine, from macOS or Windows, or with several people on one server. To run labs on the Linux machine in front of you, skip this page: the [VS Code extension](vscode.md) and the [desktop app](desktop.md#run-labs-on-this-computer) run containerlab themselves.
@@ -81,7 +81,7 @@ Next, [sign in from the desktop or web app](sign-in.md).
 
 ??? note "Quick trial with containerlab"
 
-    If containerlab is already installed, it can start the API server as a container:
+    If containerlab is already installed, it can start the API Server as a container:
 
     ```bash
     sudo containerlab tools api-server start --labs-dir /opt/containerlab/labs
@@ -140,7 +140,7 @@ Add `--purge` to `uninstall` to delete the config file too.
 
 Set `CLAB_SHARED_LABS_ROOT` to a dedicated directory, for example `/var/lib/containerlab/shared-labs`, and restart the service. Every signed-in user then sees a **Shared labs** folder. See [Shared labs](../guides/shared-labs.md).
 
-All settings, the REST API, and its docs are in the [API server reference](../reference/api-server.md).
+All settings, the REST API, and its docs are in the [API Server reference](../reference/api-server.md).
 
 <div class="next" markdown>
 [:lucide-arrow-right: Sign in to a lab host](sign-in.md)

@@ -182,7 +182,11 @@ function hostProfileFromHealth(health: Pick<ServerHealth, "runtime" | "namespace
  * settings, which are server policy.
  */
 function withServerLabHost(base: LabHostProfile, labHost: ServerLabHost): LabHostProfile {
-  const profile: LabHostProfile = labHost.defaultTimeout ? { ...base, defaultTimeout: labHost.defaultTimeout } : base;
+  const profile: LabHostProfile = {
+    ...base,
+    ...(labHost.defaultTimeout ? { defaultTimeout: labHost.defaultTimeout } : {}),
+    ...(labHost.capture ? { capture: labHost.capture } : {})
+  };
   const c9s = labHost.c9s;
   if (profile.runtime !== "c9s" || labHost.runtime !== "c9s" || !c9s) return profile;
   return {
@@ -193,7 +197,8 @@ function withServerLabHost(base: LabHostProfile, labHost: ServerLabHost): LabHos
     ...(isC9sExposeType(c9s.exposeType) ? { exposeType: c9s.exposeType } : {}),
     ...(c9s.persistence !== undefined ? { persistence: c9s.persistence } : {}),
     ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
-    ...(c9s.labQuota !== undefined ? { labQuota: c9s.labQuota } : {})
+    ...(c9s.labQuota !== undefined ? { labQuota: c9s.labQuota } : {}),
+    ...(c9s.noTopologyCR !== undefined ? { noTopologyCR: c9s.noTopologyCR } : {})
   };
 }
 

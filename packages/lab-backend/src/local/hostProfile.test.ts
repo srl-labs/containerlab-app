@@ -15,6 +15,9 @@ test("a Docker host keeps every container runtime feature and has no c9s options
   const backend = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker" });
   // containerlab's own --timeout default on Docker.
   assert.deepEqual(await backend.hostProfile(), { runtime: "docker", defaultTimeout: "2m" });
+  // A host with a deploy timeout of its own reports it as the default.
+  const slow = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker", deployTimeout: " 5m " });
+  assert.equal((await slow.hostProfile()).defaultTimeout, "5m");
   const support = effectiveSupport(backend.capabilities, await backend.features());
   assert.equal(support.lifecycleTimeout, true);
   assert.equal(support.netem, true);
@@ -116,7 +119,7 @@ test("a c9s host's kubeconfig may start with ~ and tells apart clusters with the
 test("containerlab runs on Linux only, also for a host whose labs run on a cluster", async () => {
   assert.equal(containerlabPlatformProblem("linux"), undefined);
   for (const platform of ["darwin", "win32"] as const) {
-    assert.match(containerlabPlatformProblem(platform) ?? "", /^containerlab runs on Linux only\. Use a clab-api-server lab host, or run the app in WSL or a Linux VM\.$/);
+    assert.match(containerlabPlatformProblem(platform) ?? "", /^containerlab runs on Linux only\. Use an API Server, or run the app in WSL or a Linux VM\.$/);
     for (const runtime of ["docker", "c9s"]) {
       const status = await detectLocalEnvironment(
         { runtime, env: ENV, c9s: { kubeContext: "kind-c9s-app" } },

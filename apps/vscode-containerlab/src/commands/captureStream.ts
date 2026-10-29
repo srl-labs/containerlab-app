@@ -34,7 +34,7 @@ import {
 import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
 
 import { outputChannel } from "../globals";
-import { backendFor, connectionOf } from "../backend/labBackends";
+import { backendFor, captureMethodSetting, connectionOf } from "../backend/labBackends";
 import { isClusterConnection, type LabConnection } from "../backend/connections";
 import { labHostInfo } from "../backend/labHostSupport";
 
@@ -116,23 +116,17 @@ export function streamCaptureDeliveries(
   return { deliveries, ...(plan.notice ? { notice: plan.notice } : {}) };
 }
 
-function preferredAction(): string | undefined {
-  return vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction");
-}
-
 /** Notices already shown in this session: a fallback is explained once, not on every capture. */
 const shownNotices = new Set<string>();
 
-function showFallbackNotice(notice: string | undefined): void {
+function showFallbackNotice(notice: string | undefined, hostId: string): void {
   if (!notice || shownNotices.has(notice)) return;
   shownNotices.add(notice);
   const change = "Change default";
   void vscode.window.showInformationMessage(notice, change).then((choice) => {
+    // The default capture method is a setting of the lab host, on its page.
     if (choice === change)
-      void vscode.commands.executeCommand(
-        "workbench.action.openSettings",
-        "containerlab.capture.preferredAction"
-      );
+      void vscode.commands.executeCommand("containerlab.settings.open", `host:${hostId}`);
   });
 }
 
@@ -501,7 +495,7 @@ export async function captureOnStreamHost(
     const { deliveries, notice } = streamCaptureDeliveries(
       local,
       host.info,
-      preferredAction(),
+      captureMethodSetting(host.connection),
       wireshark !== undefined
     );
     const choices: DeliveryChoices = {
@@ -519,7 +513,7 @@ export async function captureOnStreamHost(
       else if (delivery === "save") await saveCapture(backend, labName, targets, label);
     };
     // Asked or named explicitly, the user decides; else the default may have fallen back.
-    if (!request.askDelivery && !request.delivery) showFallbackNotice(notice);
+    if (!request.askDelivery && !request.delivery) showFallbackNotice(notice, host.connection.id);
     await open(await chooseDelivery(request, choices, label));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

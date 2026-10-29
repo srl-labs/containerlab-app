@@ -1,4 +1,4 @@
-import { createExplorerController, isTopologyFileName } from "@containerlab/clab-ui/host";
+import { createExplorerController, isTopologyFileName, labHostTag } from "@containerlab/clab-ui/host";
 import type {
   ExplorerAction,
   ExplorerIncomingMessage,
@@ -18,7 +18,8 @@ import {
 } from "./runtimeApi";
 import { greyedExplorerCommandsForHost, hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
 
-import { endpointDisplayAddress } from "./endpointAddress";
+import { labHostKind } from "@containerlab/clab-ui/workspace/state";
+import { endpointDisplayAddress, endpointWhere } from "./endpointAddress";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import type { EndpointConfig } from "./stores/endpointStore";
 import type {
@@ -590,7 +591,9 @@ function buildEndpointRootItem(
   healthState?: EndpointHealthCacheEntry,
 ): ExplorerTreeItem {
   const address = endpointDisplayAddress(endpoint);
-  const endpointUrl = address.replace(/^https?:\/\//i, "");
+  // The tag names the kind and runtime; the description is where labs go, which may be cut off.
+  const where = endpointWhere(endpoint)?.replace(/^https?:\/\//i, "");
+  const kind = labHostKind(endpoint);
   const baseTooltip = `${address}\nUsername: ${endpoint.username}\nStatus: ${endpoint.status.replace(/_/g, " ")}${
     endpoint.updateRequired ? `\n${endpoint.updateRequired}` : ""
   }`;
@@ -598,12 +601,17 @@ function buildEndpointRootItem(
   return {
     id: `${idPrefix}:${endpoint.id}`,
     label: endpoint.label,
-    description: endpointUrl,
+    ...(where ? { description: where } : {}),
     tooltip: healthTooltip ? `${baseTooltip}\n\n${healthTooltip}` : baseTooltip,
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
     endpointKind: endpoint.kind === "local" ? "local" : "api",
-    ...(endpoint.kind === "local" && endpoint.runtime === "c9s" ? { endpointCluster: true } : {}),
+    endpointTag: labHostTag({
+      kind,
+      label: endpoint.label,
+      ...(endpoint.runtime ? { runtime: endpoint.runtime } : {}),
+    }),
+    ...(kind === "cluster" ? { endpointCluster: true } : {}),
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
