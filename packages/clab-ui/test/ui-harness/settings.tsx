@@ -159,7 +159,21 @@ function labHost(id: unknown): EndpointConfig {
   if (!host) throw new Error(`No lab host ${String(id)}`);
   return host;
 }
-/** What the extension does for the Lab Hosts page; passwords "wrong" fail. */
+/** A Kubernetes lab host's deploy defaults from its form: fields of its entry, as its page shows them. */
+function keepClusterDeployDefaults(id: string, settings: Record<string, unknown>) {
+  const values = (hostValues[id] ??= {});
+  const deployDefaults: Record<string, unknown> = {
+    timeout: settings.deployTimeout,
+    exposeType: settings.exposeType,
+    imagePullSecret: settings.imagePullSecret,
+    noTopologyCR: settings.noTopologyCR,
+    persistence: settings.persistence === false ? false : undefined,
+  };
+  for (const [setting, value] of Object.entries(deployDefaults)) {
+    if (value !== undefined) values[setting] = value;
+  }
+}
+/** What the extension does for the lab host pages; passwords "wrong" fail. */
 function labHostAction(payload: Record<string, unknown>): unknown {
   switch (payload.action) {
     case "labHosts.add": {
@@ -268,6 +282,7 @@ function labHostAction(payload: Record<string, unknown>): unknown {
         ...settings,
       };
       labHosts.hosts = [...labHosts.hosts.filter((entry) => entry.id !== id), host];
+      keepClusterDeployDefaults(id, settings);
       break;
     }
     case "labHosts.setting": {

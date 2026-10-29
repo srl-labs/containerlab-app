@@ -10,12 +10,15 @@ test("covers the manifest, searches every category, saves and resets with scope 
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/settings.html");
-  // Lab hosts have their own page; a search for them leads there.
-  await expect(page.locator("[data-setting-key]")).toHaveCount(35);
+  // Lab hosts and This computer's settings have their own pages; a search for them leads there.
+  await expect(page.locator("[data-setting-key]")).toHaveCount(23);
   await search(page, "lab host");
   await expect(card(page, "connections")).toHaveCount(0);
-  await page.getByRole("button", { name: "Open Lab Hosts" }).click();
-  await expect(page.getByRole("heading", { name: "Lab Hosts" })).toBeVisible();
+  await search(page, "binary");
+  await expect(card(page, "binaryPath")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open Lab hosts" }).click();
+  await expect(page.getByRole("heading", { name: "This computer", level: 2 })).toBeVisible();
+  await expect(page.getByTestId("lab-host-setting-binaryPath")).toBeVisible();
   await search(page, "telnetPort");
   const setting = card(page, "node.telnetPort");
   await setting.getByRole("spinbutton").fill("65536");
@@ -38,34 +41,29 @@ test("preserves drafts across navigation, blocks scope loss, and detects externa
   page,
 }) => {
   await page.goto("/settings.html");
-  const binary = card(page, "binaryPath");
-  await binary.getByRole("textbox").fill("/usr/local/bin/clab");
+  const interval = card(page, "pollInterval");
+  await interval.getByRole("spinbutton").fill("9000");
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
-  await page
-    .getByRole("button", {
-      name: "General & Runtime",
-      exact: true,
-    })
-    .click();
-  await expect(binary.getByRole("textbox")).toHaveValue("/usr/local/bin/clab");
+  await page.getByRole("button", { name: "General", exact: true }).click();
+  await expect(interval.getByRole("spinbutton")).toHaveValue("9000");
   await page.getByRole("combobox", { name: "Save settings to" }).click();
   await page.getByRole("option", { name: "Workspace", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Keep editing" }).click();
   await page.evaluate(() =>
     (window as any).settingsHarness.external(
-      "containerlab.binaryPath",
-      "/opt/clab",
+      "containerlab.pollInterval",
+      7000,
     ),
   );
   await expect(
-    binary.getByText("The saved value changed elsewhere.", { exact: false }),
+    interval.getByText("The saved value changed elsewhere.", { exact: false }),
   ).toBeVisible();
   await expect(
-    binary.getByRole("button", { name: "Save", exact: true }),
+    interval.getByRole("button", { name: "Save", exact: true }),
   ).toBeDisabled();
-  await binary.getByRole("button", { name: "Use latest" }).click();
-  await expect(binary.getByRole("textbox")).toHaveValue("/opt/clab");
+  await interval.getByRole("button", { name: "Use latest" }).click();
+  await expect(interval.getByRole("spinbutton")).toHaveValue("7000");
 });
 test("edits mappings and templates, preserves advanced JSON, and reports save failures", async ({
   page,
@@ -182,8 +180,8 @@ test("distinguishes modified settings in the current view and across all categor
   await page.goto("/settings.html");
   await page.evaluate(() => {
     const harness = (window as any).settingsHarness;
-    harness.external("containerlab.binaryPath", "/opt/clab");
-    harness.external("containerlab.runtime", "podman");
+    harness.external("containerlab.pollInterval", 7000);
+    harness.external("containerlab.refreshMode", "polling");
     harness.external("containerlab.appearance.fontSize", 15);
   });
   const here = page.getByRole("button", {
@@ -240,14 +238,14 @@ test("uses compact rows on wide editors and a scrollable layout on narrow editor
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/settings.html");
   await expect(page.getByTestId("settings-layout")).toBeVisible();
-  const bounds = await card(page, "binaryPath").boundingBox();
+  const bounds = await card(page, "pollInterval").boundingBox();
   expect(bounds!.width).toBeGreaterThan(1100);
   expect(bounds!.height).toBeLessThan(120);
-  const label = await card(page, "binaryPath")
+  const label = await card(page, "pollInterval")
     .getByRole("heading")
     .boundingBox();
-  const input = await card(page, "binaryPath")
-    .getByRole("textbox")
+  const input = await card(page, "pollInterval")
+    .getByRole("spinbutton")
     .boundingBox();
   expect(input!.x).toBeGreaterThan(label!.x + label!.width);
   await page.screenshot({ path: "/tmp/containerlab-settings-v2-general.png" });
