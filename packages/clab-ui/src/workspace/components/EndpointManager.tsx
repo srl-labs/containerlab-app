@@ -1465,6 +1465,22 @@ export function EndpointManager({
     <Stack spacing={2.5}>
       {mode === "manage" && showAdd ? transferActions : null}
 
+      {/* A host's page has no add form: what its actions report shows above its card. */}
+      {showAdd ? null : (
+        <>
+          {visibleError ? (
+            <Alert severity="error" variant="outlined" onClose={() => setError(null)}>
+              {visibleError}
+            </Alert>
+          ) : null}
+          {notice ? (
+            <Alert severity="success" variant="outlined" onClose={() => setNotice(null)}>
+              {notice}
+            </Alert>
+          ) : null}
+        </>
+      )}
+
       {showHosts && showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
           busyKey={busyKey}

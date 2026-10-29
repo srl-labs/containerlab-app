@@ -70,10 +70,6 @@ test("signs in to a lab host after a wrong password, and signs out again", async
 });
 
 test("reports a wrong password on a lab host's page", async ({ page }) => {
-  test.fail(
-    true,
-    "Known bug: with show=\"hosts\" EndpointManager renders its error only inside the add form, so a failed sign-in on a host page shows nothing."
-  );
   await page.goto("/settings.html?category=host:api-lab1");
   await page.getByRole("button", { name: "Sign in to lab1 again" }).click();
   const dialog = page.getByRole("dialog", { name: "Sign in to lab1" });
