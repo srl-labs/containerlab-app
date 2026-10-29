@@ -12,7 +12,8 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { SettingsField } from "../../../settings/SettingsField";
-import { NOT_ON_KUBERNETES, type LabHostProfile } from "../../../host/labHostSupport";
+import { unsupportedReason } from "../../../host/kubernetesLimits";
+import type { LabHostProfile } from "../../../host/labHostSupport";
 import { C9S_EXPOSE_TYPES, type C9sExposeType } from "../../../host/lifecycleOptions";
 import {
   defaultTimeout,
@@ -49,8 +50,6 @@ const SourceChip: React.FC<{ own: boolean }> = ({ own }) => (
     sx={{ height: 20, fontSize: 11 }}
   />
 );
-
-const UNSUPPORTED_ON_KUBERNETES = `${NOT_ON_KUBERNETES}: containerlab refuses it with -r c9s.`;
 
 function nodeStorageDefault(persistence: boolean | undefined): string {
   return persistence === false ? "not kept" : "kept on persistent volumes";
@@ -125,7 +124,10 @@ const ContainerlabRows: React.FC<{
 }> = ({ form, update, canSetTimeout, readOnly }) => {
   const kubernetes = form.runtime === "c9s";
   const timeout = defaultTimeout(form.runtime);
-  const containerOnly = kubernetes ? UNSUPPORTED_ON_KUBERNETES : undefined;
+  const profile = { runtime: form.runtime };
+  const exportTemplateLimit = unsupportedReason(profile, "exportTemplate");
+  const skipPostDeployLimit = unsupportedReason(profile, "skipPostDeploy");
+  const skipLabdirAclLimit = unsupportedReason(profile, "skipLabdirAcl");
   return (
     <>
       <TextRow
@@ -168,7 +170,7 @@ const ContainerlabRows: React.FC<{
         description="Template of the lab's topology-data.json. Use __full to export everything. Lab host default: containerlab's."
         value={form.exportTemplate}
         placeholder="Default"
-        {...(containerOnly ? { disabledReason: containerOnly } : {})}
+        {...(exportTemplateLimit ? { disabledReason: exportTemplateLimit } : {})}
         readOnly={readOnly}
         onChange={(value) => update("exportTemplate", value)}
       />
@@ -177,7 +179,7 @@ const ContainerlabRows: React.FC<{
         title="Skip post-deploy actions"
         description="Skip node configuration after the containers start."
         checked={form.skipPostDeploy}
-        {...(containerOnly ? { disabledReason: containerOnly } : {})}
+        {...(skipPostDeployLimit ? { disabledReason: skipPostDeployLimit } : {})}
         readOnly={readOnly}
         onChange={(checked) => update("skipPostDeploy", checked)}
       />
@@ -186,7 +188,7 @@ const ContainerlabRows: React.FC<{
         title="Skip lab directory ACLs"
         description="Skip extended file ACLs on the lab directory."
         checked={form.skipLabdirAcl}
-        {...(containerOnly ? { disabledReason: containerOnly } : {})}
+        {...(skipLabdirAclLimit ? { disabledReason: skipLabdirAclLimit } : {})}
         readOnly={readOnly}
         onChange={(checked) => update("skipLabdirAcl", checked)}
       />

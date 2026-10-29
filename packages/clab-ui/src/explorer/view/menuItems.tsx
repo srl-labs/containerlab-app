@@ -25,6 +25,7 @@ export function toContextMenuItem(
     icon: <ActionIcon fontSize="small" />,
     danger: Boolean(action.destructive),
     disabled: action.disabled,
+    ...(action.disabledReason !== undefined ? { disabledReason: action.disabledReason } : {}),
     onClick: () => onInvokeAction(action)
   };
 }

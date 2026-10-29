@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { runtimeLimit, type KubernetesLimitKey, type RuntimeLimit } from "../host/kubernetesLimits";
 import type { LabHostInfo, LabHostSupport } from "../host/labHostSupport";
 import type { LabOperationSupport } from "../host/labOperations";
 
@@ -52,4 +53,9 @@ export function hostLabOperationSupport(
     snapshotSave: support.snapshotSave && snapshots,
     deployRestore: support.deployRestore && snapshots
   };
+}
+
+/** What the open topology's lab host cannot do with an option, or does differently (c9s). */
+export function useRuntimeLimit(key: KubernetesLimitKey): RuntimeLimit | undefined {
+  return useLabHostStore((state) => runtimeLimit(state.info?.profile, key));
 }

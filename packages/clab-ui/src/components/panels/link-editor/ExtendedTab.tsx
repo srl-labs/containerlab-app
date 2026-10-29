@@ -9,9 +9,11 @@ import {
   PanelAddSection,
   InputField,
   PanelSection,
+  RuntimeLimited,
   SelectField
 } from "../../ui/form";
 import { useGraphStore } from "../../../stores/graphStore";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 
 import type { LinkTabProps, LinkEditorData } from "./types";
 
@@ -49,16 +51,23 @@ function linkTypeHelp(type: string, connectsSrsim: boolean): string | undefined 
 const LinkTypeField: React.FC<LinkTabProps> = ({ data, onChange }) => {
   const type = data.type ?? "veth";
   const connectsSrsim = useConnectsSrsim(data);
+  // c9s deploys veth links only.
+  const stitchLimit = useRuntimeLimit("linkVethStitch");
+  const options = DUAL_ENDPOINT_LINK_TYPES.map((option) =>
+    stitchLimit && option.value === "veth-stitch" && type !== "veth-stitch" ? { ...option, disabled: true } : option
+  );
   return (
     <PanelSection title="Link Type">
-      <SelectField
-        id="link-type"
-        label="Type"
-        value={type}
-        onChange={(next) => onChange({ type: next })}
-        options={DUAL_ENDPOINT_LINK_TYPES}
-        helperText={linkTypeHelp(type, connectsSrsim)}
-      />
+      <RuntimeLimited limit={stitchLimit} keepEditable>
+        <SelectField
+          id="link-type"
+          label="Type"
+          value={type}
+          onChange={(next) => onChange({ type: next })}
+          options={options}
+          helperText={linkTypeHelp(type, connectsSrsim)}
+        />
+      </RuntimeLimited>
     </PanelSection>
   );
 };
@@ -69,6 +78,18 @@ const LinkTypeField: React.FC<LinkTabProps> = ({ data, onChange }) => {
 const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
   const sourceName = data.source || "Source";
   const targetName = data.target || "Target";
+
+  const addressesLimit = useRuntimeLimit("linkEndpointAddresses");
+  const varsLimit = useRuntimeLimit("linkVars");
+  const labelsLimit = useRuntimeLimit("linkLabels");
+  const hasAddresses = [
+    data.sourceMac,
+    data.targetMac,
+    data.sourceIpv4,
+    data.targetIpv4,
+    data.sourceIpv6,
+    data.targetIpv6
+  ].some((value) => (value ?? "") !== "");
 
   const handleAddVar = () => {
     const vars = data.vars ?? {};
@@ -84,56 +105,60 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
     <Box sx={{ display: "flex", flexDirection: "column" }}>
       <LinkTypeField data={data} onChange={onChange} />
       <PanelSection title="Endpoint Properties">
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-          <InputField
-            id="link-source-mac"
-            label={`${sourceName} MAC`}
-            value={data.sourceMac ?? ""}
-            onChange={(value) => onChange({ sourceMac: value })}
-            placeholder="e.g., 02:42:ac:11:00:01"
-          />
-          <InputField
-            id="link-target-mac"
-            label={`${targetName} MAC`}
-            value={data.targetMac ?? ""}
-            onChange={(value) => onChange({ targetMac: value })}
-            placeholder="e.g., 02:42:ac:11:00:02"
-          />
-        </Box>
-
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-          <InputField
-            id="link-source-ipv4"
-            label={`${sourceName} IPv4`}
-            value={data.sourceIpv4 ?? ""}
-            onChange={(value) => onChange({ sourceIpv4: value })}
-            placeholder="e.g., 10.0.0.1/24"
-          />
-          <InputField
-            id="link-target-ipv4"
-            label={`${targetName} IPv4`}
-            value={data.targetIpv4 ?? ""}
-            onChange={(value) => onChange({ targetIpv4: value })}
-            placeholder="e.g., 10.0.0.2/24"
-          />
-        </Box>
-
-        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-          <InputField
-            id="link-source-ipv6"
-            label={`${sourceName} IPv6`}
-            value={data.sourceIpv6 ?? ""}
-            onChange={(value) => onChange({ sourceIpv6: value })}
-            placeholder="e.g., 2001:db8::1/64"
-          />
-          <InputField
-            id="link-target-ipv6"
-            label={`${targetName} IPv6`}
-            value={data.targetIpv6 ?? ""}
-            onChange={(value) => onChange({ targetIpv6: value })}
-            placeholder="e.g., 2001:db8::2/64"
-          />
-        </Box>
+        <RuntimeLimited limit={addressesLimit} keepEditable={hasAddresses}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+              <InputField
+                id="link-source-mac"
+                label={`${sourceName} MAC`}
+                value={data.sourceMac ?? ""}
+                onChange={(value) => onChange({ sourceMac: value })}
+                placeholder="e.g., 02:42:ac:11:00:01"
+              />
+              <InputField
+                id="link-target-mac"
+                label={`${targetName} MAC`}
+                value={data.targetMac ?? ""}
+                onChange={(value) => onChange({ targetMac: value })}
+                placeholder="e.g., 02:42:ac:11:00:02"
+              />
+            </Box>
+    
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+              <InputField
+                id="link-source-ipv4"
+                label={`${sourceName} IPv4`}
+                value={data.sourceIpv4 ?? ""}
+                onChange={(value) => onChange({ sourceIpv4: value })}
+                placeholder="e.g., 10.0.0.1/24"
+              />
+              <InputField
+                id="link-target-ipv4"
+                label={`${targetName} IPv4`}
+                value={data.targetIpv4 ?? ""}
+                onChange={(value) => onChange({ targetIpv4: value })}
+                placeholder="e.g., 10.0.0.2/24"
+              />
+            </Box>
+    
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+              <InputField
+                id="link-source-ipv6"
+                label={`${sourceName} IPv6`}
+                value={data.sourceIpv6 ?? ""}
+                onChange={(value) => onChange({ sourceIpv6: value })}
+                placeholder="e.g., 2001:db8::1/64"
+              />
+              <InputField
+                id="link-target-ipv6"
+                label={`${targetName} IPv6`}
+                value={data.targetIpv6 ?? ""}
+                onChange={(value) => onChange({ targetIpv6: value })}
+                placeholder="e.g., 2001:db8::2/64"
+              />
+            </Box>
+          </Box>
+        </RuntimeLimited>
 
         <InputField
           id="link-mtu"
@@ -145,7 +170,12 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
         />
       </PanelSection>
 
-      <PanelAddSection title="Variables" onAdd={handleAddVar}>
+      <PanelAddSection
+        title="Variables"
+        onAdd={handleAddVar}
+        limit={varsLimit}
+        limitKeepsEditable={Object.keys(data.vars ?? {}).length > 0}
+      >
         <KeyValueList
           items={data.vars ?? {}}
           onChange={(vars) => onChange({ vars })}
@@ -155,7 +185,12 @@ const VethLinkFields: React.FC<LinkTabProps> = ({ data, onChange }) => {
         />
       </PanelAddSection>
 
-      <PanelAddSection title="Labels" onAdd={handleAddLabel}>
+      <PanelAddSection
+        title="Labels"
+        onAdd={handleAddLabel}
+        limit={labelsLimit}
+        limitKeepsEditable={Object.keys(data.labels ?? {}).length > 0}
+      >
         <KeyValueList
           items={data.labels ?? {}}
           onChange={(labels) => onChange({ labels })}

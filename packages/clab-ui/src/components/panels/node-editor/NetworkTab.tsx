@@ -9,9 +9,11 @@ import {
   DynamicList,
   FilterableDropdown,
   PanelAddSection,
-  PanelSection
+  PanelSection,
+  RuntimeLimited
 } from "../../ui/form";
 import { useGraphStore } from "../../../stores/graphStore";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 import { useTopoViewerStore } from "../../../stores/topoViewerStore";
 import { CONTAINER_NETWORK_MODE_PREFIX } from "../../../core/utilities/nodeEditorConversions";
 import { getMgmtNetworkName, getMgmtNetworks } from "../../../core/types/labSettings";
@@ -72,6 +74,11 @@ const NetworkModeFields: React.FC<TabProps> = (props) => {
   const { data, onChange } = props;
   const networkMode = data.networkMode ?? "";
   const selection = getNetworkModeSelection(networkMode);
+  // c9s takes only container:<node>.
+  const modeLimit = useRuntimeLimit("nodeNetworkMode");
+  const modeOptions = withCurrentOption(NETWORK_MODE_OPTIONS, selection).map((option) =>
+    modeLimit && (option.value === "host" || option.value === "none") ? { ...option, disabled: true } : option
+  );
   const target = getContainerTarget(networkMode);
   const targetOptions = useContainerTargetOptions(data.id);
 
@@ -85,14 +92,16 @@ const NetworkModeFields: React.FC<TabProps> = (props) => {
 
   return (
     <>
-      <SelectField
-        id="node-network-mode"
-        label="Network Mode"
-        value={selection}
-        onChange={handleModeChange}
-        options={withCurrentOption(NETWORK_MODE_OPTIONS, selection)}
-        helperText={inheritedFieldHint(props, "networkMode")}
-      />
+      <RuntimeLimited limit={modeLimit}>
+        <SelectField
+          id="node-network-mode"
+          label="Network Mode"
+          value={selection}
+          onChange={handleModeChange}
+          options={modeOptions}
+          helperText={inheritedFieldHint(props, "networkMode")}
+        />
+      </RuntimeLimited>
       {selection === CONTAINER_MODE && (
         <FilterableDropdown
           id="node-network-mode-container"
@@ -182,6 +191,7 @@ function describeMgmtNet(
 const MgmtNetworkField: React.FC<TabProps> = (props) => {
   const { data, onChange, inheritedProps = [] } = props;
   const networks = useMgmtNetworks();
+  const mgmtNetLimit = useRuntimeLimit("nodeMgmtNet");
   const value = data.mgmtNet ?? "";
   const options = useMemo(() => {
     const names = networks.length > 0 ? networks.map(getMgmtNetworkName) : [getMgmtNetworkName({})];
@@ -201,16 +211,18 @@ const MgmtNetworkField: React.FC<TabProps> = (props) => {
   const note = describeMgmtNet(props, networks, inheritedProps);
 
   return (
-    <SelectField
-      id="node-mgmt-net"
-      label="Management Network"
-      value={value}
-      onChange={(next) => onChange({ mgmtNet: next })}
-      options={options}
-      disabled={isMgmtNetExempt(undefined, data.networkMode)}
-      error={note.error}
-      helperText={note.text}
-    />
+    <RuntimeLimited limit={mgmtNetLimit} keepEditable={value !== ""}>
+      <SelectField
+        id="node-mgmt-net"
+        label="Management Network"
+        value={value}
+        onChange={(next) => onChange({ mgmtNet: next })}
+        options={options}
+        disabled={isMgmtNetExempt(undefined, data.networkMode)}
+        error={note.error}
+        helperText={note.text}
+      />
+    </RuntimeLimited>
   );
 };
 
@@ -246,6 +258,8 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
   const isSection = data.section !== undefined;
   const ipv4Warning = useAddressWarning(data, data.mgmtIpv4, "ipv4");
   const ipv6Warning = useAddressWarning(data, data.mgmtIpv6, "ipv6");
+  const portsLimit = useRuntimeLimit("nodePorts");
+  const aliasesLimit = useRuntimeLimit("nodeAliases");
 
   const handleAddPort = () => {
     onChange({ ports: [...(data.ports ?? []), ""] });
@@ -296,7 +310,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
         <NetworkModeFields {...props} />
       </PanelSection>
 
-      <PanelAddSection title="Port Mappings" onAdd={handleAddPort}>
+      <PanelAddSection title="Port Mappings" onAdd={handleAddPort} limit={portsLimit}>
         <PortMappingList items={data.ports ?? []} onChange={(items) => onChange({ ports: items })} />
         <InheritedListHint hint={inheritedFieldHint(props, "ports")} />
       </PanelAddSection>
@@ -330,7 +344,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
       </PanelAddSection>
 
       {!isSection && (
-        <PanelAddSection title="Network Aliases" onAdd={handleAddAlias}>
+        <PanelAddSection title="Network Aliases" onAdd={handleAddAlias} limit={aliasesLimit}>
           <DynamicList
             items={data.aliases ?? []}
             onChange={(items) => onChange({ aliases: items })}

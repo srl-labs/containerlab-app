@@ -16,7 +16,7 @@ import {
   listFileExplorerDirectory,
   type FileExplorerEntry,
 } from "./runtimeApi";
-import { hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
+import { greyedExplorerCommandsForHost, hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
 
 import { endpointDisplayAddress } from "./endpointAddress";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
@@ -781,6 +781,16 @@ export function createStandaloneExplorerBridge(
     }
     return hidden;
   };
+  /** What a cluster lacks, shown greyed out with why instead of hidden. */
+  const greyedCommandsByEndpoint = (): Map<string, Map<string, string>> => {
+    const greyed = new Map<string, Map<string, string>>();
+    const hosts = useLabHostStore.getState().hosts;
+    for (const endpoint of options.getEndpoints()) {
+      const info = hosts.get(endpoint.id);
+      if (endpoint.connected && info) greyed.set(endpoint.id, greyedExplorerCommandsForHost(info));
+    }
+    return greyed;
+  };
   let explorerFilterText = "";
   let explorerUiState: ExplorerUiState = {};
   const explorerSubscribers = new Set<
@@ -1372,6 +1382,7 @@ export function createStandaloneExplorerBridge(
         isLocalCaptureAllowed: true,
         hiddenCommandIds,
         hiddenCommandIdsByEndpoint: hiddenCommandsByEndpoint(),
+        greyedCommandsByEndpoint: greyedCommandsByEndpoint(),
         commandMetadata: STANDALONE_EXPLORER_COMMAND_METADATA,
         sectionOrder: [
           RUNNING_LABS_SECTION_ID,

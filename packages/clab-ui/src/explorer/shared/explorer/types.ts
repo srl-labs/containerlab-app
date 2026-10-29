@@ -28,6 +28,8 @@ export interface ExplorerAction {
   iconId?: string;
   destructive?: boolean;
   disabled?: boolean;
+  /** Why it is disabled, e.g. what a Kubernetes lab host lacks; menus show it under the label. */
+  disabledReason?: string;
 }
 
 export interface ExplorerNode {

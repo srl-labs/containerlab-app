@@ -52,6 +52,7 @@ export * from "./labFiles";
 export * from "./captureMethod";
 export * from "./captureStream";
 export * from "./kubernetes";
+export * from "./kubernetesLimits";
 export * from "./labHostSupport";
 export * from "./labOperations";
 export * from "./lifecycleOptions";

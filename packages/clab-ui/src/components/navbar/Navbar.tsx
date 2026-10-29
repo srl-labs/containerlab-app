@@ -60,6 +60,8 @@ import {
   type LabLifecycleOptions,
   type TopoViewerLifecycleAction
 } from "../../host";
+import { unsupportedReason } from "../../host/kubernetesLimits";
+import type { LabHostInfo } from "../../host/labHostSupport";
 import { hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { withShortcut } from "../../utils/shortcuts";
@@ -248,6 +250,12 @@ export interface NavbarProps {
 
 // This is a UI composition component with lots of conditional rendering and menu wiring.
 /* eslint-disable complexity */
+/** On a Kubernetes lab host, Save VM Snapshots shows greyed out with why. */
+function snapshotLimit(info: LabHostInfo | undefined): { unavailable?: { snapshots: string } } {
+  const reason = unsupportedReason(info?.profile, "vmSnapshots");
+  return reason !== undefined ? { unavailable: { snapshots: reason } } : {};
+}
+
 export const Navbar: React.FC<NavbarProps> = ({
   hasActiveTopology = true,
   lifecycleActionsAvailable = true,
@@ -745,6 +753,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 labOperationMenuItems({
                   support: labOperationSupport,
                   disabled: isRunningActionDisabled,
+                  ...snapshotLimit(labHostInfo),
                   onOpen: (kind) => {
                     setDeployMenuPosition(null);
                     openLabOperation(kind);

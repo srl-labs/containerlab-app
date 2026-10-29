@@ -161,8 +161,24 @@ Elsewhere, **Add lab host** shows **This computer** and **Kubernetes cluster** g
 - Nodes are pods. The node panel shows each node's namespace, pod, container, and exposed ports, and a `kubectl exec` command to copy; it names the lab host's context and kubeconfig file.
 - **Run with options** offers the c9s deploy options: **Namespace**, **Expose ports**, **No persistent volumes**, **Image pull secret**, and **Without a Topology resource**, next to **Timeout** (containerlab's default on a cluster is 10m; raise it when big images pull slowly) and **Max workers** (Kubernetes requests sent in parallel). Each shows the cluster's default; a plain deploy uses the defaults. On a lab server the c9s options show read-only, as set by the server, and there is no timeout: the server takes none.
 - **Lab Settings** → [**Deploy**](labs.md#deploy-settings) keeps these options for one lab on the cluster, so its redeploys, applies, and destroys use the same namespace, timeout, and storage. They live with the lab host, not in the topology file.
-- What a cluster has no use for is hidden: image management, link impairments, VM snapshots, pausing nodes, fcli, Edgeshark, SSHX and GoTTY sharing, and host stats. Node stats need `metrics.k8s.io` in the cluster. Image management in particular: the cluster's nodes pull images themselves, so for a private registry set an image pull secret instead.
+- What a cluster cannot do stays in the menus and editors, greyed out with the reason, so you see it exists but not here; what it does differently keeps working with a hint. Docker and Podman lab hosts show everything as before. See [Greyed out on a cluster](#greyed-out-on-a-cluster).
+- Image management and host stats are hidden: the cluster's nodes pull images themselves, so for a private registry set an image pull secret instead. Node stats need `metrics.k8s.io` in the cluster.
 - Packet captures come from clabernetes as one pcapng stream; see [Labs on a Kubernetes cluster](labs.md#labs-on-a-kubernetes-cluster) for where they open in each app. Wireshark VNC of a cluster on this machine runs its container on this machine's Docker, not in the cluster, and the app writes the capture into it: it needs Docker here and a wireshark-vnc-docker image with the capture pipe, but no permission to create pods.
+
+### Greyed out on a cluster
+
+containerlab's c9s runtime and the clabernetes compiler refuse or ignore these, so the app greys them out on a Kubernetes lab host, used directly or through a lab server:
+
+| Where | Greyed out | Why |
+| --- | --- | --- |
+| Lab Settings → Management | Network name, driver and macvlan, bridge, MTU, external access, address allocation, skip when unused, Tailscale, driver options; **Add network** | clabernetes runs the management network and accepts only its subnets; a lab has one |
+| Lab Settings → Certificates | The certificate authority | clabernetes signs node certificates with its own CA and refuses the `settings` block |
+| Lab Settings → Deploy, Run with options | Nodes, graceful shutdown, keep management network, skip post-deploy actions, skip lab directory ACLs, export template, restore VM snapshots | containerlab refuses these flags with `-r c9s` |
+| Node editor | CPU set, container runtime, auto-remove, stages and wait-for, environment files, management network; Host and None network modes; No and On Failure restart policies | clabernetes rejects them or the node fails to start |
+| Link editor | veth-stitch, endpoint MAC and IP addresses, link variables and labels | only veth links with node and interface names reach clabernetes |
+| Menus | Link impairments, Save VM Snapshots, pause, SSHX and GoTTY sharing, fcli, Edgeshark capture and its install | containerlab has no `tools` commands on c9s, and pods cannot be paused |
+
+A field that already holds a value stays editable, so you can remove it. These work with a difference and keep a hint: subnets (the management network of clabernetes), port mappings (through a Kubernetes Service, without the host port), bind mounts (copied read-only from the machine that deploys, up to 950 KB each), labels (Kubernetes label values), network aliases (Service names), and exec commands (run as the container starts; one that fails does not stop the node).
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run a lab](labs.md)

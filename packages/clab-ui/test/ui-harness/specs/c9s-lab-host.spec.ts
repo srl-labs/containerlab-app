@@ -97,14 +97,17 @@ test.describe("A lab on a Kubernetes cluster (c9s)", () => {
     await expect(page.getByTestId("node-kubernetes-persistence")).toContainText("persistent volume");
   });
 
-  test("offers the c9s deploy options and hides the Docker-only ones", async ({ page }) => {
+  test("offers the c9s deploy options and greys out the Docker-only ones", async ({ page }) => {
     await openDeployMenuItem(page, "navbar-deploy-item-options");
     const dialog = page.getByTestId("lifecycle-options-dialog");
     await expect(dialog).toBeVisible();
     await expect(page.getByTestId("lifecycle-options-c9s")).toBeVisible();
-    await expect(page.getByTestId("lifecycle-options-skip-post-deploy")).toHaveCount(0);
-    await expect(page.getByTestId("lifecycle-options-nodes")).toHaveCount(0);
-    await expect(page.getByTestId("lifecycle-options-restore")).toHaveCount(0);
+    // Shown, not hidden, so users see they exist; disabled with why.
+    await expect(page.getByTestId("lifecycle-options-skip-post-deploy").locator("input")).toBeDisabled();
+    await expect(page.getByTestId("lifecycle-options-skip-post-deploy")).toContainText("Not supported on Kubernetes (c9s)");
+    await expect(page.getByTestId("lifecycle-options-nodes")).toBeDisabled();
+    await expect(page.getByTestId("lifecycle-options-restore").locator("input")).toBeDisabled();
+    await expect(page.getByTestId("lifecycle-options-restore")).toContainText("no VM snapshots");
     await page.locator("#lifecycle-options-namespace").fill("team-a");
     await page.getByTestId("lifecycle-options-no-persistence").locator('input[type="checkbox"]').check();
     await expect(page.getByTestId("lifecycle-options-command")).toHaveText(
@@ -167,6 +170,36 @@ test.describe("A lab on a Kubernetes cluster (c9s)", () => {
     await expect(page.getByTestId("manifest-export-yaml")).toContainText("kind: Topology");
     await expect(page.getByTestId("manifest-export-yaml")).toContainText("namespace: c9s-spine-leaf");
   });
+
+  test("Lab settings > Deploy shows the cluster's options and greys out what it refuses", async ({ page }) => {
+    await page.locator('[data-testid="navbar-lab-settings"]').click();
+    const modal = page.getByTestId("lab-settings-modal");
+    await modal.getByTestId("lab-settings-tab-deploy").click();
+    await expect(modal.getByTestId("lab-deploy-storage")).toContainText("Kubernetes · kind-harness");
+    await expect(modal.locator("#lab-deploy-namespace")).toHaveAttribute("placeholder", "c9s-<lab>");
+    await expect(modal.locator("#lab-deploy-export-template")).toBeDisabled();
+    await expect(modal.getByTestId("lab-deploy-skip-post-deploy").locator("input")).toBeDisabled();
+    await modal.locator("#lab-deploy-namespace").fill("team-a");
+    await modal.getByTestId("lab-settings-save-btn").click();
+    await page.getByTestId("lab-settings-close-btn").click();
+    await openDeployMenuItem(page, "navbar-deploy-item-options");
+    await expect(page.locator("#lifecycle-options-namespace")).toHaveValue("team-a");
+  });
+
+  test("Lab settings grey out the management and CA options the cluster lacks, with why", async ({
+    page,
+    topoViewerPage
+  }) => {
+    await topoViewerPage.setEditMode();
+    await topoViewerPage.unlock();
+    await page.locator('[data-testid="navbar-lab-settings"]').click();
+    const modal = page.getByTestId("lab-settings-modal");
+    await modal.getByTestId("lab-settings-tab-mgmt").click();
+    await expect(modal.getByTestId("lab-mgmt-runtime-limit")).toContainText("Ignored on Kubernetes (c9s)");
+    await expect(modal.getByTestId("lab-settings-mgmt-add-network")).toBeDisabled();
+    await modal.getByTestId("lab-settings-tab-certificates").click();
+    await expect(modal.getByTestId("runtime-limit-note").first()).toContainText("Not supported on Kubernetes (c9s)");
+  });
 });
 
 test.describe("A lab on Docker", () => {
@@ -185,4 +218,5 @@ test.describe("A lab on Docker", () => {
     await page.getByTestId("navbar-deploy-menu").click();
     await expect(page.getByTestId("navbar-deploy-item-export-manifests")).toHaveCount(0);
   });
+
 });

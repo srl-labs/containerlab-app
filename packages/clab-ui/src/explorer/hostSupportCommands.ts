@@ -1,4 +1,5 @@
-import type { LabHostSupport } from "../host/labHostSupport";
+import { KUBERNETES_LIMITS, type KubernetesLimitKey } from "../host/kubernetesLimits";
+import type { LabHostInfo, LabHostSupport } from "../host/labHostSupport";
 
 const FCLI_COMMANDS = [
   "containerlab.lab.fcli.bgpPeers",
@@ -57,4 +58,34 @@ export function hiddenExplorerCommandsForSupport(support: LabHostSupport): strin
     hidden.push("containerlab.node.captureInterfaces");
   }
   return hidden;
+}
+
+/** Explorer commands a Kubernetes (c9s) lab host lacks, and the limit that says why. */
+const KUBERNETES_GREYED_COMMANDS: ReadonlyArray<readonly [KubernetesLimitKey, readonly string[]]> = [
+  ["linkImpairments", NETEM_COMMANDS],
+  ["nodePause", ["containerlab.node.pause", "containerlab.node.unpause"]],
+  ["fcli", FCLI_COMMANDS],
+  ["shareTools", SHARE_COMMANDS],
+  [
+    "edgeshark",
+    [
+      "containerlab.interface.captureWithEdgeshark",
+      "containerlab.install.edgeshark",
+      "containerlab.uninstall.edgeshark"
+    ]
+  ]
+];
+
+/**
+ * Explorer commands to show greyed out on a lab host's items, with why,
+ * instead of hiding them: what a Kubernetes (c9s) lab host lacks. Other
+ * lab hosts grey nothing out.
+ */
+export function greyedExplorerCommandsForHost(info: Pick<LabHostInfo, "profile">): Map<string, string> {
+  const greyed = new Map<string, string>();
+  if (info.profile.runtime !== "c9s") return greyed;
+  for (const [key, commands] of KUBERNETES_GREYED_COMMANDS) {
+    for (const command of commands) greyed.set(command, KUBERNETES_LIMITS[key].reason);
+  }
+  return greyed;
 }

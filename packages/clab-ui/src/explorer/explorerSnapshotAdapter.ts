@@ -64,6 +64,11 @@ export interface ExplorerSnapshotOptions {
    * host whose support is not known yet with no commands.
    */
   hiddenCommandIdsByEndpoint?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Commands shown greyed out on the items of one lab host, with why, by
+   * endpoint id (`greyedExplorerCommandsForHost`); they win over hiding.
+   */
+  greyedCommandsByEndpoint?: ReadonlyMap<string, ReadonlyMap<string, string>>;
   sectionOrder?: readonly ExplorerSectionId[];
   expandedBySection?: ExplorerUiState["expandedBySection"];
   /** Section titles that replace the defaults, e.g. once labs come from several hosts. */
@@ -597,12 +602,17 @@ function filterHiddenActions(
       ? (options.hiddenCommandIdsByEndpoint?.get(host) ?? [])
       : commandsHiddenOnEveryHost(options))
   ];
-  if (hiddenCommandIds.length === 0) {
+  const greyed = host !== undefined ? options.greyedCommandsByEndpoint?.get(host) : undefined;
+  if (hiddenCommandIds.length === 0 && !greyed?.size) {
     return actions;
   }
 
   const hidden = new Set(hiddenCommandIds);
-  return actions.filter((action) => !hidden.has(action.commandId));
+  return actions.flatMap((action) => {
+    const reason = greyed?.get(action.commandId);
+    if (reason !== undefined) return [{ ...action, disabled: true, disabledReason: reason }];
+    return hidden.has(action.commandId) ? [] : [action];
+  });
 }
 
 function getLinkArgument(item: ExplorerTreeItemLike): string | undefined {

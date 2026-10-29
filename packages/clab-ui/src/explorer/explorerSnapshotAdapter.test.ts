@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { greyedExplorerCommandsForHost } from "./hostSupportCommands";
+
 import {
   buildExplorerSnapshot,
   type ExplorerSnapshotProviders
@@ -415,4 +417,52 @@ test("section actions hide what no lab host can do, and stay while one can", asy
   // A host whose support is not known yet hides nothing.
   assert.ok((await toolbar([cluster, ["pending", []]])).includes("containerlab.images.manage"));
   assert.ok((await toolbar([])).includes("containerlab.images.manage"));
+});
+
+test("a Kubernetes lab host's items show what it lacks greyed out, with why", async () => {
+  const container = {
+    label: "leaf1",
+    contextValue: "containerlabContainer",
+    state: "running",
+    status: "Up",
+    endpointId: "cluster",
+    collapsibleState: 0
+  };
+  const endpoint = {
+    label: "Cluster",
+    contextValue: "containerlabEndpoint",
+    state: "connected",
+    endpointId: "cluster",
+    collapsibleState: TREE_ITEM_COLLAPSED,
+    children: [
+      {
+        label: "demo.clab.yml",
+        contextValue: "containerlabLabDeployed",
+        endpointId: "cluster",
+        collapsibleState: TREE_ITEM_COLLAPSED,
+        children: [container]
+      }
+    ]
+  };
+  const providers = {
+    runningProvider: provider([endpoint]),
+    localProvider: provider([]),
+    helpProvider: provider([])
+  } as ExplorerSnapshotProviders;
+  const cluster = { profile: { runtime: "c9s" as const } };
+  const { snapshot } = await buildExplorerSnapshot(providers, "", {
+    hideNonOwnedLabs: false,
+    isLocalCaptureAllowed: true,
+    hiddenCommandIdsByEndpoint: new Map([["cluster", ["containerlab.node.pause", "containerlab.node.unpause"]]]),
+    greyedCommandsByEndpoint: new Map([["cluster", greyedExplorerCommandsForHost(cluster)]])
+  });
+  const node = snapshot.sections.find((section) => section.id === "runningLabs")?.nodes[0].children[0].children[0];
+  assert.ok(node);
+  const pause = node.actions.find((action) => action.commandId === "containerlab.node.pause");
+  assert.equal(pause?.disabled, true);
+  assert.match(pause?.disabledReason ?? "", /^Not supported on Kubernetes \(c9s\)/);
+  assert.equal(node.actions.find((action) => action.commandId === "containerlab.node.stop")?.disabledReason, undefined);
+
+  // Docker and Podman grey nothing out.
+  assert.equal(greyedExplorerCommandsForHost({ profile: { runtime: "docker" } }).size, 0);
 });
