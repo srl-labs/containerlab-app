@@ -13,10 +13,10 @@ import {
   DEFAULT_ENDPOINT_SESSION_DURATION,
   useEndpointStore,
   type EndpointConfig,
-  type EndpointSessionDuration,
-  type EndpointStatus
+  type EndpointSessionDuration
 } from "../stores/endpointStore";
 import { useLabStore } from "../stores/labStore";
+import { mergeStoredAndServerEndpoints } from "../endpointMerge";
 
 interface AuthMeResponse {
   authenticated?: boolean;
@@ -56,40 +56,6 @@ function syncRemovedEndpointState(
       useLabStore.getState().clearEndpoint(endpointId);
     }
   }
-}
-
-function markEndpointStatus(
-  endpoint: EndpointConfig,
-  status: EndpointStatus
-): EndpointConfig {
-  return {
-    ...endpoint,
-    status,
-    connected: status === "connected"
-  };
-}
-
-function mergeStoredAndServerEndpoints(
-  previous: Map<string, EndpointConfig>,
-  nextEndpoints: EndpointConfig[]
-): EndpointConfig[] {
-  const merged = new Map<string, EndpointConfig>();
-
-  for (const endpoint of previous.values()) {
-    merged.set(endpoint.id, markEndpointStatus(endpoint, "saved"));
-  }
-
-  for (const endpoint of nextEndpoints) {
-    const previousEndpoint = previous.get(endpoint.id);
-    merged.set(endpoint.id, {
-      ...endpoint,
-      sessionDuration: previousEndpoint?.status === "saved"
-        ? previousEndpoint.sessionDuration
-        : endpoint.sessionDuration
-    });
-  }
-
-  return Array.from(merged.values());
 }
 
 function useEndpointAuth() {
@@ -175,10 +141,9 @@ function useEndpointAuth() {
           ? payload.endpoints.map((endpoint) => withStatus(endpoint))
           : [];
         syncRemovedEndpointState(previousEndpoints, nextEndpoints);
-        if (nextEndpoints.length > 0) {
+        if (nextEndpoints.length > 0 || previousEndpoints.size > 0) {
+          // Kept API Servers come back signed out; local hosts only as the server lists them.
           setEndpoints(mergeStoredAndServerEndpoints(previousEndpoints, nextEndpoints));
-        } else if (previousEndpoints.size > 0) {
-          markAllSaved();
         } else {
           setEndpoints([]);
         }

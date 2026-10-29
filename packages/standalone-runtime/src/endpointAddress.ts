@@ -1,4 +1,4 @@
-import { endpointRuntimeBadge } from "@containerlab/clab-ui/workspace/state";
+import { endpointRuntimeBadge, labHostKind } from "@containerlab/clab-ui/workspace/state";
 import type { EndpointConfig } from "./stores/endpointStore";
 
 type EndpointAddress = Pick<EndpointConfig, "kind" | "url">;
@@ -11,9 +11,11 @@ type EndpointAddress = Pick<EndpointConfig, "kind" | "url">;
 export function endpointDisplayAddress(
   endpoint: EndpointAddress & Partial<Pick<EndpointConfig, "runtime" | "kubeContext" | "namespace">>
 ): string {
-  const badge = endpointRuntimeBadge(endpoint);
-  if (endpoint.kind === "local") {
-    if (endpoint.runtime === "c9s" && badge) return badge;
+  const kind = labHostKind(endpoint);
+  // A cluster whose check has not answered yet is still Kubernetes, never "This computer · Docker".
+  const badge = endpointRuntimeBadge(kind === "cluster" ? { ...endpoint, runtime: "c9s" } : endpoint);
+  if (kind === "cluster") return badge ?? "Kubernetes";
+  if (kind === "this-computer") {
     return `This computer · ${endpoint.runtime === "podman" ? "Podman" : "Docker"}`;
   }
   return badge ? `${endpoint.url} · ${badge}` : endpoint.url;

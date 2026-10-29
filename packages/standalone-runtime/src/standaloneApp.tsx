@@ -1,5 +1,6 @@
 import {
   applyStandaloneAppearance,
+  labHostKind,
   persistStandaloneAppearance,
   persistTabOrientation,
   readPersistedTabOrientation,
@@ -1880,8 +1881,8 @@ function StandaloneApp() {
   // "This computer" is the app server's local host with Docker or Podman; a cluster is not this computer.
   const thisComputer = useMemo(
     () =>
-      localEndpoints.find((status) => status.runtime !== "c9s") ??
-      (localEndpoint && localEndpoint.runtime !== "c9s" ? localEndpoint : undefined),
+      localEndpoints.find((status) => labHostKind({ kind: "local", ...status }) === "this-computer") ??
+      (localEndpoint && labHostKind({ kind: "local", ...localEndpoint }) === "this-computer" ? localEndpoint : undefined),
     [localEndpoint, localEndpoints],
   );
   const localEndpointOffer = useMemo<LocalEndpointOffer | undefined>(

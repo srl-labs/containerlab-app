@@ -53,10 +53,19 @@ export function endpointRuntimeBadge(
 /** Where a lab host runs labs, as the lab host list and "Add lab host" name it. */
 export type LabHostKind = "this-computer" | "cluster" | "server";
 
-/** A lab host's kind: a clab-api-server, a Kubernetes cluster used from this machine, or this machine. */
-export function labHostKind(endpoint: Pick<EndpointConfig, "kind" | "runtime">): LabHostKind {
+/** The address scheme of a Kubernetes lab host on the app's machine: `local://c9s/<context>`. */
+const CLUSTER_URL_PREFIX = "local://c9s/";
+
+/**
+ * A lab host's kind: a clab-api-server, a Kubernetes cluster used from this
+ * machine, or this machine. A cluster's address says it is one, so it is
+ * never taken for this computer while its runtime is not known yet (a list
+ * from before its check, or one kept in the browser).
+ */
+export function labHostKind(endpoint: Pick<EndpointConfig, "kind" | "runtime"> & { url?: string }): LabHostKind {
   if (endpoint.kind !== "local") return "server";
-  return endpoint.runtime === "c9s" ? "cluster" : "this-computer";
+  if (endpoint.runtime === "c9s" || endpoint.url?.startsWith(CLUSTER_URL_PREFIX) === true) return "cluster";
+  return "this-computer";
 }
 
 /**
@@ -73,6 +82,32 @@ export function isLocalOfferListed(
       ? endpoint.kind === "local" && endpoint.url === offer.url
       : labHostKind(endpoint) === "this-computer"
   );
+}
+
+/** Local lab host offers (e.g. clusters the app was set up with) that are not listed, to add again. */
+export function unlistedLocalOffers<T extends { url?: string }>(
+  endpoints: readonly Pick<EndpointConfig, "kind" | "runtime" | "url">[],
+  offers: readonly T[]
+): T[] {
+  return offers.filter((offer) => !isLocalOfferListed(endpoints, offer));
+}
+
+/** Why an app without cluster support cannot add one. */
+export const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes lab hosts. Use an API Server that runs Kubernetes.";
+
+/**
+ * Why "Kubernetes" cannot be chosen in "Add lab host"; undefined when it can:
+ * the app adds clusters, or it has configured clusters that are not listed
+ * (e.g. one the user removed), which can be added again from there.
+ */
+export function clusterChoiceUnavailable(
+  support: object | undefined,
+  reason: string | undefined,
+  configuredClusters: number
+): string | undefined {
+  if (support !== undefined && reason === undefined) return undefined;
+  if (configuredClusters > 0) return undefined;
+  return reason ?? CLUSTERS_UNSUPPORTED;
 }
 
 /** What each kind is called. */
@@ -99,7 +134,7 @@ function clusterNamespaceLabel(namespace: string | undefined): string {
  * or "API Server · c9s · cluster c9s".
  */
 export function labHostSubtitle(
-  endpoint: Pick<EndpointConfig, "kind" | "runtime" | "kubeContext" | "namespace" | "cluster">
+  endpoint: Pick<EndpointConfig, "kind" | "runtime" | "kubeContext" | "namespace" | "cluster"> & { url?: string }
 ): string {
   const kind = labHostKind(endpoint);
   if (kind === "this-computer") {

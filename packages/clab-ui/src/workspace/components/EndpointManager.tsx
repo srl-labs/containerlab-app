@@ -34,7 +34,10 @@ import { APP_DOCS_URL,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
   LAB_HOST_KIND_LABELS,
+  CLUSTERS_UNSUPPORTED,
+  clusterChoiceUnavailable,
   isLocalOfferListed,
+  unlistedLocalOffers,
   labHostKind,
   labHostSubtitle,
   type ClusterHostSettings,
@@ -54,7 +57,7 @@ import type { EndpointUiAction } from "../state/endpointActions";
 import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../state/endpointStatus";
 import { downloadJsonFile, pickJsonFile } from "../../utils/jsonFile";
 import { firstFailedCheck } from "../../host/labHostSupport";
-import type { ClusterHostsSupport, LabHostSetupProps } from "../types";
+import type { LabHostSetupProps } from "../types";
 import {
   ClusterHostDialog,
   LabHostCheckDialog,
@@ -115,8 +118,6 @@ function withUnavailable(unavailable: string | undefined): { unavailable?: strin
   return unavailable === undefined ? {} : { unavailable };
 }
 
-/** Why an app without cluster support cannot add one. */
-const CLUSTERS_UNSUPPORTED = "This app cannot add Kubernetes lab hosts. Use an API Server that runs Kubernetes.";
 
 /** The settings of an editable cluster lab host, for its edit form. */
 function clusterSettingsOf(endpoint: EndpointConfig): ClusterHostSettings {
@@ -695,17 +696,6 @@ function HostProblems(props: { endpoint: EndpointConfig; failed: boolean; localE
 function thisComputerChoiceUnavailable(offer: LocalEndpointOffer | undefined, reason: string | undefined): string | undefined {
   if (!offer) return reason ?? "Not offered by this app";
   return offer.available ? undefined : (offer.problems[0] ?? "Not ready");
-}
-
-function clusterChoiceUnavailable(
-  support: ClusterHostsSupport | undefined,
-  reason: string | undefined,
-  configuredClusters: number
-): string | undefined {
-  if (support !== undefined && reason === undefined) return undefined;
-  // Clusters the app was set up with can still be added from the list.
-  if (configuredClusters > 0) return undefined;
-  return reason ?? CLUSTERS_UNSUPPORTED;
 }
 
 /** The lines of the remove dialog: what is asked, and what happens to the labs. */
@@ -1357,7 +1347,7 @@ export function EndpointManager({
   );
   const isLocalConnected = (offer: LocalEndpointOffer) => isLocalOfferListed(sortedEndpoints, offer);
   const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
-  const extraLocalOffers = (extraLocalEndpoints ?? []).filter((offer) => !isLocalConnected(offer));
+  const extraLocalOffers = unlistedLocalOffers(sortedEndpoints, extraLocalEndpoints ?? []);
   // This computer first while it is not listed, else an API Server.
   const addKind: LabHostKind = chosenAddKind ?? (offerLocalEndpoint ? "this-computer" : "server");
   const addChoices: LabHostChoice[] = [

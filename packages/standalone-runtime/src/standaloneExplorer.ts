@@ -18,6 +18,7 @@ import {
 } from "./runtimeApi";
 import { greyedExplorerCommandsForHost, hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
 
+import { labHostKind } from "@containerlab/clab-ui/workspace/state";
 import { endpointDisplayAddress } from "./endpointAddress";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import type { EndpointConfig } from "./stores/endpointStore";
@@ -603,7 +604,7 @@ function buildEndpointRootItem(
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
     endpointKind: endpoint.kind === "local" ? "local" : "api",
-    ...(endpoint.kind === "local" && endpoint.runtime === "c9s" ? { endpointCluster: true } : {}),
+    ...(labHostKind(endpoint) === "cluster" ? { endpointCluster: true } : {}),
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,

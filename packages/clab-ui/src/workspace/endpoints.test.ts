@@ -58,3 +58,29 @@ test("a listed cluster does not stand in for a hidden This computer", () => {
   // Not answered yet: a local host without a runtime is this computer.
   assert.equal(isLocalOfferListed([{ kind: "local", url: "local://this-computer" }], {}), true);
 });
+
+test("a Kubernetes lab host on the app's machine reads as Kubernetes before its check answers", async () => {
+  const { labHostKind, labHostSubtitle } = await import("./endpoints");
+  // A cluster listed before its runtime is known, or kept in the browser from an earlier session.
+  const cluster = { kind: "local" as const, url: "local://c9s/kind-c9s-app?kubeconfig=%2Fhome%2Fclab%2Fapp.kubeconfig" };
+  assert.equal(labHostKind(cluster), "cluster");
+  assert.equal(labHostSubtitle(cluster), "Kubernetes · current context · one namespace per lab");
+  assert.equal(labHostKind({ kind: "local", url: "local://this-computer" }), "this-computer");
+  // Listed, it is no "This computer": that one can still be added.
+  assert.equal(isLocalOfferListed([cluster], {}), false);
+});
+
+test("a configured cluster the user removed can be added again under Kubernetes", async () => {
+  const { clusterChoiceUnavailable, unlistedLocalOffers } = await import("./endpoints");
+  const url = "local://c9s/kind-c9s-app";
+  const offers = [{ url, label: "kind-c9s-app" }];
+  // The web app adds no clusters itself; its configured one comes from the server.
+  const webReason = "In the web app, a Kubernetes lab host comes from the server's configuration.";
+  const listed = [{ kind: "local" as const, url }];
+  assert.deepEqual(unlistedLocalOffers(listed, offers), []);
+  assert.equal(clusterChoiceUnavailable(undefined, webReason, 0), webReason);
+  // Removed: offered again, and the Kubernetes choice is open for it.
+  const removed = unlistedLocalOffers([], offers);
+  assert.deepEqual(removed, offers);
+  assert.equal(clusterChoiceUnavailable(undefined, webReason, removed.length), undefined);
+});
