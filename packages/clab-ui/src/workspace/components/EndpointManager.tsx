@@ -1518,6 +1518,8 @@ export function EndpointManager({
         }}
       >
         <Stack spacing={2.5}>
+          {/* On its own settings page, the page's title asks it already. */}
+          {show === "add" ? null : (
           <Box sx={mode === "initial" ? { textAlign: "center" } : undefined}>
             <Typography
               variant="subtitle1"
@@ -1535,6 +1537,7 @@ export function EndpointManager({
               {mode === "initial" ? endpointAddDescription(mode) : "Where should labs run?"}
             </Typography>
           </Box>
+          )}
 
           {mode === "manage" ? (
             <LabHostChoices choices={addChoices} selected={addKind} onSelect={setAddKind} />
