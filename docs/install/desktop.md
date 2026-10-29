@@ -59,7 +59,7 @@ When something is missing, the app opens on a start screen instead. It lists wha
 
 Labs on this computer run as your user. Topologies live in `~/.clab`, the same folder `clab-api-server` uses, and so do node templates and icons; a lab host on the same machine sees the same files.
 
-To hide **This computer**, remove it under **Settings** > **Lab hosts**. It stays hidden until you select **Use This Computer** there.
+To hide **This computer**, remove it on its page under **Settings** > **Lab hosts**. It stays hidden until you select **Use This Computer** under **Settings** > **Add lab host**.
 
 To change how the app runs containerlab, create `~/.config/Containerlab/local-backend.json`:
 
@@ -75,11 +75,11 @@ To change how the app runs containerlab, create `~/.config/Containerlab/local-ba
 
 Set `"enabled": false` to turn **This computer** off entirely, or `"sudo": true` to run containerlab with `sudo -n`, which needs passwordless sudo. The same options are available as [environment variables](../reference/app-settings.md#desktop-app).
 
-To run labs on a Kubernetes cluster with clabernetes as well, choose **Add lab host** > **Kubernetes** under **Settings** > **Lab hosts**; the app keeps it under `clusters` in the same file. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
+To run labs on a Kubernetes cluster with clabernetes as well, choose **Settings** > **Add lab host** > **Kubernetes**; the app keeps it under `clusters` in the same file, with the deploy defaults you set on its page (`deployTimeout`, `exposeType`, `persistence`, `imagePullSecret`, `noTopologyCR`). See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
 
 ## Work with lab hosts
 
-To work with labs on other machines, or from macOS and Windows, set up a [lab host](lab-host.md) and [sign in to it](sign-in.md). On Linux, add lab hosts under **Settings** > **Lab hosts**; their labs show up next to **This computer**. On macOS and Windows the app starts on the sign-in screen.
+To work with labs on other machines, or from macOS and Windows, set up a [lab host](lab-host.md) and [sign in to it](sign-in.md). On Linux, add lab hosts under **Settings** > **Add lab host**; their labs show up next to **This computer**. On macOS and Windows the app starts on the sign-in screen.
 
 ## Options
 

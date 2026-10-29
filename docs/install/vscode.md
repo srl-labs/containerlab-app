@@ -61,7 +61,7 @@ The extension can also manage labs on a [lab host](lab-host.md) that runs `clab-
 
 <div class="steps" markdown>
 
-1. **Open the Lab Hosts page.** Select the server button in the explorer title bar, or run **Containerlab: Manage Lab Hosts** from the command palette.
+1. **Open the lab hosts in the settings.** Select the server button in the explorer title bar, or run **Containerlab: Manage Lab Hosts** from the command palette. The settings list every lab host under **Lab hosts**, then **Add lab host**.
 
 2. **Add the lab host** with its API Server URL, for example `https://lab1.example.com:8090`, a name, and your Linux account on it. The account must be in the `clab_api` or `clab_admins` group, as for the [desktop and web apps](sign-in.md). The host is saved once the sign-in works.
 
@@ -72,7 +72,7 @@ The extension can also manage labs on a [lab host](lab-host.md) that runs `clab-
 ![Lab hosts next to This computer in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-dark.webp#only-dark){ .shot }
 ![Lab hosts next to This computer in the explorer, and the Lab Hosts page](../images/app/vscode-lab-hosts-light.webp#only-light){ .shot }
 
-The Lab Hosts page shows each host's status, CPU, memory, and disk, and signs in, signs out, edits, or removes it. In the explorer, right-click a lab host for the same actions and more: deploy a lab file, clone a repository, manage images, install Edgeshark, or open its files. **Containerlab: Add Lab Host…** adds one from the command palette, step by step.
+Each lab host's page shows its status, CPU, memory, and disk, signs in, signs out, edits, or removes it, and holds its settings: containerlab, connection, deploy defaults and capture, greyed out where they do not apply and read-only where the API Server sets them. See [Lab host settings](../reference/vscode-settings.md#lab-host-settings). An open lab names its lab host at the left of its toolbar; click it for that page. In the explorer, right-click a lab host for the same actions and more: deploy a lab file, clone a repository, manage images, install Edgeshark, or open its files. **Containerlab: Add Lab Host…** adds one from the command palette, step by step.
 
 The lab hosts are kept in the `containerlab.connections` setting, so you can also add them there, for a whole team in workspace settings:
 
@@ -93,9 +93,9 @@ On a lab host:
 - **Clone repository** and **Deploy lab file** with a Git URL clone into the host's workspace. The host takes GitHub and GitLab URLs.
 - **Image completion** in topology files and the topology editor offers the host's images.
 
-**Add Lab Host** asks where labs should run: **This computer**, **Kubernetes**, or **API Server**. To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes**: the cluster form opens on the Lab Hosts page, with **Check connection**. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
+**Add Lab Host** asks where labs should run: **This computer**, **Kubernetes**, or **API Server**. To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes**: the cluster form opens under **Add lab host**, with **Check connection**. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
 
-**This computer** is listed when containerlab can run where VS Code runs. When something is missing there, its dot turns red and its tooltip says what to fix; **Check Again** looks again once you fixed it. To work with lab hosts only, hide **This computer** on the Lab Hosts page, or turn off `containerlab.localConnection`. Like the desktop app, the extension accepts the API Server's self-signed certificate; start VS Code with `CLAB_API_TLS_VERIFY=true` to require a trusted one.
+**This computer** is listed when containerlab can run where VS Code runs. When something is missing there, its dot turns red and its tooltip says what to fix; **Check Again** looks again once you fixed it. To work with lab hosts only, hide **This computer** on its page in the settings, or turn off `containerlab.localConnection`. Like the desktop app, the extension accepts the API Server's self-signed certificate; start VS Code with `CLAB_API_TLS_VERIFY=true` to require a trusted one.
 
 ## Only in VS Code
 
@@ -113,7 +113,7 @@ Every setting is listed in the [VS Code settings reference](../reference/vscode-
 
 **Interfaces are missing.** Labs deployed with containerlab older than 0.64.0 need a redeploy before interfaces and statistics show up.
 
-**Packet capture does not open.** For local labs, Docker must work on the machine running the extension. On a lab host, Edgeshark must run there: right-click the host in the explorer and select **Install EdgeShark**. Check the [capture settings](../reference/vscode-settings.md#packet-capture) if your browser reaches the lab host under a different name.
+**Packet capture does not open.** For local labs, Docker must work on the machine running the extension. On a lab host, Edgeshark must run there: right-click the host in the explorer and select **Install EdgeShark**. Check the [capture settings of the lab host](../reference/vscode-settings.md#lab-host-settings) if your browser reaches the lab host under a different name.
 
 <div class="next" markdown>
 [:lucide-arrow-right: Run your first lab](../getting-started/first-lab.md)

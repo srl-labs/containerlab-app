@@ -60,7 +60,7 @@ In VS Code and the desktop app:
 
 <div class="steps" markdown>
 
-1. **Open Add lab host.** In VS Code: **Containerlab: Add Lab Host…** from the command palette, or **Settings** > **Lab hosts**. In the desktop app: **Settings** > **Lab hosts**, or **Add Lab Host** in the explorer. Choose **Kubernetes**.
+1. **Open Add lab host.** In VS Code: **Containerlab: Add Lab Host…** from the command palette, or **Settings** > **Add lab host**. In the desktop app: **Settings** > **Add lab host**, or **Add Lab Host** in the explorer. Choose **Kubernetes**.
 
 2. **Pick the kubeconfig and context.** The form starts with your default kubeconfig (`KUBECONFIG`, else `~/.kube/config`) and its current context. **Choose file…** picks another file; the lab host keeps its path. The **Context** list shows each context with its cluster and marks the current one.
 
@@ -115,7 +115,7 @@ VS Code keeps a cluster in the `containerlab.connections` setting, next to the A
 ]
 ```
 
-Only `kind` and `kubeContext` are required; see the [settings reference](../reference/vscode-settings.md#lab-hosts). Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. `containerlab.runtime` (`docker` or `podman`) is the runtime of this computer only; `containerlab.binaryPath` names the containerlab to run.
+Only `kind` and `kubeContext` are required; see the [settings reference](../reference/vscode-settings.md#lab-hosts). Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. `containerlab.runtime` (`docker` or `podman`) is the runtime of this computer only; `containerlab.binaryPath` names the containerlab to run. The cluster's page in the settings sets its deploy defaults, a default deploy timeout, and its own deploy arguments, capture method and Wireshark VNC image; settings it does not support, such as the container runtime and Edgeshark, are greyed out there with the reason.
 
 The desktop app keeps clusters under `clusters` in `~/.config/Containerlab/local-backend.json` and writes the file itself when you add, edit, or remove one:
 
@@ -142,7 +142,7 @@ With `CLAB_RUNTIME=c9s`, `clab-api-server` runs the labs of everyone who signs i
 - On a user's first deploy of a lab, the server creates the namespace `c9s-<user>-<lab>` and binds `clabernetes-lab-editor` in it to `clab:<user>`.
 - Every lab action then runs as `clab:<user>` in the group `clab:users`; members of `SUPERUSER_GROUP` also get `clab:admins`. A user can do through the server what `kubectl` would let that user do.
 
-Once you are signed in, the lab host shows what the server runs: *API Server · c9s · cluster `<cluster>` · namespaces `c9s-<user>-{lab}`*, and the server's deploy settings, *Set by the API Server: ports exposed: None · node storage kept · no image pull secret*. These are the server's policy: **Deploy with options** shows them read-only instead of fields the server would ignore. A server without the `lab-host-info` feature shows only *API Server · c9s*; one that does not report its runtime at all is older than c9s support and shows *Update it to 0.10.0 or later*.
+Once you are signed in, the lab host shows what the server runs: *API Server · c9s · cluster `<cluster>` · namespaces `c9s-<user>-{lab}`*, and the server's deploy settings, *Set by the API Server: ports exposed: None · node storage kept · no image pull secret*. These are the server's policy: **Deploy with options** shows them read-only instead of fields the server would ignore, and so does the server's page in the settings, marked *Set by the API Server*. A server without the `lab-host-info` feature shows only *API Server · c9s*; one that does not report its runtime at all is older than c9s support and shows *Update it to 0.10.0 or later*.
 
 To set up the server, its ServiceAccount, and the roles, see [Running on Kubernetes](https://github.com/srl-labs/clab-api-server/blob/main/docs/kubernetes.md) in the clab-api-server repository.
 
