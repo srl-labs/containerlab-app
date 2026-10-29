@@ -26,7 +26,8 @@ const LAB_EDITOR_ROLE = "clabernetes-lab-editor";
 /**
  * The permissions a c9s lab host needs: create Topologies, exec into pods,
  * forward their ports and read their logs, and with a namespace per lab,
- * create namespaces.
+ * get, create and delete namespaces: containerlab looks the lab's namespace
+ * up, creates it on deploy and deletes it on destroy --cleanup.
  */
 export function c9sPermissionChecks(namespace: string | undefined): PermissionCheck[] {
   const checks: PermissionCheck[] = [
@@ -35,7 +36,13 @@ export function c9sPermissionChecks(namespace: string | undefined): PermissionCh
     { label: "pods/portforward", verb: "create", resource: "pods", subresource: "portforward", namespace },
     { label: "pods/log", verb: "get", resource: "pods", subresource: "log", namespace }
   ];
-  if (!namespace) checks.push({ label: "namespaces", verb: "create", resource: "namespaces" });
+  if (!namespace) {
+    checks.push(
+      { label: "namespaces", verb: "create", resource: "namespaces" },
+      { label: "namespaces:get", verb: "get", resource: "namespaces" },
+      { label: "namespaces:delete", verb: "delete", resource: "namespaces" }
+    );
+  }
   return checks;
 }
 
@@ -78,8 +85,22 @@ function skipped(checks: Array<Pick<LabHostCheck, "id" | "label">>): LabHostChec
 const CLUSTER_CHECK = { id: "cluster", label: "The cluster answers" };
 const CLABERNETES_CHECK = { id: "clabernetes", label: `clabernetes ${C9S_MIN_CLABERNETES_VERSION} or newer` };
 
+/** What each namespace permission is for, with a namespace per lab. */
+const NAMESPACE_CHECK_LABELS: Record<string, string> = {
+  create: "May create namespaces (one per lab)",
+  get: "May get namespaces (find the lab's)",
+  delete: "May delete namespaces (destroy --cleanup)"
+};
+
+/** Why containerlab needs a namespace permission, for a failed check. */
+const NAMESPACE_NEEDS: Record<string, string> = {
+  create: "a namespace per lab needs, on deploy",
+  get: "containerlab needs to find each lab's namespace",
+  delete: "destroy --cleanup needs to remove the lab's namespace"
+};
+
 function permissionCheckLabel(check: PermissionCheck, namespace: string | undefined): string {
-  if (check.resource === "namespaces") return "May create namespaces (one per lab)";
+  if (check.resource === "namespaces") return NAMESPACE_CHECK_LABELS[check.verb] ?? `May ${check.verb} namespaces`;
   return `May ${check.verb} ${check.label} in ${namespace ? `namespace ${namespace}` : "lab namespaces"}`;
 }
 
@@ -250,14 +271,15 @@ export async function detectC9sEnvironment(
       checks.push({ ...base, status: "failed", message: `Could not check: ${error}` });
     } else if (!allowed) {
       if (check.resource === "namespaces") {
+        const need = NAMESPACE_NEEDS[check.verb] ?? "a namespace per lab needs";
         problems.push(
-          `Your account cannot create namespaces, which a namespace per lab needs. Set the lab host's namespace to one you may use, or ask for namespace create rights.`
+          `Your account cannot ${check.verb} namespaces, which ${need}. Set the lab host's namespace to one you may use, or ask for the right to get, create and delete namespaces.`
         );
         checks.push({
           ...base,
           status: "failed",
-          message: `${user ?? "Your account"} cannot create namespaces.`,
-          fix: "Use one fixed namespace on this lab host, or ask a cluster admin for the right to create namespaces."
+          message: `${user ?? "Your account"} cannot ${check.verb} namespaces, which ${need}.`,
+          fix: "Use one fixed namespace on this lab host, or ask a cluster admin for the right to get, create and delete namespaces."
         });
       } else {
         problems.push(

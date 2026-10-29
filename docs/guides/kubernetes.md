@@ -49,7 +49,7 @@ The context is the lab host's `kubeContext`, else the kubeconfig's current conte
 
 | Namespace | What it takes | Your account needs |
 | --- | --- | --- |
-| One per lab, `c9s-<lab>` (default) | nothing to set | to create namespaces, and the `clabernetes-lab-editor` rights across the cluster |
+| One per lab, `c9s-<lab>` (default) | nothing to set | to get, create, and delete namespaces, and the `clabernetes-lab-editor` rights across the cluster |
 | One fixed namespace for every lab | the lab host's `namespace` | a RoleBinding of `clabernetes-lab-editor` in that namespace |
 
 Pick a fixed namespace when you may only use one. **Destroy** with cleanup deletes a lab's own `c9s-<lab>` namespace; a fixed namespace stays.
@@ -87,7 +87,7 @@ When you deploy a topology from this computer in VS Code and clusters exist, VS 
 2. The kubeconfig loads and has the context.
 3. The cluster answers.
 4. clabernetes 0.11.0 or later is installed. When your account may not read its manager, the check passes and containerlab checks the version before it changes the cluster.
-5. Your account may create Topologies, `pods/exec` and `pods/portforward`, read `pods/log`, and, with a namespace per lab, create namespaces.
+5. Your account may create Topologies, `pods/exec` and `pods/portforward`, read `pods/log`, and, with a namespace per lab, get, create, and delete namespaces: containerlab creates the lab's namespace on deploy and deletes it on **Destroy (cleanup)**.
 
 A missing right comes with the command a cluster admin runs, for the user the cluster sees you as, for example:
 
@@ -162,7 +162,7 @@ Elsewhere, **Add lab host** shows **This computer** and **Kubernetes cluster** g
 - **Run with options** offers the c9s deploy options: **Namespace**, **Expose ports**, **No persistent volumes**, **Image pull secret**, and **Without a Topology resource**, next to **Timeout** (containerlab's default on a cluster is 10m; raise it when big images pull slowly) and **Max workers** (Kubernetes requests sent in parallel). Each shows the cluster's default; a plain deploy uses the defaults. On a lab server the c9s options show read-only, as set by the server, and there is no timeout: the server takes none.
 - **Lab Settings** → [**Deploy**](labs.md#deploy-settings) keeps these options for one lab on the cluster, so its redeploys, applies, and destroys use the same namespace, timeout, and storage. They live with the lab host, not in the topology file.
 - What a cluster cannot do stays in the menus and editors, greyed out with the reason, so you see it exists but not here; what it does differently keeps working with a hint. Docker and Podman lab hosts show everything as before. See [Greyed out on a cluster](#greyed-out-on-a-cluster).
-- Image management and host stats are hidden: the cluster's nodes pull images themselves, so for a private registry set an image pull secret instead. Node stats need `metrics.k8s.io` in the cluster.
+- Two things are left out instead of greyed out, since there is nothing of them on a cluster: **Manage Images** (the cluster's nodes pull images themselves; for a private registry set an image pull secret) and the lab host's CPU, memory, and disk stats. Node stats need `metrics.k8s.io` in the cluster.
 - Packet captures come from clabernetes as one pcapng stream; see [Labs on a Kubernetes cluster](labs.md#labs-on-a-kubernetes-cluster) for where they open in each app. Wireshark VNC of a cluster on this machine runs its container on this machine's Docker, not in the cluster, and the app writes the capture into it: it needs Docker here and a wireshark-vnc-docker image with the capture pipe, but no permission to create pods.
 
 ### Greyed out on a cluster

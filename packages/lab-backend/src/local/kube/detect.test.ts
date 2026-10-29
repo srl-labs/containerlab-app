@@ -45,7 +45,9 @@ test("a ready cluster has no problems", async () => {
       ["access:pods/exec", "ok"],
       ["access:pods/portforward", "ok"],
       ["access:pods/log", "ok"],
-      ["access:namespaces", "ok"]
+      ["access:namespaces", "ok"],
+      ["access:namespaces:get", "ok"],
+      ["access:namespaces:delete", "ok"]
     ]
   );
 });
@@ -148,10 +150,28 @@ test("missing permissions name the permission, the namespace and the role to bin
   ]);
 });
 
-test("a namespace per lab needs namespace create rights", async () => {
+test("a namespace per lab needs to get, create and delete namespaces", async () => {
   const status = await detectC9sEnvironment(HOST, "0.83.0", () => fakeProbe({}, ["namespaces"]));
-  assert.equal(status.problems.length, 1);
+  assert.equal(status.problems.length, 3);
   assert.match(status.problems[0], /cannot create namespaces.*Set the lab host's namespace/);
+
+  // Creating alone passes deploy, then destroy --cleanup fails: the check says so up front.
+  const deleteDenied = await detectC9sEnvironment(HOST, "0.83.0", () =>
+    fakeProbe({ canI: async (check) => !(check.resource === "namespaces" && check.verb === "delete") })
+  );
+  assert.deepEqual(deleteDenied.problems, [
+    "Your account cannot delete namespaces, which destroy --cleanup needs to remove the lab's namespace. Set the lab host's namespace to one you may use, or ask for the right to get, create and delete namespaces."
+  ]);
+  const failed = deleteDenied.checks?.find((check) => check.status === "failed");
+  assert.equal(failed?.id, "access:namespaces:delete");
+  assert.equal(failed?.label, "May delete namespaces (destroy --cleanup)");
+  assert.match(failed?.fix ?? "", /get, create and delete namespaces/);
+  assert.deepEqual(
+    c9sPermissionChecks(undefined)
+      .filter((check) => check.resource === "namespaces")
+      .map((check) => check.verb),
+    ["create", "get", "delete"]
+  );
   assert.ok(c9sPermissionChecks(undefined).some((check) => check.resource === "namespaces"));
   assert.ok(!c9sPermissionChecks("team-a").some((check) => check.resource === "namespaces"));
 });
