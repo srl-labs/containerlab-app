@@ -229,7 +229,7 @@ const KubernetesRows: React.FC<{
           value={form.exposeType}
           onChange={(event) => update("exposeType", event.target.value as "" | C9sExposeType)}
           disabled={readOnly}
-          slotProps={{ select: { inputProps: { "aria-label": "Expose ports" } } }}
+          slotProps={{ select: { displayEmpty: true, inputProps: { "aria-label": "Expose ports" } } }}
         >
           <MenuItem value="">Lab host default ({exposeDefault})</MenuItem>
           {C9S_EXPOSE_TYPES.map((type) => (

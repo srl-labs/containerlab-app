@@ -135,8 +135,8 @@ export const CertificatesTab: React.FC<CertificatesTabProps> = ({
   );
   if (!caLimit) return fields;
   return (
-    <RuntimeLimited limit={caLimit} keepEditable={isSet}>
-      <Box sx={{ display: "grid", rowGap: 2 }}>{fields}</Box>
+    <RuntimeLimited limit={caLimit} keepEditable={isSet} notePlacement="top">
+      <Box sx={{ display: "grid", rowGap: 2, mt: 1 }}>{fields}</Box>
     </RuntimeLimited>
   );
 };

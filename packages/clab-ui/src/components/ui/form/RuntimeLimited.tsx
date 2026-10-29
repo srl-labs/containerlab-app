@@ -43,23 +43,29 @@ export const RuntimeLimited: React.FC<{
    * can remove it; the reason still shows.
    */
   keepEditable?: boolean;
-}> = ({ limit, children, note = true, keepEditable = false }) => {
+  /** Where the reason goes: under the fields, or above them for a whole tab. */
+  notePlacement?: "top" | "bottom";
+}> = ({ limit, children, note = true, keepEditable = false, notePlacement = "bottom" }) => {
   if (!limit) return <>{children}</>;
+  const noteAbove = note && notePlacement === "top" ? <RuntimeLimitNote limit={limit} /> : null;
+  const noteBelow = note && notePlacement === "bottom" ? <RuntimeLimitNote limit={limit} /> : null;
   if (limit.level === "partial" || keepEditable) {
     return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+        {noteAbove}
         {children}
-        {note ? <RuntimeLimitNote limit={limit} /> : null}
+        {noteBelow}
       </Box>
     );
   }
   return (
     <Tooltip title={limit.reason} placement="top-start" describeChild>
       <Box data-runtime-limited="" sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+        {noteAbove}
         <Box inert sx={{ opacity: 0.45, filter: "grayscale(1)", pointerEvents: "none", userSelect: "none" }}>
           {children}
         </Box>
-        {note ? <RuntimeLimitNote limit={limit} /> : null}
+        {noteBelow}
       </Box>
     </Tooltip>
   );
