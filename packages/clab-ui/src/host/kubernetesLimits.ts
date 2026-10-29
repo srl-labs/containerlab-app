@@ -10,6 +10,7 @@
  * - clabernetes `compiler/compilecontainerlab.go`: rejected node fields
  *   (`runtime`, `auto-remove`, `cpu-set`, `stages`), the management fields it
  *   accepts and ignores, a single management network, no `settings` block,
+ *   no node `credentials`,
  *   `network-mode` other than `container:`, and `restart-policy` `no` and
  *   `on-failure`;
  * - clabernetes `compiler/links.go`: no link vars or labels, no `mgmt-net`
@@ -59,6 +60,7 @@ export const KUBERNETES_LIMITS = {
   nodeRuntime: unsupported(`Not supported on ${C9S}: pods use the cluster's container runtime`),
   nodeAutoRemove: unsupported(`Not supported on ${C9S}: Kubernetes owns the container's lifecycle`),
   nodeStages: unsupported(`Not supported on ${C9S}: clabernetes does not run deployment stages`),
+  nodeCredentials: unsupported(`Not supported on ${C9S}: clabernetes refuses node credentials; the kind's defaults apply`),
   nodeEnvFiles: unsupported(`Not supported on ${C9S}: a node with env-files fails to start`),
   nodeNetworkMode: partial(`On ${C9S} only Container works; Host and None are refused.`),
   nodeRestartPolicy: partial(`On ${C9S} only Always and Unless Stopped work.`),
@@ -71,7 +73,7 @@ export const KUBERNETES_LIMITS = {
   nodeExec: partial(`On ${C9S} the commands run as the container starts; one that fails does not stop the node.`),
 
   // Links
-  linkVethStitch: unsupported(`Not supported on ${C9S}: only veth links`),
+  linkVethStitch: partial(`On ${C9S} only veth links work; veth-stitch is refused.`),
   linkEndpointAddresses: unsupported(`Ignored on ${C9S}: only the node and interface names of an endpoint reach clabernetes`),
   linkVars: unsupported(NOT_IN_LINK_API),
   linkLabels: unsupported(NOT_IN_LINK_API),

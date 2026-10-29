@@ -18,7 +18,9 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import UploadIcon from "@mui/icons-material/Upload";
 
 import { CAPTURE_METHODS, CAPTURE_METHOD_LABELS, type CaptureMethod } from "../../host/captureMethod";
+import { KUBERNETES_LIMITS } from "../../host/kubernetesLimits";
 import { NOT_ON_KUBERNETES } from "../../host/labHostSupport";
+import { RuntimeLimited } from "../../components/ui/form/RuntimeLimited";
 import { SettingsField } from "../../settings/SettingsField";
 import { useWorkspaceHost } from "../WorkspaceHost";
 import type { EndpointConfig } from "../endpoints";
@@ -208,87 +210,91 @@ export function CaptureSettingsSection(props: {
         wide
       >
         {props.captureError && !kubernetes ? <Alert severity="error">{props.captureError}</Alert> : null}
-        <TextField
-          label="Status"
-          value={
-            kubernetes
-              ? "Not available on Kubernetes (c9s)"
-              : formatCaptureStatus(
-                  Boolean(props.captureEndpoint),
-                  props.captureStatusLoading,
-                  props.captureStatus,
-                  props.captureEndpointLabel
-                )
-          }
-          fullWidth
-          disabled={kubernetes}
-          slotProps={{ input: { readOnly: true } }}
-          data-testid="standalone-settings-capture-status"
-        />
-        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => {
-              void props.refreshCaptureStatus();
-            }}
-            disabled={actionsBusy}
-            data-testid="standalone-settings-capture-refresh"
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => runCaptureAction("install")}
-            disabled={actionsBusy}
-            data-testid="standalone-settings-capture-install"
-          >
-            Install
-          </Button>
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={<UploadIcon />}
-            onClick={() => runCaptureAction("uninstall")}
-            disabled={actionsBusy}
-            data-testid="standalone-settings-capture-uninstall"
-          >
-            Uninstall
-          </Button>
-        </Stack>
-        <TextField
-          label="Session hostname override"
-          value={props.captureSessionHostname}
-          onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
-          fullWidth
-          disabled={edgesharkDisabled}
-          placeholder="IPv4, IPv6, or DNS hostname"
-          helperText={
-            kubernetes
-              ? "Only Edgeshark's packetflix links use it."
-              : "The host packetflix links of this lab host name, in this browser session only."
-          }
-          data-testid="standalone-settings-capture-session-hostname"
-        />
-        <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-          <Button
-            variant="outlined"
-            onClick={props.applyCaptureSessionHostname}
-            disabled={edgesharkDisabled}
-            data-testid="standalone-settings-capture-session-hostname-apply"
-          >
-            Apply session hostname
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={props.clearCaptureSessionHostname}
-            disabled={edgesharkDisabled}
-            data-testid="standalone-settings-capture-session-hostname-clear"
-          >
-            Clear override
-          </Button>
-        </Stack>
+        <RuntimeLimited limit={kubernetes ? KUBERNETES_LIMITS.edgeshark : undefined} note={false}>
+          <Stack spacing={1.5}>
+            <TextField
+              label="Status"
+              value={
+                kubernetes
+                  ? "Not available on Kubernetes (c9s)"
+                  : formatCaptureStatus(
+                      Boolean(props.captureEndpoint),
+                      props.captureStatusLoading,
+                      props.captureStatus,
+                      props.captureEndpointLabel
+                    )
+              }
+              fullWidth
+              disabled={kubernetes}
+              slotProps={{ input: { readOnly: true } }}
+              data-testid="standalone-settings-capture-status"
+            />
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => {
+                  void props.refreshCaptureStatus();
+                }}
+                disabled={actionsBusy}
+                data-testid="standalone-settings-capture-refresh"
+              >
+                Refresh
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={() => runCaptureAction("install")}
+                disabled={actionsBusy}
+                data-testid="standalone-settings-capture-install"
+              >
+                Install
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={<UploadIcon />}
+                onClick={() => runCaptureAction("uninstall")}
+                disabled={actionsBusy}
+                data-testid="standalone-settings-capture-uninstall"
+              >
+                Uninstall
+              </Button>
+            </Stack>
+            <TextField
+              label="Session hostname override"
+              value={props.captureSessionHostname}
+              onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
+              fullWidth
+              disabled={edgesharkDisabled}
+              placeholder="IPv4, IPv6, or DNS hostname"
+              helperText={
+                kubernetes
+                  ? "Only Edgeshark's packetflix links use it."
+                  : "The host packetflix links of this lab host name, in this browser session only."
+              }
+              data-testid="standalone-settings-capture-session-hostname"
+            />
+            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
+              <Button
+                variant="outlined"
+                onClick={props.applyCaptureSessionHostname}
+                disabled={edgesharkDisabled}
+                data-testid="standalone-settings-capture-session-hostname-apply"
+              >
+                Apply session hostname
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={props.clearCaptureSessionHostname}
+                disabled={edgesharkDisabled}
+                data-testid="standalone-settings-capture-session-hostname-clear"
+              >
+                Clear override
+              </Button>
+            </Stack>
+          </Stack>
+        </RuntimeLimited>
         {kubernetes ? null : (
           <Typography variant="caption" sx={{ color: "text.secondary" }}>
             The lab host&apos;s environment sets the Wireshark VNC image and pull policy, and the packetflix host and

@@ -58,7 +58,7 @@ const LinkTypeField: React.FC<LinkTabProps> = ({ data, onChange }) => {
   );
   return (
     <PanelSection title="Link Type">
-      <RuntimeLimited limit={stitchLimit} keepEditable>
+      <RuntimeLimited limit={stitchLimit}>
         <SelectField
           id="link-type"
           label="Type"

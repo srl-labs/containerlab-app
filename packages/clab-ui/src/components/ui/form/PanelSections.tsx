@@ -59,20 +59,23 @@ interface PanelSectionProps {
   bodySx?: SystemStyleObject<Theme>;
   /** What the lab host cannot do here (c9s): the section is greyed out or gets a hint. */
   limit?: RuntimeLimit;
+  /** The section holds values: an unsupported one stays editable so they can be removed. */
+  limitKeepsEditable?: boolean;
 }
 
 export const PanelSection: React.FC<PanelSectionProps> = ({
   title,
   children,
   bodySx = DEFAULT_FORM_BODY_SX,
-  limit
+  limit,
+  limitKeepsEditable = false
 }) => (
   <>
     <PanelSectionHeader title={title} />
     <SectionLimitNote limit={limit} />
     <Box sx={withBodyPadding(bodySx)}>
       {limit ? (
-        <RuntimeLimited limit={limit} note={false}>
+        <RuntimeLimited limit={limit} note={false} keepEditable={limitKeepsEditable}>
           <Box sx={bodySx}>{children}</Box>
         </RuntimeLimited>
       ) : (

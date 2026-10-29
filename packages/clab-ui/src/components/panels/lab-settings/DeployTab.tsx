@@ -231,7 +231,9 @@ const KubernetesRows: React.FC<{
           disabled={readOnly}
           slotProps={{ select: { displayEmpty: true, inputProps: { "aria-label": "Expose ports" } } }}
         >
-          <MenuItem value="">Lab host default ({exposeDefault})</MenuItem>
+          <MenuItem value="">
+            {profile?.exposeType ? `Lab host default (${profile.exposeType})` : "Lab host default"}
+          </MenuItem>
           {C9S_EXPOSE_TYPES.map((type) => (
             <MenuItem key={type} value={type}>
               {EXPOSE_LABELS[type]}
