@@ -74,7 +74,7 @@ function localWiresharkChoice(kubernetes: boolean, localWireshark: boolean): Met
 }
 
 /** What each method does for the selected lab host in this app, and which it lacks. */
-export function captureMethodChoices(
+function captureMethodChoices(
   kubernetes: boolean,
   localWireshark: boolean
 ): Record<CaptureMethod, MethodChoice> {

@@ -466,12 +466,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleOpenLifecycleOptions = React.useCallback(() => {
     setDeployMenuPosition(null);
-    openLifecycleDialog("run");
-  }, [openLifecycleDialog]);
-
-  const handleOpenLabSettings = React.useCallback(() => {
-    setDeployMenuPosition(null);
-    openLifecycleDialog("settings");
+    openLifecycleDialog();
   }, [openLifecycleDialog]);
 
   const handleRunWithOptions = React.useCallback(
@@ -793,18 +788,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </ListItemIcon>
                 <ListItemText>Run with options…</ListItemText>
               </MenuItem>
-              {labOperations ? (
-                <MenuItem
-                  onClick={handleOpenLabSettings}
-                  disabled={isProcessing || !isTopologyActive}
-                  data-testid="navbar-deploy-item-lab-settings"
-                >
-                  <ListItemIcon>
-                    <SettingsOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText>Lab settings…</ListItemText>
-                </MenuItem>
-              ) : null}
               {extraDeployMenuItems ? <Divider /> : null}
               {extraDeployMenuItems}
             </Menu>
@@ -812,7 +795,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <React.Suspense fallback={null}>
                 <LazyLifecycleOptionsDialog
                   open
-                  mode={lifecycleDialog.mode}
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
                   canSetTimeout={labHostInfo?.support.lifecycleTimeout === true}

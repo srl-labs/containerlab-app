@@ -82,6 +82,11 @@ export function createLifecycleOptionsForm(
   };
 }
 
+/** containerlab's `--timeout` default: lab runtimes such as c9s wait longer for images. */
+export function defaultTimeout(runtime: LabRuntimeKind): string {
+  return runtime === "c9s" ? "10m" : "2m";
+}
+
 export function lifecycleKindTakes(
   kind: LabLifecycleOptionKind,
   field: LabLifecycleOptionField,

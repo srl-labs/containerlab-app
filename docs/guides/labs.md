@@ -45,13 +45,12 @@ The arrow next to the play button opens the rest:
 | **Run Command…**, **Save Configs…**, **Save VM Snapshots…**, **Inspect Details** | Work with the running lab; see [Lab operations](#lab-operations). |
 | **Validate** | Run `containerlab validate` on the topology file without deploying it. |
 | **Run with options…** | Any of the above with extra containerlab flags. |
-| **Lab settings…** | The flags this lab's deploys, redeploys, applies, and destroys use on this lab host. |
 
 In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanupWarning` is on.
 
 ## Run with options
 
-**Run with options…** deploys, redeploys, or destroys with flags you pick. It starts from the lab's settings, and with **Remember as lab settings** on (the default) a deploy or redeploy keeps its flags as the lab's settings for later runs. The dialog shows the resulting `containerlab` command as you go.
+**Run with options…** deploys, redeploys, or destroys with flags you pick. It starts from the lab's [deploy settings](#deploy-settings), and with **Remember as this lab's deploy settings** on (the default) a deploy or redeploy keeps its flags as those settings for later runs. The dialog shows the resulting `containerlab` command as you go.
 
 ![Run with options](../images/app/lifecycle-options-dark.webp#only-dark){ .shot .narrow }
 ![Run with options](../images/app/lifecycle-options-light.webp#only-light){ .shot .narrow }
@@ -78,11 +77,13 @@ Destroying only some nodes keeps the rest running, so it cannot be combined with
 
 **Restore VM snapshots** boots vrnetlab nodes from snapshots saved with **Save VM Snapshots…**: every node with a `<node>.tar` in the snapshot directory starts from it, and a node snapshot file you add wins for its node. Relative paths start at the topology file's folder. containerlab 0.72 or later is needed.
 
-## Lab settings
+## Deploy settings
 
-**Lab settings…** shows the flags this lab remembers on this lab host: timeout, max workers, the template variables file, the export template and skip options on Docker and Podman, and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Under them, **Lab host defaults** lists what an empty field gets. Every **Deploy**, **Redeploy**, **Apply**, and **Destroy** of the lab without options of its own uses them; destroy takes only its part, such as the timeout and the namespace. Flags of one run, such as nodes, clean up, and snapshot restore, are never remembered. **Clear settings** forgets them.
+**Lab Settings** → **Deploy** holds the flags this lab's deploys use on its lab host: timeout, max workers, and the template variables file; the export template and skip options on Docker and Podman (greyed out on a Kubernetes cluster, which refuses them); and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Each field says what the lab host's default is, and a tag next to it shows whether the lab has its own value (**This lab**) or uses that default (**Lab host default**). On a lab server the Kubernetes options are its own and show read-only, and the timeout is greyed out: the server takes none.
 
-Settings belong to one topology file on one lab host: the same file on another host has its own. VS Code keeps them in its global state; the web and desktop apps keep them in the browser's local storage.
+Every **Deploy**, **Redeploy**, **Apply**, and **Destroy** of the lab without options of its own uses them; destroy takes only its part, such as the timeout and the namespace. Flags of one run, such as nodes, clean up, and snapshot restore, are never remembered. **Clear all** empties every field, and **Apply** saves the tab. Deploy settings stay editable in a locked lab: they do not change the topology.
+
+Unlike the other tabs, deploy settings are not written into the topology file. They belong to one topology file on one lab host: the same file on another host has its own. VS Code keeps them in its global state; the web and desktop apps keep them in the browser's local storage.
 
 ## Lab operations
 

@@ -28,7 +28,7 @@ export function kubeNameError(value: string, kind: "namespace" | "secret"): stri
   return valid ? undefined : "Lowercase letters, digits and '-' only";
 }
 
-const EXPOSE_LABELS: Record<C9sExposeType, string> = {
+export const EXPOSE_LABELS: Record<C9sExposeType, string> = {
   None: "None: reach nodes through this app",
   ClusterIP: "ClusterIP: inside the cluster",
   LoadBalancer: "LoadBalancer: a load balancer per node",
@@ -41,7 +41,7 @@ function nodeStorageLabel(persistence: boolean | undefined): string {
 }
 
 /** What a lab server decides for c9s labs, shown instead of options it would ignore. */
-const C9sServerSettings: React.FC<{ profile?: LabHostProfile; namespaceOnly: boolean }> = ({ profile, namespaceOnly }) => {
+export const C9sServerSettings: React.FC<{ profile?: LabHostProfile; namespaceOnly: boolean }> = ({ profile, namespaceOnly }) => {
   const rows: Array<[string, string]> = [
     ["Namespace", profile?.namespacePattern ?? "Chosen by the lab server"],
     ...(namespaceOnly

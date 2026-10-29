@@ -149,6 +149,13 @@ test.describe("Run with options", () => {
   });
 });
 
+async function openDeployTab(page: Page): Promise<void> {
+  await page.locator('[data-testid="navbar-lab-settings"]').click();
+  const modal = page.getByTestId("lab-settings-modal");
+  await expect(modal).toBeVisible();
+  await modal.getByTestId("lab-settings-tab-deploy").click();
+}
+
 test.describe("Lab settings", () => {
   test.beforeEach(async ({ topoViewerPage }) => {
     await topoViewerPage.resetFiles();
@@ -156,7 +163,7 @@ test.describe("Lab settings", () => {
     await topoViewerPage.waitForCanvasReady();
   });
 
-  test("a deploy with options remembers them, and Lab settings shows and clears them", async ({ page }) => {
+  test("a deploy with options remembers them, and Lab settings > Deploy shows and clears them", async ({ page }) => {
     await setDeploymentState(page, "undeployed");
     await openOptionsDialog(page);
     await page.locator("#lifecycle-options-timeout").fill("30");
@@ -178,18 +185,22 @@ test.describe("Lab settings", () => {
     await expect(ok).toBeVisible({ timeout: 30_000 });
     await ok.click();
     await expect(page.getByTestId("lifecycle-progress-modal")).toHaveCount(0);
+    // One Lab settings: the deploy menu has none of its own.
     await page.getByTestId("navbar-deploy-menu").click();
-    await page.getByTestId("navbar-deploy-item-lab-settings").click();
-    await expect(page.locator(SEL_DIALOG)).toBeVisible();
-    await expect(page.locator("#lifecycle-options-timeout")).toHaveValue("30m");
-    await expect(page.locator("#lifecycle-options-max-workers")).toHaveValue("2");
-    await expect(page.getByTestId("lifecycle-options-nodes")).toHaveCount(0);
-    await expect(page.getByTestId("lab-settings-host-defaults")).toContainText("2m (containerlab default)");
-    await page.getByTestId("lab-settings-clear").click();
-    await expect(page.locator(SEL_DIALOG)).toHaveCount(0);
+    await expect(page.getByTestId("navbar-deploy-item-lab-settings")).toHaveCount(0);
+    await page.keyboard.press("Escape");
 
-    await page.getByTestId("navbar-deploy-menu").click();
-    await page.getByTestId("navbar-deploy-item-lab-settings").click();
-    await expect(page.locator("#lifecycle-options-timeout")).toHaveValue("");
+    await openDeployTab(page);
+    await expect(page.locator("#lab-deploy-timeout")).toHaveValue("30m");
+    await expect(page.locator("#lab-deploy-max-workers")).toHaveValue("2");
+    await expect(page.getByTestId("lab-deploy-storage")).toContainText("not in the topology file");
+    await page.getByTestId("lab-deploy-reset").click();
+    await expect(page.locator("#lab-deploy-timeout")).toHaveValue("");
+    await page.getByTestId("lab-settings-save-btn").click();
+    await page.getByTestId("lab-settings-close-btn").click();
+
+    await openDeployTab(page);
+    await expect(page.locator("#lab-deploy-timeout")).toHaveValue("");
+    await expect(page.locator("#lab-deploy-timeout")).toHaveAttribute("placeholder", "2m");
   });
 });
