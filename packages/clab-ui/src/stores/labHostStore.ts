@@ -23,11 +23,22 @@ export function hostSupports(info: LabHostInfo | undefined, flag: keyof LabHostS
   return info ? info.support[flag] : true;
 }
 
-/** Any way to capture packets: Edgeshark, Wireshark VNC or tcpdump on the lab host. */
+/** Any way to capture packets: Edgeshark, Wireshark VNC, tcpdump on the lab host or its capture stream. */
 export function hostCanCapture(info: LabHostInfo | undefined): boolean {
   return (
-    hostSupports(info, "edgeshark") || hostSupports(info, "wiresharkVnc") || hostSupports(info, "hostCapture")
+    hostSupports(info, "edgeshark") ||
+    hostSupports(info, "wiresharkVnc") ||
+    hostSupports(info, "hostCapture") ||
+    hostSupports(info, "captureStream")
   );
+}
+
+/**
+ * A lab host that captures lab links as one stream (c9s): its nodes' own
+ * interfaces are pod interfaces, so pickers offer the topology's links only.
+ */
+export function hostCapturesLinks(info: LabHostInfo | undefined): boolean {
+  return info?.support.captureStream === true;
 }
 
 /** Lab operations the lab host offers: VM snapshots need a runtime that has them. */

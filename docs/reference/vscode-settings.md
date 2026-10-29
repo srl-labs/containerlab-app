@@ -24,7 +24,7 @@ The **Lab Hosts** page of the settings tab manages these; see [Work with labs on
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `connections` | `[]` | Lab hosts running `clab-api-server`, each with `url`, `label`, and optionally `username` and `sessionDuration`. Passwords and tokens are never stored here. |
+| `connections` | `[]` | Lab hosts. A `clab-api-server` entry has `url`, and optionally `label`, `username`, and `sessionDuration`; passwords and tokens are never stored here. A [Kubernetes cluster](../guides/kubernetes.md#vs-code) entry has `"kind": "local"`, `"runtime": "c9s"`, and `kubeContext`, and optionally `kubeconfig` (the file with the context; a leading `~` is your home folder), `namespace` (one for every lab instead of `c9s-<lab>`), `exposeType` (`ClusterIP`, `Headless`, `LoadBalancer`, or `None`), `persistence` (`false` turns node volumes off), and `label`. Clusters need Linux or WSL, where containerlab runs. |
 | `localConnection` | `true` | Show **Local**, the labs on the machine VS Code runs on, next to the lab hosts. |
 
 ## Runtime
@@ -92,6 +92,7 @@ A template can hold a full node definition:
 | `capture.preferredAction` | `Wireshark VNC` | What the capture action does: `Wireshark VNC` or `Edgeshark`. |
 | `capture.remoteHostname` | empty | Host name or IP your machine uses to reach Edgeshark on the lab host. |
 | `capture.packetflixPort` | `5001` | Packetflix WebSocket port used by Edgeshark. |
+| `capture.wireshark.path` | empty | Wireshark for captures from Kubernetes (c9s) lab hosts, which pipe the capture into `wireshark -k -i -`; found on `PATH` or where it installs when empty. |
 | `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. |
 | `capture.wireshark.pullPolicy` | `always` | `always`, `missing`, or `never`. |
 | `capture.wireshark.theme` | `Follow VS Code theme` | Wireshark color scheme. |

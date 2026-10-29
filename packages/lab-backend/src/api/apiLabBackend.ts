@@ -39,6 +39,8 @@ import type {
   WorkspaceFileEvent
 } from "../contract/backend.ts";
 import type {
+  CaptureInterface,
+  CaptureStreamOptions,
   CaptureTarget,
   ExecResponse,
   InspectContainerInfo,
@@ -55,6 +57,7 @@ import type {
   ShareToolOptions,
   ValidateTopologyResponse
 } from "../contract/dto.ts";
+import { captureLimits, captureNodeTargets, pcapngBlocks } from "../capture.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
@@ -96,7 +99,9 @@ const SERVER_FEATURES = {
   deployRestore: "deploy-restore",
   nodeStats: "node-stats",
   logStream: "log-stream",
-  terminalResume: "terminal-resume"
+  terminalResume: "terminal-resume",
+  captureStream: "capture-stream",
+  wiresharkVnc: "wireshark-vnc"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -182,7 +187,10 @@ function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
     ...containerRuntimeFeatures(containerRuntime),
     // A c9s server picks namespaces, exposure and persistence itself, and has no manifest export.
     manifestExport: false,
-    c9sDeployOptions: false
+    c9sDeployOptions: false,
+    captureStream: listed.has(SERVER_FEATURES.captureStream),
+    // Docker servers feed Wireshark VNC from Edgeshark; a c9s server from its own stream, while it runs Docker.
+    captureVnc: !containerRuntime && listed.has(SERVER_FEATURES.wiresharkVnc)
   };
 }
 
@@ -699,6 +707,30 @@ export class ApiLabBackend implements LabBackend {
     return this.client.createWiresharkVncSessions(this.token, labName, request);
   }
 
+  private async requireCaptureStream(): Promise<void> {
+    if (!(await this.hasFeature(SERVER_FEATURES.captureStream))) {
+      throw unsupported("stream packet captures (it needs the c9s lab runtime)");
+    }
+  }
+
+  async captureInterfaces(labName: string): Promise<CaptureInterface[]> {
+    await this.requireCaptureStream();
+    return this.client.listCaptureInterfaces(this.token, labName);
+  }
+
+  async openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>> {
+    await this.requireCaptureStream();
+    const targets = captureNodeTargets(labName, options.targets, await this.inspectLab(labName));
+    const response = await this.client.openCaptureStream(
+      this.token,
+      labName,
+      { targets, ...captureLimits(options) },
+      { signal: options.signal }
+    );
+    if (!response.body) throw new LabBackendError("clab-api-server sent no capture stream", 502);
+    return pcapngBlocks(captureBody(response.body, options.signal));
+  }
+
   wiresharkVncReady(sessionId: string) {
     return this.client.getWiresharkVncSessionReady(this.token, sessionId);
   }
@@ -839,6 +871,24 @@ export class ApiLabBackend implements LabBackend {
   }
 
   dispose(): void {}
+}
+
+/**
+ * The bytes of a capture response, read from the call on (see `readLines`).
+ * Aborting the request is how a capture ends from this side, so the abort
+ * ends the stream instead of failing it; `pcapngBlocks` then drops a block the
+ * abort cut short.
+ */
+function captureBody(body: AsyncIterable<Uint8Array>, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  return captureChunks(body[Symbol.asyncIterator](), signal);
+}
+
+async function* captureChunks(chunks: AsyncIterator<Uint8Array>, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  try {
+    for await (const chunk of { [Symbol.asyncIterator]: () => chunks }) yield chunk;
+  } catch (error) {
+    if (!signal.aborted) throw error;
+  }
 }
 
 function wiresharkVncPath(sessionId: string): string {

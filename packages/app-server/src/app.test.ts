@@ -2762,6 +2762,8 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     hostCapture: true,
     manifestExport: false,
     c9sDeployOptions: false,
+    captureStream: false,
+    captureVnc: false,
   });
 });
 
@@ -2786,6 +2788,79 @@ test("/api/runtime/host reports the runtime and what a c9s clab-api-server offer
   for (const flag of ["netem", "imageManagement", "edgesharkManagement", "wiresharkVnc", "healthMetrics", "tailscaleStatus"]) {
     assert.equal(host.support[flag], false, flag);
   }
+});
+
+test("/api/runtime/host offers capture streams and VNC of a c9s clab-api-server that lists them", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["capture-stream", "wireshark-vnc"], runtime: "c9s" }),
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const response = await context.app.inject({
+    method: "GET",
+    url: `/api/runtime/host?endpointId=${encodeURIComponent(endpointId)}`,
+    headers: { cookie },
+  });
+  const host = response.json<{ support: Record<string, boolean> }>();
+  for (const flag of ["captureStream", "captureVnc", "wiresharkVnc"]) {
+    assert.equal(host.support[flag], true, flag);
+  }
+  assert.equal(host.support.edgeshark, false);
+});
+
+test("a capture download from a c9s clab-api-server streams for the session that asked for it", async (t) => {
+  const context = await createTestContext(t);
+  mockLoginAndTopology(context);
+  context.fetchMock.on("GET", "http://api.example.test/health", () =>
+    jsonResponse({ status: "healthy", features: ["capture-stream"], runtime: "c9s", namespaceMode: "per-lab" }),
+  );
+  context.fetchMock.on("GET", "http://api.example.test/api/v1/labs/demo", () =>
+    jsonResponse([{ name: "demo-n1", state: "running" }]),
+  );
+  const streamed: string[] = [];
+  context.fetchMock.on(
+    "GET",
+    "http://api.example.test/api/v1/labs/demo/capture/stream?target=n1%3Aeth1&duration=5s",
+    (call) => {
+      streamed.push(call.headers.get("authorization") ?? "");
+      return new Response(new Uint8Array([10, 20, 30]), { headers: { "Content-Type": "application/x-pcapng" } });
+    },
+  );
+  const { cookie, endpointId } = await loginEndpoint(context, { url: "http://api.example.test" });
+  const created = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/downloads",
+    headers: { cookie },
+    payload: {
+      endpointId,
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [{ containerName: "demo-n1", interfaceName: "eth1" }],
+      duration: "5s",
+    },
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const { url } = created.json<{ url: string }>();
+  // Every request gets its own ApiLabBackend; the browser session decides.
+  const other = await loginEndpoint(context, { url: "http://api.example.test" });
+  const stranger = await context.app.inject({ url, headers: { cookie: other.cookie } });
+  assert.equal(stranger.statusCode, 404, "another browser session cannot use it");
+
+  const again = await context.app.inject({
+    method: "POST",
+    url: "/api/runtime/capture/downloads",
+    headers: { cookie },
+    payload: {
+      endpointId,
+      topologyRef: demoTopologyRef(endpointId),
+      targets: [{ containerName: "demo-n1", interfaceName: "eth1" }],
+      duration: "5s",
+    },
+  });
+  const download = await context.app.inject({ url: again.json<{ url: string }>().url, headers: { cookie } });
+  assert.equal(download.statusCode, 200, download.body);
+  assert.equal(download.headers["content-type"], "application/x-pcapng");
+  assert.deepEqual(streamed, ["Bearer secret-token"]);
 });
 
 test("share routes forward sshx readers and refuse unsafe GoTTY credentials", async (t) => {

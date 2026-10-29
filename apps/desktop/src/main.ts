@@ -488,6 +488,10 @@ async function startLocalAppServer(): Promise<string> {
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
     localEndpoints: createDesktopLocalEndpoints(),
+    // Captures of Kubernetes lab hosts open in Wireshark on this machine.
+    localWireshark: process.env.CONTAINERLAB_DESKTOP_WIRESHARK?.trim()
+      ? { binaryPath: process.env.CONTAINERLAB_DESKTOP_WIRESHARK.trim() }
+      : {},
     logger: parseBooleanEnv(process.env.CONTAINERLAB_DESKTOP_DEBUG, false),
     sessionPersistenceFile: resolveSessionPersistenceFile(),
     staticClientRoot: resolveStaticClientRoot()

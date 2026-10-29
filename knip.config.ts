@@ -60,7 +60,10 @@ const workspaces: Record<string, WorkspaceProjectConfig> = {
       "maplibre-gl",
       // buildCss in esbuild.config.js constructs a `pnpm exec postcss` shell command.
       "postcss-cli"
-    ]
+    ],
+    // The opt-in cluster e2e suites check the lab's pods with the user's kubectl, and pgrep
+    // that a capture ended.
+    ignoreBinaries: ["kubectl", "pgrep"]
   },
   "packages/app-contract": {},
   "packages/lab-backend": {

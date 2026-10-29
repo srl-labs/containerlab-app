@@ -7,6 +7,7 @@ import type {
   RuntimeTargetRequest,
   TerminalProtocol as ApiTerminalProtocol
 } from "../types";
+import type { CaptureDelivery, LabCaptureInterface } from "../../host/captureStream";
 import { extractEndpointIdFromTopologyId } from "./documentUtils";
 
 export type RuntimeTerminalProtocol = ApiTerminalProtocol | "output";
@@ -35,9 +36,38 @@ export interface RuntimeCaptureSession {
   label?: string;
 }
 
+/** One capture stream of a lab host with `captureStream` (c9s), as the dialog asks for it. */
+export interface RuntimeStreamCapture {
+  /** Nodes and interfaces, in list order. */
+  targets: { node: string; interface: string }[];
+  delivery: CaptureDelivery;
+  /** Go duration; undefined captures until it is stopped. */
+  duration?: string;
+  /** The interfaces as the user reads them, for the window title. */
+  label: string;
+}
+
+/**
+ * A capture on a lab host that captures lab links as one stream (c9s): the
+ * dialog lists the lab-link interfaces of `nodes` and asks where the
+ * capture goes.
+ */
+export interface RuntimeStreamCaptureRequest {
+  /** Topology nodes whose lab-link interfaces are offered; the first one names the dialog. */
+  nodes: string[];
+  /** `<node>:<interface>` keys ticked when the dialog opens; the last pick otherwise. */
+  initialSelection?: string[];
+  /** Where a capture can go on this lab host, the default first. */
+  deliveries: CaptureDelivery[];
+  loadInterfaces: () => Promise<LabCaptureInterface[]>;
+  onCapture: (capture: RuntimeStreamCapture) => void;
+}
+
 export interface RuntimeCaptureRequest extends RuntimeNodeRequest {
   /** Opens the capture sessions the dialog asks for, in list order, in one call. */
   onCapture: (sessions: RuntimeCaptureSession[]) => void;
+  /** Set for a lab host with capture streams; `onCapture` is then not used. */
+  stream?: RuntimeStreamCaptureRequest;
 }
 
 export interface RuntimeTerminalRequest extends RuntimeNodeRequest {

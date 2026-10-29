@@ -30,6 +30,8 @@ import type {
   WiresharkVncRequest
 } from "../contract/backend.ts";
 import type {
+  CaptureInterface,
+  CaptureStreamOptions,
   CaptureTarget,
   GenerateTopologyRequest,
   GraphExportFormat,
@@ -48,7 +50,9 @@ import type {
 import { LabBackendError } from "../contract/errors.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines } from "../ndjson.ts";
+import { captureNodeTargets } from "../capture.ts";
 import { LocalCapture } from "./capture.ts";
+import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
 import { createDockerNodeAccess } from "./dockerNodeAccess.ts";
 import { inspectField } from "./inspect.ts";
 import { createKubeClient, type KubeClient } from "./kube/kubeClient.ts";
@@ -112,8 +116,12 @@ function localFeatures(runtime: ResolvedLocalOptions["runtime"], nodeStats: bool
     nodeStats,
     terminalResume: true,
     ...containerRuntimeFeatures(!c9s),
+    // `containerlab inspect interfaces -r c9s` lists the lab-link interfaces.
+    interfaceInspect: true,
     manifestExport: c9s,
-    c9sDeployOptions: c9s
+    c9sDeployOptions: c9s,
+    captureStream: c9s,
+    captureVnc: false
   };
 }
 
@@ -489,19 +497,26 @@ export class LocalLabBackend implements LabBackend {
     return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown[]>) : {};
   }
 
-  /** `containerlab inspect interfaces`: the interfaces of one container. */
+  /**
+   * `containerlab inspect interfaces`: the interfaces of one container. On
+   * c9s, the lab-link interfaces of the node (`-r c9s --name <lab> -n <node>`).
+   */
   async inspectInterfaces(topology: string, containerName: string): Promise<unknown[]> {
-    const [file, args] = containerlabCommand(this.options, [
-      "inspect",
-      "interfaces",
-      "-t",
-      topology,
-      "-f",
-      "json",
-      "-n",
-      containerName
-    ]);
-    const result = await runChecked(file, args, { env: this.options.env, timeoutMs: 10_000 });
+    let commandArgs = ["inspect", "interfaces", "-t", topology, "-f", "json", "-n", containerName];
+    let env = this.options.env;
+    if (this.options.runtime === "c9s") {
+      const labs = await this.access.inspectLabs();
+      const [labName, container] =
+        Object.entries(labs)
+          .map(([name, containers]) => [name, containers.find((record) => record.name === containerName)] as const)
+          .find(([, record]) => record !== undefined) ?? [];
+      if (!labName || !container) throw new LabBackendError(`Node ${containerName} is not running.`, 404);
+      const nodeName = await this.access.topologyNodeName(container);
+      commandArgs = ["inspect", "interfaces", "-r", "c9s", "--name", labName, "-f", "json", "-n", nodeName];
+      env = await this.labEnv(labName);
+    }
+    const [file, args] = containerlabCommand(this.options, commandArgs);
+    const result = await runChecked(file, args, { env, timeoutMs: 30_000 });
     const parsed = JSON.parse(result.stdout.slice(Math.max(0, result.stdout.indexOf("[")))) as unknown;
     return Array.isArray(parsed) ? parsed : [];
   }
@@ -665,6 +680,62 @@ export class LocalLabBackend implements LabBackend {
     const topology = await this.runningTopologyFile(labName);
     const labDirectory = topology ? path.join(path.dirname(topology), `clab-${labName}`) : undefined;
     return this.capture.createVnc(labName, labDirectory, request.targets, request.theme);
+  }
+
+  private requireCaptureStream(): void {
+    if (this.options.runtime !== "c9s") {
+      throw new LabBackendError(
+        "Capture streams need a c9s lab host; this machine captures with Edgeshark.",
+        501
+      );
+    }
+  }
+
+  /** `containerlab -r c9s capture --name <lab> --list -f json`. */
+  async captureInterfaces(labName: string): Promise<CaptureInterface[]> {
+    this.requireCaptureStream();
+    return listC9sCaptureInterfaces(this.options, labName, await this.labEnv(labName));
+  }
+
+  /** `containerlab -r c9s capture --name <lab> --target … -w -`, its stdout as pcapng. */
+  async openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>> {
+    this.requireCaptureStream();
+    const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+    if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
+    const args = c9sCaptureArgs({
+      labName,
+      targets: captureNodeTargets(labName, options.targets, records),
+      ...(options.duration !== undefined ? { duration: options.duration } : {}),
+      ...(options.packetLimit !== undefined ? { packetLimit: options.packetLimit } : {}),
+      ...(options.snapLength !== undefined ? { snapLength: options.snapLength } : {})
+    });
+    return spawnC9sCapture(this.options, args, {
+      env: await this.labEnv(labName),
+      signal: options.signal,
+      ...(options.onGap ? { onGap: options.onGap } : {})
+    });
+  }
+
+  /**
+   * The shell command a terminal runs to capture into a pipe, e.g. into
+   * `wireshark -k -i -`: `containerlab -r c9s capture … -w -`, with the
+   * cluster settings as environment variables. Arguments are quoted for a POSIX shell.
+   */
+  async captureCommandLine(
+    labName: string,
+    targets: CaptureTarget[],
+    options: { duration?: string; packetLimit?: number } = {}
+  ): Promise<{ command: string; env: Record<string, string> }> {
+    this.requireCaptureStream();
+    const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+    const args = c9sCaptureArgs({ labName, targets: captureNodeTargets(labName, targets, records), ...options });
+    const env = await this.labEnv(labName);
+    const clusterEnv = Object.fromEntries(
+      ["CLAB_KUBE_CONTEXT", "CLAB_KUBECONFIG", "CLAB_KUBE_NAMESPACE"].flatMap((key) =>
+        env[key] ? [[key, env[key]]] : []
+      )
+    );
+    return { command: this.commandLine(args), env: clusterEnv };
   }
 
   wiresharkVncReady(sessionId: string) {

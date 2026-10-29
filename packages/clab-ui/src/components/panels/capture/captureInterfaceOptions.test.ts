@@ -3,8 +3,11 @@ import test from "node:test";
 
 import type { Edge, Node } from "@xyflow/react";
 
+import { hiddenExplorerCommandsForSupport } from "../../../explorer/hostSupportCommands";
+import { containerRuntimeFeatures, effectiveSupport } from "../../../host/labHostSupport";
 import {
   buildCaptureNodeTarget,
+  buildLinkCaptureOptions,
   buildRuntimeCaptureOptions,
   groupCaptureSelection,
   matchesCaptureFilter
@@ -152,4 +155,93 @@ test("the dialog starts from linked interfaces, then remembers the last pick", (
 
   rememberCaptureSelection(target.containerName, ["eth0", "gone"]);
   assert.deepEqual(initialCaptureSelection(target.containerName, target.options), ["eth0"]);
+});
+
+test("on c9s the picker offers lab-link interfaces only, with their peers and aliases", () => {
+  const interfaces = [
+    { node: "srl1", interface: "e1-1", alias: "ethernet-1/1", peerNode: "srl2", peerInterface: "ethernet-1/1" },
+    { node: "srl1", interface: "e1-10", peerNode: "host", peerInterface: "srl1-e1-10" },
+    { node: "srl1", interface: "e1-2", peerNode: "client", peerInterface: "eth1" },
+    { node: "srl2", interface: "e1-1", alias: "ethernet-1/1", peerNode: "srl1", peerInterface: "ethernet-1/1" }
+  ];
+  const one = buildLinkCaptureOptions(interfaces, ["srl1"]);
+  assert.deepEqual(
+    one.map((option) => [option.name, option.label, option.detail ?? null, option.peer?.node, option.peer?.endpoint, option.nodeLabel ?? null]),
+    [
+      ["srl1:e1-1", "e1-1", "ethernet-1/1", "srl2", "ethernet-1/1", null],
+      ["srl1:e1-2", "e1-2", null, "client", "eth1", null],
+      ["srl1:e1-10", "e1-10", null, "host", "srl1-e1-10", null]
+    ]
+  );
+  assert.ok(one.every((option) => option.containerName === "srl1" && !option.hostNetns && !option.isManagement));
+  // Both ends of a link: one key per node, the node named on each row.
+  const both = buildLinkCaptureOptions(interfaces, ["srl2", "srl1"]);
+  assert.deepEqual(both.slice(0, 2).map((option) => [option.name, option.nodeLabel]), [
+    ["srl2:e1-1", "srl2"],
+    ["srl1:e1-1", "srl1"]
+  ]);
+  assert.equal(new Set(both.map((option) => option.name)).size, both.length, "keys are unique across nodes");
+});
+
+test("on c9s the canvas picker offers the lab links only", () => {
+  // containerlab reports a c9s node's interfaces as Docker does: eth0, the lab links and lo.
+  const nodes = [
+    topologyNode("n1", {
+      runtimeInterfaces: [
+        { name: "eth0", state: "up" },
+        { name: "eth1", state: "up" },
+        { name: "lo", state: "unknown" }
+      ]
+    }),
+    topologyNode("n2")
+  ];
+  const edges = [link("l1", "n1", "eth1", "n2", "eth1")];
+  assert.deepEqual(
+    buildCaptureNodeTarget("n1", nodes, edges)?.options.map((option) => option.name),
+    ["eth0", "eth1"]
+  );
+  assert.deepEqual(
+    buildCaptureNodeTarget("n1", nodes, edges, { linksOnly: true })?.options.map((option) => [
+      option.name,
+      option.label,
+      option.detail ?? null,
+      option.peer?.node
+    ]),
+    [["eth1", "eth1", null, "n2"]]
+  );
+});
+
+test("capture commands show on c9s hosts through their capture stream", () => {
+  const capabilities = {
+    sshAccess: false,
+    deployFromUrl: true,
+    importFromUrl: true,
+    edgesharkManagement: true,
+    wiresharkVnc: true,
+    healthMetrics: true,
+    sharedWorkspace: false,
+    tailscaleStatus: false
+  };
+  const base = {
+    validate: true,
+    graphMermaid: true,
+    graphDot: true,
+    sshxReaders: false,
+    gottyOptions: false,
+    nodeStats: false,
+    terminalResume: true,
+    manifestExport: true,
+    c9sDeployOptions: true,
+    captureVnc: false
+  };
+  const c9s = effectiveSupport(capabilities, { ...base, ...containerRuntimeFeatures(false), captureStream: true });
+  const hidden = hiddenExplorerCommandsForSupport(c9s);
+  assert.equal(hidden.includes("containerlab.node.captureInterfaces"), false);
+  assert.equal(hidden.includes("containerlab.interface.capture"), false);
+  assert.ok(hidden.includes("containerlab.interface.captureWithEdgeshark"));
+  assert.ok(hidden.includes("containerlab.interface.captureWithEdgesharkVNC"));
+
+  const noCapture = effectiveSupport(capabilities, { ...base, ...containerRuntimeFeatures(false), captureStream: false });
+  assert.ok(hiddenExplorerCommandsForSupport(noCapture).includes("containerlab.node.captureInterfaces"));
+  assert.ok(hiddenExplorerCommandsForSupport(noCapture).includes("containerlab.interface.capture"));
 });

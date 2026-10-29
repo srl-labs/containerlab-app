@@ -138,6 +138,11 @@ import {
   type WiresharkCaptureRequest,
 } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import {
+  hostCapturesStreams,
+  openStreamCaptureDialog,
+  streamCaptureSelection,
+} from "./streamCapture";
 import { validateTopologyFlow } from "./standaloneLabTools";
 import type { CaptureTarget } from "./runtimeApi";
 import type { LabFileRequest } from "@containerlab/clab-ui/host";
@@ -975,6 +980,19 @@ function openCanvasCaptures(requests: WiresharkCaptureRequest[]): void {
     runtimeUiActions.notify("Missing capture target.", "error");
   }
   if (captures.length === 0) {
+    return;
+  }
+
+  // A c9s lab host captures the picked link ends as one stream; its dialog asks where it goes.
+  if (hostCapturesStreams(target.endpointId)) {
+    void openStreamCaptureDialog({
+      target,
+      ...streamCaptureSelection(
+        target.topologyRef?.labName,
+        captures.flatMap((capture) => capture.targets),
+      ),
+      title: "Capture",
+    });
     return;
   }
 

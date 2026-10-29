@@ -11,7 +11,7 @@ test("covers the manifest, searches every category, saves and resets with scope 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/settings.html");
   // Lab hosts have their own page; a search for them leads there.
-  await expect(page.locator("[data-setting-key]")).toHaveCount(34);
+  await expect(page.locator("[data-setting-key]")).toHaveCount(35);
   await search(page, "lab host");
   await expect(card(page, "connections")).toHaveCount(0);
   await page.getByRole("button", { name: "Open Lab Hosts" }).click();

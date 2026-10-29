@@ -1,5 +1,6 @@
 import { isRecord } from "../core/utilities/typeHelpers";
 
+import { parseLabCaptureInterfaces, type LabCaptureInterface } from "./captureStream";
 import { parseNodeLocations, type LabNodeLocation } from "./kubernetes";
 import { parseLabHostInfo, type LabHostInfo } from "./labHostSupport";
 
@@ -110,6 +111,8 @@ export interface ClabUiLabOperationsHost {
   hostInfo(): Promise<LabHostInfo | undefined>;
   /** Where the lab's nodes run on a c9s host; empty elsewhere. */
   nodeLocations(): Promise<LabNodeLocation[]>;
+  /** The lab-link interfaces a host with capture streams (c9s) captures on, with their peers. */
+  captureInterfaces(): Promise<LabCaptureInterface[]>;
   /** The Kubernetes resources a c9s deploy creates (`deploy --emit-crs`). */
   exportManifests(): Promise<{ yaml: string }>;
   /** `containerlab validate` on the lab host, without showing anything. */
@@ -341,6 +344,7 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   inspectDetails: 2 * 60_000,
   hostInfo: 30_000,
   nodeLocations: 60_000,
+  captureInterfaces: 60_000,
   exportManifests: 2 * 60_000,
   validate: 2 * 60_000
 };
@@ -413,6 +417,7 @@ export function createLabOperationsRequester(options: {
     inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
     hostInfo: async () => parseLabHostInfo(await send("hostInfo")),
     nodeLocations: async () => parseNodeLocations(await send("nodeLocations")),
+    captureInterfaces: async () => parseLabCaptureInterfaces(await send("captureInterfaces")),
     exportManifests: async () => parseManifestExport(await send("exportManifests")),
     validate: async () => parseHostValidation(await send("validate"))
   };

@@ -40,8 +40,7 @@ const COMMANDS_BY_SUPPORT: ReadonlyArray<readonly [keyof LabHostSupport, readonl
   ["shareTools", SHARE_COMMANDS],
   ["edgesharkManagement", ["containerlab.install.edgeshark", "containerlab.uninstall.edgeshark"]],
   ["edgeshark", ["containerlab.interface.captureWithEdgeshark"]],
-  ["wiresharkVnc", ["containerlab.interface.captureWithEdgesharkVNC", "containerlab.capture.killAllWiresharkVNC"]],
-  ["hostCapture", ["containerlab.interface.capture"]]
+  ["wiresharkVnc", ["containerlab.interface.captureWithEdgesharkVNC", "containerlab.capture.killAllWiresharkVNC"]]
 ];
 
 /**
@@ -50,7 +49,11 @@ const COMMANDS_BY_SUPPORT: ReadonlyArray<readonly [keyof LabHostSupport, readonl
  */
 export function hiddenExplorerCommandsForSupport(support: LabHostSupport): string[] {
   const hidden = COMMANDS_BY_SUPPORT.flatMap(([flag, commands]) => (support[flag] ? [] : commands));
-  if (!support.edgeshark && !support.wiresharkVnc && !support.hostCapture) {
+  // A c9s lab host captures through its own capture stream instead.
+  if (!support.hostCapture && !support.captureStream) {
+    hidden.push("containerlab.interface.capture");
+  }
+  if (!support.edgeshark && !support.wiresharkVnc && !support.hostCapture && !support.captureStream) {
     hidden.push("containerlab.node.captureInterfaces");
   }
   return hidden;

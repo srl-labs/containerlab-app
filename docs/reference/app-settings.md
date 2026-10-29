@@ -32,7 +32,12 @@ These run labs on the web app's own host, without `clab-api-server`; see [Run la
 | `WEB_LOCAL_LABS` | `false` | Run labs on the web app's host. Every browser that opens the app can then run labs there, without signing in. |
 | `WEB_LOCAL_LABEL` | host name | Name of the host in the explorer. |
 | `WEB_LOCAL_CLAB_BINARY` | `containerlab` | containerlab binary, looked up in `PATH`. |
-| `WEB_LOCAL_RUNTIME` | `docker` | Container runtime: `docker` or `podman`. |
+| `WEB_LOCAL_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` for a [Kubernetes cluster](../guides/kubernetes.md#web-app-for-one-user). |
+| `WEB_LOCAL_KUBECONFIG` | `KUBECONFIG`, else `~/.kube/config` | With `c9s`: the kubeconfig file. In a pod without one, the pod's ServiceAccount. |
+| `WEB_LOCAL_KUBE_CONTEXT` | current context | With `c9s`: the kubeconfig context of the cluster. |
+| `WEB_LOCAL_KUBE_NAMESPACE` | `c9s-<lab>` per lab | With `c9s`: one namespace for every lab. |
+| `WEB_LOCAL_C9S_EXPOSE_TYPE` | unset | With `c9s`: `ClusterIP`, `Headless`, `LoadBalancer`, or `None`. |
+| `WEB_LOCAL_C9S_PERSISTENCE` | `true` | With `c9s`: `false` turns persistent node volumes off. |
 | `WEB_LOCAL_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket. |
 | `WEB_LOCAL_WORKSPACE` | `~/.clab` of the container user | Folder for the topologies. Mount it at the same path as on the host. |
 | `WEB_LOCAL_SUDO` | `false` | Run containerlab with `sudo -n`. |
@@ -49,9 +54,14 @@ Set these in the environment that starts the app.
 | `CONTAINERLAB_DESKTOP_DEBUG` | unset | Log debug output from the built-in server. |
 | `CONTAINERLAB_DESKTOP_LOCAL` | `true` | Run labs on **This computer** with the local containerlab. Linux only. Set to `false` to start on the sign-in page. |
 | `CONTAINERLAB_DESKTOP_CLAB_BINARY` | `containerlab` | containerlab binary for **This computer**, looked up in `PATH`. |
-| `CONTAINERLAB_DESKTOP_RUNTIME` | `docker` | Container runtime for **This computer**: `docker` or `podman`. |
+| `CONTAINERLAB_DESKTOP_RUNTIME` | `docker` | Lab runtime for **This computer**: `docker`, `podman`, or `c9s` to run its labs on a [Kubernetes cluster](../guides/kubernetes.md#desktop-app) instead. |
+| `CONTAINERLAB_DESKTOP_KUBECONFIG` | `KUBECONFIG`, else `~/.kube/config` | With `c9s`: the kubeconfig file. |
+| `CONTAINERLAB_DESKTOP_KUBE_CONTEXT` | current context | With `c9s`: the kubeconfig context of the cluster. |
+| `CONTAINERLAB_DESKTOP_KUBE_NAMESPACE` | `c9s-<lab>` per lab | With `c9s`: one namespace for every lab. |
+| `CONTAINERLAB_DESKTOP_C9S_EXPOSE_TYPE` | unset | With `c9s`: `ClusterIP`, `Headless`, `LoadBalancer`, or `None`. |
+| `CONTAINERLAB_DESKTOP_C9S_PERSISTENCE` | `true` | With `c9s`: `false` turns persistent node volumes off. |
 | `CONTAINERLAB_DESKTOP_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker or Podman socket for **This computer**. |
 | `CONTAINERLAB_DESKTOP_WORKSPACE` | `~/.clab` | Folder for the topologies of **This computer**. |
 | `CONTAINERLAB_DESKTOP_SUDO` | `false` | Run containerlab with `sudo -n`. Needs passwordless sudo. |
 
-The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer).
+The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer). Kubernetes clusters next to **This computer** are listed under `clusters` in that file; see [Labs on Kubernetes](../guides/kubernetes.md#desktop-app). Like **This computer**, clusters need Linux.

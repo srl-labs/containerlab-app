@@ -26,6 +26,10 @@ export function cachedLabHostInfo(connection: LabConnection): LabHostInfo | unde
 }
 
 /** The runtime and support of a connection's lab host; undefined while it cannot be asked. */
+export function labHostInfo(connection: LabConnection): Promise<LabHostInfo | undefined> {
+  return loadLabHostInfo(connection);
+}
+
 function loadLabHostInfo(connection: LabConnection): Promise<LabHostInfo | undefined> {
   const cached = cache.get(connection.id);
   if (cached && Date.now() - cached.at <= HOST_INFO_TTL_MS) return Promise.resolve(cached.info);

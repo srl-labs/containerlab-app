@@ -106,6 +106,29 @@ The **Sharing** actions of a running lab start a terminal others can join in the
 
 The app shows the links to copy or open. Labs on a lab host need a clab-api-server that offers these options; with an older one, sharing works with the defaults and the dialog says what is missing.
 
+## Capture packets
+
+Right-click a running node and choose **Capture**, or right-click a link to capture both ends. Pick the interfaces, then Wireshark opens.
+
+On Docker and Podman lab hosts, captures come from Edgeshark: a `packetflix:` link that your Wireshark opens through cshargextcap, or Wireshark VNC in a browser window.
+
+### Labs on a Kubernetes cluster
+
+On a Kubernetes cluster (c9s), clabernetes captures in each lab pod and containerlab merges the interfaces into one pcapng stream, one interface per pick, named `<node>:<interface>`. Only the interfaces of links between nodes can be captured, not the management interface. The picker lists them with the node and interface at the other end, and the vendor name (e.g. `ethernet-1/1`) when the topology used one. A capture longer than an hour stays one file; if clabernetes misses packets while it switches, you see a status line, and the capture goes on.
+
+The capture dialog asks where the capture goes and when it stops:
+
+| App | Lab host | Choices, default first |
+| --- | --- | --- |
+| Desktop | cluster or clab-api-server | Wireshark on this computer, Wireshark VNC (clab-api-server with Docker), download `.pcapng` |
+| Web | clab-api-server | Wireshark VNC (when the server runs Docker), download `.pcapng` |
+| VS Code | cluster on this machine | Wireshark in a terminal: `containerlab -r c9s capture … -w - \| wireshark -k -i -`; or save `.pcapng` |
+| VS Code | clab-api-server | Wireshark on this computer, Wireshark VNC, save `.pcapng` |
+
+- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app and VS Code find Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods.
+- **Wireshark VNC** runs on the clab-api-server host. The capture lasts as long as the window; closing the window ends it. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it.
+- A **download** needs a stop time. The file grows in your downloads while the capture runs.
+
 ## Images
 
 **Manage Images**, in the header of the explorer's running labs section, lists the images your labs and templates use, pulls missing ones, and removes those you no longer need.

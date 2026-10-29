@@ -32,7 +32,9 @@ function features(containerRuntime: boolean): LabBackendFeatures {
     terminalResume: true,
     ...containerRuntimeFeatures(containerRuntime),
     manifestExport: !containerRuntime,
-    c9sDeployOptions: !containerRuntime
+    c9sDeployOptions: !containerRuntime,
+    captureStream: !containerRuntime,
+    captureVnc: false
   };
 }
 
@@ -59,6 +61,18 @@ test("the runtime narrows the static capabilities, never widens them", () => {
   const local = effectiveSupport({ ...ALL_CAPABILITIES, tailscaleStatus: false, sshAccess: false }, features(true));
   assert.equal(local.tailscaleStatus, false);
   assert.equal(local.sshAccess, false);
+});
+
+test("capture: c9s captures one stream; VNC comes from Edgeshark or the stream", () => {
+  const docker = effectiveSupport(ALL_CAPABILITIES, features(true));
+  assert.equal(docker.captureStream, false);
+  assert.equal(docker.wiresharkVnc, true);
+
+  const c9s = effectiveSupport(ALL_CAPABILITIES, features(false));
+  assert.equal(c9s.captureStream, true);
+  assert.equal(c9s.wiresharkVnc, false, "no VNC without Docker next to the lab host");
+  assert.equal(effectiveSupport(ALL_CAPABILITIES, { ...features(false), captureVnc: true }).wiresharkVnc, true);
+  assert.equal(parseLabHostInfo({ profile: { runtime: "c9s" }, support: c9s })?.support.captureStream, true);
 });
 
 test("host info from a transport keeps only well-formed values", () => {

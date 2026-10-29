@@ -156,6 +156,11 @@ export function registerLabOperationsProxy(
     withLab(request, reply, (backend, labName) => backend.inspectLab(labName))
   );
 
+  // The lab-link interfaces a lab host with capture streams (c9s) captures on.
+  app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/capture-interfaces", (request, reply) =>
+    withLab(request, reply, (backend, labName) => backend.captureInterfaces(labName))
+  );
+
   app.post<{ Body: RuntimeTargetBody }>("/api/runtime/lab-operations/manifests", (request, reply) =>
     withLab(request, reply, (backend, labName, _body, path) =>
       backend.exportManifests({ labName, ...(path ? { path } : {}) })
