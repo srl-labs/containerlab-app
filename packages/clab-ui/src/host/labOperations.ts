@@ -3,6 +3,7 @@ import { isRecord } from "../core/utilities/typeHelpers";
 import { parseLabCaptureInterfaces, type LabCaptureInterface } from "./captureStream";
 import { parseNodeLocations, type LabNodeLocation } from "./kubernetes";
 import { parseLabHostInfo, type LabHostInfo } from "./labHostSupport";
+import { normalizeLabSettings, type LabSettings } from "./lifecycleOptions";
 
 /**
  * Lab operations beyond the lifecycle that a lab host may lack, such as an
@@ -117,6 +118,13 @@ export interface ClabUiLabOperationsHost {
   exportManifests(): Promise<{ yaml: string }>;
   /** `containerlab validate` on the lab host, without showing anything. */
   validate(): Promise<LabValidation>;
+  /**
+   * The settings the lab remembers on its lab host: the deploy options that
+   * deploy, redeploy, destroy and apply use when they run without options.
+   */
+  labSettings(): Promise<LabSettings | undefined>;
+  /** Remember the lab's settings on its lab host; undefined forgets them. */
+  saveLabSettings(settings: LabSettings | undefined): Promise<void>;
 }
 
 /** What `containerlab validate` says about the topology. */
@@ -346,7 +354,9 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   nodeLocations: 60_000,
   captureInterfaces: 60_000,
   exportManifests: 2 * 60_000,
-  validate: 2 * 60_000
+  validate: 2 * 60_000,
+  labSettings: 30_000,
+  saveLabSettings: 30_000
 };
 
 interface PendingLabOperation {
@@ -419,6 +429,10 @@ export function createLabOperationsRequester(options: {
     nodeLocations: async () => parseNodeLocations(await send("nodeLocations")),
     captureInterfaces: async () => parseLabCaptureInterfaces(await send("captureInterfaces")),
     exportManifests: async () => parseManifestExport(await send("exportManifests")),
-    validate: async () => parseHostValidation(await send("validate"))
+    validate: async () => parseHostValidation(await send("validate")),
+    labSettings: async () => normalizeLabSettings(await send("labSettings")),
+    saveLabSettings: async (settings) => {
+      await send("saveLabSettings", { settings: settings ?? null });
+    }
   };
 }

@@ -18,15 +18,38 @@ export interface LabHostProfile {
   namespaceMode?: LabHostNamespaceMode;
   /** c9s with `namespaceMode: "fixed"`: the namespace of every lab. */
   namespace?: string;
-  /** c9s on this machine: the deploy defaults of the host. */
+  /** c9s: the deploy defaults of the host; a clab-api-server's are its policy. */
   exposeType?: C9sExposeType;
   persistence?: boolean;
+  /** c9s: the image pull secret every lab's pods get. */
+  imagePullSecret?: string;
+  /** c9s through a clab-api-server: the cluster it runs labs on. */
+  cluster?: string;
+  /** c9s through a clab-api-server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
+  namespacePattern?: string;
+  /** c9s through a clab-api-server: the namespace of a shared lab, e.g. `c9s-shared-{lab}`. */
+  sharedNamespacePattern?: string;
+  /** c9s through a clab-api-server: every lab namespace gets a resource quota. */
+  labQuota?: boolean;
+  /**
+   * The timeout containerlab gets on a deploy, redeploy, apply or destroy
+   * without one, as a duration such as `10m`: containerlab's default for the
+   * runtime on this machine, a clab-api-server's own (`GET /api/v1/lab-host`).
+   * Unset on a lab server that does not report it.
+   */
+  defaultTimeout?: string;
   /**
    * The lab host is older than this app needs, e.g. a clab-api-server that
    * does not report its runtime. What it can do runs as before; the message
    * says what to update for the rest.
    */
   updateRequired?: string;
+  /**
+   * Why the lab host offers no Wireshark VNC although it could, e.g. a
+   * cluster used from this machine without Docker here. UIs show the choice
+   * disabled with this reason instead of hiding it.
+   */
+  wiresharkVncUnavailable?: string;
 }
 
 /**
@@ -71,6 +94,11 @@ export interface LabBackendFeatures {
   nodeStats: boolean;
   /** Terminal sessions that keep running when the client disconnects, and replay their output. */
   terminalResume: boolean;
+  /**
+   * containerlab's `--timeout` on deploy, redeploy, apply and destroy: this
+   * machine, and a clab-api-server that lists `lab-lifecycle-timeout`.
+   */
+  lifecycleTimeout: boolean;
 
   // Features of the lab runtime. Docker and Podman have them; c9s does not.
 
@@ -174,6 +202,24 @@ export function containerRuntimeFeatures(
   };
 }
 
+/** The reason the UI gives for an option a Kubernetes (c9s) lab host lacks; it shows greyed out. */
+export const NOT_ON_KUBERNETES = "Not supported on Kubernetes (c9s)";
+
+/**
+ * Why a Kubernetes lab host has no image management. Hosts show it instead of
+ * the image manager, and lab hosts answer image requests (501) with it.
+ */
+export const KUBERNETES_IMAGE_MANAGEMENT_MESSAGE =
+  "Image management is not supported on a Kubernetes lab host: the cluster's nodes pull the images themselves. " +
+  "For a private registry, set an image pull secret.";
+
+/** Why a lab host offers no image management, for hosts that tell the user. */
+export function imageManagementUnavailableMessage(profile: LabHostProfile | undefined): string {
+  return profile?.runtime === "c9s"
+    ? KUBERNETES_IMAGE_MANAGEMENT_MESSAGE
+    : "This lab host does not offer image management.";
+}
+
 /** The lab host of a topology or explorer item, as hosts hand it to the UI. */
 export interface LabHostInfo {
   profile: LabHostProfile;
@@ -196,6 +242,7 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "gottyOptions",
   "nodeStats",
   "terminalResume",
+  "lifecycleTimeout",
   "imageManagement",
   "netem",
   "snapshots",
@@ -245,8 +292,15 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
     profile.exposeType = exposeType;
   }
   if (typeof raw.persistence === "boolean") profile.persistence = raw.persistence;
+  for (const key of ["imagePullSecret", "cluster", "namespacePattern", "sharedNamespacePattern", "defaultTimeout"] as const) {
+    const text = optionalString(raw[key]);
+    if (text) profile[key] = text;
+  }
+  if (typeof raw.labQuota === "boolean") profile.labQuota = raw.labQuota;
   const updateRequired = optionalString(raw.updateRequired);
   if (updateRequired) profile.updateRequired = updateRequired;
+  const wiresharkVncUnavailable = optionalString(raw.wiresharkVncUnavailable);
+  if (wiresharkVncUnavailable) profile.wiresharkVncUnavailable = wiresharkVncUnavailable;
   const supportRecord = value.support;
   const support = Object.fromEntries(
     BOOLEAN_KEYS.map((key) => [key, supportRecord[key] === true])
@@ -258,6 +312,30 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
 export function labHostRuntimeLabel(profile: LabHostProfile, labNamespace?: string): string {
   if (profile.runtime !== "c9s") return profile.runtime === "podman" ? "Podman" : "Docker";
   const namespace = labNamespace ?? profile.namespace;
-  const where = [profile.kubeContext, namespace].filter(Boolean).join("/");
+  const where = [profile.kubeContext ?? profile.cluster, namespace].filter(Boolean).join("/");
   return where ? `Kubernetes · ${where}` : "Kubernetes";
+}
+
+/**
+ * One check of a lab host, as "Check connection" lists it: what was checked,
+ * whether it passed, what was found and, for a failure, what to do.
+ */
+export interface LabHostCheck {
+  /** Stable id, e.g. `containerlab`, `kubeconfig`, `cluster`, `clabernetes`, `access:pods/exec`. */
+  id: string;
+  /** What is checked, e.g. "containerlab 0.83.0 or newer". */
+  label: string;
+  /** `skipped` when an earlier check failed and this one could not run. */
+  status: "ok" | "failed" | "skipped";
+  /** What was found: a version, or what went wrong. */
+  message?: string;
+  /** What to do about a failure. */
+  fix?: string;
+  /** A command that fixes the failure, shown to copy, e.g. `kubectl create rolebinding …`. */
+  command?: string;
+}
+
+/** The first check that failed, for a lab host's status line. */
+export function firstFailedCheck(checks: readonly LabHostCheck[] | undefined): LabHostCheck | undefined {
+  return checks?.find((check) => check.status === "failed");
 }

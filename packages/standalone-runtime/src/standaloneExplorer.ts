@@ -16,7 +16,7 @@ import {
   listFileExplorerDirectory,
   type FileExplorerEntry,
 } from "./runtimeApi";
-import { hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
+import { greyedExplorerCommandsForHost, hiddenExplorerCommandsForSupport } from "@containerlab/clab-ui/explorer";
 
 import { endpointDisplayAddress } from "./endpointAddress";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
@@ -603,6 +603,7 @@ function buildEndpointRootItem(
     contextValue: "containerlabEndpoint",
     endpointId: endpoint.id,
     endpointKind: endpoint.kind === "local" ? "local" : "api",
+    ...(endpoint.kind === "local" && endpoint.runtime === "c9s" ? { endpointCluster: true } : {}),
     state: endpoint.status,
     collapsibleState:
       children.length > 0 ? TREE_ITEM_COLLAPSED : TREE_ITEM_NONE,
@@ -774,10 +775,22 @@ export function createStandaloneExplorerBridge(
       if (info) {
         hidden.set(endpoint.id, hiddenExplorerCommandsForSupport(info.support));
       } else {
+        // Not known yet: it hides nothing, so section actions stay until it is.
+        hidden.set(endpoint.id, []);
         void loadLabHostInfo(endpoint.id);
       }
     }
     return hidden;
+  };
+  /** What a cluster lacks, shown greyed out with why instead of hidden. */
+  const greyedCommandsByEndpoint = (): Map<string, Map<string, string>> => {
+    const greyed = new Map<string, Map<string, string>>();
+    const hosts = useLabHostStore.getState().hosts;
+    for (const endpoint of options.getEndpoints()) {
+      const info = hosts.get(endpoint.id);
+      if (endpoint.connected && info) greyed.set(endpoint.id, greyedExplorerCommandsForHost(info));
+    }
+    return greyed;
   };
   let explorerFilterText = "";
   let explorerUiState: ExplorerUiState = {};
@@ -1370,6 +1383,7 @@ export function createStandaloneExplorerBridge(
         isLocalCaptureAllowed: true,
         hiddenCommandIds,
         hiddenCommandIdsByEndpoint: hiddenCommandsByEndpoint(),
+        greyedCommandsByEndpoint: greyedCommandsByEndpoint(),
         commandMetadata: STANDALONE_EXPLORER_COMMAND_METADATA,
         sectionOrder: [
           RUNNING_LABS_SECTION_ID,

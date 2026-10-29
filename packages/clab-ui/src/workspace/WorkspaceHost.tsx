@@ -12,7 +12,12 @@ type InterfaceTarget = NodeTarget & { interfaceName: string };
 
 /** Operations and live data supplied by the embedding host, never imported from an app. */
 export interface WorkspaceHost {
-  capabilities: { lifecycle: boolean; endpoints: boolean };
+  capabilities: {
+    lifecycle: boolean;
+    endpoints: boolean;
+    /** The app can start Wireshark on the user's computer for capture streams: the desktop app. */
+    localWireshark?: boolean;
+  };
   assetUrl: (asset: WorkspaceAsset) => string;
   openTerminalWindow: (pane: RuntimeTerminalPane) => void;
   /**

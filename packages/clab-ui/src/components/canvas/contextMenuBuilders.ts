@@ -134,6 +134,8 @@ interface EdgeMenuBuilderContext {
   showLinkImpairment?: (id: string) => void;
   /** Whether the lab host has link impairments (netem); true when unset. */
   canImpairLinks?: boolean;
+  /** Why links cannot be impaired on this lab host; the item shows greyed out with it. */
+  impairLinksUnavailable?: string;
 }
 
 type PaneMenuActions = Pick<
@@ -822,6 +824,9 @@ export function buildEdgeContextMenu(ctx: EdgeMenuBuilderContext): ContextMenuIt
       items.push({ id: "divider-capture", label: "", divider: true });
     }
     if (ctx.canImpairLinks !== false) items.push(impairmentItem);
+    else if (ctx.impairLinksUnavailable !== undefined) {
+      items.push({ ...impairmentItem, disabled: true, disabledReason: ctx.impairLinksUnavailable });
+    }
   }
 
   if (isEditMode) {

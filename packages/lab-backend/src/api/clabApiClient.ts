@@ -1,5 +1,6 @@
 import {
   labLifecycleQueryParams,
+  lifecycleTimeoutMs,
   type LabLifecycleOptions,
   type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
@@ -82,6 +83,28 @@ interface LifecycleRequestOptions {
   lifecycleOptions?: LabLifecycleOptions;
 }
 
+/** How long other requests, e.g. image downloads, may take. */
+const REQUEST_TIMEOUT_MS = 10 * 60_000;
+/**
+ * How long a deploy, redeploy, apply or destroy without a timeout may take:
+ * longer than the server lets it run with its default (on c9s 15 minutes,
+ * 25 for a redeploy).
+ */
+const LIFECYCLE_REQUEST_TIMEOUT_MS = 30 * 60_000;
+/** What the server adds to containerlab's timeout for its own steps (5 minutes), and a minute for the answer. */
+const LIFECYCLE_REQUEST_MARGIN_MS = 6 * 60_000;
+
+/**
+ * How long to wait for a lifecycle request: containerlab's timeout for each
+ * of its calls (a redeploy destroys, then deploys) plus the server's margin,
+ * as the server limits the request.
+ */
+export function lifecycleRequestTimeoutMs(options: LabLifecycleOptions | undefined, calls = 1): number {
+  const timeout = lifecycleTimeoutMs(options?.timeout);
+  if (timeout === undefined) return LIFECYCLE_REQUEST_TIMEOUT_MS;
+  return Math.max(REQUEST_TIMEOUT_MS, calls * timeout + LIFECYCLE_REQUEST_MARGIN_MS);
+}
+
 interface LoginRequest {
   username: string;
   password: string;
@@ -98,6 +121,25 @@ export interface ServerHealth {
   runtime?: string;
   /** c9s: `per-lab` or `fixed`. */
   namespaceMode?: string;
+}
+
+/** What `GET /api/v1/lab-host` says about the lab host behind a clab-api-server (`lab-host-info`). */
+export interface ServerLabHost {
+  runtime: string;
+  /** containerlab's timeout of a lifecycle request without one, e.g. `10m`. */
+  defaultTimeout?: string;
+  /** Only for runtime `c9s`: the cluster and the server's deploy settings. */
+  c9s?: {
+    context?: string;
+    cluster?: string;
+    namespacePattern?: string;
+    sharedNamespacePattern?: string;
+    exposeType?: string;
+    persistence?: boolean;
+    imagePullSecret?: string;
+    labQuota?: boolean;
+    metrics?: boolean;
+  };
 }
 
 export class ClabApiClient {
@@ -427,6 +469,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -488,6 +531,9 @@ export class ClabApiClient {
       "DELETE",
       `/api/v1/labs/${enc(labName)}${query ? `?${query}` : ""}`,
       token,
+      undefined,
+      undefined,
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
 
     const payload = await res.json().catch(() => undefined);
@@ -497,7 +543,12 @@ export class ClabApiClient {
   async applyLab(
     token: string,
     labName: string,
-    options: { path?: string; dryRun?: boolean; includeLogs?: boolean } = {},
+    options: {
+      path?: string;
+      dryRun?: boolean;
+      includeLogs?: boolean;
+      lifecycleOptions?: LabLifecycleOptions;
+    } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.path) {
@@ -509,6 +560,7 @@ export class ClabApiClient {
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     const query = params.toString();
     const res = await this.request(
       "POST",
@@ -516,6 +568,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -541,6 +594,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions, 2),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -1105,6 +1159,31 @@ export class ClabApiClient {
     return health;
   }
 
+  /** The lab host's runtime and, on c9s, its cluster and deploy settings (`lab-host-info`). */
+  async getLabHost(token: string): Promise<ServerLabHost> {
+    const res = await this.get("/api/v1/lab-host", token);
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    if (!isRecord(payload) || typeof payload.runtime !== "string") {
+      throw new Error("GET /api/v1/lab-host answered without a runtime");
+    }
+    const result: ServerLabHost = { runtime: payload.runtime.trim() };
+    if (typeof payload.defaultTimeout === "string" && payload.defaultTimeout.trim()) {
+      result.defaultTimeout = payload.defaultTimeout.trim();
+    }
+    if (isRecord(payload.c9s)) {
+      const raw = payload.c9s;
+      const c9s: NonNullable<ServerLabHost["c9s"]> = {};
+      for (const key of ["context", "cluster", "namespacePattern", "sharedNamespacePattern", "exposeType", "imagePullSecret"] as const) {
+        if (typeof raw[key] === "string" && raw[key].trim()) c9s[key] = raw[key].trim();
+      }
+      for (const key of ["persistence", "labQuota", "metrics"] as const) {
+        if (typeof raw[key] === "boolean") c9s[key] = raw[key];
+      }
+      result.c9s = c9s;
+    }
+    return result;
+  }
+
   async getVersion(
     token: string,
     timeoutMs?: number,
@@ -1488,6 +1567,7 @@ export class ClabApiClient {
     token: string,
     body?: string | Uint8Array,
     contentType?: string,
+    timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -1503,7 +1583,7 @@ export class ClabApiClient {
         body,
       },
       // Image downloads and lab operations can take several minutes.
-      { timeoutMs: 10 * 60_000 },
+      { timeoutMs },
     );
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);

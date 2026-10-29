@@ -36,6 +36,7 @@ const TEST_LAB_HOST_FEATURES: LabBackendFeatures = {
   gottyOptions: false,
   nodeStats: false,
   terminalResume: false,
+  lifecycleTimeout: true,
   imageManagement: true,
   netem: true,
   snapshots: true,

@@ -65,10 +65,19 @@ test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => 
   const enabled = resolve({
     ...web,
     platform: "linux",
-    env: { WEB_LOCAL_LABS: "true", WEB_LOCAL_WORKSPACE: "/home/alice/.clab", WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab" }
+    env: {
+      WEB_LOCAL_LABS: "true",
+      WEB_LOCAL_WORKSPACE: "/home/alice/.clab",
+      WEB_LOCAL_CLAB_BINARY: "/usr/local/bin/containerlab",
+      WEB_LOCAL_WIRESHARK_IMAGE: "registry.example.com/wireshark-vnc:custom"
+    }
   });
   assert.equal(enabled.enabled, true);
-  assert.deepEqual(enabled.options, { binaryPath: "/usr/local/bin/containerlab", workspaceRoot: "/home/alice/.clab" });
+  assert.deepEqual(enabled.options, {
+    binaryPath: "/usr/local/bin/containerlab",
+    workspaceRoot: "/home/alice/.clab",
+    wiresharkImage: "registry.example.com/wireshark-vnc:custom"
+  });
 });
 
 test("the desktop app's own host can be a cluster: CONTAINERLAB_DESKTOP_RUNTIME=c9s", () => {
@@ -150,8 +159,15 @@ test("local-backend.json lists clusters next to this computer", () => {
   const config = resolveLocalBackendConfig("linux", {}, file);
   assert.equal(config.enabled, true);
   assert.deepEqual(config.clusters, [
-    { label: "Lab prod", options: { runtime: "c9s", c9s: { kubeContext: "lab-prod", namespace: "labs", persistence: false } } },
-    { options: { runtime: "c9s", c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP" } } }
+    {
+      label: "Lab prod",
+      options: { runtime: "c9s", c9s: { kubeContext: "lab-prod", namespace: "labs", persistence: false } },
+      settings: { kubeContext: "lab-prod", label: "Lab prod", namespace: "labs", persistence: false }
+    },
+    {
+      options: { runtime: "c9s", c9s: { kubeContext: "kind-dev", exposeType: "ClusterIP" } },
+      settings: { kubeContext: "kind-dev", exposeType: "ClusterIP" }
+    }
   ]);
   assert.deepEqual(config.problems, [
     "clusters[2] names no kubeContext.",

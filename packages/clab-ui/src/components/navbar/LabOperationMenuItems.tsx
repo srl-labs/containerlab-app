@@ -51,17 +51,28 @@ export function labOperationMenuItems(options: {
   support: LabOperationSupport;
   disabled: boolean;
   onOpen: (kind: LabOperationDialogKind) => void;
+  /** Entries the lab host lacks, with why: shown greyed out instead of hidden (c9s). */
+  unavailable?: Partial<Record<LabOperationDialogKind, string>>;
 }): React.ReactNode[] {
-  const items = ENTRIES.filter((entry) => entry.available(options.support)).map((entry) => (
-    <MenuItem
-      key={entry.kind}
-      onClick={() => options.onOpen(entry.kind)}
-      disabled={options.disabled}
-      data-testid={`navbar-deploy-item-lab-${entry.kind}`}
-    >
-      <ListItemIcon>{entry.icon}</ListItemIcon>
-      <ListItemText>{entry.label}</ListItemText>
-    </MenuItem>
-  ));
+  const items = ENTRIES.flatMap((entry) => {
+    const reason = entry.available(options.support) ? undefined : options.unavailable?.[entry.kind];
+    if (!entry.available(options.support) && reason === undefined) return [];
+    return [
+      <MenuItem
+        key={entry.kind}
+        onClick={() => options.onOpen(entry.kind)}
+        disabled={options.disabled || reason !== undefined}
+        data-testid={`navbar-deploy-item-lab-${entry.kind}`}
+      >
+        <ListItemIcon>{entry.icon}</ListItemIcon>
+        <ListItemText
+          {...(reason !== undefined ? { secondary: reason } : {})}
+          slotProps={{ secondary: { sx: { fontSize: 11, maxWidth: 240, whiteSpace: "normal" } } }}
+        >
+          {entry.label}
+        </ListItemText>
+      </MenuItem>
+    ];
+  });
   return [<Divider key="lab-operations-divider" />, ...items];
 }

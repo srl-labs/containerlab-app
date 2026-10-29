@@ -10,6 +10,7 @@ import {
   PanelAddSection,
   PanelSection
 } from "../../ui/form";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 
 import type { TabProps } from "./types";
 import { inheritedFieldHint, inheritedListItems, inheritedMapEntries } from "./inheritanceHints";
@@ -79,6 +80,9 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
     });
   };
 
+  const bindsLimit = useRuntimeLimit("nodeBinds");
+  const envFilesLimit = useRuntimeLimit("nodeEnvFiles");
+  const labelsLimit = useRuntimeLimit("nodeLabels");
   const handleAddBind = () => {
     onChange({ binds: [...(data.binds ?? []), ""] });
   };
@@ -152,7 +156,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
 
       <CredentialsSection {...props} />
 
-      <PanelAddSection title="Bind Mounts" onAdd={handleAddBind}>
+      <PanelAddSection title="Bind Mounts" onAdd={handleAddBind} limit={bindsLimit}>
         <DynamicList
           items={data.binds ?? []}
           onChange={(items) => onChange({ binds: items })}
@@ -176,7 +180,12 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
         />
       </PanelAddSection>
 
-      <PanelAddSection title="Environment Files" onAdd={handleAddEnvFile}>
+      <PanelAddSection
+        title="Environment Files"
+        onAdd={handleAddEnvFile}
+        limit={envFilesLimit}
+        limitKeepsEditable={(data.envFiles ?? []).length > 0}
+      >
         <DynamicList
           items={data.envFiles ?? []}
           onChange={(items) => onChange({ envFiles: items })}
@@ -186,7 +195,7 @@ export const ConfigTab: React.FC<TabProps> = (props) => {
         />
       </PanelAddSection>
 
-      <PanelAddSection title="Labels" onAdd={handleAddLabel}>
+      <PanelAddSection title="Labels" onAdd={handleAddLabel} limit={labelsLimit}>
         <KeyValueList
           items={data.labels ?? {}}
           onChange={(items) => onChange({ labels: items })}

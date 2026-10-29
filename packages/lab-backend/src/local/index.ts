@@ -8,7 +8,13 @@ export {
   type LocalLabBackendOptions,
   type ResolvedLocalOptions
 } from "./options.ts";
-export { listKubeContexts, type KubeContextInfo } from "./kube/kubeConfig.ts";
+export {
+  defaultKubeconfigFile,
+  listKubeContexts,
+  readKubeContexts,
+  type KubeconfigContexts,
+  type KubeContextInfo
+} from "./kube/kubeConfig.ts";
 export {
   CONTAINERLAB_LINUX_ONLY,
   containerlabPlatformProblem,

@@ -2749,6 +2749,7 @@ test("/api/runtime/features reports what an older clab-api-server lacks", async 
     gottyOptions: false,
     nodeStats: false,
     terminalResume: false,
+    lifecycleTimeout: false,
     imageManagement: true,
     netem: true,
     snapshots: true,

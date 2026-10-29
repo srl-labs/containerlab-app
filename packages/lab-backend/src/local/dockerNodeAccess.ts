@@ -3,7 +3,7 @@ import type Docker from "dockerode";
 import type { InspectContainerInfo, NodeLogLine } from "../contract/dto.ts";
 import { inspectField, inspectLabs } from "./inspect.ts";
 import type { NodeAccess } from "./nodeAccess.ts";
-import type { ResolvedLocalOptions } from "./options.ts";
+import { containerRuntimeCli, type ResolvedLocalOptions } from "./options.ts";
 import { spawnLines } from "./process.ts";
 import { labStats } from "./stats.ts";
 import { dockerTerminalAccess } from "./terminals.ts";
@@ -26,7 +26,7 @@ export function createDockerNodeAccess(options: ResolvedLocalOptions, docker: ()
     nodeLogs: (container, tail) => containerLogs(options, container.name, tail),
     async streamNodeLogs(container, { tail, signal }) {
       const command = await spawnLines(
-        options.runtime,
+        containerRuntimeCli(options),
         ["logs", "--follow", "--tail", tail, "--timestamps", container.name],
         { env: options.env, signal }
       );

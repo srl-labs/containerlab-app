@@ -133,6 +133,11 @@ function useEndpointAuth() {
     }
     setLocalEndpoint(payload.localEndpoint ?? null, payload.localEndpoints);
     useAuthStore.getState().setLocalWireshark(payload.localWireshark === true);
+    useAuthStore.getState().setLabHostSetup({
+      ...(payload.clusterHosts ? { clusterHosts: payload.clusterHosts } : {}),
+      ...(payload.clustersUnavailable ? { clustersUnavailable: payload.clustersUnavailable } : {}),
+      ...(payload.localUnavailable ? { localUnavailable: payload.localUnavailable } : {})
+    });
   }, [setDefaultApiUrl, setLocalEndpoint]);
 
   const refreshEndpoints = useCallback(async () => {

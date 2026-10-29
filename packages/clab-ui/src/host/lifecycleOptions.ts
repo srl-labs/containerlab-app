@@ -25,6 +25,12 @@ export function isC9sExposeType(value: unknown): value is C9sExposeType {
  * `LAB_LIFECYCLE_OPTION_FIELDS`.
  */
 export interface LabLifecycleOptions {
+  /**
+   * How long containerlab waits for the lab runtime, as a Go duration such as
+   * `30m` (`--timeout`). containerlab's default is 2m on Docker and Podman and
+   * 10m on c9s, where nodes wait for their images.
+   */
+  timeout?: string;
   /** Only act on these nodes (`--node-filter`). */
   nodeFilter?: string[];
   /** Limit the number of parallel workers (`--max-workers`). */
@@ -82,6 +88,7 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
   readonly LabLifecycleOptionField[]
 > = {
   deploy: [
+    "timeout",
     "nodeFilter",
     "maxWorkers",
     "skipPostDeploy",
@@ -97,6 +104,7 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
     "noTopologyCR"
   ],
   redeploy: [
+    "timeout",
     "maxWorkers",
     "skipPostDeploy",
     "skipLabdirAcl",
@@ -110,7 +118,7 @@ export const LAB_LIFECYCLE_OPTION_FIELDS: Record<
     "imagePullSecret",
     "noTopologyCR"
   ],
-  destroy: ["nodeFilter", "graceful", "keepMgmtNet", "varsFile", "namespace"]
+  destroy: ["timeout", "nodeFilter", "graceful", "keepMgmtNet", "varsFile", "namespace"]
 };
 
 const CONTAINER_RUNTIMES: readonly LabRuntimeKind[] = ["docker", "podman"];
@@ -139,11 +147,18 @@ export const LAB_LIFECYCLE_OPTION_RUNTIMES: Partial<
   noTopologyCR: C9S_RUNTIME
 };
 
+/**
+ * The lab runtime options are checked for; `any` keeps the options of every
+ * runtime, for clients that leave the narrowing to the lab host.
+ */
+export type LabLifecycleOptionRuntime = LabRuntimeKind | "any";
+
 /** The options an action takes on a lab runtime. */
 export function labLifecycleOptionFields(
   kind: LabLifecycleOptionKind,
-  runtime: LabRuntimeKind = "docker"
+  runtime: LabLifecycleOptionRuntime = "docker"
 ): readonly LabLifecycleOptionField[] {
+  if (runtime === "any") return LAB_LIFECYCLE_OPTION_FIELDS[kind];
   return LAB_LIFECYCLE_OPTION_FIELDS[kind].filter(
     (field) => LAB_LIFECYCLE_OPTION_RUNTIMES[field]?.includes(runtime) ?? true
   );
@@ -155,6 +170,8 @@ const VARS_FILE_PATTERN = /^[A-Za-z0-9_./@+-]+$/;
 /** A Kubernetes namespace or secret name: a DNS label (RFC 1123), as Kubernetes checks it. */
 const KUBE_NAME_PATTERN = /^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$/;
 const KUBE_SECRET_NAME_PATTERN = /^[a-z0-9]([-a-z0-9.]{0,251}[a-z0-9])?$/;
+/** A Go duration with units, as containerlab's `--timeout` takes it, e.g. `30m` or `1h30m`. */
+const DURATION_PATTERN = /^(?:\d+(?:\.\d+)?(?:h|m|s|ms))+$/;
 const BOOLEAN_FIELDS = [
   "skipPostDeploy",
   "skipLabdirAcl",
@@ -177,6 +194,29 @@ export function isValidKubeNamespace(name: string): boolean {
 /** A Kubernetes Secret name. */
 export function isValidKubeSecretName(name: string): boolean {
   return KUBE_SECRET_NAME_PATTERN.test(name);
+}
+
+/** A positive Go duration such as `90s`, `30m` or `1h30m`. */
+export function isValidLifecycleTimeout(value: string): boolean {
+  return DURATION_PATTERN.test(value) && /[1-9]/.test(value);
+}
+
+/** containerlab's `--timeout` default: 10m on lab runtimes such as c9s, where nodes wait for their images, else 2m. */
+export function containerlabDefaultTimeout(runtime: LabRuntimeKind): string {
+  return runtime === "c9s" ? "10m" : "2m";
+}
+
+const DURATION_UNIT_MS: Record<string, number> = { h: 3_600_000, m: 60_000, s: 1_000, ms: 1 };
+
+/** A lifecycle timeout in milliseconds; undefined unless it is a valid one. */
+export function lifecycleTimeoutMs(value: string | undefined): number | undefined {
+  const trimmed = value?.trim() ?? "";
+  if (!isValidLifecycleTimeout(trimmed)) return undefined;
+  let total = 0;
+  for (const [, amount, unit] of trimmed.matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g)) {
+    total += Number(amount) * (DURATION_UNIT_MS[unit] ?? 0);
+  }
+  return total;
 }
 
 export function isValidExportTemplate(template: string): boolean {
@@ -257,13 +297,17 @@ function readKubeName(value: unknown, valid: (name: string) => boolean): string 
 export function normalizeLabLifecycleOptions(
   kind: LabLifecycleOptionKind,
   value: unknown,
-  runtime: LabRuntimeKind = "docker"
+  runtime: LabLifecycleOptionRuntime = "docker"
 ): LabLifecycleOptions | undefined {
   if (!isRecord(value)) return undefined;
   const raw = value;
   const allowed = new Set<LabLifecycleOptionField>(labLifecycleOptionFields(kind, runtime));
   const options: LabLifecycleOptions = {};
 
+  if (allowed.has("timeout") && typeof raw.timeout === "string") {
+    const timeout = raw.timeout.trim();
+    if (isValidLifecycleTimeout(timeout)) options.timeout = timeout;
+  }
   if (allowed.has("nodeFilter")) {
     const nodeFilter = readNodeFilter(raw.nodeFilter);
     if (nodeFilter) options.nodeFilter = nodeFilter;
@@ -314,6 +358,7 @@ function readSnapshotRestore(
 export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): string[] {
   if (!options) return [];
   const flags: string[] = [];
+  if (options.timeout !== undefined) flags.push("--timeout", options.timeout);
   if (options.nodeFilter && options.nodeFilter.length > 0) {
     flags.push("--node-filter", options.nodeFilter.join(","));
   }
@@ -340,13 +385,16 @@ export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): 
 /**
  * clab-api-server query parameters for the options. The c9s options have
  * none: a clab-api-server with `CLAB_RUNTIME=c9s` sets namespaces, exposure
- * and persistence itself.
+ * and persistence itself. `timeout` needs a server that lists
+ * `lab-lifecycle-timeout`; hosts offer it only where `lifecycleTimeout` is
+ * supported.
  */
 export function labLifecycleQueryParams(
   options: LabLifecycleOptions | undefined
 ): Array<[string, string]> {
   if (!options) return [];
   const params: Array<[string, string]> = [];
+  if (options.timeout !== undefined) params.push(["timeout", options.timeout]);
   if (options.nodeFilter && options.nodeFilter.length > 0) {
     params.push(["nodeFilter", options.nodeFilter.join(",")]);
   }
@@ -373,4 +421,63 @@ export function isPartialDestroy(options: LabLifecycleOptions | undefined): bool
 /** Deploys that restore VM snapshots need a lab host that supports it. */
 export function restoresSnapshots(options: LabLifecycleOptions | undefined): boolean {
   return options?.restoreAll !== undefined || (options?.restore?.length ?? 0) > 0;
+}
+
+/**
+ * The deploy options a lab remembers on its lab host, its "lab settings":
+ * every deploy, redeploy and apply without options of their own uses them.
+ * Options of one run (node filter, snapshot restore, cleanup) stay out.
+ */
+export const LAB_SETTINGS_FIELDS = [
+  "timeout",
+  "maxWorkers",
+  "skipPostDeploy",
+  "skipLabdirAcl",
+  "exportTemplate",
+  "varsFile",
+  "namespace",
+  "exposeType",
+  "noPersistence",
+  "imagePullSecret",
+  "noTopologyCR"
+] as const satisfies readonly LabLifecycleOptionField[];
+
+export type LabSettingsField = (typeof LAB_SETTINGS_FIELDS)[number];
+export type LabSettings = Pick<LabLifecycleOptions, LabSettingsField>;
+
+function pickLabSettings(options: LabLifecycleOptions | undefined): LabSettings | undefined {
+  if (!options) return undefined;
+  const settings: Record<string, unknown> = {};
+  for (const field of LAB_SETTINGS_FIELDS) {
+    if (options[field] !== undefined) settings[field] = options[field];
+  }
+  return Object.keys(settings).length > 0 ? (settings as LabSettings) : undefined;
+}
+
+/** Well-formed lab settings a lab runtime takes; undefined when none are left. */
+export function normalizeLabSettings(
+  value: unknown,
+  runtime: LabLifecycleOptionRuntime = "any"
+): LabSettings | undefined {
+  return pickLabSettings(normalizeLabLifecycleOptions("deploy", value, runtime));
+}
+
+/**
+ * The options of a lab's settings that an action takes: deploy, redeploy and
+ * destroy take theirs (destroy e.g. the namespace), apply those of deploy.
+ */
+export function labSettingsOptions(
+  action: LabLifecycleOptionKind | "apply",
+  settings: LabSettings | undefined,
+  runtime: LabLifecycleOptionRuntime = "any"
+): LabLifecycleOptions | undefined {
+  if (!settings) return undefined;
+  const kind = action === "apply" ? "deploy" : action;
+  const options = normalizeLabLifecycleOptions(kind, settings, runtime);
+  return action === "apply" ? pickLabSettings(options) : options;
+}
+
+/** The lab settings among options of one run, e.g. to remember them. */
+export function labSettingsFromOptions(options: LabLifecycleOptions | undefined): LabSettings | undefined {
+  return pickLabSettings(options);
 }

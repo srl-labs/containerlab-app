@@ -24,7 +24,7 @@ The **Lab Hosts** page of the settings tab manages these; see [Work with labs on
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `connections` | `[]` | Lab hosts. A `clab-api-server` entry has `url`, and optionally `label`, `username`, and `sessionDuration`; passwords and tokens are never stored here. A [Kubernetes cluster](../guides/kubernetes.md#vs-code) entry has `"kind": "local"`, `"runtime": "c9s"`, and `kubeContext`, and optionally `kubeconfig` (the file with the context; a leading `~` is your home folder), `namespace` (one for every lab instead of `c9s-<lab>`), `exposeType` (`ClusterIP`, `Headless`, `LoadBalancer`, or `None`), `persistence` (`false` turns node volumes off), and `label`. Clusters need Linux or WSL, where containerlab runs. |
+| `connections` | `[]` | Lab hosts. A `clab-api-server` entry has `url`, and optionally `label`, `username`, and `sessionDuration`; passwords and tokens are never stored here. A [Kubernetes cluster](../guides/kubernetes.md#add-a-cluster) entry has `"kind": "kubernetes"` and `kubeContext`, and optionally `kubeconfig` (the file with the context; a leading `~` is your home folder), `namespace` (one for every lab instead of `c9s-<lab>`), the deploy defaults `exposeType` (`ClusterIP`, `Headless`, `LoadBalancer`, or `None`), `persistence` (`false` keeps no node storage) and `imagePullSecret`, and `label`. **Add Lab Host** > **Kubernetes cluster** writes it for you. Entries with `"kind": "local", "runtime": "c9s"` from earlier versions keep working. Clusters need Linux or WSL, where containerlab runs. |
 | `localConnection` | `true` | Show **Local**, the labs on the machine VS Code runs on, next to the lab hosts. |
 
 ## Runtime
@@ -32,7 +32,7 @@ The **Lab Hosts** page of the settings tab manages these; see [Work with labs on
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `binaryPath` | empty | Absolute path to `containerlab`. Empty looks it up in `PATH`. |
-| `runtime` | `docker` | Container runtime: `docker` or `podman`. |
+| `runtime` | `docker` | Container runtime of labs on this computer (**Local**): `docker` or `podman`. A Kubernetes cluster is a lab host of its own; add it with **Add Lab Host** > **Kubernetes cluster**. |
 | `dockerSocketPath` | `/var/run/docker.sock` | Docker or Podman socket, e.g. `/run/user/1000/podman/podman.sock`. |
 | `refreshMode` | `events` | `events` follows `containerlab events` live. `polling` runs `containerlab inspect` every `pollInterval`. |
 | `pollInterval` | `5000` | Polling interval in ms. |
@@ -89,11 +89,11 @@ A template can hold a full node definition:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `capture.preferredAction` | `Wireshark VNC` | What the capture action does: `Wireshark VNC` or `Edgeshark`. |
+| `capture.preferredAction` | `Automatic` | Where a capture opens: `Automatic`, `Wireshark on this computer`, `Wireshark VNC` or `Edgeshark`. When the lab host lacks the pick, the capture opens the automatic way and says why; see [Default capture method](../guides/labs.md#default-capture-method). |
 | `capture.remoteHostname` | empty | Host name or IP your machine uses to reach Edgeshark on the lab host. |
 | `capture.packetflixPort` | `5001` | Packetflix WebSocket port used by Edgeshark. |
 | `capture.wireshark.path` | empty | Wireshark for captures from Kubernetes (c9s) lab hosts, which pipe the capture into `wireshark -k -i -`; found on `PATH` or where it installs when empty. |
-| `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. |
+| `capture.wireshark.dockerImage` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image for Wireshark VNC sessions. For a Kubernetes cluster on this machine it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`) of wireshark-vnc-docker. |
 | `capture.wireshark.pullPolicy` | `always` | `always`, `missing`, or `never`. |
 | `capture.wireshark.theme` | `Follow VS Code theme` | Wireshark color scheme. |
 | `capture.wireshark.stayOpenInBackground` | `true` | Keep sessions alive in background tabs. Uses more memory. |

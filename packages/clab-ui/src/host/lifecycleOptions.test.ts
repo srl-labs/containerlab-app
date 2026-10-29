@@ -3,10 +3,15 @@ import test from "node:test";
 
 import {
   isPartialDestroy,
+  isValidLifecycleTimeout,
   labLifecycleCliFlags,
   labLifecycleOptionFields,
   labLifecycleQueryParams,
+  labSettingsFromOptions,
+  labSettingsOptions,
+  lifecycleTimeoutMs,
   normalizeLabLifecycleOptions,
+  normalizeLabSettings,
   restoresSnapshots
 } from "./lifecycleOptions";
 
@@ -96,6 +101,17 @@ test("options turn into clab-api-server query parameters", () => {
   ]);
 });
 
+test("lifecycle timeouts parse like Go durations", () => {
+  assert.equal(lifecycleTimeoutMs("30m"), 30 * 60_000);
+  assert.equal(lifecycleTimeoutMs(" 1h30m "), 90 * 60_000);
+  assert.equal(lifecycleTimeoutMs("1.5h"), 90 * 60_000);
+  assert.equal(lifecycleTimeoutMs("90s"), 90_000);
+  assert.equal(lifecycleTimeoutMs("1m500ms"), 60_500);
+  assert.equal(lifecycleTimeoutMs("0s"), undefined);
+  assert.equal(lifecycleTimeoutMs("10"), undefined);
+  assert.equal(lifecycleTimeoutMs(undefined), undefined);
+});
+
 test("a destroy with a node filter is partial", () => {
   assert.equal(isPartialDestroy(undefined), false);
   assert.equal(isPartialDestroy({ graceful: true }), false);
@@ -157,6 +173,7 @@ test("snapshot restore turns into flags and query parameters", () => {
 
 test("the runtime filter hides container-only options on c9s and c9s options elsewhere", () => {
   assert.deepEqual(labLifecycleOptionFields("deploy", "c9s"), [
+    "timeout",
     "maxWorkers",
     "varsFile",
     "namespace",
@@ -165,8 +182,9 @@ test("the runtime filter hides container-only options on c9s and c9s options els
     "imagePullSecret",
     "noTopologyCR"
   ]);
-  assert.deepEqual(labLifecycleOptionFields("destroy", "c9s"), ["varsFile", "namespace"]);
+  assert.deepEqual(labLifecycleOptionFields("destroy", "c9s"), ["timeout", "varsFile", "namespace"]);
   assert.deepEqual(labLifecycleOptionFields("redeploy", "podman"), [
+    "timeout",
     "maxWorkers",
     "skipPostDeploy",
     "skipLabdirAcl",
@@ -231,4 +249,63 @@ test("c9s options turn into containerlab flags and no API parameters", () => {
     "--no-topology-cr"
   ]);
   assert.deepEqual(labLifecycleQueryParams(options), [["maxWorkers", "4"]]);
+});
+
+test("the timeout is a positive Go duration, a flag and an API parameter", () => {
+  for (const value of ["30m", "1h30m", "90s", "1.5h", "500ms"]) {
+    assert.equal(isValidLifecycleTimeout(value), true, value);
+  }
+  for (const value of ["", "30", "0s", "-5m", "5 m", "10d", "5m;rm"]) {
+    assert.equal(isValidLifecycleTimeout(value), false, value);
+  }
+  const options = normalizeLabLifecycleOptions("deploy", { timeout: " 30m ", maxWorkers: 2 }, "c9s");
+  assert.deepEqual(options, { timeout: "30m", maxWorkers: 2 });
+  assert.deepEqual(labLifecycleCliFlags(options), ["--timeout", "30m", "--max-workers", "2"]);
+  assert.deepEqual(labLifecycleQueryParams(options), [
+    ["timeout", "30m"],
+    ["maxWorkers", "2"]
+  ]);
+  assert.deepEqual(normalizeLabLifecycleOptions("destroy", { timeout: "5m" }, "docker"), { timeout: "5m" });
+  assert.equal(normalizeLabLifecycleOptions("deploy", { timeout: "soon" }), undefined);
+});
+
+test("any runtime keeps the options of every runtime for the lab host to narrow", () => {
+  assert.deepEqual(normalizeLabLifecycleOptions("deploy", { namespace: "team-a", skipPostDeploy: true }, "any"), {
+    skipPostDeploy: true,
+    namespace: "team-a"
+  });
+});
+
+test("lab settings keep the options a lab remembers, not those of one run", () => {
+  const settings = normalizeLabSettings({ ...C9S_OPTIONS, timeout: "20m", varsFile: "vars.yml" });
+  assert.deepEqual(settings, {
+    timeout: "20m",
+    maxWorkers: 4,
+    skipPostDeploy: true,
+    skipLabdirAcl: true,
+    exportTemplate: "__full",
+    varsFile: "vars.yml",
+    namespace: "team-a",
+    exposeType: "LoadBalancer",
+    noPersistence: true,
+    imagePullSecret: "regcred",
+    noTopologyCR: true
+  });
+  assert.deepEqual(normalizeLabSettings(C9S_OPTIONS, "docker"), {
+    maxWorkers: 4,
+    skipPostDeploy: true,
+    skipLabdirAcl: true,
+    exportTemplate: "__full"
+  });
+  assert.equal(normalizeLabSettings({ nodeFilter: ["r1"], restoreAll: "snapshots" }), undefined);
+  assert.deepEqual(labSettingsFromOptions({ nodeFilter: ["r1"], timeout: "5m" }), { timeout: "5m" });
+});
+
+test("each action takes its part of the lab settings", () => {
+  const settings = { timeout: "20m", maxWorkers: 4, namespace: "team-a", noTopologyCR: true };
+  assert.deepEqual(labSettingsOptions("deploy", settings, "c9s"), settings);
+  assert.deepEqual(labSettingsOptions("apply", settings, "c9s"), settings);
+  assert.deepEqual(labSettingsOptions("destroy", settings, "c9s"), { timeout: "20m", namespace: "team-a" });
+  assert.deepEqual(labSettingsOptions("redeploy", settings, "docker"), { timeout: "20m", maxWorkers: 4 });
+  assert.equal(labSettingsOptions("deploy", undefined), undefined);
 });

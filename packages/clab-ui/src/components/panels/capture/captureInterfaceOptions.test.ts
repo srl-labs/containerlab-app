@@ -230,6 +230,7 @@ test("capture commands show on c9s hosts through their capture stream", () => {
     gottyOptions: false,
     nodeStats: false,
     terminalResume: true,
+    lifecycleTimeout: true,
     manifestExport: true,
     c9sDeployOptions: true,
     captureVnc: false

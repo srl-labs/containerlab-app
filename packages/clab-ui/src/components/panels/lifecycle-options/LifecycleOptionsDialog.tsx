@@ -1,5 +1,6 @@
 /* eslint-disable import-x/max-dependencies */
-// Deploy, redeploy or destroy the lab with extra containerlab options.
+// Deploy, redeploy or destroy the lab once with extra containerlab options,
+// starting from the lab's deploy settings (Lab settings > Deploy).
 import React from "react";
 import Autocomplete from "@mui/material/Autocomplete";
 import Box from "@mui/material/Box";
@@ -15,11 +16,13 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
+import { unsupportedReason, type KubernetesLimitKey } from "../../../host/kubernetesLimits";
 import type { LabHostProfile } from "../../../host/labHostSupport";
 import type {
   LabLifecycleOptionKind,
   LabLifecycleOptions,
-  LabRuntimeKind
+  LabRuntimeKind,
+  LabSettings
 } from "../../../host/lifecycleOptions";
 import type { DeploymentState } from "../../../core/types/topology";
 import { useGraphStore } from "../../../stores/graphStore";
@@ -31,9 +34,13 @@ import { InputField } from "../../ui/form/InputField";
 import {
   buildLifecycleRun,
   createLifecycleOptionsForm,
+  formForHost,
   isCleanupBlocked,
+  labSettingsFromForm,
   lifecycleKindTakes,
   maxWorkersError,
+  timeoutDefaultLabel,
+  timeoutError,
   varsFileError,
   type LifecycleOptionsForm
 } from "./lifecycleOptionsForm";
@@ -47,8 +54,18 @@ export interface LifecycleOptionsDialogProps {
   canRestoreSnapshots?: boolean;
   /** The lab host's runtime; options containerlab rejects there are hidden. */
   runtime?: LabRuntimeKind;
-  /** c9s: the lab host takes the c9s deploy options, with these defaults. */
+  /** c9s: the lab host's deploy defaults, which the c9s options override. */
   c9sProfile?: LabHostProfile;
+  /** c9s: the lab host sets the c9s options itself (a lab server); they show read-only. */
+  c9sReadOnly?: boolean;
+  /** The lab host takes containerlab's `--timeout`; an older clab-api-server does not. */
+  canSetTimeout?: boolean;
+  /** The lab host's profile, for the defaults it reports, e.g. its timeout. */
+  labHostProfile?: LabHostProfile;
+  /** The lab's deploy settings on its lab host; they fill in the form. */
+  labSettings?: LabSettings;
+  /** Remember a run's options as the lab's deploy settings. Without it the dialog only runs actions. */
+  onSaveSettings?: (settings: LabSettings | undefined) => Promise<void>;
   onClose: () => void;
   onRun: (action: TopoViewerLifecycleAction, options?: LabLifecycleOptions) => void;
 }
@@ -126,6 +143,28 @@ const OptionCheckbox: React.FC<{
   />
 );
 
+type OptionField = Parameters<typeof lifecycleKindTakes>[1];
+/** Why an option is greyed out on this lab host, or undefined where it is offered. */
+type Limited = (field: OptionField) => string | undefined;
+
+/** Options Docker and Podman take that a Kubernetes (c9s) lab host refuses, and the reason to show. */
+const KUBERNETES_REFUSED: Partial<Record<OptionField, KubernetesLimitKey>> = {
+  nodeFilter: "nodeFilter",
+  graceful: "graceful",
+  keepMgmtNet: "keepMgmtNet",
+  skipPostDeploy: "skipPostDeploy",
+  skipLabdirAcl: "skipLabdirAcl",
+  exportTemplate: "exportTemplate",
+  restoreAll: "vmSnapshots"
+};
+
+/** Greyed out, not hidden: an option the action takes elsewhere but this lab host refuses. */
+function limitedOn(kind: LabLifecycleOptionKind, field: OptionField, runtime: LabRuntimeKind): string | undefined {
+  const key = KUBERNETES_REFUSED[field];
+  if (!key || lifecycleKindTakes(kind, field, runtime) || !lifecycleKindTakes(kind, field, "docker")) return undefined;
+  return unsupportedReason({ runtime }, key);
+}
+
 type FormUpdate = <K extends keyof LifecycleOptionsForm>(
   key: K,
   value: LifecycleOptionsForm[K]
@@ -137,8 +176,22 @@ const SnapshotRestoreSection: React.FC<{
   form: LifecycleOptionsForm;
   nodeNames: string[];
   error: string | undefined;
+  limited: Limited;
   update: FormUpdate;
-}> = ({ canRestore, form, nodeNames, error, update }) => {
+}> = ({ canRestore, form, nodeNames, error, limited, update }) => {
+  const reason = limited("restoreAll");
+  if (reason !== undefined) {
+    return (
+      <OptionCheckbox
+        testId="lifecycle-options-restore"
+        label="Restore VM snapshots"
+        description={reason}
+        checked={false}
+        disabled
+        onChange={() => undefined}
+      />
+    );
+  }
   if (canRestore !== true || !lifecycleKindTakes(form.kind, "restoreAll")) return null;
   return (
     <>
@@ -163,19 +216,134 @@ const SnapshotRestoreSection: React.FC<{
   );
 };
 
+/** The options of one run, never remembered. */
+const RunOnlyOptions: React.FC<{
+  form: LifecycleOptionsForm;
+  takes: (field: OptionField) => boolean;
+  limited: Limited;
+  update: FormUpdate;
+}> = ({ form, takes, limited, update }) => {
+  const cleanupBlocked = isCleanupBlocked(form);
+  return (
+    <>
+      <OptionCheckbox
+        testId="lifecycle-options-cleanup"
+        label="Clean up"
+        description={
+          cleanupBlocked
+            ? "Not available when only some nodes are destroyed."
+            : CLEANUP_DESCRIPTIONS[form.kind]
+        }
+        checked={form.cleanup && !cleanupBlocked}
+        disabled={cleanupBlocked}
+        onChange={(checked) => update("cleanup", checked)}
+      />
+      {takes("graceful") && (
+        <OptionCheckbox
+          testId="lifecycle-options-graceful"
+          label="Graceful shutdown"
+          description={limited("graceful") ?? "Stop containers before removing them."}
+          checked={form.graceful && limited("graceful") === undefined}
+          disabled={limited("graceful") !== undefined}
+          onChange={(checked) => update("graceful", checked)}
+        />
+      )}
+      {takes("keepMgmtNet") && (
+        <OptionCheckbox
+          testId="lifecycle-options-keep-mgmt-net"
+          label="Keep management network"
+          description={limited("keepMgmtNet") ?? "Leave the management network in place."}
+          checked={form.keepMgmtNet && limited("keepMgmtNet") === undefined}
+          disabled={limited("keepMgmtNet") !== undefined}
+          onChange={(checked) => update("keepMgmtNet", checked)}
+        />
+      )}
+    </>
+  );
+};
+
+/** Timeout, max workers and export template, where the action and host take them. */
+const LimitFields: React.FC<{
+  form: LifecycleOptionsForm;
+  takes: (field: OptionField) => boolean;
+  limited: Limited;
+  canSetTimeout: boolean;
+  hostProfile: LabHostProfile | undefined;
+  update: FormUpdate;
+}> = ({ form, takes, limited, canSetTimeout, hostProfile, update }) => {
+  const showTimeout = canSetTimeout && takes("timeout");
+  const timeoutDefault = timeoutDefaultLabel(form.runtime, hostProfile);
+  const workersError = maxWorkersError(form.maxWorkers);
+  const durationError = timeoutError(form.timeout);
+  if (!showTimeout && !takes("maxWorkers") && !takes("exportTemplate")) return null;
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+      {showTimeout && (
+        <InputField
+          id="lifecycle-options-timeout"
+          label="Timeout"
+          value={form.timeout}
+          onChange={(value) => update("timeout", value)}
+          placeholder={timeoutDefault.placeholder}
+          error={durationError !== undefined}
+          helperText={
+            durationError ??
+            `How long containerlab waits for the lab runtime, e.g. 30m. Raise it when images pull slowly. Empty: ${timeoutDefault.text}.`
+          }
+        />
+      )}
+      {takes("maxWorkers") && (
+        <InputField
+          id="lifecycle-options-max-workers"
+          label="Max workers"
+          type="number"
+          min={1}
+          value={form.maxWorkers}
+          onChange={(value) => update("maxWorkers", value)}
+          placeholder="No limit"
+          error={workersError !== undefined}
+          helperText={
+            workersError ??
+            (form.runtime === "c9s"
+              ? "Kubernetes requests sent in parallel."
+              : "Nodes handled in parallel.")
+          }
+        />
+      )}
+      {takes("exportTemplate") && (
+        <InputField
+          id="lifecycle-options-export-template"
+          label="Export template"
+          value={limited("exportTemplate") === undefined ? form.exportTemplate : ""}
+          onChange={(value) => update("exportTemplate", value)}
+          placeholder="Default"
+          disabled={limited("exportTemplate") !== undefined}
+          helperText={limited("exportTemplate") ?? "Use __full to export everything."}
+        />
+      )}
+    </Box>
+  );
+};
+
 export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   open,
   deploymentState,
   canRestoreSnapshots,
   runtime = "docker",
   c9sProfile,
+  c9sReadOnly = false,
+  canSetTimeout = false,
+  labHostProfile,
+  labSettings,
+  onSaveSettings,
   onClose,
   onRun
 }) => {
   const nodeNames = useTopologyNodeNames();
   const [form, setForm] = React.useState<LifecycleOptionsForm>(() =>
-    createLifecycleOptionsForm(initialKind(deploymentState), runtime)
+    createLifecycleOptionsForm(initialKind(deploymentState), runtime, labSettings)
   );
+  const [remember, setRemember] = React.useState(true);
   React.useEffect(() => {
     setForm((current) => (current.runtime === runtime ? current : { ...current, runtime }));
   }, [runtime]);
@@ -185,24 +353,28 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
     []
   );
 
-  const takes = (field: Parameters<typeof lifecycleKindTakes>[1]) =>
-    lifecycleKindTakes(form.kind, field, form.runtime);
-  const cleanupBlocked = isCleanupBlocked(form);
-  const workersError = maxWorkersError(form.maxWorkers);
+  // What a c9s host refuses stays visible, greyed out with why.
+  const limited: Limited = (field) => limitedOn(form.kind, field, form.runtime);
+  const takes = (field: OptionField) =>
+    lifecycleKindTakes(form.kind, field, form.runtime) || limited(field) !== undefined;
   const varsError = varsFileError(form.varsFile);
   const showC9s = c9sProfile !== undefined && takes("namespace");
   const c9sError =
     showC9s &&
+    !c9sReadOnly &&
     (kubeNameError(form.namespace, "namespace") !== undefined ||
       kubeNameError(form.imagePullSecret, "secret") !== undefined);
-  const { request, snapshotError } = buildLifecycleRun(form, canRestoreSnapshots === true);
+  const { request, snapshotError } = buildLifecycleRun(form, canRestoreSnapshots === true, canSetTimeout);
+  const hostForm = formForHost(form, { canRestoreSnapshots: false, canSetTimeout });
+  // Destroy takes too few options to remember; deploy and redeploy remember theirs.
+  const canRemember = onSaveSettings !== undefined && form.kind !== "destroy";
 
   const kindAvailable = isKindAvailable(form.kind, deploymentState);
-  const runLabel = KIND_LABELS[form.kind];
 
   const blocked = [
     !kindAvailable,
-    workersError !== undefined,
+    maxWorkersError(form.maxWorkers) !== undefined,
+    canSetTimeout && timeoutError(form.timeout) !== undefined,
     varsError !== undefined,
     snapshotError !== undefined,
     c9sError
@@ -210,6 +382,8 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
 
   const handleRun = () => {
     if (blocked) return;
+    // The run goes ahead even when the lab host cannot remember its options.
+    if (canRemember && remember) void onSaveSettings?.(labSettingsFromForm(hostForm)).catch(() => undefined);
     onRun(request.action, request.options);
   };
 
@@ -256,13 +430,14 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             options={nodeNames}
             value={form.nodeFilter}
             onChange={(_event, value) => update("nodeFilter", value)}
+            disabled={limited("nodeFilter") !== undefined}
             filterSelectedOptions
             renderInput={(params) => (
               <TextField
                 {...params}
                 label="Nodes"
                 placeholder={form.nodeFilter.length === 0 ? "All nodes" : undefined}
-                helperText={NODE_FILTER_HELP[form.kind]}
+                helperText={limited("nodeFilter") ?? NODE_FILTER_HELP[form.kind]}
                 slotProps={{
                   ...params.slotProps,
                   htmlInput: {
@@ -275,43 +450,24 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           />
         )}
 
+        <LimitFields
+          form={form}
+          takes={takes}
+          limited={limited}
+          canSetTimeout={canSetTimeout}
+          hostProfile={labHostProfile}
+          update={update}
+        />
+
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <OptionCheckbox
-            testId="lifecycle-options-cleanup"
-            label="Clean up"
-            description={
-              cleanupBlocked
-                ? "Not available when only some nodes are destroyed."
-                : CLEANUP_DESCRIPTIONS[form.kind]
-            }
-            checked={form.cleanup && !cleanupBlocked}
-            disabled={cleanupBlocked}
-            onChange={(checked) => update("cleanup", checked)}
-          />
-          {takes("graceful") && (
-            <OptionCheckbox
-              testId="lifecycle-options-graceful"
-              label="Graceful shutdown"
-              description="Stop containers before removing them."
-              checked={form.graceful}
-              onChange={(checked) => update("graceful", checked)}
-            />
-          )}
-          {takes("keepMgmtNet") && (
-            <OptionCheckbox
-              testId="lifecycle-options-keep-mgmt-net"
-              label="Keep management network"
-              description="Leave the management network in place."
-              checked={form.keepMgmtNet}
-              onChange={(checked) => update("keepMgmtNet", checked)}
-            />
-          )}
+          <RunOnlyOptions form={form} takes={takes} limited={limited} update={update} />
           {takes("skipPostDeploy") && (
             <OptionCheckbox
               testId="lifecycle-options-skip-post-deploy"
               label="Skip post-deploy actions"
-              description="Skip node configuration after the containers start."
-              checked={form.skipPostDeploy}
+              description={limited("skipPostDeploy") ?? "Skip node configuration after the containers start."}
+              checked={form.skipPostDeploy && limited("skipPostDeploy") === undefined}
+              disabled={limited("skipPostDeploy") !== undefined}
               onChange={(checked) => update("skipPostDeploy", checked)}
             />
           )}
@@ -319,8 +475,9 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             <OptionCheckbox
               testId="lifecycle-options-skip-labdir-acl"
               label="Skip lab directory ACLs"
-              description="Skip extended file ACLs on the lab directory."
-              checked={form.skipLabdirAcl}
+              description={limited("skipLabdirAcl") ?? "Skip extended file ACLs on the lab directory."}
+              checked={form.skipLabdirAcl && limited("skipLabdirAcl") === undefined}
+              disabled={limited("skipLabdirAcl") !== undefined}
               onChange={(checked) => update("skipLabdirAcl", checked)}
             />
           )}
@@ -329,43 +486,17 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
             form={form}
             nodeNames={nodeNames}
             error={snapshotError}
+            limited={limited}
             update={update}
           />
         </Box>
-
-        {(takes("maxWorkers") || takes("exportTemplate")) && (
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
-            {takes("maxWorkers") && (
-              <InputField
-                id="lifecycle-options-max-workers"
-                label="Max workers"
-                type="number"
-                min={1}
-                value={form.maxWorkers}
-                onChange={(value) => update("maxWorkers", value)}
-                placeholder="No limit"
-                error={workersError !== undefined}
-                helperText={workersError ?? "Nodes handled in parallel."}
-              />
-            )}
-            {takes("exportTemplate") && (
-              <InputField
-                id="lifecycle-options-export-template"
-                label="Export template"
-                value={form.exportTemplate}
-                onChange={(value) => update("exportTemplate", value)}
-                placeholder="Default"
-                helperText="Use __full to export everything."
-              />
-            )}
-          </Box>
-        )}
 
         {showC9s && (
           <C9sDeployFields
             form={form}
             profile={c9sProfile}
             namespaceOnly={!takes("exposeType")}
+            readOnly={c9sReadOnly}
             update={(key, value) => update(key, value as LifecycleOptionsForm[typeof key])}
             renderCheckbox={(props) => <OptionCheckbox {...props} />}
           />
@@ -383,6 +514,16 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
               varsError ??
               "Relative to the topology file. Empty uses the vars file next to the topology, if any."
             }
+          />
+        )}
+
+        {canRemember && (
+          <OptionCheckbox
+            testId="lifecycle-options-remember"
+            label="Remember as this lab's deploy settings"
+            description="Later deploys, redeploys and applies of this lab on this lab host use these options too. Lab settings > Deploy shows and edits them."
+            checked={remember}
+            onChange={setRemember}
           />
         )}
 
@@ -414,7 +555,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           disabled={blocked}
           data-testid="lifecycle-options-run"
         >
-          {runLabel}
+          {KIND_LABELS[form.kind]}
         </Button>
       </DialogActions>
     </Dialog>

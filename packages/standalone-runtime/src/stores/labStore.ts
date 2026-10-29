@@ -710,6 +710,14 @@ function applyInterfaceEvent(
 ): void {
   const { attrs, containerName, endpointLabs, lab, labKey } = context;
   const existing = lab.containers.get(containerName);
+  if (!existing && action === "delete") {
+    // The removed interface of a node that is already gone (on c9s they are
+    // reported after the destroy): no placeholder node, or the lab comes back.
+    if (lab.containers.size > 0) {
+      endpointLabs.set(labKey, lab);
+    }
+    return;
+  }
   const placeholder = extractContainerState(endpointId, attrs, action);
   const container: ContainerState = existing
     ? { ...existing, endpointId, interfaces: new Map(existing.interfaces) }

@@ -9,6 +9,7 @@ import {
   CheckboxField,
   DynamicList,
   KeyValueList,
+  HostLimited,
   PanelAddSection,
   PanelSection
 } from "../../ui/form";
@@ -57,14 +58,16 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance
         min={0}
         helperText={inheritedFieldHint({ data, inheritance }, "cpu")}
       />
-      <InputField
-        id="node-cpu-set"
-        label="CPU Set"
-        value={data.cpuSet ?? ""}
-        onChange={(v) => onChange({ cpuSet: v })}
-        placeholder="e.g., 0-3, 0,3"
-        helperText={inheritedFieldHint({ data, inheritance }, "cpuSet")}
-      />
+      <HostLimited limit="nodeCpuSet" keepEditable={(data.cpuSet ?? "") !== ""}>
+        <InputField
+          id="node-cpu-set"
+          label="CPU Set"
+          value={data.cpuSet ?? ""}
+          onChange={(v) => onChange({ cpuSet: v })}
+          placeholder="e.g., 0-3, 0,3"
+          helperText={inheritedFieldHint({ data, inheritance }, "cpuSet")}
+        />
+      </HostLimited>
       <InputField
         id="node-memory"
         label="Memory Limit"
@@ -236,14 +239,16 @@ const RuntimeSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => 
         options={withCurrentOption(PULL_POLICY_OPTIONS, data.imagePullPolicy ?? "")}
         helperText={inheritedFieldHint({ data, inheritance }, "imagePullPolicy")}
       />
-      <SelectField
-        id="node-runtime"
-        label="Container Runtime"
-        value={data.runtime ?? ""}
-        onChange={(v) => onChange({ runtime: v })}
-        options={withCurrentOption(RUNTIME_OPTIONS, data.runtime ?? "")}
-        helperText={inheritedFieldHint({ data, inheritance }, "runtime")}
-      />
+      <HostLimited limit="nodeRuntime" keepEditable={(data.runtime ?? "") !== ""}>
+        <SelectField
+          id="node-runtime"
+          label="Container Runtime"
+          value={data.runtime ?? ""}
+          onChange={(v) => onChange({ runtime: v })}
+          options={withCurrentOption(RUNTIME_OPTIONS, data.runtime ?? "")}
+          helperText={inheritedFieldHint({ data, inheritance }, "runtime")}
+        />
+      </HostLimited>
     </Box>
   </PanelSection>
 );

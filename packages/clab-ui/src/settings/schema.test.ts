@@ -95,9 +95,9 @@ test("lab host entries are clab-api-servers or Kubernetes clusters", () => {
         sessionDuration: "24h",
       },
       { kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app" },
+      { kind: "kubernetes", kubeContext: "kind-c9s-app", imagePullSecret: "regcred" },
       {
-        kind: "local",
-        runtime: "c9s",
+        kind: "kubernetes",
         kubeContext: "prod",
         kubeconfig: "~/.kube/prod.yaml",
         namespace: "team-a",
@@ -120,10 +120,12 @@ test("lab host entries are clab-api-servers or Kubernetes clusters", () => {
       exposeType: "NodePort",
     },
     { kind: "local", runtime: "c9s", kubeContext: "x", persistence: "no" },
+    { kind: "kubernetes", runtime: "c9s", kubeContext: "x" },
+    { kind: "kubernetes" },
   ])
     assert.match(
       validateSettingsChange(connections, [invalid]) ?? "",
-      /matches none of: clab-api-server, Kubernetes cluster \(c9s\)/,
+      /matches none of: clab-api-server, Kubernetes cluster, Kubernetes cluster \(older form\)/,
       JSON.stringify(invalid),
     );
 });

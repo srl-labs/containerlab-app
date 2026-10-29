@@ -25,6 +25,14 @@ export function kubeconfigFiles(c9s: Pick<C9sHostOptions, "kubeconfig">, env: No
 }
 
 /**
+ * The kubeconfig file a cluster lab host without its own file reads first:
+ * `CLAB_KUBECONFIG`, the first of `KUBECONFIG`, or `~/.kube/config`.
+ */
+export function defaultKubeconfigFile(env: NodeJS.ProcessEnv = process.env): string {
+  return kubeconfigFiles({}, env)[0] ?? path.join(env.HOME?.trim() || os.homedir(), ".kube", "config");
+}
+
+/**
  * Loads the kubeconfig of a c9s host and selects its context. Without a
  * kubeconfig file, a pod uses its ServiceAccount. Exec credential plugins
  * (GKE, EKS, OIDC) run through client-node when a request needs a token.
@@ -80,22 +88,44 @@ export interface KubeContextInfo {
   current: boolean;
 }
 
-/** The contexts of the kubeconfig, for "Add lab host"; empty when there is none. */
-export function listKubeContexts(
+/** The contexts of a kubeconfig, or why it does not load. */
+export interface KubeconfigContexts {
+  /** The file (or path list) that was read. */
+  kubeconfig: string;
+  contexts: KubeContextInfo[];
+  /** Why the file does not load, or that it has no context. */
+  error?: string;
+}
+
+/** The contexts of the kubeconfig, for the cluster form of "Add lab host", with why it fails. */
+export function readKubeContexts(
   c9s: Pick<C9sHostOptions, "kubeconfig"> = {},
   env: NodeJS.ProcessEnv = process.env
-): KubeContextInfo[] {
+): KubeconfigContexts {
+  const home = env.HOME?.trim() || os.homedir();
+  const kubeconfig = c9s.kubeconfig?.trim()
+    ? expandKubeconfigPath(c9s.kubeconfig.trim(), home)
+    : kubeconfigFiles({}, env).join(path.delimiter);
   let config: KubeConfig;
   try {
-    config = loadKubeConfig({ ...c9s, kubeContext: undefined }, { ...env, KUBERNETES_SERVICE_HOST: "" });
-  } catch {
-    return [];
+    config = loadKubeConfig({ kubeconfig, kubeContext: undefined }, { ...env, KUBERNETES_SERVICE_HOST: "" });
+  } catch (error) {
+    return { kubeconfig, contexts: [], error: error instanceof Error ? error.message : String(error) };
   }
   const current = config.getCurrentContext();
-  return config.getContexts().map((context) => ({
+  const contexts = config.getContexts().map((context) => ({
     name: context.name,
     cluster: context.cluster,
     ...(context.namespace ? { namespace: context.namespace } : {}),
     current: context.name === current
   }));
+  return contexts.length > 0 ? { kubeconfig, contexts } : { kubeconfig, contexts, error: `${kubeconfig} has no context.` };
+}
+
+/** The contexts of the kubeconfig, for "Add lab host"; empty when there is none. */
+export function listKubeContexts(
+  c9s: Pick<C9sHostOptions, "kubeconfig"> = {},
+  env: NodeJS.ProcessEnv = process.env
+): KubeContextInfo[] {
+  return readKubeContexts(c9s, env).contexts;
 }

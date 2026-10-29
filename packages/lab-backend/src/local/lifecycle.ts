@@ -1,6 +1,11 @@
 import path from "node:path";
 
-import { labLifecycleCliFlags, topologyFileStem, type LabLifecycleOptions } from "@containerlab/clab-ui/host";
+import {
+  labLifecycleCliFlags,
+  labSettingsOptions,
+  topologyFileStem,
+  type LabLifecycleOptions
+} from "@containerlab/clab-ui/host";
 
 import { c9sPlanFields } from "../c9sPlan.ts";
 import type {
@@ -49,6 +54,9 @@ export function lifecycleLineStream(line: string): "stdout" | "stderr" {
     ? "stderr"
     : "stdout";
 }
+
+/** The last output lines of a lifecycle command searched for its error. */
+const ERROR_TAIL_LINES = 40;
 
 const ACTION_VERBS: Record<LabLifecycleAction, string> = {
   deploy: "deploy",
@@ -189,7 +197,12 @@ export class LocalLifecycle {
         break;
       case "apply":
         if (options.dryRun) args.push("--dry-run");
-        if (runtime === "c9s") args.push(...labLifecycleCliFlags(this.withHostDefaults(undefined)));
+        // A lab's settings (timeout, workers, c9s options) hold for apply as for deploy.
+        args.push(
+          ...labLifecycleCliFlags(
+            this.withHostDefaults(labSettingsOptions("apply", options.lifecycleOptions, runtime))
+          )
+        );
         break;
       case "start":
       case "stop":
@@ -213,14 +226,15 @@ export class LocalLifecycle {
     return { args, cwd, labName: lab.labName, env };
   }
 
-  /** A c9s host's deploy defaults (exposure, persistence) where the options leave them open. */
+  /** A c9s host's deploy defaults (exposure, persistence, pull secret) where the options leave them open. */
   private withHostDefaults(options: LabLifecycleOptions | undefined): LabLifecycleOptions | undefined {
     const c9s = this.context.options.c9s;
     if (this.context.options.runtime !== "c9s" || !c9s) return options;
     return {
       ...options,
       ...(options?.exposeType === undefined && c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
-      ...(options?.noPersistence === undefined && c9s.persistence === false ? { noPersistence: true } : {})
+      ...(options?.noPersistence === undefined && c9s.persistence === false ? { noPersistence: true } : {}),
+      ...(options?.imagePullSecret === undefined && c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {})
     };
   }
 
@@ -279,11 +293,11 @@ export class LocalLifecycle {
     options: LifecycleRunOptions = {}
   ): Promise<LifecycleActionResult> {
     if (action === "apply" && options.dryRun) {
-      return { result: await this.plan(lab), logs: [] };
+      return { result: await this.plan(lab, options.lifecycleOptions), logs: [] };
     }
     const release = this.acquire(lab, action);
     try {
-      const plan = action === "apply" ? await this.plan(lab) : undefined;
+      const plan = action === "apply" ? await this.plan(lab, options.lifecycleOptions) : undefined;
       const prepared = await this.prepare(action, lab, options);
       const [file, args] = containerlabCommand(this.context.options, prepared.args);
       const result = await runCommand(file, args, {
@@ -296,7 +310,7 @@ export class LocalLifecycle {
         .map(filterLifecycleLine)
         .filter((line): line is string => line !== undefined);
       if (result.code !== 0) {
-        const detail = lastContainerlabError(stripAnsi(result.stderr)) ?? `exit status ${result.code}`;
+        const detail = lastContainerlabError(result.stderr) ?? `exit status ${result.code}`;
         throw Object.assign(new LabBackendError(this.failure(action, labDisplayName(lab), detail), 500), { logs });
       }
       return {
@@ -334,8 +348,12 @@ export class LocalLifecycle {
 
     async function* events(): AsyncGenerator<LifecycleStreamEvent> {
       let lastError: string | undefined;
+      // containerlab's boxed error spans lines the log filter drops.
+      const tail: string[] = [];
       try {
         for await (const output of command.lines) {
+          tail.push(output.line);
+          if (tail.length > ERROR_TAIL_LINES) tail.shift();
           const line = filterLifecycleLine(output.line);
           if (!line) continue;
           lastError = lastContainerlabError(line) ?? lastError;
@@ -345,9 +363,10 @@ export class LocalLifecycle {
         if (exit.code === 0) {
           yield startStop && message ? { type: "done", message } : { type: "done" };
         } else if (!options.signal?.aborted) {
+          const detail = lastContainerlabError(tail.join("\n")) ?? lastError;
           yield {
             type: "error",
-            error: failure(lastError ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
+            error: failure(detail ?? (exit.signal ? `terminated by ${exit.signal}` : `exit status ${exit.code}`))
           };
         }
       } finally {
@@ -359,8 +378,13 @@ export class LocalLifecycle {
   }
 
   /** `containerlab apply --dry-run`: what applying the topology would change. */
-  async plan(lab: LabTarget) {
-    const prepared = await this.prepare("apply", lab, { dryRun: true }, ["--format", "json"]);
+  async plan(lab: LabTarget, lifecycleOptions?: LabLifecycleOptions) {
+    const prepared = await this.prepare(
+      "apply",
+      lab,
+      { dryRun: true, ...(lifecycleOptions ? { lifecycleOptions } : {}) },
+      ["--format", "json"]
+    );
     const [file, args] = containerlabCommand(this.context.options, prepared.args);
     const result = await runCommand(file, args, { cwd: prepared.cwd, env: prepared.env });
     if (result.code !== 0) {

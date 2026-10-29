@@ -34,11 +34,12 @@ const UNTIL_STOPPED = "";
 /** Where the capture goes and for how long; a download always has an end. */
 const StreamCaptureControls: React.FC<{
   deliveries: readonly CaptureDelivery[];
+  unavailable?: Partial<Record<CaptureDelivery, string>>;
   delivery: CaptureDelivery;
   duration: string;
   onDeliveryChange: (delivery: CaptureDelivery) => void;
   onDurationChange: (duration: string) => void;
-}> = ({ deliveries, delivery, duration, onDeliveryChange, onDurationChange }) => (
+}> = ({ deliveries, unavailable, delivery, duration, onDeliveryChange, onDurationChange }) => (
   <Box sx={{ display: "flex", gap: 1.5 }}>
     <TextField
       select
@@ -54,6 +55,25 @@ const StreamCaptureControls: React.FC<{
           {CAPTURE_DELIVERY_LABELS[entry]}
         </MenuItem>
       ))}
+      {Object.entries(unavailable ?? {}).flatMap(([entry, reason]) =>
+        deliveries.includes(entry as CaptureDelivery) || !reason
+          ? []
+          : [
+              // Shown, not hidden: the reason says what makes it available.
+              <MenuItem
+                key={entry}
+                value={entry}
+                disabled
+                data-testid={`capture-delivery-${entry}`}
+                sx={{ display: "block", whiteSpace: "normal" }}
+              >
+                {CAPTURE_DELIVERY_LABELS[entry as CaptureDelivery]}
+                <Box component="span" sx={{ display: "block", fontSize: 12 }}>
+                  {reason}
+                </Box>
+              </MenuItem>
+            ]
+      )}
     </TextField>
     <TextField
       select
@@ -160,8 +180,14 @@ const StreamCaptureDialogContent: React.FC<{ request: RuntimeCaptureRequest; str
               {error}
             </Box>
           ) : null}
+          {stream.notice !== undefined ? (
+            <Box sx={{ fontSize: 12, color: "text.secondary" }} data-testid="capture-delivery-notice">
+              {stream.notice}
+            </Box>
+          ) : null}
           <StreamCaptureControls
             deliveries={stream.deliveries}
+            {...(stream.unavailable ? { unavailable: stream.unavailable } : {})}
             delivery={delivery}
             duration={duration}
             onDeliveryChange={changeDelivery}

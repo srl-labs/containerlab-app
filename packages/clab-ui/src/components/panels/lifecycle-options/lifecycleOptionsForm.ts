@@ -1,15 +1,20 @@
 // Form state of the lifecycle options dialog and the request it produces.
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
+import type { LabHostProfile } from "../../../host/labHostSupport";
 import {
+  containerlabDefaultTimeout,
+  isValidLifecycleTimeout,
   isValidVarsFile,
   labLifecycleOptionFields,
   labLifecycleCliFlags,
+  labSettingsFromOptions,
   normalizeLabLifecycleOptions,
   type LabLifecycleOptionField,
   type LabLifecycleOptionKind,
   type C9sExposeType,
   type LabLifecycleOptions,
   type LabRuntimeKind,
+  type LabSettings,
   type LabSnapshotRestore
 } from "../../../host/lifecycleOptions";
 
@@ -18,6 +23,8 @@ export interface LifecycleOptionsForm {
   /** The lab host's runtime: it decides which options containerlab takes. */
   runtime: LabRuntimeKind;
   cleanup: boolean;
+  /** containerlab's `--timeout`, e.g. `30m`; empty uses containerlab's default. */
+  timeout: string;
   nodeFilter: string[];
   maxWorkers: string;
   skipPostDeploy: boolean;
@@ -47,31 +54,55 @@ export interface LifecycleOptionsRequest {
   command: string;
 }
 
+/** A form for an action, filled in from the lab's settings where it has them. */
 export function createLifecycleOptionsForm(
   kind: LabLifecycleOptionKind,
-  runtime: LabRuntimeKind = "docker"
+  runtime: LabRuntimeKind = "docker",
+  settings?: LabSettings
 ): LifecycleOptionsForm {
   return {
     kind,
     runtime,
     cleanup: false,
+    timeout: settings?.timeout ?? "",
     nodeFilter: [],
-    maxWorkers: "",
-    skipPostDeploy: false,
-    skipLabdirAcl: false,
-    exportTemplate: "",
+    maxWorkers: settings?.maxWorkers !== undefined ? String(settings.maxWorkers) : "",
+    skipPostDeploy: settings?.skipPostDeploy === true,
+    skipLabdirAcl: settings?.skipLabdirAcl === true,
+    exportTemplate: settings?.exportTemplate ?? "",
     graceful: false,
     keepMgmtNet: false,
-    varsFile: "",
+    varsFile: settings?.varsFile ?? "",
     restoreSnapshots: false,
     restoreAll: "snapshots",
     restore: [],
-    namespace: "",
-    exposeType: "",
-    noPersistence: false,
-    imagePullSecret: "",
-    noTopologyCR: false
+    namespace: settings?.namespace ?? "",
+    exposeType: settings?.exposeType ?? "",
+    noPersistence: settings?.noPersistence === true,
+    imagePullSecret: settings?.imagePullSecret ?? "",
+    noTopologyCR: settings?.noTopologyCR === true
   };
+}
+
+/**
+ * What an empty Timeout uses on a lab host: the default it reports, or
+ * containerlab's for the runtime while the host has not answered. Undefined
+ * for a lab server that does not report its default.
+ */
+function hostTimeoutDefault(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): string | undefined {
+  if (profile?.defaultTimeout !== undefined) return profile.defaultTimeout;
+  return profile === undefined ? containerlabDefaultTimeout(runtime) : undefined;
+}
+
+/** How the Timeout field names the lab host's default: `10m`, or the lab server's when it does not say. */
+export function timeoutDefaultLabel(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): {
+  placeholder: string;
+  text: string;
+} {
+  const value = hostTimeoutDefault(runtime, profile);
+  return value === undefined
+    ? { placeholder: "Server default", text: "the lab server's default" }
+    : { placeholder: value, text: value };
 }
 
 export function lifecycleKindTakes(
@@ -95,6 +126,13 @@ export function maxWorkersError(value: string): string | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? undefined : "Enter a whole number above 0";
 }
 
+/** Problem with the timeout field, if any. Empty means containerlab's default. */
+export function timeoutError(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed === "" || isValidLifecycleTimeout(trimmed)) return undefined;
+  return "Enter a duration such as 30m or 1h30m";
+}
+
 /** Problem with the variables file field, if any. Empty means the default file. */
 export function varsFileError(value: string): string | undefined {
   const trimmed = value.trim();
@@ -113,6 +151,7 @@ export function buildLifecycleOptionsRequest(form: LifecycleOptionsForm): Lifecy
   const cleanup = form.cleanup && !isCleanupBlocked(form);
   const maxWorkers = form.maxWorkers.trim() === "" ? undefined : Number(form.maxWorkers.trim());
   const options = normalizeLabLifecycleOptions(form.kind, {
+    timeout: form.timeout,
     nodeFilter: form.nodeFilter,
     maxWorkers,
     skipPostDeploy: form.skipPostDeploy,
@@ -147,13 +186,40 @@ export function restoreError(form: LifecycleOptionsForm): string | undefined {
 }
 
 /**
+ * The form as a lab host takes it: snapshot restore and the timeout left out
+ * on lab hosts that cannot do them.
+ */
+export function formForHost(
+  form: LifecycleOptionsForm,
+  host: { canRestoreSnapshots: boolean; canSetTimeout: boolean }
+): LifecycleOptionsForm {
+  return {
+    ...form,
+    ...(host.canRestoreSnapshots ? {} : { restoreSnapshots: false }),
+    ...(host.canSetTimeout ? {} : { timeout: "" })
+  };
+}
+
+/**
  * The request of the form and what keeps it from running, with snapshot
- * restore left out on lab hosts that cannot do it.
+ * restore and the timeout left out on lab hosts that cannot do them.
  */
 export function buildLifecycleRun(
   form: LifecycleOptionsForm,
-  canRestoreSnapshots: boolean
+  canRestoreSnapshots: boolean,
+  canSetTimeout = true
 ): { request: LifecycleOptionsRequest; snapshotError: string | undefined } {
-  const effective = canRestoreSnapshots ? form : { ...form, restoreSnapshots: false };
+  const effective = formForHost(form, { canRestoreSnapshots, canSetTimeout });
   return { request: buildLifecycleOptionsRequest(effective), snapshotError: restoreError(effective) };
+}
+
+/**
+ * The lab settings a form holds: its deploy options without those of one run
+ * (node filter, snapshot restore, cleanup). Undefined when it holds none.
+ */
+export function labSettingsFromForm(form: LifecycleOptionsForm): LabSettings | undefined {
+  return labSettingsFromOptions(
+    buildLifecycleOptionsRequest({ ...form, kind: "deploy", cleanup: false, nodeFilter: [], restoreSnapshots: false })
+      .options
+  );
 }

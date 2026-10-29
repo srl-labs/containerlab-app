@@ -30,6 +30,7 @@ function features(containerRuntime: boolean): LabBackendFeatures {
     gottyOptions: true,
     nodeStats: true,
     terminalResume: true,
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(containerRuntime),
     manifestExport: !containerRuntime,
     c9sDeployOptions: !containerRuntime,
@@ -73,6 +74,13 @@ test("capture: c9s captures one stream; VNC comes from Edgeshark or the stream",
   assert.equal(c9s.wiresharkVnc, false, "no VNC without Docker next to the lab host");
   assert.equal(effectiveSupport(ALL_CAPABILITIES, { ...features(false), captureVnc: true }).wiresharkVnc, true);
   assert.equal(parseLabHostInfo({ profile: { runtime: "c9s" }, support: c9s })?.support.captureStream, true);
+  // A cluster used from this machine: VNC from its stream when Docker runs here, else the reason.
+  const withoutDocker = parseLabHostInfo({
+    profile: { runtime: "c9s", wiresharkVncUnavailable: "Wireshark in the browser needs Docker on this computer" },
+    support: c9s
+  });
+  assert.equal(withoutDocker?.support.wiresharkVnc, false);
+  assert.equal(withoutDocker?.profile.wiresharkVncUnavailable, "Wireshark in the browser needs Docker on this computer");
 });
 
 test("host info from a transport keeps only well-formed values", () => {
@@ -86,6 +94,15 @@ test("host info from a transport keeps only well-formed values", () => {
   assert.equal(parsed?.support.manifestExport, true);
   assert.equal(parseLabHostInfo({ profile: { runtime: "lxd" }, support: {} }), undefined);
   assert.equal(parseLabHostInfo(undefined), undefined);
+});
+
+test("the timeout is a feature of the lab host, with its default in the profile", () => {
+  assert.equal(effectiveSupport(ALL_CAPABILITIES, features(false)).lifecycleTimeout, true);
+  const olderServer = effectiveSupport(ALL_CAPABILITIES, { ...features(false), lifecycleTimeout: false });
+  assert.equal(olderServer.lifecycleTimeout, false);
+  const parsed = parseLabHostInfo({ profile: { runtime: "c9s", defaultTimeout: " 10m " }, support: olderServer });
+  assert.equal(parsed?.profile.defaultTimeout, "10m");
+  assert.equal(parsed?.support.lifecycleTimeout, false);
 });
 
 test("runtime labels name the cluster and namespace", () => {

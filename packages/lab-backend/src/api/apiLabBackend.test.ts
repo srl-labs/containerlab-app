@@ -7,6 +7,7 @@ import { runInNewContext } from "node:vm";
 import undici, { Response } from "undici";
 
 import { ApiLabBackend } from "./apiLabBackend.ts";
+import { lifecycleRequestTimeoutMs } from "./clabApiClient.ts";
 
 interface RecordedRequest {
   url: URL;
@@ -96,6 +97,53 @@ test("the lab runtime comes from /health; a server without one is an old Docker 
   await assert.rejects(unknown.hostProfile(), /runs labs with "lxd"/);
 });
 
+test("a c9s server with lab-host-info adds its cluster and deploy settings; a failing one leaves /health's profile", async (t) => {
+  const requests: RecordedRequest[] = [];
+  t.mock.method(undici, "fetch", (input: unknown) => {
+    const url = new URL(String(input));
+    requests.push({ url, method: "GET" });
+    if (url.pathname === "/health") {
+      return Promise.resolve(
+        Response.json({ features: [...NEW_SERVER, "lab-host-info"], runtime: "c9s", namespaceMode: "per-lab" })
+      );
+    }
+    return Promise.resolve(
+      Response.json({
+        runtime: "c9s",
+        c9s: {
+          context: "c9s-provisioner",
+          cluster: "c9s",
+          namespacePattern: "c9s-alice-{lab}",
+          sharedNamespacePattern: "c9s-shared-{lab}",
+          exposeType: "None",
+          persistence: true,
+          imagePullSecret: "",
+          labQuota: false,
+          metrics: false
+        }
+      })
+    );
+  });
+  const backend = new ApiLabBackend({ baseUrl: "https://c9s-info.test", token: "token" });
+  assert.deepEqual(await backend.hostProfile(), {
+    runtime: "c9s",
+    namespaceMode: "per-lab",
+    cluster: "c9s",
+    namespacePattern: "c9s-alice-{lab}",
+    sharedNamespacePattern: "c9s-shared-{lab}",
+    exposeType: "None",
+    persistence: true,
+    labQuota: false
+  });
+  await backend.hostProfile();
+  assert.equal(requests.filter((request) => request.url.pathname === "/api/v1/lab-host").length, 1, "cached");
+
+  t.mock.restoreAll();
+  mockServer(t, { features: [...NEW_SERVER, "lab-host-info"], health: { runtime: "c9s" }, missingRoutes: /lab-host/ });
+  const failing = new ApiLabBackend({ baseUrl: "https://c9s-info-old.test", token: "token" });
+  assert.deepEqual(await failing.hostProfile(), { runtime: "c9s" });
+});
+
 test("an unreachable server is not taken for an old one", async (t) => {
   t.mock.method(undici, "fetch", () => Promise.reject(new TypeError("fetch failed")));
   const backend = new ApiLabBackend({ baseUrl: "https://down.test", token: "token" });
@@ -118,6 +166,7 @@ test("features come from the server's health endpoint and older servers list non
     gottyOptions: true,
     nodeStats: false,
     terminalResume: false,
+    lifecycleTimeout: false,
     ...DOCKER_RUNTIME_FEATURES
   });
 
@@ -133,8 +182,60 @@ test("features come from the server's health endpoint and older servers list non
     gottyOptions: false,
     nodeStats: false,
     terminalResume: false,
+    lifecycleTimeout: false,
     ...DOCKER_RUNTIME_FEATURES
   });
+});
+
+test("a server that lists lab-lifecycle-timeout takes a timeout and names its default", async (t) => {
+  const requests: RecordedRequest[] = [];
+  t.mock.method(undici, "fetch", (input: unknown, init: { method?: string } = {}) => {
+    const url = new URL(String(input));
+    requests.push({ url, method: init.method ?? "GET" });
+    if (url.pathname === "/health") {
+      return Promise.resolve(
+        Response.json({ features: [...NEW_SERVER, "lab-host-info", "lab-lifecycle-timeout"], runtime: "docker" })
+      );
+    }
+    if (url.pathname === "/api/v1/lab-host") return Promise.resolve(Response.json({ runtime: "docker", defaultTimeout: "5m" }));
+    return Promise.resolve(Response.json({ result: {}, logs: [] }));
+  });
+  const backend = new ApiLabBackend({ baseUrl: "https://timeout.test", token: "token" });
+  assert.equal((await backend.features()).lifecycleTimeout, true);
+  assert.deepEqual(await backend.hostProfile(), { runtime: "docker", defaultTimeout: "5m" });
+
+  await backend.runLifecycle("deploy", { labName: "demo", path: "demo.clab.yml" }, { lifecycleOptions: { timeout: "30m" } });
+  await backend.runLifecycle("redeploy", { labName: "demo" }, { lifecycleOptions: { timeout: "1h" } });
+  await backend.runLifecycle("destroy", { labName: "demo" }, { lifecycleOptions: { timeout: "90s" } });
+  const lifecycle = requests.filter((request) => request.url.pathname.startsWith("/api/v1/labs/demo"));
+  assert.deepEqual(
+    lifecycle.map((request) => [request.method, request.url.searchParams.get("timeout")]),
+    [
+      ["POST", "30m"],
+      ["PUT", "1h"],
+      ["DELETE", "90s"]
+    ]
+  );
+});
+
+test("an older server refuses a timeout before anything runs", async (t) => {
+  const requests = mockServer(t, { features: NEW_SERVER, health: { runtime: "c9s" } });
+  const backend = new ApiLabBackend({ baseUrl: "https://no-timeout.test", token: "token" });
+  assert.equal((await backend.features()).lifecycleTimeout, false);
+  await assert.rejects(
+    backend.runLifecycle("deploy", { labName: "demo" }, { lifecycleOptions: { timeout: "30m" } }),
+    (error: Error & { status?: number }) => error.status === 501 && /Update clab-api-server/.test(error.message)
+  );
+  assert.equal(requests.filter((request) => request.url.pathname.startsWith("/api/v1/labs")).length, 0);
+});
+
+test("a lifecycle request waits as long as the server lets containerlab run", () => {
+  // The server's own limit without a timeout is 15 minutes on c9s, 25 for a redeploy.
+  assert.equal(lifecycleRequestTimeoutMs(undefined), 30 * 60_000);
+  // containerlab's timeout for each containerlab call plus the server's margin, never under 10 minutes.
+  assert.equal(lifecycleRequestTimeoutMs({ timeout: "30s" }), 10 * 60_000);
+  assert.equal(lifecycleRequestTimeoutMs({ timeout: "30m" }), 36 * 60_000);
+  assert.equal(lifecycleRequestTimeoutMs({ timeout: "1h" }, 2), 126 * 60_000);
 });
 
 test("graph exports go to the format's endpoint with the topology path", async (t) => {

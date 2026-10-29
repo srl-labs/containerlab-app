@@ -11,6 +11,7 @@ import type { ServerOptions as HttpsServerOptions } from "node:https";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 import type {
   AppConfigResponse,
+  ClusterHostSettings,
   LocalEndpointStatus
 } from "@srl-labs/containerlab-app-contract";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
@@ -35,6 +36,7 @@ import { createStandaloneTopologySessionManager } from "./topologySessionManager
 import { normalizeBasePath } from "./basePath.ts";
 import type { ResolvedEndpoint } from "./endpointResolver.ts";
 import { apiUiStore, type EndpointUiStore } from "./uiStore.ts";
+import { registerLabHostRoutes, type ClusterHostsOptions } from "./labHostRoutes.ts";
 
 /**
  * A local lab host: containerlab on this machine with Docker or Podman, or
@@ -60,6 +62,11 @@ export interface LocalEndpointOptions {
    * the way VS Code always offers Local. Users can still remove it.
    */
   autoConnect?: boolean;
+  /**
+   * A Kubernetes cluster the user added in the app (`clusterHosts`): its
+   * settings for the edit form. It is listed even while its checks fail.
+   */
+  cluster?: ClusterHostSettings;
 }
 
 export interface CreateStandaloneAppOptions {
@@ -74,6 +81,16 @@ export interface CreateStandaloneAppOptions {
   localEndpoint?: LocalEndpointOptions;
   /** Several local lab hosts, e.g. this machine and Kubernetes clusters; wins over `localEndpoint`. */
   localEndpoints?: LocalEndpointOptions[];
+  /**
+   * The user adds, edits and removes Kubernetes clusters in the app. Only for
+   * a single-user app on the user's own machine (the desktop app): the routes
+   * read the kubeconfig files of the server's OS user.
+   */
+  clusterHosts?: ClusterHostsOptions;
+  /** Why clusters cannot be added in the app, shown in "Add lab host" (the web app). */
+  clustersUnavailable?: string;
+  /** Why the app offers no labs on its own machine, shown in "Add lab host". */
+  localUnavailable?: string;
   /**
    * Start Wireshark on this machine for captures of lab hosts with capture
    * streams. Only for a single-user app on the user's own machine, such as
@@ -376,6 +393,10 @@ export async function createStandaloneApp(
         endpointSessions,
         resolveSession,
       });
+      registerLabHostRoutes(scoped, {
+        locals,
+        ...(options.clusterHosts ? { clusterHosts: options.clusterHosts } : {})
+      });
       registerStandaloneProxies(
         scoped,
         resolveEndpoint,
@@ -403,6 +424,14 @@ export async function createStandaloneApp(
           endpoints,
           defaultClabApiUrl,
           ...(options.localWireshark ? { localWireshark: true } : {}),
+          ...(options.clusterHosts
+            ? {
+                clusterHosts: options.clusterHosts.defaultKubeconfig
+                  ? { defaultKubeconfig: options.clusterHosts.defaultKubeconfig }
+                  : {}
+              }
+            : {}),
+          ...(options.clustersUnavailable ? { clustersUnavailable: options.clustersUnavailable } : {}),
         };
         if (locals.length > 0) {
           const fresh = request.query.fresh === "1";
@@ -412,6 +441,10 @@ export async function createStandaloneApp(
           // The first host keeps its status as is, for apps that offer one.
           payload.localEndpoint = await locals[0].status({ fresh });
           payload.localEndpoints = statuses;
+        }
+        // "This computer" is a local host with Docker or Podman; clusters do not count.
+        if (options.localUnavailable && !(payload.localEndpoints ?? []).some((status) => status.runtime !== "c9s")) {
+          payload.localUnavailable = options.localUnavailable;
         }
         return reply.send(payload);
       });

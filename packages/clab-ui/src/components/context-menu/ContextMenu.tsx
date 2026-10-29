@@ -14,6 +14,8 @@ export interface ContextMenuItem {
   label: string;
   icon?: React.ReactNode;
   disabled?: boolean;
+  /** Why the item is disabled, shown under its label, e.g. what a Kubernetes lab host lacks. */
+  disabledReason?: string;
   divider?: boolean;
   danger?: boolean;
   onClick?: () => void;
@@ -260,7 +262,12 @@ function renderMenuItemLabel(item: ContextMenuItem): React.ReactElement {
   return (
     <>
       {hasIcon && <ListItemIcon>{item.icon}</ListItemIcon>}
-      <ListItemText slotProps={{ primary: { noWrap: true } }}>{item.label}</ListItemText>
+      <ListItemText
+        slotProps={{ primary: { noWrap: true }, secondary: { sx: { fontSize: 11, whiteSpace: "normal" } } }}
+        {...(item.disabled === true && item.disabledReason !== undefined ? { secondary: item.disabledReason } : {})}
+      >
+        {item.label}
+      </ListItemText>
       {item.shortcut !== undefined && (
         <Typography variant="body2" sx={{ ml: 3, color: "text.secondary", flexShrink: 0 }}>
           {item.shortcut}

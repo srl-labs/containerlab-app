@@ -9,6 +9,7 @@ import {
   type LabSnapshotNodeResult
 } from "../../src/host/labOperations";
 import { parseNodeLocations } from "../../src/host/kubernetes";
+import type { LabSettings } from "../../src/host/lifecycleOptions";
 
 import {
   containerRuntimeFeatures,
@@ -66,6 +67,7 @@ function harnessLabHost(): LabHostInfo {
     gottyOptions: !c9s,
     nodeStats: !c9s,
     terminalResume: true,
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(!c9s),
     manifestExport: c9s,
     c9sDeployOptions: c9s,
@@ -75,8 +77,8 @@ function harnessLabHost(): LabHostInfo {
   };
   return {
     profile: c9s
-      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true }
-      : { runtime: "docker" },
+      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true, defaultTimeout: "10m" }
+      : { runtime: "docker", defaultTimeout: "2m" },
     support: effectiveSupport(capabilities, features)
   };
 }
@@ -104,10 +106,20 @@ export function createFakeLabOperations(deps: {
     return readTopology(yaml);
   };
   const delay = () => new Promise((resolve) => setTimeout(resolve, 150));
+  let labSettings: LabSettings | undefined;
 
   return {
     async support() {
       return harnessSupport();
+    },
+
+    async labSettings() {
+      return labSettings;
+    },
+
+    async saveLabSettings(settings) {
+      deps.record({ command: "labOperation", operation: "saveLabSettings", settings });
+      labSettings = settings;
     },
 
     async hostInfo() {

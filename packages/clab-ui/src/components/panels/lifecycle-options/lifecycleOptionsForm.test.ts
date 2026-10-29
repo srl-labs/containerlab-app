@@ -3,7 +3,11 @@ import test from "node:test";
 
 import {
   buildLifecycleOptionsRequest,
+  buildLifecycleRun,
   createLifecycleOptionsForm,
+  labSettingsFromForm,
+  timeoutDefaultLabel,
+  timeoutError,
   isCleanupBlocked,
   lifecycleKindTakes,
   maxWorkersError,
@@ -142,4 +146,44 @@ test("Kubernetes names are checked before running", () => {
   assert.equal(kubeNameError("team-a", "namespace"), undefined);
   assert.match(kubeNameError("Team_A", "namespace") ?? "", /Lowercase/);
   assert.equal(kubeNameError("registry.example-cred", "secret"), undefined);
+});
+
+test("a form starts from the lab's settings and gives them back", () => {
+  const settings = { timeout: "30m", maxWorkers: 2, namespace: "team-a", noPersistence: true };
+  const form = createLifecycleOptionsForm("redeploy", "c9s", settings);
+  assert.equal(form.timeout, "30m");
+  assert.equal(form.maxWorkers, "2");
+  assert.deepEqual(buildLifecycleOptionsRequest(form), {
+    action: "redeployLab",
+    options: { timeout: "30m", maxWorkers: 2, noPersistence: true, namespace: "team-a" },
+    command: "containerlab redeploy -r c9s --timeout 30m --max-workers 2 --namespace team-a --no-persistence"
+  });
+  assert.deepEqual(labSettingsFromForm({ ...form, nodeFilter: ["r1"], cleanup: true }), settings);
+});
+
+test("a lab host without a timeout parameter runs without it", () => {
+  const form = { ...createLifecycleOptionsForm("deploy", "c9s"), timeout: "30m" };
+  assert.equal(buildLifecycleRun(form, false, false).request.options, undefined);
+  assert.deepEqual(buildLifecycleRun(form, false, true).request.options, { timeout: "30m" });
+});
+
+test("the timeout field takes Go durations", () => {
+  assert.equal(timeoutError(""), undefined);
+  assert.equal(timeoutError(" 45m "), undefined);
+  assert.equal(timeoutError("45"), "Enter a duration such as 30m or 1h30m");
+});
+
+test("the Timeout names the lab host's default, or the lab server's when it does not report one", () => {
+  // Before the lab host answers: containerlab's default for the runtime.
+  assert.deepEqual(timeoutDefaultLabel("c9s", undefined), { placeholder: "10m", text: "10m" });
+  assert.deepEqual(timeoutDefaultLabel("docker", undefined), { placeholder: "2m", text: "2m" });
+  // This machine reports containerlab's; a lab server its own.
+  assert.deepEqual(timeoutDefaultLabel("docker", { runtime: "docker", defaultTimeout: "5m" }), {
+    placeholder: "5m",
+    text: "5m"
+  });
+  assert.deepEqual(timeoutDefaultLabel("c9s", { runtime: "c9s" }), {
+    placeholder: "Server default",
+    text: "the lab server's default"
+  });
 });

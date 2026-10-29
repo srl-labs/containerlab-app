@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import { backendOf, isRemote, isUriString, labUri } from "../backend/labBackends";
+import { backendOf, isRemote, isUriString, labUri, rememberHostOf } from "../backend/labBackends";
 
 export function openLabFile(node?: ClabLabTreeNode) {
   if (node === undefined) {
@@ -20,6 +20,8 @@ export function openLabFile(node?: ClabLabTreeNode) {
     void openRunningTopology(node, node.name);
     return;
   }
+  // Opened from a lab host's section: the editor's lab commands run on that host.
+  void rememberHostOf(node);
   vscode.commands.executeCommand("vscode.open", labUri(labPath));
 }
 

@@ -50,7 +50,7 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 
 ## Run with options
 
-**Run with options…** deploys, redeploys, or destroys with flags you pick for this run only. The dialog shows the resulting `containerlab` command as you go.
+**Run with options…** deploys, redeploys, or destroys with flags you pick. It starts from the lab's [deploy settings](#deploy-settings), and with **Remember as this lab's deploy settings** on (the default) a deploy or redeploy keeps its flags as those settings for later runs. The dialog shows the resulting `containerlab` command as you go.
 
 ![Run with options](../images/app/lifecycle-options-dark.webp#only-dark){ .shot .narrow }
 ![Run with options](../images/app/lifecycle-options-light.webp#only-light){ .shot .narrow }
@@ -58,6 +58,7 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 | Option | Deploy | Redeploy | Destroy | Flag |
 | --- | :---: | :---: | :---: | --- |
 | Clean up | ✓ | ✓ | ✓ | `-c` |
+| Timeout | ✓ | ✓ | ✓ | `--timeout` |
 | Nodes | ✓ | | ✓ | `--node-filter` |
 | Graceful shutdown | | ✓ | ✓ | `--graceful` |
 | Keep management network | | ✓ | ✓ | `--keep-mgmt-net` |
@@ -70,9 +71,19 @@ In VS Code, cleanup actions ask for confirmation unless `containerlab.skipCleanu
 
 The template variables file is relative to the topology file. Leave it empty to use `<topology>_vars.yml` next to the topology, as containerlab does. Destroy and redeploy need the same file as the deploy when the template depends on it. On a lab host, `--vars` needs a clab-api-server with template support; older servers ignore it.
 
+**Timeout** is how long containerlab waits for the lab runtime, as a duration such as `30m` or `1h`. containerlab's default is 2m on Docker and Podman and 10m on a Kubernetes cluster, where nodes first pull their images; raise it when big images pull slowly. A lab server takes a timeout of at most 2h when it lists the `lab-lifecycle-timeout` feature (clab-api-server with the c9s runtime support); its default, 5m with Docker and Podman and 10m on a cluster, shows in the field, or *the lab server's default* when the server does not report it. Older servers run containerlab with their own timeouts and take none, so the field is not offered there.
+
 Destroying only some nodes keeps the rest running, so it cannot be combined with clean up. In VS Code these flags come after `deploy.extraArgs` and `destroy.extraArgs`. The desktop and web apps do not accept an absolute path for the export template.
 
 **Restore VM snapshots** boots vrnetlab nodes from snapshots saved with **Save VM Snapshots…**: every node with a `<node>.tar` in the snapshot directory starts from it, and a node snapshot file you add wins for its node. Relative paths start at the topology file's folder. containerlab 0.72 or later is needed.
+
+## Deploy settings
+
+**Lab Settings** → **Deploy** holds the flags this lab's deploys use on its lab host: timeout, max workers, and the template variables file; the export template and skip options on Docker and Podman (greyed out on a Kubernetes cluster, which refuses them); and the [Kubernetes deploy options](kubernetes.md#what-changes-on-a-cluster) on a cluster. Each field says what the lab host's default is, and a tag next to it shows whether the lab has its own value (**This lab**) or uses that default (**Lab host default**). On a lab server the Kubernetes options are its own and show read-only, and the timeout is greyed out unless the server takes one (`lab-lifecycle-timeout`).
+
+Every **Deploy**, **Redeploy**, **Apply**, and **Destroy** of the lab without options of its own uses them; destroy takes only its part, such as the timeout and the namespace. Flags of one run, such as nodes, clean up, and snapshot restore, are never remembered. **Clear all** empties every field, and **Apply** saves the tab. Deploy settings stay editable in a locked lab: they do not change the topology.
+
+Unlike the other tabs, deploy settings are not written into the topology file. They belong to one topology file on one lab host: the same file on another host has its own. VS Code keeps them in its global state; the web and desktop apps keep them in the browser's local storage.
 
 ## Lab operations
 
@@ -112,26 +123,43 @@ Right-click a running node and choose **Capture**, or right-click a link to capt
 
 On Docker and Podman lab hosts, captures come from Edgeshark: a `packetflix:` link that your Wireshark opens through cshargextcap, or Wireshark VNC in a browser window.
 
+### Default capture method
+
+Where a capture opens is a setting: `containerlab.capture.preferredAction` in VS Code, **Settings → Capture → Capture defaults** per lab host in the web and desktop apps.
+
+| Method | Docker or Podman lab host | Kubernetes (c9s) lab host |
+| --- | --- | --- |
+| **Automatic** (default) | Wireshark VNC, else Edgeshark | Wireshark on this computer when the app can open it (desktop, VS Code with Wireshark found), else Wireshark VNC, else a `.pcapng` |
+| **Wireshark on this computer** | Edgeshark's `packetflix:` link, which starts it | The capture stream into `wireshark -k -i -` (desktop and VS Code; greyed out in the web app) |
+| **Wireshark VNC** | Wireshark VNC fed by Edgeshark | Wireshark VNC fed by the capture stream |
+| **Edgeshark** | The `packetflix:` link | Greyed out: not supported on Kubernetes |
+
+When the lab host lacks the method you picked, for example Edgeshark on a cluster, Wireshark VNC without Docker, or Wireshark that is not installed, the capture opens the automatic way and says why: VS Code once per session, the capture dialog of the web and desktop apps under its choices. The earlier values `Wireshark VNC` and `Edgeshark` keep working. On a Kubernetes lab host the Edgeshark controls of the web and desktop settings are greyed out too.
+
 ### Labs on a Kubernetes cluster
 
 On a Kubernetes cluster (c9s), clabernetes captures in each lab pod and containerlab merges the interfaces into one pcapng stream, one interface per pick, named `<node>:<interface>`. Only the interfaces of links between nodes can be captured, not the management interface. The picker lists them with the node and interface at the other end, and the vendor name (e.g. `ethernet-1/1`) when the topology used one. A capture longer than an hour stays one file; if clabernetes misses packets while it switches, you see a status line, and the capture goes on.
 
-The capture dialog asks where the capture goes and when it stops:
+The capture dialog asks where the capture goes and when it stops. With the **Automatic** default it starts with:
 
 | App | Lab host | Choices, default first |
 | --- | --- | --- |
-| Desktop | cluster or clab-api-server | Wireshark on this computer, Wireshark VNC (clab-api-server with Docker), download `.pcapng` |
+| Desktop | cluster on this machine | Wireshark on this computer, Wireshark VNC (with Docker on this computer), download `.pcapng` |
+| Desktop | clab-api-server | Wireshark on this computer, Wireshark VNC (when the server runs Docker), download `.pcapng` |
+| Web | cluster of the web server (`WEB_LOCAL_LABS`) | Wireshark VNC (with Docker next to the web server), download `.pcapng` |
 | Web | clab-api-server | Wireshark VNC (when the server runs Docker), download `.pcapng` |
-| VS Code | cluster on this machine | Wireshark in a terminal: `containerlab -r c9s capture … -w - \| wireshark -k -i -`; or save `.pcapng` |
-| VS Code | clab-api-server | Wireshark on this computer, Wireshark VNC, save `.pcapng` |
+| VS Code | cluster on this machine | Wireshark in a terminal when Wireshark is found, Wireshark VNC (with Docker on this computer), save `.pcapng`; without Wireshark, Wireshark VNC comes first |
+| VS Code | clab-api-server | Wireshark on this computer when Wireshark is found, Wireshark VNC (when the server runs Docker), save `.pcapng`; without Wireshark, Wireshark VNC comes first |
 
-- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app and VS Code find Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods.
-- **Wireshark VNC** runs on the clab-api-server host. The capture lasts as long as the window; closing the window ends it. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it.
+- **Wireshark on this computer** pipes the capture into `wireshark -k -i -`. The desktop app and VS Code find Wireshark where it installs itself; `CONTAINERLAB_DESKTOP_WIRESHARK` (desktop) or `containerlab.capture.wireshark.path` (VS Code) point to another one. In WSL, a Wireshark installed on Windows is found too and opens on the Windows desktop. Closing Wireshark or pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal ends the capture in the pods. When VS Code finds no Wireshark, it offers Wireshark VNC, saving a `.pcapng`, or setting the path.
+- **Wireshark VNC** runs on the clab-api-server host, or, for a cluster used from this machine, in a container on this machine's Docker (or Podman). The app runs `containerlab -r c9s capture … -w -` and writes the capture into a named pipe in that container, which its Wireshark reads; the container needs no way back to the app. The capture lasts as long as the window, and restarting it inside that Wireshark starts a new one; closing the window ends the capture and removes the container. This needs a [wireshark-vnc-docker](https://github.com/srl-labs/wireshark-vnc-docker) image with its `CLABWIRE_CAPTURE_PIPE` mode; the current `:latest` has it. With an older image, opening it fails and says so. `containerlab.capture.wireshark.dockerImage` (VS Code), `CONTAINERLAB_DESKTOP_WIRESHARK_IMAGE` (desktop) or `WEB_LOCAL_WIRESHARK_IMAGE` (web) pick another image. If the browser quits or crashes before it can say so, the web and desktop apps end the capture 30 seconds after its window stopped showing it. Without Docker on this computer the choice stays in the list, greyed, with *Wireshark in the browser needs Docker on this computer*. The [default capture method](#default-capture-method) **Wireshark VNC** puts it first.
 - A **download** needs a stop time. The file grows in your downloads while the capture runs.
 
 ## Images
 
 **Manage Images**, in the header of the explorer's running labs section, lists the images your labs and templates use, pulls missing ones, and removes those you no longer need.
+
+A Kubernetes lab host has no images to manage: the cluster's nodes pull the images themselves. Manage Images is hidden on such a host, and in the header when every lab host is a cluster; asking for it anyway says so. For a private registry, set an [image pull secret](kubernetes.md#what-changes-on-a-cluster).
 
 ![Image manager](../images/app/image-manager-dark.webp#only-dark){ .shot }
 ![Image manager](../images/app/image-manager-light.webp#only-light){ .shot }

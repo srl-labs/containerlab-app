@@ -93,7 +93,7 @@ On a lab host:
 - **Clone repository** and **Deploy lab file** with a Git URL clone into the host's workspace. The host takes GitHub and GitLab URLs.
 - **Image completion** in topology files and the topology editor offers the host's images.
 
-To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes cluster (c9s)** in **Add Lab Host**; see [Labs on Kubernetes](../guides/kubernetes.md#vs-code).
+**Add Lab Host** asks where labs should run: **This computer**, **Kubernetes cluster**, or **Lab server**. To run labs on a Kubernetes cluster with clabernetes from this machine, choose **Kubernetes cluster**: the cluster form opens on the Lab Hosts page, with **Check connection**. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster).
 
 **Local** is listed when containerlab can run where VS Code runs. When something is missing there, its dot turns red and its tooltip says what to fix; **Check Again** looks again once you fixed it. To work with lab hosts only, hide **Local** on the Lab Hosts page, or turn off `containerlab.localConnection`. Like the desktop app, the extension accepts the API server's self-signed certificate; start VS Code with `CLAB_API_TLS_VERIFY=true` to require a trusted one.
 

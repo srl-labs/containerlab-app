@@ -1,19 +1,22 @@
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { effectiveSupport } from "../index.ts";
 import { LocalLabBackend } from "./localLabBackend.ts";
-import { containerlabPlatformProblem, detectLocalEnvironment } from "./detect.ts";
+import { containerlabPlatformProblem, detectLocalEnvironment, suidRootCheck } from "./detect.ts";
 import { expandKubeconfigPath, resolveLocalOptions } from "./options.ts";
 
 const ENV = { PATH: "/nonexistent", HOME: "/nonexistent" };
 
 test("a Docker host keeps every container runtime feature and has no c9s options", async () => {
   const backend = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker" });
-  assert.deepEqual(await backend.hostProfile(), { runtime: "docker" });
+  // containerlab's own --timeout default on Docker.
+  assert.deepEqual(await backend.hostProfile(), { runtime: "docker", defaultTimeout: "2m" });
   const support = effectiveSupport(backend.capabilities, await backend.features());
+  assert.equal(support.lifecycleTimeout, true);
   assert.equal(support.netem, true);
   assert.equal(support.edgesharkManagement, true);
   assert.equal(support.wiresharkVnc, true);
@@ -32,11 +35,15 @@ test("a c9s host turns the container runtime features off and reports its cluste
   });
   assert.deepEqual(await backend.hostProfile(), {
     runtime: "c9s",
+    // containerlab's --timeout default on c9s: clusters pull images slowly.
+    defaultTimeout: "10m",
     kubeContext: "kind-c9s-app",
     namespaceMode: "fixed",
     namespace: "team-a",
     exposeType: "LoadBalancer",
-    persistence: false
+    persistence: false,
+    // No Docker on PATH: Wireshark VNC is shown, but disabled with the reason.
+    wiresharkVncUnavailable: "Wireshark in the browser needs Docker on this computer"
   });
   const support = effectiveSupport(backend.capabilities, await backend.features());
   for (const flag of [
@@ -136,7 +143,8 @@ test("detection of a c9s host skips the Docker checks and asks the cluster", asy
         serverVersion: async () => "v1.33.1",
         hasTopologyResource: async () => true,
         clabernetesVersion: async () => "0.11.0",
-        canI: async () => true
+        canI: async () => true,
+        whoAmI: async () => "alice"
       })
     }
   );
@@ -153,4 +161,16 @@ test("an unknown runtime is a detection problem, not a crash", async () => {
   const status = await detectLocalEnvironment({ runtime: "lxd", env: ENV });
   assert.equal(status.available, false);
   assert.deepEqual(status.problems, ['Unknown lab runtime "lxd". Use docker, podman or c9s.']);
+});
+
+test("a containerlab binary that is not SUID root is a failed check with the fix", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "clab-suid-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const binary = path.join(directory, "my containerlab");
+  await fs.writeFile(binary, "#!/bin/sh\n", { mode: 0o755 });
+  const check = await suidRootCheck(binary);
+  assert.equal(check.status, "failed");
+  assert.equal(check.message, `containerlab at ${binary} is not SUID root, so it cannot run Docker labs without sudo.`);
+  assert.equal(check.command, `sudo chown root:root '${binary}' && sudo chmod 4755 '${binary}'`);
+  assert.equal((await suidRootCheck(path.join(directory, "missing"))).status, "skipped");
 });

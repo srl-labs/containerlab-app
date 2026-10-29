@@ -1,12 +1,15 @@
 // Form of one management network: driver, addressing, driver-specific options and Tailscale.
 import React from "react";
+import Box from "@mui/material/Box";
 import MenuItem from "@mui/material/MenuItem";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { SettingsField } from "../../../settings/SettingsField";
-import { KeyValueList } from "../../ui/form";
+import type { RuntimeLimit } from "../../../host/kubernetesLimits";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
+import { KeyValueList, RuntimeLimitNote, RuntimeLimited } from "../../ui/form";
 import type { MgmtNetworkIssues } from "../../../hooks/editor/labSettingsForm";
 
 import type {
@@ -418,6 +421,19 @@ const TailscaleFields: React.FC<FieldProps> = ({ mgmt, setMgmt, isViewMode, issu
   </>
 );
 
+/** Fields a Kubernetes (c9s) lab host ignores: greyed out, in the form's row rhythm. */
+const Ignored: React.FC<{ limit: RuntimeLimit | undefined; children: React.ReactNode }> = ({ limit, children }) =>
+  limit ? (
+    // A row of its own, so the hairlines between rows stay.
+    <Box data-settings-row="">
+      <RuntimeLimited limit={limit} note={false}>
+        <Box sx={{ display: "grid", rowGap: 2 }}>{children}</Box>
+      </RuntimeLimited>
+    </Box>
+  ) : (
+    <>{children}</>
+  );
+
 export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
   mgmt,
   setMgmt,
@@ -427,46 +443,55 @@ export const MgmtNetworkForm: React.FC<MgmtNetworkFormProps> = ({
   issues
 }) => {
   const fieldProps: FieldProps = { mgmt, setMgmt, isViewMode, issues };
+  // c9s: clabernetes runs the management network; only the addresses apply.
+  const optionsLimit = useRuntimeLimit("mgmtNetworkOptions");
+  const subnetsLimit = useRuntimeLimit("mgmtSubnets");
   return (
     <>
-      <SettingsField title="Network Name" description="Docker network name (default: clab).">
-        <TextField
-          slotProps={{ htmlInput: { "aria-label": "Network Name" } }}
-          id="lab-mgmt-network-name"
-          size="small"
-          placeholder="Docker network name (default: clab)"
-          value={mgmt.networkName}
-          onChange={(event) => setMgmt.setNetworkName(event.target.value)}
-          disabled={isViewMode}
-          error={issues.networkName !== undefined}
-          helperText={issues.networkName}
-        />
-      </SettingsField>
-      <DriverFields {...fieldProps} />
+      {optionsLimit ? <RuntimeLimitNote limit={optionsLimit} testId="lab-mgmt-runtime-limit" /> : null}
+      <Ignored limit={optionsLimit}>
+        <SettingsField title="Network Name" description="Docker network name (default: clab).">
+          <TextField
+            slotProps={{ htmlInput: { "aria-label": "Network Name" } }}
+            id="lab-mgmt-network-name"
+            size="small"
+            placeholder="Docker network name (default: clab)"
+            value={mgmt.networkName}
+            onChange={(event) => setMgmt.setNetworkName(event.target.value)}
+            disabled={isViewMode}
+            error={issues.networkName !== undefined}
+            helperText={issues.networkName}
+          />
+        </SettingsField>
+        <DriverFields {...fieldProps} />
+      </Ignored>
       <AddressFields {...fieldProps} isDefaultNetwork={isDefaultNetwork} />
-      {mgmt.driver === "bridge" ? <BridgeFields {...fieldProps} /> : null}
-      <AllocationFields {...fieldProps} />
-      <TailscaleFields {...fieldProps} />
-      <SettingsField
-        title="Driver Options"
-        description={`Key/value options passed to the Docker ${mgmt.driver} driver.`}
-        wide
-        feedback={
-          issues.driverOptions !== undefined ? (
-            <Typography variant="caption" sx={{ color: "error.main" }}>
-              {issues.driverOptions}
-            </Typography>
-          ) : undefined
-        }
-      >
-        <KeyValueList
-          items={driverOptionsToRecord(mgmt.driverOptions)}
-          onChange={(record) => driverOpts.setAll(recordToDriverOptions(record))}
-          keyPlaceholder="Option key"
-          valuePlaceholder="Option value"
-          disabled={isViewMode}
-        />
-      </SettingsField>
+      {subnetsLimit ? <RuntimeLimitNote limit={subnetsLimit} /> : null}
+      <Ignored limit={optionsLimit}>
+        {mgmt.driver === "bridge" ? <BridgeFields {...fieldProps} /> : null}
+        <AllocationFields {...fieldProps} />
+        <TailscaleFields {...fieldProps} />
+        <SettingsField
+          title="Driver Options"
+          description={`Key/value options passed to the Docker ${mgmt.driver} driver.`}
+          wide
+          feedback={
+            issues.driverOptions !== undefined ? (
+              <Typography variant="caption" sx={{ color: "error.main" }}>
+                {issues.driverOptions}
+              </Typography>
+            ) : undefined
+          }
+        >
+          <KeyValueList
+            items={driverOptionsToRecord(mgmt.driverOptions)}
+            onChange={(record) => driverOpts.setAll(recordToDriverOptions(record))}
+            keyPlaceholder="Option key"
+            valuePlaceholder="Option value"
+            disabled={isViewMode}
+          />
+        </SettingsField>
+      </Ignored>
     </>
   );
 };

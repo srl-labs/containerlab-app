@@ -1,7 +1,6 @@
 import { useWorkspaceHost } from "../WorkspaceHost";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Box,
   Button,
   Chip,
@@ -11,24 +10,19 @@ import {
   Stack,
   TextField,
   Switch,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
-import DownloadIcon from "@mui/icons-material/Download";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
-import RefreshIcon from "@mui/icons-material/Refresh";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TerminalIcon from "@mui/icons-material/Terminal";
-import UploadIcon from "@mui/icons-material/Upload";
 
 import { subscribeEndpointUiAction, type EndpointUiAction } from "../state/endpointActions";
-import type { EdgeSharkStatusResponse } from "../types";
+import type { EdgeSharkStatusResponse, LabHostSetupProps } from "../types";
 import {
   MAX_TERMINAL_FONT_SIZE,
   MIN_TERMINAL_FONT_SIZE,
@@ -55,6 +49,7 @@ import { floatingSurfaceSx, overlayShadow } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { AboutSettingsContent } from "./AboutSettingsContent";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent";
+import { CaptureSettingsSection } from "./CaptureSettingsSection";
 import { EndpointManager } from "./EndpointManager";
 import {
   persistAutoOpenPalette,
@@ -117,6 +112,8 @@ interface SettingsOverlayProps {
   localEndpoint?: LocalEndpointOffer;
   /** More local lab hosts, such as Kubernetes clusters. */
   extraLocalEndpoints?: readonly LocalEndpointOffer[];
+  /** How the app adds clusters, checks lab hosts, and why some kinds are not offered. */
+  labHostSetup?: LabHostSetupProps;
   tabOrientation?: TabOrientation;
   onTabOrientationChange?: (orientation: TabOrientation) => void;
   terminalPreferences: TerminalPreferences;
@@ -133,27 +130,6 @@ type TerminalDraftResult =
       field: "ssh" | "telnet" | "fontSize";
     };
 
-function formatCaptureStatus(
-  hasEndpoint: boolean,
-  loading: boolean,
-  status: EdgeSharkStatusResponse | null,
-  endpointLabel: string
-): string {
-  if (!hasEndpoint) {
-    return "No endpoint selected";
-  }
-  if (loading) {
-    return `Loading status for ${endpointLabel}...`;
-  }
-  if (!status) {
-    return `Unknown on ${endpointLabel}`;
-  }
-  if (!status.running) {
-    return `Not running on ${endpointLabel}`;
-  }
-  return `Running on ${endpointLabel}${status.version ? ` (${status.version})` : ""}`;
-}
-
 const SETTINGS_SECTIONS: Array<{
   key: SettingsSectionKey;
   label: string;
@@ -163,7 +139,7 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "endpoints",
     label: "Lab hosts",
-    description: "This computer and the clab-api-server hosts you sign in to",
+    description: "Where your labs run: this computer, Kubernetes clusters and lab servers",
     icon: <DnsOutlinedIcon fontSize="small" />
   },
   {
@@ -187,7 +163,7 @@ const SETTINGS_SECTIONS: Array<{
   {
     key: "capture",
     label: "Capture",
-    description: "Edgeshark and packet capture helpers",
+    description: "Default capture method and Edgeshark",
     icon: <HubOutlinedIcon fontSize="small" />
   },
   {
@@ -300,206 +276,6 @@ function captureSettingsEndpointLabel(endpoint: EndpointConfig | null): string {
   return endpoint?.label || endpoint?.url || endpoint?.id || "selected endpoint";
 }
 
-function CaptureSettingsSection(props: {
-  applyCaptureSessionHostname: () => void;
-  captureActionLoading: "install" | "uninstall" | null;
-  captureEndpoint: EndpointConfig | null;
-  captureEndpointId: string;
-  captureEndpointLabel: string;
-  captureError: string | null;
-  capturePreferences: CapturePreferences;
-  captureSessionHostname: string;
-  captureStatus: EdgeSharkStatusResponse | null;
-  captureStatusLoading: boolean;
-  clearCaptureSessionHostname: () => void;
-  endpoints: EndpointConfig[];
-  handlePreferredCaptureActionChange: (
-    event: React.MouseEvent<HTMLElement>,
-    nextAction: CapturePreferredAction | null
-  ) => void;
-  refreshCaptureStatus: () => Promise<void>;
-  setCaptureActionLoading: (action: "install" | "uninstall" | null) => void;
-  setCaptureEndpointId: (endpointId: string) => void;
-  setCaptureError: (message: string | null) => void;
-  setCaptureSessionHostname: (hostname: string) => void;
-}) {
-  const { installEdgeShark, uninstallEdgeShark } = useWorkspaceHost().api;
-  const runCaptureAction = (action: "install" | "uninstall") => {
-    props.setCaptureActionLoading(action);
-    props.setCaptureError(null);
-    const operation = action === "install" ? installEdgeShark : uninstallEdgeShark;
-    void operation(props.captureEndpoint?.id)
-      .then(() => props.refreshCaptureStatus())
-      .catch((error) =>
-        props.setCaptureError(error instanceof Error ? error.message : String(error))
-      )
-      .finally(() => props.setCaptureActionLoading(null));
-  };
-
-  return (
-    <>
-      <SectionCard
-        title="Edgeshark"
-        description="Install or uninstall Edgeshark on the selected endpoint."
-        tone={props.captureEndpoint && props.captureStatus?.running ? "success" : "warning"}
-      >
-        {props.captureError ? (
-          <Alert severity="error">
-            {props.captureError}
-          </Alert>
-        ) : null}
-        <TextField
-          select
-          label="Endpoint"
-          value={props.captureEndpointId}
-          onChange={(event) => props.setCaptureEndpointId(event.target.value)}
-          fullWidth
-          disabled={props.endpoints.length === 0}
-          helperText="Capture status, actions and defaults apply to this endpoint only."
-          data-testid="standalone-settings-capture-endpoint"
-        >
-          {props.endpoints.length === 0 ? (
-            <MenuItem value="">No endpoints configured</MenuItem>
-          ) : (
-            props.endpoints.map((endpoint) => (
-              <MenuItem key={endpoint.id} value={endpoint.id}>
-                {endpoint.label} ({endpoint.status})
-              </MenuItem>
-            ))
-          )}
-        </TextField>
-        <TextField
-          label="Status"
-          value={formatCaptureStatus(
-            Boolean(props.captureEndpoint),
-            props.captureStatusLoading,
-            props.captureStatus,
-            props.captureEndpointLabel
-          )}
-          fullWidth
-          slotProps={{ input: { readOnly: true } }}
-          data-testid="standalone-settings-capture-status"
-        />
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            flexWrap: "wrap"
-          }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={() => {
-              void props.refreshCaptureStatus();
-            }}
-            disabled={
-              !props.captureEndpoint ||
-              props.captureStatusLoading ||
-              props.captureActionLoading !== null
-            }
-            data-testid="standalone-settings-capture-refresh"
-          >
-            Refresh
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => runCaptureAction("install")}
-            disabled={
-              !props.captureEndpoint ||
-              props.captureStatusLoading ||
-              props.captureActionLoading !== null
-            }
-            data-testid="standalone-settings-capture-install"
-          >
-            Install
-          </Button>
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={<UploadIcon />}
-            onClick={() => runCaptureAction("uninstall")}
-            disabled={
-              !props.captureEndpoint ||
-              props.captureStatusLoading ||
-              props.captureActionLoading !== null
-            }
-            data-testid="standalone-settings-capture-uninstall"
-          >
-            Uninstall
-          </Button>
-        </Stack>
-        <Typography
-          variant="caption"
-          sx={{
-            color: "text.secondary"
-          }}
-        >
-          The API server sets capture defaults (image, pull policy, packetflix host and port) in its environment.
-        </Typography>
-      </SectionCard>
-      <SectionCard
-        title="Capture defaults"
-        description="Capture defaults per endpoint, and an optional session hostname override."
-        tone="info"
-      >
-        <ToggleButtonGroup
-          exclusive
-          value={props.capturePreferences.preferredAction}
-          onChange={props.handlePreferredCaptureActionChange}
-          disabled={!props.captureEndpoint}
-          size="small"
-          sx={{ alignSelf: "flex-start" }}
-        >
-          <ToggleButton value="wireshark-vnc" data-testid="standalone-settings-capture-default-vnc">
-            Wireshark VNC
-          </ToggleButton>
-          <ToggleButton
-            value="edgeshark"
-            data-testid="standalone-settings-capture-default-edgeshark"
-          >
-            Edgeshark
-          </ToggleButton>
-        </ToggleButtonGroup>
-        <TextField
-          label="Session Hostname Override"
-          value={props.captureSessionHostname}
-          onChange={(event) => props.setCaptureSessionHostname(event.target.value)}
-          fullWidth
-          placeholder="IPv4, IPv6, or DNS hostname"
-          helperText="Used in packetflix URIs for this endpoint, in this browser session only."
-          data-testid="standalone-settings-capture-session-hostname"
-        />
-        <Stack
-          direction="row"
-          spacing={1}
-          sx={{
-            flexWrap: "wrap"
-          }}
-        >
-          <Button
-            variant="outlined"
-            onClick={props.applyCaptureSessionHostname}
-            disabled={!props.captureEndpoint}
-            data-testid="standalone-settings-capture-session-hostname-apply"
-          >
-            Apply session hostname
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={props.clearCaptureSessionHostname}
-            disabled={!props.captureEndpoint}
-            data-testid="standalone-settings-capture-session-hostname-clear"
-          >
-            Clear override
-          </Button>
-        </Stack>
-      </SectionCard>
-    </>
-  );
-}
-
 export function SettingsOverlay({
   open,
   onOpen,
@@ -520,6 +296,7 @@ export function SettingsOverlay({
   onAppearanceChange,
   localEndpoint,
   extraLocalEndpoints,
+  labHostSetup,
   tabOrientation = "horizontal",
   onTabOrientationChange,
   terminalPreferences
@@ -624,7 +401,8 @@ export function SettingsOverlay({
   }, [activeSection, dialogOpen, primaryEndpoint?.id, fetchVersionInfo, fetchVersionCheck]);
 
   const refreshCaptureStatus = useCallback(async () => {
-    if (!captureEndpoint?.id) {
+    // A Kubernetes lab host has no Edgeshark to ask about.
+    if (!captureEndpoint?.id || captureEndpoint.runtime === "c9s") {
       setCaptureStatus(null);
       setCaptureError(null);
       setCaptureStatusLoading(false);
@@ -641,7 +419,7 @@ export function SettingsOverlay({
     } finally {
       setCaptureStatusLoading(false);
     }
-  }, [captureEndpoint?.id, fetchEdgeSharkStatus]);
+  }, [captureEndpoint?.id, captureEndpoint?.runtime, fetchEdgeSharkStatus]);
 
   useEffect(() => {
     if (!dialogOpen || activeSection !== "capture") {
@@ -653,10 +431,7 @@ export function SettingsOverlay({
   }, [activeSection, captureEndpoint?.id, dialogOpen, refreshCaptureStatus]);
 
   const handlePreferredCaptureActionChange = useCallback(
-    (_event: React.MouseEvent<HTMLElement>, nextAction: CapturePreferredAction | null) => {
-      if (!nextAction) {
-        return;
-      }
+    (nextAction: CapturePreferredAction) => {
       const persisted = persistCapturePreferences(
         {
           ...capturePreferences,
@@ -718,6 +493,7 @@ export function SettingsOverlay({
               onSetEndpointSessionDuration={onSetEndpointSessionDuration}
               localEndpoint={localEndpoint}
               extraLocalEndpoints={extraLocalEndpoints}
+              {...labHostSetup}
               onRequestedActionHandled={() => setRequestedEndpointAction(null)}
               requestedAction={requestedEndpointAction}
             />
@@ -956,7 +732,7 @@ export function SettingsOverlay({
             captureStatusLoading={captureStatusLoading}
             clearCaptureSessionHostname={clearCaptureSessionHostname}
             endpoints={endpoints}
-            handlePreferredCaptureActionChange={handlePreferredCaptureActionChange}
+            onPreferredCaptureActionChange={handlePreferredCaptureActionChange}
             refreshCaptureStatus={refreshCaptureStatus}
             setCaptureActionLoading={setCaptureActionLoading}
             setCaptureEndpointId={setCaptureEndpointId}

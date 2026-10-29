@@ -30,6 +30,12 @@ describe("SettingsService", () => {
   let writes = 0;
   const stub = {
     ConfigurationTarget: { Global: 1, Workspace: 2 },
+    // The Lab Hosts page's modules make emitters when they load.
+    EventEmitter: class {
+      event = () => ({ dispose() {} });
+      fire() {}
+      dispose() {}
+    },
     env: { remoteName: "ssh-remote" },
     version: "1.105.1",
     workspace: {

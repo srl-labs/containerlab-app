@@ -47,7 +47,7 @@ export const IntfStateIcons = {
  */
 export class ClabLabTreeNode extends vscode.TreeItem {
   public readonly labPath: LabPath;
-  /** The connection the lab runs on; unset for Local. */
+  /** The connection the lab runs on; unset when no lab host section lists it. */
   public connectionId?: string;
   public readonly name?: string;
   public readonly owner?: string;
@@ -90,6 +90,8 @@ export class ClabLabTreeNode extends vscode.TreeItem {
 
 export class ClabFolderTreeNode extends vscode.TreeItem {
   public readonly fullPath: string;
+  /** The lab host whose section lists the folder; unset without lab hosts. */
+  public connectionId?: string;
   constructor(label: string, fullPath: string) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.fullPath = fullPath;
@@ -389,15 +391,16 @@ export function flattenContainers(
 }
 
 /**
- * Marks a node as running on a lab host. Lab hosts can have labs with the
- * same paths, so their tree ids carry the connection.
+ * Marks a node as belonging to a lab host, this machine included, so its
+ * commands run there. Lab hosts can have labs with the same paths, so the
+ * tree ids of other hosts' nodes carry the connection.
  */
 export function onConnection<T extends vscode.TreeItem & { connectionId?: string }>(
   node: T,
   connectionId: string
 ): T {
-  if (connectionId === "local") return node;
   node.connectionId = connectionId;
+  if (connectionId === "local") return node;
   if (node.id !== undefined && !node.id.startsWith(`${connectionId}|`)) {
     node.id = `${connectionId}|${node.id}`;
   }
@@ -416,6 +419,8 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
   /** Read by the explorer: the root's id, kind and status. */
   public readonly endpointId: string;
   public readonly endpointKind: "local" | "api";
+  /** A Kubernetes cluster used from this machine: removed, not hidden like this machine. */
+  public readonly endpointCluster: boolean;
   public readonly state: ConnectionNodeState;
 
   constructor(
@@ -444,6 +449,7 @@ export class ClabConnectionTreeNode extends vscode.TreeItem {
     this.connectionId = connection.id;
     this.endpointId = connection.id;
     this.endpointKind = connection.kind;
+    this.endpointCluster = connection.kind === "local" && connection.runtime === "c9s";
     this.state = state;
     this.contextValue = "containerlabEndpoint";
     this.id = `connection:${section}:${connection.id}`;

@@ -290,7 +290,11 @@ function ExplorerEndpointActionButton({
   }
 
   return (
-    <Tooltip title={action.label || ariaLabel} placement="bottom" enterDelay={300}>
+    <Tooltip
+      title={action.disabledReason !== undefined ? `${action.label}: ${action.disabledReason}` : action.label || ariaLabel}
+      placement="bottom"
+      enterDelay={300}
+    >
       <Box component="span" sx={{ display: "inline-flex" }}>
         <IconButton
           size="small"

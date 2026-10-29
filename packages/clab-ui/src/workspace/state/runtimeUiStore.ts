@@ -59,6 +59,10 @@ export interface RuntimeStreamCaptureRequest {
   initialSelection?: string[];
   /** Where a capture can go on this lab host, the default first. */
   deliveries: CaptureDelivery[];
+  /** The default capture method is not available on this lab host: why, and what the dialog starts with. */
+  notice?: string;
+  /** Ways the lab host could offer but cannot now, with why; shown disabled. */
+  unavailable?: Partial<Record<CaptureDelivery, string>>;
   loadInterfaces: () => Promise<LabCaptureInterface[]>;
   onCapture: (capture: RuntimeStreamCapture) => void;
 }

@@ -1,6 +1,7 @@
 import React from "react";
 import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import { StructuredSettingEditor } from "./StructuredSettingEditor";
 import { ColorSchemePicker } from "./ColorSchemePicker";
 import type { SettingDefinition } from "./schema";
@@ -37,6 +38,10 @@ export function SettingInput({
         disabled={busy}
       />
     );
+  const enumIndex = definition.enum?.indexOf(text) ?? -1;
+  // What the picked choice does, e.g. where "Automatic" opens captures.
+  const choiceDescription =
+    enumIndex >= 0 ? definition.enumDescriptions?.[enumIndex] : undefined;
   return (
     <TextField
       fullWidth
@@ -47,7 +52,7 @@ export function SettingInput({
       disabled={busy}
       onChange={(event) => onChange(event.target.value)}
       error={Boolean(validation)}
-      helperText={validation}
+      helperText={validation ?? choiceDescription}
       slotProps={{
         htmlInput: {
           "aria-label": definition.title,
@@ -55,14 +60,34 @@ export function SettingInput({
           max: definition.maximum,
           step: 1,
         },
-        select: { inputProps: { "aria-label": definition.title } },
+        select: {
+          inputProps: { "aria-label": definition.title },
+          // The field shows the choice; its description sits under the field.
+          renderValue: (value) => String(value),
+        },
       }}
     >
-      {definition.enum?.map((value) => (
-        <MenuItem key={value} value={value}>
-          {value}
-        </MenuItem>
-      ))}
+      {definition.enum?.map((value, index) => {
+        const description = definition.enumDescriptions?.[index];
+        return (
+          <MenuItem
+            key={value}
+            value={value}
+            sx={description ? { display: "block", whiteSpace: "normal", maxWidth: 520 } : undefined}
+          >
+            {value}
+            {description ? (
+              <Typography
+                component="span"
+                variant="caption"
+                sx={{ display: "block", color: "text.secondary" }}
+              >
+                {description}
+              </Typography>
+            ) : null}
+          </MenuItem>
+        );
+      })}
     </TextField>
   );
 }

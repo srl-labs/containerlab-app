@@ -1,7 +1,11 @@
 import { createHash } from "crypto";
 
 import * as vscode from "vscode";
-import type { EndpointKind } from "@srl-labs/containerlab-app-contract";
+import type {
+  ClusterHostSettings,
+  EndpointKind,
+  LabHostCheck
+} from "@srl-labs/containerlab-app-contract";
 import { errorStatus, type TopologyEntry } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 import {
@@ -12,6 +16,8 @@ import {
 /**
  * Where labs run: this machine, a Kubernetes cluster with clabernetes that
  * containerlab on this machine reaches (`runtime: "c9s"`), or a clab-api-server.
+ * In the settings a cluster is `"kind": "kubernetes"`; inside the extension it
+ * is a local connection, because containerlab on this machine runs its labs.
  */
 export interface LabConnection {
   id: string;
@@ -32,6 +38,8 @@ export interface LabConnection {
   exposeType?: "ClusterIP" | "Headless" | "LoadBalancer" | "None";
   /** c9s: false turns persistent node volumes off by default. */
   persistence?: boolean;
+  /** c9s: the image pull secret of every lab's pods by default. */
+  imagePullSecret?: string;
   /** The clab-api-server URL; only for API connections. */
   url?: string;
   /** User name to sign in with, from the settings or the last sign-in. */
@@ -48,6 +56,7 @@ interface ConnectionSetting {
   namespace?: unknown;
   exposeType?: unknown;
   persistence?: unknown;
+  imagePullSecret?: unknown;
   label?: unknown;
   url?: unknown;
   username?: unknown;
@@ -69,6 +78,7 @@ export const DEFAULT_SESSION_DURATION = "24h";
 export interface LocalStatus {
   available: boolean;
   problems: string[];
+  checks?: LabHostCheck[];
   containerlabVersion?: string;
   username?: string;
 }
@@ -122,9 +132,33 @@ function kubeconfigPath(value: unknown): string | undefined {
   return configured === undefined ? undefined : expandKubeconfigPath(configured);
 }
 
-/** Whether a setting entry is a cluster lab host (`kind: "local", runtime: "c9s"`). */
+/**
+ * Whether a setting entry is a cluster lab host: `kind: "kubernetes"`, or
+ * `kind: "local", runtime: "c9s"` as earlier builds wrote it.
+ */
 function isClusterSetting(setting: ConnectionSetting): boolean {
-  return setting.kind === "local" && setting.runtime === "c9s";
+  return setting.kind === "kubernetes" || (setting.kind === "local" && setting.runtime === "c9s");
+}
+
+/** The settings entry of a cluster lab host, as the cluster form saves it. */
+function clusterSettingEntry(settings: ClusterHostSettings): ConnectionSetting {
+  const text = (value: string | undefined) => value?.trim() || undefined;
+  const label = text(settings.label);
+  const kubeconfig = text(settings.kubeconfig);
+  const namespace = text(settings.namespace);
+  const imagePullSecret = text(settings.imagePullSecret);
+  return {
+    kind: "kubernetes",
+    ...(label !== undefined ? { label } : {}),
+    kubeContext: settings.kubeContext.trim(),
+    ...(kubeconfig !== undefined ? { kubeconfig } : {}),
+    ...(namespace !== undefined ? { namespace } : {}),
+    ...(settings.exposeType !== undefined && EXPOSE_TYPES.has(settings.exposeType)
+      ? { exposeType: settings.exposeType }
+      : {}),
+    ...(settings.persistence === false ? { persistence: false } : {}),
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {})
+  };
 }
 
 /** A cluster lab host from its `containerlab.connections` entry. */
@@ -137,9 +171,10 @@ export function clusterConnectionFromSetting(
   const kubeconfig = kubeconfigPath(setting.kubeconfig);
   const namespace = settingString(setting.namespace);
   const exposeType = settingString(setting.exposeType);
+  const imagePullSecret = settingString(setting.imagePullSecret);
   return {
     id: clusterConnectionId(kubeContext, kubeconfig),
-    label: settingString(setting.label) ?? `Cluster ${kubeContext} (c9s)`,
+    label: settingString(setting.label) ?? kubeContext,
     kind: "local",
     runtime: "c9s",
     kubeContext,
@@ -148,13 +183,42 @@ export function clusterConnectionFromSetting(
     ...(exposeType !== undefined && EXPOSE_TYPES.has(exposeType)
       ? { exposeType: exposeType as LabConnection["exposeType"] }
       : {}),
-    ...(setting.persistence === false ? { persistence: false } : {})
+    ...(setting.persistence === false ? { persistence: false } : {}),
+    ...(imagePullSecret !== undefined ? { imagePullSecret } : {})
+  };
+}
+
+/** The settings of a cluster connection, for the cluster form; the kubeconfig as the user wrote it. */
+export function clusterSettingsOf(connection: LabConnection): ClusterHostSettings {
+  const configured = vscode.workspace
+    .getConfiguration("containerlab")
+    .get<ConnectionSetting[]>("connections", []);
+  const entry = (Array.isArray(configured) ? configured : []).find(
+    (setting) => clusterConnectionFromSetting(setting)?.id === connection.id
+  );
+  const kubeconfig = settingString(entry?.kubeconfig) ?? connection.kubeconfig;
+  const label = settingString(entry?.label);
+  return {
+    kubeContext: connection.kubeContext ?? "",
+    ...(label !== undefined ? { label } : {}),
+    ...(kubeconfig !== undefined ? { kubeconfig } : {}),
+    ...(connection.namespace !== undefined ? { namespace: connection.namespace } : {}),
+    ...(connection.exposeType !== undefined ? { exposeType: connection.exposeType } : {}),
+    ...(connection.persistence === false ? { persistence: false } : {}),
+    ...(connection.imagePullSecret !== undefined
+      ? { imagePullSecret: connection.imagePullSecret }
+      : {})
   };
 }
 
 /** Whether a connection is a Kubernetes cluster that containerlab on this machine runs labs on. */
 export function isClusterConnection(connection: LabConnection): boolean {
   return connection.kind === "local" && connection.runtime === "c9s";
+}
+
+/** Whether a connection is this machine with Docker or Podman, which is hidden instead of removed. */
+export function isThisComputer(connection: LabConnection): boolean {
+  return connection.kind === "local" && !isClusterConnection(connection);
 }
 
 function tokenKey(url: string): string {
@@ -184,6 +248,8 @@ export class ConnectionManager implements vscode.Disposable {
   private readonly problems = new Map<string, string>();
   /** What the last check of this machine found. */
   private localStatus: LocalStatus | undefined;
+  /** Each check of the last look at a local connection (this machine or a cluster). */
+  private readonly checks = new Map<string, LabHostCheck[]>();
   private readonly expired = new Set<string>();
   /** Pending checks of lab hosts that do not answer, by connection id. */
   private readonly retries = new Map<string, ReturnType<typeof setTimeout>>();
@@ -312,6 +378,17 @@ export class ConnectionManager implements vscode.Disposable {
     return this.expired.has(connection.id) ? "session_expired" : "saved";
   }
 
+  /** The checks of the last look at a local connection, for the Lab Hosts page. */
+  checksOf(connection: LabConnection): LabHostCheck[] | undefined {
+    return this.checks.get(connection.id);
+  }
+
+  /** Records the checks of a local connection and, from them, whether it can run labs. */
+  setChecks(connection: LabConnection, checks: LabHostCheck[], problems: string[]): void {
+    this.checks.set(connection.id, checks);
+    this.setProblem(connection, problems.length === 0 ? undefined : problems.join(" "));
+  }
+
   /** What is wrong with a connection that does not answer. */
   problem(connection: LabConnection): string | undefined {
     return this.problems.get(connection.id);
@@ -379,6 +456,7 @@ export class ConnectionManager implements vscode.Disposable {
   /** Records a check of this machine; its problems show on Local's root. */
   setLocalStatus(status: LocalStatus): void {
     this.localStatus = status;
+    if (status.checks) this.checks.set(LOCAL_CONNECTION.id, status.checks);
     this.setProblem(LOCAL_CONNECTION, status.available ? undefined : status.problems.join(" "));
     this.changeEmitter.fire(LOCAL_CONNECTION);
   }
@@ -641,7 +719,7 @@ export class ConnectionManager implements vscode.Disposable {
 
   /**
    * Adds a Kubernetes cluster as a lab host, or updates the one with the same
-   * context. containerlab on this machine runs its labs with `-r c9s`.
+   * context and kubeconfig. containerlab on this machine runs its labs with `-r c9s`.
    */
   async addClusterConnection(input: {
     kubeContext: string;
@@ -650,30 +728,45 @@ export class ConnectionManager implements vscode.Disposable {
     label?: string;
     namespace?: string;
   }): Promise<LabConnection> {
+    return this.saveClusterConnection(input);
+  }
+
+  /**
+   * Saves a cluster lab host from the cluster form: a new one, or `previous`
+   * changed. Another entry with the same context and kubeconfig is replaced.
+   */
+  async saveClusterConnection(
+    settings: ClusterHostSettings,
+    previous?: LabConnection
+  ): Promise<LabConnection> {
     if (!this.localSupported) throw new Error(CONTAINERLAB_LINUX_ONLY);
-    const kubeContext = input.kubeContext.trim();
+    const kubeContext = settings.kubeContext.trim();
     if (!kubeContext) throw new Error("A cluster lab host needs a kubeconfig context.");
-    const kubeconfig = input.kubeconfig?.trim();
+    const kubeconfig = settings.kubeconfig?.trim();
     const id = clusterConnectionId(
       kubeContext,
       kubeconfig ? expandKubeconfigPath(kubeconfig) : undefined
     );
     const config = vscode.workspace.getConfiguration("containerlab");
     const current = config.get<ConnectionSetting[]>("connections", []);
-    const next = (Array.isArray(current) ? current : []).filter(
-      (entry) => clusterConnectionFromSetting(entry)?.id !== id
-    );
-    const label = input.label?.trim();
-    const namespace = input.namespace?.trim();
-    next.push({
-      kind: "local",
-      runtime: "c9s",
-      kubeContext,
-      ...(kubeconfig ? { kubeconfig } : {}),
-      ...(label ? { label } : {}),
-      ...(namespace ? { namespace } : {})
+    const entries = Array.isArray(current) ? current : [];
+    const entry = clusterSettingEntry({ ...settings, kubeContext });
+    const replaced = new Set([id, ...(previous ? [previous.id] : [])]);
+    // The edited entry keeps its place in the list; a new one goes last.
+    const index = entries.findIndex((setting) => {
+      const cluster = clusterConnectionFromSetting(setting);
+      return cluster !== undefined && replaced.has(cluster.id);
     });
+    const next = entries.filter((setting) => {
+      const cluster = clusterConnectionFromSetting(setting);
+      return cluster === undefined || !replaced.has(cluster.id);
+    });
+    next.splice(index < 0 ? next.length : Math.min(index, next.length), 0, entry);
     await config.update("connections", next, vscode.ConfigurationTarget.Global);
+    if (previous && previous.id !== id) {
+      this.problems.delete(previous.id);
+      this.checks.delete(previous.id);
+    }
     const connection = this.get(id);
     if (!connection) throw new Error("The cluster could not be saved.");
     this.changeEmitter.fire(undefined);
@@ -692,6 +785,7 @@ export class ConnectionManager implements vscode.Disposable {
         vscode.ConfigurationTarget.Global
       );
       this.problems.delete(connection.id);
+      this.checks.delete(connection.id);
       return;
     }
     if (connection.kind !== "api" || connection.url === undefined) return;

@@ -15,7 +15,11 @@ import {
 
 import { effectiveSupport } from "@srl-labs/containerlab-lab-backend";
 
-import { resolveLab } from "../../../backend/labBackends";
+import type { LabConnection } from "../../../backend/connections";
+import { labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { lifecycleOptionsWithLabSettings } from "../../../backend/labSettings";
+import { topologyHostFor } from "../../../backend/topologyHost";
+import type { LifecycleCommandType } from "../../../commands/graph";
 
 import { log } from "./logger";
 
@@ -24,6 +28,8 @@ import { log } from "./logger";
  */
 interface LabAction {
   command: string;
+  /** The lifecycle action, as runClabAction names it. */
+  action: LifecycleCommandType;
   resultMsg: string;
   errorMsg: string;
   noLabPath: string;
@@ -34,60 +40,70 @@ interface LabAction {
  */
 const LAB_ACTIONS = {
   deployLab: {
+    action: "deploy",
     command: "containerlab.lab.deploy",
     resultMsg: "Lab deployment initiated",
     errorMsg: "Error deploying lab",
     noLabPath: "No lab path provided for deployment"
   },
   destroyLab: {
+    action: "destroy",
     command: "containerlab.lab.destroy",
     resultMsg: "Lab destruction initiated",
     errorMsg: "Error destroying lab",
     noLabPath: "No lab path provided for destruction"
   },
   deployLabCleanup: {
+    action: "deploy",
     command: "containerlab.lab.deploy.cleanup",
     resultMsg: "Lab deployment with cleanup initiated",
     errorMsg: "Error deploying lab with cleanup",
     noLabPath: "No lab path provided for deployment with cleanup"
   },
   destroyLabCleanup: {
+    action: "destroy",
     command: "containerlab.lab.destroy.cleanup",
     resultMsg: "Lab destruction with cleanup initiated",
     errorMsg: "Error destroying lab with cleanup",
     noLabPath: "No lab path provided for destruction with cleanup"
   },
   redeployLab: {
+    action: "redeploy",
     command: "containerlab.lab.redeploy",
     resultMsg: "Lab redeploy initiated",
     errorMsg: "Error redeploying lab",
     noLabPath: "No lab path provided for redeploy"
   },
   redeployLabCleanup: {
+    action: "redeploy",
     command: "containerlab.lab.redeploy.cleanup",
     resultMsg: "Lab redeploy with cleanup initiated",
     errorMsg: "Error redeploying lab with cleanup",
     noLabPath: "No lab path provided for redeploy with cleanup"
   },
   applyLab: {
+    action: "apply",
     command: "containerlab.lab.apply",
     resultMsg: "Lab apply initiated",
     errorMsg: "Error applying lab topology",
     noLabPath: "No lab path provided for apply"
   },
   startLab: {
+    action: "start",
     command: "containerlab.lab.start",
     resultMsg: "Lab node start initiated",
     errorMsg: "Error starting lab nodes",
     noLabPath: "No lab path provided for node start"
   },
   stopLab: {
+    action: "stop",
     command: "containerlab.lab.stop",
     resultMsg: "Lab node stop initiated",
     errorMsg: "Error stopping lab nodes",
     noLabPath: "No lab path provided for node stop"
   },
   restartLab: {
+    action: "restart",
     command: "containerlab.lab.restart",
     resultMsg: "Lab node restart initiated",
     errorMsg: "Error restarting lab nodes",
@@ -100,6 +116,27 @@ const lifecycleController = createLifecycleCommandController<LabActionName>();
 
 function isLabActionName(value: string): value is LabActionName {
   return value in LAB_ACTIONS;
+}
+
+/**
+ * The lab host a lifecycle action of the viewer runs on; asks where when the
+ * topology has none yet. Undefined, and the viewer told, when the user cancels.
+ */
+async function hostOfAction(
+  labPath: string,
+  action: LifecycleCommandType
+): Promise<LabConnection | undefined> {
+  const verb = action.charAt(0).toUpperCase() + action.slice(1);
+  const host = await topologyHostFor(labPath, labNameForPath(labPath), verb);
+  if (!host) {
+    const { notifyCurrentTopoViewerOfCommandFailure } = await import("../../../commands/graph");
+    await notifyCurrentTopoViewerOfCommandFailure(
+      action,
+      new Error("Operation cancelled by user"),
+      labPath
+    );
+  }
+  return host;
 }
 
 /**
@@ -132,15 +169,20 @@ class LabLifecycleService {
     return (
       (await lifecycleController.run(endpointName, async () => {
         try {
-          const { ClabLabTreeNode } = await import("../../../treeView/common");
-          const tempNode = new ClabLabTreeNode("", vscode.TreeItemCollapsibleState.None, {
-            absolute: labPath,
-            relative: ""
-          });
+          const host = await hostOfAction(labPath, action.action);
+          if (!host) return { result: null, error: null };
+          const { ClabLabTreeNode, onConnection } = await import("../../../treeView/common");
+          const tempNode = onConnection(
+            new ClabLabTreeNode("", vscode.TreeItemCollapsibleState.None, {
+              absolute: labPath,
+              relative: ""
+            }),
+            host.id
+          );
           const optionKind = LIFECYCLE_ACTION_OPTION_KIND[endpointName];
           // Options the lab host's runtime does not take are dropped.
           const runtime = optionKind
-            ? (await (await resolveLab(labPath)).backend.hostProfile()).runtime
+            ? (await (await resolveLab(labPath, undefined, host.id)).backend.hostProfile()).runtime
             : undefined;
           const lifecycleOptions = optionKind
             ? normalizeLabLifecycleOptions(optionKind, rawOptions, runtime)
@@ -168,8 +210,19 @@ class LabLifecycleService {
 
   /** Plan `containerlab apply` without changing the lab; the plan's JSON. */
   async planApply(labPath: string): Promise<unknown> {
-    const { backend, target } = await resolveLab(labPath);
-    const plan = await backend.runLifecycle("apply", target, { dryRun: true });
+    const host = await topologyHostFor(labPath, labNameForPath(labPath), "Apply");
+    if (!host) throw new Error("Operation cancelled by user");
+    const { backend, target } = await resolveLab(labPath, undefined, host.id);
+    // The plan uses the lab's settings, e.g. its namespace, as the apply will.
+    const lifecycleOptions = lifecycleOptionsWithLabSettings("apply", undefined, {
+      connectionId: host.id,
+      labPath,
+      runtime: (await backend.hostProfile()).runtime
+    });
+    const plan = await backend.runLifecycle("apply", target, {
+      dryRun: true,
+      ...(lifecycleOptions ? { lifecycleOptions } : {})
+    });
     return plan.result;
   }
 

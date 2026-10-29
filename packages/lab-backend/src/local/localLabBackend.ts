@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  containerlabDefaultTimeout,
   isTopologyFileName,
   type LabExecRequest,
   type LabOperationSupport,
@@ -51,7 +52,7 @@ import { LabBackendError } from "../contract/errors.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines } from "../ndjson.ts";
 import { captureNodeTargets } from "../capture.ts";
-import { LocalCapture } from "./capture.ts";
+import { LocalCapture, WIRESHARK_VNC_NEEDS_DOCKER } from "./capture.ts";
 import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
 import { createDockerNodeAccess } from "./dockerNodeAccess.ts";
 import { inspectField } from "./inspect.ts";
@@ -69,9 +70,15 @@ import {
   type LocalLabRef
 } from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
-import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
+import {
+  containerRuntimeCli,
+  resolveLocalOptions,
+  type LocalLabBackendOptions,
+  type ResolvedLocalOptions
+} from "./options.ts";
 import {
   containerlabCommand,
+  lastContainerlabError,
   runChecked,
   runCommand,
   spawnLines,
@@ -103,8 +110,15 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   tailscaleStatus: false
 };
 
-/** What a local host can do, by its lab runtime; c9s has node stats when metrics.k8s.io answers. */
-function localFeatures(runtime: ResolvedLocalOptions["runtime"], nodeStats: boolean): LabBackendFeatures {
+/**
+ * What a local host can do, by its lab runtime; c9s has node stats when
+ * metrics.k8s.io answers, and Wireshark VNC with Docker or Podman on this machine.
+ */
+function localFeatures(
+  runtime: ResolvedLocalOptions["runtime"],
+  nodeStats: boolean,
+  captureVnc = false
+): LabBackendFeatures {
   const c9s = runtime === "c9s";
   return {
     validate: true,
@@ -115,13 +129,15 @@ function localFeatures(runtime: ResolvedLocalOptions["runtime"], nodeStats: bool
     gottyOptions: !c9s,
     nodeStats,
     terminalResume: true,
+    // containerlab's `--timeout`.
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(!c9s),
     // `containerlab inspect interfaces -r c9s` lists the lab-link interfaces.
     interfaceInspect: true,
     manifestExport: c9s,
     c9sDeployOptions: c9s,
     captureStream: c9s,
-    captureVnc: false
+    captureVnc: c9s && captureVnc
   };
 }
 
@@ -404,21 +420,27 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    const nodeStats = this.options.runtime === "c9s" ? await this.access.statsAvailable() : true;
-    return localFeatures(this.options.runtime, nodeStats);
+    if (this.options.runtime !== "c9s") return localFeatures(this.options.runtime, true);
+    const [nodeStats, vncRuntime] = await Promise.all([this.access.statsAvailable(), this.capture.vncRuntime()]);
+    return localFeatures(this.options.runtime, nodeStats, vncRuntime !== undefined);
   }
 
   async hostProfile(): Promise<LabHostProfile> {
     const { runtime, c9s } = this.options;
-    if (!c9s) return { runtime };
+    const defaultTimeout = containerlabDefaultTimeout(runtime);
+    if (!c9s) return { runtime, defaultTimeout };
+    const vncRuntime = await this.capture.vncRuntime();
     return {
       runtime,
+      defaultTimeout,
       ...(c9s.kubeContext ? { kubeContext: c9s.kubeContext } : {}),
       ...(c9s.kubeconfig ? { kubeconfig: c9s.kubeconfig } : {}),
       namespaceMode: c9s.namespace ? "fixed" : "per-lab",
       ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
       ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
-      persistence: c9s.persistence !== false
+      persistence: c9s.persistence !== false,
+      ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+      ...(vncRuntime ? {} : { wiresharkVncUnavailable: WIRESHARK_VNC_NEEDS_DOCKER })
     };
   }
 
@@ -436,6 +458,7 @@ export class LocalLabBackend implements LabBackend {
     if (lab.labName) args.push("--name", lab.labName);
     if (c9s.exposeType) args.push("--expose-type", c9s.exposeType);
     if (c9s.persistence === false) args.push("--no-persistence");
+    if (c9s.imagePullSecret) args.push("--image-pull-secret", c9s.imagePullSecret);
     const [file, commandArgs] = containerlabCommand(this.options, args);
     const result = await runChecked(file, commandArgs, {
       cwd: path.dirname(topology),
@@ -532,7 +555,7 @@ export class LocalLabBackend implements LabBackend {
       if (this.options.runtime === "c9s") {
         throw new LabBackendError("Nodes on a c9s lab host cannot be paused.", 501);
       }
-      await runChecked(this.options.runtime, [action, container.name], { env: this.options.env });
+      await runChecked(containerRuntimeCli(this.options), [action, container.name], { env: this.options.env });
       return;
     }
     const topology = await this.requireRunningTopology(labName);
@@ -677,6 +700,22 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async createWiresharkVnc(labName: string, request: { targets: CaptureTarget[]; theme?: string }) {
+    if (this.options.runtime === "c9s") {
+      // Wireshark VNC fed by this machine's capture stream of the cluster lab.
+      const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+      if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
+      const targets = captureNodeTargets(labName, request.targets, records);
+      return this.capture.createStreamVnc(
+        labName,
+        targets,
+        (granted, signal) =>
+          this.openCaptureStream(labName, {
+            targets: granted.map((target) => ({ containerName: target.node, interfaceName: target.interface })),
+            signal
+          }),
+        request.theme
+      );
+    }
     const topology = await this.runningTopologyFile(labName);
     const labDirectory = topology ? path.join(path.dirname(topology), `clab-${labName}`) : undefined;
     return this.capture.createVnc(labName, labDirectory, request.targets, request.theme);
@@ -859,9 +898,21 @@ export class LocalLabBackend implements LabBackend {
     running.add(command);
     void command.exit.then(() => running.delete(command));
     async function* lines(): AsyncGenerator<string> {
+      const stderr: string[] = [];
       try {
         for await (const output of command.lines) {
-          if (output.stream === "stdout") yield `${output.line}\n`;
+          if (output.stream === "stdout") {
+            yield `${output.line}\n`;
+          } else {
+            stderr.push(output.line);
+            if (stderr.length > 40) stderr.shift();
+          }
+        }
+        const exit = await command.exit;
+        if (exit.code !== 0 && exit.code !== null && !signal.aborted) {
+          // E.g. a binary that is neither run as root nor SUID root.
+          const detail = lastContainerlabError(stderr.join("\n")) ?? `exit status ${exit.code}`;
+          throw new LabBackendError(`containerlab events failed: ${detail}`, 500);
         }
       } finally {
         command.kill();

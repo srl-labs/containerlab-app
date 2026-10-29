@@ -2,6 +2,7 @@
 import React from "react";
 
 import { InputField, PanelSection } from "../../ui/form";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 import type { NodeCredentials } from "../../../core/parsing/NodeCredentials";
 
 import type { TabProps } from "./types";
@@ -32,6 +33,7 @@ function describeLogin(ownLogin: boolean, inheritedSource: string | undefined): 
 }
 
 export const CredentialsSection: React.FC<TabProps> = ({ data, onChange }) => {
+  const credentialsLimit = useRuntimeLimit("nodeCredentials");
   if (data.isCustomTemplate === true) return null;
 
   const own = data.credentials ?? {};
@@ -46,7 +48,11 @@ export const CredentialsSection: React.FC<TabProps> = ({ data, onChange }) => {
   };
 
   return (
-    <PanelSection title="Login Credentials">
+    <PanelSection
+      title="Login Credentials"
+      limit={credentialsLimit}
+      limitKeepsEditable={isSet(own.username) || isSet(own.password) || isSet(own.identityFile)}
+    >
       <InputField
         id="node-credentials-username"
         label="Username"

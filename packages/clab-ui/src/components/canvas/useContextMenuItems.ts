@@ -10,7 +10,8 @@ import {
 } from "../../host";
 import { kubectlExecCommand } from "../../host/kubernetes";
 import type { ClabUiLabOperationsHost } from "../../host/labOperations";
-import type { LabHostProfile } from "../../host/labHostSupport";
+import { unsupportedReason } from "../../host/kubernetesLimits";
+import type { LabHostInfo, LabHostProfile } from "../../host/labHostSupport";
 import { copyToClipboard } from "../../utils/clipboard";
 import { hostCanCapture, hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
@@ -85,6 +86,7 @@ interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   renderCapturePanel?: typeof renderCapturePanel;
   /** Whether the lab host has link impairments (netem). */
   canImpairLinks: boolean;
+  impairLinksUnavailable?: string;
   /** c9s: copies the kubectl exec command of a node. */
   copyKubectlExec?: (nodeId: string) => void;
   type: "node" | "edge" | "pane" | null;
@@ -205,6 +207,7 @@ function buildEdgeItems(
     isLocked: params.isLocked,
     renderLinkCapturePanel: params.renderCapturePanel ? renderLinkCapturePanel : undefined,
     canImpairLinks: params.canImpairLinks,
+    ...(params.impairLinksUnavailable !== undefined ? { impairLinksUnavailable: params.impairLinksUnavailable } : {}),
     closeContextMenu: params.handlers.closeContextMenu,
     editEdge: params.editEdge,
     handleDeleteEdge: params.handleDeleteEdge,
@@ -269,6 +272,12 @@ function runNodeAction(
 ): void {
   trackNodeActions(action, [nodeName]);
   topoViewer.runNodeAction(action, nodeName);
+}
+
+/** On a Kubernetes lab host, link impairments show greyed out with why. */
+function linkImpairmentLimit(info: LabHostInfo | undefined): { impairLinksUnavailable?: string } {
+  const reason = unsupportedReason(info?.profile, "linkImpairments");
+  return reason !== undefined ? { impairLinksUnavailable: reason } : {};
 }
 
 /** Looks the node up in `containerlab inspect` and copies the kubectl command for its device container. */
@@ -341,6 +350,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
         : undefined,
       renderCapturePanel: hostCanCapture(labHostInfo) ? renderCapturePanel : undefined,
       canImpairLinks: hostSupports(labHostInfo, "netem"),
+      ...linkImpairmentLimit(labHostInfo),
       ...(labHostInfo?.profile.runtime === "c9s" && topoViewer.labOperations
         ? { copyKubectlExec: copyKubectlExecHandler(topoViewer.labOperations, labHostInfo.profile) }
         : {}),

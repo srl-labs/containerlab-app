@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import { isInternalInterfaceName, nodeNamespaceInterfaceName } from "@containerlab/clab-ui/session";
+import { captureRoutePlan, parseCaptureMethod } from "@containerlab/clab-ui/host";
 
 import { outputChannel, dockerClient, extensionContext, username } from "../globals";
 import * as utils from "../utils";
@@ -18,6 +19,7 @@ import {
 import type { ImagePullPolicy } from "../utils/consts";
 import { WIRESHARK_VNC_PANEL, createPanelWebviewHtml } from "../webviews/shared/webviewPanels";
 import { backendFor, backendOf, connectionOf, pickConnection } from "../backend/labBackends";
+import { isClusterConnection } from "../backend/connections";
 import { isRemoteNode, remoteHostname, remoteLabNameOf } from "../backend/remoteNode";
 import { startVncProxy } from "../backend/vncProxy";
 import {
@@ -25,7 +27,7 @@ import {
   DEFAULT_WIRESHARK_VNC_DOCKER_PULL_POLICY,
   WIRESHARK_VNC_CTR_NAME_PREFIX
 } from "../utils/consts";
-import { ensureHostSupports } from "../backend/labHostSupport";
+import { ensureHostSupports, labHostInfo } from "../backend/labHostSupport";
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 
 import {
@@ -57,18 +59,23 @@ export async function captureInterface(
 
   if (await captureOnStream(node, allSelectedNodes)) return;
 
-  // Settings override
-  const preferredCaptureMethod = vscode.workspace
-    .getConfiguration("containerlab")
-    .get<string>("capture.preferredAction");
-  switch (preferredCaptureMethod) {
-    case "Edgeshark":
-      return captureInterfaceWithPacketflix(node, allSelectedNodes);
-    case "Wireshark VNC":
-      return captureEdgesharkVNC(node, allSelectedNodes);
-  }
-
-  // Default to VNC capture
+  // Docker and Podman: Wireshark VNC or Edgeshark, whose packetflix link opens Wireshark here.
+  const info = await labHostInfo(connectionOf(node));
+  const plan = captureRoutePlan(
+    parseCaptureMethod(
+      vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction")
+    ),
+    {
+      stream: false,
+      localWireshark: false,
+      // A lab host that cannot be asked is let through: it refuses itself.
+      wiresharkVnc: info?.support.wiresharkVnc ?? true,
+      edgeshark: info?.support.edgeshark ?? true
+    }
+  );
+  if (plan.notice) void vscode.window.showInformationMessage(plan.notice);
+  if (plan.routes[0] === "edgeshark") return captureInterfaceWithPacketflix(node, allSelectedNodes);
+  // Wireshark VNC, or the warning of a lab host that has neither.
   return captureEdgesharkVNC(node, allSelectedNodes);
 }
 
@@ -249,7 +256,11 @@ function labNameOf(node: CaptureNode): { labName?: string } {
   return labName ? { labName } : {};
 }
 
-/** Wireshark VNC of a c9s clab-api-server: it feeds the session from its own capture stream. */
+/**
+ * Wireshark VNC of a c9s lab host: a clab-api-server feeds the session from
+ * its own capture stream; for a cluster on this machine the container runs on
+ * this machine's Docker and the extension writes the capture into its pipe.
+ */
 async function openStreamVnc(
   node: unknown,
   labName: string,
@@ -846,7 +857,8 @@ export async function killAllWiresharkVNCCtrs(target?: unknown) {
       ? connectionOf(target)
       : await pickConnection("Close Wireshark VNC sessions");
   if (!connection) return;
-  if (connection.kind === "api") {
+  // clab-api-server and clusters on this machine know their own sessions.
+  if (connection.kind === "api" || isClusterConnection(connection)) {
     try {
       const result = await backendFor(connection).closeAllWiresharkVnc();
       outputChannel.info(result.message);

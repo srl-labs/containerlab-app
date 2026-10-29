@@ -90,9 +90,12 @@ describe("deploy command", () => {
     await deploy(node);
 
     expect(clabStub.instances).to.have.lengthOf(1);
-    const [action, commandNode, , onSuccess, onFailure, onOutputLine] = clabStub.instances[0].args;
+    const [action, commandNode, spinnerMsg, onSuccess, onFailure, onOutputLine] =
+      clabStub.instances[0].args;
     expect(action).to.equal("deploy");
     expect(commandNode).to.equal(node);
+    // The notification names the lab and where it runs.
+    expect(spinnerMsg.progressMsg).to.equal("Deploying lab.yml on Local...");
 
     expect(graphStub.createdHandlers).to.have.lengthOf(1);
     const { commandType, handlers } = graphStub.createdHandlers[0];
@@ -102,7 +105,7 @@ describe("deploy command", () => {
     expect(onOutputLine).to.equal(handlers.onOutputLine);
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
-    expect(spy.calledOnceWithExactly()).to.be.true;
+    expect(spy.calledOnceWithExactly({ connectionId: "local" })).to.be.true;
   });
 
   it("passes lifecycle options to the backend", async () => {
@@ -111,7 +114,7 @@ describe("deploy command", () => {
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
     expect(spy.firstCall.args).to.deep.equal([
-      { lifecycleOptions: { nodeFilter: ["r1", "r2"], maxWorkers: 2 } }
+      { connectionId: "local", lifecycleOptions: { nodeFilter: ["r1", "r2"], maxWorkers: 2 } }
     ]);
     expect(graphStub.createdHandlers[0].options).to.deep.equal({
       labKeepsRunning: false,
@@ -125,7 +128,7 @@ describe("deploy command", () => {
 
     const spy = clabStub.ClabCommand.prototype.run as sinon.SinonSpy;
     expect(spy.firstCall.args).to.deep.equal([
-      { lifecycleOptions: { nodeFilter: ["r1"], graceful: true } }
+      { connectionId: "local", lifecycleOptions: { nodeFilter: ["r1"], graceful: true } }
     ]);
     expect(graphStub.createdHandlers[0].options).to.deep.equal({
       labKeepsRunning: true,

@@ -2,7 +2,8 @@
  * Captures on lab hosts that capture lab links as one stream (c9s): the
  * picker lists the lab-link interfaces, and the capture goes where the user
  * chose: Wireshark on this machine (desktop), Wireshark in a window (VNC on
- * a clab-api-server), or a `.pcapng` download.
+ * a clab-api-server, or for a cluster used from this machine a VNC container
+ * on this machine's Docker), or a `.pcapng` download.
  */
 import type { CaptureTarget } from "@srl-labs/containerlab-lab-backend";
 import {
@@ -11,6 +12,7 @@ import {
   parseLabCaptureInterfaces
 } from "@containerlab/clab-ui/host";
 import {
+  loadCapturePreferences,
   resolveStandaloneTheme,
   runtimeUiActions,
   type RuntimeStreamCapture
@@ -23,7 +25,11 @@ import {
   type RuntimeTargetRequest
 } from "./runtimeApi";
 import { useAuthStore } from "./stores/authStore";
-import { streamCaptureDeliveries } from "./streamCaptureDeliveries";
+import {
+  edgesharkCaptureRoute,
+  streamCaptureDeliveries,
+  unavailableStreamCaptureDeliveries
+} from "./streamCaptureDeliveries";
 import { loadLabHostInfo, useLabHostStore } from "./stores/labHostStore";
 import { resolveStandaloneServerOrigin } from "./standaloneServerOrigin";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
@@ -95,6 +101,18 @@ export function hostCapturesStreams(endpointId: string | undefined): boolean {
   return useLabHostStore.getState().hosts.get(endpointId)?.support.captureStream === true;
 }
 
+/**
+ * How a capture opens on a Docker or Podman lab host, from the endpoint's
+ * default capture method; says why when that method is not available there.
+ * Synchronous, so Wireshark VNC still opens within the click.
+ */
+export function edgesharkCaptureRouteFor(endpointId: string | undefined): "edgeshark" | "wireshark-vnc" {
+  const support = endpointId !== undefined ? useLabHostStore.getState().hosts.get(endpointId)?.support : undefined;
+  const { route, notice } = edgesharkCaptureRoute(loadCapturePreferences(endpointId).preferredAction, support);
+  if (notice) runtimeUiActions.notify(notice, "info");
+  return route;
+}
+
 /** The topology node of a container name on a c9s lab host: `<lab>-<node>`, or the node itself. */
 export function topologyNodeOf(labName: string | undefined, containerName: string): string {
   for (const prefix of labName ? [`clab-${labName}-`, `${labName}-`] : []) {
@@ -135,9 +153,11 @@ export async function openStreamCaptureDialog(request: StreamCaptureDialogReques
   const endpointId = request.target.endpointId;
   const info = endpointId !== undefined ? await loadLabHostInfo(endpointId) : undefined;
   if (info?.support.captureStream !== true) return false;
-  const deliveries = streamCaptureDeliveries(info.support, {
-    localWireshark: useAuthStore.getState().localWireshark
-  });
+  const { deliveries, notice } = streamCaptureDeliveries(
+    info,
+    { localWireshark: useAuthStore.getState().localWireshark },
+    loadCapturePreferences(endpointId).preferredAction
+  );
   runtimeUiActions.openCapture({
     ...request.target,
     nodeName: request.nodes[0] ?? "",
@@ -147,6 +167,8 @@ export async function openStreamCaptureDialog(request: StreamCaptureDialogReques
       nodes: request.nodes,
       ...(request.initialSelection ? { initialSelection: request.initialSelection } : {}),
       deliveries,
+      ...(notice ? { notice } : {}),
+      unavailable: unavailableStreamCaptureDeliveries(info),
       loadInterfaces: async () =>
         parseLabCaptureInterfaces(await requestLabOperation("capture-interfaces", { ...request.target })),
       onCapture: (capture) => {

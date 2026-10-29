@@ -31,7 +31,7 @@ import type {
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
 import { gottyOptionsError, sshxReadOnlyLink } from "../shareOptions.ts";
-import type { ResolvedLocalOptions } from "./options.ts";
+import { containerRuntimeCli, imageRuntimeCli, type ResolvedLocalOptions } from "./options.ts";
 import { containerlabCommand, lastContainerlabError, runChecked, runCommand, stripAnsi } from "./process.ts";
 
 const STARTED_AT = new Date();
@@ -257,10 +257,11 @@ export async function fcli(
     "/topo.yml",
     ...command.split(/\s+/).filter(Boolean)
   ];
-  const result = await runCommand(options.runtime, args, { env: options.env, timeoutMs: 10 * 60_000 });
+  const cli = containerRuntimeCli(options, "fcli reports need Docker or Podman; a Kubernetes lab host has none.");
+  const result = await runCommand(cli, args, { env: options.env, timeoutMs: 10 * 60_000 });
   const output = `${result.stdout}${result.stderr}`.trim();
   if (result.code !== 0) {
-    throw new LabBackendError(`command ${options.runtime} run failed: exit status ${result.code}: ${output}`, 500);
+    throw new LabBackendError(`command ${cli} run failed: exit status ${result.code}: ${output}`, 500);
   }
   return { command, output };
 }
@@ -469,8 +470,9 @@ interface DockerImageRow {
 }
 
 export async function listImages(options: ResolvedLocalOptions): Promise<RuntimeImagesResponse> {
+  const cli = imageRuntimeCli(options);
   const result = await runChecked(
-    options.runtime,
+    cli,
     ["image", "ls", "--all", "--digests", "--no-trunc", "--format", "{{json .}}"],
     { env: options.env, timeoutMs: 60_000 }
   );
@@ -502,7 +504,7 @@ export async function listImages(options: ResolvedLocalOptions): Promise<Runtime
     }
     images.set(row.ID, image);
   }
-  return { runtime: options.runtime, images: [...images.values()] };
+  return { runtime: cli, images: [...images.values()] };
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -518,8 +520,9 @@ function validateImageReference(reference: string): string {
 }
 
 export async function pullImage(options: ResolvedLocalOptions, image: string): Promise<RuntimeImageActionResponse> {
+  const cli = imageRuntimeCli(options);
   const reference = validateImageReference(image);
-  const result = await runChecked(options.runtime, ["pull", reference], { env: options.env, timeoutMs: 30 * 60_000 });
+  const result = await runChecked(cli, ["pull", reference], { env: options.env, timeoutMs: 30 * 60_000 });
   return { success: true, image: reference, message: "Image pulled", output: stripAnsi(result.stdout).trim() };
 }
 
@@ -528,9 +531,10 @@ export async function removeImage(
   image: string,
   force: boolean
 ): Promise<RuntimeImageActionResponse> {
+  const cli = imageRuntimeCli(options);
   const reference = validateImageReference(image);
   const result = await runChecked(
-    options.runtime,
+    cli,
     ["image", "rm", ...(force ? ["--force"] : []), reference],
     { env: options.env, timeoutMs: 5 * 60_000 }
   );
@@ -539,7 +543,7 @@ export async function removeImage(
 
 export async function containerLogs(options: ResolvedLocalOptions, containerName: string, tail = "all") {
   const result = await runChecked(
-    options.runtime,
+    containerRuntimeCli(options),
     ["logs", "--tail", tail, "--timestamps", containerName],
     { env: options.env, timeoutMs: 60_000 }
   );

@@ -3,17 +3,19 @@
  * start/stop/restart for the lab open in the topology view.
  */
 
-import type {
-  LabExecRequest,
-  LabOperationName,
-  LabSaveConfigsRequest,
-  LabSnapshotSaveRequest,
-  TopoViewerNodesAction
+import {
+  normalizeLabSettings,
+  type LabExecRequest,
+  type LabOperationName,
+  type LabSaveConfigsRequest,
+  type LabSnapshotSaveRequest,
+  type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 
 import { describeLabHost } from "@srl-labs/containerlab-lab-backend";
 
-import { labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { hostOfLabPath, labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { labSettingsFor, rememberLabSettings } from "../../../backend/labSettings";
 import { runWithProgress } from "../../../commands/command";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -41,7 +43,9 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "nodeLocations" ||
     value === "captureInterfaces" ||
     value === "exportManifests" ||
-    value === "validate"
+    value === "validate" ||
+    value === "labSettings" ||
+    value === "saveLabSettings"
   );
 }
 
@@ -99,6 +103,15 @@ class LabOperationsService {
         });
       case "validate":
         return backend.validate({ ...target, labName: target.labName || labNameForPath(labPath) });
+      case "labSettings":
+        return labSettingsFor(hostOfLabPath(labPath).id, labPath) ?? null;
+      case "saveLabSettings":
+        await rememberLabSettings(
+          hostOfLabPath(labPath).id,
+          labPath,
+          normalizeLabSettings(request.settings)
+        );
+        return null;
     }
   }
 

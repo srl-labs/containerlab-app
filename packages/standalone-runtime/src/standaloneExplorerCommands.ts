@@ -3,7 +3,6 @@ import type { TopologyRef } from "@containerlab/clab-ui/session";
 import {
   dispatchEndpointUiAction,
   getSessionHostnameOverride,
-  loadCapturePreferences,
   resolveStandaloneTheme,
   runtimeUiActions,
   setSessionHostnameOverride
@@ -45,6 +44,7 @@ import { endpointDisplayAddress, endpointHostname } from "./endpointAddress";
 import type { WiresharkCaptureRequest } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
 import {
+  edgesharkCaptureRouteFor,
   hostCapturesStreams,
   openStreamCaptureDialog,
   streamCaptureSelection,
@@ -290,8 +290,7 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         await openStreamCapture(streamTargets, `Capture: ${targetLabel}`);
         return;
       }
-      const preferredAction = loadCapturePreferences(actionEndpointId).preferredAction;
-      if (preferredAction === "edgeshark") {
+      if (edgesharkCaptureRouteFor(actionEndpointId) === "edgeshark") {
         await Promise.all(requests.map((request) => runPacketflixCapture(request.targets)));
         return;
       }

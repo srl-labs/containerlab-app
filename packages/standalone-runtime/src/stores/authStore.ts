@@ -1,4 +1,4 @@
-import type { LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
+import type { AppConfigResponse, LocalEndpointStatus } from "@srl-labs/containerlab-app-contract";
 import { create } from "zustand";
 
 interface AuthState {
@@ -9,6 +9,8 @@ interface AuthState {
   localEndpoints: LocalEndpointStatus[];
   /** The app server opens captures in Wireshark on this machine (the desktop app). */
   localWireshark: boolean;
+  /** How the app server sets up lab hosts: cluster management (the desktop app) or why not. */
+  labHostSetup: Pick<AppConfigResponse, "clusterHosts" | "clustersUnavailable" | "localUnavailable">;
   error: string | null;
   initialized: boolean;
   loading: boolean;
@@ -16,6 +18,7 @@ interface AuthState {
   setDefaultApiUrl: (defaultApiUrl: string) => void;
   setLocalEndpoint: (localEndpoint: LocalEndpointStatus | null, localEndpoints?: LocalEndpointStatus[]) => void;
   setLocalWireshark: (localWireshark: boolean) => void;
+  setLabHostSetup: (setup: AuthState["labHostSetup"]) => void;
   setError: (error: string | null) => void;
   setInitialized: (initialized: boolean) => void;
   setLoading: (loading: boolean) => void;
@@ -26,6 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   localEndpoint: null,
   localEndpoints: [],
   localWireshark: false,
+  labHostSetup: {},
   error: null,
   initialized: false,
   loading: true,
@@ -34,6 +38,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setLocalEndpoint: (localEndpoint, localEndpoints) =>
     set({ localEndpoint, localEndpoints: localEndpoints ?? (localEndpoint ? [localEndpoint] : []) }),
   setLocalWireshark: (localWireshark) => set({ localWireshark }),
+  setLabHostSetup: (labHostSetup) => set({ labHostSetup }),
   setError: (error) => set({ error, loading: false }),
   setInitialized: (initialized) => set({ initialized }),
   setLoading: (loading) => set({ loading })
