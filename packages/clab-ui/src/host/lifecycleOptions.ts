@@ -201,6 +201,24 @@ export function isValidLifecycleTimeout(value: string): boolean {
   return DURATION_PATTERN.test(value) && /[1-9]/.test(value);
 }
 
+/** containerlab's `--timeout` default: 10m on lab runtimes such as c9s, where nodes wait for their images, else 2m. */
+export function containerlabDefaultTimeout(runtime: LabRuntimeKind): string {
+  return runtime === "c9s" ? "10m" : "2m";
+}
+
+const DURATION_UNIT_MS: Record<string, number> = { h: 3_600_000, m: 60_000, s: 1_000, ms: 1 };
+
+/** A lifecycle timeout in milliseconds; undefined unless it is a valid one. */
+export function lifecycleTimeoutMs(value: string | undefined): number | undefined {
+  const trimmed = value?.trim() ?? "";
+  if (!isValidLifecycleTimeout(trimmed)) return undefined;
+  let total = 0;
+  for (const [, amount, unit] of trimmed.matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g)) {
+    total += Number(amount) * (DURATION_UNIT_MS[unit] ?? 0);
+  }
+  return total;
+}
+
 export function isValidExportTemplate(template: string): boolean {
   return EXPORT_TEMPLATE_PATTERN.test(template) && !template.includes("..");
 }
@@ -367,8 +385,8 @@ export function labLifecycleCliFlags(options: LabLifecycleOptions | undefined): 
 /**
  * clab-api-server query parameters for the options. The c9s options have
  * none: a clab-api-server with `CLAB_RUNTIME=c9s` sets namespaces, exposure
- * and persistence itself. Nor has `timeout`: the server runs containerlab
- * with its own timeouts, so hosts offer it only where `lifecycleTimeout` is
+ * and persistence itself. `timeout` needs a server that lists
+ * `lab-lifecycle-timeout`; hosts offer it only where `lifecycleTimeout` is
  * supported.
  */
 export function labLifecycleQueryParams(
@@ -376,6 +394,7 @@ export function labLifecycleQueryParams(
 ): Array<[string, string]> {
   if (!options) return [];
   const params: Array<[string, string]> = [];
+  if (options.timeout !== undefined) params.push(["timeout", options.timeout]);
   if (options.nodeFilter && options.nodeFilter.length > 0) {
     params.push(["nodeFilter", options.nodeFilter.join(",")]);
   }

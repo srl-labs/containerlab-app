@@ -16,8 +16,8 @@ import { unsupportedReason } from "../../../host/kubernetesLimits";
 import type { LabHostProfile } from "../../../host/labHostSupport";
 import { C9S_EXPOSE_TYPES, type C9sExposeType } from "../../../host/lifecycleOptions";
 import {
-  defaultTimeout,
   maxWorkersError,
+  timeoutDefaultLabel,
   timeoutError,
   varsFileError,
   type LifecycleOptionsForm
@@ -32,7 +32,7 @@ export interface DeployTabProps {
   profile: LabHostProfile | undefined;
   /** How the UI names the lab host, e.g. "Kubernetes · kind-c9s-app". */
   hostLabel: string;
-  /** The lab host takes containerlab's `--timeout`; a lab server does not. */
+  /** The lab host takes containerlab's `--timeout`; an older lab server does not. */
   canSetTimeout: boolean;
   /** c9s through a lab server: it sets the Kubernetes options itself. */
   c9sReadOnly: boolean;
@@ -56,6 +56,10 @@ function nodeStorageDefault(persistence: boolean | undefined): string {
 }
 
 type Update = LabDeploySettingsState["update"];
+
+/** Why the Timeout is greyed out: a lab server older than the `timeout` parameter. */
+const LAB_SERVER_WITHOUT_TIMEOUT =
+  "Not offered by this lab server: it runs containerlab with its own timeouts. Update clab-api-server to set one.";
 
 const TextRow: React.FC<{
   id: string;
@@ -118,12 +122,13 @@ const SwitchRow: React.FC<{
 /** Timeout, max workers, variables file and the Docker and Podman options. */
 const ContainerlabRows: React.FC<{
   form: LifecycleOptionsForm;
+  hostProfile: LabHostProfile | undefined;
   update: Update;
   canSetTimeout: boolean;
   readOnly: boolean;
-}> = ({ form, update, canSetTimeout, readOnly }) => {
+}> = ({ form, hostProfile, update, canSetTimeout, readOnly }) => {
   const kubernetes = form.runtime === "c9s";
-  const timeout = defaultTimeout(form.runtime);
+  const timeout = timeoutDefaultLabel(form.runtime, hostProfile);
   const profile = { runtime: form.runtime };
   const exportTemplateLimit = unsupportedReason(profile, "exportTemplate");
   const skipPostDeployLimit = unsupportedReason(profile, "skipPostDeploy");
@@ -133,13 +138,13 @@ const ContainerlabRows: React.FC<{
       <TextRow
         id="lab-deploy-timeout"
         title="Timeout"
-        description={`How long containerlab waits for the lab runtime, e.g. 30m. Raise it when images pull slowly. Lab host default: ${timeout} (containerlab's).`}
+        description={`How long containerlab waits for the lab runtime, e.g. 30m. Raise it when images pull slowly. Lab host default: ${timeout.text}.`}
         value={form.timeout}
-        placeholder={timeout}
+        placeholder={timeout.placeholder}
         error={canSetTimeout ? timeoutError(form.timeout) : undefined}
         {...(canSetTimeout
           ? {}
-          : { disabledReason: "Not offered by this lab server: it runs containerlab with its own timeouts." })}
+          : { disabledReason: LAB_SERVER_WITHOUT_TIMEOUT })}
         readOnly={readOnly}
         onChange={(value) => update("timeout", value)}
       />
@@ -310,7 +315,13 @@ export const DeployTab: React.FC<DeployTabProps> = ({
       ) : (
         <>
           <SubsectionHeading>containerlab</SubsectionHeading>
-          <ContainerlabRows form={form} update={update} canSetTimeout={canSetTimeout} readOnly={readOnly} />
+          <ContainerlabRows
+            form={form}
+            hostProfile={profile}
+            update={update}
+            canSetTimeout={canSetTimeout}
+            readOnly={readOnly}
+          />
           {kubernetes ? (
             <>
               <SubsectionHeading>Kubernetes (c9s)</SubsectionHeading>

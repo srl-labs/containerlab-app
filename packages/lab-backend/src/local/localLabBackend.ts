@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  containerlabDefaultTimeout,
   isTopologyFileName,
   type LabExecRequest,
   type LabOperationSupport,
@@ -106,8 +107,7 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   healthMetrics: true,
   sharedWorkspace: false,
   // containerlab has no command that reports it.
-  tailscaleStatus: false,
-  lifecycleTimeout: true
+  tailscaleStatus: false
 };
 
 /**
@@ -129,6 +129,8 @@ function localFeatures(
     gottyOptions: !c9s,
     nodeStats,
     terminalResume: true,
+    // containerlab's `--timeout`.
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(!c9s),
     // `containerlab inspect interfaces -r c9s` lists the lab-link interfaces.
     interfaceInspect: true,
@@ -425,10 +427,12 @@ export class LocalLabBackend implements LabBackend {
 
   async hostProfile(): Promise<LabHostProfile> {
     const { runtime, c9s } = this.options;
-    if (!c9s) return { runtime };
+    const defaultTimeout = containerlabDefaultTimeout(runtime);
+    if (!c9s) return { runtime, defaultTimeout };
     const vncRuntime = await this.capture.vncRuntime();
     return {
       runtime,
+      defaultTimeout,
       ...(c9s.kubeContext ? { kubeContext: c9s.kubeContext } : {}),
       ...(c9s.kubeconfig ? { kubeconfig: c9s.kubeconfig } : {}),
       namespaceMode: c9s.namespace ? "fixed" : "per-lab",

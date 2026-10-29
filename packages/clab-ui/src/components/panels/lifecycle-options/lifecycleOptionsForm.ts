@@ -1,6 +1,8 @@
 // Form state of the lifecycle options dialog and the request it produces.
 import type { TopoViewerLifecycleAction } from "../../../host/contracts";
+import type { LabHostProfile } from "../../../host/labHostSupport";
 import {
+  containerlabDefaultTimeout,
   isValidLifecycleTimeout,
   isValidVarsFile,
   labLifecycleOptionFields,
@@ -82,9 +84,25 @@ export function createLifecycleOptionsForm(
   };
 }
 
-/** containerlab's `--timeout` default: lab runtimes such as c9s wait longer for images. */
-export function defaultTimeout(runtime: LabRuntimeKind): string {
-  return runtime === "c9s" ? "10m" : "2m";
+/**
+ * What an empty Timeout uses on a lab host: the default it reports, or
+ * containerlab's for the runtime while the host has not answered. Undefined
+ * for a lab server that does not report its default.
+ */
+function hostTimeoutDefault(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): string | undefined {
+  if (profile?.defaultTimeout !== undefined) return profile.defaultTimeout;
+  return profile === undefined ? containerlabDefaultTimeout(runtime) : undefined;
+}
+
+/** How the Timeout field names the lab host's default: `10m`, or the lab server's when it does not say. */
+export function timeoutDefaultLabel(runtime: LabRuntimeKind, profile: LabHostProfile | undefined): {
+  placeholder: string;
+  text: string;
+} {
+  const value = hostTimeoutDefault(runtime, profile);
+  return value === undefined
+    ? { placeholder: "Server default", text: "the lab server's default" }
+    : { placeholder: value, text: value };
 }
 
 export function lifecycleKindTakes(

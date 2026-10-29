@@ -18,8 +18,7 @@ const ALL_CAPABILITIES: LabBackendCapabilities = {
   wiresharkVnc: true,
   healthMetrics: true,
   sharedWorkspace: true,
-  tailscaleStatus: true,
-  lifecycleTimeout: true
+  tailscaleStatus: true
 };
 
 function features(containerRuntime: boolean): LabBackendFeatures {
@@ -31,6 +30,7 @@ function features(containerRuntime: boolean): LabBackendFeatures {
     gottyOptions: true,
     nodeStats: true,
     terminalResume: true,
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(containerRuntime),
     manifestExport: !containerRuntime,
     c9sDeployOptions: !containerRuntime,
@@ -94,6 +94,15 @@ test("host info from a transport keeps only well-formed values", () => {
   assert.equal(parsed?.support.manifestExport, true);
   assert.equal(parseLabHostInfo({ profile: { runtime: "lxd" }, support: {} }), undefined);
   assert.equal(parseLabHostInfo(undefined), undefined);
+});
+
+test("the timeout is a feature of the lab host, with its default in the profile", () => {
+  assert.equal(effectiveSupport(ALL_CAPABILITIES, features(false)).lifecycleTimeout, true);
+  const olderServer = effectiveSupport(ALL_CAPABILITIES, { ...features(false), lifecycleTimeout: false });
+  assert.equal(olderServer.lifecycleTimeout, false);
+  const parsed = parseLabHostInfo({ profile: { runtime: "c9s", defaultTimeout: " 10m " }, support: olderServer });
+  assert.equal(parsed?.profile.defaultTimeout, "10m");
+  assert.equal(parsed?.support.lifecycleTimeout, false);
 });
 
 test("runtime labels name the cluster and namespace", () => {

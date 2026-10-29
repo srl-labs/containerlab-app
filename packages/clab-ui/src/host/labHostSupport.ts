@@ -32,6 +32,13 @@ export interface LabHostProfile {
   /** c9s through a clab-api-server: every lab namespace gets a resource quota. */
   labQuota?: boolean;
   /**
+   * The timeout containerlab gets on a deploy, redeploy, apply or destroy
+   * without one, as a duration such as `10m`: containerlab's default for the
+   * runtime on this machine, a clab-api-server's own (`GET /api/v1/lab-host`).
+   * Unset on a lab server that does not report it.
+   */
+  defaultTimeout?: string;
+  /**
    * The lab host is older than this app needs, e.g. a clab-api-server that
    * does not report its runtime. What it can do runs as before; the message
    * says what to update for the rest.
@@ -66,11 +73,6 @@ export interface LabBackendCapabilities {
   sharedWorkspace: boolean;
   /** The Tailscale devices of a running lab (`mgmt.tailscale`). */
   tailscaleStatus: boolean;
-  /**
-   * containerlab's `--timeout` on deploy, redeploy and destroy. A
-   * clab-api-server takes none: it runs containerlab with its own timeouts.
-   */
-  lifecycleTimeout: boolean;
 }
 
 /**
@@ -92,6 +94,11 @@ export interface LabBackendFeatures {
   nodeStats: boolean;
   /** Terminal sessions that keep running when the client disconnects, and replay their output. */
   terminalResume: boolean;
+  /**
+   * containerlab's `--timeout` on deploy, redeploy, apply and destroy: this
+   * machine, and a clab-api-server that lists `lab-lifecycle-timeout`.
+   */
+  lifecycleTimeout: boolean;
 
   // Features of the lab runtime. Docker and Podman have them; c9s does not.
 
@@ -154,7 +161,6 @@ export function effectiveSupport(
     deployFromUrl: capabilities.deployFromUrl,
     importFromUrl: capabilities.importFromUrl,
     sharedWorkspace: capabilities.sharedWorkspace,
-    lifecycleTimeout: capabilities.lifecycleTimeout,
     edgesharkManagement: capabilities.edgesharkManagement && features.edgeshark,
     // The Wireshark VNC containers read their capture from Edgeshark, or from the host's capture stream.
     wiresharkVnc: capabilities.wiresharkVnc && (features.edgeshark || features.captureVnc),
@@ -229,7 +235,6 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "healthMetrics",
   "sharedWorkspace",
   "tailscaleStatus",
-  "lifecycleTimeout",
   "validate",
   "graphMermaid",
   "graphDot",
@@ -237,6 +242,7 @@ const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
   "gottyOptions",
   "nodeStats",
   "terminalResume",
+  "lifecycleTimeout",
   "imageManagement",
   "netem",
   "snapshots",
@@ -286,7 +292,7 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
     profile.exposeType = exposeType;
   }
   if (typeof raw.persistence === "boolean") profile.persistence = raw.persistence;
-  for (const key of ["imagePullSecret", "cluster", "namespacePattern", "sharedNamespacePattern"] as const) {
+  for (const key of ["imagePullSecret", "cluster", "namespacePattern", "sharedNamespacePattern", "defaultTimeout"] as const) {
     const text = optionalString(raw[key]);
     if (text) profile[key] = text;
   }

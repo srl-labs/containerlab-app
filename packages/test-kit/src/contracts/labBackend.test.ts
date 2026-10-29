@@ -72,7 +72,7 @@ describeLabBackendContract("API (fake c9s clab-api-server)", {
     const server = await startFakeClabApiServer(workspace.root, {
       runtime: "c9s",
       namespaceMode: "per-lab",
-      features: ["capture-stream"]
+      features: ["capture-stream", "lab-host-info", "lab-lifecycle-timeout"]
     });
     return {
       backend: new ApiLabBackend({ baseUrl: server.url, token: server.token }),

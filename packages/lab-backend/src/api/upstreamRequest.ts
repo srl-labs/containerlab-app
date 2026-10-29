@@ -2,8 +2,10 @@ import undici, { Agent, type RequestInit, type Response } from "undici";
 
 import { shouldVerifyApiTls } from "./upstreamTls.ts";
 
-const verifiedAgent = new Agent({ connect: { rejectUnauthorized: true } });
-const selfSignedAgent = new Agent({ connect: { rejectUnauthorized: false } });
+// Each request has its own deadline (`timeoutMs`): a deploy answers only when it is
+// done, so undici's own 5 minute limit on the response headers would cut it off.
+const verifiedAgent = new Agent({ connect: { rejectUnauthorized: true }, headersTimeout: 0 });
+const selfSignedAgent = new Agent({ connect: { rejectUnauthorized: false }, headersTimeout: 0 });
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 interface ApiRequestOptions {

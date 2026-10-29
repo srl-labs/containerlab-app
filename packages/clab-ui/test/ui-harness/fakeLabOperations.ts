@@ -57,8 +57,7 @@ function harnessLabHost(): LabHostInfo {
     wiresharkVnc: true,
     healthMetrics: true,
     sharedWorkspace: false,
-    tailscaleStatus: false,
-    lifecycleTimeout: true
+    tailscaleStatus: false
   };
   const features = {
     validate: true,
@@ -68,6 +67,7 @@ function harnessLabHost(): LabHostInfo {
     gottyOptions: !c9s,
     nodeStats: !c9s,
     terminalResume: true,
+    lifecycleTimeout: true,
     ...containerRuntimeFeatures(!c9s),
     manifestExport: c9s,
     c9sDeployOptions: c9s,
@@ -77,8 +77,8 @@ function harnessLabHost(): LabHostInfo {
   };
   return {
     profile: c9s
-      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true }
-      : { runtime: "docker" },
+      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true, defaultTimeout: "10m" }
+      : { runtime: "docker", defaultTimeout: "2m" },
     support: effectiveSupport(capabilities, features)
   };
 }

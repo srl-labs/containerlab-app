@@ -6,6 +6,7 @@ import {
   buildLifecycleRun,
   createLifecycleOptionsForm,
   labSettingsFromForm,
+  timeoutDefaultLabel,
   timeoutError,
   isCleanupBlocked,
   lifecycleKindTakes,
@@ -170,4 +171,19 @@ test("the timeout field takes Go durations", () => {
   assert.equal(timeoutError(""), undefined);
   assert.equal(timeoutError(" 45m "), undefined);
   assert.equal(timeoutError("45"), "Enter a duration such as 30m or 1h30m");
+});
+
+test("the Timeout names the lab host's default, or the lab server's when it does not report one", () => {
+  // Before the lab host answers: containerlab's default for the runtime.
+  assert.deepEqual(timeoutDefaultLabel("c9s", undefined), { placeholder: "10m", text: "10m" });
+  assert.deepEqual(timeoutDefaultLabel("docker", undefined), { placeholder: "2m", text: "2m" });
+  // This machine reports containerlab's; a lab server its own.
+  assert.deepEqual(timeoutDefaultLabel("docker", { runtime: "docker", defaultTimeout: "5m" }), {
+    placeholder: "5m",
+    text: "5m"
+  });
+  assert.deepEqual(timeoutDefaultLabel("c9s", { runtime: "c9s" }), {
+    placeholder: "Server default",
+    text: "the lab server's default"
+  });
 });

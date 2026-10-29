@@ -44,6 +44,11 @@ export interface FakeClabApiServerHealth {
    * lists `lab-host-info`; these defaults otherwise.
    */
   c9s?: Partial<FakeServerC9sHost>;
+  /**
+   * The `defaultTimeout` of `GET /api/v1/lab-host`, as clab-api-server reports
+   * it with `lab-lifecycle-timeout`: 10m on c9s, 5m with Docker and Podman.
+   */
+  defaultTimeout?: string;
 }
 
 /** The c9s part of `GET /api/v1/lab-host`. */
@@ -164,8 +169,10 @@ export async function startFakeClabApiServer(
       const route = `${request.method} ${url.pathname}`;
       if (route === "GET /api/v1/lab-host" && (health.features ?? []).includes("lab-host-info")) {
         const runtime = health.runtime ?? "docker";
+        const timeouts = (health.features ?? []).includes("lab-lifecycle-timeout");
         sendJson(response, 200, {
           runtime,
+          ...(timeouts ? { defaultTimeout: health.defaultTimeout ?? (runtime === "c9s" ? "10m" : "5m") } : {}),
           ...(runtime === "c9s" ? { c9s: { ...FAKE_SERVER_C9S_HOST, ...health.c9s } } : {})
         });
         return;

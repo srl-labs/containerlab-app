@@ -36,6 +36,7 @@ const TEST_LAB_HOST_FEATURES: LabBackendFeatures = {
   gottyOptions: false,
   nodeStats: false,
   terminalResume: false,
+  lifecycleTimeout: true,
   imageManagement: true,
   netem: true,
   snapshots: true,
@@ -69,8 +70,7 @@ const TEST_LAB_HOST: LabHostInfo = {
     wiresharkVnc: true,
     healthMetrics: true,
     sharedWorkspace: true,
-    tailscaleStatus: true,
-    lifecycleTimeout: true
+    tailscaleStatus: true
   }
 };
 

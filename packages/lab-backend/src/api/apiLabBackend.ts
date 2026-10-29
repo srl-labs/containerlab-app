@@ -89,9 +89,7 @@ const API_CAPABILITIES: LabBackendCapabilities = {
   wiresharkVnc: true,
   healthMetrics: true,
   sharedWorkspace: true,
-  tailscaleStatus: true,
-  // clab-api-server has no timeout parameter on deploy, redeploy or destroy.
-  lifecycleTimeout: false
+  tailscaleStatus: true
 };
 
 /** Features clab-api-server lists in `/health`, by the operation that needs them. */
@@ -107,7 +105,8 @@ const SERVER_FEATURES = {
   terminalResume: "terminal-resume",
   captureStream: "capture-stream",
   wiresharkVnc: "wireshark-vnc",
-  labHostInfo: "lab-host-info"
+  labHostInfo: "lab-host-info",
+  lifecycleTimeout: "lab-lifecycle-timeout"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
@@ -178,10 +177,12 @@ function hostProfileFromHealth(health: Pick<ServerHealth, "runtime" | "namespace
 }
 
 /**
- * A c9s server's profile with what `GET /api/v1/lab-host` adds: the cluster,
- * the namespace patterns and the deploy settings, which are server policy.
+ * A server's profile with what `GET /api/v1/lab-host` adds: the default
+ * timeout and, on c9s, the cluster, the namespace patterns and the deploy
+ * settings, which are server policy.
  */
-function withServerLabHost(profile: LabHostProfile, labHost: ServerLabHost): LabHostProfile {
+function withServerLabHost(base: LabHostProfile, labHost: ServerLabHost): LabHostProfile {
+  const profile: LabHostProfile = labHost.defaultTimeout ? { ...base, defaultTimeout: labHost.defaultTimeout } : base;
   const c9s = labHost.c9s;
   if (profile.runtime !== "c9s" || labHost.runtime !== "c9s" || !c9s) return profile;
   return {
@@ -212,6 +213,8 @@ function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
     gottyOptions: listed.has("gotty-options"),
     nodeStats: listed.has(SERVER_FEATURES.nodeStats),
     terminalResume: listed.has(SERVER_FEATURES.terminalResume),
+    // Older servers run containerlab with their own timeouts and take none.
+    lifecycleTimeout: listed.has(SERVER_FEATURES.lifecycleTimeout),
     ...containerRuntimeFeatures(containerRuntime),
     // A c9s server picks namespaces, exposure and persistence itself, and has no manifest export.
     manifestExport: false,
@@ -332,7 +335,7 @@ export class ApiLabBackend implements LabBackend {
     const state = await this.serverState();
     // An unreachable server is not an old one: let the error through.
     const profile = hostProfileFromHealth(state.unreachable ? await this.client.getServerHealth() : state);
-    if (profile.runtime !== "c9s" || !state.features.has(SERVER_FEATURES.labHostInfo)) return profile;
+    if (!state.features.has(SERVER_FEATURES.labHostInfo)) return profile;
     const labHost = await this.serverLabHost();
     return labHost ? withServerLabHost(profile, labHost) : profile;
   }
@@ -462,6 +465,12 @@ export class ApiLabBackend implements LabBackend {
 
   /** A deploy that restores snapshots must not run as a plain deploy on an older server. */
   private async checkLifecycleOptions(action: LabLifecycleAction, options: LifecycleRunOptions) {
+    if (
+      options.lifecycleOptions?.timeout !== undefined &&
+      !(await this.hasFeature(SERVER_FEATURES.lifecycleTimeout))
+    ) {
+      throw unsupported("take a timeout for deploy, redeploy, apply or destroy");
+    }
     if (
       action === "deploy" &&
       restoresSnapshots(options.lifecycleOptions) &&

@@ -198,6 +198,11 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
         for (const flag of containerOnly) {
           assert.equal(support[flag], profile.runtime !== "c9s", `${flag} on ${profile.runtime}`);
         }
+        // A host that takes a timeout names its default as a duration, or a lab server leaves it out.
+        if (profile.defaultTimeout !== undefined) {
+          assert.match(profile.defaultTimeout, /^(?:\d+(?:\.\d+)?(?:h|m|s|ms))+$/, "defaultTimeout");
+          assert.equal(support.lifecycleTimeout, true, "a host that names a default timeout takes one");
+        }
         // c9s captures through its own stream; Docker hosts keep Edgeshark.
         assert.equal(support.captureStream, profile.runtime === "c9s", `captureStream on ${profile.runtime}`);
         assert.equal(support.wiresharkVnc, profile.runtime !== "c9s" || support.captureVnc);

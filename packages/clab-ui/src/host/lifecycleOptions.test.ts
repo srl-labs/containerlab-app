@@ -9,6 +9,7 @@ import {
   labLifecycleQueryParams,
   labSettingsFromOptions,
   labSettingsOptions,
+  lifecycleTimeoutMs,
   normalizeLabLifecycleOptions,
   normalizeLabSettings,
   restoresSnapshots
@@ -98,6 +99,17 @@ test("options turn into clab-api-server query parameters", () => {
     ["graceful", "true"],
     ["keepMgmtNet", "true"]
   ]);
+});
+
+test("lifecycle timeouts parse like Go durations", () => {
+  assert.equal(lifecycleTimeoutMs("30m"), 30 * 60_000);
+  assert.equal(lifecycleTimeoutMs(" 1h30m "), 90 * 60_000);
+  assert.equal(lifecycleTimeoutMs("1.5h"), 90 * 60_000);
+  assert.equal(lifecycleTimeoutMs("90s"), 90_000);
+  assert.equal(lifecycleTimeoutMs("1m500ms"), 60_500);
+  assert.equal(lifecycleTimeoutMs("0s"), undefined);
+  assert.equal(lifecycleTimeoutMs("10"), undefined);
+  assert.equal(lifecycleTimeoutMs(undefined), undefined);
 });
 
 test("a destroy with a node filter is partial", () => {
@@ -239,7 +251,7 @@ test("c9s options turn into containerlab flags and no API parameters", () => {
   assert.deepEqual(labLifecycleQueryParams(options), [["maxWorkers", "4"]]);
 });
 
-test("the timeout is a positive Go duration and a flag, but no API parameter", () => {
+test("the timeout is a positive Go duration, a flag and an API parameter", () => {
   for (const value of ["30m", "1h30m", "90s", "1.5h", "500ms"]) {
     assert.equal(isValidLifecycleTimeout(value), true, value);
   }
@@ -249,7 +261,10 @@ test("the timeout is a positive Go duration and a flag, but no API parameter", (
   const options = normalizeLabLifecycleOptions("deploy", { timeout: " 30m ", maxWorkers: 2 }, "c9s");
   assert.deepEqual(options, { timeout: "30m", maxWorkers: 2 });
   assert.deepEqual(labLifecycleCliFlags(options), ["--timeout", "30m", "--max-workers", "2"]);
-  assert.deepEqual(labLifecycleQueryParams(options), [["maxWorkers", "2"]]);
+  assert.deepEqual(labLifecycleQueryParams(options), [
+    ["timeout", "30m"],
+    ["maxWorkers", "2"]
+  ]);
   assert.deepEqual(normalizeLabLifecycleOptions("destroy", { timeout: "5m" }, "docker"), { timeout: "5m" });
   assert.equal(normalizeLabLifecycleOptions("deploy", { timeout: "soon" }), undefined);
 });

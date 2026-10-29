@@ -13,8 +13,10 @@ const ENV = { PATH: "/nonexistent", HOME: "/nonexistent" };
 
 test("a Docker host keeps every container runtime feature and has no c9s options", async () => {
   const backend = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker" });
-  assert.deepEqual(await backend.hostProfile(), { runtime: "docker" });
+  // containerlab's own --timeout default on Docker.
+  assert.deepEqual(await backend.hostProfile(), { runtime: "docker", defaultTimeout: "2m" });
   const support = effectiveSupport(backend.capabilities, await backend.features());
+  assert.equal(support.lifecycleTimeout, true);
   assert.equal(support.netem, true);
   assert.equal(support.edgesharkManagement, true);
   assert.equal(support.wiresharkVnc, true);
@@ -33,6 +35,8 @@ test("a c9s host turns the container runtime features off and reports its cluste
   });
   assert.deepEqual(await backend.hostProfile(), {
     runtime: "c9s",
+    // containerlab's --timeout default on c9s: clusters pull images slowly.
+    defaultTimeout: "10m",
     kubeContext: "kind-c9s-app",
     namespaceMode: "fixed",
     namespace: "team-a",

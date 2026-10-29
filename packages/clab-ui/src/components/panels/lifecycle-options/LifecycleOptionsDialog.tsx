@@ -34,12 +34,12 @@ import { InputField } from "../../ui/form/InputField";
 import {
   buildLifecycleRun,
   createLifecycleOptionsForm,
-  defaultTimeout,
   formForHost,
   isCleanupBlocked,
   labSettingsFromForm,
   lifecycleKindTakes,
   maxWorkersError,
+  timeoutDefaultLabel,
   timeoutError,
   varsFileError,
   type LifecycleOptionsForm
@@ -58,8 +58,10 @@ export interface LifecycleOptionsDialogProps {
   c9sProfile?: LabHostProfile;
   /** c9s: the lab host sets the c9s options itself (a lab server); they show read-only. */
   c9sReadOnly?: boolean;
-  /** The lab host takes containerlab's `--timeout`; a clab-api-server does not. */
+  /** The lab host takes containerlab's `--timeout`; an older clab-api-server does not. */
   canSetTimeout?: boolean;
+  /** The lab host's profile, for the defaults it reports, e.g. its timeout. */
+  labHostProfile?: LabHostProfile;
   /** The lab's deploy settings on its lab host; they fill in the form. */
   labSettings?: LabSettings;
   /** Remember a run's options as the lab's deploy settings. Without it the dialog only runs actions. */
@@ -266,9 +268,11 @@ const LimitFields: React.FC<{
   takes: (field: OptionField) => boolean;
   limited: Limited;
   canSetTimeout: boolean;
+  hostProfile: LabHostProfile | undefined;
   update: FormUpdate;
-}> = ({ form, takes, limited, canSetTimeout, update }) => {
+}> = ({ form, takes, limited, canSetTimeout, hostProfile, update }) => {
   const showTimeout = canSetTimeout && takes("timeout");
+  const timeoutDefault = timeoutDefaultLabel(form.runtime, hostProfile);
   const workersError = maxWorkersError(form.maxWorkers);
   const durationError = timeoutError(form.timeout);
   if (!showTimeout && !takes("maxWorkers") && !takes("exportTemplate")) return null;
@@ -280,11 +284,11 @@ const LimitFields: React.FC<{
           label="Timeout"
           value={form.timeout}
           onChange={(value) => update("timeout", value)}
-          placeholder={defaultTimeout(form.runtime)}
+          placeholder={timeoutDefault.placeholder}
           error={durationError !== undefined}
           helperText={
             durationError ??
-            `How long containerlab waits for the lab runtime, e.g. 30m. Raise it when images pull slowly. Empty: ${defaultTimeout(form.runtime)}.`
+            `How long containerlab waits for the lab runtime, e.g. 30m. Raise it when images pull slowly. Empty: ${timeoutDefault.text}.`
           }
         />
       )}
@@ -329,6 +333,7 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
   c9sProfile,
   c9sReadOnly = false,
   canSetTimeout = false,
+  labHostProfile,
   labSettings,
   onSaveSettings,
   onClose,
@@ -445,7 +450,14 @@ export const LifecycleOptionsDialog: React.FC<LifecycleOptionsDialogProps> = ({
           />
         )}
 
-        <LimitFields form={form} takes={takes} limited={limited} canSetTimeout={canSetTimeout} update={update} />
+        <LimitFields
+          form={form}
+          takes={takes}
+          limited={limited}
+          canSetTimeout={canSetTimeout}
+          hostProfile={labHostProfile}
+          update={update}
+        />
 
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <RunOnlyOptions form={form} takes={takes} limited={limited} update={update} />

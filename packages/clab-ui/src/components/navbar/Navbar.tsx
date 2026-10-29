@@ -807,6 +807,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   deploymentState={deploymentState}
                   canRestoreSnapshots={labOperationSupport.deployRestore}
                   canSetTimeout={labHostInfo?.support.lifecycleTimeout === true}
+                  {...(labHostInfo ? { labHostProfile: labHostInfo.profile } : {})}
                   {...(lifecycleDialog.settings ? { labSettings: lifecycleDialog.settings } : {})}
                   {...(labOperations ? { onSaveSettings: handleSaveLabSettings } : {})}
                   runtime={labHostInfo?.profile.runtime}
