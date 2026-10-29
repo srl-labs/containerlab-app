@@ -179,6 +179,11 @@ export interface EndpointConfig {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** c9s on this machine: the timeout of deploys that set none, and deploys without a Topology resource. */
+  deployTimeout?: string;
+  noTopologyCR?: boolean;
+  /** The timeout containerlab gets on a deploy without one, e.g. an API Server's own `10m`. */
+  defaultTimeout?: string;
   /** c9s through a lab server: the cluster it runs labs on. */
   cluster?: string;
   /** c9s through a lab server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */
@@ -255,6 +260,10 @@ export interface ClusterHostSettings {
   /** False: nodes keep no state across restarts (`--no-persistence`). */
   persistence?: boolean;
   imagePullSecret?: string;
+  /** containerlab's `--timeout` of deploys that set none, e.g. `20m`; containerlab's default when unset. */
+  deployTimeout?: string;
+  /** Deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
 }
 
 /** A context of a kubeconfig, for the context list of the cluster form. */

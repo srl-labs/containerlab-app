@@ -183,6 +183,29 @@ test("deploy passes the host's exposure, persistence and pull secret unless the 
   ]);
 });
 
+test("deploy takes the host's timeout and Topology resource default unless the options set them", async (t) => {
+  const host = await fakeC9sHost(t);
+  const lab = new LocalLabBackend({
+    runtime: "c9s",
+    binaryPath: host.binary,
+    workspaceRoot: host.workspace,
+    env: { PATH: "/usr/bin:/bin" },
+    deployTimeout: "25m",
+    c9s: { kubeContext: "kind-c9s-app", noTopologyCR: true }
+  });
+  await lab.runLifecycle("deploy", { labName: "demo", path: "demo/demo.clab.yml" });
+  await lab.runLifecycle(
+    "deploy",
+    { labName: "demo", path: "demo/demo.clab.yml" },
+    { lifecycleOptions: { timeout: "5m", noTopologyCR: false } }
+  );
+  const deploys = (await host.calls()).filter((call) => call.startsWith("deploy"));
+  assert.match(deploys[0], /--timeout 25m/);
+  assert.match(deploys[0], /--no-topology-cr/);
+  assert.match(deploys[1], /--timeout 5m/);
+  assert.doesNotMatch(deploys[1], /--no-topology-cr/);
+});
+
 test("commands on a running lab take the file it was deployed from, and its namespace from inspect", async (t) => {
   const host = await fakeC9sHost(t);
   const lab = backend(host);

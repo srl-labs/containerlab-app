@@ -101,6 +101,8 @@ function localStatusInfo(status: LocalEndpointStatus): EndpointRuntimeInfo {
     ...(status.exposeType ? { exposeType: status.exposeType } : {}),
     ...(status.persistence !== undefined ? { persistence: status.persistence } : {}),
     ...(status.imagePullSecret ? { imagePullSecret: status.imagePullSecret } : {}),
+    ...(status.deployTimeout ? { deployTimeout: status.deployTimeout } : {}),
+    ...(status.noTopologyCR === true ? { noTopologyCR: true } : {}),
     ...(status.editable === true ? { editable: true } : {}),
     ...(!status.available && status.checks ? { checks: status.checks } : {})
   };
@@ -147,6 +149,7 @@ async function runtimeInfo(backend: LabBackend): Promise<EndpointRuntimeInfo> {
       ...(profile.exposeType ? { exposeType: profile.exposeType } : {}),
       ...(profile.persistence !== undefined ? { persistence: profile.persistence } : {}),
       ...(profile.imagePullSecret ? { imagePullSecret: profile.imagePullSecret } : {}),
+      ...(profile.defaultTimeout ? { defaultTimeout: profile.defaultTimeout } : {}),
       ...(profile.updateRequired ? { updateRequired: profile.updateRequired } : {})
     };
   } catch {

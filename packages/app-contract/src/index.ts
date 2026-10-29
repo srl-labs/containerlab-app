@@ -38,6 +38,10 @@ export interface ClusterHostSettings {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** containerlab's `--timeout` of deploys that set none, e.g. `20m`; containerlab's default when unset. */
+  deployTimeout?: string;
+  /** Deploy the nodes without clabernetes' Topology resource (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
 }
 
 /** What runs a lab host's labs, for its badge. Missing until the host answered. */
@@ -53,6 +57,11 @@ export interface EndpointRuntimeInfo {
   exposeType?: C9sExposeType;
   persistence?: boolean;
   imagePullSecret?: string;
+  /** c9s on this machine: the timeout of deploys that set none, and deploys without a Topology resource. */
+  deployTimeout?: string;
+  noTopologyCR?: boolean;
+  /** The timeout containerlab gets on a deploy without one, e.g. an API Server's own `10m`. */
+  defaultTimeout?: string;
   /** c9s through a lab server: the cluster it runs labs on. */
   cluster?: string;
   /** c9s through a lab server: the namespace of a user's lab, e.g. `c9s-alice-{lab}`. */

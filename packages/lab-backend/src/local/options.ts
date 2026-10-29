@@ -30,6 +30,8 @@ export interface C9sHostOptions {
   persistence?: boolean;
   /** A Secret in the lab's namespace for private registries (`--image-pull-secret`). */
   imagePullSecret?: string;
+  /** Deploy the nodes without clabernetes' Topology resource by default (`--no-topology-cr`). */
+  noTopologyCR?: boolean;
 }
 
 /**
@@ -54,6 +56,11 @@ export interface LocalLabBackendOptions {
   sudo?: boolean;
   /** Extra arguments for every deploy and redeploy, e.g. from a user setting. */
   deployExtraArgs?: string[];
+  /**
+   * containerlab's `--timeout` for deploys, redeploys and applies that set
+   * none, as a duration such as `20m`; containerlab's default when unset.
+   */
+  deployTimeout?: string;
   /** Extra arguments for every destroy. */
   destroyExtraArgs?: string[];
   /** Host name in Packetflix capture links when none is requested. */
@@ -80,6 +87,7 @@ export interface ResolvedLocalOptions {
   sudo: boolean;
   deployExtraArgs: string[];
   destroyExtraArgs: string[];
+  deployTimeout?: string;
   captureHostname: string;
   packetflixPort: number;
   wiresharkImage: string;
@@ -134,6 +142,7 @@ function resolveC9sOptions(options: C9sHostOptions | undefined): C9sHostOptions 
   const exposeType = options?.exposeType;
   const imagePullSecret = trimmed(options?.imagePullSecret);
   return {
+    ...(options?.noTopologyCR === true ? { noTopologyCR: true } : {}),
     ...(kubeContext ? { kubeContext } : {}),
     ...(kubeconfig ? { kubeconfig } : {}),
     ...(namespace ? { namespace } : {}),
@@ -165,6 +174,7 @@ export function resolveLocalOptions(options: LocalLabBackendOptions = {}): Resol
   }
   const c9s = runtime === "c9s" ? resolveC9sOptions(options.c9s) : undefined;
   const env = options.env ?? process.env;
+  const deployTimeout = trimmed(options.deployTimeout);
   return {
     binaryPath: options.binaryPath?.trim() || "containerlab",
     runtime,
@@ -177,6 +187,7 @@ export function resolveLocalOptions(options: LocalLabBackendOptions = {}): Resol
     sudo: runtime !== "c9s" && options.sudo === true,
     deployExtraArgs: options.deployExtraArgs ?? [],
     destroyExtraArgs: options.destroyExtraArgs ?? [],
+    ...(deployTimeout ? { deployTimeout } : {}),
     captureHostname: options.captureHostname?.trim() || "localhost",
     packetflixPort: options.packetflixPort ?? 5001,
     wiresharkImage: options.wiresharkImage?.trim() || DEFAULT_WIRESHARK_IMAGE,

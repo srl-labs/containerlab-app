@@ -15,6 +15,9 @@ test("a Docker host keeps every container runtime feature and has no c9s options
   const backend = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker" });
   // containerlab's own --timeout default on Docker.
   assert.deepEqual(await backend.hostProfile(), { runtime: "docker", defaultTimeout: "2m" });
+  // A host with a deploy timeout of its own reports it as the default.
+  const slow = new LocalLabBackend({ env: ENV, workspaceRoot: "/tmp/clab-docker", deployTimeout: " 5m " });
+  assert.equal((await slow.hostProfile()).defaultTimeout, "5m");
   const support = effectiveSupport(backend.capabilities, await backend.features());
   assert.equal(support.lifecycleTimeout, true);
   assert.equal(support.netem, true);
