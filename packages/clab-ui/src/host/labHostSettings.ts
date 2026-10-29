@@ -7,6 +7,7 @@
  */
 import { CAPTURE_METHODS, CAPTURE_METHOD_LABELS } from "./captureMethod";
 import { KUBERNETES_LIMITS } from "./kubernetesLimits";
+import { LAB_RUNTIME_NAMES } from "./labHostIdentity";
 import type { LabHostProfile } from "./labHostSupport";
 import {
   C9S_EXPOSE_TYPES,
@@ -288,7 +289,14 @@ export interface LabHostSettingsSubject {
   server?: Partial<
     Pick<
       LabHostProfile,
-      "cluster" | "namespacePattern" | "exposeType" | "persistence" | "imagePullSecret" | "defaultTimeout"
+      | "cluster"
+      | "namespacePattern"
+      | "exposeType"
+      | "persistence"
+      | "imagePullSecret"
+      | "defaultTimeout"
+      | "noTopologyCR"
+      | "capture"
     >
   >;
 }
@@ -303,16 +311,19 @@ export const SET_BY_APP_CONFIGURATION = "Set by the app's configuration";
  * - `edit`: the user sets it for this host;
  * - `unsupported`: greyed out with the reason;
  * - `server`: the API Server's own value, read-only, with "Set by the API Server";
+ *   without a value (signed out, or a server too old to report it) `note` says why;
  * - `fixed`: read-only, set elsewhere (the app's configuration, This computer).
  */
 export type LabHostSettingAccess =
   | { access: "edit" }
   | { access: "unsupported"; reason: string }
-  | { access: "server"; value?: string; reason: string }
+  | { access: "server"; value?: string; reason: string; note?: string }
   | { access: "fixed"; reason: string };
 
 const ONLY_KUBERNETES = "Only for Kubernetes lab hosts.";
-const RUNTIME_NAMES: Record<LabRuntimeKind, string> = { docker: "Docker", podman: "Podman", c9s: "c9s" };
+/** Why an API Server's value is missing: not signed in yet, or a server that does not report it. */
+const SIGN_IN_TO_SEE = "Sign in to see what it sets.";
+const NOT_REPORTED_BY_SERVER = "This API Server does not report it; update it to see the value here.";
 
 const THIS_COMPUTER_ONLY: Partial<Record<LabHostSettingId, { cluster: string; server: string }>> = {
   runtime: {
@@ -342,35 +353,50 @@ function onOff(value: boolean | undefined): string | undefined {
   return value ? "On" : "Off";
 }
 
-/** The value an API Server reports for a setting, as the page shows it. */
-function serverValue(id: LabHostSettingId, subject: LabHostSettingsSubject): string | undefined {
-  const server = subject.server ?? {};
-  switch (id) {
-    case "runtime":
-      if (subject.runtime === undefined) return undefined;
-      return subject.runtime === "c9s" ? "Kubernetes (c9s)" : RUNTIME_NAMES[subject.runtime];
-    case "kubeconfig":
-      return server.cluster;
-    case "namespaces":
-      return server.namespacePattern;
-    case "timeout":
-      return server.defaultTimeout;
-    case "exposeType":
-      return server.exposeType;
-    case "persistence":
-      return onOff(server.persistence);
-    case "imagePullSecret":
-      // A server that reports its settings and names no secret has none.
-      return server.imagePullSecret ?? (server.exposeType !== undefined ? "None" : undefined);
-    default:
-      // Not in what an API Server reports: it decides them for every lab.
-      return "Chosen by the API Server";
+/** A choice's label, e.g. "When missing" for the pull policy `missing`. */
+function optionLabel(id: LabHostSettingId, value: string): string {
+  const control = LAB_HOST_SETTINGS[id].control;
+  return control.type === "select" ? (control.options.find((option) => option.value === value)?.label ?? value) : value;
+}
+
+type ServerReport = NonNullable<LabHostSettingsSubject["server"]>;
+
+/** How the page shows each value an API Server reports; the others it does not report. */
+const SERVER_VALUES: Partial<Record<LabHostSettingId, (server: ServerReport, subject: LabHostSettingsSubject) => string | undefined>> = {
+  runtime: (_server, subject) => {
+    if (subject.runtime === undefined) return undefined;
+    return subject.runtime === "c9s" ? "Kubernetes (c9s)" : LAB_RUNTIME_NAMES[subject.runtime];
+  },
+  kubeconfig: (server) => server.cluster,
+  namespaces: (server) => server.namespacePattern,
+  timeout: (server) => server.defaultTimeout,
+  exposeType: (server) => server.exposeType,
+  persistence: (server) => onOff(server.persistence),
+  // A server that reports its settings and names no secret has none.
+  imagePullSecret: (server) => server.imagePullSecret ?? (server.exposeType !== undefined ? "None" : undefined),
+  noTopologyCR: (server) => onOff(server.noTopologyCR),
+  wiresharkImage: (server) => server.capture?.wiresharkImage,
+  wiresharkPullPolicy: (server) => {
+    const policy = server.capture?.wiresharkPullPolicy;
+    return policy ? optionLabel("wiresharkPullPolicy", policy) : undefined;
+  },
+  packetflixPort: (server) => server.capture?.packetflixPort?.toString(),
+  edgesharkEnv: (server) => {
+    const names = server.capture?.edgesharkEnv;
+    if (names === undefined) return undefined;
+    return names.length > 0 ? `${names.join(", ")} (values not shown)` : "None";
   }
+};
+
+/** The value an API Server reports for a setting, as the page shows it; undefined when it reports none. */
+function serverValue(id: LabHostSettingId, subject: LabHostSettingsSubject): string | undefined {
+  return SERVER_VALUES[id]?.(subject.server ?? {}, subject);
 }
 
 function server(id: LabHostSettingId, subject: LabHostSettingsSubject): LabHostSettingAccess {
   const value = serverValue(id, subject);
-  return { access: "server", reason: SET_BY_API_SERVER, ...(value !== undefined ? { value } : {}) };
+  if (value !== undefined) return { access: "server", reason: SET_BY_API_SERVER, value };
+  return { access: "server", reason: SET_BY_API_SERVER, note: subject.runtime === undefined ? SIGN_IN_TO_SEE : NOT_REPORTED_BY_SERVER };
 }
 
 function clusterAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): LabHostSettingAccess {
@@ -391,9 +417,37 @@ function clusterAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): L
   return { access: "edit" };
 }
 
-function serverAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): LabHostSettingAccess {
+/** Why an API Server has no Wireshark VNC, when it says so. */
+function noWiresharkVnc(subject: LabHostSettingsSubject): string | undefined {
+  if (subject.server?.capture?.wiresharkVnc !== false) return undefined;
+  return subject.runtime === "c9s"
+    ? "This API Server runs no Wireshark VNC sessions: for c9s labs they need Docker on the server host."
+    : "This API Server runs no Wireshark VNC sessions.";
+}
+
+/** The capture settings of an API Server: Wireshark VNC everywhere, Edgeshark next to Docker and Podman labs. */
+function serverCaptureAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): LabHostSettingAccess {
   const kubernetes = subject.runtime === "c9s";
-  const unknown = subject.runtime === undefined;
+  if (id === "captureMethod") return { access: "edit" };
+  if (id === "wiresharkImage" || id === "wiresharkPullPolicy") {
+    const reason = noWiresharkVnc(subject);
+    return reason !== undefined ? { access: "unsupported", reason } : server(id, subject);
+  }
+  if (id === "vncHostname") {
+    return {
+      access: "unsupported",
+      reason: kubernetes
+        ? "Wireshark VNC of c9s labs reads the API Server's capture stream, without packetflix links."
+        : "Wireshark VNC sessions run on the API Server, which reaches Edgeshark itself: there is no hostname to set."
+    };
+  }
+  if (kubernetes) return { access: "unsupported", reason: `${KUBERNETES_LIMITS.edgeshark.reason}.` };
+  // Docker and Podman API Servers run Edgeshark next to their labs; packetflix links name the server.
+  if (id === "edgeshark" || id === "captureHostname") return { access: "edit" };
+  return server(id, subject);
+}
+
+function serverAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): LabHostSettingAccess {
   if (id === "runtime" || id === "timeout") return server(id, subject);
   if (id === "socket") return { access: "unsupported", reason: THIS_COMPUTER_ONLY.socket?.server ?? "" };
   if (id === "binaryPath") return { access: "unsupported", reason: "The API Server runs its own containerlab." };
@@ -401,15 +455,10 @@ function serverAccess(id: LabHostSettingId, subject: LabHostSettingsSubject): La
     return { access: "unsupported", reason: "The API Server takes no containerlab arguments." };
   }
   if (KUBERNETES_SETTINGS.has(id)) {
-    if (kubernetes || unknown) return server(id, subject);
-    return { access: "unsupported", reason: `${ONLY_KUBERNETES} This API Server runs ${RUNTIME_NAMES[subject.runtime ?? "docker"]}.` };
+    if (subject.runtime === "c9s" || subject.runtime === undefined) return server(id, subject);
+    return { access: "unsupported", reason: `${ONLY_KUBERNETES} This API Server runs ${LAB_RUNTIME_NAMES[subject.runtime]}.` };
   }
-  if (id === "captureMethod") return { access: "edit" };
-  if (id === "wiresharkImage" || id === "wiresharkPullPolicy" || id === "vncHostname") return server(id, subject);
-  if (kubernetes) return { access: "unsupported", reason: `${KUBERNETES_LIMITS.edgeshark.reason}.` };
-  // Docker and Podman API Servers run Edgeshark next to their labs; packetflix links name the server.
-  if (id === "edgeshark" || id === "captureHostname") return { access: "edit" };
-  return server(id, subject);
+  return serverCaptureAccess(id, subject);
 }
 
 function thisComputerAccess(id: LabHostSettingId): LabHostSettingAccess {

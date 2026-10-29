@@ -3,10 +3,11 @@ import test from "node:test";
 
 import type {
   ClusterHostSettings as ContractClusterHostSettings,
+  EndpointCaptureInfo as ContractCaptureInfo,
   EndpointKind as ContractEndpointKind,
   LabHostCheck as ContractLabHostCheck
 } from "@srl-labs/containerlab-app-contract";
-import type { LabHostCheck as UiLabHostCheck } from "@containerlab/clab-ui/host";
+import type { LabHostCaptureInfo as UiCaptureInfo, LabHostCheck as UiLabHostCheck } from "@containerlab/clab-ui/host";
 import type {
   ClusterHostSettings as UiClusterHostSettings,
   EndpointKind as UiEndpointKind
@@ -22,6 +23,7 @@ const uiMatchesContract: Same<UiEndpointKind, ContractEndpointKind> = true;
 const storeUsesContract: Same<EndpointKind, ContractEndpointKind> = true;
 const checksMatchContract: Same<UiLabHostCheck, ContractLabHostCheck> = true;
 const clusterSettingsMatchContract: Same<UiClusterHostSettings, ContractClusterHostSettings> = true;
+const captureInfoMatchesContract: Same<UiCaptureInfo, ContractCaptureInfo> = true;
 
 test("every package uses the app contract's endpoint kinds", () => {
   assert.equal(uiMatchesContract, true);
@@ -31,4 +33,8 @@ test("every package uses the app contract's endpoint kinds", () => {
 test("lab host checks and cluster settings are the app contract's", () => {
   assert.equal(checksMatchContract, true);
   assert.equal(clusterSettingsMatchContract, true);
+});
+
+test("an API Server's capture settings are the app contract's", () => {
+  assert.equal(captureInfoMatchesContract, true);
 });

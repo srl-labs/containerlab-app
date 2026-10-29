@@ -104,6 +104,31 @@ if (new URLSearchParams(location.search).get("hosts") === "all") {
       exposeType: "None",
       persistence: true,
       defaultTimeout: "10m",
+      noTopologyCR: false,
+      capture: {
+        wiresharkVnc: true,
+        wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+        wiresharkPullPolicy: "always",
+      },
+    },
+    {
+      id: "api-docker",
+      kind: "api",
+      runtime: "docker",
+      url: "https://lab2.example.com:8090",
+      label: "lab2",
+      username: "alice",
+      sessionDuration: "24h",
+      status: "connected",
+      connected: true,
+      defaultTimeout: "5m",
+      capture: {
+        wiresharkVnc: true,
+        wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+        wiresharkPullPolicy: "missing",
+        packetflixPort: 5001,
+        edgesharkEnv: ["HTTP_PROXY", "NO_PROXY"],
+      },
     },
   );
 }

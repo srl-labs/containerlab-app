@@ -5,6 +5,7 @@ import type {
   EndpointRuntimeInfo,
   LocalEndpointStatus
 } from "@srl-labs/containerlab-app-contract";
+import { labHostProfileDetails } from "@containerlab/clab-ui/host";
 import type { LabBackend } from "@srl-labs/containerlab-lab-backend";
 import { ApiLabBackend } from "@srl-labs/containerlab-lab-backend/api";
 
@@ -136,25 +137,23 @@ function toPublicInfo(
   };
 }
 
-/** The lab runtime of an endpoint for its badge; nothing when the host does not answer. */
+/** The lab runtime of an endpoint and what it reports; nothing when the host does not answer. */
 async function runtimeInfo(backend: LabBackend): Promise<EndpointRuntimeInfo> {
   try {
-    const profile = await backend.hostProfile();
-    return {
-      runtime: profile.runtime,
-      ...(profile.kubeContext ? { kubeContext: profile.kubeContext } : {}),
-      ...(profile.namespace ? { namespace: profile.namespace } : {}),
-      ...(profile.cluster ? { cluster: profile.cluster } : {}),
-      ...(profile.namespacePattern ? { namespacePattern: profile.namespacePattern } : {}),
-      ...(profile.exposeType ? { exposeType: profile.exposeType } : {}),
-      ...(profile.persistence !== undefined ? { persistence: profile.persistence } : {}),
-      ...(profile.imagePullSecret ? { imagePullSecret: profile.imagePullSecret } : {}),
-      ...(profile.defaultTimeout ? { defaultTimeout: profile.defaultTimeout } : {}),
-      ...(profile.updateRequired ? { updateRequired: profile.updateRequired } : {})
-    };
+    return labHostProfileDetails(await backend.hostProfile());
   } catch {
     return {};
   }
+}
+
+/** A lab host just signed in to, with its runtime and what it reports, without checking it again. */
+async function signedInInfo(
+  entry: EndpointEntry,
+  options: Pick<AuthRouteOptions, "backendFor">
+): Promise<EndpointPublicInfo> {
+  if (!entry.token) return toPublicInfo(entry, "session_expired");
+  const backend = options.backendFor(entry);
+  return { ...toPublicInfo(entry, "connected"), ...(backend ? await runtimeInfo(backend) : {}) };
 }
 
 async function validateEndpoint(
@@ -420,8 +419,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
       options.endpointSessions.upsertEndpoint(session.sessionId, entry);
       clearLegacySessionCookies(reply);
       // The runtime, so a freshly added lab host shows its badge right away.
-      const backend = options.backendFor(entry);
-      return reply.send({ ...toPublicInfo(entry, "connected"), ...(backend ? await runtimeInfo(backend) : {}) });
+      return reply.send(await signedInInfo(entry, options));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";
       return reply.status(authErrorStatusCode(error)).send({ error: message });
@@ -439,7 +437,7 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
         success: true,
         username: entry.username,
         clabApiUrl: entry.url,
-        endpoint: toPublicInfo(entry, "connected")
+        endpoint: await signedInInfo(entry, options)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Login failed";
@@ -531,7 +529,8 @@ export function registerAuthRoutes(app: FastifyInstance, options: AuthRouteOptio
         const session = options.ensureSession(request, reply);
         const updated = await reconnectEndpoint(endpointId, request.body, session, options);
         clearLegacySessionCookies(reply);
-        return reply.send(toPublicInfo(updated, updated.token ? "connected" : "session_expired"));
+        // With what the lab host reports, as the list has it: the client replaces its entry with this.
+        return reply.send(await signedInInfo(updated, options));
       } catch (error) {
         const message = error instanceof Error ? error.message : "Reconnect failed";
         return reply.status(authErrorStatusCode(error)).send({ error: message });

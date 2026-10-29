@@ -31,7 +31,9 @@ test("lists This computer first, then the lab hosts, each with its status", asyn
   await expect(menu(page)).toContainText("Lab hosts");
   await expect(menuEntry(page, "This computer").locator("[data-status]")).toHaveAttribute("data-status", "connected");
   await expect(menuEntry(page, "lab1").locator("[data-status]")).toHaveAttribute("data-status", "saved");
+  // A signed-out API Server has not told its runtime yet: its tag names the kind only.
   await expect(menuEntry(page, "lab1")).toContainText("API Server");
+  await expect(menuEntry(page, "This computer")).toContainText("Docker");
 
   // "Lab Hosts" of earlier builds opens the first lab host's page.
   await expect(menuEntry(page, "This computer")).toHaveAttribute("aria-current", "page");
@@ -154,4 +156,58 @@ test("shows on each lab host's page what applies to its kind", async ({ page }) 
   const value = namespaces.getByTestId("lab-host-setting-namespaces-value").getByRole("textbox");
   await expect(value).toHaveValue("c9s-c9sdemo-{lab}");
   await expect(value).toBeDisabled();
+});
+
+/** Each read-only value an API Server's page shows, by setting. */
+async function serverValues(page: Page): Promise<Record<string, string>> {
+  const rows = page.getByTestId("lab-host-settings-page").locator('[data-access="server"]');
+  const values: Record<string, string> = {};
+  for (const row of await rows.all()) {
+    const id = (await row.getAttribute("data-testid"))?.replace("lab-host-setting-", "") ?? "";
+    values[id] = await row.getByRole("textbox").inputValue();
+  }
+  return values;
+}
+
+test("an API Server's page shows each value the server reports, and names its runtime", async ({ page }) => {
+  await page.goto("/settings.html?hosts=all&category=host:api-c9s");
+  const settings = page.getByTestId("lab-host-settings-page");
+  await expect(settings).toHaveAttribute("data-kind", "server");
+  // The menu and the page name the kind and the runtime.
+  await expect(menuEntry(page, "localhost:18190")).toContainText("API Server · c9s");
+  await expect(menuEntry(page, "lab2")).toContainText("API Server · Docker");
+  await expect(menuEntry(page, "kind-c9s-app")).toContainText("Kubernetes · c9s");
+  await expect(page.getByText("API Server · c9s · settings for labs on this lab host")).toBeVisible();
+
+  await expect(settings).not.toContainText("Not reported");
+  expect(await serverValues(page)).toEqual({
+    runtime: "Kubernetes (c9s)",
+    kubeconfig: "c9s-provisioner",
+    namespaces: "c9s-c9sdemo-{lab}",
+    timeout: "10m",
+    exposeType: "None",
+    persistence: "On",
+    imagePullSecret: "None",
+    noTopologyCR: "Off",
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+    wiresharkPullPolicy: "Always"
+  });
+  await expect(settings.getByTestId("lab-host-setting-packetflixPort")).toHaveAttribute("data-access", "unsupported");
+
+  await menuEntry(page, "lab2").click();
+  await expect(settings).not.toContainText("Not reported");
+  expect(await serverValues(page)).toEqual({
+    runtime: "Docker",
+    timeout: "5m",
+    wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+    wiresharkPullPolicy: "When missing",
+    packetflixPort: "5001",
+    edgesharkEnv: "HTTP_PROXY, NO_PROXY (values not shown)"
+  });
+  await expect(settings.getByTestId("lab-host-setting-noTopologyCR")).toContainText("This API Server runs Docker");
+
+  // Signed out, it says to sign in rather than showing values it does not know.
+  await menuEntry(page, "lab1").click();
+  await expect(settings).not.toContainText("Not reported");
+  await expect(settings.getByTestId("lab-host-setting-runtime")).toContainText("Sign in to see what it sets.");
 });

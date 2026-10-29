@@ -203,6 +203,15 @@ export function describeLabBackendContract(name: string, options: LabBackendCont
           assert.match(profile.defaultTimeout, /^(?:\d+(?:\.\d+)?(?:h|m|s|ms))+$/, "defaultTimeout");
           assert.equal(support.lifecycleTimeout, true, "a host that names a default timeout takes one");
         }
+        // A lab server that reports how it captures names each capture setting it owns.
+        if (profile.capture) {
+          assert.ok(profile.capture.wiresharkImage, "wiresharkImage");
+          assert.ok(profile.capture.wiresharkPullPolicy, "wiresharkPullPolicy");
+          const edgeshark = profile.runtime !== "c9s";
+          assert.equal(profile.capture.packetflixPort !== undefined, edgeshark, `packetflixPort on ${profile.runtime}`);
+          assert.equal(profile.capture.edgesharkEnv !== undefined, edgeshark, `edgesharkEnv on ${profile.runtime}`);
+          if (profile.runtime === "c9s") assert.equal(typeof profile.noTopologyCR, "boolean", "noTopologyCR");
+        }
         // c9s captures through its own stream; Docker hosts keep Edgeshark.
         assert.equal(support.captureStream, profile.runtime === "c9s", `captureStream on ${profile.runtime}`);
         assert.equal(support.wiresharkVnc, profile.runtime !== "c9s" || support.captureVnc);

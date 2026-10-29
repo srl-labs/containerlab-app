@@ -60,6 +60,9 @@ function LockedReason(props: { reason: string }) {
   );
 }
 
+/** Read-only values longer than this wrap. */
+const LONG_VALUE = 28;
+
 function ReadOnlyValue(props: { value: string; reason: string; testId: string }) {
   return (
     <Stack spacing={0.5} sx={{ alignItems: "stretch", width: "100%" }} data-testid={props.testId}>
@@ -68,8 +71,11 @@ function ReadOnlyValue(props: { value: string; reason: string; testId: string })
         value={props.value}
         disabled
         fullWidth
+        // Long values such as an image with its tag wrap instead of losing their end.
+        multiline={props.value.length > LONG_VALUE}
+        title={props.value}
         slotProps={{ htmlInput: { "aria-label": props.reason } }}
-        sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" } }}
+        sx={{ "& .MuiOutlinedInput-notchedOutline": { borderStyle: "dashed" }, "& textarea": { wordBreak: "break-all" } }}
       />
       <LockedReason reason={props.reason} />
     </Stack>
@@ -187,9 +193,42 @@ function SettingControl(props: {
   return <CommittedText definition={definition} row={row} busy={busy} onCommit={onCommit} />;
 }
 
-function displayValue(row: LabHostSettingRow | undefined, access: LabHostSettingAccess): string {
-  if (access.access === "server") return access.value ?? "Not reported";
+function displayValue(row: LabHostSettingRow | undefined, access: LabHostSettingAccess): string | undefined {
+  if (access.access === "server") return access.value;
   return row?.shown ?? (row?.value !== undefined ? String(row.value) : (row?.defaultLabel ?? ""));
+}
+
+/** An API Server's setting without its value: who sets it, and why the value is not shown. */
+function ServerOwnedWithoutValue(props: { reason: string; note?: string; testId: string }) {
+  return (
+    <Stack spacing={0.25} sx={{ width: "100%" }} data-testid={props.testId} data-value="missing">
+      <LockedReason reason={props.reason} />
+      {props.note ? (
+        <Typography variant="caption" sx={{ color: "text.secondary", pl: "17px" }}>
+          {props.note}
+        </Typography>
+      ) : null}
+    </Stack>
+  );
+}
+
+function ReadOnlySetting(props: {
+  row: LabHostSettingRow | undefined;
+  access: Extract<LabHostSettingAccess, { access: "server" | "fixed" }>;
+  testId: string;
+}) {
+  const { access } = props;
+  const value = displayValue(props.row, access);
+  if (value === undefined) {
+    return (
+      <ServerOwnedWithoutValue
+        reason={access.reason}
+        {...(access.access === "server" && access.note ? { note: access.note } : {})}
+        testId={props.testId}
+      />
+    );
+  }
+  return <ReadOnlyValue value={value} reason={access.reason} testId={props.testId} />;
 }
 
 function SettingRow(props: {
@@ -238,7 +277,7 @@ function SettingRow(props: {
               <LockedReason reason={access.reason} />
             </>
           ) : (
-            <ReadOnlyValue value={displayValue(row, access)} reason={access.reason} testId={`lab-host-setting-${id}-value`} />
+            <ReadOnlySetting row={row} access={access} testId={`lab-host-setting-${id}-value`} />
           )}
         </SettingsField>
       </Box>

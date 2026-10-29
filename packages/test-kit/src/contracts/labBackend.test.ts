@@ -66,6 +66,25 @@ if (process.env.CLAB_CONTRACT_LOCAL === "1") {
   });
 }
 
+describeLabBackendContract("API (fake Docker clab-api-server with lab-host-info)", {
+  async createFixture() {
+    const workspace = await temporaryWorkspace();
+    const server = await startFakeClabApiServer(workspace.root, {
+      runtime: "docker",
+      features: ["lab-host-info", "lab-lifecycle-timeout"]
+    });
+    return {
+      backend: new ApiLabBackend({ baseUrl: server.url, token: server.token }),
+      runsLabs: false,
+      runtime: "docker",
+      async dispose() {
+        await server.close();
+        await workspace.remove();
+      }
+    };
+  }
+});
+
 describeLabBackendContract("API (fake c9s clab-api-server)", {
   async createFixture() {
     const workspace = await temporaryWorkspace();

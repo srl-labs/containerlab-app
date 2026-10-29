@@ -42,6 +42,8 @@ type HostEntry = Pick<
   | "persistence"
   | "imagePullSecret"
   | "defaultTimeout"
+  | "noTopologyCR"
+  | "capture"
   | "editable"
 >;
 
@@ -59,7 +61,9 @@ export function labHostSettingsSubject(endpoint: HostEntry): LabHostSettingsSubj
       ...(endpoint.exposeType ? { exposeType: endpoint.exposeType } : {}),
       ...(endpoint.persistence !== undefined ? { persistence: endpoint.persistence } : {}),
       ...(endpoint.imagePullSecret ? { imagePullSecret: endpoint.imagePullSecret } : {}),
-      ...(endpoint.defaultTimeout ? { defaultTimeout: endpoint.defaultTimeout } : {})
+      ...(endpoint.defaultTimeout ? { defaultTimeout: endpoint.defaultTimeout } : {}),
+      ...(endpoint.noTopologyCR !== undefined ? { noTopologyCR: endpoint.noTopologyCR } : {}),
+      ...(endpoint.capture ? { capture: endpoint.capture } : {})
     }
   };
 }

@@ -6,6 +6,7 @@ import type { ClusterHostSettings } from "@srl-labs/containerlab-app-contract";
 import type { LabHostsSnapshot } from "@containerlab/clab-ui/settings/schema";
 import {
   LAB_HOST_SETTINGS,
+  labHostProfileDetails,
   type LabHostSettingId,
   type LabHostSettingRows,
   type LabHostSettingValue,
@@ -80,19 +81,7 @@ function hostDetails(
   }
   // A lab server tells what it runs once signed in.
   const profile = connected ? cachedLabHostInfo(connection)?.profile : undefined;
-  if (!profile) return {};
-  return {
-    runtime: profile.runtime,
-    ...(profile.cluster !== undefined ? { cluster: profile.cluster } : {}),
-    ...(profile.namespacePattern !== undefined
-      ? { namespacePattern: profile.namespacePattern }
-      : {}),
-    ...(profile.exposeType !== undefined ? { exposeType: profile.exposeType } : {}),
-    ...(profile.persistence !== undefined ? { persistence: profile.persistence } : {}),
-    ...(profile.imagePullSecret !== undefined ? { imagePullSecret: profile.imagePullSecret } : {}),
-    ...(profile.defaultTimeout !== undefined ? { defaultTimeout: profile.defaultTimeout } : {}),
-    ...(profile.updateRequired !== undefined ? { updateRequired: profile.updateRequired } : {})
-  };
+  return profile ? labHostProfileDetails(profile) : {};
 }
 
 /** What VS Code knows about one of This computer's settings. */

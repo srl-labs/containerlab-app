@@ -100,10 +100,106 @@ describe("labHostSettingsMatrix", () => {
     assert.equal(labHostSettingAccess("socket", subject).access, "unsupported");
   });
 
-  it("waits for a signed-out API Server to tell what it runs", () => {
+  it("waits for a signed-out API Server to tell what it runs, and says so", () => {
     const subject = { kind: "server" as const };
-    assert.deepEqual(labHostSettingAccess("runtime", subject), { access: "server", reason: SET_BY_API_SERVER });
+    assert.deepEqual(labHostSettingAccess("runtime", subject), {
+      access: "server",
+      reason: SET_BY_API_SERVER,
+      note: "Sign in to see what it sets."
+    });
     assert.equal(labHostSettingAccess("namespaces", subject).access, "server");
+  });
+
+  it("says an older API Server does not report a value instead of making one up", () => {
+    const access = labHostSettingAccess("wiresharkImage", { kind: "server", runtime: "docker", server: { defaultTimeout: "5m" } });
+    assert.deepEqual(access, {
+      access: "server",
+      reason: SET_BY_API_SERVER,
+      note: "This API Server does not report it; update it to see the value here."
+    });
+  });
+
+  it("names every value a Docker API Server reports, and greys out what does not apply", () => {
+    const subject = {
+      kind: "server" as const,
+      runtime: "docker" as const,
+      server: {
+        defaultTimeout: "5m",
+        capture: {
+          wiresharkVnc: true,
+          wiresharkImage: "ghcr.io/srl-labs/wireshark-vnc-docker:latest",
+          wiresharkPullPolicy: "missing" as const,
+          packetflixPort: 5001,
+          edgesharkEnv: ["HTTP_PROXY", "NO_PROXY"]
+        }
+      }
+    };
+    assert.deepEqual(labHostSettingsMatrix(subject), {
+      runtime: "server",
+      socket: "unsupported",
+      binaryPath: "unsupported",
+      kubeconfig: "unsupported",
+      namespaces: "unsupported",
+      timeout: "server",
+      exposeType: "unsupported",
+      persistence: "unsupported",
+      imagePullSecret: "unsupported",
+      noTopologyCR: "unsupported",
+      deployArgs: "unsupported",
+      destroyArgs: "unsupported",
+      captureMethod: "edit",
+      wiresharkImage: "server",
+      wiresharkPullPolicy: "server",
+      vncHostname: "unsupported",
+      edgeshark: "edit",
+      captureHostname: "edit",
+      packetflixPort: "server",
+      edgesharkEnv: "server"
+    });
+    const value = (id: Parameters<typeof labHostSettingAccess>[0]) => {
+      const access = labHostSettingAccess(id, subject);
+      return access.access === "server" ? access.value : undefined;
+    };
+    assert.equal(value("runtime"), "Docker");
+    assert.equal(value("timeout"), "5m");
+    assert.equal(value("wiresharkImage"), "ghcr.io/srl-labs/wireshark-vnc-docker:latest");
+    assert.equal(value("wiresharkPullPolicy"), "When missing");
+    assert.equal(value("packetflixPort"), "5001");
+    assert.equal(value("edgesharkEnv"), "HTTP_PROXY, NO_PROXY (values not shown)");
+  });
+
+  it("names every value a c9s API Server reports, its Topology resource included", () => {
+    const subject = {
+      kind: "server" as const,
+      runtime: "c9s" as const,
+      server: {
+        cluster: "c9s",
+        namespacePattern: "c9s-alice-{lab}",
+        exposeType: "LoadBalancer" as const,
+        persistence: true,
+        imagePullSecret: "regcred",
+        defaultTimeout: "10m",
+        noTopologyCR: false,
+        capture: { wiresharkVnc: true, wiresharkImage: "registry.example/wireshark-vnc:1.2", wiresharkPullPolicy: "never" as const }
+      }
+    };
+    const matrix = labHostSettingsMatrix(subject);
+    for (const id of ["runtime", "kubeconfig", "namespaces", "timeout", "exposeType", "persistence", "imagePullSecret", "noTopologyCR", "wiresharkImage", "wiresharkPullPolicy"] as const) {
+      const access = labHostSettingAccess(id, subject);
+      assert.equal(access.access, "server", id);
+      assert.ok(access.access === "server" && access.value, `${id} has a value`);
+    }
+    assert.partialDeepStrictEqual(labHostSettingAccess("noTopologyCR", subject), { value: "Off" });
+    assert.partialDeepStrictEqual(labHostSettingAccess("wiresharkPullPolicy", subject), { value: "Never" });
+    for (const id of ["vncHostname", "edgeshark", "captureHostname", "packetflixPort", "edgesharkEnv"] as const) {
+      assert.equal(matrix[id], "unsupported", id);
+    }
+    // Without Docker on the server host, a c9s API Server has no Wireshark VNC: its image does not apply.
+    const withoutVnc = { ...subject, server: { ...subject.server, capture: { ...subject.server.capture, wiresharkVnc: false } } };
+    assert.deepEqual(labHostSettingAccess("wiresharkImage", withoutVnc), {
+      access: "unsupported",
+      reason: "This API Server runs no Wireshark VNC sessions: for c9s labs they need Docker on the server host."
+    });
   });
 
   it("says why a setting is greyed out on Kubernetes", () => {
