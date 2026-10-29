@@ -1,7 +1,9 @@
 export type EndpointUiAction =
   | { action: "add" }
   | { action: "reconnect"; endpointId: string }
-  | { action: "remove"; endpointId: string };
+  | { action: "remove"; endpointId: string }
+  /** Opens the lab host's page in the settings, e.g. from the toolbar's lab host chip. */
+  | { action: "settings"; endpointId: string };
 
 const ENDPOINT_UI_ACTION_EVENT = "clab-standalone:endpoint-ui-action";
 
@@ -22,7 +24,7 @@ export function subscribeEndpointUiAction(
       listener(detail);
       return;
     }
-    if (detail?.endpointId && (detail.action === "reconnect" || detail.action === "remove")) {
+    if (detail?.endpointId && (detail.action === "reconnect" || detail.action === "remove" || detail.action === "settings")) {
       listener(detail);
     }
   };

@@ -13,8 +13,6 @@ import {
   Typography
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
-import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
@@ -30,14 +28,6 @@ import {
   type TerminalPreferences
 } from "../state/runtimeTerminalSettings";
 import {
-  getSessionHostnameOverride,
-  loadCapturePreferences,
-  persistCapturePreferences,
-  setSessionHostnameOverride,
-  type CapturePreferences,
-  type CapturePreferredAction
-} from "../state/runtimeCaptureSettings";
-import {
   type EndpointConfig,
   type EndpointImportResult,
   type EndpointSessionDuration,
@@ -49,7 +39,17 @@ import { floatingSurfaceSx, overlayShadow } from "../../theme/surfaces";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 import { AboutSettingsContent } from "./AboutSettingsContent";
 import { AppearanceSettingsContent } from "./AppearanceSettingsContent";
-import { CaptureSettingsSection } from "./CaptureSettingsSection";
+import { labHostSettingAccess } from "../../host/labHostSettings";
+import {
+  ADD_HOST_PAGE,
+  hostPageId,
+  hostPageKey,
+  labHostNavigationItems,
+  labHostSettingsSubject
+} from "../../settings/labHostEntries";
+import type { SettingsNavigationItem } from "../../settings/SettingsNavigation";
+import { LAB_HOST_KIND_LABELS, labHostKind } from "../endpoints";
+import { LabHostPage } from "./LabHostPage";
 import { EndpointManager } from "./EndpointManager";
 import {
   persistAutoOpenPalette,
@@ -64,7 +64,8 @@ import {
   type TabOrientation
 } from "../state/themePreferences";
 
-type SettingsSectionKey = "endpoints" | "general" | "appearance" | "terminal" | "capture" | "about";
+/** A page of the settings: the app's own, a lab host's (`host:<id>`), or "Add lab host". */
+type SettingsSectionKey = string;
 
 interface SettingsOverlayProps {
   open: boolean;
@@ -130,49 +131,37 @@ type TerminalDraftResult =
       field: "ssh" | "telnet" | "fontSize";
     };
 
-const SETTINGS_SECTIONS: Array<{
-  key: SettingsSectionKey;
-  label: string;
-  description: string;
-  icon: React.ReactElement;
-}> = [
-  {
-    key: "endpoints",
-    label: "Lab hosts",
-    description: "Where your labs run: this computer, Kubernetes and API Servers",
-    icon: <DnsOutlinedIcon fontSize="small" />
-  },
+const APP_SECTIONS: SettingsNavigationItem[] = [
   {
     key: "general",
     label: "General",
     description: "Workspace behavior",
-    icon: <SettingsOutlinedIcon fontSize="small" />
+    icon: <SettingsOutlinedIcon fontSize="small" />,
+    group: "App"
   },
   {
     key: "appearance",
     label: "Appearance",
     description: "Color mode, themes and custom colors",
-    icon: <PaletteOutlinedIcon fontSize="small" />
+    icon: <PaletteOutlinedIcon fontSize="small" />,
+    group: "App"
   },
   {
     key: "terminal",
     label: "Terminal",
     description: "SSH mapping, telnet, and font defaults",
-    icon: <TerminalIcon fontSize="small" />
-  },
-  {
-    key: "capture",
-    label: "Capture",
-    description: "Default capture method and Edgeshark",
-    icon: <HubOutlinedIcon fontSize="small" />
-  },
-  {
-    key: "about",
-    label: "About",
-    description: "Version and diagnostics entrypoints",
-    icon: <InfoOutlinedIcon fontSize="small" />
+    icon: <TerminalIcon fontSize="small" />,
+    group: "App"
   }
 ];
+
+const ABOUT_SECTION: SettingsNavigationItem = {
+  key: "about",
+  label: "About",
+  description: "Version and diagnostics entrypoints",
+  icon: <InfoOutlinedIcon fontSize="small" />,
+  group: "Other"
+};
 
 function SectionCard(props: {
   title: string;
@@ -265,17 +254,6 @@ function primarySettingsEndpoint(endpoints: EndpointConfig[]): EndpointConfig | 
   return endpoints.find((endpoint) => endpoint.status === "connected") ?? endpoints[0] ?? null;
 }
 
-function captureSettingsEndpoint(
-  endpoints: EndpointConfig[],
-  captureEndpointId: string
-): EndpointConfig | null {
-  return endpoints.find((endpoint) => endpoint.id === captureEndpointId) ?? null;
-}
-
-function captureSettingsEndpointLabel(endpoint: EndpointConfig | null): string {
-  return endpoint?.label || endpoint?.url || endpoint?.id || "selected endpoint";
-}
-
 export function SettingsOverlay({
   open,
   onOpen,
@@ -325,17 +303,9 @@ export function SettingsOverlay({
   );
   const [captureError, setCaptureError] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState<EdgeSharkStatusResponse | null>(null);
-  const [capturePreferences, setCapturePreferences] = useState<CapturePreferences>(() =>
-    loadCapturePreferences()
-  );
-  const [captureEndpointId, setCaptureEndpointId] = useState("");
-  const [captureSessionHostname, setCaptureSessionHostname] = useState(
-    () => getSessionHostnameOverride() ?? ""
-  );
-
   const primaryEndpoint = primarySettingsEndpoint(endpoints);
-  const captureEndpoint = captureSettingsEndpoint(endpoints, captureEndpointId);
-  const captureEndpointLabel = captureSettingsEndpointLabel(captureEndpoint);
+  const hostId = hostPageId(activeSection);
+  const hostEndpoint = hostId === undefined ? null : (endpoints.find((endpoint) => endpoint.id === hostId) ?? null);
 
   useEffect(() => {
     setSshUserMappingText(JSON.stringify(terminalPreferences.sshUserMapping, null, 2));
@@ -343,23 +313,22 @@ export function SettingsOverlay({
     setFontSizeText(String(terminalPreferences.fontSize));
   }, [terminalPreferences]);
 
+  // A removed lab host's page goes; "Add lab host" takes its place.
   useEffect(() => {
-    const selectedStillExists = endpoints.some((endpoint) => endpoint.id === captureEndpointId);
-    if (selectedStillExists) {
-      return;
-    }
-    setCaptureEndpointId(primaryEndpoint?.id ?? "");
-  }, [captureEndpointId, endpoints, primaryEndpoint?.id]);
+    if (hostId !== undefined && hostEndpoint === null) setActiveSection(ADD_HOST_PAGE);
+  }, [hostEndpoint, hostId]);
 
   useEffect(() => {
     const unsubscribe = subscribeEndpointUiAction((action) => {
       onOpen();
-      setActiveSection("endpoints");
       if (action.action === "add") {
+        setActiveSection(ADD_HOST_PAGE);
         setRequestedEndpointAction(null);
         return;
       }
-      setRequestedEndpointAction(action);
+      // Sign in, remove and the toolbar chip open the lab host's page.
+      setActiveSection(hostPageKey(action.endpointId));
+      setRequestedEndpointAction(action.action === "settings" ? null : action);
     });
     return unsubscribe;
   }, [onOpen]);
@@ -400,9 +369,12 @@ export function SettingsOverlay({
     };
   }, [activeSection, dialogOpen, primaryEndpoint?.id, fetchVersionInfo, fetchVersionCheck]);
 
+  const edgesharkHost =
+    hostEndpoint !== null && hostEndpoint.status === "connected" && labHostSettingAccess("edgeshark", labHostSettingsSubject(hostEndpoint)).access === "edit"
+      ? hostEndpoint.id
+      : undefined;
   const refreshCaptureStatus = useCallback(async () => {
-    // A Kubernetes lab host has no Edgeshark to ask about.
-    if (!captureEndpoint?.id || captureEndpoint.runtime === "c9s") {
+    if (edgesharkHost === undefined) {
       setCaptureStatus(null);
       setCaptureError(null);
       setCaptureStatusLoading(false);
@@ -412,47 +384,18 @@ export function SettingsOverlay({
     setCaptureError(null);
     setCaptureStatus(null);
     try {
-      const status = await fetchEdgeSharkStatus(captureEndpoint.id);
-      setCaptureStatus(status);
+      setCaptureStatus(await fetchEdgeSharkStatus(edgesharkHost));
     } catch (error) {
       setCaptureError(error instanceof Error ? error.message : String(error));
     } finally {
       setCaptureStatusLoading(false);
     }
-  }, [captureEndpoint?.id, captureEndpoint?.runtime, fetchEdgeSharkStatus]);
+  }, [edgesharkHost, fetchEdgeSharkStatus]);
 
   useEffect(() => {
-    if (!dialogOpen || activeSection !== "capture") {
-      return;
-    }
-    setCapturePreferences(loadCapturePreferences(captureEndpoint?.id));
-    setCaptureSessionHostname(getSessionHostnameOverride(captureEndpoint?.id) ?? "");
+    if (!dialogOpen || edgesharkHost === undefined) return;
     void refreshCaptureStatus();
-  }, [activeSection, captureEndpoint?.id, dialogOpen, refreshCaptureStatus]);
-
-  const handlePreferredCaptureActionChange = useCallback(
-    (nextAction: CapturePreferredAction) => {
-      const persisted = persistCapturePreferences(
-        {
-          ...capturePreferences,
-          preferredAction: nextAction
-        },
-        captureEndpoint?.id
-      );
-      setCapturePreferences(persisted);
-    },
-    [captureEndpoint?.id, capturePreferences]
-  );
-
-  const applyCaptureSessionHostname = useCallback(() => {
-    const next = setSessionHostnameOverride(captureSessionHostname, captureEndpoint?.id);
-    setCaptureSessionHostname(next ?? "");
-  }, [captureEndpoint?.id, captureSessionHostname]);
-
-  const clearCaptureSessionHostname = useCallback(() => {
-    setSessionHostnameOverride(undefined, captureEndpoint?.id);
-    setCaptureSessionHostname("");
-  }, [captureEndpoint?.id]);
+  }, [dialogOpen, edgesharkHost, refreshCaptureStatus]);
 
   const terminalDraft = useMemo(
     () => parseTerminalPreferencesDraft(sshUserMappingText, telnetPortText, fontSizeText),
@@ -476,28 +419,45 @@ export function SettingsOverlay({
     onSaveTerminalPreferences(terminalDraft.preferences);
   }, [onSaveTerminalPreferences, terminalDraft]);
 
+  const endpointManagerProps = {
+    defaultApiUrl,
+    onAddEndpoint,
+    onExportEndpoints,
+    onImportEndpoints,
+    onReconnectEndpoint,
+    onRemoveEndpoint,
+    onUpdateEndpoint,
+    onSetEndpointSessionDuration,
+    ...(localEndpoint ? { localEndpoint } : {}),
+    ...(extraLocalEndpoints ? { extraLocalEndpoints } : {}),
+    ...labHostSetup,
+    onRequestedActionHandled: () => setRequestedEndpointAction(null),
+    requestedAction: requestedEndpointAction
+  };
+
   const renderSectionContent = () => {
+    if (hostEndpoint !== null) {
+      return (
+        <LabHostPage
+          key={hostEndpoint.id}
+          endpoint={hostEndpoint}
+          manager={{ ...endpointManagerProps, healthStatsEnabled: dialogOpen }}
+          localWireshark={capabilities.localWireshark === true}
+          edgeshark={{
+            status: captureStatus,
+            loading: captureStatusLoading,
+            error: captureError,
+            action: captureActionLoading,
+            setAction: setCaptureActionLoading,
+            setError: setCaptureError,
+            refresh: refreshCaptureStatus
+          }}
+        />
+      );
+    }
     switch (activeSection) {
-      case "endpoints":
-        return (
-            <EndpointManager
-              defaultApiUrl={defaultApiUrl}
-              endpoints={endpoints}
-              healthStatsEnabled={dialogOpen && activeSection === "endpoints"}
-              onAddEndpoint={onAddEndpoint}
-              onExportEndpoints={onExportEndpoints}
-              onImportEndpoints={onImportEndpoints}
-              onReconnectEndpoint={onReconnectEndpoint}
-              onRemoveEndpoint={onRemoveEndpoint}
-              onUpdateEndpoint={onUpdateEndpoint}
-              onSetEndpointSessionDuration={onSetEndpointSessionDuration}
-              localEndpoint={localEndpoint}
-              extraLocalEndpoints={extraLocalEndpoints}
-              {...labHostSetup}
-              onRequestedActionHandled={() => setRequestedEndpointAction(null)}
-              requestedAction={requestedEndpointAction}
-            />
-        );
+      case ADD_HOST_PAGE:
+        return <EndpointManager {...endpointManagerProps} endpoints={endpoints} show="add" />;
       case "general":
         return (
           <>
@@ -717,40 +677,20 @@ export function SettingsOverlay({
             versionLoading={versionLoading}
           />
         );
-      case "capture":
-        return (
-          <CaptureSettingsSection
-            applyCaptureSessionHostname={applyCaptureSessionHostname}
-            captureActionLoading={captureActionLoading}
-            captureEndpoint={captureEndpoint}
-            captureEndpointId={captureEndpointId}
-            captureEndpointLabel={captureEndpointLabel}
-            captureError={captureError}
-            capturePreferences={capturePreferences}
-            captureSessionHostname={captureSessionHostname}
-            captureStatus={captureStatus}
-            captureStatusLoading={captureStatusLoading}
-            clearCaptureSessionHostname={clearCaptureSessionHostname}
-            endpoints={endpoints}
-            onPreferredCaptureActionChange={handlePreferredCaptureActionChange}
-            refreshCaptureStatus={refreshCaptureStatus}
-            setCaptureActionLoading={setCaptureActionLoading}
-            setCaptureEndpointId={setCaptureEndpointId}
-            setCaptureError={setCaptureError}
-            setCaptureSessionHostname={setCaptureSessionHostname}
-          />
-        );
       default:
         return null;
     }
   };
 
-  const sections = SETTINGS_SECTIONS.filter(
-    (section) =>
-      (section.key !== "endpoints" || capabilities.endpoints) &&
-      (!["terminal", "capture"].includes(section.key) || capabilities.lifecycle)
-  );
+  const sections: SettingsNavigationItem[] = [
+    ...APP_SECTIONS.filter((section) => section.key !== "terminal" || capabilities.lifecycle),
+    ...(capabilities.endpoints ? labHostNavigationItems(endpoints) : []),
+    ABOUT_SECTION
+  ];
   const active = sections.find((section) => section.key === activeSection) ?? sections[0];
+  const sectionDescription = hostEndpoint
+    ? `${LAB_HOST_KIND_LABELS[labHostKind(hostEndpoint)]} · settings for labs on this lab host`
+    : active.description;
   return (
     <Dialog
       open={dialogOpen}
@@ -777,7 +717,7 @@ export function SettingsOverlay({
         onSelect={(key) => setActiveSection(key as SettingsSectionKey)}
         navigationTestIdPrefix="standalone-settings-nav-"
         sectionTitle={active.label}
-        sectionDescription={active.description}
+        sectionDescription={sectionDescription}
         headerActions={
           <IconButton
             size="small"
