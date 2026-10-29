@@ -1,5 +1,6 @@
 import {
   applyStandaloneAppearance,
+  dispatchEndpointUiAction,
   labHostKind,
   persistStandaloneAppearance,
   persistTabOrientation,
@@ -10,6 +11,7 @@ import {
   type TabOrientation
 } from "@containerlab/clab-ui/workspace/state";
 import { WorkspaceHostProvider, WorkspaceSidebar } from "@containerlab/clab-ui/workspace";
+import { labHostIdentityOf } from "@containerlab/clab-ui/settings";
 import { hasDesktopTitleBar } from "./desktopChrome";
 import { LoadingScreen } from "@containerlab/clab-ui/workspace/bootstrap";
 import type {
@@ -1644,7 +1646,14 @@ function setupStandaloneUiHost(): void {
           ? {
               labHost: async () => {
                 const endpointId = topologyManager.getCurrentEndpointId();
-                return endpointId ? await loadLabHostInfo(endpointId) : undefined;
+                if (!endpointId) return undefined;
+                const info = await loadLabHostInfo(endpointId);
+                // Which lab host it is, for the toolbar's chip.
+                const endpoint = useEndpointStore.getState().endpoints.get(endpointId);
+                return info && endpoint ? { ...info, host: labHostIdentityOf(endpoint) } : info;
+              },
+              openLabHostSettings: (hostId: string) => {
+                dispatchEndpointUiAction({ action: "settings", endpointId: hostId });
               },
             }
           : {}),

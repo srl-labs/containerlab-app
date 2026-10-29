@@ -15,6 +15,7 @@ import {
 import { describeLabHost } from "@srl-labs/containerlab-lab-backend";
 
 import { hostOfLabPath, labNameForPath, resolveLab } from "../../../backend/labBackends";
+import { labHostIdentity } from "../../../backend/hostIdentity";
 import { labSettingsFor, rememberLabSettings } from "../../../backend/labSettings";
 import { runWithProgress } from "../../../commands/command";
 
@@ -90,7 +91,7 @@ class LabOperationsService {
       case "inspectDetails":
         return backend.inspectLabDetails(target);
       case "hostInfo":
-        return describeLabHost(backend);
+        return { ...(await describeLabHost(backend)), host: labHostIdentity(labPath) };
       case "nodeLocations":
         // The inspect records; on c9s they say where each node runs.
         return backend.inspectLab(target.labName || labNameForPath(labPath));

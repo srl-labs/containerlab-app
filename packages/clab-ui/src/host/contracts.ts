@@ -263,6 +263,11 @@ export interface ClabUiTopoViewerHost {
    * what the host lacks; hosts that omit it, or resolve undefined, hide nothing.
    */
   labHost?(): Promise<LabHostInfo | undefined>;
+  /**
+   * Open the settings of the lab's host, e.g. from the toolbar's lab host
+   * chip. Hosts that omit it show the chip without a click.
+   */
+  openLabHostSettings?(hostId: string): void;
   captureInterface(
     nodeName: string,
     interfaceName: string,

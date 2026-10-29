@@ -3,6 +3,7 @@
  * static capabilities; its lab runtime (Docker, Podman, c9s) decides the
  * features. Every host gates its UI on `effectiveSupport` of both.
  */
+import { parseLabHostIdentity, type LabHostIdentity } from "./labHostIdentity";
 import type { C9sExposeType, LabRuntimeKind } from "./lifecycleOptions";
 
 /** c9s: one namespace per lab (`c9s-<lab>`), or every lab in one namespace. */
@@ -224,6 +225,8 @@ export function imageManagementUnavailableMessage(profile: LabHostProfile | unde
 export interface LabHostInfo {
   profile: LabHostProfile;
   support: LabHostSupport;
+  /** Which lab host it is, for the toolbar's lab host chip; hosts that omit it show none. */
+  host?: LabHostIdentity;
 }
 
 const BOOLEAN_KEYS: readonly (keyof LabHostSupport)[] = [
@@ -305,7 +308,8 @@ export function parseLabHostInfo(value: unknown): LabHostInfo | undefined {
   const support = Object.fromEntries(
     BOOLEAN_KEYS.map((key) => [key, supportRecord[key] === true])
   ) as unknown as LabHostSupport;
-  return { profile, support };
+  const host = parseLabHostIdentity(value.host);
+  return { profile, support, ...(host ? { host } : {}) };
 }
 
 /** How the UI names a lab host's runtime, e.g. "Kubernetes · lab-prod/c9s-demo". */
