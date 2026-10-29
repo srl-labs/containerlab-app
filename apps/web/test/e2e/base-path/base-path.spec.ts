@@ -99,7 +99,7 @@ for (const mode of ["production", "development"] as const) {
         await expect(page.getByTestId("standalone-settings-button")).toBeVisible();
         await expect(page.locator("base")).toHaveAttribute("href", `${basePath}/`);
         await page.getByTestId("standalone-settings-button").click();
-        await page.getByTestId("standalone-settings-nav-endpoints").click();
+        await page.getByTestId(`standalone-settings-nav-host:${savedEndpoint.id}`).click();
         await page.getByRole("button", { name: "Sign in to Saved endpoint again", exact: true }).click();
         const dialog = page.getByRole("dialog", { name: "Sign in to Saved endpoint" });
         await dialog.getByLabel("Password", { exact: true }).fill("test-password");
