@@ -10,7 +10,7 @@ export function resolveViewerOptions(options: ViewerOptions = {}, borderless = f
   const fitPadding = options.fitPadding ?? 0.25;
   return {
     ...options,
-    controls: options.controls ?? !borderless,
+    controls: options.controls ?? false,
     background: options.background ?? (borderless ? "none" : "dots"),
     transparent: options.transparent ?? borderless,
     nodeLabels: options.nodeLabels ?? true,

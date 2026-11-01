@@ -5,7 +5,7 @@ test("landing example renders the real graph and links a selected node to its YA
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("./");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab.");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("The GUI for containerlab");
   await expect(page.getByText("Diagrams that speak YAML", { exact: true })).toHaveCount(0);
   await expect(page.locator(".hero-eyebrow, .hero-caption")).toHaveCount(0);
   const component = page.locator("clab-topology").first();
@@ -14,6 +14,32 @@ test("landing example renders the real graph and links a selected node to its YA
   await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
   await expect(viewer.locator(".react-flow__edge")).toHaveCount(9);
   await expect(viewer.locator(".topology-node-runtime-badge")).toHaveCount(0);
+  await expect(viewer.locator(".react-flow__controls")).toHaveCount(0);
+  await expect(component.getByLabel("Inspect a node")).toBeHidden();
+  await expect(component.locator(".clab-component-heading")).not.toContainText("INTERACTIVE");
+  await viewer.locator('.react-flow__node[data-id="leaf2"]').click();
+  await expect(component.locator(".clab-line-selected").first()).toContainText("leaf2:");
+  await expect(component.locator(".clab-line-selected").first()).toBeInViewport();
+  expect(errors).toEqual([]);
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.screenshot({ path: "test-results/docs/home-desktop.png", fullPage: true });
+});
+
+test("an opted-in inspector and zoom buttons find a selected node in the YAML", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const yaml = await readFile("docs/examples/fabric.clab.yml", "utf8");
+  await page.goto("viewer/reference/");
+  await page.evaluate(source => {
+    const element = document.createElement("clab-topology");
+    for (const [key, value] of Object.entries({ view: "split", inspector: "true", controls: "true", loading: "eager" })) element.setAttribute(key, value);
+    const pre = document.createElement("pre"); pre.textContent = source; element.append(pre);
+    document.querySelector("article")!.prepend(element);
+  }, yaml);
+  const component = page.locator("clab-topology").first();
+  await expect(component).toHaveAttribute("data-loaded", "true");
+  const viewer = component.frameLocator("iframe");
+  await expect(viewer.locator(".react-flow__controls")).toBeVisible();
   await viewer.locator('.react-flow__node[data-id="leaf2"]').click();
   await expect(component.getByLabel("Inspect a node")).toHaveValue("leaf2");
   await expect(component.locator(".clab-node-detail")).toContainText("nokia_srlinux");
@@ -23,10 +49,7 @@ test("landing example renders the real graph and links a selected node to its YA
   await component.getByRole("button", { name: "Show in YAML" }).click();
   await expect(component).toHaveAttribute("data-view", "split");
   await expect(component.locator(".clab-line-selected").first()).toBeInViewport();
-  await expect(viewer.locator(".react-flow__node-topology-node")).toHaveCount(8);
   expect(errors).toEqual([]);
-  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
-  await page.screenshot({ path: "test-results/docs/home-desktop.png", fullPage: true });
 });
 
 test("the full sidebar keeps categories and the active page together across instant navigation", async ({ page }) => {
