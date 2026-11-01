@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   shouldVerifyApiTls,
   createContainerlabAppServer,
-  createLocalEndpoint,
+  createLocalEndpoints,
   normalizeBasePath,
   resolveLocalBackendConfig,
   resolveWebTlsConfig
@@ -36,7 +36,7 @@ function resolveStaticClientRoot(): string {
  * WEB_LOCAL_LABS=true: everyone who can open the app then runs labs as the
  * server's OS user, so it suits a personal or trusted setup.
  */
-function createWebLocalEndpoint() {
+function createWebLocalEndpoints() {
   const config = resolveLocalBackendConfig({
     platform: process.platform,
     env: process.env,
@@ -44,23 +44,38 @@ function createWebLocalEndpoint() {
     enableVariable: "WEB_LOCAL_LABS",
     enabledByDefault: false
   });
-  if (!config.enabled) return undefined;
-  return createLocalEndpoint({
-    options: config.options,
+  for (const problem of config.problems) {
+    console.warn(`WEB_LOCAL_*: ${problem}`);
+  }
+  // With WEB_LOCAL_RUNTIME=c9s and no kubeconfig, labs run in the pod's own cluster
+  // with its ServiceAccount.
+  return createLocalEndpoints(config, {
     label: process.env.WEB_LOCAL_LABEL?.trim() || os.hostname(),
     setupUrl: "https://srl-labs.github.io/containerlab-app/docs/install/web/#run-labs-on-the-web-apps-host",
     autoConnect: true
   });
 }
 
+/**
+ * Why "Add lab host" offers no Kubernetes lab host here: the browser never
+ * handles a kubeconfig, so only the server's configuration adds one.
+ */
+const WEB_CLUSTERS_UNAVAILABLE =
+  "In the web app, a Kubernetes lab host comes from the server's configuration (WEB_LOCAL_LABS=true, WEB_LOCAL_RUNTIME=c9s, WEB_LOCAL_KUBECONFIG, WEB_LOCAL_KUBE_CONTEXT); the browser never handles a kubeconfig. Or add an API Server that runs Kubernetes.";
+
+const WEB_LOCAL_UNAVAILABLE =
+  "The web app runs labs on its own server only when its administrator sets WEB_LOCAL_LABS=true with Docker or Podman. Add an API Server instead.";
+
 async function start(): Promise<void> {
-  const localEndpoint = createWebLocalEndpoint();
+  const localEndpoints = createWebLocalEndpoints();
   const app = await createContainerlabAppServer({
     basePath: BASE_PATH,
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     https: WEB_TLS.https,
     isDev: IS_DEV,
-    localEndpoint,
+    localEndpoints,
+    clustersUnavailable: WEB_CLUSTERS_UNAVAILABLE,
+    localUnavailable: WEB_LOCAL_UNAVAILABLE,
     logger: true,
     staticClientRoot: resolveStaticClientRoot(),
     viteDevUrl: VITE_DEV_URL
@@ -80,17 +95,22 @@ async function start(): Promise<void> {
     );
   }
   app.log.info(`default clab-api-server URL: ${DEFAULT_CLAB_API_URL}`);
-  if (localEndpoint) {
-    const status = await localEndpoint.status();
-    app.log.warn(
-      `Labs on this host are on (WEB_LOCAL_LABS): everyone who can open the app runs labs as ${status.username} here, without signing in.`
-    );
-    if (!status.available) {
-      app.log.warn(`Labs on this host cannot run yet: ${status.problems.join(" ")}`);
+  if (localEndpoints.length > 0) {
+    for (const localEndpoint of localEndpoints) {
+      const status = await localEndpoint.status();
+      app.log.warn(
+        `Labs on ${status.label} are on (WEB_LOCAL_LABS): everyone who can open the app runs labs as ${status.username} there, without signing in.`
+      );
+      if (!status.available) {
+        app.log.warn(`Labs on ${status.label} cannot run yet: ${status.problems.join(" ")}`);
+      }
     }
     // Event streams, terminals and Wireshark containers end with the server.
     const stop = (): void => {
-      void Promise.allSettled([app.close(), localEndpoint.backend.dispose()]).finally(() => process.exit(0));
+      void Promise.allSettled([
+        app.close(),
+        ...localEndpoints.map((localEndpoint) => localEndpoint.backend.dispose())
+      ]).finally(() => process.exit(0));
     };
     process.once("SIGTERM", stop);
     process.once("SIGINT", stop);

@@ -8,4 +8,5 @@ export {
   type ExplorerSnapshotOptions,
   type ExplorerSnapshotProviders
 } from "./explorerSnapshotAdapter";
+export { greyedExplorerCommandsForHost, hiddenExplorerCommandsForSupport } from "./hostSupportCommands";
 export * from "./shared/explorer/types";

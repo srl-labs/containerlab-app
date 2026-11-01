@@ -98,6 +98,11 @@ interface ContainerlabImageManagerProps {
 interface ContainerlabImageManagerDialogProps extends ContainerlabImageManagerProps {
   open: boolean;
   runtime: ClabUiRuntime;
+  /**
+   * Why no lab host has images to manage, e.g. every one is a Kubernetes
+   * cluster. The dialog says it instead of listing images.
+   */
+  unavailableMessage?: string;
 }
 
 function imageDisplayName(image: ContainerImageSummary): string {
@@ -1264,8 +1269,24 @@ export function ContainerlabImageManagerDialog({
   open,
   runtime,
   onClose,
+  unavailableMessage,
   ...props
 }: ContainerlabImageManagerDialogProps): React.JSX.Element {
+  if (unavailableMessage !== undefined) {
+    return (
+      <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth data-testid="image-manager-unavailable">
+        <DialogTitle>Images</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">{unavailableMessage}</Typography>
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
+            <Button size="small" onClick={onClose}>
+              Close
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
+    );
+  }
   return (
     <Dialog
       open={open}

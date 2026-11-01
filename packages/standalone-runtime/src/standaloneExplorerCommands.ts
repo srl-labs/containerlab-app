@@ -3,7 +3,6 @@ import type { TopologyRef } from "@containerlab/clab-ui/session";
 import {
   dispatchEndpointUiAction,
   getSessionHostnameOverride,
-  loadCapturePreferences,
   resolveStandaloneTheme,
   runtimeUiActions,
   setSessionHostnameOverride
@@ -44,6 +43,13 @@ import {
 import { endpointDisplayAddress, endpointHostname } from "./endpointAddress";
 import type { WiresharkCaptureRequest } from "./wiresharkCaptureLauncher";
 import { openWiresharkCaptureWindow } from "./wiresharkCaptureWindow";
+import {
+  edgesharkCaptureRouteFor,
+  hostCapturesStreams,
+  openStreamCaptureDialog,
+  streamCaptureSelection,
+  topologyNodeOf
+} from "./streamCapture";
 import type { LifecycleCommandEndpoint } from "./standaloneHostShared";
 import {
   findLabStateForTopology,
@@ -263,11 +269,28 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
       }
     };
 
+    const runningLabName = item?.labName ?? actionTopologyRef?.labName;
+
+    /** On a lab host with capture streams (c9s), the stream dialog with these interfaces ticked. */
+    const openStreamCapture = async (targets: CaptureTargets, title: string): Promise<boolean> => {
+      if (!actionTopologyRef) return false;
+      return openStreamCaptureDialog({
+        target: { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
+        ...streamCaptureSelection(runningLabName, targets),
+        title
+      });
+    };
+
     const runPreferredCapture = async (
       requests: WiresharkCaptureRequest[] = [{ targets: resolveCaptureTargets() }]
     ): Promise<void> => {
-      const preferredAction = loadCapturePreferences(actionEndpointId).preferredAction;
-      if (preferredAction === "edgeshark") {
+      // Known from the explorer's lab host; Docker hosts open Wireshark right away, within the click.
+      const streamTargets = requests.flatMap((request) => request.targets);
+      if (hostCapturesStreams(actionEndpointId) && streamTargets.length > 0) {
+        await openStreamCapture(streamTargets, `Capture: ${targetLabel}`);
+        return;
+      }
+      if (edgesharkCaptureRouteFor(actionEndpointId) === "edgeshark") {
         await Promise.all(requests.map((request) => runPacketflixCapture(request.targets)));
         return;
       }
@@ -280,11 +303,21 @@ export function createExplorerCommandHandler(context: ExplorerCommandContext) {
         postExplorerError("Capture requires a running node item.");
         return;
       }
+      void openStreamCaptureDialog({
+        target: { endpointId: actionEndpointId, topologyRef: actionTopologyRef },
+        nodes: [topologyNodeOf(runningLabName, containerName)],
+        title: `Capture: ${item.label || containerName}`
+      }).then((opened) => {
+        if (!opened) openEdgesharkCaptureDialog(containerName, actionTopologyRef);
+      });
+    };
+
+    const openEdgesharkCaptureDialog = (containerName: string, topologyRef: TopologyRef): void => {
       runtimeUiActions.openCapture({
         endpointId: actionEndpointId,
-        topologyRef: actionTopologyRef,
+        topologyRef,
         nodeName: containerName,
-        title: `Capture: ${item.label || containerName}`,
+        title: `Capture: ${item?.label || containerName}`,
         onCapture: (sessions) => {
           void runPreferredCapture(
             sessions.map(({ interfaceNames, nodeNamespace, label }) => ({

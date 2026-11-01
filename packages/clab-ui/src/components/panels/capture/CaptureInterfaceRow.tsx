@@ -147,6 +147,11 @@ export const CaptureInterfaceRow: React.FC<CaptureInterfaceRowProps> = ({
         slotProps={{ input: { id: `${labelId}-input`, "aria-labelledby": labelId } }}
       />
       <Box id={labelId} sx={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: 1 }}>
+        {option.nodeLabel !== undefined ? (
+          <Typography noWrap sx={{ fontSize: 13, color: "text.secondary" }} data-testid="capture-interface-node">
+            {option.nodeLabel}
+          </Typography>
+        ) : null}
         <Typography
           noWrap
           sx={{ fontFamily: MONO_FONT_FAMILY, fontSize: 13, fontWeight: 600, color: "text.primary" }}

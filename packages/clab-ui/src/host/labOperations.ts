@@ -1,5 +1,10 @@
 import { isRecord } from "../core/utilities/typeHelpers";
 
+import { parseLabCaptureInterfaces, type LabCaptureInterface } from "./captureStream";
+import { parseNodeLocations, type LabNodeLocation } from "./kubernetes";
+import { parseLabHostInfo, type LabHostInfo } from "./labHostSupport";
+import { normalizeLabSettings, type LabSettings } from "./lifecycleOptions";
+
 /**
  * Lab operations beyond the lifecycle that a lab host may lack, such as an
  * older clab-api-server or containerlab. Hosts hide what is false.
@@ -103,6 +108,41 @@ export interface ClabUiLabOperationsHost {
   saveSnapshots(request: LabSnapshotSaveRequest): Promise<LabSnapshotSaveResult>;
   saveConfigs(request: LabSaveConfigsRequest): Promise<LabSaveConfigsResult>;
   inspectDetails(): Promise<LabInspectDetailsResult>;
+  /** The runtime of the lab's host and what it offers; undefined when the host tells nothing. */
+  hostInfo(): Promise<LabHostInfo | undefined>;
+  /** Where the lab's nodes run on a c9s host; empty elsewhere. */
+  nodeLocations(): Promise<LabNodeLocation[]>;
+  /** The lab-link interfaces a host with capture streams (c9s) captures on, with their peers. */
+  captureInterfaces(): Promise<LabCaptureInterface[]>;
+  /** The Kubernetes resources a c9s deploy creates (`deploy --emit-crs`). */
+  exportManifests(): Promise<{ yaml: string }>;
+  /** `containerlab validate` on the lab host, without showing anything. */
+  validate(): Promise<LabValidation>;
+  /**
+   * The settings the lab remembers on its lab host: the deploy options that
+   * deploy, redeploy, destroy and apply use when they run without options.
+   */
+  labSettings(): Promise<LabSettings | undefined>;
+  /** Remember the lab's settings on its lab host; undefined forgets them. */
+  saveLabSettings(settings: LabSettings | undefined): Promise<void>;
+}
+
+/** What `containerlab validate` says about the topology. */
+export interface LabValidation {
+  valid: boolean;
+  error?: string;
+}
+
+/** A validate result from a lab host. */
+export function parseHostValidation(value: unknown): LabValidation {
+  if (!isRecord(value)) return { valid: false, error: "The lab host sent no validation result." };
+  const error = typeof value.error === "string" && value.error.trim() ? value.error.trim() : undefined;
+  return { valid: value.valid === true, ...(error ? { error } : {}) };
+}
+
+/** Manifests from a lab host. */
+export function parseManifestExport(value: unknown): { yaml: string } {
+  return { yaml: isRecord(value) && typeof value.yaml === "string" ? value.yaml : "" };
 }
 
 export type LabOperationName = keyof ClabUiLabOperationsHost;
@@ -309,7 +349,14 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   exec: 10 * 60_000,
   saveSnapshots: 60 * 60_000,
   saveConfigs: 15 * 60_000,
-  inspectDetails: 2 * 60_000
+  inspectDetails: 2 * 60_000,
+  hostInfo: 30_000,
+  nodeLocations: 60_000,
+  captureInterfaces: 60_000,
+  exportManifests: 2 * 60_000,
+  validate: 2 * 60_000,
+  labSettings: 30_000,
+  saveLabSettings: 30_000
 };
 
 interface PendingLabOperation {
@@ -377,6 +424,15 @@ export function createLabOperationsRequester(options: {
       parseExecResponse(await send("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await send("saveSnapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await send("saveConfigs", request)),
-    inspectDetails: async () => parseInspectDetails(await send("inspectDetails"))
+    inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
+    hostInfo: async () => parseLabHostInfo(await send("hostInfo")),
+    nodeLocations: async () => parseNodeLocations(await send("nodeLocations")),
+    captureInterfaces: async () => parseLabCaptureInterfaces(await send("captureInterfaces")),
+    exportManifests: async () => parseManifestExport(await send("exportManifests")),
+    validate: async () => parseHostValidation(await send("validate")),
+    labSettings: async () => normalizeLabSettings(await send("labSettings")),
+    saveLabSettings: async (settings) => {
+      await send("saveLabSettings", { settings: settings ?? null });
+    }
   };
 }

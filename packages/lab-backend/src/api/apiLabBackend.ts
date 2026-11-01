@@ -1,6 +1,9 @@
 import WebSocket, { type RawData } from "ws";
 import {
   hasLabNameGitTokens,
+  isC9sExposeType,
+  KUBERNETES_IMAGE_MANAGEMENT_MESSAGE,
+  labSettingsOptions,
   restoresSnapshots,
   type LabExecRequest,
   type LabOperationSupport,
@@ -9,10 +12,13 @@ import {
   type TopoViewerNodesAction
 } from "@containerlab/clab-ui/host";
 
+import { c9sPlanFields } from "../c9sPlan.ts";
 import type {
   LabBackend,
   LabBackendCapabilities,
   LabBackendFeatures,
+  LabHostProfile,
+  LabRuntimeKind,
   LabEvent,
   LabEventStreamOptions,
   LabFileContent,
@@ -36,6 +42,8 @@ import type {
   WorkspaceFileEvent
 } from "../contract/backend.ts";
 import type {
+  CaptureInterface,
+  CaptureStreamOptions,
   CaptureTarget,
   ExecResponse,
   InspectContainerInfo,
@@ -52,10 +60,12 @@ import type {
   ShareToolOptions,
   ValidateTopologyResponse
 } from "../contract/dto.ts";
+import { captureLimits, captureNodeTargets, pcapngBlocks } from "../capture.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { gottyOptionsError } from "../shareOptions.ts";
-import { buildWebSocketUrl, ClabApiClient } from "./clabApiClient.ts";
+import { buildWebSocketUrl, ClabApiClient, type ServerHealth, type ServerLabHost } from "./clabApiClient.ts";
 import { ClabApiFileSystemAdapter } from "./clabApiFileSystem.ts";
 import { apiFetch } from "./upstreamRequest.ts";
 import { apiTlsWebSocketOptions } from "./upstreamTls.ts";
@@ -92,18 +102,33 @@ const SERVER_FEATURES = {
   deployRestore: "deploy-restore",
   nodeStats: "node-stats",
   logStream: "log-stream",
-  terminalResume: "terminal-resume"
+  terminalResume: "terminal-resume",
+  captureStream: "capture-stream",
+  wiresharkVnc: "wireshark-vnc",
+  labHostInfo: "lab-host-info",
+  lifecycleTimeout: "lab-lifecycle-timeout"
 } as const;
 
 type ServerFeature = (typeof SERVER_FEATURES)[keyof typeof SERVER_FEATURES];
 
 /** Servers get upgraded in place; look again after a minute. */
 const SERVER_FEATURES_TTL_MS = 60_000;
-const serverFeatureCache = new Map<string, { expires: number; features: Promise<ReadonlySet<string>> }>();
+
+/** What a server's `/health` says, with its feature list as a set. */
+interface ServerState {
+  features: ReadonlySet<string>;
+  runtime?: string;
+  namespaceMode?: string;
+  /** `/health` did not answer; the next call asks again. */
+  unreachable?: boolean;
+}
+
+const serverHealthCache = new Map<string, { expires: number; state: Promise<ServerState> }>();
 
 /** Forgets what servers listed, e.g. between tests that fake different servers at one URL. */
 export function clearServerFeatureCache(): void {
-  serverFeatureCache.clear();
+  serverHealthCache.clear();
+  serverLabHostCache.clear();
 }
 
 function unsupported(what: string): LabBackendError {
@@ -113,8 +138,77 @@ function unsupported(what: string): LabBackendError {
   );
 }
 
-/** The features a clab-api-server lists on `GET /health`; older servers list none. */
-function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures {
+const SERVER_RUNTIMES: readonly LabRuntimeKind[] = ["docker", "podman", "c9s"];
+
+function isServerRuntime(value: string | undefined): value is LabRuntimeKind {
+  return value !== undefined && (SERVER_RUNTIMES as readonly string[]).includes(value);
+}
+
+/**
+ * The first clab-api-server release that reports its lab runtime on `/health`.
+ * Servers without the field are older than c9s support, so they run Docker.
+ */
+const MIN_CLAB_API_SERVER_RUNTIME_VERSION = "0.10.0";
+
+/**
+ * The lab host profile of a server from its `/health`. A server that reports
+ * no runtime predates c9s support: it keeps working for what Docker servers
+ * always did, and the profile asks to update it for anything that needs the
+ * runtime. Nothing c9s-specific is ever guessed for it.
+ */
+function hostProfileFromHealth(health: Pick<ServerHealth, "runtime" | "namespaceMode">): LabHostProfile {
+  if (health.runtime === undefined) {
+    return {
+      runtime: "docker",
+      updateRequired: `This clab-api-server does not report its lab runtime. Update it to ${MIN_CLAB_API_SERVER_RUNTIME_VERSION} or later.`
+    };
+  }
+  if (!isServerRuntime(health.runtime)) {
+    throw new LabBackendError(
+      `This clab-api-server runs labs with "${health.runtime}", which this app does not support. Update the app.`,
+      501
+    );
+  }
+  const profile: LabHostProfile = { runtime: health.runtime };
+  if (profile.runtime === "c9s" && (health.namespaceMode === "per-lab" || health.namespaceMode === "fixed")) {
+    profile.namespaceMode = health.namespaceMode;
+  }
+  return profile;
+}
+
+/**
+ * A server's profile with what `GET /api/v1/lab-host` adds: the default
+ * timeout and, on c9s, the cluster, the namespace patterns and the deploy
+ * settings, which are server policy.
+ */
+function withServerLabHost(base: LabHostProfile, labHost: ServerLabHost): LabHostProfile {
+  const profile: LabHostProfile = {
+    ...base,
+    ...(labHost.defaultTimeout ? { defaultTimeout: labHost.defaultTimeout } : {}),
+    ...(labHost.capture ? { capture: labHost.capture } : {})
+  };
+  const c9s = labHost.c9s;
+  if (profile.runtime !== "c9s" || labHost.runtime !== "c9s" || !c9s) return profile;
+  return {
+    ...profile,
+    ...(c9s.cluster ? { cluster: c9s.cluster } : {}),
+    ...(c9s.namespacePattern ? { namespacePattern: c9s.namespacePattern } : {}),
+    ...(c9s.sharedNamespacePattern ? { sharedNamespacePattern: c9s.sharedNamespacePattern } : {}),
+    ...(isC9sExposeType(c9s.exposeType) ? { exposeType: c9s.exposeType } : {}),
+    ...(c9s.persistence !== undefined ? { persistence: c9s.persistence } : {}),
+    ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+    ...(c9s.labQuota !== undefined ? { labQuota: c9s.labQuota } : {}),
+    ...(c9s.noTopologyCR !== undefined ? { noTopologyCR: c9s.noTopologyCR } : {})
+  };
+}
+
+const serverLabHostCache = new Map<string, { expires: number; labHost: Promise<ServerLabHost | undefined> }>();
+
+/** The features of a clab-api-server from its `/health`; older servers list none. */
+function featuresFromServerHealth(state: ServerState): LabBackendFeatures {
+  const listed = state.features;
+  // Servers without a runtime predate c9s, so they run Docker or Podman.
+  const containerRuntime = state.runtime === undefined || state.runtime === "docker" || state.runtime === "podman";
   return {
     // Servers before the feature list had validate already, or answer 404.
     validate: true,
@@ -123,7 +217,16 @@ function featuresFromServerList(listed: ReadonlySet<string>): LabBackendFeatures
     sshxReaders: listed.has("sshx-readers"),
     gottyOptions: listed.has("gotty-options"),
     nodeStats: listed.has(SERVER_FEATURES.nodeStats),
-    terminalResume: listed.has(SERVER_FEATURES.terminalResume)
+    terminalResume: listed.has(SERVER_FEATURES.terminalResume),
+    // Older servers run containerlab with their own timeouts and take none.
+    lifecycleTimeout: listed.has(SERVER_FEATURES.lifecycleTimeout),
+    ...containerRuntimeFeatures(containerRuntime),
+    // A c9s server picks namespaces, exposure and persistence itself, and has no manifest export.
+    manifestExport: false,
+    c9sDeployOptions: false,
+    captureStream: listed.has(SERVER_FEATURES.captureStream),
+    // Docker servers feed Wireshark VNC from Edgeshark; a c9s server from its own stream, while it runs Docker.
+    captureVnc: !containerRuntime && listed.has(SERVER_FEATURES.wiresharkVnc)
   };
 }
 
@@ -160,6 +263,34 @@ function isMissingRoute(error: unknown): boolean {
 }
 
 /** A lab backend for one signed-in user of a clab-api-server. */
+/**
+ * A c9s clab-api-server reports an apply plan as Kubernetes resource changes
+ * (`runtimePlan`) and leaves its node lists empty; give the result the fields
+ * a local c9s host's plan has, so pending changes and the plan dialog read alike.
+ */
+function withRuntimePlan(response: LifecycleActionResult): LifecycleActionResult {
+  const result = response.result;
+  if (typeof result !== "object" || result === null) return response;
+  const record = result as Record<string, unknown>;
+  const plan = record.runtimePlan;
+  if (typeof plan !== "object" || plan === null) return response;
+  const fields = c9sPlanFields(plan as { namespace?: unknown; changes?: unknown });
+  const merged = (key: "addedNodes" | "deletedNodes" | "recreatedNodes") => [
+    ...new Set([...(Array.isArray(record[key]) ? (record[key] as string[]) : []), ...fields[key]])
+  ];
+  return {
+    ...response,
+    result: {
+      ...record,
+      ...fields,
+      deployedLab: record.deployedLab === true || fields.deployedLab,
+      addedNodes: merged("addedNodes"),
+      deletedNodes: merged("deletedNodes"),
+      recreatedNodes: merged("recreatedNodes")
+    }
+  };
+}
+
 export class ApiLabBackend implements LabBackend {
   readonly kind = "api";
   readonly capabilities = API_CAPABILITIES;
@@ -202,27 +333,57 @@ export class ApiLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    return featuresFromServerList(await this.serverFeatures());
+    return featuresFromServerHealth(await this.serverState());
+  }
+
+  async hostProfile(): Promise<LabHostProfile> {
+    const state = await this.serverState();
+    // An unreachable server is not an old one: let the error through.
+    const profile = hostProfileFromHealth(state.unreachable ? await this.client.getServerHealth() : state);
+    if (!state.features.has(SERVER_FEATURES.labHostInfo)) return profile;
+    const labHost = await this.serverLabHost();
+    return labHost ? withServerLabHost(profile, labHost) : profile;
+  }
+
+  /** `GET /api/v1/lab-host`, cached like `/health`; undefined when it fails, which leaves `/health`'s profile. */
+  private serverLabHost(): Promise<ServerLabHost | undefined> {
+    const key = `${this.client.getBaseUrl()}\n${this.token}`;
+    const cached = serverLabHostCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.labHost;
+    const labHost = this.client.getLabHost(this.token).catch(() => {
+      serverLabHostCache.delete(key);
+      return undefined;
+    });
+    serverLabHostCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, labHost });
+    return labHost;
   }
 
   inspectAll() {
     return this.client.listLabs(this.token);
   }
 
-  private serverFeatures(): Promise<ReadonlySet<string>> {
+  private serverState(): Promise<ServerState> {
     const key = this.client.getBaseUrl();
-    const cached = serverFeatureCache.get(key);
-    if (cached && cached.expires > Date.now()) return cached.features;
-    const features = this.client.getServerFeatures().then(
-      (list) => new Set(list),
-      (): ReadonlySet<string> => {
+    const cached = serverHealthCache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.state;
+    const state = this.client.getServerHealth().then(
+      (health): ServerState => ({
+        features: new Set(health.features),
+        ...(health.runtime !== undefined ? { runtime: health.runtime } : {}),
+        ...(health.namespaceMode !== undefined ? { namespaceMode: health.namespaceMode } : {})
+      }),
+      (): ServerState => {
         // An unreachable server is asked again on the next call.
-        serverFeatureCache.delete(key);
-        return new Set();
+        serverHealthCache.delete(key);
+        return { features: new Set(), unreachable: true };
       }
     );
-    serverFeatureCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, features });
-    return features;
+    serverHealthCache.set(key, { expires: Date.now() + SERVER_FEATURES_TTL_MS, state });
+    return state;
+  }
+
+  private serverFeatures(): Promise<ReadonlySet<string>> {
+    return this.serverState().then((state) => state.features);
   }
 
   private async hasFeature(feature: ServerFeature): Promise<boolean> {
@@ -310,6 +471,12 @@ export class ApiLabBackend implements LabBackend {
   /** A deploy that restores snapshots must not run as a plain deploy on an older server. */
   private async checkLifecycleOptions(action: LabLifecycleAction, options: LifecycleRunOptions) {
     if (
+      options.lifecycleOptions?.timeout !== undefined &&
+      !(await this.hasFeature(SERVER_FEATURES.lifecycleTimeout))
+    ) {
+      throw unsupported("take a timeout for deploy, redeploy, apply or destroy");
+    }
+    if (
       action === "deploy" &&
       restoresSnapshots(options.lifecycleOptions) &&
       !(await this.hasFeature(SERVER_FEATURES.deployRestore))
@@ -346,12 +513,16 @@ export class ApiLabBackend implements LabBackend {
       case "redeploy":
         return this.client.redeployLab(token, lab.labName, { ...lifecycle, includeLogs: true });
       case "apply":
-        return this.client.applyLab(
-          token,
-          lab.labName,
-          options.dryRun === true
-            ? { path: lab.path, dryRun: true }
-            : { path: lab.path, includeLogs: true }
+        return withRuntimePlan(
+          await this.client.applyLab(
+            token,
+            lab.labName,
+            {
+              path: lab.path,
+              ...(options.dryRun === true ? { dryRun: true } : { includeLogs: true }),
+              lifecycleOptions: labSettingsOptions("apply", options.lifecycleOptions)
+            }
+          )
         );
       case "start":
       case "stop":
@@ -370,7 +541,14 @@ export class ApiLabBackend implements LabBackend {
       this.token,
       action,
       lab.labName,
-      { path: lab.path, cleanup: options.cleanup, lifecycleOptions: options.lifecycleOptions },
+      {
+        path: lab.path,
+        cleanup: options.cleanup,
+        lifecycleOptions:
+          action === "apply"
+            ? labSettingsOptions("apply", options.lifecycleOptions)
+            : options.lifecycleOptions
+      },
       { signal: options.signal }
     );
     if (!response.body) {
@@ -465,6 +643,12 @@ export class ApiLabBackend implements LabBackend {
 
   generateTopology(request: GenerateTopologyRequest) {
     return this.client.generateTopology(this.token, request);
+  }
+
+  exportManifests(): Promise<{ yaml: string }> {
+    return Promise.reject(
+      new LabBackendError("Kubernetes manifests are only exported by a c9s lab host on this machine.", 501)
+    );
   }
 
   nodeAction(labName: string, containerName: string, action: NodeLifecycleAction) {
@@ -590,6 +774,30 @@ export class ApiLabBackend implements LabBackend {
     return this.client.createWiresharkVncSessions(this.token, labName, request);
   }
 
+  private async requireCaptureStream(): Promise<void> {
+    if (!(await this.hasFeature(SERVER_FEATURES.captureStream))) {
+      throw unsupported("stream packet captures (it needs the c9s lab runtime)");
+    }
+  }
+
+  async captureInterfaces(labName: string): Promise<CaptureInterface[]> {
+    await this.requireCaptureStream();
+    return this.client.listCaptureInterfaces(this.token, labName);
+  }
+
+  async openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>> {
+    await this.requireCaptureStream();
+    const targets = captureNodeTargets(labName, options.targets, await this.inspectLab(labName));
+    const response = await this.client.openCaptureStream(
+      this.token,
+      labName,
+      { targets, ...captureLimits(options) },
+      { signal: options.signal }
+    );
+    if (!response.body) throw new LabBackendError("clab-api-server sent no capture stream", 502);
+    return pcapngBlocks(captureBody(response.body, options.signal));
+  }
+
   wiresharkVncReady(sessionId: string) {
     return this.client.getWiresharkVncSessionReady(this.token, sessionId);
   }
@@ -638,15 +846,25 @@ export class ApiLabBackend implements LabBackend {
     );
   }
 
-  listImages() {
+  /** A clab-api-server that runs labs on a cluster has no images to manage; say why. */
+  private async requireImageManagement(): Promise<void> {
+    if (!(await this.features()).imageManagement) {
+      throw new LabBackendError(KUBERNETES_IMAGE_MANAGEMENT_MESSAGE, 501);
+    }
+  }
+
+  async listImages() {
+    await this.requireImageManagement();
     return this.client.listRuntimeImages(this.token);
   }
 
-  pullImage(image: string) {
+  async pullImage(image: string) {
+    await this.requireImageManagement();
     return this.client.pullRuntimeImage(this.token, image);
   }
 
-  removeImage(reference: string, force = false) {
+  async removeImage(reference: string, force = false) {
+    await this.requireImageManagement();
     return this.client.removeRuntimeImage(this.token, reference, force);
   }
 
@@ -730,6 +948,24 @@ export class ApiLabBackend implements LabBackend {
   }
 
   dispose(): void {}
+}
+
+/**
+ * The bytes of a capture response, read from the call on (see `readLines`).
+ * Aborting the request is how a capture ends from this side, so the abort
+ * ends the stream instead of failing it; `pcapngBlocks` then drops a block the
+ * abort cut short.
+ */
+function captureBody(body: AsyncIterable<Uint8Array>, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  return captureChunks(body[Symbol.asyncIterator](), signal);
+}
+
+async function* captureChunks(chunks: AsyncIterator<Uint8Array>, signal: AbortSignal): AsyncGenerator<Uint8Array> {
+  try {
+    for await (const chunk of { [Symbol.asyncIterator]: () => chunks }) yield chunk;
+  } catch (error) {
+    if (!signal.aborted) throw error;
+  }
 }
 
 function wiresharkVncPath(sessionId: string): string {

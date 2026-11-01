@@ -15,9 +15,41 @@ export interface ApplyPlan {
   deletedEndpoints: string[];
   /** Why a node is recreated or restarted, e.g. "config drift: image". */
   nodeChangeReasons: Record<string, string>;
+  /** c9s: the Kubernetes resources the apply creates, updates, recreates or deletes. */
+  changes?: ApplyPlanChange[];
+  /** c9s: the lab's namespace. */
+  namespace?: string;
 }
 
-type ApplyPlanListKey = Exclude<keyof ApplyPlan, "deploysLab" | "nodeChangeReasons">;
+/** One resource change of a c9s apply; `recreate` restarts a node. */
+export interface ApplyPlanChange {
+  action: "create" | "update" | "delete" | "recreate";
+  kind: string;
+  name: string;
+  namespace?: string;
+}
+
+const CHANGE_ACTIONS = new Set(["create", "update", "delete", "recreate"]);
+
+function planChanges(value: unknown): ApplyPlanChange[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const changes: ApplyPlanChange[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) continue;
+    const action = typeof entry.action === "string" ? entry.action : "";
+    const name = typeof entry.name === "string" ? entry.name : "";
+    if (!CHANGE_ACTIONS.has(action) || !name) continue;
+    changes.push({
+      action: action as ApplyPlanChange["action"],
+      kind: typeof entry.kind === "string" ? entry.kind : "",
+      name,
+      ...(typeof entry.namespace === "string" && entry.namespace ? { namespace: entry.namespace } : {})
+    });
+  }
+  return changes;
+}
+
+type ApplyPlanListKey = Exclude<keyof ApplyPlan, "deploysLab" | "nodeChangeReasons" | "changes" | "namespace">;
 
 /** The API sends camelCase keys, `containerlab apply --dry-run --format json` sends kebab-case. */
 const LIST_KEYS: Record<ApplyPlanListKey, readonly [string, string]> = {
@@ -61,7 +93,8 @@ export function parseApplyPlan(value: unknown): ApplyPlan | undefined {
   if (!isRecord(value)) return undefined;
   const deployed = readField(value, ["deployedLab", "deployed-lab"]);
   const hasLists = LIST_NAMES.some((name) => Array.isArray(readField(value, LIST_KEYS[name])));
-  if (deployed !== true && !hasLists) return undefined;
+  const changes = planChanges(value.changes);
+  if (deployed !== true && !hasLists && !changes) return undefined;
 
   const plan: ApplyPlan = {
     deploysLab: deployed === true,
@@ -77,10 +110,16 @@ export function parseApplyPlan(value: unknown): ApplyPlan | undefined {
   for (const name of LIST_NAMES) {
     plan[name] = stringList(readField(value, LIST_KEYS[name]));
   }
+  if (changes) plan.changes = changes;
+  if (typeof value.namespace === "string" && value.namespace) plan.namespace = value.namespace;
   return plan;
 }
 
 /** Whether applying the plan would change the lab. */
 export function applyPlanHasChanges(plan: ApplyPlan): boolean {
-  return plan.deploysLab || LIST_NAMES.some((name) => plan[name].length > 0);
+  return (
+    plan.deploysLab ||
+    LIST_NAMES.some((name) => plan[name].length > 0) ||
+    (plan.changes?.length ?? 0) > 0
+  );
 }

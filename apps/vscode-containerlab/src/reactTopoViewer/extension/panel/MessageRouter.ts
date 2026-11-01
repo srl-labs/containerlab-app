@@ -730,6 +730,17 @@ export class MessageRouter {
       return true;
     }
 
+    // The toolbar's lab host chip: that lab host's page in the settings.
+    if (command === "clab-open-lab-host-settings") {
+      if (typeof message.hostId === "string" && message.hostId !== "") {
+        await vscode.commands.executeCommand(
+          "containerlab.settings.open",
+          `host:${message.hostId}`
+        );
+      }
+      return true;
+    }
+
     if (command === MSG_VALIDATE_TOPOLOGY) {
       const yamlFilePath = this.context.yamlFilePath;
       if (yamlFilePath) {

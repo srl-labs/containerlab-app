@@ -75,3 +75,32 @@ test("parseApplyPlan drops entries that are not names", () => {
   assert.deepEqual(plan.addedNodes, ["leaf3"]);
   assert.deepEqual(plan.nodeChangeReasons, { leaf1: "added link" });
 });
+
+test("parseApplyPlan keeps the resource changes of a c9s plan", () => {
+  const plan = parseApplyPlan({
+    dryRun: true,
+    deployedLab: false,
+    namespace: "c9s-demo",
+    recreatedNodes: ["n1"],
+    changes: [
+      { action: "recreate", kind: "Node", namespace: "c9s-demo", name: "n1" },
+      { action: "update", kind: "Topology", name: "demo" },
+      { action: "explode", kind: "Node", name: "bad" },
+      { action: "create", kind: "Node" }
+    ]
+  });
+  assert.ok(plan);
+  assert.equal(plan.namespace, "c9s-demo");
+  assert.deepEqual(plan.changes, [
+    { action: "recreate", kind: "Node", namespace: "c9s-demo", name: "n1" },
+    { action: "update", kind: "Topology", name: "demo" }
+  ]);
+  assert.equal(applyPlanHasChanges(plan), true);
+  // A Topology change alone is a change too.
+  const topologyOnly = parseApplyPlan({ changes: [{ action: "update", kind: "Topology", name: "demo" }] });
+  assert.ok(topologyOnly);
+  assert.equal(applyPlanHasChanges(topologyOnly), true);
+  const none = parseApplyPlan({ changes: [] });
+  assert.ok(none);
+  assert.equal(applyPlanHasChanges(none), false);
+});

@@ -8,6 +8,7 @@ import {
   type ExplorerSnapshotMessage,
   type ExplorerUiState
 } from "./shared/explorer/types";
+import type { LabHostTag } from "../host/labHostIdentity";
 
 interface ExplorerTreeProvider {
   getChildren(element?: unknown):
@@ -30,8 +31,14 @@ interface ExplorerTreeItemLike {
   id?: string;
   contextValue?: string;
   endpointId?: string;
+  /** VS Code's name for the lab host of a lab, node or interface. */
+  connectionId?: string;
   /** A lab host root: `local` for the app's own machine, `api` for clab-api-server. */
   endpointKind?: "local" | "api";
+  /** A `local` lab host root that is a Kubernetes cluster used from this machine, not this machine. */
+  endpointCluster?: boolean;
+  /** A lab host root: its kind and runtime as a tag. */
+  endpointTag?: LabHostTag;
   hasChildren?: boolean;
   state?: string;
   status?: string;
@@ -55,6 +62,18 @@ export interface ExplorerSnapshotOptions {
   isLocalCaptureAllowed: boolean;
   commandMetadata?: ExplorerCommandMetadata;
   hiddenCommandIds?: readonly string[];
+  /**
+   * Commands hidden on the items of one lab host, by endpoint id: what the
+   * host's runtime cannot do (`hiddenExplorerCommandsForSupport`). Actions of
+   * no host (section toolbars) hide what every host listed here hides; list a
+   * host whose support is not known yet with no commands.
+   */
+  hiddenCommandIdsByEndpoint?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Commands shown greyed out on the items of one lab host, with why, by
+   * endpoint id (`greyedExplorerCommandsForHost`); they win over hiding.
+   */
+  greyedCommandsByEndpoint?: ReadonlyMap<string, ReadonlyMap<string, string>>;
   sectionOrder?: readonly ExplorerSectionId[];
   expandedBySection?: ExplorerUiState["expandedBySection"];
   /** Section titles that replace the defaults, e.g. once labs come from several hosts. */
@@ -559,17 +578,46 @@ function appendContributedActions(
   }
 }
 
+/** The lab host an item belongs to: its endpoint, or in VS Code its connection. */
+function hostOfItem(item: ExplorerTreeItemLike | undefined): string | undefined {
+  return item?.endpointId ?? item?.connectionId;
+}
+
+/**
+ * Commands no lab host can run: hidden on every host in
+ * `hiddenCommandIdsByEndpoint`. Section actions belong to no host, so they
+ * hide these, e.g. Manage Images when every host is a cluster.
+ */
+function commandsHiddenOnEveryHost(options: ExplorerSnapshotOptions): string[] {
+  const byHost = [...(options.hiddenCommandIdsByEndpoint?.values() ?? [])];
+  const [first, ...rest] = byHost;
+  if (!first) return [];
+  return first.filter((commandId) => rest.every((hidden) => hidden.includes(commandId)));
+}
+
 function filterHiddenActions(
   actions: ExplorerAction[],
-  options: ExplorerSnapshotOptions
+  options: ExplorerSnapshotOptions,
+  item?: ExplorerTreeItemLike
 ): ExplorerAction[] {
-  const hiddenCommandIds = options.hiddenCommandIds ?? [];
-  if (hiddenCommandIds.length === 0) {
+  const host = hostOfItem(item);
+  const hiddenCommandIds = [
+    ...(options.hiddenCommandIds ?? []),
+    ...(host !== undefined
+      ? (options.hiddenCommandIdsByEndpoint?.get(host) ?? [])
+      : commandsHiddenOnEveryHost(options))
+  ];
+  const greyed = host !== undefined ? options.greyedCommandsByEndpoint?.get(host) : undefined;
+  if (hiddenCommandIds.length === 0 && !greyed?.size) {
     return actions;
   }
 
   const hidden = new Set(hiddenCommandIds);
-  return actions.filter((action) => !hidden.has(action.commandId));
+  return actions.flatMap((action) => {
+    const reason = greyed?.get(action.commandId);
+    if (reason !== undefined) return [{ ...action, disabled: true, disabledReason: reason }];
+    return hidden.has(action.commandId) ? [] : [action];
+  });
 }
 
 function getLinkArgument(item: ExplorerTreeItemLike): string | undefined {
@@ -797,6 +845,8 @@ function appendEndpointActions(
   const normalizedState = String(item.state ?? "").toLowerCase();
   const connected = normalizedState === "connected";
   const local = item.endpointKind === "local";
+  // This machine is hidden; a cluster used from it is removed, like a lab server.
+  const thisComputer = local && item.endpointCluster !== true;
   if (connected) {
     pushAction(actions, seen, registry, "containerlab.editor.topoViewerEditor", [item]);
     pushAction(actions, seen, registry, "containerlab.lab.generate", [item]);
@@ -810,7 +860,7 @@ function appendEndpointActions(
   let reconnectLabel = connected ? "Sign In Again" : "Sign In";
   if (local) reconnectLabel = "Check Again";
   pushAction(actions, seen, registry, "containerlab.endpoint.reconnect", [item], reconnectLabel);
-  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], local ? "Hide" : "Remove", true);
+  pushAction(actions, seen, registry, "containerlab.endpoint.remove", [item], thisComputer ? "Hide" : "Remove", true);
   if (!local) {
     pushAction(actions, seen, registry, "containerlab.endpoint.copyUrl", [item]);
   }
@@ -941,7 +991,7 @@ function getNodeActions(
 
   if (sectionId === "helpFeedback") {
     appendHelpFeedbackActions(actions, seen, registry, item);
-    return filterHiddenActions(applyCommandIcons(actions, commandIcons), options);
+    return filterHiddenActions(applyCommandIcons(actions, commandIcons), options, item);
   }
 
   appendNodeActionsForContext(
@@ -956,7 +1006,7 @@ function getNodeActions(
     commandIcons
   );
 
-  return filterHiddenActions(applyCommandIcons(actions, commandIcons), options);
+  return filterHiddenActions(applyCommandIcons(actions, commandIcons), options, item);
 }
 
 function resolvePrimaryAction(
@@ -1113,6 +1163,7 @@ async function buildNode(
     contextValue,
     endpointId: item.endpointId,
     ...(item.endpointKind !== undefined ? { endpointKind: item.endpointKind } : {}),
+    ...(item.endpointTag !== undefined ? { endpointTag: item.endpointTag } : {}),
     state: item.state,
     statusIndicator,
     statusDescription: description,

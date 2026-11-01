@@ -57,7 +57,7 @@ test("location controls the submitted path and resets when the dialog is reopene
   await expect.poll(() => submissions).toEqual([{ endpointId: "team", fileName: "my-lab.clab.yml" }]);
   dialog = await openCreate(page);
   await dialog.getByRole("button", { name: "Shared", exact: true }).click();
-  await expect(dialog).toContainText("Everyone signed in to this API server can edit, deploy, and destroy this lab.");
+  await expect(dialog).toContainText("Everyone signed in to this API Server can edit, deploy, and destroy this lab.");
   await dialog.getByLabel("Topology file name", { exact: true }).fill("team/demo");
   await dialog.getByLabel("Topology file name", { exact: true }).press("Enter");
   await expect.poll(() => submissions).toEqual([

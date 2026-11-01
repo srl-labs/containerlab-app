@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  clearCapturePreferences,
   getSessionHostnameOverride,
   loadCapturePreferences,
+  loadOwnCaptureMethod,
   normalizeCapturePreferences,
   persistCapturePreferences,
   setSessionHostnameOverride
@@ -68,7 +70,7 @@ test.after(() => {
 
 test("normalizeCapturePreferences falls back to default action for invalid input", () => {
   const normalized = normalizeCapturePreferences({ preferredAction: "invalid" });
-  assert.equal(normalized.preferredAction, "wireshark-vnc");
+  assert.equal(normalized.preferredAction, "auto");
 });
 
 test("capture preferences are persisted and resolved per endpoint", () => {
@@ -88,6 +90,17 @@ test("capture preferences are persisted and resolved per endpoint", () => {
 
   assert.equal(persisted.defaultPreferences?.preferredAction, "edgeshark");
   assert.equal(persisted.preferencesByEndpoint?.["endpoint-a"]?.preferredAction, "wireshark-vnc");
+});
+
+test("a lab host's own capture method is changed for it, and Reset makes it follow the default", () => {
+  persistCapturePreferences({ preferredAction: "edgeshark" });
+  persistCapturePreferences({ preferredAction: "wireshark-vnc" }, "endpoint-a");
+  assert.equal(loadOwnCaptureMethod("endpoint-a"), "wireshark-vnc");
+  assert.equal(loadOwnCaptureMethod("endpoint-b"), undefined);
+
+  clearCapturePreferences("endpoint-a");
+  assert.equal(loadOwnCaptureMethod("endpoint-a"), undefined);
+  assert.equal(loadCapturePreferences("endpoint-a").preferredAction, "edgeshark");
 });
 
 test("loadCapturePreferences supports legacy flat storage payload", () => {
@@ -114,4 +127,11 @@ test("session hostname override is scoped per endpoint with default fallback", (
   setSessionHostnameOverride(undefined);
   assert.equal(getSessionHostnameOverride("endpoint-a"), undefined);
   assert.equal(getSessionHostnameOverride("endpoint-b"), undefined);
+});
+
+test("capture preferences keep Automatic and Wireshark on this computer", () => {
+  persistCapturePreferences({ preferredAction: "local-wireshark" }, "endpoint-desktop");
+  persistCapturePreferences({ preferredAction: "auto" }, "endpoint-auto");
+  assert.equal(loadCapturePreferences("endpoint-desktop").preferredAction, "local-wireshark");
+  assert.equal(loadCapturePreferences("endpoint-auto").preferredAction, "auto");
 });

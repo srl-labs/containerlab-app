@@ -8,6 +8,12 @@ import {
   type TopoViewerNodeAction,
   type TopoViewerNodesAction
 } from "../../host";
+import { kubectlExecCommand } from "../../host/kubernetes";
+import type { ClabUiLabOperationsHost } from "../../host/labOperations";
+import { unsupportedReason } from "../../host/kubernetesLimits";
+import type { LabHostInfo, LabHostProfile } from "../../host/labHostSupport";
+import { copyToClipboard } from "../../utils/clipboard";
+import { hostCanCapture, hostLabOperationSupport, hostSupports, useLabHostStore } from "../../stores/labHostStore";
 import { useLabOperationsStore } from "../../stores/labOperationsStore";
 import { trackNodeActions } from "../../stores/nodeLifecycleStore";
 import { useLabFileOpener, useLabFileScope } from "../../hooks/editor/useLabFiles";
@@ -76,7 +82,13 @@ interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
   onNodeAction: (action: TopoViewerNodeAction, nodeName: string) => void;
   onNodesAction?: (action: TopoViewerNodesAction, nodeNames: string[]) => void;
   labOperations?: Parameters<typeof buildNodeContextMenu>[0]["labOperations"];
-  renderCapturePanel: typeof renderCapturePanel;
+  /** Absent when the lab host cannot capture packets. */
+  renderCapturePanel?: typeof renderCapturePanel;
+  /** Whether the lab host has link impairments (netem). */
+  canImpairLinks: boolean;
+  impairLinksUnavailable?: string;
+  /** c9s: copies the kubectl exec command of a node. */
+  copyKubectlExec?: (nodeId: string) => void;
   type: "node" | "edge" | "pane" | null;
   targetId: string | null;
   menuPosition: { x: number; y: number };
@@ -151,6 +163,7 @@ function buildNodeItems(
     onNodesAction: params.onNodesAction,
     labOperations: params.labOperations,
     renderCapturePanel: params.renderCapturePanel,
+    ...(params.copyKubectlExec ? { copyKubectlExec: params.copyKubectlExec } : {}),
     closeContextMenu: params.handlers.closeContextMenu,
     editNode: params.editNode,
     editNetwork: params.editNetwork,
@@ -192,7 +205,9 @@ function buildEdgeItems(
     isEditMode: params.isEditMode,
     isDeployed: params.deploymentState === "deployed",
     isLocked: params.isLocked,
-    renderLinkCapturePanel,
+    renderLinkCapturePanel: params.renderCapturePanel ? renderLinkCapturePanel : undefined,
+    canImpairLinks: params.canImpairLinks,
+    ...(params.impairLinksUnavailable !== undefined ? { impairLinksUnavailable: params.impairLinksUnavailable } : {}),
     closeContextMenu: params.handlers.closeContextMenu,
     editEdge: params.editEdge,
     handleDeleteEdge: params.handleDeleteEdge,
@@ -259,10 +274,40 @@ function runNodeAction(
   topoViewer.runNodeAction(action, nodeName);
 }
 
+/** On a Kubernetes lab host, link impairments show greyed out with why. */
+function linkImpairmentLimit(info: LabHostInfo | undefined): { impairLinksUnavailable?: string } {
+  const reason = unsupportedReason(info?.profile, "linkImpairments");
+  return reason !== undefined ? { impairLinksUnavailable: reason } : {};
+}
+
+/** Looks the node up in `containerlab inspect` and copies the kubectl command for its device container. */
+function copyKubectlExecHandler(
+  operations: ClabUiLabOperationsHost,
+  profile: Pick<LabHostProfile, "kubeContext" | "kubeconfig">
+): (nodeId: string) => void {
+  return (nodeId) => {
+    void operations.nodeLocations().then(async (locations) => {
+      const location = locations.find((entry) => entry.node === nodeId);
+      if (!location) return;
+      await copyToClipboard(
+        kubectlExecCommand(location, {
+          ...(profile.kubeContext ? { kubeContext: profile.kubeContext } : {}),
+          ...(profile.kubeconfig ? { kubeconfig: profile.kubeconfig } : {})
+        })
+      );
+    });
+  };
+}
+
 export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenuItem[] {
   const { topoViewer } = useClabUiHost();
   const deploymentState = useDeploymentState();
-  const labOperationSupport = useLabOperationsStore((state) => state.support);
+  const labHostInfo = useLabHostStore((state) => state.info);
+  const operationSupport = useLabOperationsStore((state) => state.support);
+  const labOperationSupport = useMemo(
+    () => hostLabOperationSupport(operationSupport, labHostInfo),
+    [operationSupport, labHostInfo]
+  );
   const openLabOperation = useLabOperationsStore((state) => state.openDialog);
   const hasLabOperations = topoViewer.labOperations !== undefined;
   const labFileScope = useLabFileScope();
@@ -303,7 +348,12 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
       labOperations: hasLabOperations
         ? { support: labOperationSupport, open: openLabOperation }
         : undefined,
-      renderCapturePanel,
+      renderCapturePanel: hostCanCapture(labHostInfo) ? renderCapturePanel : undefined,
+      canImpairLinks: hostSupports(labHostInfo, "netem"),
+      ...linkImpairmentLimit(labHostInfo),
+      ...(labHostInfo?.profile.runtime === "c9s" && topoViewer.labOperations
+        ? { copyKubectlExec: copyKubectlExecHandler(topoViewer.labOperations, labHostInfo.profile) }
+        : {}),
       type,
       targetId,
       menuPosition,
@@ -340,6 +390,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     topoViewer,
     hasLabOperations,
     labOperationSupport,
+    labHostInfo,
     openLabOperation,
     annotationHandlers,
     onOpenNodePalette,

@@ -66,6 +66,7 @@ import {
 } from "../../../stores/editHistoryStore";
 import { useUndoRedoControls } from "../../../hooks/app/useUndoRedoControls";
 import { containerlabSchema } from "../../../core/schema/bundledSchema";
+import { useHostTopologyValidation } from "../../../hooks/editor/useHostTopologyValidation";
 import { preloadMonacoCodeEditor } from "../../monaco/preloadMonacoCodeEditor";
 import type { LabFileLinks } from "../../monaco/labFileLinks";
 import type { MonacoEditDetails, MonacoSelection } from "../../monaco/MonacoCodeEditor";
@@ -251,7 +252,10 @@ const SourceEditorTab: React.FC<{
   onReadOnlyEditAttempt,
   history,
   restoreSelection
-}) => (
+}) => {
+  // On a c9s lab host, containerlab validates the topology after each edit.
+  const hostDiagnostics = useHostTopologyValidation(value, language === "yaml" && !readOnly);
+  return (
   <Box sx={{ flex: 1, minHeight: 0, overflowY: "hidden", display: "flex", flexDirection: "column" }}>
     {error !== null && error.length > 0 && (
       <Typography variant="caption" color="error" sx={{ px: 2, py: 0.5 }}>
@@ -305,11 +309,13 @@ const SourceEditorTab: React.FC<{
           onBlur={closeSourceStep}
           history={history}
           restoreSelection={restoreSelection}
+          hostDiagnostics={hostDiagnostics}
         />
       </Suspense>
     </Box>
   </Box>
-);
+  );
+};
 
 /** Why palette cards in a section can't be dragged, and what to do when someone tries. */
 interface PaletteBlock {

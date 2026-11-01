@@ -82,3 +82,50 @@ test("validates mappings and template structure without stripping advanced field
     undefined,
   );
 });
+test("lab host entries are clab-api-servers or Kubernetes lab hosts", () => {
+  const connections = catalog.find(
+    (setting) => setting.key === "containerlab.connections",
+  )!;
+  assert.equal(
+    validateSettingsChange(connections, [
+      {
+        url: "https://lab:8090",
+        label: "Lab",
+        username: "alice",
+        sessionDuration: "24h",
+      },
+      { kind: "local", runtime: "c9s", kubeContext: "kind-c9s-app" },
+      { kind: "kubernetes", kubeContext: "kind-c9s-app", imagePullSecret: "regcred" },
+      {
+        kind: "kubernetes",
+        kubeContext: "prod",
+        kubeconfig: "~/.kube/prod.yaml",
+        namespace: "team-a",
+        exposeType: "LoadBalancer",
+        persistence: false,
+        label: "Prod",
+      },
+    ]),
+    undefined,
+  );
+  for (const invalid of [
+    { label: "no url" },
+    { url: "https://lab:8090", kubeContext: "mixed" },
+    { kind: "local", runtime: "c9s" },
+    { kind: "local", runtime: "docker", kubeContext: "x" },
+    {
+      kind: "local",
+      runtime: "c9s",
+      kubeContext: "x",
+      exposeType: "NodePort",
+    },
+    { kind: "local", runtime: "c9s", kubeContext: "x", persistence: "no" },
+    { kind: "kubernetes", runtime: "c9s", kubeContext: "x" },
+    { kind: "kubernetes" },
+  ])
+    assert.match(
+      validateSettingsChange(connections, [invalid]) ?? "",
+      /matches none of: clab-api-server, Kubernetes, Kubernetes \(older form\)/,
+      JSON.stringify(invalid),
+    );
+});

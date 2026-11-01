@@ -4,9 +4,10 @@ import * as vscode from "vscode";
 import * as YAML from "yaml";
 
 import type { ClabLabTreeNode } from "../treeView/common";
-import { isRemote, resolveLab } from "../backend/labBackends";
+import { connectionOf, isRemote, resolveLab } from "../backend/labBackends";
 
 import { execCommandInTerminal } from "./command";
+import { ensureHostSupports } from "../backend/labHostSupport";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -33,11 +34,12 @@ function buildNetworkFromYaml(topoPath: string): string {
   return "clab";
 }
 
-function runFcli(node: ClabLabTreeNode | undefined, cmd: string) {
+async function runFcli(node: ClabLabTreeNode | undefined, cmd: string): Promise<void> {
   if (!node) {
     vscode.window.showErrorMessage("No lab node selected.");
     return;
   }
+  if (!(await ensureHostSupports(connectionOf(node), "fcli", "fcli"))) return;
 
   const topo = node.labPath.absolute;
   if (topo.length === 0) {
@@ -98,5 +100,5 @@ export async function fcliCustom(node: ClabLabTreeNode) {
   if (val === undefined || val.trim().length === 0) {
     return;
   }
-  runFcli(node, val.trim());
+  await runFcli(node, val.trim());
 }

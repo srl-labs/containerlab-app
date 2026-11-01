@@ -3,23 +3,25 @@ import * as os from "os";
 
 import * as vscode from "vscode";
 import Docker from "dockerode";
-import { detectLocalEnvironment, findBinary } from "@srl-labs/containerlab-lab-backend/local";
+import { findBinary } from "@srl-labs/containerlab-lab-backend/local";
 
 import {
   connectionOf,
   disposeLabBackends,
   getConnections,
-  getLocalBackend,
   initConnections,
   labPathOf,
   pickConnection,
   remoteUri
 } from "./backend/labBackends";
 import {
+  isClusterConnection,
+  migrateHostSettings,
   LOCAL_CONNECTION,
   type ConnectionManager,
   type LabConnection
 } from "./backend/connections";
+import { checkLocalLabHost } from "./backend/labHostChecks";
 import { RemoteLabFileSystem } from "./backend/remoteFileSystem";
 
 import * as cmd from "./commands";
@@ -328,23 +330,21 @@ async function prepareLocalContainerlab(
  */
 async function checkLocalConnection(connections: ConnectionManager): Promise<boolean> {
   if (!connections.localAvailable) return false;
-  const environment = await detectLocalEnvironment(getLocalBackend().options).catch(
-    (err: unknown) => ({
-      available: false,
-      problems: [err instanceof Error ? err.message : String(err)],
-      containerlabVersion: undefined,
-      username: undefined
-    })
+  await checkLocalLabHost(connections, LOCAL_CONNECTION);
+  return connections.local?.available === true;
+}
+
+/**
+ * Whether containerlab reaches each Kubernetes cluster lab host: the context,
+ * clabernetes and the user's rights. What is missing shows on the cluster's root.
+ */
+async function checkClusterConnections(connections: ConnectionManager): Promise<void> {
+  await Promise.all(
+    connections
+      .list()
+      .filter(isClusterConnection)
+      .map((connection) => checkLocalLabHost(connections, connection))
   );
-  connections.setLocalStatus({
-    available: environment.available,
-    problems: environment.problems,
-    ...(environment.containerlabVersion !== undefined
-      ? { containerlabVersion: environment.containerlabVersion }
-      : {}),
-    ...(environment.username !== undefined ? { username: environment.username } : {})
-  });
-  return environment.available;
 }
 
 // Session refresh functions are available from ./services/sessionRefresh directly
@@ -832,6 +832,15 @@ async function startLocalServices(
     void checkLocalConnection(connections);
   }
   if (!e2eSmokeTest) {
+    void checkClusterConnections(connections);
+    // Clusters added or changed in the settings are checked again.
+    context.subscriptions.push(
+      connections.onDidChange((connection) => {
+        if (connection === undefined) void checkClusterConnections(connections);
+      })
+    );
+  }
+  if (!e2eSmokeTest) {
     // Share links of running labs; the explorer shows them once they are known.
     void Promise.all([refreshSshxSessions(), refreshGottySessions()]).then(() =>
       runningLabsProvider.softRefresh()
@@ -859,9 +868,15 @@ export async function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration("containerlab");
   const isSupportedPlatform = process.platform === "linux" || vscode.env.remoteName === "wsl";
 
-  // Lab hosts work from any platform; labs on this machine need Linux or WSL.
+  // clab-api-server lab hosts work from any platform. Labs on this machine and
+  // on Kubernetes clusters need containerlab here, which runs on Linux (or WSL) only.
   const connections = initConnections(context, { localSupported: isSupportedPlatform });
+  const ignoredClusters = connections.ignoredClusters();
+  if (ignoredClusters !== undefined) outputChannel.warn(ignoredClusters);
   context.subscriptions.push(connections, RemoteLabFileSystem.register(connections));
+  await migrateHostSettings(context).catch((error: unknown) =>
+    outputChannel.warn(`Lab host settings were not migrated: ${String(error)}`)
+  );
   await connections.restoreAll();
   registerConnectionCommands(context);
   const hasLabServers = connections.list().some((connection) => connection.kind === "api");
@@ -990,7 +1005,10 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       "containerlab.connection.checkLocal",
       async (options?: unknown) => {
-        const ready = await checkLocalConnection(connections);
+        const [ready] = await Promise.all([
+          checkLocalConnection(connections),
+          checkClusterConnections(connections)
+        ]);
         await runningLabsProvider.refresh();
         localLabsProvider.forceRefresh();
         const quiet =
@@ -1000,7 +1018,7 @@ export async function activate(context: vscode.ExtensionContext) {
           void vscode.window.showInformationMessage("containerlab is ready on this machine.");
         } else {
           void vscode.window.showWarningMessage(
-            `Labs on this machine: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
+            `This computer: ${connections.problem(LOCAL_CONNECTION) ?? "not ready"}`
           );
         }
       }

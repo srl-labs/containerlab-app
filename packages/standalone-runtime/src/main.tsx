@@ -123,6 +123,7 @@ function BootstrapApp() {
     () =>
       localEndpoint
         ? {
+            ...(localEndpoint.url ? { url: localEndpoint.url } : {}),
             available: localEndpoint.available,
             problems: localEndpoint.problems,
             ...(localEndpoint.containerlabVersion

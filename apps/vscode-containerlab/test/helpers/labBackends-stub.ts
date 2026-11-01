@@ -76,7 +76,7 @@ const backend = {
   }
 };
 
-const LOCAL = { id: "local", label: "Local", kind: "local" as const };
+const LOCAL = { id: "local", label: "This computer", kind: "local" as const };
 
 export function getLocalBackend() {
   return backend;

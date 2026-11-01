@@ -8,6 +8,7 @@ import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import LockIcon from "@mui/icons-material/LockOutlined";
 import LockOpenIcon from "@mui/icons-material/LockOpenOutlined";
 import PaletteOutlinedIcon from "@mui/icons-material/PaletteOutlined";
+import RocketLaunchOutlinedIcon from "@mui/icons-material/RocketLaunchOutlined";
 import VerifiedUserOutlinedIcon from "@mui/icons-material/VerifiedUserOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -15,6 +16,7 @@ import Dialog from "@mui/material/Dialog";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 
+import { useClabUiHost } from "../../../host";
 import { SettingsLayout } from "../../../settings/SettingsLayout";
 import { useIsProcessing, useTopoViewerActions } from "../../../stores/topoViewerStore";
 import { floatingSurfaceSx, lockedButtonSx, overlayShadow } from "../../../theme/surfaces";
@@ -29,6 +31,13 @@ const LAB_SETTINGS_SECTIONS = [
     label: "General",
     description: "Lab name and container prefix",
     icon: <AccountTreeIcon fontSize="small" />
+  },
+  {
+    key: "deploy",
+    label: "Deploy",
+    description:
+      "How this lab deploys on its lab host: kept with the lab host, not in the topology file",
+    icon: <RocketLaunchOutlinedIcon fontSize="small" />
   },
   {
     key: "mgmt",
@@ -92,9 +101,13 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
   const [activeSection, setActiveSection] = useState<LabSettingsSectionKey>("basic");
   const isProcessing = useIsProcessing();
   const { toggleLock } = useTopoViewerActions();
-  const canSave = !isLocked;
+  // Deploy settings are not topology edits: a locked lab keeps them editable.
+  const canSave = !isLocked || activeSection === "deploy";
   const lockLabel = isLocked ? "Unlock lab to edit" : "Lock Lab";
-  const active = LAB_SETTINGS_SECTIONS.find((section) => section.key === activeSection) ?? LAB_SETTINGS_SECTIONS[0];
+  // Deploy settings belong to a lab host: only where the app runs labs.
+  const hasLabOperations = useClabUiHost().topoViewer.labOperations !== undefined;
+  const sections = LAB_SETTINGS_SECTIONS.filter((section) => section.key !== "deploy" || hasLabOperations);
+  const active = sections.find((section) => section.key === activeSection) ?? sections[0];
   useEffect(() => {
     if (isOpen) setActiveSection("basic");
   }, [isOpen]);
@@ -132,7 +145,7 @@ export const LabSettingsModal: React.FC<LabSettingsModalProps> = ({
       <SettingsLayout
         title="Lab Settings"
         titleId="containerlab-lab-settings-title"
-        items={[...LAB_SETTINGS_SECTIONS]}
+        items={sections}
         active={activeSection}
         onSelect={(key) => setActiveSection(key as LabSettingsSectionKey)}
         navigationTestIdPrefix="lab-settings-tab-"

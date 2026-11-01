@@ -47,7 +47,7 @@ A Visual Studio Code extension that integrates [containerlab](https://containerl
 - **Remote Labs:**
   Works perfectly with the: [SSH-Remote extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-ssh) to manage labs on remote servers.
 - **Lab Hosts:**
-  Manage labs on hosts running [clab-api-server](https://github.com/srl-labs/clab-api-server) from Linux, macOS, or Windows, without containerlab or Docker on your machine. Open **Containerlab: Manage Lab Hosts**, add a host and sign in: its labs show up in the explorer next to **Local**, each host with its status. Topologies open from the host's workspace, and deploy, node terminals, logs, and packet capture go through the API server. Lab hosts are listed in `containerlab.connections`; sign-in tokens stay in VS Code's secret storage.
+  Manage labs on hosts running [clab-api-server](https://github.com/srl-labs/clab-api-server) from Linux, macOS, or Windows, without containerlab or Docker on your machine. Open **Containerlab: Manage Lab Hosts**, add a host and sign in: its labs show up in the explorer next to **This computer**, each host with its status. Topologies open from the host's workspace, and deploy, node terminals, logs, and packet capture go through the API Server. Lab hosts are listed in `containerlab.connections`; sign-in tokens stay in VS Code's secret storage.
 - **Remote Topology URLs:**
   Deploy labs directly from GitHub or GitLab by providing a repository or file URL when using the "Deploy an existing lab" command.
 
@@ -140,7 +140,7 @@ The Containerlab Explorer listens to the containerlab event stream, so running l
 
 | Setting                                  | Type    | Default                                              | Description                                             |
 | ---------------------------------------- | ------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| `capture.preferredAction`                | string  | `Wireshark VNC`                                      | Preferred capture method (`Edgeshark`, `Wireshark VNC`) |
+| `capture.preferredAction`                | string  | `Automatic`                                          | Default capture method (`Automatic`, `Wireshark on this computer`, `Wireshark VNC`, `Edgeshark`) |
 | `capture.wireshark.dockerImage`          | string  | `ghcr.io/srl-labs/`<br/>`wireshark-vnc-docker:latest` | Docker image for Wireshark VNC                          |
 | `capture.wireshark.pullPolicy`           | string  | `always`                                             | Image pull policy (`always`, `missing`, `never`)        |
 | `capture.wireshark.theme`                | string  | `Follow VS Code theme`                               | Wireshark theme                                         |

@@ -13,6 +13,8 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 import { SettingsField } from "../../../settings/SettingsField";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
+import { RuntimeLimitNote } from "../../ui/form";
 import { DEFAULT_MGMT_NETWORK_NAME, getMgmtNetworks } from "../../../core/types/labSettings";
 import { getMgmtNetworkColor } from "../../../core/utilities/mgmtNetworks";
 import type { MgmtNetworkListActions } from "../../../hooks/editor/useLabSettings";
@@ -196,6 +198,8 @@ const NetworkList: React.FC<{
 }> = ({ actions, usage, isViewMode, renderForm }) => {
   // The selected network stays bound to the form while its card is collapsed.
   const [collapsed, setCollapsed] = useState(false);
+  // c9s: a lab has one management network.
+  const networksLimit = useRuntimeLimit("mgmtNetworks");
   const toggle = (index: number) => {
     if (index === actions.selected) {
       setCollapsed((value) => !value);
@@ -228,19 +232,25 @@ const NetworkList: React.FC<{
         ))}
       </Box>
       {!isViewMode ? (
-        <Box>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              actions.add();
-              setCollapsed(false);
-            }}
-            data-testid="lab-settings-mgmt-add-network"
-          >
-            Add network
-          </Button>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.5 }}>
+          <Tooltip title={networksLimit?.reason ?? ""}>
+            <span>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<AddIcon />}
+                disabled={networksLimit !== undefined}
+                onClick={() => {
+                  actions.add();
+                  setCollapsed(false);
+                }}
+                data-testid="lab-settings-mgmt-add-network"
+              >
+                Add network
+              </Button>
+            </span>
+          </Tooltip>
+          {networksLimit ? <RuntimeLimitNote limit={networksLimit} /> : null}
         </Box>
       ) : null}
     </SettingsField>

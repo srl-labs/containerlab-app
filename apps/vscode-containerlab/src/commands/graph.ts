@@ -20,6 +20,7 @@ import {
   labNameForPath,
   labPathOf,
   labUri,
+  rememberHostOf,
   resolveLab
 } from "../backend/labBackends";
 
@@ -160,6 +161,9 @@ export async function graphTopoviewer(node?: ClabLabTreeNode, context?: vscode.E
     await showRenderedTopology(labPath, node?.connectionId);
     return;
   }
+
+  // Opened from a lab host's section: the viewer's actions run on that host.
+  if (node) await rememberHostOf(node);
 
   // Derive the lab name
   const labName =

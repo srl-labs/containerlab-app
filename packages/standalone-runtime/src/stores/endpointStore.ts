@@ -1,3 +1,6 @@
+import type { EndpointKind, EndpointRuntimeInfo } from "@srl-labs/containerlab-app-contract";
+
+export type { EndpointKind };
 import { getStandaloneBackend } from "../backend";
 import { create } from "zustand";
 
@@ -25,10 +28,7 @@ export function endpointSessionDurationLabel(duration: EndpointSessionDuration):
   return normalizeEndpointSessionDuration(duration);
 }
 
-/** `api` is a clab-api-server; `local` runs labs on the desktop app's machine. */
-export type EndpointKind = "api" | "local";
-
-export interface EndpointConfig {
+export interface EndpointConfig extends EndpointRuntimeInfo {
   id: string;
   kind?: EndpointKind;
   url: string;

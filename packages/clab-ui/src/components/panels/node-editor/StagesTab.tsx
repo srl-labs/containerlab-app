@@ -6,7 +6,15 @@ import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Typography from "@mui/material/Typography";
 
-import { FilterableDropdown, InputField, PanelSectionHeader, SelectField } from "../../ui/form";
+import {
+  FilterableDropdown,
+  InputField,
+  PanelSectionHeader,
+  RuntimeLimitNote,
+  RuntimeLimited,
+  SelectField
+} from "../../ui/form";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 import { DeleteItemButton } from "../../ui/form/ListButtons";
 import { createRowIds, nextRowId } from "../../ui/form/listRowIds";
 import { useGraphStore } from "../../../stores/graphStore";
@@ -403,12 +411,19 @@ export const StagesTab: React.FC<TabProps> = ({ data, onChange }) => {
     return found?.includes(data.id) === true ? found : null;
   }, [data.id, data.stages, inherited, otherDependencies]);
   const cycleNodes = useMemo(() => new Set(cycle ?? []), [cycle]);
+  const stagesLimit = useRuntimeLimit("nodeStages");
+  const hasStages = Object.keys(data.stages ?? {}).length > 0;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", pb: 1 }}>
       <Typography variant="body2" sx={{ color: "text.secondary", px: 2, pt: 2 }}>
         Wait for stages of other nodes, and run commands when the node enters or leaves a stage.
       </Typography>
+      {stagesLimit ? (
+        <Box sx={{ px: 2, pt: 1 }}>
+          <RuntimeLimitNote limit={stagesLimit} />
+        </Box>
+      ) : null}
       {cycle && (
         <Typography
           variant="body2"
@@ -418,19 +433,21 @@ export const StagesTab: React.FC<TabProps> = ({ data, onChange }) => {
           {`Nodes wait for each other in a loop (${cycle.join(" → ")}). containerlab will not deploy the lab.`}
         </Typography>
       )}
-      {STAGE_NAMES.map((name) => (
-        <StageSection
-          key={name}
-          name={name}
-          nodeId={data.id}
-          stage={data.stages?.[name] ?? {}}
-          inherited={listInheritedEntries(inherited, name)}
-          nodeOptions={nodeOptions}
-          nodeNames={nodeNameSet}
-          cycleNodes={cycleNodes}
-          onChange={(stage) => onChange({ stages: withStage(data.stages, name, stage) })}
-        />
-      ))}
+      <RuntimeLimited limit={stagesLimit} note={false} keepEditable={hasStages}>
+        {STAGE_NAMES.map((name) => (
+          <StageSection
+            key={name}
+            name={name}
+            nodeId={data.id}
+            stage={data.stages?.[name] ?? {}}
+            inherited={listInheritedEntries(inherited, name)}
+            nodeOptions={nodeOptions}
+            nodeNames={nodeNameSet}
+            cycleNodes={cycleNodes}
+            onChange={(stage) => onChange({ stages: withStage(data.stages, name, stage) })}
+          />
+        ))}
+      </RuntimeLimited>
     </Box>
   );
 };

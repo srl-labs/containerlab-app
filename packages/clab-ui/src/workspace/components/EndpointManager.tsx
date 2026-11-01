@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
@@ -28,9 +29,20 @@ import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 import StorageOutlinedIcon from "@mui/icons-material/StorageOutlined";
 
 import { APP_DOCS_URL,
+  c9sDefaultsSummary,
   ENDPOINT_EXPORT_FILENAME,
   DEFAULT_ENDPOINT_SESSION_DURATION,
   endpointSessionDurationLabel,
+  endpointKindLabel,
+  CLUSTERS_UNSUPPORTED,
+  clusterChoiceUnavailable,
+  clusterSettingsOf,
+  isLocalOfferListed,
+  unlistedLocalOffers,
+  labHostKind,
+  labHostSubtitle,
+  type ClusterHostSettings,
+  type LabHostKind,
   isValidEndpointSessionDuration,
   splitSetupCommand,
   type EndpointConfig,
@@ -45,9 +57,19 @@ import {
 import type { EndpointUiAction } from "../state/endpointActions";
 import { endpointStatusHint, endpointStatusLabel, endpointStatusSeverity } from "../state/endpointStatus";
 import { downloadJsonFile, pickJsonFile } from "../../utils/jsonFile";
+import { firstFailedCheck } from "../../host/labHostSupport";
+import type { LabHostSetupProps } from "../types";
+import {
+  ClusterHostDialog,
+  LabHostCheckDialog,
+  LabHostCheckList,
+  LabHostChoices,
+  LabHostKindIcon,
+  type LabHostChoice
+} from "./LabHostSetup";
 import { MONO_FONT_FAMILY } from "../../theme/typography";
 
-interface EndpointManagerProps {
+interface EndpointManagerProps extends LabHostSetupProps {
   defaultApiUrl: string;
   endpoints: EndpointConfig[];
   externalError?: string | null;
@@ -81,12 +103,95 @@ interface EndpointManagerProps {
     endpointId: string,
     sessionDuration: EndpointSessionDuration
   ) => void;
+  /** Opens "Add lab host" on this kind, e.g. the cluster form from a command; once per change. */
+  requestedAddKind?: LabHostKind;
   /** Offered when the host can run labs on this machine. */
   localEndpoint?: LocalEndpointOffer;
+  /** More local lab hosts, such as Kubernetes clusters, each offered until it is added. */
+  extraLocalEndpoints?: readonly LocalEndpointOffer[];
   /** Health stats of a signed-in lab host; the workspace host's when unset. */
   fetchHealthMetrics?: HealthMetricsFetcher;
   /** Signs out of a lab host but keeps it, so the user can sign in again later. */
   onSignOutEndpoint?: (endpointId: string) => Promise<void>;
+  /**
+   * What the settings show: the lab host cards (a host's page), "Add lab
+   * host" (its own page), or both (the default).
+   */
+  show?: "all" | "hosts" | "add";
+}
+
+function withUnavailable(unavailable: string | undefined): { unavailable?: string } {
+  return unavailable === undefined ? {} : { unavailable };
+}
+
+
+/** "This computer" in "Add lab host": its offer, why it cannot run labs, or that it is listed. */
+function ThisComputerPanel(props: {
+  busy: boolean;
+  connected: boolean;
+  offer?: LocalEndpointOffer;
+  unavailable?: string;
+  onAdd: () => void;
+  onCheckAgain: () => void;
+}) {
+  if (props.connected) {
+    return (
+      <Typography variant="body2" sx={{ color: "text.secondary" }}>
+        This computer is in the list already. Its container runtime is a setting of the app (Docker or Podman).
+      </Typography>
+    );
+  }
+  if (!props.offer) {
+    return (
+      <Alert severity="info" variant="outlined">
+        {props.unavailable ?? "This app does not run labs on its own computer. Add an API Server instead."}
+      </Alert>
+    );
+  }
+  return (
+    <LocalEndpointCard busy={props.busy} offer={props.offer} onAdd={props.onAdd} onCheckAgain={props.onCheckAgain} variant="manage" />
+  );
+}
+
+/** "Kubernetes" in "Add lab host": the cluster form, clusters the app was set up with, or why not here. */
+function ClusterPanel(props: {
+  busy: boolean;
+  canAdd: boolean;
+  unavailable?: string;
+  configured: readonly LocalEndpointOffer[];
+  onAddCluster: () => void;
+  onUseConfigured: (offer: LocalEndpointOffer) => void;
+  onCheckConfigured: (offer: LocalEndpointOffer) => void;
+}) {
+  return (
+    <Stack spacing={1.5}>
+      {props.canAdd ? (
+        <Typography variant="body2" sx={{ color: "text.secondary" }}>
+          Labs run on a Kubernetes cluster with clabernetes. containerlab on this computer deploys them with your kubeconfig, which stays on this computer.
+        </Typography>
+      ) : null}
+      {props.unavailable ? (
+        <Alert severity="info" variant="outlined" data-testid="lab-host-cluster-unavailable">
+          {props.unavailable}
+        </Alert>
+      ) : null}
+      {props.configured.map((offer) => (
+        <LocalEndpointCard
+          key={offer.url ?? offer.label}
+          busy={props.busy}
+          offer={offer}
+          onAdd={() => props.onUseConfigured(offer)}
+          onCheckAgain={() => props.onCheckConfigured(offer)}
+          variant="manage"
+        />
+      ))}
+      {props.canAdd ? (
+        <Button variant="contained" onClick={props.onAddCluster} disabled={props.busy} sx={{ alignSelf: "flex-start" }}>
+          Add Kubernetes lab host…
+        </Button>
+      ) : null}
+    </Stack>
+  );
 }
 
 type EndpointHealthState =
@@ -230,6 +335,11 @@ function EndpointHealthReady(props: { metrics: EndpointHealthMetrics }) {
   );
 }
 
+/** A Kubernetes cluster has no host to measure: c9s hosts report no CPU, memory or disk usage. */
+function hasHostMetrics(endpoint: Pick<EndpointConfig, "runtime">): boolean {
+  return endpoint.runtime !== "c9s";
+}
+
 function EndpointHealthStats(props: { endpoint: EndpointConfig; state?: EndpointHealthState }) {
   const { endpoint, state } = props;
 
@@ -340,6 +450,7 @@ function ManagedEndpointList(props: {
   endpoints: EndpointConfig[];
   healthStatsEnabled: boolean;
   localEndpoint?: LocalEndpointOffer;
+  onCheck?: (endpoint: EndpointConfig) => void;
   onDraftChange: (endpointId: string, nextValue: EndpointSessionDuration) => void;
   onEdit: (endpoint: EndpointConfig) => void;
   onReconnect: (endpoint: EndpointConfig) => void;
@@ -361,11 +472,16 @@ function ManagedEndpointList(props: {
           !props.onSetEndpointSessionDuration ||
           !durationValid ||
           !endpointDurationHasChanges(props.sessionDurationDrafts, endpoint);
+        const kind = labHostKind(endpoint);
+        const failed = endpoint.status !== "connected" ? firstFailedCheck(endpoint.checks) : undefined;
+        const editable = kind === "server" || (kind === "cluster" && endpoint.editable === true);
+        const serverDefaults = kind === "server" && endpoint.runtime === "c9s" ? c9sDefaultsSummary(endpoint) : "";
 
         return (
           <Paper
             key={endpoint.id}
             variant="outlined"
+            data-testid={`lab-host-${endpoint.id}`}
             sx={{
               p: 2,
               borderColor: "divider",
@@ -375,12 +491,15 @@ function ManagedEndpointList(props: {
             <Stack spacing={1.5} divider={<Divider flexItem />}>
               <Stack
                 direction="row"
-                spacing={1}
+                spacing={1.25}
                 sx={{
                   justifyContent: "space-between",
                   alignItems: "flex-start"
                 }}
               >
+                <Box sx={{ color: "text.secondary", display: "inline-flex", mt: 0.25, flexShrink: 0 }} title={endpointKindLabel(endpoint)}>
+                  <LabHostKindIcon kind={kind} />
+                </Box>
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Stack
                     direction="row"
@@ -396,18 +515,33 @@ function ManagedEndpointList(props: {
                   </Stack>
                   <Typography
                     variant="body2"
-                    noWrap
-                    sx={{
-                      color: "text.secondary",
-                      fontFamily: endpoint.kind === "local" ? undefined : MONO_FONT_FAMILY,
-                      display: "block",
-                      mt: 0.25
-                    }}
+                    sx={{ color: "text.secondary", display: "block", mt: 0.25 }}
+                    data-testid="lab-host-subtitle"
                   >
-                    {endpoint.kind === "local"
-                      ? `Runs labs as ${endpoint.username}, without signing in`
-                      : endpoint.url}
+                    {labHostSubtitle(endpoint)}
+                    {kind === "server" && endpoint.runtime === "c9s" && endpoint.namespacePattern
+                      ? ` · namespaces ${endpoint.namespacePattern}`
+                      : ""}
                   </Typography>
+                  {kind === "server" ? (
+                    <Typography
+                      variant="caption"
+                      noWrap
+                      sx={{ color: "text.secondary", fontFamily: MONO_FONT_FAMILY, display: "block" }}
+                    >
+                      {endpoint.url}
+                    </Typography>
+                  ) : null}
+                  {serverDefaults ? (
+                    <Typography variant="caption" sx={{ color: "text.secondary", display: "block" }}>
+                      Set by the API Server: {serverDefaults}
+                    </Typography>
+                  ) : null}
+                  {endpoint.updateRequired ? (
+                    <Typography variant="caption" sx={{ color: "warning.main", display: "block" }}>
+                      {endpoint.updateRequired}
+                    </Typography>
+                  ) : null}
                   <Typography
                     variant="caption"
                     sx={{
@@ -415,19 +549,14 @@ function ManagedEndpointList(props: {
                       display: "block"
                     }}
                   >
-                    {endpoint.kind === "local"
-                      ? localStatusHint(endpoint.status, props.localEndpoint)
-                      : endpointStatusHint(endpoint.status)}
+                    {kind === "server"
+                      ? endpointStatusHint(endpoint.status)
+                      : localStatusHint(endpoint, kind === "this-computer" ? props.localEndpoint : undefined)}
                   </Typography>
-                  {endpoint.kind === "local" &&
-                  endpoint.status !== "connected" &&
-                  props.localEndpoint &&
-                  props.localEndpoint.problems.length > 0 ? (
-                    <LocalProblems problems={props.localEndpoint.problems} setupUrl={props.localEndpoint.setupUrl} />
-                  ) : null}
+                  <HostProblems endpoint={endpoint} failed={failed !== undefined} localEndpoint={props.localEndpoint} />
                 </Box>
                 <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0, mt: -0.5, mr: -0.75 }}>
-                  {endpoint.kind === "local" ? null : (
+                  {editable ? (
                     <IconButton
                       size="small"
                       onClick={() => props.onEdit(endpoint)}
@@ -437,16 +566,28 @@ function ManagedEndpointList(props: {
                     >
                       <EditOutlinedIcon sx={{ fontSize: 18 }} />
                     </IconButton>
+                  ) : null}
+                  {endpoint.kind === "local" && props.onCheck ? (
+                    <IconButton
+                      size="small"
+                      onClick={() => props.onCheck?.(endpoint)}
+                      aria-label={`Check connection of ${endpoint.label}`}
+                      title="Check connection"
+                      disabled={props.busyKey !== null}
+                    >
+                      <FactCheckOutlinedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  ) : (
+                    <IconButton
+                      size="small"
+                      onClick={() => props.onReconnect(endpoint)}
+                      aria-label={endpoint.kind === "local" ? `Check ${endpoint.label} again` : `Sign in to ${endpoint.label} again`}
+                      title={endpoint.kind === "local" ? "Check again" : "Sign in again"}
+                      disabled={props.busyKey !== null}
+                    >
+                      <RefreshIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
                   )}
-                  <IconButton
-                    size="small"
-                    onClick={() => props.onReconnect(endpoint)}
-                    aria-label={endpoint.kind === "local" ? `Check ${endpoint.label} again` : `Sign in to ${endpoint.label} again`}
-                    title={endpoint.kind === "local" ? "Check again" : "Sign in again"}
-                    disabled={props.busyKey !== null}
-                  >
-                    <RefreshIcon sx={{ fontSize: 18 }} />
-                  </IconButton>
                   {props.onSignOut && endpoint.kind !== "local" && endpoint.status === "connected" ? (
                     <IconButton
                       size="small"
@@ -470,7 +611,7 @@ function ManagedEndpointList(props: {
                   </IconButton>
                 </Stack>
               </Stack>
-              {props.healthStatsEnabled ? (
+              {props.healthStatsEnabled && hasHostMetrics(endpoint) ? (
                 <EndpointHealthStats
                   endpoint={endpoint}
                   state={props.endpointHealth[endpoint.id]}
@@ -523,12 +664,61 @@ function ManagedEndpointList(props: {
   );
 }
 
-function localStatusHint(status: EndpointConfig["status"], offer: LocalEndpointOffer | undefined): string {
-  if (status === "connected") {
+/** What keeps a lab host on this machine from running labs: its failed checks, or this computer's problems. */
+function HostProblems(props: { endpoint: EndpointConfig; failed: boolean; localEndpoint?: LocalEndpointOffer }) {
+  const { endpoint, localEndpoint } = props;
+  if (props.failed) {
+    return (
+      <Alert severity="warning" variant="outlined" sx={{ mt: 1 }}>
+        <LabHostCheckList checks={endpoint.checks?.filter((check) => check.status === "failed") ?? []} dense />
+      </Alert>
+    );
+  }
+  if (
+    labHostKind(endpoint) !== "this-computer" ||
+    endpoint.status === "connected" ||
+    !localEndpoint ||
+    localEndpoint.problems.length === 0
+  ) {
+    return null;
+  }
+  return <LocalProblems problems={localEndpoint.problems} setupUrl={localEndpoint.setupUrl} />;
+}
+
+/** Why a kind of lab host cannot be added here, or nothing. */
+function thisComputerChoiceUnavailable(offer: LocalEndpointOffer | undefined, reason: string | undefined): string | undefined {
+  if (!offer) return reason ?? "Not offered by this app";
+  return offer.available ? undefined : (offer.problems[0] ?? "Not ready");
+}
+
+/** The lines of the remove dialog: what is asked, and what happens to the labs. */
+function removeDialogText(endpoint: EndpointConfig | null, localAddLabel: string | undefined): [string, string] {
+  const kind = endpoint ? labHostKind(endpoint) : "server";
+  if (kind === "this-computer") {
+    return [
+      "Stop showing labs on this computer?",
+      `Running labs keep running. ${localAddLabel ?? "Use this computer"} brings them back.`
+    ];
+  }
+  const question = `Remove "${endpoint?.label ?? "lab host"}"?`;
+  if (kind === "cluster") {
+    return [
+      question,
+      `Its labs keep running in the cluster.${endpoint?.editable === true ? " The app forgets the cluster's settings; add it again any time." : ""}`
+    ];
+  }
+  return [question, "Its labs keep running on the host. Open topologies and terminals from it close."];
+}
+
+function localStatusHint(endpoint: EndpointConfig, offer: LocalEndpointOffer | undefined): string {
+  if (endpoint.status === "connected") {
+    if (labHostKind(endpoint) === "cluster") return `Ready: runs labs as ${endpoint.username || "you"}, without signing in.`;
     const version = offer?.containerlabVersion ?? "";
     return version === "" ? "containerlab is ready." : `containerlab ${version} is ready.`;
   }
-  return "containerlab does not answer right now.";
+  const failed = firstFailedCheck(endpoint.checks);
+  if (failed) return `Problem: ${failed.label}.`;
+  return labHostKind(endpoint) === "cluster" ? "The cluster cannot run labs right now." : "containerlab does not answer right now.";
 }
 
 function LocalProblems(props: { problems: string[]; setupUrl?: string }) {
@@ -718,7 +908,7 @@ function useRequestedEndpointActionDialog(input: {
       setRemoveEndpointId,
       sortedEndpoints
     } = input;
-    if (!requestedAction || requestedAction.action === "add") {
+    if (!requestedAction || requestedAction.action === "add" || requestedAction.action === "settings") {
       return;
     }
 
@@ -1053,10 +1243,22 @@ export function EndpointManager({
   requestedAction,
   onSetEndpointSessionDuration,
   localEndpoint,
+  extraLocalEndpoints,
   fetchHealthMetrics,
-  onSignOutEndpoint
+  onSignOutEndpoint,
+  onCheckEndpoint,
+  clusterHosts,
+  clustersUnavailable,
+  thisComputerUnavailable,
+  requestedAddKind,
+  show = "all"
 }: EndpointManagerProps) {
+  const showHosts = show !== "add";
+  const showAdd = show !== "hosts";
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [chosenAddKind, setAddKind] = useState<LabHostKind | null>(null);
+  const [clusterDialog, setClusterDialog] = useState<{ open: boolean; editing?: { endpointId: string; settings: ClusterHostSettings } }>({ open: false });
+  const [checkEndpoint, setCheckEndpoint] = useState<EndpointConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -1071,7 +1273,7 @@ export function EndpointManager({
     [endpoints]
   );
   const connectedEndpointKey = sortedEndpoints
-    .filter((endpoint) => endpoint.status === "connected")
+    .filter((endpoint) => endpoint.status === "connected" && hasHostMetrics(endpoint))
     .map((endpoint) => endpoint.id)
     .join("|");
   // Keyed by the ids, so a fresh endpoints array with the same hosts loads no health stats again.
@@ -1139,8 +1341,37 @@ export function EndpointManager({
     },
     [busyKey]
   );
-  const offerLocalEndpoint =
-    localEndpoint !== undefined && !sortedEndpoints.some((endpoint) => endpoint.kind === "local");
+  const isLocalConnected = (offer: LocalEndpointOffer) => isLocalOfferListed(sortedEndpoints, offer);
+  const offerLocalEndpoint = localEndpoint !== undefined && !isLocalConnected(localEndpoint);
+  const extraLocalOffers = unlistedLocalOffers(sortedEndpoints, extraLocalEndpoints ?? []);
+  // This computer first while it is not listed, else an API Server.
+  const addKind: LabHostKind = chosenAddKind ?? (offerLocalEndpoint ? "this-computer" : "server");
+  const addChoices: LabHostChoice[] = [
+    {
+      kind: "this-computer",
+      description: "Docker or Podman on the computer this app runs on.",
+      ...withUnavailable(thisComputerChoiceUnavailable(localEndpoint, thisComputerUnavailable))
+    },
+    {
+      kind: "cluster",
+      description: "With your kubeconfig; containerlab runs here.",
+      ...withUnavailable(clusterChoiceUnavailable(clusterHosts, clustersUnavailable, extraLocalOffers.length))
+    },
+    { kind: "server", description: "clab-api-server on another machine; it may run Docker or Kubernetes." }
+  ];
+  useEffect(() => {
+    if (requestedAddKind === undefined) return;
+    setAddKind(requestedAddKind);
+    if (requestedAddKind === "cluster" && clusterHosts && clustersUnavailable === undefined) {
+      setClusterDialog({ open: true });
+    }
+    // Only a new request opens the form; later updates of the host's support do not.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedAddKind]);
+  const runEndpointCheck = useCallback(
+    () => (checkEndpoint && onCheckEndpoint ? onCheckEndpoint(checkEndpoint.id) : Promise.resolve([])),
+    [checkEndpoint, onCheckEndpoint]
+  );
 
   useRequestedEndpointActionDialog({
     onReconnectLocal: reconnectLocal,
@@ -1232,17 +1463,38 @@ export function EndpointManager({
 
   return (
     <Stack spacing={2.5}>
-      {mode === "manage" ? transferActions : null}
+      {mode === "manage" && showAdd ? transferActions : null}
 
-      {showManagedEndpoints(mode, sortedEndpoints.length) ? (
+      {/* A host's page has no add form: what its actions report shows above its card. */}
+      {showAdd ? null : (
+        <>
+          {visibleError ? (
+            <Alert severity="error" variant="outlined" onClose={() => setError(null)}>
+              {visibleError}
+            </Alert>
+          ) : null}
+          {notice ? (
+            <Alert severity="success" variant="outlined" onClose={() => setNotice(null)}>
+              {notice}
+            </Alert>
+          ) : null}
+        </>
+      )}
+
+      {showHosts && showManagedEndpoints(mode, sortedEndpoints.length) ? (
         <ManagedEndpointList
           busyKey={busyKey}
           endpointHealth={endpointHealth}
           endpoints={sortedEndpoints}
           healthStatsEnabled={healthStatsEnabled}
           localEndpoint={localEndpoint}
+          onCheck={onCheckEndpoint ? setCheckEndpoint : undefined}
           onDraftChange={handleEndpointDurationDraftChange}
-          onEdit={editDialog.open}
+          onEdit={(endpoint) =>
+            labHostKind(endpoint) === "cluster"
+              ? setClusterDialog({ open: true, editing: { endpointId: endpoint.id, settings: clusterSettingsOf(endpoint) } })
+              : editDialog.open(endpoint)
+          }
           onReconnect={(endpoint) =>
             endpoint.kind === "local" ? reconnectLocal(endpoint) : reconnectDialog.open(endpoint)
           }
@@ -1257,7 +1509,7 @@ export function EndpointManager({
         />
       ) : null}
 
-      {offerLocalEndpoint ? (
+      {mode === "initial" && offerLocalEndpoint ? (
         <LocalEndpointCard
           busy={busyKey !== null}
           offer={localEndpoint}
@@ -1268,6 +1520,7 @@ export function EndpointManager({
       ) : null}
 
       {/* On the login card the form is the card's content; in settings it is one card among the endpoints. */}
+      {showAdd ? (
       <Paper
         variant="outlined"
         sx={mode === "initial" ? {
@@ -1281,6 +1534,8 @@ export function EndpointManager({
         }}
       >
         <Stack spacing={2.5}>
+          {/* On its own settings page, the page's title asks it already. */}
+          {show === "add" ? null : (
           <Box sx={mode === "initial" ? { textAlign: "center" } : undefined}>
             <Typography
               variant="subtitle1"
@@ -1295,9 +1550,14 @@ export function EndpointManager({
                 mt: mode === "initial" ? 0.75 : 0.25
               }}
             >
-              {endpointAddDescription(mode)}
+              {mode === "initial" ? endpointAddDescription(mode) : "Where should labs run?"}
             </Typography>
           </Box>
+          )}
+
+          {mode === "manage" ? (
+            <LabHostChoices choices={addChoices} selected={addKind} onSelect={setAddKind} />
+          ) : null}
 
           {visibleError ? (
             <Alert severity="error" variant="outlined">
@@ -1310,6 +1570,29 @@ export function EndpointManager({
             </Alert>
           ) : null}
 
+          {mode === "manage" && addKind === "this-computer" ? (
+            <ThisComputerPanel
+              busy={busyKey !== null}
+              connected={localEndpoint !== undefined && !offerLocalEndpoint}
+              offer={localEndpoint}
+              unavailable={thisComputerUnavailable}
+              onAdd={() => runAction("add-local", localEndpoint?.onAdd)}
+              onCheckAgain={() => runAction("check-local", localEndpoint?.onCheckAgain)}
+            />
+          ) : null}
+          {mode === "manage" && addKind === "cluster" ? (
+            <ClusterPanel
+              busy={busyKey !== null}
+              canAdd={clusterHosts !== undefined && clustersUnavailable === undefined}
+              unavailable={clustersUnavailable ?? (clusterHosts ? undefined : CLUSTERS_UNSUPPORTED)}
+              configured={extraLocalOffers}
+              onAddCluster={() => setClusterDialog({ open: true })}
+              onUseConfigured={(offer) => runAction(`add-local:${offer.url ?? ""}`, offer.onAdd)}
+              onCheckConfigured={(offer) => runAction(`check-local:${offer.url ?? ""}`, offer.onCheckAgain)}
+            />
+          ) : null}
+          {mode === "initial" || addKind === "server" ? (
+            <>
           <Stack spacing={2}>
             <TextField
               label="Lab host URL"
@@ -1405,8 +1688,11 @@ export function EndpointManager({
           >
             {addEndpointButtonLabel(busyKey, mode)}
           </Button>
+            </>
+          ) : null}
         </Stack>
       </Paper>
+      ) : null}
 
       {mode === "initial" && transferActions ? (
         <Stack
@@ -1419,6 +1705,26 @@ export function EndpointManager({
           </Typography>
           {transferActions}
         </Stack>
+      ) : null}
+
+      {clusterHosts ? (
+        <ClusterHostDialog
+          open={clusterDialog.open}
+          support={clusterHosts}
+          {...(clusterDialog.editing ? { editing: clusterDialog.editing } : {})}
+          // A host's page edits its deploy defaults itself.
+          connectionOnly={show === "hosts" && clusterDialog.editing !== undefined}
+          onClose={() => setClusterDialog({ open: false })}
+        />
+      ) : null}
+
+      {onCheckEndpoint && checkEndpoint ? (
+        <LabHostCheckDialog
+          label={checkEndpoint.label}
+          open
+          runCheck={runEndpointCheck}
+          onClose={() => setCheckEndpoint(null)}
+        />
       ) : null}
 
       <Dialog
@@ -1594,19 +1900,17 @@ export function EndpointManager({
         maxWidth="xs"
       >
         <DialogTitle>
-          {removeDialog.endpoint?.kind === "local" ? `Hide ${removeDialog.endpoint.label}` : "Remove Lab Host"}
+          {removeDialog.endpoint && labHostKind(removeDialog.endpoint) === "this-computer"
+            ? `Hide ${removeDialog.endpoint.label}`
+            : "Remove Lab Host"}
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2">
-              {removeDialog.endpoint?.kind === "local"
-                ? "Stop showing labs on this computer?"
-                : `Remove "${removeDialog.endpoint?.label ?? "lab host"}"?`}
+              {removeDialogText(removeDialog.endpoint, localEndpoint?.addLabel)[0]}
             </Typography>
             <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              {removeDialog.endpoint?.kind === "local"
-                ? `Running labs keep running. ${localEndpoint?.addLabel ?? "Use this computer"} brings them back.`
-                : "Its labs keep running on the host. Open topologies and terminals from it close."}
+              {removeDialogText(removeDialog.endpoint, localEndpoint?.addLabel)[1]}
             </Typography>
           </Stack>
         </DialogContent>

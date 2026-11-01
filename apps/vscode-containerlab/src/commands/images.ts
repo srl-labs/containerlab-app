@@ -16,6 +16,7 @@ import { listDockerImageSummaries, removeDockerImage } from "../utils/docker/ima
 import { connectionOf, pickConnection } from "../backend/labBackends";
 import type { LabConnection } from "../backend/connections";
 import { getCustomNodesFromConfig } from "../reactTopoViewer/extension/services/schema";
+import { cachedLabHostInfo, ensureHostSupports } from "../backend/labHostSupport";
 
 type ImageManagerRequestMessage = {
   command?: string;
@@ -200,10 +201,17 @@ export async function manageImages(
   target?: unknown
 ): Promise<void> {
   const connection =
-    target !== undefined ? connectionOf(target) : await pickConnection("Manage images on");
+    target !== undefined
+      ? connectionOf(target)
+      : await pickConnection(
+          "Manage images on",
+          // A cluster's nodes pull their own images: only container runtimes have images here.
+          (candidate) => cachedLabHostInfo(candidate)?.support.imageManagement !== false
+        );
   if (!connection) {
     return;
   }
+  if (!(await ensureHostSupports(connection, "imageManagement", "Image management"))) return;
   const existing = panels.get(connection.id);
   if (existing) {
     existing.reveal(vscode.ViewColumn.One);

@@ -683,10 +683,14 @@ export function createStandaloneTopologyManager(
     requestedState: DeploymentState | undefined
   ): Promise<DeploymentState> {
     const stateFromApi = await resolveDeploymentState(topologyRef);
-    const stateFromRunningLabs = isTopologyRunning(topologyRef, options.getLabs())
-      ? "deployed"
-      : undefined;
-    return requestedState ?? stateFromApi ?? stateFromRunningLabs ?? snapshotState;
+    // A lab that runs now is deployed, whatever the opener asked for: it worked its state out
+    // before the load (from a file listing or an explorer row that predate the lab's events),
+    // and a lab that started running during the load was already passed to
+    // handleLabStateChange, so nothing would correct a stale state set here.
+    if (isTopologyRunning(topologyRef, options.getLabs())) {
+      return "deployed";
+    }
+    return requestedState ?? stateFromApi ?? snapshotState;
   }
 
   async function loadTopologyFile(
@@ -702,9 +706,9 @@ export function createStandaloneTopologyManager(
       await resolveLoadTopologyTarget(topologyRef, endpointId, loadOptions);
     useTopoViewerStore.getState().setCustomIcons([]);
     resetTopologyDirtyState();
-    const initialDeploymentState =
-      loadOptions.deploymentState ??
-      (isTopologyRunning(canonicalTopologyRef, options.getLabs()) ? "deployed" : "undeployed");
+    const initialDeploymentState = isTopologyRunning(canonicalTopologyRef, options.getLabs())
+      ? "deployed"
+      : (loadOptions.deploymentState ?? "undeployed");
     const initialMode = modeForSourcePreference(sourcePreference);
     await ensureTopologySession(canonicalTopologyRef, {
       deploymentState: initialDeploymentState,

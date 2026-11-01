@@ -1,13 +1,15 @@
-// Lab settings with Basic, Management, Certificates, Appearance, and Grid sections.
+// Lab settings with Basic, Deploy, Management, Certificates, Appearance, and Grid sections.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-import { useTopologySessionClient } from "../../../host";
+import { useClabUiHost, useTopologySessionClient } from "../../../host";
+import { labHostRuntimeLabel } from "../../../host/labHostSupport";
 import { useLabSettingsState } from "../../../hooks/editor";
 import {
   saveAnnotationNodesAndViewerSettings,
   saveViewerSettings
 } from "../../../services";
 import { useGraphStore, useTopoViewerStore } from "../../../stores";
+import { useLabHostStore } from "../../../stores/labHostStore";
 import type { GridSettingsControlsProps } from "../GridSettingsPopover";
 import {
   BasicTab,
@@ -19,6 +21,9 @@ import {
   type LabSettings
 } from "../lab-settings";
 
+import { DeployTab } from "../lab-settings/DeployTab";
+import { useLabDeploySettings } from "../lab-settings/useLabDeploySettings";
+
 import { syncRateLabelAnnotationsForLinks } from "./trafficRateAnnotationAutoCreate";
 
 export interface LabSettingsSectionProps extends GridSettingsControlsProps {
@@ -26,9 +31,9 @@ export interface LabSettingsSectionProps extends GridSettingsControlsProps {
   isLocked: boolean;
   labSettings?: LabSettings;
   saveRef?: React.RefObject<(() => Promise<void>) | null>;
-  activeTab: "basic" | "mgmt" | "certificates" | "inheritance" | "appearance" | "grid";
+  activeTab: "basic" | "deploy" | "mgmt" | "certificates" | "inheritance" | "appearance" | "grid";
   /** Called instead of saving when a section has errors, with the section to show */
-  onInvalid?: (tab: "mgmt" | "certificates") => void;
+  onInvalid?: (tab: "deploy" | "mgmt" | "certificates") => void;
 }
 
 export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
@@ -56,6 +61,15 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
   const setShowRateLabels = useTopoViewerStore((store) => store.setShowRateLabels);
   const [draftShowRateLabels, setDraftShowRateLabels] = useState(showRateLabels);
   const showRateLabelsEditedRef = useRef(false);
+  // The lab's deploy settings on its lab host: kept with the host, not in the topology.
+  const labOperations = useClabUiHost().topoViewer.labOperations;
+  const labHostInfo = useLabHostStore((store) => store.info);
+  const canSetTimeout = labHostInfo?.support.lifecycleTimeout === true;
+  const c9sReadOnly = labHostInfo?.profile.runtime === "c9s" && !labHostInfo.support.c9sDeployOptions;
+  const deploy = useLabDeploySettings(labOperations, labHostInfo?.profile.runtime ?? "docker", {
+    canSetTimeout,
+    c9sEditable: !c9sReadOnly
+  });
 
   useEffect(() => {
     if (showRateLabelsEditedRef.current) return;
@@ -72,6 +86,14 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
       onInvalid?.(state.invalidSection);
       return;
     }
+    if (deploy.invalid) {
+      onInvalid?.("deploy");
+      return;
+    }
+    // Deploy settings go to the lab host, whatever happens to the topology after.
+    await deploy.save();
+    // A locked lab saves only its deploy settings.
+    if (isLocked) return;
     // Save appearance before lab settings: every save pushes a host snapshot into the
     // store, and appearance in that snapshot comes from the annotations file.
     const {
@@ -127,6 +149,17 @@ export const LabSettingsSection: React.FC<LabSettingsSectionProps> = ({
 
   if (saveRef) saveRef.current = handleSave;
 
+  if (activeTab === "deploy") {
+    return (
+      <DeployTab
+        state={deploy}
+        profile={labHostInfo?.profile}
+        hostLabel={labHostInfo ? labHostRuntimeLabel(labHostInfo.profile) : "this lab host"}
+        canSetTimeout={canSetTimeout}
+        c9sReadOnly={c9sReadOnly}
+      />
+    );
+  }
   if (activeTab === "mgmt") {
     return (
       <MgmtTab

@@ -1,4 +1,8 @@
 import {
+  parseHostValidation,
+  parseLabCaptureInterfaces,
+  parseManifestExport,
+  parseNodeLocations,
   parseExecResponse,
   parseInspectDetails,
   parseLabOperationSupport,
@@ -9,6 +13,8 @@ import {
 } from "@containerlab/clab-ui/host";
 
 import { requestLabOperation, type RuntimeTargetRequest } from "./runtimeApi";
+import { readLabSettings, writeLabSettings } from "./standaloneLabSettings";
+import { loadLabHostInfo } from "./stores/labHostStore";
 
 type TargetResolver = () => RuntimeTargetRequest | null;
 
@@ -28,7 +34,20 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
       parseExecResponse(await run("exec", request), request.nodeNames ?? []),
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await run("snapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await run("save", request)),
-    inspectDetails: async () => parseInspectDetails(await run("inspect-details"))
+    inspectDetails: async () => parseInspectDetails(await run("inspect-details")),
+    hostInfo: async () => {
+      const endpointId = getTarget()?.endpointId;
+      return endpointId ? await loadLabHostInfo(endpointId) : undefined;
+    },
+    nodeLocations: async () => parseNodeLocations(await run("node-locations")),
+    captureInterfaces: async () => parseLabCaptureInterfaces(await run("capture-interfaces")),
+    exportManifests: async () => parseManifestExport(await run("manifests")),
+    validate: async () => parseHostValidation(await run("validate")),
+    // Lab settings stay in this browser, by lab host and topology file.
+    labSettings: async () => readLabSettings(getTarget() ?? {}),
+    saveLabSettings: async (settings) => {
+      writeLabSettings(requireTarget(getTarget), settings);
+    }
   };
 }
 

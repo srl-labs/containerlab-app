@@ -1,7 +1,6 @@
 export {
   getSessionHostnameOverride,
   isFileLabTab,
-  loadCapturePreferences,
   loadTerminalPreferences,
   persistTerminalPreferences,
   resolveLabTab,

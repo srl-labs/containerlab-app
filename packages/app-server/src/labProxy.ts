@@ -3,7 +3,10 @@
  */
 
 import {
+  labSettingsOptions,
   normalizeLabLifecycleOptions,
+  normalizeLabSettings,
+  type LabLifecycleOptionKind,
   type LabLifecycleOptions
 } from "@containerlab/clab-ui/host";
 import type { TopologyRef } from "@containerlab/clab-ui/session";
@@ -42,6 +45,8 @@ interface LabActionBody extends LabTarget {
 
 interface LabApplyBody extends LabTarget {
   dryRun?: boolean;
+  /** The lab's settings (`LabSettings`) for apply and its plan; checked before use. */
+  options?: unknown;
 }
 
 interface LabStatusBody extends LabTarget {}
@@ -366,6 +371,24 @@ async function openAndForwardLifecycleStream(
   }
 }
 
+/** The lab settings an apply takes on a lab host's runtime; the rest are dropped. */
+async function applyOptionsForHost(backend: LabBackend, raw: unknown): Promise<LabLifecycleOptions | undefined> {
+  if (raw === undefined || raw === null) return undefined;
+  const { runtime } = await backend.hostProfile();
+  return labSettingsOptions("apply", normalizeLabSettings(raw, runtime), runtime);
+}
+
+/** The lifecycle options a lab host's runtime takes; the rest are dropped. */
+async function lifecycleOptionsForHost(
+  backend: LabBackend,
+  kind: LabLifecycleOptionKind,
+  raw: unknown
+): Promise<LabLifecycleOptions | undefined> {
+  if (raw === undefined || raw === null) return undefined;
+  const { runtime } = await backend.hostProfile();
+  return normalizeLabLifecycleOptions(kind, raw, runtime);
+}
+
 export function registerLabProxy(
   app: FastifyInstance,
   resolveEndpoint: EndpointResolver,
@@ -452,6 +475,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "deploy", request.body.options);
         const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
@@ -464,7 +488,7 @@ export function registerLabProxy(
               { labName: target.labName, path: target.yamlPath },
               {
                 cleanup: request.body.cleanup === true,
-                lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
+                lifecycleOptions: hostLifecycleOptions
               }
             ),
           { preRunning }
@@ -488,6 +512,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "deploy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -497,7 +522,7 @@ export function registerLabProxy(
           {
             path: target.yamlPath,
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("deploy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {
@@ -519,6 +544,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "destroy", request.body.options);
         const preRunning = await backend.isLabRunning(target.labName).catch(() => undefined);
         return await sendLifecycleJsonAction(
           reply,
@@ -531,7 +557,7 @@ export function registerLabProxy(
               { labName: target.labName },
               {
                 cleanup: request.body.cleanup === true,
-                lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
+                lifecycleOptions: hostLifecycleOptions
               }
             ),
           { preRunning }
@@ -555,6 +581,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "destroy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -563,7 +590,7 @@ export function registerLabProxy(
           target.labName,
           {
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("destroy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {
@@ -585,13 +612,14 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "redeploy", request.body.options);
         return await sendLifecycleJsonAction(reply, backend, target.labName, "redeploy", () =>
           backend.runLifecycle(
             "redeploy",
             { labName: target.labName },
             {
               cleanup: request.body.cleanup === true,
-              lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
+              lifecycleOptions: hostLifecycleOptions
             }
           )
         );
@@ -614,6 +642,7 @@ export function registerLabProxy(
       try {
         const { backend, endpoint } = resolved;
         const target = await resolveLabTarget(endpoint, backend, sessions, request.body);
+        const hostLifecycleOptions = await lifecycleOptionsForHost(backend, "redeploy", request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -622,7 +651,7 @@ export function registerLabProxy(
           target.labName,
           {
             cleanup: request.body.cleanup === true,
-            lifecycleOptions: normalizeLabLifecycleOptions("redeploy", request.body.options)
+            lifecycleOptions: hostLifecycleOptions
           }
         );
       } catch (error) {
@@ -652,11 +681,12 @@ export function registerLabProxy(
           yamlPath: target.yamlPath
         };
 
+        const applyOptions = await applyOptionsForHost(backend, request.body.options);
         if (request.body.dryRun === true) {
           const lifecycle = await backend.runLifecycle(
             "apply",
             { labName: target.labName, path: target.yamlPath },
-            { dryRun: true }
+            { dryRun: true, ...(applyOptions ? { lifecycleOptions: applyOptions } : {}) }
           );
           const changesPending = applyResultHasPendingChanges(lifecycle.result);
           if (changesPending !== undefined) {
@@ -678,10 +708,11 @@ export function registerLabProxy(
           target.runtimeLabName,
           "apply",
           async () => {
-            const lifecycle = await backend.runLifecycle("apply", {
-              labName: target.labName,
-              path: target.yamlPath
-            });
+            const lifecycle = await backend.runLifecycle(
+              "apply",
+              { labName: target.labName, path: target.yamlPath },
+              applyOptions ? { lifecycleOptions: applyOptions } : {}
+            );
             sessions.setDirtyForTopology(dirtyTarget, false);
             return lifecycle;
           },
@@ -709,6 +740,7 @@ export function registerLabProxy(
           preferTopologyLabName: true
         });
         const preRunning = await backend.isLabRunning(target.runtimeLabName).catch(() => undefined);
+        const applyOptions = await applyOptionsForHost(backend, request.body.options);
         return await openAndForwardLifecycleStream(
           request,
           reply,
@@ -716,7 +748,8 @@ export function registerLabProxy(
           "apply",
           target.labName,
           {
-            path: target.yamlPath
+            path: target.yamlPath,
+            ...(applyOptions ? { lifecycleOptions: applyOptions } : {})
           },
           { labName: target.runtimeLabName, preRunning }
         );
@@ -751,7 +784,9 @@ function applyResultHasPendingChanges(result: unknown): boolean | undefined {
     "startedNodes",
     "addedLinks",
     "deletedEndpoints",
-    "restartedNodes"
+    "restartedNodes",
+    // c9s: the Kubernetes resources an apply would create, update or recreate.
+    "changes"
   ];
   let sawList = false;
   for (const key of changeLists) {

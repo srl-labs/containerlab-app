@@ -10,10 +10,13 @@ import {
   type LocalLabBackendOptions
 } from "@srl-labs/containerlab-lab-backend/local";
 
+import { labHostKindLabel, type LabRuntimeKind } from "@containerlab/clab-ui/host";
 import { containerlabBinaryPath } from "../globals";
+import { initLabSettings } from "./labSettings";
 
 import {
   ConnectionManager,
+  isClusterConnection,
   LOCAL_CONNECTION,
   REMOTE_SCHEME,
   type LabConnection
@@ -43,6 +46,9 @@ function localBackendOptions(): LocalLabBackendOptions {
     workspaceRoot: workspaceFolder ?? path.join(os.homedir(), ".clab"),
     deployExtraArgs: splitArgs(config.get<string>("deploy.extraArgs", "")),
     destroyExtraArgs: splitArgs(config.get<string>("destroy.extraArgs", "")),
+    ...(nonEmpty(config.get<string>("deploy.timeout", "")?.trim())
+      ? { deployTimeout: config.get<string>("deploy.timeout", "").trim() }
+      : {}),
     packetflixPort: config.get<number>("capture.packetflixPort", 5001),
     wiresharkImage: config.get<string>("capture.wireshark.dockerImage", ""),
     edgesharkExtraEnv: extraEnv
@@ -65,13 +71,151 @@ export function getLocalBackend(): LocalLabBackend {
   return localBackend;
 }
 
+const clusterBackends = new Map<string, { key: string; backend: LocalLabBackend }>();
+
+/** containerlab on this machine running labs on a cluster connection's Kubernetes cluster. */
+export function clusterBackendOptions(connection: LabConnection): LocalLabBackendOptions {
+  // containerlab on this computer, with the cluster's own deploy settings and Wireshark VNC image.
+  const { deployTimeout: _thisComputerTimeout, ...thisComputer } = localBackendOptions();
+  return {
+    ...thisComputer,
+    deployExtraArgs: splitArgs(connection.deployExtraArgs ?? ""),
+    destroyExtraArgs: splitArgs(connection.destroyExtraArgs ?? ""),
+    wiresharkImage: connection.wiresharkImage ?? "",
+    ...(connection.deployTimeout !== undefined ? { deployTimeout: connection.deployTimeout } : {}),
+    runtime: "c9s",
+    c9s: {
+      ...(connection.kubeContext !== undefined ? { kubeContext: connection.kubeContext } : {}),
+      ...(connection.kubeconfig !== undefined ? { kubeconfig: connection.kubeconfig } : {}),
+      ...(connection.namespace !== undefined ? { namespace: connection.namespace } : {}),
+      ...(connection.exposeType !== undefined ? { exposeType: connection.exposeType } : {}),
+      ...(connection.persistence === false ? { persistence: false } : {}),
+      ...(connection.imagePullSecret !== undefined
+        ? { imagePullSecret: connection.imagePullSecret }
+        : {}),
+      ...(connection.noTopologyCR === true ? { noTopologyCR: true } : {})
+    }
+  };
+}
+
+/**
+ * Where captures of a lab host open: This computer's `capture.preferredAction`,
+ * a Kubernetes lab host's or an API Server's own choice (Automatic unless set).
+ */
+export function captureMethodSetting(connection: LabConnection): string | undefined {
+  if (connection.kind === "local" && !isClusterConnection(connection)) {
+    return vscode.workspace.getConfiguration("containerlab").get<string>("capture.preferredAction");
+  }
+  return connection.captureMethod;
+}
+
+/** The backend of a cluster connection, rebuilt when its settings change. */
+function getClusterBackend(connection: LabConnection): LocalLabBackend {
+  const options = clusterBackendOptions(connection);
+  const key = JSON.stringify(options);
+  const cached = clusterBackends.get(connection.id);
+  if (cached?.key === key) return cached.backend;
+  void cached?.backend.dispose();
+  const backend = new LocalLabBackend(options);
+  clusterBackends.set(connection.id, { key, backend });
+  return backend;
+}
+
 /** Starts connection management; without it every lab is local. */
 export function initConnections(
   context: vscode.ExtensionContext,
   options: { localSupported?: boolean } = {}
 ): ConnectionManager {
   connections ??= new ConnectionManager(context, options);
+  topologyHosts = context.workspaceState;
+  initLabSettings(context.globalState);
   return connections;
+}
+
+const TOPOLOGY_HOSTS_KEY = "containerlab.topologyLabHosts";
+let topologyHosts: vscode.Memento | undefined;
+/** Topologies of labs running on a cluster, as the cluster reports them (also `k8s://` paths). */
+const clusterTopologies = new Map<string, string>();
+
+/**
+ * The local lab host remembered for a topology file on this machine: the one
+ * it was opened from, acted on or deployed to last, else the cluster that
+ * runs it. Undefined while the file has no host yet.
+ */
+export function knownTopologyHost(file: string): LabConnection | undefined {
+  const assigned =
+    topologyHosts?.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {})[file] ??
+    clusterTopologies.get(file);
+  if (assigned === LOCAL_CONNECTION.id) return LOCAL_CONNECTION;
+  const connection = assigned !== undefined ? connections?.get(assigned) : undefined;
+  return connection && isClusterConnection(connection) ? connection : undefined;
+}
+
+/** The local lab host a topology file on this machine runs on; this machine by default. */
+function labHostOfTopology(file: string): LabConnection {
+  return knownTopologyHost(file) ?? LOCAL_CONNECTION;
+}
+
+/** A topology file on this machine, as opposed to a lab server URI, a URL or a cluster's own lab. */
+function isLocalTopologyFile(file: string): boolean {
+  return file !== "" && !isUriString(file);
+}
+
+/**
+ * Remembers the lab host a topology file on this machine runs on: this
+ * machine or a Kubernetes cluster. Lab servers have their own files.
+ */
+export async function rememberTopologyHost(file: string, connection: LabConnection): Promise<void> {
+  if (!topologyHosts || !isLocalTopologyFile(file) || connection.kind !== "local") return;
+  const current = topologyHosts.get<Record<string, string>>(TOPOLOGY_HOSTS_KEY, {});
+  if (current[file] === connection.id) return;
+  await topologyHosts.update(TOPOLOGY_HOSTS_KEY, { ...current, [file]: connection.id });
+}
+
+/**
+ * Remembers the host of a topology opened or acted on from a host's section
+ * of the explorer, so the viewer, the editor and the palette use it too.
+ */
+export async function rememberHostOf(node: {
+  connectionId?: string;
+  labPath?: { absolute: string };
+}): Promise<void> {
+  const file = node.labPath?.absolute;
+  const connection =
+    node.connectionId !== undefined ? connectionById(node.connectionId) : undefined;
+  if (file === undefined || !connection) return;
+  await rememberTopologyHost(file, connection);
+}
+
+/**
+ * With Kubernetes clusters configured, asks where a topology on this machine
+ * runs: this machine or a cluster. Undefined when the user cancels.
+ */
+export async function pickTopologyHost(
+  file: string,
+  labName: string,
+  verb = "Deploy"
+): Promise<LabConnection | undefined> {
+  const clusters = (connections?.list() ?? []).filter(isClusterConnection);
+  if (clusters.length === 0) return LOCAL_CONNECTION;
+  const current = labHostOfTopology(file);
+  const choices = [
+    ...(connections?.list().some((connection) => connection.id === LOCAL_CONNECTION.id)
+      ? [LOCAL_CONNECTION]
+      : []),
+    ...clusters
+  ].sort((left, right) => Number(right.id === current.id) - Number(left.id === current.id));
+  const picked = await vscode.window.showQuickPick(
+    choices.map((connection) => ({
+      label: `$(${isClusterConnection(connection) ? "cloud" : "vm"}) ${connection.label}`,
+      description: connectionDescription(connection),
+      connection
+    })),
+    { title: `${verb} ${labName} on`, placeHolder: "Where?" }
+  );
+  if (!picked) return undefined;
+  await rememberTopologyHost(file, picked.connection);
+  return picked.connection;
 }
 
 export function getConnections(): ConnectionManager | undefined {
@@ -101,7 +245,7 @@ export function connectionOf(target: unknown): LabConnection {
         return connectionOfAuthority(uri.authority);
       }
     }
-    return LOCAL_CONNECTION;
+    return labHostOfTopology(target);
   }
   if (typeof target === "object" && target !== null) {
     const scheme: unknown = Reflect.get(target, "scheme");
@@ -136,7 +280,7 @@ export function isRemote(target: unknown): boolean {
  */
 export function backendFor(connection: LabConnection): LabBackend {
   if (connection.kind === "local") {
-    return getLocalBackend();
+    return isClusterConnection(connection) ? getClusterBackend(connection) : getLocalBackend();
   }
   const backend = connections?.apiBackend(connection);
   if (!backend) {
@@ -147,7 +291,9 @@ export function backendFor(connection: LabConnection): LabBackend {
 
 /** The backend of a connection; asks for the password of a signed-out lab host. */
 async function ensureBackendFor(connection: LabConnection): Promise<LabBackend> {
-  if (connection.kind === "local") return getLocalBackend();
+  if (connection.kind === "local") {
+    return isClusterConnection(connection) ? getClusterBackend(connection) : getLocalBackend();
+  }
   const backend = await connections?.ensureBackend(connection);
   if (!backend) throw new Error(`Sign in to ${connection.label} first.`);
   return backend;
@@ -163,13 +309,18 @@ export function backendOf(target: unknown): LabBackend {
  * the one; otherwise the user picks, signed-out lab hosts included (they
  * are asked to sign in).
  */
-export async function pickConnection(title: string): Promise<LabConnection | undefined> {
-  const all = connections?.list() ?? [LOCAL_CONNECTION];
+export async function pickConnection(
+  title: string,
+  offered: (connection: LabConnection) => boolean = () => true
+): Promise<LabConnection | undefined> {
+  const listed = connections?.list() ?? [LOCAL_CONNECTION];
+  // Offer the hosts that can; with none, the first, which says why it cannot.
+  const all = listed.filter(offered).length > 0 ? listed.filter(offered) : listed.slice(0, 1);
   if (all.length <= 1) return all[0] ?? LOCAL_CONNECTION;
   const picked = await vscode.window.showQuickPick(
     all.map((connection) => ({
-      label: `$(${connection.kind === "local" ? "vm" : "cloud"}) ${connection.label}`,
-      description: connection.kind === "local" ? "this machine" : connection.url,
+      label: `$(${connection.kind === "local" && !isClusterConnection(connection) ? "vm" : "cloud"}) ${connection.label}`,
+      description: connectionDescription(connection),
       detail:
         connection.kind === "api" && connections?.status(connection) !== "connected"
           ? "Signed out: you are asked to sign in"
@@ -185,6 +336,51 @@ export async function pickConnection(title: string): Promise<LabConnection | und
   }
   return picked.connection;
 }
+
+/** The runtime an API Server told; labHostSupport, which asks the servers, sets how to look it up. */
+let serverRuntimeOf: (connection: LabConnection) => LabRuntimeKind | undefined = () => undefined;
+
+export function setServerRuntimeLookup(
+  lookup: (connection: LabConnection) => LabRuntimeKind | undefined
+): void {
+  serverRuntimeOf = lookup;
+}
+
+/**
+ * A connection's kind and runtime, then where its labs run, as the lab host
+ * pickers describe it, e.g. "API Server · c9s · https://lab:8090" or
+ * "Kubernetes · c9s · prod/labs · b.yaml".
+ */
+export function connectionDescription(connection: LabConnection): string {
+  if (isClusterConnection(connection)) {
+    const where = [connection.kubeContext, connection.namespace].filter(Boolean).join("/");
+    // Two kubeconfig files can name their contexts alike.
+    const file =
+      connection.kubeconfig !== undefined ? path.basename(connection.kubeconfig) : undefined;
+    return [labHostKindLabel({ kind: "cluster" }), where, file].filter(Boolean).join(" · ");
+  }
+  if (connection.kind === "local") {
+    const runtime = vscode.workspace.getConfiguration("containerlab").get<string>("runtime");
+    return labHostKindLabel({
+      kind: "this-computer",
+      runtime: runtime === "podman" ? "podman" : "docker"
+    });
+  }
+  const runtime = serverRuntimeOf(connection);
+  return [
+    labHostKindLabel({ kind: "server", ...(runtime !== undefined ? { runtime } : {}) }),
+    connection.url
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/**
+ * The topology path containerlab reports for a c9s lab it did not deploy:
+ * `k8s://<namespace>/topologies/<lab>`. Labs containerlab deployed report
+ * their file.
+ */
+const KUBERNETES_LAB_PATH = /^k8s:\/\//i;
 
 /** A topology to fetch from Git or the web, e.g. `https://github.com/srl-labs/srlinux-getting-started`. */
 export function isLabSourceUrl(value: string): boolean {
@@ -281,6 +477,18 @@ async function resolveRemoteFile(labPath: string, labName?: string): Promise<Res
 }
 
 /**
+ * The host a lab path runs on. A topology on this machine runs on the host
+ * given with it (a node of that host's section), else where it was opened or
+ * deployed last; a cluster's own lab on the cluster that reports it.
+ */
+export function hostOfLabPath(labPath: string, connectionId?: string): LabConnection {
+  const given = connectionById(connectionId) ?? LOCAL_CONNECTION;
+  if (given.kind !== "local" || isClusterConnection(given)) return given;
+  if (KUBERNETES_LAB_PATH.test(labPath)) return labHostOfTopology(labPath);
+  return connectionId !== undefined || isUriString(labPath) ? given : labHostOfTopology(labPath);
+}
+
+/**
  * Where a lab command goes. Local labs are addressed by their topology file
  * (containerlab finds the lab name in it); labs on a lab host by name, with
  * the workspace path of their topology when there is one. A source URL runs
@@ -291,12 +499,20 @@ export async function resolveLab(
   labName?: string,
   connectionId?: string
 ): Promise<ResolvedLab> {
-  const connection = connectionById(connectionId) ?? LOCAL_CONNECTION;
+  const connection = hostOfLabPath(labPath, connectionId);
+  if (connectionId !== undefined) void rememberTopologyHost(labPath, connection);
   if (isLabSourceUrl(labPath)) {
     // containerlab and clab-api-server fetch the topology themselves.
     return {
       backend: await ensureBackendFor(connection),
       target: { labName: labName ?? "", path: labPath }
+    };
+  }
+  if (isClusterConnection(connection) && KUBERNETES_LAB_PATH.test(labPath)) {
+    // A c9s lab whose topology lives only in the cluster.
+    return {
+      backend: backendFor(connection),
+      target: { labName: nonEmpty(labName) ?? labPath.split("/").pop() ?? "" }
     };
   }
   if (isUriString(labPath)) {
@@ -309,8 +525,16 @@ export async function resolveLab(
       target: { labName: nonEmpty(labName) ?? labNameForPath(labPath) }
     };
   }
+  if (isClusterConnection(connection)) {
+    // A cluster's lab reports the file it was deployed from, maybe on another
+    // machine; then the lab host goes by its name.
+    return {
+      backend: backendFor(connection),
+      target: { labName: nonEmpty(labName) ?? labNameForPath(labPath), path: labPath }
+    };
+  }
   // containerlab reads the lab name from the topology file.
-  return { backend: getLocalBackend(), target: { labName: "", path: labPath } };
+  return { backend: backendFor(connection), target: { labName: "", path: labPath } };
 }
 
 /**
@@ -318,6 +542,11 @@ export async function resolveLab(
  * when the host lists it, the host's own path otherwise.
  */
 export function viewLabPath(connection: LabConnection, serverPath: string): string {
+  if (isClusterConnection(connection) && serverPath) {
+    // The topology file of a cluster's lab runs on that cluster, also when opened later.
+    clusterTopologies.set(serverPath, connection.id);
+    return serverPath;
+  }
   if (connection.kind !== "api" || !serverPath || isUriString(serverPath)) {
     return serverPath;
   }
@@ -328,7 +557,12 @@ export function viewLabPath(connection: LabConnection, serverPath: string): stri
 }
 
 export async function disposeLabBackends(): Promise<void> {
-  await localBackend?.dispose();
+  const backends = [
+    localBackend,
+    ...Array.from(clusterBackends.values(), (entry) => entry.backend)
+  ];
+  clusterBackends.clear();
   localBackend = undefined;
   localBackendKey = "";
+  await Promise.allSettled(backends.map(async (backend) => backend?.dispose()));
 }

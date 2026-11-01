@@ -1,11 +1,15 @@
 import {
   labLifecycleQueryParams,
+  lifecycleTimeoutMs,
+  parseLabHostCaptureInfo,
+  type LabHostCaptureInfo,
   type LabLifecycleOptions,
   type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
 import type { Response } from "undici";
 
 import type {
+  CaptureInterface,
   CaptureCloseAllResponse,
   CapturePacketflixResponse,
   CaptureTarget,
@@ -54,6 +58,7 @@ import type {
   WorkspaceFileEntry
 } from "../contract/dto.ts";
 import type { RenderedTopology } from "../contract/backend.ts";
+import { parseCaptureInterfaces, type CaptureNodeTarget } from "../capture.ts";
 import { isNotFoundError, LabBackendError } from "../contract/errors.ts";
 
 import { apiFetch } from "./upstreamRequest.ts";
@@ -80,6 +85,28 @@ interface LifecycleRequestOptions {
   lifecycleOptions?: LabLifecycleOptions;
 }
 
+/** How long other requests, e.g. image downloads, may take. */
+const REQUEST_TIMEOUT_MS = 10 * 60_000;
+/**
+ * How long a deploy, redeploy, apply or destroy without a timeout may take:
+ * longer than the server lets it run with its default (on c9s 15 minutes,
+ * 25 for a redeploy).
+ */
+const LIFECYCLE_REQUEST_TIMEOUT_MS = 30 * 60_000;
+/** What the server adds to containerlab's timeout for its own steps (5 minutes), and a minute for the answer. */
+const LIFECYCLE_REQUEST_MARGIN_MS = 6 * 60_000;
+
+/**
+ * How long to wait for a lifecycle request: containerlab's timeout for each
+ * of its calls (a redeploy destroys, then deploys) plus the server's margin,
+ * as the server limits the request.
+ */
+export function lifecycleRequestTimeoutMs(options: LabLifecycleOptions | undefined, calls = 1): number {
+  const timeout = lifecycleTimeoutMs(options?.timeout);
+  if (timeout === undefined) return LIFECYCLE_REQUEST_TIMEOUT_MS;
+  return Math.max(REQUEST_TIMEOUT_MS, calls * timeout + LIFECYCLE_REQUEST_MARGIN_MS);
+}
+
 interface LoginRequest {
   username: string;
   password: string;
@@ -88,6 +115,38 @@ interface LoginRequest {
 
 type LifecycleEndpoint =
   "deploy" | "destroy" | "redeploy" | "apply" | "start" | "stop" | "restart";
+
+/** What `GET /health` tells about a clab-api-server. */
+export interface ServerHealth {
+  features: string[];
+  /** `docker`, `podman` or `c9s`; missing on servers older than c9s support. */
+  runtime?: string;
+  /** c9s: `per-lab` or `fixed`. */
+  namespaceMode?: string;
+}
+
+/** What `GET /api/v1/lab-host` says about the lab host behind a clab-api-server (`lab-host-info`). */
+export interface ServerLabHost {
+  runtime: string;
+  /** containerlab's timeout of a lifecycle request without one, e.g. `10m`. */
+  defaultTimeout?: string;
+  /** Only for runtime `c9s`: the cluster and the server's deploy settings. */
+  c9s?: {
+    context?: string;
+    cluster?: string;
+    namespacePattern?: string;
+    sharedNamespacePattern?: string;
+    exposeType?: string;
+    persistence?: boolean;
+    imagePullSecret?: string;
+    labQuota?: boolean;
+    /** Labs deploy without clabernetes' Topology resource; false on servers that report it. */
+    noTopologyCR?: boolean;
+    metrics?: boolean;
+  };
+  /** How the server captures packets, with every runtime; missing on older servers. */
+  capture?: LabHostCaptureInfo;
+}
 
 export class ClabApiClient {
   private readonly baseUrl: string;
@@ -416,6 +475,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -477,6 +537,9 @@ export class ClabApiClient {
       "DELETE",
       `/api/v1/labs/${enc(labName)}${query ? `?${query}` : ""}`,
       token,
+      undefined,
+      undefined,
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
 
     const payload = await res.json().catch(() => undefined);
@@ -486,7 +549,12 @@ export class ClabApiClient {
   async applyLab(
     token: string,
     labName: string,
-    options: { path?: string; dryRun?: boolean; includeLogs?: boolean } = {},
+    options: {
+      path?: string;
+      dryRun?: boolean;
+      includeLogs?: boolean;
+      lifecycleOptions?: LabLifecycleOptions;
+    } = {},
   ): Promise<LifecycleActionResult> {
     const params = new URLSearchParams();
     if (options.path) {
@@ -498,6 +566,7 @@ export class ClabApiClient {
     if (options.includeLogs) {
       params.set("includeLogs", "true");
     }
+    appendLifecycleOptionParams(params, options.lifecycleOptions);
     const query = params.toString();
     const res = await this.request(
       "POST",
@@ -505,6 +574,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -530,6 +600,7 @@ export class ClabApiClient {
       token,
       JSON.stringify({}),
       "application/json",
+      lifecycleRequestTimeoutMs(options.lifecycleOptions, 2),
     );
     const payload = (await res.json()) as unknown;
     return normalizeLifecycleActionResult(payload);
@@ -1068,8 +1139,11 @@ export class ClabApiClient {
     return (await res.json()) as GenerateTopologyResponse;
   }
 
-  /** The optional features the server lists on its public health endpoint. */
-  async getServerFeatures(timeoutMs = 10_000): Promise<string[]> {
+  /**
+   * The public health endpoint: the optional features the server lists, and
+   * the lab runtime it runs (servers before c9s support leave it out).
+   */
+  async getServerHealth(timeoutMs = 10_000): Promise<ServerHealth> {
     const res = await apiFetch(`${this.baseUrl}/health`, {}, { timeoutMs });
     if (!res.ok) {
       const err: HttpError = new Error(`GET /health failed (${res.status})`);
@@ -1077,10 +1151,45 @@ export class ClabApiClient {
       throw err;
     }
     const payload = (await res.json().catch(() => undefined)) as unknown;
-    const features = isRecord(payload) ? payload.features : undefined;
-    return Array.isArray(features)
-      ? features.filter((feature): feature is string => typeof feature === "string")
+    if (!isRecord(payload)) return { features: [] };
+    const features = Array.isArray(payload.features)
+      ? payload.features.filter((feature): feature is string => typeof feature === "string")
       : [];
+    const health: ServerHealth = { features };
+    if (typeof payload.runtime === "string" && payload.runtime.trim()) {
+      health.runtime = payload.runtime.trim();
+    }
+    if (typeof payload.namespaceMode === "string" && payload.namespaceMode.trim()) {
+      health.namespaceMode = payload.namespaceMode.trim();
+    }
+    return health;
+  }
+
+  /** The lab host's runtime and, on c9s, its cluster and deploy settings (`lab-host-info`). */
+  async getLabHost(token: string): Promise<ServerLabHost> {
+    const res = await this.get("/api/v1/lab-host", token);
+    const payload = (await res.json().catch(() => undefined)) as unknown;
+    if (!isRecord(payload) || typeof payload.runtime !== "string") {
+      throw new Error("GET /api/v1/lab-host answered without a runtime");
+    }
+    const result: ServerLabHost = { runtime: payload.runtime.trim() };
+    if (typeof payload.defaultTimeout === "string" && payload.defaultTimeout.trim()) {
+      result.defaultTimeout = payload.defaultTimeout.trim();
+    }
+    if (isRecord(payload.c9s)) {
+      const raw = payload.c9s;
+      const c9s: NonNullable<ServerLabHost["c9s"]> = {};
+      for (const key of ["context", "cluster", "namespacePattern", "sharedNamespacePattern", "exposeType", "imagePullSecret"] as const) {
+        if (typeof raw[key] === "string" && raw[key].trim()) c9s[key] = raw[key].trim();
+      }
+      for (const key of ["persistence", "labQuota", "noTopologyCR", "metrics"] as const) {
+        if (typeof raw[key] === "boolean") c9s[key] = raw[key];
+      }
+      result.c9s = c9s;
+    }
+    const capture = parseLabHostCaptureInfo(payload.capture);
+    if (capture) result.capture = capture;
+    return result;
   }
 
   async getVersion(
@@ -1181,6 +1290,25 @@ export class ClabApiClient {
       "application/json",
     );
     return (await res.json()) as CaptureWiresharkVncCreateResponse;
+  }
+
+  /** The lab-link interfaces of a c9s lab, with their peers. */
+  async listCaptureInterfaces(token: string, labName: string): Promise<CaptureInterface[]> {
+    const res = await this.get(`/api/v1/labs/${enc(labName)}/capture/interfaces`, token);
+    return parseCaptureInterfaces(await res.json());
+  }
+
+  /**
+   * Opens a capture as a chunked pcapng response
+   * (`GET /api/v1/labs/{lab}/capture/stream`). Returns the raw Response for streaming.
+   */
+  async openCaptureStream(
+    token: string,
+    labName: string,
+    request: CaptureStreamQuery,
+    requestOptions: StreamRequestOptions = {},
+  ): Promise<Response> {
+    return this.openStream(captureStreamPath(labName, request), token, requestOptions);
   }
 
   async getWiresharkVncSessionReady(
@@ -1447,6 +1575,7 @@ export class ClabApiClient {
     token: string,
     body?: string | Uint8Array,
     contentType?: string,
+    timeoutMs = REQUEST_TIMEOUT_MS,
   ): Promise<Response> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
@@ -1462,7 +1591,7 @@ export class ClabApiClient {
         body,
       },
       // Image downloads and lab operations can take several minutes.
-      { timeoutMs: 10 * 60_000 },
+      { timeoutMs },
     );
     if (!res.ok) {
       const text = await res.text().catch(() => res.statusText);
@@ -1474,6 +1603,27 @@ export class ClabApiClient {
     }
     return res;
   }
+}
+
+/** What a capture stream asks of clab-api-server. */
+export interface CaptureStreamQuery {
+  targets: CaptureNodeTarget[];
+  duration?: string;
+  packetLimit?: number;
+  snapLength?: number;
+  /** Ask for `Content-Disposition: attachment`. */
+  download?: boolean;
+}
+
+/** `/api/v1/labs/{lab}/capture/stream?target=<node>:<iface>&…`, one `target` per interface. */
+export function captureStreamPath(labName: string, request: CaptureStreamQuery): string {
+  const params = new URLSearchParams();
+  for (const target of request.targets) params.append("target", `${target.node}:${target.interface}`);
+  if (request.duration !== undefined) params.set("duration", request.duration);
+  if (request.packetLimit !== undefined) params.set("packetLimit", String(request.packetLimit));
+  if (request.snapLength !== undefined) params.set("snapLength", String(request.snapLength));
+  if (request.download) params.set("download", "1");
+  return `/api/v1/labs/${enc(labName)}/capture/stream?${params.toString()}`;
 }
 
 function enc(value: string): string {

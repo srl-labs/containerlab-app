@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import {
+  containerlabDefaultTimeout,
   isTopologyFileName,
   type LabExecRequest,
   type LabOperationSupport,
@@ -16,6 +17,7 @@ import type {
   LabBackendCapabilities,
   LabBackendFeatures,
   LabEvent,
+  LabHostProfile,
   LabEventStreamOptions,
   LabLifecycleAction,
   LabStatsStreamOptions,
@@ -29,6 +31,8 @@ import type {
   WiresharkVncRequest
 } from "../contract/backend.ts";
 import type {
+  CaptureInterface,
+  CaptureStreamOptions,
   CaptureTarget,
   GenerateTopologyRequest,
   GraphExportFormat,
@@ -45,9 +49,18 @@ import type {
   SSHAccessResponse
 } from "../contract/dto.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines } from "../ndjson.ts";
-import { LocalCapture } from "./capture.ts";
-import { inspectField, inspectLabs } from "./inspect.ts";
+import { captureNodeTargets } from "../capture.ts";
+import { LocalCapture, WIRESHARK_VNC_NEEDS_DOCKER } from "./capture.ts";
+import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
+import { createDockerNodeAccess } from "./dockerNodeAccess.ts";
+import { inspectField } from "./inspect.ts";
+import { createKubeClient, type KubeClient } from "./kube/kubeClient.ts";
+import { loadKubeConfig } from "./kube/kubeConfig.ts";
+import type { C9sContainerRecord } from "./kube/inspect.ts";
+import { KubeNodeAccess } from "./kube/kubeNodeAccess.ts";
+import type { NodeAccess } from "./nodeAccess.ts";
 import {
   localExec,
   localInspectDetails,
@@ -57,15 +70,22 @@ import {
   type LocalLabRef
 } from "./labOperations.ts";
 import { LocalLifecycle } from "./lifecycle.ts";
-import { labStats } from "./stats.ts";
-import { resolveLocalOptions, type LocalLabBackendOptions, type ResolvedLocalOptions } from "./options.ts";
+import {
+  containerRuntimeCli,
+  resolveLocalOptions,
+  type LocalLabBackendOptions,
+  type ResolvedLocalOptions
+} from "./options.ts";
 import {
   containerlabCommand,
+  lastContainerlabError,
   runChecked,
   runCommand,
   spawnLines,
+  stripAnsi,
   type StreamingCommand
 } from "./process.ts";
+import { isRunningTopologyHere } from "./runningTopology.ts";
 import { LocalTerminals } from "./terminals.ts";
 import { localTopologyVariables, renderTopologyFile } from "./topologyTemplates.ts";
 import * as tools from "./tools.ts";
@@ -90,15 +110,36 @@ const LOCAL_CAPABILITIES: LabBackendCapabilities = {
   tailscaleStatus: false
 };
 
-const LOCAL_FEATURES: LabBackendFeatures = {
-  validate: true,
-  graphMermaid: true,
-  graphDot: true,
-  sshxReaders: true,
-  gottyOptions: true,
-  nodeStats: true,
-  terminalResume: true
-};
+/**
+ * What a local host can do, by its lab runtime; c9s has node stats when
+ * metrics.k8s.io answers, and Wireshark VNC with Docker or Podman on this machine.
+ */
+function localFeatures(
+  runtime: ResolvedLocalOptions["runtime"],
+  nodeStats: boolean,
+  captureVnc = false
+): LabBackendFeatures {
+  const c9s = runtime === "c9s";
+  return {
+    validate: true,
+    graphMermaid: true,
+    graphDot: true,
+    // `tools sshx` and `tools gotty` run containers next to the lab.
+    sshxReaders: !c9s,
+    gottyOptions: !c9s,
+    nodeStats,
+    terminalResume: true,
+    // containerlab's `--timeout`.
+    lifecycleTimeout: true,
+    ...containerRuntimeFeatures(!c9s),
+    // `containerlab inspect interfaces -r c9s` lists the lab-link interfaces.
+    interfaceInspect: true,
+    manifestExport: c9s,
+    c9sDeployOptions: c9s,
+    captureStream: c9s,
+    captureVnc: c9s && captureVnc
+  };
+}
 
 function shellQuote(value: string): string {
   return /^[A-Za-z0-9_./:=@%+,-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
@@ -120,27 +161,47 @@ export class LocalLabBackend implements LabBackend {
   private dockerClient: Docker | undefined;
   private readonly lifecycle: LocalLifecycle;
   private readonly terminals: LocalTerminals;
+  /** How the backend reaches nodes beyond the CLI: Docker, or Kubernetes for c9s. */
+  private readonly access: NodeAccess;
+  private kubeClient: KubeClient | undefined;
   private readonly capture: LocalCapture;
   private support: Promise<LabOperationSupport> | undefined;
   /** Running `containerlab events` commands; they must not outlive the app. */
   private readonly eventCommands = new Set<StreamingCommand>();
 
-  constructor(options: LocalLabBackendOptions = {}) {
+  constructor(options: LocalLabBackendOptions = {}, overrides: { kubeClient?: KubeClient } = {}) {
     this.options = resolveLocalOptions(options);
     this.fs = new LocalWorkspace(this.options.workspaceRoot);
     const docker = () => this.docker;
-    this.terminals = new LocalTerminals(docker, this.options.username);
+    if (overrides.kubeClient) this.kubeClient = overrides.kubeClient;
+    this.access =
+      this.options.runtime === "c9s"
+        ? new KubeNodeAccess(this.options, () => this.kube)
+        : createDockerNodeAccess(this.options, docker);
+    this.terminals = new LocalTerminals(this.access, this.options.username);
     this.capture = new LocalCapture(this.options, docker);
     this.lifecycle = new LocalLifecycle({
       options: this.options,
       resolveTopology: (labName, rawPath) => this.resolveTopology(labName, rawPath),
       runningTopologyFile: (labName) => this.runningTopologyFile(labName),
-      inspectLab: (labName) => this.inspectLab(labName)
+      inspectLab: (labName) => this.inspectLab(labName),
+      labEnv: (labName) => this.labEnv(labName)
     });
   }
 
   get scope(): string {
-    return `local:${this.options.workspaceRoot}`;
+    const { c9s, workspaceRoot } = this.options;
+    // A cluster is another lab host than this machine, although the files are the same.
+    if (!c9s) return `local:${workspaceRoot}`;
+    // The same context name in another kubeconfig file can be another cluster.
+    const cluster = c9s.kubeconfig ? `${c9s.kubeContext ?? ""}@${c9s.kubeconfig}` : (c9s.kubeContext ?? "");
+    return `local-c9s:${cluster}:${workspaceRoot}`;
+  }
+
+  /** One Kubernetes client per backend, from the host's kubeconfig and context, made on first use. */
+  private get kube(): KubeClient {
+    this.kubeClient ??= createKubeClient(loadKubeConfig(this.options.c9s ?? {}, this.options.env));
+    return this.kubeClient;
   }
 
   /** The Docker Engine API of the container runtime. */
@@ -166,7 +227,7 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async runningTopologyFile(labName: string): Promise<string | undefined> {
-    const containers = (await inspectLabs(this.docker, labName))[labName] ?? [];
+    const containers = (await this.access.inspectLabs(labName))[labName] ?? [];
     for (const container of containers) {
       const file = inspectField(container, "absLabPath", "labPath");
       if (file) return file;
@@ -201,6 +262,9 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async healthMetrics() {
+    if (this.options.runtime === "c9s") {
+      throw new LabBackendError("A Kubernetes lab host has no host metrics; this machine's would mislead.", 501);
+    }
     const version = await this.version().then(
       (response) => /version: (\S+)/.exec(response.versionInfo)?.[1] ?? "unknown",
       () => "unknown"
@@ -209,11 +273,11 @@ export class LocalLabBackend implements LabBackend {
   }
 
   inspectAll(): Promise<InspectAllLabsResponse> {
-    return inspectLabs(this.docker);
+    return this.access.inspectLabs();
   }
 
   async inspectLab(labName: string) {
-    const containers = (await inspectLabs(this.docker, labName))[labName];
+    const containers = (await this.access.inspectLabs(labName))[labName];
     if (!containers || containers.length === 0) {
       throw new LabBackendError(`Lab '${labName}' not found.`, 404);
     }
@@ -221,7 +285,7 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async isLabRunning(labName: string): Promise<boolean> {
-    return ((await inspectLabs(this.docker, labName))[labName]?.length ?? 0) > 0;
+    return ((await this.access.inspectLabs(labName))[labName]?.length ?? 0) > 0;
   }
 
   runLifecycle(action: LabLifecycleAction, lab: LabTarget, options?: LifecycleRunOptions) {
@@ -259,7 +323,28 @@ export class LocalLabBackend implements LabBackend {
     if (copyDir && !(await this.labOperationSupport()).saveCopy) {
       throw new LabBackendError("This containerlab cannot copy saved configs; update it to 0.73 or later.", 501);
     }
-    return tools.saveLab(this.options, await this.labTopology(lab), options.nodeFilter, copyDir);
+    const topology = await this.labTopology(lab);
+    if (!(await isRunningTopologyHere(this.options.runtime, topology))) {
+      // A c9s lab whose topology file is not on this machine: save it by name.
+      const args = ["save", "-r", "c9s", "--name", lab.labName, ...(copyDir ? [`--copy=${copyDir}`] : [])];
+      const [file, commandArgs] = containerlabCommand(this.options, args);
+      const result = await runChecked(file, commandArgs, {
+        cwd: this.options.workspaceRoot,
+        env: await this.labEnv(lab.labName),
+        timeoutMs: 10 * 60_000
+      });
+      return {
+        message: `Configuration save command executed successfully for lab '${lab.labName}'.`,
+        output: stripAnsi(`${result.stderr}${result.stdout}`).trim() || "Configuration saved",
+        ...(copyDir ? { copyDir: path.resolve(this.options.workspaceRoot, copyDir) } : {})
+      };
+    }
+    return tools.saveLab(
+      { ...this.options, env: await this.labEnv(lab.labName) },
+      topology,
+      options.nodeFilter,
+      copyDir
+    );
   }
 
   labOperationSupport(): Promise<LabOperationSupport> {
@@ -273,19 +358,28 @@ export class LocalLabBackend implements LabBackend {
   /** The running lab's topology file, or its name when containerlab has none. */
   private async labRef(lab: LabTarget): Promise<LocalLabRef> {
     try {
-      return { topology: await this.labTopology(lab), labName: lab.labName };
+      const topology = await this.labTopology(lab);
+      // A c9s lab whose topology file is not on this machine goes by its name.
+      if (!(await isRunningTopologyHere(this.options.runtime, topology))) return { labName: lab.labName };
+      return { topology, labName: lab.labName };
     } catch (error) {
       if (lab.labName) return { labName: lab.labName };
       throw error;
     }
   }
 
+  /** The options of a command on one lab, with its c9s namespace. */
+  private async labOptions(labName: string): Promise<ResolvedLocalOptions> {
+    const env = await this.labEnv(labName);
+    return env === this.options.env ? this.options : { ...this.options, env };
+  }
+
   async exec(lab: LabTarget, request: LabExecRequest) {
-    return localExec(this.options, await this.labRef(lab), request);
+    return localExec(await this.labOptions(lab.labName), await this.labRef(lab), request);
   }
 
   async nodesAction(lab: LabTarget, nodeNames: string[], action: TopoViewerNodesAction) {
-    return localNodesAction(this.options, await this.labRef(lab), nodeNames, action);
+    return localNodesAction(await this.labOptions(lab.labName), await this.labRef(lab), nodeNames, action);
   }
 
   async saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest) {
@@ -296,7 +390,7 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async inspectLabDetails(lab: LabTarget) {
-    return localInspectDetails(this.options, await this.labRef(lab));
+    return localInspectDetails(await this.labOptions(lab.labName), await this.labRef(lab));
   }
 
   /** The topology file of a lab that need not be running, like clab-api-server finds it. */
@@ -326,7 +420,52 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async features(): Promise<LabBackendFeatures> {
-    return LOCAL_FEATURES;
+    if (this.options.runtime !== "c9s") return localFeatures(this.options.runtime, true);
+    const [nodeStats, vncRuntime] = await Promise.all([this.access.statsAvailable(), this.capture.vncRuntime()]);
+    return localFeatures(this.options.runtime, nodeStats, vncRuntime !== undefined);
+  }
+
+  async hostProfile(): Promise<LabHostProfile> {
+    const { runtime, c9s, deployTimeout } = this.options;
+    const defaultTimeout = deployTimeout ?? containerlabDefaultTimeout(runtime);
+    if (!c9s) return { runtime, defaultTimeout };
+    const vncRuntime = await this.capture.vncRuntime();
+    return {
+      runtime,
+      defaultTimeout,
+      ...(c9s.kubeContext ? { kubeContext: c9s.kubeContext } : {}),
+      ...(c9s.kubeconfig ? { kubeconfig: c9s.kubeconfig } : {}),
+      namespaceMode: c9s.namespace ? "fixed" : "per-lab",
+      ...(c9s.namespace ? { namespace: c9s.namespace } : {}),
+      ...(c9s.exposeType ? { exposeType: c9s.exposeType } : {}),
+      persistence: c9s.persistence !== false,
+      ...(c9s.imagePullSecret ? { imagePullSecret: c9s.imagePullSecret } : {}),
+      ...(vncRuntime ? {} : { wiresharkVncUnavailable: WIRESHARK_VNC_NEEDS_DOCKER })
+    };
+  }
+
+  /** `containerlab deploy -r c9s --emit-crs`: the resources a deploy would create, without a cluster. */
+  async exportManifests(lab: LabTarget): Promise<{ yaml: string }> {
+    if (this.options.runtime !== "c9s") {
+      throw new LabBackendError("Kubernetes manifests need a c9s lab host.", 501);
+    }
+    const topology = await this.topologyFile(lab);
+    if (!(await isRunningTopologyHere(this.options.runtime, topology))) {
+      throw new LabBackendError(`Lab '${lab.labName}' has no topology file on this machine to export.`, 404);
+    }
+    const c9s = this.options.c9s ?? {};
+    const args = ["deploy", "-r", "c9s", "--emit-crs", "-t", topology];
+    if (lab.labName) args.push("--name", lab.labName);
+    if (c9s.exposeType) args.push("--expose-type", c9s.exposeType);
+    if (c9s.persistence === false) args.push("--no-persistence");
+    if (c9s.imagePullSecret) args.push("--image-pull-secret", c9s.imagePullSecret);
+    const [file, commandArgs] = containerlabCommand(this.options, args);
+    const result = await runChecked(file, commandArgs, {
+      cwd: path.dirname(topology),
+      env: this.options.env,
+      timeoutMs: 2 * 60_000
+    });
+    return { yaml: result.stdout };
   }
 
   async fcli(lab: LabTarget, command: string) {
@@ -381,19 +520,26 @@ export class LocalLabBackend implements LabBackend {
     return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown[]>) : {};
   }
 
-  /** `containerlab inspect interfaces`: the interfaces of one container. */
+  /**
+   * `containerlab inspect interfaces`: the interfaces of one container. On
+   * c9s, the lab-link interfaces of the node (`-r c9s --name <lab> -n <node>`).
+   */
   async inspectInterfaces(topology: string, containerName: string): Promise<unknown[]> {
-    const [file, args] = containerlabCommand(this.options, [
-      "inspect",
-      "interfaces",
-      "-t",
-      topology,
-      "-f",
-      "json",
-      "-n",
-      containerName
-    ]);
-    const result = await runChecked(file, args, { env: this.options.env, timeoutMs: 10_000 });
+    let commandArgs = ["inspect", "interfaces", "-t", topology, "-f", "json", "-n", containerName];
+    let env = this.options.env;
+    if (this.options.runtime === "c9s") {
+      const labs = await this.access.inspectLabs();
+      const [labName, container] =
+        Object.entries(labs)
+          .map(([name, containers]) => [name, containers.find((record) => record.name === containerName)] as const)
+          .find(([, record]) => record !== undefined) ?? [];
+      if (!labName || !container) throw new LabBackendError(`Node ${containerName} is not running.`, 404);
+      const nodeName = await this.access.topologyNodeName(container);
+      commandArgs = ["inspect", "interfaces", "-r", "c9s", "--name", labName, "-f", "json", "-n", nodeName];
+      env = await this.labEnv(labName);
+    }
+    const [file, args] = containerlabCommand(this.options, commandArgs);
+    const result = await runChecked(file, args, { env, timeoutMs: 30_000 });
     const parsed = JSON.parse(result.stdout.slice(Math.max(0, result.stdout.indexOf("[")))) as unknown;
     return Array.isArray(parsed) ? parsed : [];
   }
@@ -406,33 +552,51 @@ export class LocalLabBackend implements LabBackend {
   async nodeAction(labName: string, containerName: string, action: NodeLifecycleAction): Promise<void> {
     const container = await this.container(labName, containerName);
     if (action === "pause" || action === "unpause") {
-      await runChecked(this.options.runtime, [action, container.name], { env: this.options.env });
+      if (this.options.runtime === "c9s") {
+        throw new LabBackendError("Nodes on a c9s lab host cannot be paused.", 501);
+      }
+      await runChecked(containerRuntimeCli(this.options), [action, container.name], { env: this.options.env });
       return;
     }
     const topology = await this.requireRunningTopology(labName);
-    // Slot containers of a distributed node start and stop through their root node.
-    const labels = await this.docker
-      .getContainer(container.name)
-      .inspect()
-      .then((details) => details.Config.Labels ?? {})
-      .catch((): Record<string, string> => ({}));
-    const nodeName =
-      labels["clab-root-node-name"] || inspectField(container, "nodeName") || container.name;
+    const nodeName = await this.access.topologyNodeName(container);
+    // A c9s lab whose topology file is not on this machine goes by its name.
+    const target = (await isRunningTopologyHere(this.options.runtime, topology))
+      ? ["-t", topology]
+      : ["--name", labName];
     const [file, args] = containerlabCommand(this.options, [
       action,
       "-r",
       this.options.runtime,
-      "-t",
-      topology,
+      ...target,
       "-n",
       nodeName
     ]);
-    await runChecked(file, args, { cwd: path.dirname(topology), env: this.options.env, timeoutMs: 10 * 60_000 });
+    await runChecked(file, args, {
+      ...(target[0] === "-t" ? { cwd: path.dirname(topology) } : {}),
+      env: await this.labEnv(labName),
+      timeoutMs: 10 * 60_000
+    });
+  }
+
+  /**
+   * The environment of a command on one lab: on c9s, the lab's namespace
+   * from inspect, so labs deployed with a namespace option are found again.
+   * A lab in its own namespace (`c9s-<lab>`) goes without one: containerlab
+   * finds it there, and deletes that namespace on `destroy --cleanup` only
+   * when no namespace was given.
+   */
+  async labEnv(labName: string): Promise<NodeJS.ProcessEnv> {
+    if (this.options.runtime !== "c9s" || this.options.c9s?.namespace) return this.options.env;
+    const records = await this.access.inspectLabs(labName).catch(() => ({}) as InspectAllLabsResponse);
+    const namespace = inspectField(records[labName]?.[0] ?? ({} as InspectContainerInfo), "namespace");
+    if (!namespace || namespace === `c9s-${labName}`) return this.options.env;
+    return { ...this.options.env, CLAB_KUBE_NAMESPACE: namespace };
   }
 
   async nodeLogs(labName: string, containerName: string, options: { tail?: string } = {}) {
     const container = await this.container(labName, containerName);
-    return tools.containerLogs(this.options, container.name, options.tail ?? "all");
+    return this.access.nodeLogs(container, options.tail ?? "all");
   }
 
   async streamNodeLogs(
@@ -441,26 +605,16 @@ export class LocalLabBackend implements LabBackend {
     options: NodeLogStreamOptions
   ): Promise<AsyncIterable<NodeLogLine>> {
     const container = await this.container(labName, containerName);
-    const command = await spawnLines(
-      this.options.runtime,
-      ["logs", "--follow", "--tail", options.tail ?? "all", "--timestamps", container.name],
-      { env: this.options.env, signal: options.signal }
-    );
-    // The runtime CLI writes the container's stderr to its own stderr.
-    async function* lines(): AsyncGenerator<NodeLogLine> {
-      try {
-        for await (const output of command.lines) yield output;
-      } finally {
-        command.kill();
-      }
-    }
-    return lines();
+    return this.access.streamNodeLogs(container, { tail: options.tail ?? "all", signal: options.signal });
   }
 
   async streamLabStats(labName: string, options: LabStatsStreamOptions) {
     await this.inspectLab(labName);
+    if (!(await this.access.statsAvailable())) {
+      throw new LabBackendError("This lab host does not report node stats (metrics.k8s.io is missing).", 501);
+    }
     const interval = Math.min(20, Math.max(1, Math.round(options.intervalSeconds ?? 2)));
-    return labStats(this.docker, labName, interval, options.signal);
+    return this.access.labStats(labName, interval, options.signal);
   }
 
   async nodeBrowserPorts(labName: string, containerName: string) {
@@ -468,7 +622,7 @@ export class LocalLabBackend implements LabBackend {
     return {
       nodeName: inspectField(container, "nodeName") || container.name,
       containerName: container.name,
-      ports: await tools.browserPorts(this.docker, container.name)
+      ports: await this.access.browserPorts(container)
     };
   }
 
@@ -486,13 +640,20 @@ export class LocalLabBackend implements LabBackend {
 
   async createTerminal(labName: string, containerName: string, options: TerminalCreateOptions) {
     const container = await this.container(labName, containerName);
+    const node = container as unknown as Partial<C9sContainerRecord>;
     return this.terminals.create(
       {
         labName,
         nodeName: inspectField(container, "nodeName") || container.name,
         containerId: inspectField(container, "container_id", "containerId") || container.name,
         kind: inspectField(container, "kind"),
-        ipv4Address: inspectField(container, "ipv4_address", "ipv4Address")
+        ipv4Address: inspectField(container, "ipv4_address", "ipv4Address"),
+        // c9s: where containerlab says the node runs.
+        ...(node.namespace ? { namespace: node.namespace } : {}),
+        ...(node.pod ? { pod: node.pod } : {}),
+        ...(node.container ? { container: node.container } : {}),
+        ...(node.load_balancer_address ? { loadBalancerAddress: node.load_balancer_address } : {}),
+        ...(node.exposed_ports?.length ? { exposedPorts: node.exposed_ports } : {})
       },
       options
     );
@@ -539,9 +700,81 @@ export class LocalLabBackend implements LabBackend {
   }
 
   async createWiresharkVnc(labName: string, request: { targets: CaptureTarget[]; theme?: string }) {
+    if (this.options.runtime === "c9s") {
+      // Wireshark VNC fed by this machine's capture stream of the cluster lab.
+      const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+      if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
+      const targets = captureNodeTargets(labName, request.targets, records);
+      return this.capture.createStreamVnc(
+        labName,
+        targets,
+        (granted, signal) =>
+          this.openCaptureStream(labName, {
+            targets: granted.map((target) => ({ containerName: target.node, interfaceName: target.interface })),
+            signal
+          }),
+        request.theme
+      );
+    }
     const topology = await this.runningTopologyFile(labName);
     const labDirectory = topology ? path.join(path.dirname(topology), `clab-${labName}`) : undefined;
     return this.capture.createVnc(labName, labDirectory, request.targets, request.theme);
+  }
+
+  private requireCaptureStream(): void {
+    if (this.options.runtime !== "c9s") {
+      throw new LabBackendError(
+        "Capture streams need a c9s lab host; this machine captures with Edgeshark.",
+        501
+      );
+    }
+  }
+
+  /** `containerlab -r c9s capture --name <lab> --list -f json`. */
+  async captureInterfaces(labName: string): Promise<CaptureInterface[]> {
+    this.requireCaptureStream();
+    return listC9sCaptureInterfaces(this.options, labName, await this.labEnv(labName));
+  }
+
+  /** `containerlab -r c9s capture --name <lab> --target … -w -`, its stdout as pcapng. */
+  async openCaptureStream(labName: string, options: CaptureStreamOptions): Promise<AsyncIterable<Uint8Array>> {
+    this.requireCaptureStream();
+    const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+    if (records.length === 0) throw new LabBackendError(`Lab '${labName}' is not running.`, 404);
+    const args = c9sCaptureArgs({
+      labName,
+      targets: captureNodeTargets(labName, options.targets, records),
+      ...(options.duration !== undefined ? { duration: options.duration } : {}),
+      ...(options.packetLimit !== undefined ? { packetLimit: options.packetLimit } : {}),
+      ...(options.snapLength !== undefined ? { snapLength: options.snapLength } : {})
+    });
+    return spawnC9sCapture(this.options, args, {
+      env: await this.labEnv(labName),
+      signal: options.signal,
+      ...(options.onGap ? { onGap: options.onGap } : {})
+    });
+  }
+
+  /**
+   * The shell command a terminal runs to capture into a pipe, e.g. into
+   * `wireshark -k -i -`: `containerlab -r c9s capture … -w -`, with the
+   * cluster settings as environment variables. Arguments are quoted for a POSIX shell.
+   */
+  async captureCommandLine(
+    labName: string,
+    targets: CaptureTarget[],
+    options: { duration?: string; packetLimit?: number } = {}
+  ): Promise<{ command: string; env: Record<string, string> }> {
+    this.requireCaptureStream();
+    const records = (await this.access.inspectLabs(labName))[labName] ?? [];
+    const args = c9sCaptureArgs({ labName, targets: captureNodeTargets(labName, targets, records), ...options });
+    const env = await this.labEnv(labName);
+    const clusterEnv = Object.fromEntries(
+      ["CLAB_KUBE_CONTEXT", "CLAB_KUBECONFIG", "CLAB_KUBE_NAMESPACE"].flatMap((key) =>
+        env[key] ? [[key, env[key]]] : []
+      )
+    );
+    return { command: this.commandLine(args), env: clusterEnv };
   }
 
   wiresharkVncReady(sessionId: string) {
@@ -665,9 +898,21 @@ export class LocalLabBackend implements LabBackend {
     running.add(command);
     void command.exit.then(() => running.delete(command));
     async function* lines(): AsyncGenerator<string> {
+      const stderr: string[] = [];
       try {
         for await (const output of command.lines) {
-          if (output.stream === "stdout") yield `${output.line}\n`;
+          if (output.stream === "stdout") {
+            yield `${output.line}\n`;
+          } else {
+            stderr.push(output.line);
+            if (stderr.length > 40) stderr.shift();
+          }
+        }
+        const exit = await command.exit;
+        if (exit.code !== 0 && exit.code !== null && !signal.aborted) {
+          // E.g. a binary that is neither run as root nor SUID root.
+          const detail = lastContainerlabError(stderr.join("\n")) ?? `exit status ${exit.code}`;
+          throw new LabBackendError(`containerlab events failed: ${detail}`, 500);
         }
       } finally {
         command.kill();
@@ -681,7 +926,7 @@ export class LocalLabBackend implements LabBackend {
     for (const command of this.eventCommands) command.kill();
     this.eventCommands.clear();
     this.terminals.dispose();
-    await this.capture.dispose();
+    await Promise.all([this.capture.dispose(), this.access.dispose()]);
   }
 }
 

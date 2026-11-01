@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import {
+  greyedExplorerCommandsForHost,
+  hiddenExplorerCommandsForSupport,
   type ExplorerOutgoingMessage,
   type ExplorerSnapshotOptions,
   type ExplorerUiState
@@ -8,6 +10,7 @@ import { createExplorerController } from "@containerlab/clab-ui/host";
 
 import { hideNonOwnedLabsState } from "../../globals";
 import { getConnections } from "../../backend/labBackends";
+import { cachedLabHostInfo, onDidChangeLabHostInfo } from "../../backend/labHostSupport";
 import type {
   HelpFeedbackProvider,
   LocalLabTreeDataProvider,
@@ -85,6 +88,18 @@ export class ContainerlabExplorerViewProvider
         this.options.sectionLabels = getConnections()?.grouped
           ? { localLabs: "Undeployed Labs" }
           : undefined;
+        // Each lab host hides what its runtime cannot do, e.g. netem on a cluster.
+        // What a cluster lacks shows greyed out with why instead.
+        const hidden = new Map<string, string[]>();
+        const greyed = new Map<string, Map<string, string>>();
+        for (const connection of getConnections()?.list() ?? []) {
+          const info = cachedLabHostInfo(connection);
+          // A host not known yet hides nothing, so section actions stay until it is.
+          hidden.set(connection.id, info ? hiddenExplorerCommandsForSupport(info.support) : []);
+          if (info) greyed.set(connection.id, greyedExplorerCommandsForHost(info));
+        }
+        this.options.hiddenCommandIdsByEndpoint = hidden;
+        this.options.greyedCommandsByEndpoint = greyed;
         return this.options;
       },
       executeAction: async (binding) => {
@@ -138,6 +153,7 @@ export class ContainerlabExplorerViewProvider
       });
       this.disposables.push(disposable);
     }
+    this.disposables.push(onDidChangeLabHostInfo(() => this.scheduleSnapshot()));
   }
 
   public resolveWebviewView(webviewView: vscode.WebviewView): void {

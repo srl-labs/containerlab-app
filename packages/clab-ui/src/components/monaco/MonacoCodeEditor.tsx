@@ -297,6 +297,7 @@ function applyVscodeThemeToMonaco(isDevMock: boolean): void {
 
 const VALIDATION_DEBOUNCE_MS = 250;
 const MARKER_OWNER = "containerlab-yaml-schema";
+const HOST_MARKER_OWNER = "containerlab-validate";
 
 const validatorCache = new WeakMap<object, ReturnType<Ajv["compile"]>>();
 const ajv = new Ajv({ allErrors: true, strict: false });
@@ -686,6 +687,8 @@ export interface MonacoCodeEditorProps {
   onReadOnlyEditAttempt?: () => void;
   /** Ctrl/Cmd+click opens the files a topology refers to; YAML only. */
   fileLinks?: LabFileLinks;
+  /** Problems the lab host found, e.g. `containerlab validate -r c9s`; line 1 when it names none. */
+  hostDiagnostics?: ReadonlyArray<{ message: string; line?: number }>;
 }
 
 export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
@@ -700,6 +703,8 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
   onBlur,
   history,
   restoreSelection
+,
+  hostDiagnostics
 }) => {
   const host = useClabUiHost();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -755,6 +760,25 @@ export const MonacoCodeEditor: React.FC<MonacoCodeEditorProps> = ({
       monaco.editor.setModelMarkers(model, MARKER_OWNER, validateYaml(model.getValue(), schema));
     }, VALIDATION_DEBOUNCE_MS);
   }, [language]);
+
+  // The lab host's own findings, next to the schema checks.
+  useEffect(() => {
+    const model = modelRef.current;
+    if (!model) return;
+    const markers = (hostDiagnostics ?? []).map((diagnostic) => {
+      const line = Math.min(Math.max(diagnostic.line ?? 1, 1), model.getLineCount());
+      return {
+        severity: monaco.MarkerSeverity.Error,
+        message: diagnostic.message,
+        startLineNumber: line,
+        startColumn: 1,
+        endLineNumber: line,
+        endColumn: model.getLineMaxColumn(line),
+        source: "containerlab"
+      };
+    });
+    monaco.editor.setModelMarkers(model, HOST_MARKER_OWNER, markers);
+  }, [hostDiagnostics, value]);
 
   useEffect(() => {
     ensureMonacoConfiguredOnce();

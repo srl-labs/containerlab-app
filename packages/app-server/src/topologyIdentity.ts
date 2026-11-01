@@ -78,6 +78,31 @@ function runtimeLabMatchesTopologyPath(
   });
 }
 
+/**
+ * A c9s lab that containerlab deployed reports the file it was deployed from
+ * and matches like any lab. Only a lab created on the cluster by other means
+ * has no file: containerlab reports it by where it lives in the cluster,
+ * `k8s://<namespace>/topologies/<lab>`, and its name is all a topology file
+ * can match.
+ */
+function isClusterLabPath(labPath: string | undefined): boolean {
+  return /^k8s:\/\//i.test(labPath ?? "");
+}
+
+function uniqueClusterLabName(
+  entries: Array<[string, InspectContainerInfo[]]>,
+  normalizedLabName: string
+): string | undefined {
+  if (!normalizedLabName) return undefined;
+  const matches = entries.filter(([labName, containers]) =>
+    containers.some((container) =>
+      isClusterLabPath(runtimeContainerString(container, "absLabPath", "abs_lab_path", "labPath", "lab_path"))
+    ) &&
+    (runtimeLabName(labName, containers).toLowerCase() === normalizedLabName || labName.trim().toLowerCase() === normalizedLabName)
+  );
+  return matches.length === 1 ? runtimeLabName(matches[0][0], matches[0][1]) : undefined;
+}
+
 export function findRunningLabNameForTopology(
   labs: InspectAllLabsResponse,
   topologyRef: Pick<TopologyRef, "labName" | "yamlPath" | "absoluteYamlPath">
@@ -91,10 +116,10 @@ export function findRunningLabNameForTopology(
     const match = entries.find(([, containers]) => containers.some((container) =>
       normalizeTopologyPath(runtimeContainerString(container, "absLabPath", "abs_lab_path", "labPath", "lab_path") ?? "") === absolutePath
     ));
-    return match ? runtimeLabName(match[0], match[1]) : undefined;
+    return match ? runtimeLabName(match[0], match[1]) : uniqueClusterLabName(entries, normalizedLabName);
   }
 
-  if (normalizedPath.startsWith("@shared/")) return undefined;
+  if (normalizedPath.startsWith("@shared/")) return uniqueClusterLabName(entries, normalizedLabName);
 
   if (normalizedPath) {
     const pathMatches = entries.filter(([, containers]) =>

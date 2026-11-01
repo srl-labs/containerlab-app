@@ -31,6 +31,22 @@ async function main(): Promise<void> {
   const extensionTestsPath = path.resolve(__dirname, "suite");
   const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-containerlab-e2e-"));
   const topologyPath = writeSmokeTopology(workspacePath);
+  // The containerlab the live suites run, and how the explorer learns about labs.
+  const settings = {
+    ...(process.env.CLAB_E2E_CLAB_BINARY
+      ? { "containerlab.binaryPath": process.env.CLAB_E2E_CLAB_BINARY }
+      : {}),
+    ...(process.env.CLAB_E2E_REFRESH_MODE
+      ? { "containerlab.refreshMode": process.env.CLAB_E2E_REFRESH_MODE }
+      : {})
+  };
+  if (Object.keys(settings).length > 0) {
+    fs.mkdirSync(path.join(workspacePath, ".vscode"));
+    fs.writeFileSync(
+      path.join(workspacePath, ".vscode", "settings.json"),
+      JSON.stringify(settings, null, 2)
+    );
+  }
 
   process.env.VSCODE_CONTAINERLAB_E2E = "1";
   process.env.VSCODE_CONTAINERLAB_E2E_WORKSPACE = workspacePath;

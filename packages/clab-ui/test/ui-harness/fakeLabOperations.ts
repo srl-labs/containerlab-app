@@ -8,6 +8,14 @@ import {
   type LabOperationSupport,
   type LabSnapshotNodeResult
 } from "../../src/host/labOperations";
+import { parseNodeLocations } from "../../src/host/kubernetes";
+import type { LabSettings } from "../../src/host/lifecycleOptions";
+
+import {
+  containerRuntimeFeatures,
+  effectiveSupport,
+  type LabHostInfo
+} from "../../src/host/labHostSupport";
 
 import { readTopology, type DesiredLab } from "./fakeLab";
 
@@ -34,6 +42,47 @@ function harnessSupport(): LabOperationSupport {
   return ALL_SUPPORTED;
 }
 
+/**
+ * The fake lab host: Docker, unless a spec sets `window.__CLAB_UI_HARNESS_LAB_HOST__`
+ * to `"c9s"` (a Kubernetes cluster on this machine) to see what the view hides there.
+ */
+function harnessLabHost(): LabHostInfo {
+  const stub = (window as unknown as { __CLAB_UI_HARNESS_LAB_HOST__?: unknown }).__CLAB_UI_HARNESS_LAB_HOST__;
+  const c9s = stub === "c9s";
+  const capabilities = {
+    sshAccess: false,
+    deployFromUrl: true,
+    importFromUrl: true,
+    edgesharkManagement: true,
+    wiresharkVnc: true,
+    healthMetrics: true,
+    sharedWorkspace: false,
+    tailscaleStatus: false
+  };
+  const features = {
+    validate: true,
+    graphMermaid: true,
+    graphDot: true,
+    sshxReaders: !c9s,
+    gottyOptions: !c9s,
+    nodeStats: !c9s,
+    terminalResume: true,
+    lifecycleTimeout: true,
+    ...containerRuntimeFeatures(!c9s),
+    manifestExport: c9s,
+    c9sDeployOptions: c9s,
+    interfaceInspect: true,
+    captureStream: c9s,
+    captureVnc: false
+  };
+  return {
+    profile: c9s
+      ? { runtime: "c9s", kubeContext: "kind-harness", namespaceMode: "per-lab", persistence: true, defaultTimeout: "10m" }
+      : { runtime: "docker", defaultTimeout: "2m" },
+    support: effectiveSupport(capabilities, features)
+  };
+}
+
 function containerName(lab: DesiredLab, node: string): string {
   return `clab-${lab.labName}-${node}`;
 }
@@ -57,10 +106,72 @@ export function createFakeLabOperations(deps: {
     return readTopology(yaml);
   };
   const delay = () => new Promise((resolve) => setTimeout(resolve, 150));
+  let labSettings: LabSettings | undefined;
 
   return {
     async support() {
       return harnessSupport();
+    },
+
+    async labSettings() {
+      return labSettings;
+    },
+
+    async saveLabSettings(settings) {
+      deps.record({ command: "labOperation", operation: "saveLabSettings", settings });
+      labSettings = settings;
+    },
+
+    async hostInfo() {
+      return harnessLabHost();
+    },
+
+    async nodeLocations() {
+      if (harnessLabHost().profile.runtime !== "c9s") return [];
+      const current = lab();
+      return parseNodeLocations(
+        [...current.nodes.keys()].map((node) => ({
+          name: `${current.labName}-${node}`,
+          lab_name: current.labName,
+          namespace: `c9s-${current.labName}`,
+          pod: `${current.labName}-${node}-6d9f7c-x2k4q`,
+          container: `node-${node}-1a2b3c`,
+          exposed_ports: [{ exposePort: 22, destinationPort: 22, protocol: "TCP" }]
+        }))
+      );
+    },
+
+    async captureInterfaces() {
+      if (!harnessLabHost().support.captureStream) return [];
+      deps.record({ command: "labOperation", operation: "captureInterfaces" });
+      // Every end of a link between nodes, with the other end as its peer.
+      return lab().links.flatMap((link) => {
+        const [left, right] = link.split(" -- ").map((end) => {
+          const index = end.indexOf(":");
+          return { node: end.slice(0, index), iface: end.slice(index + 1) };
+        });
+        if (!left || !right || !lab().nodes.has(left.node) || !lab().nodes.has(right.node)) return [];
+        return [
+          { node: left.node, interface: left.iface, peerNode: right.node, peerInterface: right.iface },
+          { node: right.node, interface: right.iface, peerNode: left.node, peerInterface: left.iface }
+        ];
+      });
+    },
+
+    async exportManifests() {
+      deps.record({ command: "labOperation", operation: "exportManifests" });
+      const current = lab();
+      return {
+        yaml: `apiVersion: c9s.run/v1alpha1\nkind: Topology\nmetadata:\n  name: ${current.labName}\n  namespace: c9s-${current.labName}\n`
+      };
+    },
+
+    async validate() {
+      deps.record({ command: "labOperation", operation: "validate" });
+      // A spec sets `window.__CLAB_UI_HARNESS_VALIDATE_ERROR__` to what containerlab rejects.
+      const error = (window as unknown as { __CLAB_UI_HARNESS_VALIDATE_ERROR__?: unknown })
+        .__CLAB_UI_HARNESS_VALIDATE_ERROR__;
+      return typeof error === "string" ? { valid: false, error } : { valid: true };
     },
 
     async exec(request) {

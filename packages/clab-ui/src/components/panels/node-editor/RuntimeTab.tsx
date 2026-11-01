@@ -8,12 +8,17 @@ import {
   CheckboxField,
   DynamicList,
   PanelAddSection,
-  PanelSection
+  PanelSection,
+  RuntimeLimited
 } from "../../ui/form";
+import { useRuntimeLimit } from "../../../stores/labHostStore";
 
 import type { TabProps } from "./types";
 import { withCurrentOption } from "./selectOptions";
 import { inheritedFieldHint, inheritedListItems } from "./inheritanceHints";
+
+/** Restart policies a Kubernetes (c9s) lab host refuses. */
+const C9S_REFUSED_RESTART_POLICIES = new Set(["no", "on-failure"]);
 
 const RESTART_POLICY_OPTIONS = [
   { value: "", label: "Default" },
@@ -25,6 +30,12 @@ const RESTART_POLICY_OPTIONS = [
 
 export const RuntimeTab: React.FC<TabProps> = (props) => {
   const { data, onChange } = props;
+  const restartLimit = useRuntimeLimit("nodeRestartPolicy");
+  const autoRemoveLimit = useRuntimeLimit("nodeAutoRemove");
+  const execLimit = useRuntimeLimit("nodeExec");
+  const restartOptions = withCurrentOption(RESTART_POLICY_OPTIONS, data.restartPolicy ?? "").map((option) =>
+    restartLimit && C9S_REFUSED_RESTART_POLICIES.has(option.value) ? { ...option, disabled: true } : option
+  );
   const handleAddExec = () => {
     onChange({ exec: [...(data.exec ?? []), ""] });
   };
@@ -58,7 +69,7 @@ export const RuntimeTab: React.FC<TabProps> = (props) => {
         />
       </PanelSection>
 
-      <PanelAddSection title="Exec Commands" onAdd={handleAddExec}>
+      <PanelAddSection title="Exec Commands" onAdd={handleAddExec} limit={execLimit}>
         <DynamicList
           items={data.exec ?? []}
           onChange={(items) => onChange({ exec: items })}
@@ -82,20 +93,24 @@ export const RuntimeTab: React.FC<TabProps> = (props) => {
           suffix="seconds"
           helperText={inheritedFieldHint(props, "startupDelay")}
         />
-        <SelectField
-          id="node-restart-policy"
-          label="Restart Policy"
-          value={data.restartPolicy ?? ""}
-          onChange={(value) => onChange({ restartPolicy: value })}
-          options={withCurrentOption(RESTART_POLICY_OPTIONS, data.restartPolicy ?? "")}
-          helperText={inheritedFieldHint(props, "restartPolicy")}
-        />
-        <CheckboxField
-          id="node-auto-remove"
-          label="Auto-remove container on exit"
-          checked={data.autoRemove ?? false}
-          onChange={(checked) => onChange({ autoRemove: checked })}
-        />
+        <RuntimeLimited limit={restartLimit}>
+          <SelectField
+            id="node-restart-policy"
+            label="Restart Policy"
+            value={data.restartPolicy ?? ""}
+            onChange={(value) => onChange({ restartPolicy: value })}
+            options={restartOptions}
+            helperText={inheritedFieldHint(props, "restartPolicy")}
+          />
+        </RuntimeLimited>
+        <RuntimeLimited limit={autoRemoveLimit} keepEditable={data.autoRemove === true}>
+          <CheckboxField
+            id="node-auto-remove"
+            label="Auto-remove container on exit"
+            checked={data.autoRemove ?? false}
+            onChange={(checked) => onChange({ autoRemove: checked })}
+          />
+        </RuntimeLimited>
       </PanelSection>
     </Box>
   );
