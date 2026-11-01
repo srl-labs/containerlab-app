@@ -32,7 +32,7 @@ topology:
 </clab-topology>
 ```
 
-Each component owns an isolated iframe and includes Topology, YAML, and split views, source inspection, copy/download, and fullscreen controls. Use `theme="light"` or `theme="dark"` to fix a theme; otherwise it follows the system preference. `borderless` displays only the canvas. HTML-escape YAML when generating markup; for JavaScript-created elements, assign the source through `pre.textContent`.
+Each component owns an isolated iframe and includes Topology, YAML, and split views, copy/download, and fullscreen controls. Clicking a node highlights its YAML lines. Add `inspector` for a node menu with details, and `controls` for floating zoom buttons. Use `theme="light"` or `theme="dark"` to fix a theme; otherwise it follows the system preference. `borderless` displays only the canvas. HTML-escape YAML when generating markup; for JavaScript-created elements, assign the source through `pre.textContent`.
 
 Pass saved annotations as a JSON string in the `annotations` attribute. Attributes are read when the element connects: replace the element to change its topology or options. Removing it disposes its iframe and listeners. This is the supported integration for multiple independent diagrams on one page.
 

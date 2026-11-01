@@ -91,7 +91,7 @@ export class ClabTopology extends HTMLElement {
     this.applyHeight();
     // All dynamic author content is assigned through textContent, never innerHTML.
     this.innerHTML = `
-      <div class="clab-component-heading"><span class="clab-component-mark">${icon("topology")}</span><strong></strong><span class="clab-live-badge"><i></i> INTERACTIVE</span></div>
+      <div class="clab-component-heading"><span class="clab-component-mark">${icon("topology")}</span><strong></strong></div>
       <div class="clab-toolbar">
         <div class="clab-tabs" role="tablist" aria-label="Topology presentation">
           ${["topology", "yaml", "split"].map((view) => `<button type="button" role="tab" id="${id}-${view}" aria-controls="${id}-panel" data-view="${view}">${icon(view)}<span>${view === "yaml" ? "YAML" : view === "split" ? "Split" : "Topology"}</span></button>`).join("")}
@@ -125,8 +125,9 @@ export class ClabTopology extends HTMLElement {
     this.pre.tabIndex = 0;
     this.pre.setAttribute("aria-label", "Topology YAML source");
     this.querySelector(".clab-code").append(this.pre);
+    // The node inspector is opt-in; the other panels follow the borderless preset.
     for (const [option, selector] of Object.entries({ heading: ".clab-component-heading", toolbar: ".clab-toolbar", inspector: ".clab-inspector", footer: ".clab-component-footer" })) {
-      this.querySelector(selector).hidden = !booleanOption(this, option, !this.borderless);
+      this.querySelector(selector).hidden = !booleanOption(this, option, option !== "inspector" && !this.borderless);
     }
     this.querySelector(".clab-hint").textContent = [
       booleanOption(this, "pan", true) ? "Drag to pan" : "",
