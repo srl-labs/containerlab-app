@@ -90,7 +90,7 @@ test.describe("Link Editor Panel", () => {
     await page.waitForTimeout(200);
     await toggleBtn.click();
 
-    await expect(page.getByPlaceholder("Search nodes...")).toBeVisible();
+    await expect(page.getByPlaceholder("Search nodes…")).toBeVisible();
   });
 
   test("link editor does not open in view mode", async ({ page, topoViewerPage }) => {

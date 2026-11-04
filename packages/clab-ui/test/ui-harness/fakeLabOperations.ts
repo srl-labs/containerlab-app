@@ -1,4 +1,4 @@
-// Pretend exec, VM snapshots, config save and inspect details for the harness.
+// Pretend exec, VM snapshots, config save, inspect details and host scripts for the harness.
 import {
   NO_LAB_OPERATIONS,
   parseExecResponse,
@@ -27,7 +27,8 @@ const ALL_SUPPORTED: LabOperationSupport = {
   snapshotSave: true,
   deployRestore: true,
   saveCopy: true,
-  inspectDetails: true
+  inspectDetails: true,
+  hostScript: true
 };
 
 /**
@@ -239,6 +240,48 @@ export function createFakeLabOperations(deps: {
           Labels: { "clab-node-name": node, "clab-node-kind": desired.kind, containerlab: current.labName }
         }))
       });
+    },
+
+    /** Describes the script as it was given; a path or script mentioning "foreign" is someone else's. */
+    async describeHostScript(source) {
+      deps.record({ command: "labOperation", operation: "describeHostScript", request: source });
+      await delay();
+      const text = source.scriptPath ?? source.script ?? "";
+      return {
+        kind: source.scriptPath ? "file" : "inline",
+        ...(source.scriptPath ? { resolvedPath: `/lab/${source.scriptPath}` } : {}),
+        sha256: `sha-${text}`,
+        size: text.length,
+        foreign: text.includes("foreign"),
+        content: text,
+        truncated: false,
+        trustKey: `trust-${text}`
+      };
+    },
+
+    /**
+     * Echoes the script; a script or path that mentions "fail" exits with 1, and
+     * one that mentions "slow" runs until it is stopped.
+     */
+    async runHostScript(request, options) {
+      deps.record({ command: "labOperation", operation: "runHostScript", request });
+      await delay();
+      const source = request.scriptPath ?? request.script ?? "";
+      if (source.includes("slow")) {
+        await new Promise<void>((resolve) => {
+          if (options?.signal?.aborted) resolve();
+          options?.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+        return { exitCode: null, stdout: "", stderr: "", timedOut: false, cancelled: true, durationMs: 150 };
+      }
+      const failed = source.includes("fail");
+      return {
+        exitCode: failed ? 1 : 0,
+        stdout: failed ? "" : `ran ${source}`,
+        stderr: failed ? `${source}: failed` : "",
+        timedOut: false,
+        durationMs: 150
+      };
     }
   };
 }

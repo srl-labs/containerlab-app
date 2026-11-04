@@ -51,7 +51,7 @@ function DetachedTerminalApp() {
     []
   );
 
-  let message = "Opening terminal...";
+  let message = "Opening terminal…";
   if (!target) {
     message = "Missing or invalid terminal target.";
   } else if (openedPaneIdRef.current) {

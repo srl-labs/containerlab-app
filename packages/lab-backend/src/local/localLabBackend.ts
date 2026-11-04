@@ -5,6 +5,8 @@ import {
   containerlabDefaultTimeout,
   isTopologyFileName,
   type LabExecRequest,
+  type LabHostScriptRequest,
+  type LabHostScriptSource,
   type LabOperationSupport,
   type LabSnapshotSaveRequest,
   type TailscaleStatus,
@@ -23,6 +25,7 @@ import type {
   LabStatsStreamOptions,
   LabTarget,
   LifecycleRunOptions,
+  HostScriptRunOptions,
   NodeLogStreamOptions,
   RenderedTopology,
   TerminalCreateOptions,
@@ -55,6 +58,7 @@ import { captureNodeTargets } from "../capture.ts";
 import { LocalCapture, WIRESHARK_VNC_NEEDS_DOCKER } from "./capture.ts";
 import { c9sCaptureArgs, listC9sCaptureInterfaces, spawnC9sCapture } from "./c9sCapture.ts";
 import { createDockerNodeAccess } from "./dockerNodeAccess.ts";
+import { describeLocalHostScript, runLocalHostScript, streamLocalHostScript } from "./hostScripts.ts";
 import { inspectField } from "./inspect.ts";
 import { createKubeClient, type KubeClient } from "./kube/kubeClient.ts";
 import { loadKubeConfig } from "./kube/kubeConfig.ts";
@@ -349,8 +353,13 @@ export class LocalLabBackend implements LabBackend {
 
   labOperationSupport(): Promise<LabOperationSupport> {
     this.support ??= this.version().then(
-      (response) => localOperationSupport(/version: (\S+)/.exec(response.versionInfo)?.[1]),
-      () => localOperationSupport(undefined)
+      (response) =>
+        localOperationSupport(
+          /version: (\S+)/.exec(response.versionInfo)?.[1],
+          this.options.hostScripts,
+          this.options.runtime
+        ),
+      () => localOperationSupport(undefined, this.options.hostScripts, this.options.runtime)
     );
     return this.support;
   }
@@ -391,6 +400,18 @@ export class LocalLabBackend implements LabBackend {
 
   async inspectLabDetails(lab: LabTarget) {
     return localInspectDetails(await this.labOptions(lab.labName), await this.labRef(lab));
+  }
+
+  async describeHostScript(lab: LabTarget, source: LabHostScriptSource) {
+    return describeLocalHostScript(await this.labOptions(lab.labName), await this.labRef(lab), source);
+  }
+
+  async runHostScript(lab: LabTarget, request: LabHostScriptRequest, run?: HostScriptRunOptions) {
+    return runLocalHostScript(await this.labOptions(lab.labName), await this.labRef(lab), request, run);
+  }
+
+  async streamHostScript(lab: LabTarget, request: LabHostScriptRequest, run?: HostScriptRunOptions) {
+    return streamLocalHostScript(await this.labOptions(lab.labName), await this.labRef(lab), request, run);
   }
 
   /** The topology file of a lab that need not be running, like clab-api-server finds it. */

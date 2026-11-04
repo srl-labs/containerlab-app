@@ -281,7 +281,7 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
                 color: "text.secondary"
               }}
             >
-              Waiting for command output...
+              Waiting for command output…
             </Typography>
           )}
           {logItems}
@@ -290,16 +290,16 @@ export const LifecycleProgressModal: React.FC<LifecycleProgressModalProps> = ({
       <DialogActions>
         {isProcessing ? (
           <Button
+            variant="text"
             size="small"
-            variant="outlined"
             onClick={onCancel}
             data-testid="lifecycle-cancel-btn"
           >
             Cancel
           </Button>
         ) : (
-          <Button size="small" variant="contained" onClick={onClose} data-testid="lifecycle-ok-btn">
-            OK
+          <Button variant="text" size="small" onClick={onClose} data-testid="lifecycle-ok-btn">
+            Close
           </Button>
         )}
       </DialogActions>

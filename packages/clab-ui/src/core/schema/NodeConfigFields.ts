@@ -40,7 +40,7 @@ const FIELD_TEXT: Partial<Record<string, { label?: string; description?: string 
   "config.vars": {
     label: "Startup Config Variables",
     description:
-      "Variables for startup-config templates, read as .Config.Vars. Values are YAML, e.g. 65001 or [2, 4]."
+      "Variables for startup-config templates, read as .Config.Vars. Values are YAML, e.g., 65001 or [2, 4]."
   }
 };
 

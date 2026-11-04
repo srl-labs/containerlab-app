@@ -57,8 +57,10 @@ test("the installed containerlab version decides what is supported", () => {
     snapshotSave: false,
     deployRestore: false,
     saveCopy: false,
-    inspectDetails: true
+    inspectDetails: true,
+    hostScript: true
   });
+  assert.equal(localOperationSupport("0.71.3", false).hostScript, false);
   assert.equal(localOperationSupport("0.72.0").snapshotSave, true);
   assert.equal(localOperationSupport("0.72.0").saveCopy, false);
   assert.equal(localOperationSupport("v0.81.1").saveCopy, true);

@@ -20,6 +20,31 @@ export interface LabOperationSupport {
   saveCopy: boolean;
   /** `inspect --details`: everything the runtime knows about each container. */
   inspectDetails: boolean;
+  /** Script buttons: shell scripts that run on the lab host itself. */
+  hostScript: boolean;
+  /** Why script buttons cannot run here, when `hostScript` is false and the host says why. */
+  hostScriptUnavailable?: HostScriptUnavailableReason;
+}
+
+/**
+ * `c9s`: a Kubernetes lab host has no host to run on. `disabled`: its
+ * administrator left the feature off. `unsupported-server`: the clab-api-server
+ * does not offer it, because it is too old or has `API_HOST_SCRIPTS` off.
+ */
+export type HostScriptUnavailableReason = "c9s" | "disabled" | "unsupported-server";
+
+/** What the UI tells someone who wants a script button on a host that cannot run it. */
+export function hostScriptUnavailableMessage(reason: HostScriptUnavailableReason | undefined): string {
+  switch (reason) {
+    case "c9s":
+      return "Script buttons do not run on Kubernetes lab hosts.";
+    case "disabled":
+      return "Script buttons are turned off on this lab host.";
+    case "unsupported-server":
+      return "This clab-api-server does not offer script buttons. Set API_HOST_SCRIPTS=true on it, or update it.";
+    default:
+      return "This lab host cannot run scripts.";
+  }
 }
 
 export const NO_LAB_OPERATIONS: LabOperationSupport = {
@@ -27,7 +52,8 @@ export const NO_LAB_OPERATIONS: LabOperationSupport = {
   snapshotSave: false,
   deployRestore: false,
   saveCopy: false,
-  inspectDetails: false
+  inspectDetails: false,
+  hostScript: false
 };
 
 /** `containerlab exec`: one command on chosen nodes, on nodes with labels, or on all nodes. */
@@ -101,6 +127,93 @@ export interface LabInspectDetailsResult {
   containers: LabContainerDetails[];
 }
 
+/** Linux limits one command line argument to 128 KiB, and `bash -c` takes the script as one. */
+export const MAX_INLINE_SCRIPT_BYTES = 100 * 1024;
+/** One day; a script that needs longer can run without a limit on a local lab host. */
+export const MAX_SCRIPT_TIMEOUT_SECONDS = 24 * 60 * 60;
+
+/** Which script: `scriptPath` wins over `script` when both are set. */
+export interface LabHostScriptSource {
+  /** Script file; relative paths start at the topology folder. */
+  scriptPath?: string;
+  /** Script body, used when there is no path. */
+  script?: string;
+}
+
+/** A script that runs on the lab host with bash, from the topology folder. */
+export interface LabHostScriptRequest extends LabHostScriptSource {
+  /** Stops the script after this many seconds; unset means no limit. */
+  timeoutSeconds?: number;
+  /**
+   * The `sha256` of the description the user agreed to. The lab host refuses to
+   * run anything else, so a script that changed since then asks again.
+   */
+  expectedSha256?: string;
+  /**
+   * When set, the host also shows the output in its own terminal or output
+   * view under this title. Lab hosts ignore it.
+   */
+  outputTitle?: string;
+}
+
+export interface LabHostScriptResult {
+  /** Exit code; null when the script was stopped by a signal. */
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  /** Stopped on request, by the Stop action or because the client went away. */
+  cancelled?: boolean;
+  durationMs: number;
+}
+
+/**
+ * What a script is, as the lab host sees it right now. The UI shows it before a
+ * run and keeps `trustKey` for scripts the user agreed to.
+ */
+export interface LabHostScriptDescription {
+  kind: "file" | "inline";
+  /** The absolute path of a script file. */
+  resolvedPath?: string;
+  sha256: string;
+  size: number;
+  /** Who owns the script file, as far as the host can tell. */
+  owner?: string;
+  /**
+   * The signed-in user may not have written this: another user's file or lab,
+   * or a shared folder. Such a script asks before every run.
+   */
+  foreign: boolean;
+  /** The start of the script. */
+  content: string;
+  truncated: boolean;
+  /** Stands for this exact script on this lab host and topology. */
+  trustKey: string;
+}
+
+/** Why a host script request cannot run; undefined when it is fine. */
+export function hostScriptRequestProblem(request: LabHostScriptRequest): string | undefined {
+  const scriptPath = request.scriptPath?.trim() ?? "";
+  const script = request.script ?? "";
+  if (scriptPath === "" && script.trim() === "") return "The script button has no script or script path.";
+  if (scriptPath === "" && new TextEncoder().encode(script).length > MAX_INLINE_SCRIPT_BYTES) {
+    return `An inline script can have at most ${MAX_INLINE_SCRIPT_BYTES / 1024} KiB. Use a script file.`;
+  }
+  const { timeoutSeconds } = request;
+  if (
+    timeoutSeconds !== undefined &&
+    (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > MAX_SCRIPT_TIMEOUT_SECONDS)
+  ) {
+    return `The timeout must be between 1 and ${MAX_SCRIPT_TIMEOUT_SECONDS} seconds.`;
+  }
+  return undefined;
+}
+
+/** What a streamed host script reports: output as it comes, then how it ended. */
+export type LabHostScriptEvent =
+  | { type: "output"; stream: "stdout" | "stderr"; text: string }
+  | { type: "exit"; result: LabHostScriptResult };
+
 /** Lab operations on the lab that is open in the topology view. */
 export interface ClabUiLabOperationsHost {
   support(): Promise<LabOperationSupport>;
@@ -108,6 +221,13 @@ export interface ClabUiLabOperationsHost {
   saveSnapshots(request: LabSnapshotSaveRequest): Promise<LabSnapshotSaveResult>;
   saveConfigs(request: LabSaveConfigsRequest): Promise<LabSaveConfigsResult>;
   inspectDetails(): Promise<LabInspectDetailsResult>;
+  /** Script buttons: what a script is, for the confirmation before it runs. */
+  describeHostScript(source: LabHostScriptSource): Promise<LabHostScriptDescription>;
+  /** Runs a script; aborting `options.signal` stops it. */
+  runHostScript(
+    request: LabHostScriptRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<LabHostScriptResult>;
   /** The runtime of the lab's host and what it offers; undefined when the host tells nothing. */
   hostInfo(): Promise<LabHostInfo | undefined>;
   /** Where the lab's nodes run on a c9s host; empty elsewhere. */
@@ -145,7 +265,8 @@ export function parseManifestExport(value: unknown): { yaml: string } {
   return { yaml: isRecord(value) && typeof value.yaml === "string" ? value.yaml : "" };
 }
 
-export type LabOperationName = keyof ClabUiLabOperationsHost;
+/** `cancelHostScript` has no method of its own: aborting a `runHostScript` sends it. */
+export type LabOperationName = keyof ClabUiLabOperationsHost | "cancelHostScript";
 
 const LABEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}=[A-Za-z0-9._:/@+-]{1,256}$/;
 
@@ -209,7 +330,60 @@ export function parseLabOperationSupport(value: unknown): LabOperationSupport {
     snapshotSave: value.snapshotSave === true,
     deployRestore: value.deployRestore === true,
     saveCopy: value.saveCopy === true,
-    inspectDetails: value.inspectDetails === true
+    inspectDetails: value.inspectDetails === true,
+    hostScript: value.hostScript === true,
+    ...(isHostScriptUnavailableReason(value.hostScriptUnavailable)
+      ? { hostScriptUnavailable: value.hostScriptUnavailable }
+      : {})
+  };
+}
+
+function isHostScriptUnavailableReason(value: unknown): value is HostScriptUnavailableReason {
+  return value === "c9s" || value === "disabled" || value === "unsupported-server";
+}
+
+export function parseHostScriptResponse(value: unknown): LabHostScriptResult {
+  if (!isRecord(value)) {
+    return { exitCode: null, stdout: "", stderr: "", timedOut: false, durationMs: 0 };
+  }
+  const exitCode = numberField(value, "exitCode");
+  return {
+    exitCode: exitCode ?? null,
+    stdout: stringField(value, "stdout") ?? "",
+    stderr: stringField(value, "stderr") ?? "",
+    timedOut: value.timedOut === true,
+    ...(value.cancelled === true ? { cancelled: true } : {}),
+    durationMs: numberField(value, "durationMs") ?? 0
+  };
+}
+
+/** How a script ended, for output panes: "stopped", "timed out" or "exited with 3". */
+export function hostScriptOutcome(result: LabHostScriptResult): string {
+  if (result.cancelled === true) return "stopped";
+  if (result.timedOut) return "timed out";
+  return `exited with ${result.exitCode ?? "a signal"}`;
+}
+
+/** A description the lab host answered with; throws when it cannot be shown. */
+export function parseHostScriptDescription(value: unknown): LabHostScriptDescription {
+  const sha256 = isRecord(value) ? stringField(value, "sha256") : undefined;
+  const trustKey = isRecord(value) ? stringField(value, "trustKey") : undefined;
+  if (!isRecord(value) || !sha256 || !trustKey) {
+    throw new Error("The lab host did not describe the script.");
+  }
+  const resolvedPath = stringField(value, "resolvedPath");
+  const owner = stringField(value, "owner");
+  return {
+    kind: value.kind === "file" ? "file" : "inline",
+    ...(resolvedPath ? { resolvedPath } : {}),
+    sha256,
+    size: numberField(value, "size") ?? 0,
+    ...(owner ? { owner } : {}),
+    // A host that does not say gets the careful answer.
+    foreign: value.foreign !== false,
+    content: stringField(value, "content") ?? "",
+    truncated: value.truncated === true,
+    trustKey
   };
 }
 
@@ -350,6 +524,10 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
   saveSnapshots: 60 * 60_000,
   saveConfigs: 15 * 60_000,
   inspectDetails: 2 * 60_000,
+  describeHostScript: 60_000,
+  // Scripts without a limit run as long as they like; the lab host stops the others.
+  runHostScript: Number.POSITIVE_INFINITY,
+  cancelHostScript: 30_000,
   hostInfo: 30_000,
   nodeLocations: 60_000,
   captureInterfaces: 60_000,
@@ -362,7 +540,7 @@ const OPERATION_TIMEOUT_MS: Record<LabOperationName, number> = {
 interface PendingLabOperation {
   resolve: (result: unknown) => void;
   reject: (err: Error) => void;
-  timeoutId: ReturnType<typeof setTimeout>;
+  timeoutId: ReturnType<typeof setTimeout> | undefined;
 }
 
 /**
@@ -404,10 +582,13 @@ export function createLabOperationsRequester(options: {
     ensureListener();
     const requestId = newId();
     return new Promise<unknown>((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        if (!pending.delete(requestId)) return;
-        reject(new Error("The lab operation timed out"));
-      }, OPERATION_TIMEOUT_MS[operation]);
+      const timeoutMs = OPERATION_TIMEOUT_MS[operation];
+      const timeoutId = Number.isFinite(timeoutMs)
+        ? setTimeout(() => {
+            if (!pending.delete(requestId)) return;
+            reject(new Error("The lab operation timed out"));
+          }, timeoutMs)
+        : undefined;
       pending.set(requestId, { resolve, reject, timeoutId });
       postMessage({
         command: requestMessage,
@@ -425,6 +606,18 @@ export function createLabOperationsRequester(options: {
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await send("saveSnapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await send("saveConfigs", request)),
     inspectDetails: async () => parseInspectDetails(await send("inspectDetails")),
+    describeHostScript: async (source) =>
+      parseHostScriptDescription(await send("describeHostScript", source)),
+    runHostScript: async (request, options) => {
+      const runId = newId();
+      const cancel = () => void send("cancelHostScript", { runId }).catch(() => undefined);
+      options?.signal?.addEventListener("abort", cancel, { once: true });
+      try {
+        return parseHostScriptResponse(await send("runHostScript", { ...request, runId }));
+      } finally {
+        options?.signal?.removeEventListener("abort", cancel);
+      }
+    },
     hostInfo: async () => parseLabHostInfo(await send("hostInfo")),
     nodeLocations: async () => parseNodeLocations(await send("nodeLocations")),
     captureInterfaces: async () => parseLabCaptureInterfaces(await send("captureInterfaces")),

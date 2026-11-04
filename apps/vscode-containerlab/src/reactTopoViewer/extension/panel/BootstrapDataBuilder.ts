@@ -2,7 +2,7 @@
  * BootstrapDataBuilder - Assembles initial data for React TopoViewer webview
  */
 
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 
 import type { CustomIconInfo, CustomNodeTemplate } from "@containerlab/clab-ui/session";
 import { getDockerImages } from "../../../utils/docker/images";
@@ -18,6 +18,8 @@ export interface BootstrapData {
   defaultNode: string;
   dockerImages: string[];
   customIcons: CustomIconInfo[];
+  /** When script buttons confirm before running; see `containerlab.editor.scriptButtons.confirm`. */
+  scriptButtonConfirm: string;
 }
 
 /**
@@ -48,6 +50,9 @@ export async function buildBootstrapData(input: BootstrapDataInput): Promise<Boo
     customNodes,
     defaultNode,
     dockerImages,
-    customIcons
+    customIcons,
+    scriptButtonConfirm: vscode.workspace
+      .getConfiguration("containerlab.editor")
+      .get<string>("scriptButtons.confirm", "firstRun")
   };
 }

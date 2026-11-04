@@ -185,7 +185,7 @@ function ReconnectCard({
             }
             sx={{ flexShrink: 0 }}
           >
-            {busy ? "Connecting..." : "Connect"}
+            {busy ? "Connecting…" : "Connect"}
           </Button>
         </Stack>
       </Stack>

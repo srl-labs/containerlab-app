@@ -20,7 +20,8 @@ const nodeTypes = {
   "group-node": lazy(() => import("../components/canvas/nodes/GroupNode").then(m => ({ default: m.GroupNode }))),
   "free-shape-node": lazy(() => import("../components/canvas/nodes/FreeShapeNode").then(m => ({ default: m.FreeShapeNode }))),
   "free-text-node": lazy(() => import("../components/canvas/nodes/FreeTextNode").then(m => ({ default: m.FreeTextNode }))),
-  "traffic-rate-node": lazy(() => import("../components/canvas/nodes/TrafficRateNode").then(m => ({ default: m.TrafficRateNode })))
+  "traffic-rate-node": lazy(() => import("../components/canvas/nodes/TrafficRateNode").then(m => ({ default: m.TrafficRateNode }))),
+  "script-button-node": lazy(() => import("../components/canvas/nodes/ScriptButtonNode").then(m => ({ default: m.ScriptButtonNode })))
 };
 type Options = ReturnType<typeof resolveViewerOptions>;
 

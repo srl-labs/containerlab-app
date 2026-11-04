@@ -7,6 +7,7 @@ import {
   createContainerlabAppServer,
   createLocalEndpoints,
   normalizeBasePath,
+  parseAllowedHosts,
   resolveLocalBackendConfig,
   resolveWebTlsConfig
 } from "@srl-labs/containerlab-app-server";
@@ -18,6 +19,7 @@ const BASE_PATH = normalizeBasePath(process.env.WEB_BASE_PATH);
 const IS_DEV = process.env.NODE_ENV !== "production";
 const API_TLS_VERIFY = shouldVerifyApiTls();
 const WEB_TLS = resolveWebTlsConfig();
+const WEB_ALLOWED_HOSTS = parseAllowedHosts(process.env.WEB_ALLOWED_HOSTS);
 
 function resolveStaticClientRoot(): string {
   if (process.env.CONTAINERLAB_WEB_CLIENT_ROOT?.trim()) {
@@ -42,10 +44,19 @@ function createWebLocalEndpoints() {
     env: process.env,
     envPrefix: "WEB_LOCAL_",
     enableVariable: "WEB_LOCAL_LABS",
-    enabledByDefault: false
+    enabledByDefault: false,
+    // Scripts would run as the server's OS user for anyone who can open the app.
+    hostScriptsByDefault: false
   });
   for (const problem of config.problems) {
     console.warn(`WEB_LOCAL_*: ${problem}`);
+  }
+  if (config.enabled && config.options.hostScripts === true && config.options.runtime !== "c9s") {
+    console.warn(
+      `Script buttons are on (WEB_LOCAL_HOST_SCRIPTS): everyone who can open the app runs shell scripts on this host as its OS user, without signing in.${
+        WEB_ALLOWED_HOSTS ? "" : " Set WEB_ALLOWED_HOSTS to the names this app is reached by."
+      }`
+    );
   }
   // With WEB_LOCAL_RUNTIME=c9s and no kubeconfig, labs run in the pod's own cluster
   // with its ServiceAccount.
@@ -73,6 +84,7 @@ async function start(): Promise<void> {
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     https: WEB_TLS.https,
     isDev: IS_DEV,
+    ...(WEB_ALLOWED_HOSTS ? { allowedHosts: () => WEB_ALLOWED_HOSTS } : {}),
     localEndpoints,
     clustersUnavailable: WEB_CLUSTERS_UNAVAILABLE,
     localUnavailable: WEB_LOCAL_UNAVAILABLE,

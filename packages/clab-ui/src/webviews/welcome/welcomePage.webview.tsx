@@ -189,7 +189,7 @@ export function WelcomePageApp(): React.JSX.Element {
             >
               <Stack spacing={4} sx={{ flex: "1 1 50%", minWidth: 0 }}>
                 <Stack spacing={1}>
-                  <Typography variant="h6">Getting Started</Typography>
+                  <Typography variant="h6">Getting started</Typography>
                   <Typography
                     variant="body1"
                     sx={{
@@ -229,7 +229,7 @@ export function WelcomePageApp(): React.JSX.Element {
                 </Stack>
 
                 <Stack spacing={1}>
-                  <Typography variant="h6">Documentation and Resources</Typography>
+                  <Typography variant="h6">Documentation and resources</Typography>
                   <List dense disablePadding>
                     {RESOURCE_LINKS.map((link) => (
                       <ListItem key={link.label} disableGutters sx={{ py: 0.5 }}>
@@ -259,7 +259,7 @@ export function WelcomePageApp(): React.JSX.Element {
               </Stack>
 
               <Stack spacing={1} sx={{ flex: "1 1 50%", minWidth: 0, width: "100%" }}>
-                <Typography variant="h6">Popular Topologies</Typography>
+                <Typography variant="h6">Popular topologies</Typography>
 
                 {usingFallback ? (
                   <Typography

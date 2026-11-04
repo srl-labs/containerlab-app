@@ -41,11 +41,11 @@ export const GridTab: React.FC<GridTabProps> = ({
 
   return (
     <Box data-testid="lab-settings-grid-settings" sx={{ display: "contents" }}>
-      <SettingsField title="Stroke Width" description="Thickness of canvas grid lines.">
+      <SettingsField title="Stroke width" description="Thickness of canvas grid lines.">
         <Box data-testid="lab-settings-grid-line-width" sx={{ width: "100%" }}>
           <InputField
             id="lab-settings-grid-line-width"
-            ariaLabel="Stroke Width"
+            ariaLabel="Stroke width"
             type="number"
             value={String(gridLineWidth)}
             min={0.00001}
@@ -61,9 +61,9 @@ export const GridTab: React.FC<GridTabProps> = ({
           />
         </Box>
       </SettingsField>
-      <SettingsField title="Grid Style" description="Dotted points or quadratic lines.">
+      <SettingsField title="Grid style" description="Dotted points or quadratic lines.">
         <TextField
-          slotProps={{ select: { inputProps: { "aria-label": "Grid Style" } } }}
+          slotProps={{ select: { inputProps: { "aria-label": "Grid style" } } }}
           data-testid="lab-settings-grid-style"
           select
           size="small"
@@ -80,10 +80,10 @@ export const GridTab: React.FC<GridTabProps> = ({
           <MenuItem value="quadratic">Quadratic</MenuItem>
         </TextField>
       </SettingsField>
-      <SettingsField title="Grid Color" description="Color of the canvas grid.">
+      <SettingsField title="Grid color" description="Color of the canvas grid.">
         <Box sx={{ width: "100%" }}>
           <ColorField
-            ariaLabel="Grid Color"
+            ariaLabel="Grid color"
             value={gridColor ?? defaultGridColor}
             disabled={isReadOnly}
             onChange={(value) => onGridColorChange(value)}
@@ -91,7 +91,7 @@ export const GridTab: React.FC<GridTabProps> = ({
         </Box>
       </SettingsField>
       <SettingsField
-        title="Background Color"
+        title="Background color"
         description="Canvas background behind the grid."
         actions={
           hasCustomGridColors ? (
@@ -109,7 +109,7 @@ export const GridTab: React.FC<GridTabProps> = ({
       >
         <Box sx={{ width: "100%" }}>
           <ColorField
-            ariaLabel="Background Color"
+            ariaLabel="Background color"
             value={gridBgColor ?? themeBgColor}
             disabled={isReadOnly}
             onChange={(value) => onGridBgColorChange(value)}

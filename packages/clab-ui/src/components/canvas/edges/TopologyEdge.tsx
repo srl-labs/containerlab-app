@@ -21,6 +21,7 @@ import {
 } from "../../../stores/canvasStore";
 import { useEdges, useGraphStore } from "../../../stores/graphStore";
 import {
+  useAnimateTraffic,
   useTelemetryLabelSettings,
   useDeploymentState,
   useLinkStyle,
@@ -49,6 +50,17 @@ import {
   type ElbowLabelPlacement
 } from "./elbowLinkLayout";
 import { DEFAULT_ENDPOINT_LABEL_OFFSET } from "../../../annotations/endpointLabelOffset";
+import {
+  TRAFFIC_FLOW_MIN_BPS,
+  TRAFFIC_FLOW_WIDTH,
+  labTrafficRange,
+  resolveTrafficFlows,
+  trafficFlowAnimation,
+  trafficFlowLook,
+  trafficLaneOffset,
+  trafficLevel,
+  type LabTrafficRange
+} from "./trafficFlow";
 import {
   clampTelemetryInterfaceSizePercent,
   clampTelemetryNodeSizePx,
@@ -1291,6 +1303,45 @@ function getStrokeStyle(
 
 type StrokeStyle = ReturnType<typeof getStrokeStyle>;
 
+/** The traffic chart's TX and RX colors, so links and charts read the same. */
+const TRAFFIC_FLOW_FORWARD_COLOR = "#569cd6";
+const TRAFFIC_FLOW_REVERSE_COLOR = "#4ec9b0";
+
+/** Dashes along the link whose speed and gaps show its traffic in one direction, relative to the lab. */
+const TrafficFlowPath: React.FC<{
+  path: string;
+  bps: number;
+  range: LabTrafficRange;
+  color: string;
+  points: EdgeGeometry["points"];
+  linkWidth: number;
+  opacity: number;
+  reverse: boolean;
+}> = ({ path, bps, range, color, points, linkWidth, opacity, reverse }) => {
+  if (bps < TRAFFIC_FLOW_MIN_BPS) return null;
+  const look = trafficFlowLook(trafficLevel(bps, range));
+  const lane = trafficLaneOffset(points, linkWidth);
+  const side = reverse ? -1 : 1;
+  return (
+    <path
+      d={path}
+      fill="none"
+      pointerEvents="none"
+      transform={`translate(${side * lane.x} ${side * lane.y})`}
+      className="clab-traffic-flow"
+      data-testid="traffic-flow"
+      style={{
+        stroke: color,
+        strokeWidth: TRAFFIC_FLOW_WIDTH,
+        strokeDasharray: look.dashArray,
+        ["--clab-traffic-flow-period" as string]: look.period,
+        opacity,
+        animation: trafficFlowAnimation(look.cycleSeconds, reverse)
+      }}
+    />
+  );
+};
+
 /** Solid elbow stroke: the link color blended into the canvas instead of see-through. */
 function toElbowStroke(stroke: StrokeStyle, background: string): StrokeStyle {
   return {
@@ -1385,6 +1436,57 @@ function shouldRenderEdgeLabels(
   if (labelMode === "on-select") return selected;
   return true;
 }
+
+/** Both directions of a link's live traffic, when the setting is on and the lab runs. */
+const TrafficFlowOverlay: React.FC<{
+  data: unknown;
+  path: string;
+  points: EdgeGeometry["points"];
+  stroke: StrokeStyle;
+}> = ({ data, path, points, stroke }) => {
+  const animateTraffic = useAnimateTraffic();
+  const deploymentState = useDeploymentState();
+  // Traffic only flows on a running lab; stats from an earlier run must not animate.
+  if (!animateTraffic || deploymentState !== "deployed") return null;
+  return <TrafficFlowLanes data={data} path={path} points={points} stroke={stroke} />;
+};
+
+/** Both directions of a link, compared with the traffic of the whole lab. */
+const TrafficFlowLanes: React.FC<{
+  data: unknown;
+  path: string;
+  points: EdgeGeometry["points"];
+  stroke: StrokeStyle;
+}> = ({ data, path, points, stroke }) => {
+  const minBps = useGraphStore((state) => labTrafficRange(state.edges).minBps);
+  const maxBps = useGraphStore((state) => labTrafficRange(state.edges).maxBps);
+  const range = { minBps, maxBps };
+  const flows = resolveTrafficFlows(asObjectRecord(asObjectRecord(data)?.extraData) ?? undefined);
+  return (
+    <>
+      <TrafficFlowPath
+        path={path}
+        bps={flows.forwardBps}
+        range={range}
+        color={TRAFFIC_FLOW_FORWARD_COLOR}
+        points={points}
+        linkWidth={stroke.width}
+        opacity={stroke.opacity}
+        reverse={false}
+      />
+      <TrafficFlowPath
+        path={path}
+        bps={flows.reverseBps}
+        range={range}
+        color={TRAFFIC_FLOW_REVERSE_COLOR}
+        points={points}
+        linkWidth={stroke.width}
+        opacity={stroke.opacity}
+        reverse
+      />
+    </>
+  );
+};
 
 /**
  * TopologyEdge - Floating edge that connects nodes between source and target nodes
@@ -1542,6 +1644,7 @@ const TopologyEdgeComponent: React.FC<EdgeProps> = ({ id, source, target, data, 
         }}
         className="react-flow__edge-path"
       />
+      <TrafficFlowOverlay data={data} path={geometry.path} points={geometry.points} stroke={stroke} />
       {shouldRenderLabels && (
         <EdgeLabelRenderer>
           {sourceRenderedLabel !== null && sourceRenderedLabel.length > 0 && (

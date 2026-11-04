@@ -46,6 +46,20 @@ function fakeServer(t: test.TestContext, features: string[] | undefined): {
     if (method === "GET" && url.pathname === "/api/v1/labs/demo" && !url.searchParams.has("details")) {
       return json(CONTAINERS);
     }
+    if (url.pathname.endsWith("/host-script/describe")) {
+      return json({ kind: "inline", sha256: "abc", size: 7, foreign: false, content: "echo hi", truncated: false });
+    }
+    if (url.pathname.endsWith("/host-script/stream")) {
+      return new Response(
+        [
+          JSON.stringify({ type: "output", stream: "stdout", text: "hi\n" }),
+          "",
+          JSON.stringify({ type: "exit", result: { exitCode: 0, timedOut: false, durationMs: 40 } }),
+          ""
+        ].join("\n"),
+        { headers: { "Content-Type": "application/x-ndjson" } }
+      );
+    }
     if (url.pathname.endsWith("/exec")) {
       const container = url.searchParams.get("nodeFilter") ?? "clab-demo-r1";
       return json({ [container]: [{ cmd: ["ls"], "return-code": 0, stdout: "ok", stderr: "" }] });
@@ -78,7 +92,9 @@ test("a server's /health features decide what is supported", async (t) => {
     snapshotSave: true,
     deployRestore: true,
     saveCopy: true,
-    inspectDetails: true
+    inspectDetails: true,
+    hostScript: false,
+    hostScriptUnavailable: "unsupported-server"
   });
   await backend.labOperationSupport();
   assert.equal(requests.filter((request) => request.url.pathname === "/health").length, 1);
@@ -86,7 +102,46 @@ test("a server's /health features decide what is supported", async (t) => {
 
 test("servers without a feature list support none of the new operations", async (t) => {
   const { backend } = fakeServer(t, undefined);
-  assert.deepEqual(Object.values(await backend.labOperationSupport()), [false, false, false, false, false]);
+  const { hostScriptUnavailable, ...support } = await backend.labOperationSupport();
+  assert.deepEqual(Object.values(support), [false, false, false, false, false, false]);
+  assert.equal(hostScriptUnavailable, "unsupported-server");
+});
+
+test("servers that list host-scripts run script buttons; others refuse before calling", async (t) => {
+  const { backend, requests } = fakeServer(t, [...ALL_FEATURES, "host-scripts"]);
+  assert.equal((await backend.labOperationSupport()).hostScript, true);
+  const lab = { labName: "demo", path: "labs/demo.clab.yml" };
+  const result = await backend.runHostScript(lab, { script: "echo hi", timeoutSeconds: 5, outputTitle: "Greet" });
+  assert.deepEqual(result, { exitCode: 0, stdout: "hi\n", stderr: "", timedOut: false, durationMs: 40 });
+  const call = requests.find((request) => request.url.pathname === "/api/v1/labs/demo/host-script/stream");
+  assert.equal(call?.method, "POST");
+  // The topology path finds a lab that is not deployed.
+  assert.equal(call?.url.searchParams.get("path"), "labs/demo.clab.yml");
+  // The output title only matters to the UI host.
+  assert.deepEqual(JSON.parse(call?.body ?? "{}"), { script: "echo hi", timeoutSeconds: 5 });
+
+  const description = await backend.describeHostScript(lab, { script: "echo hi" });
+  assert.equal(description.sha256, "abc");
+  assert.match(description.trustKey, /^[0-9a-f]{64}$/);
+  const other = await backend.describeHostScript({ labName: "demo", path: "other/demo.clab.yml" }, { script: "echo hi" });
+  assert.notEqual(other.trustKey, description.trustKey, "trust must not carry over to another topology");
+
+  const old = fakeServer(t, ALL_FEATURES);
+  assert.equal((await old.backend.labOperationSupport()).hostScriptUnavailable, "unsupported-server");
+  await assert.rejects(old.backend.runHostScript({ labName: "demo" }, { script: "echo hi" }), { status: 501 });
+  await assert.rejects(old.backend.describeHostScript({ labName: "demo" }, { script: "echo hi" }), { status: 501 });
+  assert.equal(old.requests.some((request) => request.url.pathname.includes("/host-script")), false);
+
+  const cluster = fakeServer(t, [...ALL_FEATURES, "c9s-runtime"]);
+  assert.equal((await cluster.backend.labOperationSupport()).hostScriptUnavailable, "c9s");
+});
+
+test("a request over the limits never reaches the server", async (t) => {
+  const { backend, requests } = fakeServer(t, [...ALL_FEATURES, "host-scripts"]);
+  await assert.rejects(backend.runHostScript({ labName: "demo" }, { script: "echo hi", timeoutSeconds: -1 }), {
+    status: 400
+  });
+  assert.equal(requests.some((request) => request.url.pathname.includes("/host-script")), false);
 });
 
 test("exec by node and label goes in one call on new servers", async (t) => {

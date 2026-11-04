@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import WebSocket, { type RawData } from "ws";
 import {
   hasLabNameGitTokens,
@@ -6,6 +8,15 @@ import {
   labSettingsOptions,
   restoresSnapshots,
   type LabExecRequest,
+  hostScriptRequestProblem,
+  hostScriptUnavailableMessage,
+  parseHostScriptDescription,
+  parseHostScriptResponse,
+  type LabHostScriptDescription,
+  type LabHostScriptEvent,
+  type LabHostScriptRequest,
+  type LabHostScriptResult,
+  type LabHostScriptSource,
   type LabOperationSupport,
   type LabSnapshotSaveRequest,
   type TopologyVariables,
@@ -39,7 +50,8 @@ import type {
   WiresharkVncRequest,
   WiresharkVncResponse,
   WiresharkVncSocket,
-  WorkspaceFileEvent
+  WorkspaceFileEvent,
+  HostScriptRunOptions
 } from "../contract/backend.ts";
 import type {
   CaptureInterface,
@@ -62,6 +74,7 @@ import type {
 } from "../contract/dto.ts";
 import { captureLimits, captureNodeTargets, pcapngBlocks } from "../capture.ts";
 import { LabBackendError } from "../contract/errors.ts";
+import { collectHostScript } from "../contract/hostScripts.ts";
 import { containerRuntimeFeatures } from "../contract/support.ts";
 import { readJsonLines, readLines, withIdleTimeout } from "../ndjson.ts";
 import { gottyOptionsError } from "../shareOptions.ts";
@@ -103,6 +116,8 @@ const SERVER_FEATURES = {
   nodeStats: "node-stats",
   logStream: "log-stream",
   terminalResume: "terminal-resume",
+  hostScripts: "host-scripts",
+  c9sRuntime: "c9s-runtime",
   captureStream: "capture-stream",
   wiresharkVnc: "wireshark-vnc",
   labHostInfo: "lab-host-info",
@@ -129,6 +144,66 @@ const serverHealthCache = new Map<string, { expires: number; state: Promise<Serv
 export function clearServerFeatureCache(): void {
   serverHealthCache.clear();
   serverLabHostCache.clear();
+}
+
+/** The NDJSON events of a running script; blank lines only keep the connection alive. */
+async function* readHostScriptEvents(
+  response: Awaited<ReturnType<ClabApiClient["openHostScriptStream"]>>,
+  connection: AbortController,
+  signal: AbortSignal | undefined
+): AsyncGenerator<LabHostScriptEvent> {
+  if (!response.body) throw new LabBackendError("The script stream has no body.", 502);
+  const started = Date.now();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  try {
+    for await (const chunk of response.body) {
+      buffer += decoder.decode(chunk as Uint8Array, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
+        if (line.trim() === "") continue;
+        const event = parseHostScriptEvent(line);
+        yield event;
+        if (event.type === "exit") return;
+      }
+    }
+  } catch (error) {
+    if (signal?.aborted !== true) throw error;
+  } finally {
+    connection.abort();
+  }
+  if (signal?.aborted === true) {
+    yield {
+      type: "exit",
+      result: {
+        exitCode: null,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        cancelled: true,
+        durationMs: Date.now() - started
+      }
+    };
+    return;
+  }
+  throw new LabBackendError("The script stream ended without an exit status.", 502);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function parseHostScriptEvent(line: string): LabHostScriptEvent {
+  const event: unknown = JSON.parse(line);
+  if (isRecord(event) && event.type === "output" && typeof event.text === "string") {
+    return { type: "output", stream: event.stream === "stderr" ? "stderr" : "stdout", text: event.text };
+  }
+  if (isRecord(event) && event.type === "exit") {
+    return { type: "exit", result: parseHostScriptResponse(event.result) };
+  }
+  const message = isRecord(event) && typeof event.error === "string" ? event.error : "The script failed.";
+  throw new LabBackendError(message, 500);
 }
 
 function unsupported(what: string): LabBackendError {
@@ -392,12 +467,17 @@ export class ApiLabBackend implements LabBackend {
 
   async labOperationSupport(): Promise<LabOperationSupport> {
     const features = await this.serverFeatures();
+    const hostScript = features.has(SERVER_FEATURES.hostScripts);
     return {
       execByLabel: features.has(SERVER_FEATURES.execFilters),
       snapshotSave: features.has(SERVER_FEATURES.snapshotSave),
       deployRestore: features.has(SERVER_FEATURES.deployRestore),
       saveCopy: features.has(SERVER_FEATURES.saveCopy),
-      inspectDetails: features.has(SERVER_FEATURES.inspectDetails)
+      inspectDetails: features.has(SERVER_FEATURES.inspectDetails),
+      hostScript,
+      ...(hostScript
+        ? {}
+        : { hostScriptUnavailable: features.has(SERVER_FEATURES.c9sRuntime) ? "c9s" : "unsupported-server" })
     };
   }
 
@@ -466,6 +546,55 @@ export class ApiLabBackend implements LabBackend {
       throw unsupported("show inspect details");
     }
     return this.client.inspectLabDetails(this.token, lab.labName);
+  }
+
+  private async assertHostScripts(): Promise<void> {
+    if (!(await this.hasFeature(SERVER_FEATURES.hostScripts))) {
+      throw new LabBackendError(hostScriptUnavailableMessage("unsupported-server"), 501);
+    }
+  }
+
+  async describeHostScript(
+    lab: LabTarget,
+    source: LabHostScriptSource
+  ): Promise<LabHostScriptDescription> {
+    await this.assertHostScripts();
+    const answer = await this.client.describeHostScript(this.token, lab.labName, lab.path, {
+      ...(source.scriptPath !== undefined ? { scriptPath: source.scriptPath } : {}),
+      ...(source.script !== undefined ? { script: source.script } : {})
+    });
+    const sha256 = isRecord(answer) && typeof answer.sha256 === "string" ? answer.sha256 : "";
+    // The key names this server and topology, so trust does not carry over to another.
+    const trustKey = createHash("sha256")
+      .update(`${this.client.getBaseUrl()}\n${lab.path ?? lab.labName}\n${sha256}`)
+      .digest("hex");
+    return parseHostScriptDescription(isRecord(answer) ? { ...answer, trustKey } : answer);
+  }
+
+  async runHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest,
+    run?: HostScriptRunOptions
+  ): Promise<LabHostScriptResult> {
+    return collectHostScript(await this.streamHostScript(lab, request, run));
+  }
+
+  /** Output comes as the server sends it; stopping here closes the connection, which stops the script. */
+  async streamHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest,
+    run: HostScriptRunOptions = {}
+  ): Promise<AsyncIterable<LabHostScriptEvent>> {
+    await this.assertHostScripts();
+    const problem = hostScriptRequestProblem(request);
+    if (problem !== undefined) throw new LabBackendError(problem, 400);
+    // The output title is for the UI host; the server only needs the script.
+    const { outputTitle: _outputTitle, ...body } = request;
+    const connection = new AbortController();
+    const response = await this.client.openHostScriptStream(this.token, lab.labName, lab.path, body, {
+      signal: run.signal ? AbortSignal.any([run.signal, connection.signal]) : connection.signal
+    });
+    return readHostScriptEvents(response, connection, run.signal);
   }
 
   /** A deploy that restores snapshots must not run as a plain deploy on an older server. */

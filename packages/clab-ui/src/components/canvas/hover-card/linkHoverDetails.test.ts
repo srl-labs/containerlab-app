@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { linkHoverEndpoints, linkHoverState, netemSummary } from "./linkHoverDetails";
+import { formatPacketRate, linkHoverEndpoints, linkHoverState, netemSummary } from "./linkHoverDetails";
 
 test("a link's endpoints come from its endpoints and the lab host's interface data", () => {
   const [a, b] = linkHoverEndpoints({
@@ -43,4 +43,12 @@ test("impairments that change nothing are left out", () => {
   assert.equal(netemSummary({ delay: "0ms", loss: "0", rate: "0", corruption: "0%" }), undefined);
   assert.equal(netemSummary(undefined), undefined);
   assert.equal(netemSummary({ rate: "1000", corruption: "0.5" }), "rate 1000 kbps, corruption 0.5%");
+});
+
+test("packet rates stay short", () => {
+  assert.equal(formatPacketRate(0), "0 pps");
+  assert.equal(formatPacketRate(60.4), "60 pps");
+  assert.equal(formatPacketRate(1_500), "1.5k pps");
+  assert.equal(formatPacketRate(26_400), "26k pps");
+  assert.equal(formatPacketRate(1_250_000), "1.3M pps");
 });

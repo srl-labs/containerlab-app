@@ -113,7 +113,7 @@ async function openNodeEditor(page: Page, nodeId: string): Promise<void> {
 }
 
 async function returnToPalette(page: Page): Promise<void> {
-  const search = page.getByPlaceholder("Search nodes...");
+  const search = page.getByPlaceholder("Search nodes…");
   if (await search.isVisible().catch(() => false)) return;
 
   const toggle = page.locator(SEL_TOGGLE_BTN);

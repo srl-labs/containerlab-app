@@ -167,7 +167,7 @@ test.describe("Lab tool dialogs", () => {
     });
     await expect(page.getByTestId("share-link-1-url")).toHaveText("https://sshx.io/s/abc#read");
     await expect(page.getByRole("button", { name: "Copy Read-only link" })).toBeVisible();
-    await page.getByRole("button", { name: "Done" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     expect(await dialogResult(page)).toBeNull();
   });
 

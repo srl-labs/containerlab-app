@@ -122,7 +122,7 @@ async function applyAndBack(page: Page) {
   await toggle.click();
   await page.waitForTimeout(200);
   await toggle.click();
-  await expect(page.getByPlaceholder("Search nodes...")).toBeVisible({ timeout: 5000 });
+  await expect(page.getByPlaceholder("Search nodes…")).toBeVisible({ timeout: 5000 });
 }
 
 function findById<T extends { id: string }>(items: T[], id: string): T | undefined {

@@ -1,4 +1,5 @@
 // Node and annotation palette for the context panel.
+import { useLabOperationsStore } from "../../../stores/labOperationsStore";
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
@@ -21,6 +22,7 @@ import SaveIcon from "@mui/icons-material/SaveOutlined";
 import SearchIcon from "@mui/icons-material/SearchOutlined";
 import SelectAllIcon from "@mui/icons-material/SelectAllOutlined";
 import SpeedIcon from "@mui/icons-material/SpeedOutlined";
+import TerminalIcon from "@mui/icons-material/TerminalOutlined";
 import StarIcon from "@mui/icons-material/Star";
 import StarOutlineIcon from "@mui/icons-material/StarBorder";
 import TextFieldsIcon from "@mui/icons-material/TextFieldsOutlined";
@@ -294,7 +296,7 @@ const SourceEditorTab: React.FC<{
               justifyContent: "center"
             }}
           >
-            <Typography variant="caption">Loading editor...</Typography>
+            <Typography variant="caption">Loading editor…</Typography>
           </Box>
         }
       >
@@ -378,7 +380,7 @@ const PaletteGlyphTile: React.FC<{ children: React.ReactNode }> = ({ children })
   </Box>
 );
 
-const PaletteCardText: React.FC<{ title: string; subtitle: string; mono?: boolean }> = ({
+const PaletteCardText: React.FC<{ title: string; subtitle?: string; mono?: boolean }> = ({
   title,
   subtitle,
   mono = false
@@ -391,20 +393,22 @@ const PaletteCardText: React.FC<{ title: string; subtitle: string; mono?: boolea
     >
       {title}
     </Typography>
-    <Typography
-      variant="caption"
-      color={TEXT_SECONDARY}
-      noWrap
-      component="div"
-      sx={{ lineHeight: 1.35, ...(mono ? { fontFamily: MONO_FONT_FAMILY } : undefined) }}
-    >
-      {subtitle}
-    </Typography>
+    {subtitle !== undefined ? (
+      <Typography
+        variant="caption"
+        color={TEXT_SECONDARY}
+        noWrap
+        component="div"
+        sx={{ lineHeight: 1.35, ...(mono ? { fontFamily: MONO_FONT_FAMILY } : undefined) }}
+      >
+        {subtitle}
+      </Typography>
+    ) : null}
   </Box>
 );
 
 type AnnotationPayload = {
-  annotationType: "text" | "shape" | "group" | "traffic-rate";
+  annotationType: "text" | "shape" | "group" | "traffic-rate" | "script-button";
   shapeType?: string;
 };
 
@@ -527,7 +531,6 @@ const DraggableNode: React.FC<DraggableNodeProps> = ({
 
 interface DraggableAnnotationProps {
   label: string;
-  kind: string;
   icon: React.ReactNode;
   payload: AnnotationPayload;
 }
@@ -536,7 +539,7 @@ interface PaletteSimpleDraggableProps {
   dragPayload: Record<string, unknown>;
   icon: React.ReactNode;
   label: string;
-  subtitle: string;
+  subtitle?: string;
   monoSubtitle?: boolean;
   previewIconUrl?: string;
 }
@@ -583,18 +586,8 @@ const DraggableNetwork: React.FC<{ network: NetworkTypeDefinition }> = ({ networ
   );
 };
 
-const DraggableAnnotation: React.FC<DraggableAnnotationProps> = ({
-  label,
-  kind,
-  icon,
-  payload
-}) => (
-  <PaletteSimpleDraggable
-    dragPayload={{ type: "annotation", ...payload }}
-    icon={icon}
-    label={label}
-    subtitle={kind}
-  />
+const DraggableAnnotation: React.FC<DraggableAnnotationProps> = ({ label, icon, payload }) => (
+  <PaletteSimpleDraggable dragPayload={{ type: "annotation", ...payload }} icon={icon} label={label} />
 );
 
 const PALETTE_TABS: TabDefinition[] = [
@@ -625,6 +618,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   showInfoTab = false,
   infoTabTitle
 }) => {
+  const hostScriptSupported = useLabOperationsStore((state) => state.support.hostScript);
   const sessionClient = useTopologySessionClient();
   const { customPaletteTabs, disabledTabIds, yamlSchema, paletteTabLabels } = useClabUiRuntime();
   const customNodes = useCustomNodes();
@@ -946,7 +940,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="Search nodes..."
+                  placeholder="Search nodes…"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                   slotProps={{
@@ -1051,7 +1045,6 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Text"
-                  kind="annotation"
                   icon={<TextFieldsIcon fontSize="small" />}
                   payload={{ annotationType: "text" }}
                 />
@@ -1061,19 +1054,16 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Rectangle"
-                  kind="shape"
                   icon={<CropSquareIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "rectangle" }}
                 />
                 <DraggableAnnotation
                   label="Circle"
-                  kind="shape"
                   icon={<CircleOutlinedIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "circle" }}
                 />
                 <DraggableAnnotation
                   label="Line"
-                  kind="shape"
                   icon={<RemoveIcon fontSize="small" />}
                   payload={{ annotationType: "shape", shapeType: "line" }}
                 />
@@ -1083,7 +1073,6 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Group"
-                  kind="annotation"
                   icon={<SelectAllIcon fontSize="small" />}
                   payload={{ annotationType: "group" }}
                 />
@@ -1093,11 +1082,23 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
               <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
                 <DraggableAnnotation
                   label="Traffic Rate"
-                  kind="monitor"
                   icon={<SpeedIcon fontSize="small" />}
                   payload={{ annotationType: "traffic-rate" }}
                 />
               </Box>
+
+              {hostScriptSupported ? (
+                <>
+                  <PanelSectionHeader title="Actions" />
+                  <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
+                    <DraggableAnnotation
+                      label="Script Button"
+                      icon={<TerminalIcon fontSize="small" />}
+                      payload={{ annotationType: "script-button" }}
+                    />
+                  </Box>
+                </>
+              ) : null}
             </PaletteBlockContext.Provider>
           )}
         </Box>

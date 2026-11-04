@@ -270,7 +270,7 @@ const BoxShapeFields = memo(function BoxShapeFields({
       <Box data-testid="node-box-border-width">
         <SelectField
           id="node-box-border-width-select"
-          label="Border Width"
+          label="Border width"
           value={String(borderWidth)}
           onChange={(value) => onUpdate({ borderWidth: Number(value) })}
           options={BORDER_WIDTH_OPTIONS}
@@ -279,7 +279,7 @@ const BoxShapeFields = memo(function BoxShapeFields({
       <Box data-testid="node-box-radius">
         <InputField
           id="node-box-radius-input"
-          label="Corner Radius"
+          label="Corner radius"
           type="number"
           value={cornerRadius === undefined ? "" : String(cornerRadius)}
           onChange={(value) => onUpdate({ cornerRadius: parseCornerRadius(value) })}

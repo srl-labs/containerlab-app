@@ -77,7 +77,7 @@ export async function exportGraphFlow(target: LabToolTarget, format: GraphExport
   let direction: MermaidDirection | undefined;
   if (format === "mermaid") {
     const picked = await promptForOptionSelection({
-      title: "Export Graph (Mermaid)",
+      title: "Export graph (Mermaid)",
       message: "Choose the direction of the flowchart.",
       label: "Direction",
       confirmLabel: "Export",
@@ -88,7 +88,7 @@ export async function exportGraphFlow(target: LabToolTarget, format: GraphExport
     direction = MERMAID_DIRECTIONS.find((option) => option.value === picked)?.value;
   }
   try {
-    runtimeUiActions.notify(`Generating the ${label} graph...`, "info");
+    runtimeUiActions.notify(`Generating the ${label} graph…`, "info");
     const response = await generateGraphExport({ ...target, format, direction });
     const fallbackName = `${target.topologyRef.labName}.${format === "mermaid" ? "mermaid" : "dot"}`;
     triggerTextDownload(safeFilename(response.fileName || fallbackName), response.content, mimeType);

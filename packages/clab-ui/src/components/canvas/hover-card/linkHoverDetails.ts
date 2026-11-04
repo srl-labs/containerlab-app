@@ -81,3 +81,10 @@ export function linkHoverState(endpoints: readonly LinkHoverEndpoint[]): LinkHov
   if (endpoints.every((end) => end.state === "up")) return "up";
   return "unknown";
 }
+
+/** Packets per second, short enough to share a row with the bit rate. */
+export function formatPacketRate(pps: number): string {
+  if (pps < 1_000) return `${Math.round(pps)} pps`;
+  if (pps < 1_000_000) return `${(pps / 1_000).toFixed(pps < 10_000 ? 1 : 0)}k pps`;
+  return `${(pps / 1_000_000).toFixed(1)}M pps`;
+}

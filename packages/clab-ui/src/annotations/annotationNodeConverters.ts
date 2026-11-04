@@ -5,6 +5,7 @@
  * - FreeTextAnnotation <-> Node<FreeTextNodeData>
  * - FreeShapeAnnotation <-> Node<FreeShapeNodeData>
  * - GroupStyleAnnotation <-> Node<GroupNodeData>
+ * - ScriptButtonAnnotation <-> Node<ScriptButtonNodeData>
  *
  * Used for:
  * - Loading annotations from JSON into graph store (annotation → node)
@@ -16,12 +17,14 @@ import type {
   FreeTextAnnotation,
   FreeShapeAnnotation,
   TrafficRateAnnotation,
+  ScriptButtonAnnotation,
   GroupStyleAnnotation
 } from "../core/types/topology";
 import type {
   FreeTextNodeData,
   FreeShapeNodeData,
   TrafficRateNodeData,
+  ScriptButtonNodeData,
   GroupNodeData
 } from "../components/canvas/types";
 
@@ -42,6 +45,7 @@ import {
 export const FREE_TEXT_NODE_TYPE = "free-text-node" as const;
 export const FREE_SHAPE_NODE_TYPE = "free-shape-node" as const;
 export const TRAFFIC_RATE_NODE_TYPE = "traffic-rate-node" as const;
+export const SCRIPT_BUTTON_NODE_TYPE = "script-button-node" as const;
 export const GROUP_NODE_TYPE = "group-node" as const;
 
 /** Set of annotation node types for quick lookup */
@@ -49,6 +53,7 @@ const ANNOTATION_NODE_TYPES: Set<string> = new Set([
   FREE_TEXT_NODE_TYPE,
   FREE_SHAPE_NODE_TYPE,
   TRAFFIC_RATE_NODE_TYPE,
+  SCRIPT_BUTTON_NODE_TYPE,
   GROUP_NODE_TYPE
 ]);
 
@@ -584,6 +589,71 @@ export function nodeToTrafficRate(node: Node<TrafficRateNodeData>): TrafficRateA
   return annotation;
 }
 
+const SCRIPT_BUTTON_OUTPUT_MODES: ReadonlyArray<NonNullable<ScriptButtonNodeData["output"]>> = [
+  "terminal",
+  "dialog",
+  "toast"
+];
+
+function optionalString(value: unknown): string | undefined {
+  return isNonEmptyString(value) ? value : undefined;
+}
+
+function scriptButtonOutput(value: unknown): ScriptButtonNodeData["output"] {
+  return SCRIPT_BUTTON_OUTPUT_MODES.find((mode) => mode === value);
+}
+
+/**
+ * Convert a ScriptButtonAnnotation to a React Flow Node
+ */
+export function scriptButtonToNode(annotation: ScriptButtonAnnotation): Node<ScriptButtonNodeData> {
+  const data: ScriptButtonNodeData = {
+    label: typeof annotation.label === "string" ? annotation.label : "",
+    scriptPath: optionalString(annotation.scriptPath),
+    script: optionalString(annotation.script),
+    output: scriptButtonOutput(annotation.output),
+    timeoutSeconds: toFiniteNumber(annotation.timeoutSeconds),
+    color: optionalString(annotation.color),
+    icon: optionalString(annotation.icon),
+    groupId: optionalString(annotation.groupId),
+    geoCoordinates: toLatLng(annotation.geoCoordinates)
+  };
+  return {
+    id: annotation.id,
+    type: SCRIPT_BUTTON_NODE_TYPE,
+    position: normalizePosition(annotation.position),
+    draggable: true,
+    selectable: true,
+    data
+  };
+}
+
+/**
+ * Convert a React Flow Node back to ScriptButtonAnnotation
+ */
+export function nodeToScriptButton(node: Node<ScriptButtonNodeData>): ScriptButtonAnnotation {
+  const data = node.data;
+  const annotation: ScriptButtonAnnotation = {
+    id: node.id,
+    label: data.label,
+    position: node.position
+  };
+  const optional = {
+    scriptPath: optionalString(data.scriptPath),
+    script: optionalString(data.script),
+    output: scriptButtonOutput(data.output),
+    timeoutSeconds: toFiniteNumber(data.timeoutSeconds),
+    color: optionalString(data.color),
+    icon: optionalString(data.icon),
+    groupId: optionalString(data.groupId),
+    geoCoordinates: toLatLng(data.geoCoordinates)
+  };
+  for (const [key, value] of Object.entries(optional)) {
+    if (value !== undefined) annotation[key] = value;
+  }
+  return annotation;
+}
+
 /**
  * Convert a React Flow Node back to GroupStyleAnnotation
  */
@@ -628,6 +698,10 @@ function isTrafficRateNode(node: Node): node is Node<TrafficRateNodeData> {
   return node.type === TRAFFIC_RATE_NODE_TYPE;
 }
 
+function isScriptButtonNode(node: Node): node is Node<ScriptButtonNodeData> {
+  return node.type === SCRIPT_BUTTON_NODE_TYPE;
+}
+
 function isGroupNode(node: Node): node is Node<GroupNodeData> {
   return node.type === GROUP_NODE_TYPE;
 }
@@ -643,7 +717,8 @@ export function annotationsToNodes(
   freeTextAnnotations: FreeTextAnnotation[],
   freeShapeAnnotations: FreeShapeAnnotation[],
   groups: GroupStyleAnnotation[],
-  trafficRateAnnotations: TrafficRateAnnotation[] = []
+  trafficRateAnnotations: TrafficRateAnnotation[] = [],
+  scriptButtonAnnotations: ScriptButtonAnnotation[] = []
 ): Node[] {
   const nodes: Node[] = [];
 
@@ -667,6 +742,10 @@ export function annotationsToNodes(
     nodes.push(trafficRateToNode(annotation));
   }
 
+  for (const annotation of scriptButtonAnnotations) {
+    nodes.push(scriptButtonToNode(annotation));
+  }
+
   return nodes;
 }
 
@@ -677,11 +756,13 @@ export function nodesToAnnotations(nodes: Node[]): {
   freeTextAnnotations: FreeTextAnnotation[];
   freeShapeAnnotations: FreeShapeAnnotation[];
   trafficRateAnnotations: TrafficRateAnnotation[];
+  scriptButtonAnnotations: ScriptButtonAnnotation[];
   groups: GroupStyleAnnotation[];
 } {
   const freeTextAnnotations: FreeTextAnnotation[] = [];
   const freeShapeAnnotations: FreeShapeAnnotation[] = [];
   const trafficRateAnnotations: TrafficRateAnnotation[] = [];
+  const scriptButtonAnnotations: ScriptButtonAnnotation[] = [];
   const groups: GroupStyleAnnotation[] = [];
 
   for (const node of nodes) {
@@ -697,10 +778,20 @@ export function nodesToAnnotations(nodes: Node[]): {
       trafficRateAnnotations.push(nodeToTrafficRate(node));
       continue;
     }
+    if (isScriptButtonNode(node)) {
+      scriptButtonAnnotations.push(nodeToScriptButton(node));
+      continue;
+    }
     if (isGroupNode(node)) {
       groups.push(nodeToGroup(node));
     }
   }
 
-  return { freeTextAnnotations, freeShapeAnnotations, trafficRateAnnotations, groups };
+  return {
+    freeTextAnnotations,
+    freeShapeAnnotations,
+    trafficRateAnnotations,
+    scriptButtonAnnotations,
+    groups
+  };
 }

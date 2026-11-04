@@ -86,7 +86,7 @@ const GroupField: React.FC<TabProps> = (props) => {
   return (
     <FilterableDropdown
       id="node-group"
-      label="Settings Group"
+      label="Settings group"
       options={options}
       value={value}
       onChange={(next) => onChange({ group: next === "" ? undefined : next })}
@@ -124,7 +124,7 @@ const KindField: React.FC<KindFieldProps> = (props) => {
       options={kindOptions}
       value={data.kind ?? ""}
       onChange={handleKindChange}
-      placeholder="Search or type kind..."
+      placeholder="Search or type kind…"
       allowFreeText={true}
       helperText={inheritedFieldHint(props, "kind")}
     />
@@ -153,7 +153,7 @@ const TypeField: React.FC<TypeFieldProps> = (props) => {
       value={data.type ?? ""}
       onChange={(value) => onChange({ type: value })}
       placeholder={
-        availableTypes.length > 0 ? "Search or type..." : "Type value (no predefined types)"
+        availableTypes.length > 0 ? "Search or type…" : "Type value (no predefined types)"
       }
       allowFreeText={true}
       helperText={inheritedFieldHint(props, "type")}
@@ -249,7 +249,7 @@ const ImageVersionFields: React.FC<ImageVersionFieldsProps> = (props) => {
           options={imageOptions}
           value={currentBase}
           onChange={handleBaseChange}
-          placeholder="Search for image..."
+          placeholder="Search for image…"
           allowFreeText={true}
           helperText={imageHint}
         />
@@ -259,7 +259,7 @@ const ImageVersionFields: React.FC<ImageVersionFieldsProps> = (props) => {
           options={versionOptions}
           value={localVersion}
           onChange={handleVersionChange}
-          placeholder="Select version..."
+          placeholder="Select version…"
           allowFreeText={true}
         />
       </>
@@ -374,7 +374,7 @@ const IconField: React.FC<TabProps> = ({ data, onChange }) => {
             options={allIconOptions}
             value={dropdownValue}
             onChange={(value) => onChange({ icon: value })}
-            placeholder="Select icon..."
+            placeholder="Select icon…"
             allowFreeText={false}
             renderOption={renderOption}
           />
@@ -415,14 +415,14 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
     >
       <SelectField
         id="node-label-position"
-        label="Label Position"
+        label="Label position"
         value={data.labelPosition ?? "bottom"}
         onChange={(value) => onChange({ labelPosition: value })}
         options={NODE_LABEL_POSITION_OPTIONS}
       />
       <SelectField
         id="node-direction"
-        label="Label Text Direction"
+        label="Label text direction"
         value={data.direction ?? "right"}
         onChange={(value) => onChange({ direction: value })}
         options={NODE_DIRECTION_OPTIONS}
@@ -430,7 +430,7 @@ const LabelAndDirectionFields: React.FC<TabProps> = ({ data, onChange }) => {
       <Box sx={{ gridColumn: "1 / -1" }}>
         <ColorField
           id="node-label-bg-color"
-          label="Label Background"
+          label="Label background"
           value={pickerColor}
           onChange={(value) => onChange({ labelBackgroundColor: value })}
           disabled={isTransparent}
@@ -567,7 +567,7 @@ const NodeFieldsComponent: React.FC<TabProps> = ({
               color: "text.secondary"
             }}
           >
-            Loading schema...
+            Loading schema…
           </Typography>
         )}
       </PanelSection>

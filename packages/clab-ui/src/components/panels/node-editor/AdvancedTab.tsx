@@ -41,7 +41,7 @@ const RUNTIME_OPTIONS = [
   { value: "podman", label: "podman" }
 ];
 
-const VALIDITY_HELP = "Go duration, e.g. 720h (30 days) or 8760h (1 year)";
+const VALIDITY_HELP = "Go duration, e.g., 720h (30 days) or 8760h (1 year)";
 const VALIDITY_ERROR = "Use a Go duration such as 720h or 1h30m; d and y are not units";
 
 const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => (
@@ -49,7 +49,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance
     <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
       <InputField
         id="node-cpu"
-        label="CPU Limit"
+        label="CPU limit"
         type="number"
         value={String(data.cpu ?? "")}
         onChange={(v) => onChange({ cpu: v ? parseFloat(v) : undefined })}
@@ -61,7 +61,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance
       <HostLimited limit="nodeCpuSet" keepEditable={(data.cpuSet ?? "") !== ""}>
         <InputField
           id="node-cpu-set"
-          label="CPU Set"
+          label="CPU set"
           value={data.cpuSet ?? ""}
           onChange={(v) => onChange({ cpuSet: v })}
           placeholder="e.g., 0-3, 0,3"
@@ -70,7 +70,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance
       </HostLimited>
       <InputField
         id="node-memory"
-        label="Memory Limit"
+        label="Memory limit"
         value={data.memory ?? ""}
         onChange={(v) => onChange({ memory: v })}
         placeholder="e.g., 1Gb, 512Mb"
@@ -78,7 +78,7 @@ const ResourceLimitsSection: React.FC<TabProps> = ({ data, onChange, inheritance
       />
       <InputField
         id="node-shm-size"
-        label="Shared Memory Size"
+        label="Shared memory size"
         value={data.shmSize ?? ""}
         onChange={(v) => onChange({ shmSize: v })}
         placeholder="e.g., 256MB"
@@ -114,14 +114,14 @@ const TlsCertificateSection: React.FC<TlsCertificateSectionProps> = ({
           <>
             <SelectField
               id="node-cert-key-size"
-              label="Key Size"
+              label="Key size"
               value={keySize}
               onChange={(v) => onChange({ certKeySize: v ? Number(v) : undefined })}
               options={withCurrentOption(KEY_SIZE_OPTIONS, keySize)}
             />
             <InputField
               id="node-cert-validity"
-              label="Validity Duration"
+              label="Validity duration"
               value={validity}
               onChange={(v) => onChange({ certValidity: v })}
               placeholder="e.g., 720h"
@@ -189,7 +189,7 @@ const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, on
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
         <InputField
           id="node-healthcheck-start-period"
-          label="Start Period (s)"
+          label="Start period (s)"
           type="number"
           value={String(healthCheck.startPeriod ?? "")}
           onChange={(v) => onUpdate({ startPeriod: v ? parseInt(v, 10) : undefined })}
@@ -229,11 +229,11 @@ const HealthCheckSection: React.FC<HealthCheckSectionProps> = ({ healthCheck, on
 );
 
 const RuntimeSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => (
-  <PanelSection title="Container Runtime">
+  <PanelSection title="Container runtime">
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       <SelectField
         id="node-image-pull-policy"
-        label="Image Pull Policy"
+        label="Image pull policy"
         value={data.imagePullPolicy ?? ""}
         onChange={(v) => onChange({ imagePullPolicy: v })}
         options={withCurrentOption(PULL_POLICY_OPTIONS, data.imagePullPolicy ?? "")}
@@ -242,7 +242,7 @@ const RuntimeSection: React.FC<TabProps> = ({ data, onChange, inheritance }) => 
       <HostLimited limit="nodeRuntime" keepEditable={(data.runtime ?? "") !== ""}>
         <SelectField
           id="node-runtime"
-          label="Container Runtime"
+          label="Container runtime"
           value={data.runtime ?? ""}
           onChange={(v) => onChange({ runtime: v })}
           options={withCurrentOption(RUNTIME_OPTIONS, data.runtime ?? "")}

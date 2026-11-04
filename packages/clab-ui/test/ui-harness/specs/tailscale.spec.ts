@@ -125,7 +125,7 @@ test.describe("Tailscale management network", () => {
 
     await chooseTailscale(page, modal, "Sidecar per node (auth key)");
     await expect(modal.getByText("Required in sidecar mode")).toBeVisible();
-    await modal.getByRole("textbox", { name: "Auth Key" }).fill("${TS_AUTHKEY}");
+    await modal.getByRole("textbox", { name: "Auth key" }).fill("${TS_AUTHKEY}");
     await modal.locator(SEL_SAVE_BTN).click();
     await expect(modal).toBeVisible();
 

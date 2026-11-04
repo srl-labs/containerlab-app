@@ -13,7 +13,7 @@ const SEL_INLINE_PREVIEW = '[data-testid="free-text-inline-preview"]';
 const SEL_ADD_TEXT_ITEM = '[data-testid="context-menu-item-add-text"]';
 const SEL_EDIT_TEXT_ITEM = '[data-testid="context-menu-item-edit-text"]';
 const SEL_APPLY_BTN = '[data-testid="panel-apply-btn"]';
-const PANEL_TEXT_PLACEHOLDER = "Enter your text... (Markdown and fenced code blocks supported)";
+const PANEL_TEXT_PLACEHOLDER = "Enter your text… (Markdown and fenced code blocks supported)";
 
 interface FreeTextFileEntry {
   id: string;

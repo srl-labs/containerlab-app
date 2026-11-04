@@ -159,6 +159,13 @@ test.describe("Canvas hover cards", () => {
     await expect(traffic).toContainText("Traffic at srl1:e1-1");
     // The samples from before the hover are already in the chart.
     await expect(traffic.locator("svg").first()).toBeVisible();
-    await expect.poll(() => traffic.locator("svg path").count()).toBeGreaterThan(2);
+    // One line each for RX and TX, the bit rates; packet rates are numbers in the rows.
+    await expect.poll(() => traffic.locator("svg path").count()).toBeGreaterThanOrEqual(2);
+    // The legend sits beside the title, and the chart takes no room for axis titles.
+    const legend = card.getByTestId("link-hover-card-legend");
+    await expect(legend).toContainText("TX");
+    await expect(legend).not.toContainText("PPS");
+    await expect(traffic.getByText("Time", { exact: true })).toHaveCount(0);
+    expect((await traffic.boundingBox())?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(140);
   });
 });

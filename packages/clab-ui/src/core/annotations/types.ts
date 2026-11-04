@@ -15,6 +15,7 @@ export function createEmptyAnnotations(): TopologyAnnotations {
     freeTextAnnotations: [],
     freeShapeAnnotations: [],
     trafficRateAnnotations: [],
+    scriptButtonAnnotations: [],
     groupStyleAnnotations: [],
     networkNodeAnnotations: [],
     nodeAnnotations: [],

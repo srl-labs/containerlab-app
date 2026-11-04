@@ -243,7 +243,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
   return (
     <>
       <Typography variant="subtitle1" sx={{ mb: "1rem" }}>
-        Find Node
+        Find node
       </Typography>
 
       {hasDescription ? (
@@ -264,7 +264,7 @@ export const FindNodeSearchWidget: React.FC<FindNodeSearchWidgetProps> = ({
           fullWidth
           size="small"
           label="Search"
-          placeholder="Search for nodes..."
+          placeholder="Search for nodes…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           onKeyDown={handleKeyDown}

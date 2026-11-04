@@ -95,7 +95,7 @@ const NetworkModeFields: React.FC<TabProps> = (props) => {
       <RuntimeLimited limit={modeLimit}>
         <SelectField
           id="node-network-mode"
-          label="Network Mode"
+          label="Network mode"
           value={selection}
           onChange={handleModeChange}
           options={modeOptions}
@@ -214,7 +214,7 @@ const MgmtNetworkField: React.FC<TabProps> = (props) => {
     <RuntimeLimited limit={mgmtNetLimit} keepEditable={value !== ""}>
       <SelectField
         id="node-mgmt-net"
-        label="Management Network"
+        label="Management network"
         value={value}
         onChange={(next) => onChange({ mgmtNet: next })}
         options={options}
@@ -283,7 +283,7 @@ export const NetworkTab: React.FC<TabProps> = (props) => {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column" }}>
-      <PanelSection title="Management Network">
+      <PanelSection title="Management network">
         <MgmtNetworkField {...props} />
         {!isSection && (
           <>

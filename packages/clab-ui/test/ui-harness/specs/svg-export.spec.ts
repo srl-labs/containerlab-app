@@ -189,7 +189,7 @@ test.describe("SVG Export Modal", () => {
     await expect(modal).toBeVisible();
 
     await modal.getByRole("radio", { name: "Custom" }).check();
-    const colorInput = modal.getByRole("textbox", { name: "Color" });
+    const colorInput = modal.getByRole("textbox", { name: "Color", exact: true });
     await colorInput.fill("ffffff");
     await page.waitForTimeout(100);
 

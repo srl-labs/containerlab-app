@@ -40,6 +40,7 @@ export function usePanelTabVisibility(): PanelTabVisibility {
       state.editingTextAnnotation !== null ||
       state.editingShapeAnnotation !== null ||
       state.editingTrafficRateAnnotation !== null ||
+      state.editingScriptButtonId !== null ||
       state.editingGroup !== null
   );
   const isLocked = useTopoViewerStore((state) => state.isLocked);

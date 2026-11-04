@@ -230,7 +230,7 @@ const RadiusField: React.FC<{ value: number; onChange: (v: number) => void }> = 
 }) => (
   <InputField
     id="icon-corner-radius"
-    label="Corner Radius"
+    label="Corner radius"
     type="number"
     value={String(value)}
     onChange={(v) => {
@@ -336,7 +336,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
 
   return (
     <Dialog open={isOpen} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitleWithClose title="Edit Icons" onClose={onClose} />
+      <DialogTitleWithClose title="Edit icons" onClose={onClose} />
       <DialogContent dividers sx={{ p: 0 }}>
         <Box sx={{ display: "flex", flexDirection: "column" }}>
           {/* Icon tabs */}
@@ -446,7 +446,7 @@ export const IconSelectorModal: React.FC<IconSelectorModalProps> = ({
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                   <Box sx={{ flex: 1 }}>
                     <ColorField
-                      label="Icon Color"
+                      label="Icon color"
                       value={color ?? DEFAULT_COLOR}
                       onChange={(v) => setColor(v)}
                       disabled={!canEditColor}

@@ -109,7 +109,7 @@ test.describe("Multiple management networks", () => {
     const modal = await openMgmtTab(page);
     await modal.locator(SEL_ADD_NETWORK).click();
     await expect(modal.getByTestId("lab-settings-mgmt-network-2")).toBeVisible();
-    await modal.getByRole("textbox", { name: "Network Name" }).fill("storage");
+    await modal.getByRole("textbox", { name: "Network name" }).fill("storage");
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).toBeVisible();
 
@@ -132,7 +132,7 @@ test.describe("Multiple management networks", () => {
   }) => {
     const modal = await openMgmtTab(page);
     await modal.getByRole("button", { name: "Edit management network lab" }).click();
-    await modal.getByRole("textbox", { name: "Network Name" }).fill("data");
+    await modal.getByRole("textbox", { name: "Network name" }).fill("data");
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();
     await expect(modal).toBeVisible();
 
@@ -151,7 +151,7 @@ test.describe("Multiple management networks", () => {
     const before = await topoViewerPage.getYamlFromFile(MULTI_FILE);
     const modal = await openMgmtTab(page);
     await modal.getByRole("button", { name: "Edit management network lab" }).click();
-    await modal.getByRole("textbox", { name: "Network Name" }).fill("oob");
+    await modal.getByRole("textbox", { name: "Network name" }).fill("oob");
     await expect(modal.getByText("Another management network uses this name")).toBeVisible();
 
     await modal.getByTestId("lab-settings-tab-basic").click();
@@ -241,28 +241,28 @@ test.describe("Macvlan management network", () => {
   }) => {
     const modal = await openMgmtTab(page);
     await modal.getByRole("button", { name: "Edit management network lab" }).click();
-    await expect(modal.getByRole("textbox", { name: "Bridge Name" })).toHaveValue("br-lab");
+    await expect(modal.getByRole("textbox", { name: "Bridge name" })).toHaveValue("br-lab");
 
     await modal.getByRole("combobox", { name: "Driver" }).click();
     await page.getByRole("option", { name: "Macvlan" }).click();
-    await expect(modal.getByRole("textbox", { name: "Bridge Name" })).toHaveCount(0);
+    await expect(modal.getByRole("textbox", { name: "Bridge name" })).toHaveCount(0);
     await expect(modal.getByRole("textbox", { name: "MTU" })).toHaveCount(0);
     await expect(modal.getByText("Required for macvlan networks")).toBeVisible();
     await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText(
       "Needs attention"
     );
 
-    await modal.getByRole("textbox", { name: "Parent Interface" }).fill("eth1");
+    await modal.getByRole("textbox", { name: "Parent interface" }).fill("eth1");
     await expect(modal.getByTestId("lab-settings-mgmt-network-1")).toContainText(
       "macvlan on eth1"
     );
-    await modal.getByRole("combobox", { name: "Macvlan Mode" }).click();
+    await modal.getByRole("combobox", { name: "Macvlan mode" }).click();
     await page.getByRole("option", { name: "Private" }).click();
     // Host access only exists in bridge mode.
-    await expect(modal.getByRole("switch", { name: "Host Access" })).toHaveCount(0);
-    await modal.getByRole("combobox", { name: "Address Allocation" }).click();
+    await expect(modal.getByRole("switch", { name: "Host access" })).toHaveCount(0);
+    await modal.getByRole("combobox", { name: "Address allocation" }).click();
     await page.getByRole("option", { name: "Container runtime" }).click();
-    await expect(modal.getByRole("switch", { name: "Duplicate Address Detection" })).toHaveCount(
+    await expect(modal.getByRole("switch", { name: "Duplicate address detection" })).toHaveCount(
       0
     );
     await modal.locator(SEL_LAB_SETTINGS_SAVE_BTN).click();

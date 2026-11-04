@@ -145,7 +145,7 @@ export const AddSection: React.FC<AddSectionProps> = ({ level, existing, onAdd }
             options={kindOptions}
             value={name}
             onChange={setName}
-            placeholder="Search or type kind..."
+            placeholder="Search or type kind…"
             allowFreeText={true}
             helperText={isTaken ? "This kind already has settings" : undefined}
           />

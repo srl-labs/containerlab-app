@@ -11,7 +11,7 @@ test("covers the manifest, searches every category, saves and resets with scope 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/settings.html");
   // Lab hosts and This computer's settings have their own pages; a search for them leads there.
-  await expect(page.locator("[data-setting-key]")).toHaveCount(23);
+  await expect(page.locator("[data-setting-key]")).toHaveCount(24);
   await search(page, "lab host");
   await expect(card(page, "connections")).toHaveCount(0);
   await search(page, "binary");

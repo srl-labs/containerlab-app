@@ -5,7 +5,12 @@ import test from "node:test";
 
 import { createLocalEndpoints, resolveLocalBackendConfig as resolve } from "./localEndpointConfig.ts";
 
-const DESKTOP = { envPrefix: "CONTAINERLAB_DESKTOP_", enableVariable: "CONTAINERLAB_DESKTOP_LOCAL", enabledByDefault: true };
+const DESKTOP = {
+  envPrefix: "CONTAINERLAB_DESKTOP_",
+  enableVariable: "CONTAINERLAB_DESKTOP_LOCAL",
+  enabledByDefault: true,
+  hostScriptsByDefault: true
+};
 
 /** The desktop app's settings: `local-backend.json`, then CONTAINERLAB_DESKTOP_* variables. */
 function resolveLocalBackendConfig(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, fileContent: string | undefined) {
@@ -32,7 +37,8 @@ test("local-backend.json configures the backend and the environment overrides it
     runtime: "podman",
     workspaceRoot: "/srv/labs",
     sudo: true,
-    deployExtraArgs: ["--max-workers", "2"]
+    deployExtraArgs: ["--max-workers", "2"],
+    hostScripts: true
   });
 
   const overridden = resolveLocalBackendConfig(
@@ -60,7 +66,7 @@ test("the local endpoint can be turned off by file or environment", () => {
 });
 
 test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => {
-  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false };
+  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false, hostScriptsByDefault: false };
   assert.equal(resolve({ ...web, platform: "linux", env: {} }).enabled, false);
   const enabled = resolve({
     ...web,
@@ -76,8 +82,22 @@ test("the web app runs labs on its host only when WEB_LOCAL_LABS is set", () => 
   assert.deepEqual(enabled.options, {
     binaryPath: "/usr/local/bin/containerlab",
     workspaceRoot: "/home/alice/.clab",
-    wiresharkImage: "registry.example.com/wireshark-vnc:custom"
+    wiresharkImage: "registry.example.com/wireshark-vnc:custom",
+    hostScripts: false
   });
+});
+
+test("script buttons follow the app default, then the file, then the environment", () => {
+  assert.equal(resolveLocalBackendConfig("linux", {}, undefined).options.hostScripts, true);
+  const off = JSON.stringify({ hostScripts: false });
+  assert.equal(resolveLocalBackendConfig("linux", {}, off).options.hostScripts, false);
+  assert.equal(
+    resolveLocalBackendConfig("linux", { CONTAINERLAB_DESKTOP_HOST_SCRIPTS: "true" }, off).options.hostScripts,
+    true
+  );
+  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false, hostScriptsByDefault: false };
+  assert.equal(resolve({ ...web, platform: "linux", env: {} }).options.hostScripts, false);
+  assert.equal(resolve({ ...web, platform: "linux", env: { WEB_LOCAL_HOST_SCRIPTS: "1" } }).options.hostScripts, true);
 });
 
 test("the desktop app's own host can be a cluster: CONTAINERLAB_DESKTOP_RUNTIME=c9s", () => {
@@ -95,7 +115,8 @@ test("the desktop app's own host can be a cluster: CONTAINERLAB_DESKTOP_RUNTIME=
   assert.equal(config.enabled, true);
   assert.deepEqual(config.options, {
     runtime: "c9s",
-    c9s: { kubeContext: "kind-c9s-app", namespace: "team-a", exposeType: "LoadBalancer", persistence: false }
+    c9s: { kubeContext: "kind-c9s-app", namespace: "team-a", exposeType: "LoadBalancer", persistence: false },
+    hostScripts: true
   });
   assert.deepEqual(config.problems, []);
 });
@@ -192,10 +213,10 @@ test("an unknown runtime is reported and turns the host off instead of guessing"
 });
 
 test("the web app runs labs on a cluster with WEB_LOCAL_RUNTIME=c9s", () => {
-  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false };
+  const web = { envPrefix: "WEB_LOCAL_", enableVariable: "WEB_LOCAL_LABS", enabledByDefault: false, hostScriptsByDefault: false };
   const config = resolve({ ...web, platform: "linux", env: { WEB_LOCAL_LABS: "1", WEB_LOCAL_RUNTIME: "c9s" } });
   assert.equal(config.enabled, true);
-  assert.deepEqual(config.options, { runtime: "c9s", c9s: {} });
+  assert.deepEqual(config.options, { runtime: "c9s", c9s: {}, hostScripts: false });
 });
 
 test("each local lab host gets its own address and label", () => {

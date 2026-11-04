@@ -10,6 +10,7 @@ import type {
   FreeTextAnnotation,
   FreeShapeAnnotation,
   TrafficRateAnnotation,
+  ScriptButtonAnnotation,
   GroupStyleAnnotation,
   NodeAnnotation,
   NetworkNodeAnnotation,
@@ -387,7 +388,8 @@ function buildMergedNodes(
   groupStyleAnnotations: GroupStyleAnnotation[],
   freeTextAnnotations: FreeTextAnnotation[],
   freeShapeAnnotations: FreeShapeAnnotation[],
-  trafficRateAnnotations: TrafficRateAnnotation[]
+  trafficRateAnnotations: TrafficRateAnnotation[],
+  scriptButtonAnnotations: ScriptButtonAnnotation[]
 ): Node[] {
   const topoWithPositions = applyAnnotationPositionsToNodes(
     newNodes,
@@ -408,7 +410,8 @@ function buildMergedNodes(
     freeTextAnnotations,
     freeShapeAnnotations,
     groupStyleAnnotations,
-    trafficRateAnnotations
+    trafficRateAnnotations,
+    scriptButtonAnnotations
   );
   const mergedNodes = [...topoWithGeoCoordinates, ...annotationNodes];
   return Array.from(new Map(mergedNodes.map((n) => [n.id, n])).values());
@@ -455,6 +458,7 @@ function normalizeAnnotations(annotations?: TopologyAnnotations): Required<Topol
     freeTextAnnotations = [],
     freeShapeAnnotations = [],
     trafficRateAnnotations = [],
+    scriptButtonAnnotations = [],
     groupStyleAnnotations = [],
     nodeAnnotations = [],
     networkNodeAnnotations = [],
@@ -468,6 +472,10 @@ function normalizeAnnotations(annotations?: TopologyAnnotations): Required<Topol
     freeTextAnnotations: normalizeFreeTextAnnotations(freeTextAnnotations),
     freeShapeAnnotations: normalizeFreeShapeAnnotations(freeShapeAnnotations),
     trafficRateAnnotations: normalizeTrafficRateAnnotations(trafficRateAnnotations),
+    scriptButtonAnnotations: scriptButtonAnnotations.map((annotation) => ({
+      ...annotation,
+      position: toPosition(annotation.position) ?? { x: 0, y: 0 }
+    })),
     groupStyleAnnotations: normalizeGroupStyleAnnotations(
       groupStyleAnnotations,
       normalizedNodeAnnotations
@@ -688,6 +696,7 @@ function buildInitialTopoViewerData(
     ...(telemetryNodeSizePx !== null ? { telemetryNodeSizePx } : {}),
     ...(telemetryInterfaceSizePercent !== null ? { telemetryInterfaceSizePercent } : {}),
     showRateLabels,
+    animateTraffic: viewerSettings.animateTraffic === true,
     showDummyLinks: viewerSettings.showDummyLinks !== false,
     showWaitFor: viewerSettings.showWaitFor === true,
     ...(resolvedLinkLabelMode !== null ? { linkLabelMode: resolvedLinkLabelMode } : {}),
@@ -717,7 +726,8 @@ export function applySnapshotToStores(
     annotations.groupStyleAnnotations,
     annotations.freeTextAnnotations,
     annotations.freeShapeAnnotations,
-    annotations.trafficRateAnnotations
+    annotations.trafficRateAnnotations,
+    annotations.scriptButtonAnnotations
   );
 
   // Stamp dummy visibility before layout runs, so hidden dummies do not reserve space in

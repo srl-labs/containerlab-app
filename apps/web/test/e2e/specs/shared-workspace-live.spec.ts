@@ -210,7 +210,7 @@ test("two users share the complete lab lifecycle and keep private files isolated
     const newPath = `${sharedDir}/draft.clab.yml`;
     await page.getByRole("button", { name: "Labs", exact: true }).click();
     await page.getByRole("button", { name: "New Topology File", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Create Topology File", exact: true });
+    const dialog = page.getByRole("dialog", { name: "Create topology file", exact: true });
     await dialog.getByRole("button", { name: "Shared", exact: true }).click();
     await expect(dialog.getByLabel("Topology file name", { exact: true })).toHaveValue("new-lab");
     await dialog.getByLabel("Topology file name", { exact: true }).fill(`${lab}/draft`);

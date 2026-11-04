@@ -70,7 +70,7 @@ test.describe("Editor shortcuts", () => {
     await clickEmptyCanvas(page);
     await page.getByTestId("navbar-split-view").click();
     await page.getByTestId("panel-tab-nodes").click();
-    const search = page.getByPlaceholder("Search nodes...");
+    const search = page.getByPlaceholder("Search nodes…");
     await search.click();
     await page.keyboard.type("tr");
 

@@ -2,7 +2,7 @@
 import type { Node, Edge } from "@xyflow/react";
 
 import type { TextStyle, BoxStyle, TrafficRateStyle } from "./annotationStyles";
-import type { NodeBoxAppearance } from "./topology";
+import type { NodeBoxAppearance, ScriptButtonOutputMode } from "./topology";
 import type { NodeYamlSource } from "../io/NodeYamlClone";
 import { BUILTIN_ICON_ALIASES, BUILTIN_ICONS, type BuiltInIcon } from "./icons";
 
@@ -124,6 +124,22 @@ export interface TrafficRateNodeData extends TrafficRateStyle {
   [key: string]: unknown;
 }
 
+/**
+ * Node data for script button annotations.
+ */
+export interface ScriptButtonNodeData {
+  label: string;
+  scriptPath?: string;
+  script?: string;
+  output?: ScriptButtonOutputMode;
+  timeoutSeconds?: number;
+  color?: string;
+  icon?: string;
+  groupId?: string;
+  geoCoordinates?: { lat: number; lng: number };
+  [key: string]: unknown;
+}
+
 // ============================================================================
 // Edge Data Types
 // ============================================================================
@@ -154,7 +170,8 @@ export type RFNodeData =
   | GroupNodeData
   | FreeTextNodeData
   | FreeShapeNodeData
-  | TrafficRateNodeData;
+  | TrafficRateNodeData
+  | ScriptButtonNodeData;
 
 /**
  * Custom node type string literals
@@ -165,7 +182,8 @@ export type RFNodeType =
   | "group-node"
   | "free-text-node"
   | "free-shape-node"
-  | "traffic-rate-node";
+  | "traffic-rate-node"
+  | "script-button-node";
 
 // ============================================================================
 // Typed Node Aliases
@@ -180,6 +198,7 @@ export type GroupRFNode = Node<GroupNodeData, "group-node">;
 export type FreeTextRFNode = Node<FreeTextNodeData, "free-text-node">;
 export type FreeShapeRFNode = Node<FreeShapeNodeData, "free-shape-node">;
 export type TrafficRateRFNode = Node<TrafficRateNodeData, "traffic-rate-node">;
+export type ScriptButtonRFNode = Node<ScriptButtonNodeData, "script-button-node">;
 
 /**
  * Union of all typed nodes
@@ -190,7 +209,8 @@ export type TopoNode =
   | GroupRFNode
   | FreeTextRFNode
   | FreeShapeRFNode
-  | TrafficRateRFNode;
+  | TrafficRateRFNode
+  | ScriptButtonRFNode;
 
 /**
  * React Flow edge with topology data

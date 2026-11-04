@@ -134,7 +134,7 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     docsSlug: "csrx",
     recommendedImages: ["csrx:<version>"],
     repositoryHints: ["csrx", "junos-csrx"],
-    guidance: "Get the cSRX tarball from Juniper and load it with `docker load -i junos-csrx-docker-<version>.tgz`, then reference the loaded image, e.g. csrx:<version>.",
+    guidance: "Get the cSRX tarball from Juniper and load it with `docker load -i junos-csrx-docker-<version>.tgz`, then reference the loaded image, e.g., csrx:<version>.",
     pullable: false
   },
   juniper_vmx: {
@@ -246,7 +246,7 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     docsSlug: "c8000",
     recommendedImages: ["8201-32fh-clab:<version>"],
     repositoryHints: ["8201-32fh-clab", "c8000"],
-    guidance: "Cisco 8000 ships as a containerlab-ready image (e.g. 8201-32fh-clab:<version>) provided by Cisco. Set image-pull-policy: Never since it is loaded locally.",
+    guidance: "Cisco 8000 ships as a containerlab-ready image (e.g., 8201-32fh-clab:<version>) provided by Cisco. Set image-pull-policy: Never since it is loaded locally.",
     pullable: false
   },
   cisco_c8000v: {
@@ -431,7 +431,7 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     docsSlug: "ciena_saos",
     recommendedImages: ["ciena/saos10:<version>"],
     repositoryHints: ["ciena/saos10", "saos10", "ciena_saos"],
-    guidance: "Ciena provides the SAOS 10 image prebuilt; it cannot be built locally from a qcow2. Get it from your Ciena representative, load it (e.g. `docker load`), then reference the provided tag.",
+    guidance: "Ciena provides the SAOS 10 image prebuilt; it cannot be built locally from a qcow2. Get it from your Ciena representative, load it (e.g., `docker load`), then reference the provided tag.",
     pullable: false
   },
   paloalto_panos: {
@@ -455,7 +455,7 @@ const GUIDANCE_BY_KIND: Record<string, GuidanceInput> = {
     docsSlug: "spirent_stc",
     recommendedImages: ["stc:<version>"],
     repositoryHints: ["stc", "spirent"],
-    guidance: "Load the Spirent TestCenter container image locally and reference its tag, e.g. stc:<version>.",
+    guidance: "Load the Spirent TestCenter container image locally and reference its tag, e.g., stc:<version>.",
     pullable: false
   },
   veesix_osvbng: {

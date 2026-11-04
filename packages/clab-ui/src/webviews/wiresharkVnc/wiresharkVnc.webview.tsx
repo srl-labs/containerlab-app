@@ -81,24 +81,24 @@ export function WiresharkVncApp(): React.JSX.Element {
         const maxAttempts = typeof message.maxAttempts === "number" ? message.maxAttempts : 0;
 
         if (attempt <= 1) {
-          setRetryInfo("Waiting for VNC server...");
+          setRetryInfo("Waiting for VNC server…");
         } else if (maxAttempts > 0) {
-          setRetryInfo(`Waiting for VNC server... (attempt ${attempt}/${maxAttempts})`);
+          setRetryInfo(`Waiting for VNC server… (attempt ${attempt}/${maxAttempts})`);
         } else {
-          setRetryInfo(`Waiting for VNC server... (attempt ${attempt})`);
+          setRetryInfo(`Waiting for VNC server… (attempt ${attempt})`);
         }
 
         break;
       }
       case "vnc-ready": {
         pendingRetryRef.current = false;
-        setRetryInfo("VNC server ready, loading...");
+        setRetryInfo("VNC server ready, loading…");
         loadVnc(message.url, false);
         break;
       }
       case "vnc-timeout": {
         pendingRetryRef.current = false;
-        setRetryInfo("Connection timeout - attempting to load anyway...");
+        setRetryInfo("Connection timeout - attempting to load anyway…");
         loadVnc(message.url, true);
         break;
       }
@@ -127,7 +127,7 @@ export function WiresharkVncApp(): React.JSX.Element {
           onError={() => {
             setIsLoading(true);
             setIsFrameVisible(false);
-            setRetryInfo("Connection failed - retrying...");
+            setRetryInfo("Connection failed - retrying…");
 
             if (!pendingRetryRef.current) {
               pendingRetryRef.current = true;

@@ -30,7 +30,7 @@ async function setup(page: Page, seeded = endpoints) {
 
 async function openCreate(page: Page) {
   await page.getByRole("button", { name: "Create a lab", exact: true }).click();
-  return page.getByRole("dialog", { name: "Create Topology File", exact: true });
+  return page.getByRole("dialog", { name: "Create topology file", exact: true });
 }
 
 test("location controls the submitted path and resets when the dialog is reopened", async ({ page }) => {

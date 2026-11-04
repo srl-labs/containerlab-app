@@ -5,6 +5,7 @@ import Fastify, {
 } from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyCors from "@fastify/cors";
+import { registerHostGuard } from "./hostGuard.ts";
 import fastifyWebsocket from "@fastify/websocket";
 import WebSocket, { type RawData } from "ws";
 import type { ServerOptions as HttpsServerOptions } from "node:https";
@@ -74,6 +75,11 @@ export interface CreateStandaloneAppOptions {
   defaultClabApiUrl?: string;
   https?: HttpsServerOptions;
   isDev?: boolean;
+  /**
+   * The host names this server answers for, read per request. Unset answers for any,
+   * which suits a server behind its own name; a local one must set it.
+   */
+  allowedHosts?: () => readonly string[];
   /**
    * Offer a local endpoint. Only a single-user app such as the desktop app
    * should: every browser session would act as the server's OS user.
@@ -245,6 +251,9 @@ export async function createStandaloneApp(
   const app: FastifyInstance = options.https
     ? (Fastify({ ...fastifyOptions, https: options.https }) as FastifyInstance)
     : (Fastify(fastifyOptions) as FastifyInstance);
+
+  // Before anything else: a page that points its own name at this server is not a visitor.
+  if (options.allowedHosts) registerHostGuard(app, options.allowedHosts);
 
   await app.register(fastifyCookie);
   await app.register(fastifyCors, {

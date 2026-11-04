@@ -52,7 +52,7 @@ function GenerateTopologyDialog(props: {
   return (
     <Dialog open onClose={() => onClose(undefined)} maxWidth="sm" fullWidth data-testid="clos-generator-dialog">
       <DialogTitleWithClose
-        title="Generate Clos Topology"
+        title="Generate Clos topology"
         onClose={() => onClose(undefined)}
         closeButtonTestId="clos-generator-close"
       />
@@ -283,8 +283,8 @@ function ShareLinksDialog(props: { request: ShareLinksDialogRequest; onClose: ()
         ) : null}
       </DialogContent>
       <DialogActions>
-        <Button size="small" onClick={onClose}>
-          Done
+        <Button variant="text" size="small" onClick={onClose}>
+          Close
         </Button>
       </DialogActions>
     </Dialog>
@@ -321,7 +321,7 @@ function ValidationResultDialog(props: { request: ValidationResultDialogRequest;
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button size="small" onClick={onClose}>
+        <Button variant="text" size="small" onClick={onClose}>
           Close
         </Button>
       </DialogActions>

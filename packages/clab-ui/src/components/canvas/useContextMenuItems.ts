@@ -76,6 +76,7 @@ interface ContextMenuItemsParams {
   onAddShapes?: (shapeType?: string) => void;
   onAddShapeAtPosition?: (position: { x: number; y: number }, shapeType?: string) => void;
   onAddTrafficRateAtPosition?: (position: { x: number; y: number }) => void;
+  onAddScriptButtonAtPosition?: (position: { x: number; y: number }) => void;
 }
 
 interface ResolveContextMenuItemsParams extends ContextMenuItemsParams {
@@ -183,7 +184,10 @@ function buildNodeItems(
     editTrafficRate: params.annotationHandlers?.onEditTrafficRate,
     deleteTrafficRate: params.annotationHandlers?.onDeleteTrafficRate,
     changeZOrder: params.annotationHandlers?.onChangeZOrder,
-    labFiles: resolveNodeLabFiles(targetNode, params)
+    labFiles: resolveNodeLabFiles(targetNode, params),
+    runScriptButton: params.annotationHandlers?.onRunScriptButton,
+    editScriptButton: params.annotationHandlers?.onEditScriptButton,
+    deleteScriptButton: params.annotationHandlers?.onDeleteScriptButton
   });
 }
 
@@ -230,7 +234,8 @@ function buildPaneItems(params: ResolveContextMenuItemsParams): ContextMenuItem[
     onAddTextAtPosition: params.onAddTextAtPosition,
     onAddShapes: params.onAddShapes,
     onAddShapeAtPosition: params.onAddShapeAtPosition,
-    onAddTrafficRateAtPosition: params.onAddTrafficRateAtPosition
+    onAddTrafficRateAtPosition: params.onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition: params.onAddScriptButtonAtPosition
   });
 }
 
@@ -336,7 +341,8 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     onAddTextAtPosition,
     onAddShapes,
     onAddShapeAtPosition,
-    onAddTrafficRateAtPosition
+    onAddTrafficRateAtPosition,
+    onAddScriptButtonAtPosition
   } = params;
   const { type, targetId, position: menuPosition } = handlers.contextMenu;
 
@@ -402,6 +408,7 @@ export function useContextMenuItems(params: ContextMenuItemsParams): ContextMenu
     onAddShapeAtPosition,
     onAddTrafficRateAtPosition,
     labFileScope,
-    openLabFile
+    openLabFile,
+    onAddScriptButtonAtPosition
   ]);
 }

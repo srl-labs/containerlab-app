@@ -6,6 +6,11 @@ import type {
   LabHostInfo,
   LabHostNamespaceMode,
   LabHostProfile,
+  LabHostScriptDescription,
+  LabHostScriptEvent,
+  LabHostScriptRequest,
+  LabHostScriptResult,
+  LabHostScriptSource,
   LabHostSupport,
   LabLifecycleOptions,
   LabRuntimeKind,
@@ -290,6 +295,12 @@ export interface WiresharkVncSocket {
  * Talks to containerlab for one user on one lab host: the local CLI and
  * container runtime, or a clab-api-server.
  */
+/** How a host script run is controlled. */
+export interface HostScriptRunOptions {
+  /** Aborting stops the script and what it started. */
+  signal?: AbortSignal;
+}
+
 export interface LabBackend {
   readonly kind: LabBackendKind;
   readonly capabilities: LabBackendCapabilities;
@@ -375,6 +386,24 @@ export interface LabBackend {
   saveSnapshots(lab: LabTarget, request: LabSnapshotSaveRequest): Promise<SnapshotSaveResponse>;
   /** `containerlab inspect --details` for one lab. */
   inspectLabDetails(lab: LabTarget): Promise<InspectDetailsResponse>;
+  /** What a script button's script is right now, for the confirmation before it runs. */
+  describeHostScript(lab: LabTarget, source: LabHostScriptSource): Promise<LabHostScriptDescription>;
+  /** Runs a script button's script on the lab host, from the topology folder. */
+  runHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest,
+    run?: HostScriptRunOptions
+  ): Promise<LabHostScriptResult>;
+  /**
+   * Like `runHostScript`, with output as it comes. Resolves once the script runs;
+   * the last event is its exit. Aborting `run.signal` stops the script, and so
+   * does breaking out of the iteration.
+   */
+  streamHostScript(
+    lab: LabTarget,
+    request: LabHostScriptRequest,
+    run?: HostScriptRunOptions
+  ): Promise<AsyncIterable<LabHostScriptEvent>>;
 
   // Nodes (by container name)
 

@@ -4,6 +4,7 @@ export { NumberTextField } from "./NumberTextField";
 export { SelectField } from "./SelectField";
 export { CheckboxField } from "./CheckboxField";
 export { ColorField } from "./ColorField";
+export { ColorSwatch } from "./ColorSwatch";
 export { DynamicList } from "./DynamicList";
 export { KeyValueList } from "./KeyValueList";
 export { FilterableDropdown } from "./FilterableDropdown";

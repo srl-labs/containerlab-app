@@ -25,7 +25,7 @@ export function stripAnsi(value: string): string {
   return value.replace(ANSI_PATTERN, "");
 }
 
-function spawnError(file: string, error: NodeJS.ErrnoException): LabBackendError {
+export function spawnError(file: string, error: NodeJS.ErrnoException): LabBackendError {
   if (error.code === "ENOENT") {
     return new LabBackendError(`${file} was not found. Install it or set its path.`, 503, {
       cause: error

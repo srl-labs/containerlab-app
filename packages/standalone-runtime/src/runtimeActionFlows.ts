@@ -11,7 +11,7 @@ import {
 export async function deleteTopologyFileFlow(target: RuntimeTargetRequest): Promise<boolean> {
   const fileLabel = target.topologyRef?.yamlPath ?? "this topology file";
   const confirmed = await confirmRuntimeAction({
-    title: "Delete Topology File",
+    title: "Delete topology file",
     message: `Delete ${fileLabel}?`,
     confirmLabel: "Delete",
     severity: "error"

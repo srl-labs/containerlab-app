@@ -18,6 +18,7 @@ const {
   LinkImpairmentView,
   NetworkEditorView,
   NodeEditorView,
+  ScriptButtonEditorView,
   TrafficRateEditorView
 } = editorViews;
 
@@ -143,6 +144,8 @@ export const EditorTabContent: React.FC<EditorTabContentProps> = ({
           readOnly={isReadOnly}
         />
       );
+    case "scriptButtonEditor":
+      return <ScriptButtonEditorView readOnly={isReadOnly} />;
     default:
       return <EditorPlaceholder />;
   }
