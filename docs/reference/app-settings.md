@@ -30,6 +30,8 @@ These run labs on the web app's own host, without `clab-api-server`; see [Run la
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `WEB_LOCAL_LABS` | `false` | Run labs on the web app's host. Every browser that opens the app can then run labs there, without signing in. |
+| `WEB_LOCAL_HOST_SCRIPTS` | `false` | Let [script buttons](../guides/script-buttons.md) run shell scripts on the web app's host, as its OS user. With `WEB_LOCAL_LABS` every browser that opens the app can then do that, without signing in. Has no effect with `c9s`. |
+| `WEB_ALLOWED_HOSTS` | any | Host names this app answers for, separated by commas, for example `labs.example.com,10.0.0.5:3001`. Set it when labs run on the web app's host. |
 | `WEB_LOCAL_LABEL` | host name | Name of the host in the explorer. |
 | `WEB_LOCAL_CLAB_BINARY` | `containerlab` | containerlab binary, looked up in `PATH`. |
 | `WEB_LOCAL_RUNTIME` | `docker` | Lab runtime: `docker`, `podman`, or `c9s` for a [Kubernetes cluster](../guides/kubernetes.md#web-app). |
@@ -67,5 +69,7 @@ Set these in the environment that starts the app.
 | `CONTAINERLAB_DESKTOP_WORKSPACE` | `~/.clab` | Folder for the topologies of **This computer**. |
 | `CONTAINERLAB_DESKTOP_WIRESHARK_IMAGE` | `ghcr.io/srl-labs/wireshark-vnc-docker:latest` | Image of the Wireshark VNC containers, also of the clusters. With `c9s` it needs the capture pipe (`CLABWIRE_CAPTURE_PIPE`). |
 | `CONTAINERLAB_DESKTOP_SUDO` | `false` | Run containerlab with `sudo -n`. Needs passwordless sudo. |
+
+`CONTAINERLAB_DESKTOP_HOST_SCRIPTS`, or `hostScripts` in the file, turns [script buttons](../guides/script-buttons.md) on this computer on or off. They are on by default.
 
 The variables override `~/.config/Containerlab/local-backend.json`; see [Run labs on this computer](../install/desktop.md#run-labs-on-this-computer). Kubernetes clusters next to **This computer** are kept under `clusters` in that file; add, edit, and remove them under **Settings** > **Lab hosts**, and the app writes the file. See [Labs on Kubernetes](../guides/kubernetes.md#add-a-cluster). Like **This computer**, clusters need Linux.
