@@ -26,8 +26,8 @@ interface TrafficChartProps {
   height?: number | "100%";
   compact?: boolean;
   /**
-   * The panel's look in as little room as possible: no axis titles and no
-   * legend, for a place that shows `TRAFFIC_LEGEND` itself.
+   * The panel's look in as little room as possible: bit rates only, with no axis
+   * titles and no legend, for a place that shows `TRAFFIC_LEGEND` and the packet rates itself.
    */
   dense?: boolean;
   showLegend?: boolean;
@@ -269,8 +269,7 @@ function buildYAxis(compact: boolean, dense: boolean, scale: number, unitLabel: 
         width: 56,
         tickLabelStyle: PANEL_TICK_LABEL_STYLE,
         valueFormatter: (value: number) => `${value} ${unitLabel}`
-      },
-      { id: "pps", position: "none" as const, width: 0 }
+      }
     ];
   }
 
@@ -379,7 +378,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
   const legendSlotProps = resolveLegendSlotProps(compact, showLegend, scale);
   const xAxis = buildXAxis(compact, dense, scale, xData, xMin, xMax);
   const yAxis = buildYAxis(compact, dense, scale, unitLabel);
-  const series = buildSeries({
+  const allSeries = buildSeries({
     compact,
     showLegend,
     unitLabel,
@@ -388,6 +387,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
     rxPpsData,
     txPpsData
   });
+  const series = dense ? allSeries.filter((entry) => entry.yAxisId === "bps") : allSeries;
   const chartSx: SxProps<Theme> = compact
     ? {
         "& .MuiChartsGrid-line": { stroke: "#3e3e42" },

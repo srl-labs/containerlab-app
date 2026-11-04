@@ -7,10 +7,8 @@ export const TRAFFIC_SERIES_COLORS = {
   txPps: "#9cdcfe"
 } as const;
 
-/** What a legend beside the chart shows, in the chart's order. */
+/** What a legend beside the dense chart shows, in the chart's order. */
 export const TRAFFIC_LEGEND: ReadonlyArray<{ label: string; color: string }> = [
   { label: "RX", color: TRAFFIC_SERIES_COLORS.rxBps },
-  { label: "TX", color: TRAFFIC_SERIES_COLORS.txBps },
-  { label: "RX PPS", color: TRAFFIC_SERIES_COLORS.rxPps },
-  { label: "TX PPS", color: TRAFFIC_SERIES_COLORS.txPps }
+  { label: "TX", color: TRAFFIC_SERIES_COLORS.txBps }
 ];

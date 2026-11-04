@@ -10,7 +10,13 @@ import { linkTrafficKey } from "../../../utils/trafficHistory";
 import { TRAFFIC_LEGEND } from "../../panels/trafficChartSeries";
 
 import { CardTitle, Label, RowGrid, Value } from "./HoverCardParts";
-import { linkHoverEndpoints, linkHoverState, type LinkHoverEndpoint, type LinkHoverState } from "./linkHoverDetails";
+import {
+  formatPacketRate,
+  linkHoverEndpoints,
+  linkHoverState,
+  type LinkHoverEndpoint,
+  type LinkHoverState
+} from "./linkHoverDetails";
 
 const LazyTrafficChart = React.lazy(async () => {
   const module = await import("../../panels/TrafficChart");
@@ -72,9 +78,11 @@ function LinkTraffic({ ends }: { ends: readonly [LinkHoverEndpoint, LinkHoverEnd
   );
 }
 
-function trafficOf(end: LinkHoverEndpoint, key: "rxBps" | "txBps"): string {
-  const value = end.stats?.[key];
-  return value === undefined ? "" : formatBitRate(value);
+function trafficOf(end: LinkHoverEndpoint, direction: "rx" | "tx"): string {
+  const bps = end.stats?.[`${direction}Bps`];
+  if (bps === undefined) return "";
+  const pps = end.stats?.[`${direction}Pps`];
+  return pps === undefined ? formatBitRate(bps) : `${formatBitRate(bps)} · ${formatPacketRate(pps)}`;
 }
 
 /** A row with a value for each end; nothing when neither end has one. */
@@ -118,8 +126,8 @@ export function LinkHoverCardContent({ edgeId }: { edgeId: string }) {
           <>
             <EndpointRow label="MTU" a={a.mtu} b={b.mtu} testId="link-hover-card-mtu" />
             <EndpointRow label="MAC" a={a.mac} b={b.mac} mono testId="link-hover-card-mac" />
-            <EndpointRow label="Rx" a={trafficOf(a, "rxBps")} b={trafficOf(b, "rxBps")} testId="link-hover-card-rx" />
-            <EndpointRow label="Tx" a={trafficOf(a, "txBps")} b={trafficOf(b, "txBps")} testId="link-hover-card-tx" />
+            <EndpointRow label="Rx" a={trafficOf(a, "rx")} b={trafficOf(b, "rx")} testId="link-hover-card-rx" />
+            <EndpointRow label="Tx" a={trafficOf(a, "tx")} b={trafficOf(b, "tx")} testId="link-hover-card-tx" />
             <EndpointRow label="Impaired" a={a.impairment ?? ""} b={b.impairment ?? ""} testId="link-hover-card-impairment" />
           </>
         ) : null}
