@@ -13,6 +13,7 @@ import {
   resolveValidIntervalSeconds
 } from "../../utils/trafficHistory";
 
+import { TRAFFIC_SERIES_COLORS } from "./trafficChartSeries";
 
 interface BpsUnit {
   divisor: number;
@@ -24,6 +25,11 @@ interface TrafficChartProps {
   endpointKey: string;
   height?: number | "100%";
   compact?: boolean;
+  /**
+   * The panel's look in as little room as possible: no axis titles and no
+   * legend, for a place that shows `TRAFFIC_LEGEND` itself.
+   */
+  dense?: boolean;
   showLegend?: boolean;
   /** Scale factor for compact legend sizing (1 = default). */
   scale?: number;
@@ -43,6 +49,8 @@ function determineBpsUnit(maxBps: number): BpsUnit {
   }
   return { divisor: 1, label: "bps" };
 }
+
+const DENSE_MARGIN = { top: 4, right: 4, bottom: 0, left: 0 };
 
 function resolveChartMargin(compact: boolean, showLegend: boolean, scale: number) {
   if (!compact) {
@@ -204,6 +212,7 @@ function formatClockTime(value: Date, withSeconds: boolean): string {
 
 function buildXAxis(
   compact: boolean,
+  dense: boolean,
   scale: number,
   xData: Date[],
   xMin: Date | undefined,
@@ -211,7 +220,7 @@ function buildXAxis(
 ) {
   const timeTicks =
     xMin !== undefined && xMax !== undefined
-      ? buildTimeTicks(xMin, xMax, compact ? COMPACT_TIME_TICKS : PANEL_TIME_TICKS)
+      ? buildTimeTicks(xMin, xMax, compact || dense ? COMPACT_TIME_TICKS : PANEL_TIME_TICKS)
       : undefined;
   // Ticks on whole minutes read as HH:MM; the tooltip always shows the exact second.
   const tickSeconds = timeTicks === undefined || timeTicks.stepSeconds % 60 !== 0;
@@ -236,6 +245,9 @@ function buildXAxis(
       }
     ];
   }
+  if (dense) {
+    return [{ ...baseAxis, tickLabelStyle: PANEL_TICK_LABEL_STYLE, tickSize: 3, height: 18 }];
+  }
   return [
     {
       ...baseAxis,
@@ -248,7 +260,20 @@ function buildXAxis(
   ];
 }
 
-function buildYAxis(compact: boolean, scale: number, unitLabel: string) {
+function buildYAxis(compact: boolean, dense: boolean, scale: number, unitLabel: string) {
+  if (dense) {
+    return [
+      {
+        id: "bps",
+        tickNumber: 3,
+        width: 56,
+        tickLabelStyle: PANEL_TICK_LABEL_STYLE,
+        valueFormatter: (value: number) => `${value} ${unitLabel}`
+      },
+      { id: "pps", position: "none" as const, width: 0 }
+    ];
+  }
+
   if (compact) {
     return [
       {
@@ -303,7 +328,7 @@ function buildSeries(params: {
     {
       data: params.rxBpsData,
       label: resolveSeriesLabel(params.compact, params.showLegend, `RX ${params.unitLabel}`),
-      color: "#4ec9b0",
+      color: TRAFFIC_SERIES_COLORS.rxBps,
       showMark: false,
       curve: "linear" as const,
       yAxisId: "bps"
@@ -311,7 +336,7 @@ function buildSeries(params: {
     {
       data: params.txBpsData,
       label: resolveSeriesLabel(params.compact, params.showLegend, `TX ${params.unitLabel}`),
-      color: "#569cd6",
+      color: TRAFFIC_SERIES_COLORS.txBps,
       showMark: false,
       curve: "linear" as const,
       yAxisId: "bps"
@@ -319,7 +344,7 @@ function buildSeries(params: {
     {
       data: params.rxPpsData,
       label: resolveSeriesLabel(params.compact, params.showLegend, "RX PPS"),
-      color: "#b5cea8",
+      color: TRAFFIC_SERIES_COLORS.rxPps,
       showMark: false,
       curve: "linear" as const,
       yAxisId: "pps"
@@ -327,7 +352,7 @@ function buildSeries(params: {
     {
       data: params.txPpsData,
       label: resolveSeriesLabel(params.compact, params.showLegend, "TX PPS"),
-      color: "#9cdcfe",
+      color: TRAFFIC_SERIES_COLORS.txPps,
       showMark: false,
       curve: "linear" as const,
       yAxisId: "pps"
@@ -340,6 +365,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
   endpointKey,
   height,
   compact = false,
+  dense = false,
   showLegend = !compact,
   scale = 1,
   emptyMessage = "No traffic data available"
@@ -349,10 +375,10 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
     useMemo(() => {
       return buildChartData(recordTrafficSample(endpointKey, stats), stats);
     }, [stats, endpointKey]);
-  const margin = resolveChartMargin(compact, showLegend, scale);
+  const margin = dense ? DENSE_MARGIN : resolveChartMargin(compact, showLegend, scale);
   const legendSlotProps = resolveLegendSlotProps(compact, showLegend, scale);
-  const xAxis = buildXAxis(compact, scale, xData, xMin, xMax);
-  const yAxis = buildYAxis(compact, scale, unitLabel);
+  const xAxis = buildXAxis(compact, dense, scale, xData, xMin, xMax);
+  const yAxis = buildYAxis(compact, dense, scale, unitLabel);
   const series = buildSeries({
     compact,
     showLegend,
@@ -393,6 +419,7 @@ export const TrafficChart: React.FC<TrafficChartProps> = ({
         series={series}
         grid={{ horizontal: true }}
         margin={margin}
+        hideLegend={dense}
         slotProps={legendSlotProps}
         sx={chartSx}
       />

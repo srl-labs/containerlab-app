@@ -160,5 +160,9 @@ test.describe("Canvas hover cards", () => {
     // The samples from before the hover are already in the chart.
     await expect(traffic.locator("svg").first()).toBeVisible();
     await expect.poll(() => traffic.locator("svg path").count()).toBeGreaterThan(2);
+    // The legend sits beside the title, and the chart takes no room for axis titles.
+    await expect(card.getByTestId("link-hover-card-legend")).toContainText("TX PPS");
+    await expect(traffic.getByText("Time", { exact: true })).toHaveCount(0);
+    expect((await traffic.boundingBox())?.height ?? Number.POSITIVE_INFINITY).toBeLessThan(140);
   });
 });

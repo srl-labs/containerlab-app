@@ -7,6 +7,7 @@ import { useGraphStore } from "../../../stores/graphStore";
 import { useDeploymentState } from "../../../stores/topoViewerStore";
 import { formatBitRate } from "../../../utils/resourceUsage";
 import { linkTrafficKey } from "../../../utils/trafficHistory";
+import { TRAFFIC_LEGEND } from "../../panels/trafficChartSeries";
 
 import { CardTitle, Label, RowGrid, Value } from "./HoverCardParts";
 import { linkHoverEndpoints, linkHoverState, type LinkHoverEndpoint, type LinkHoverState } from "./linkHoverDetails";
@@ -15,8 +16,8 @@ const LazyTrafficChart = React.lazy(async () => {
   const module = await import("../../panels/TrafficChart");
   return { default: module.TrafficChart };
 });
-// The link panel's chart, with its time axis, a little shorter.
-const CHART_HEIGHT = 180;
+// The link panel's chart in as little room as it reads well in.
+const CHART_HEIGHT = 96;
 
 const STATE_LABELS: Record<LinkHoverState, string> = { up: "Up", down: "Down", unknown: "Unknown" };
 
@@ -26,6 +27,23 @@ function stateColor(state: LinkHoverState | undefined): string {
   return "text.disabled";
 }
 
+/** Beside the chart's title, where it costs no height. */
+function TrafficLegend() {
+  return (
+    <Box data-testid="link-hover-card-legend" sx={{ display: "flex", flexShrink: 0, gap: 1 }}>
+      {TRAFFIC_LEGEND.map(({ label, color }) => (
+        <Box
+          key={label}
+          sx={{ display: "flex", alignItems: "center", gap: 0.5, fontSize: 10, whiteSpace: "nowrap", color: "text.secondary" }}
+        >
+          <Box sx={{ width: 8, height: 2, borderRadius: 1, bgcolor: color }} />
+          {label}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 /** Traffic of the first end that reports any; both ends see the same packets. */
 function LinkTraffic({ ends }: { ends: readonly [LinkHoverEndpoint, LinkHoverEndpoint] }) {
   const index = ends[0].stats ? 0 : 1;
@@ -33,15 +51,19 @@ function LinkTraffic({ ends }: { ends: readonly [LinkHoverEndpoint, LinkHoverEnd
   if (!end.stats) return null;
   return (
     <Box data-testid="link-hover-card-traffic" sx={{ mt: 1, pt: 0.75, borderTop: 1, borderColor: "divider" }}>
-      <Typography variant="caption" component="p" noWrap sx={{ color: "text.secondary" }}>
-        Traffic at {end.node}:{end.interface}
-      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0, mb: 0.25 }}>
+        <Typography variant="caption" component="p" noWrap sx={{ flex: 1, minWidth: 0, color: "text.secondary" }}>
+          Traffic at {end.node}:{end.interface}
+        </Typography>
+        <TrafficLegend />
+      </Box>
       <Box sx={{ height: CHART_HEIGHT }}>
         <React.Suspense fallback={null}>
           <LazyTrafficChart
             stats={end.stats}
             endpointKey={linkTrafficKey(index === 0 ? "a" : "b", end.node, end.interface)}
             height={CHART_HEIGHT}
+            dense
             emptyMessage={null}
           />
         </React.Suspense>
