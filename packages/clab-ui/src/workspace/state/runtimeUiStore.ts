@@ -702,11 +702,35 @@ export const useRuntimeUiStore = create<RuntimeUiState>((set, get) => ({
 // Text for streaming output panes, kept until the pane's terminal mounts.
 const terminalOutputListeners = new Map<string, (text: string) => void>();
 const pendingTerminalOutput = new Map<string, string>();
+const terminalPaneCloseListeners = new Map<string, () => void>();
 
 function appendTerminalOutput(paneId: string, text: string): void {
   const listener = terminalOutputListeners.get(paneId);
-  if (listener) listener(text);
-  else pendingTerminalOutput.set(paneId, (pendingTerminalOutput.get(paneId) ?? "") + text);
+  if (listener) {
+    listener(text);
+    return;
+  }
+  // Nothing will read the output of a pane that was closed.
+  if (findPaneLocation(useRuntimeUiStore.getState().terminals, paneId)) {
+    pendingTerminalOutput.set(paneId, (pendingTerminalOutput.get(paneId) ?? "") + text);
+  }
+}
+
+/** Calls back when an open pane goes away; the returned function stops watching. */
+function onTerminalPaneClosed(paneId: string, listener: () => void): () => void {
+  terminalPaneCloseListeners.set(paneId, listener);
+  return () => {
+    if (terminalPaneCloseListeners.get(paneId) === listener) terminalPaneCloseListeners.delete(paneId);
+  };
+}
+
+function handleClosedPanes(before: readonly RuntimeTerminalGroup[], after: readonly RuntimeTerminalGroup[]): void {
+  const open = new Set(after.flatMap((group) => group.panes.map((pane) => pane.id)));
+  for (const pane of before.flatMap((group) => group.panes)) {
+    if (open.has(pane.id)) continue;
+    pendingTerminalOutput.delete(pane.id);
+    terminalPaneCloseListeners.get(pane.id)?.();
+  }
 }
 
 /** Receives a streaming output pane's text, starting with anything that came early. */
@@ -722,8 +746,13 @@ export function subscribeTerminalOutput(paneId: string, listener: (text: string)
   };
 }
 
+useRuntimeUiStore.subscribe((state, previous) => {
+  if (state.terminals !== previous.terminals) handleClosedPanes(previous.terminals, state.terminals);
+});
+
 export const runtimeUiActions = {
   appendTerminalOutput,
+  onTerminalPaneClosed,
   activateTerminalGroup: (groupId: string) => useRuntimeUiStore.getState().activateTerminalGroup(groupId),
   activateTerminalPane: (paneId: string) => useRuntimeUiStore.getState().activateTerminalPane(paneId),
   closeAllTerminals: () => useRuntimeUiStore.getState().closeAllTerminals(),

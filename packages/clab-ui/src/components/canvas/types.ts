@@ -152,6 +152,8 @@ export interface AnnotationHandlers {
   onDeleteTrafficRate?: (id: string) => void;
   /** Run a script button's script; allowed while locked and in view mode */
   onRunScriptButton?: (id: string) => void;
+  /** Stop a script button's running script */
+  onStopScriptButton?: (id: string) => void;
   /** Edit a script button */
   onEditScriptButton?: (id: string) => void;
   /** Delete a script button */

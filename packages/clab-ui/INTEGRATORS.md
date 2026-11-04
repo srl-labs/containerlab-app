@@ -690,6 +690,12 @@ the ones the lab host cannot do. The window host posts
 `clab-api-server` result; `parseExecResponse`, `parseSnapshotSaveResponse`,
 `parseSaveConfigsResponse` and `parseInspectDetails` read it.
 
+Script buttons need `describeHostScript(source)` and `runHostScript(request, { signal })` on it.
+`support().hostScript` says whether they can run, and `hostScriptUnavailable` why not. Describe
+reads the script as the lab host sees it now, and `trustKey` must change with its content and with
+the host and topology. Reject a run whose `expectedSha256` differs (409), and stop the script and
+what it started when `signal` aborts.
+
 Important node action names:
 
 - `ssh`

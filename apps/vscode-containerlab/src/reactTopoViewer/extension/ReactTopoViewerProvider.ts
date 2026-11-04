@@ -34,6 +34,7 @@ import { connectionOf, isUriString, labUri, resolveLab } from "../../backend/lab
 import { formatErrorMessage, log } from "./services/logger";
 import { deploymentStateChecker } from "./services/DeploymentStateChecker";
 import { computeDeployedTopologyDirtyState } from "./services/DirtyState";
+import { labOperationsService } from "./services/LabOperationsService";
 import { NodeStatsFeed } from "./services/NodeStatsFeed";
 import { SplitViewManager } from "./services/SplitViewManager";
 import { labsToRuntimeContainers } from "./services/runtimeContainers";
@@ -233,6 +234,8 @@ export class ReactTopoViewer {
   private setupPanelHandlers(panel: vscode.WebviewPanel, context: vscode.ExtensionContext): void {
     panel.onDidDispose(
       () => {
+        // Nothing shows a script's progress or can stop it once its view is gone.
+        labOperationsService.stopScripts(this.lastYamlFilePath);
         this.currentPanel = undefined;
         this.internalUpdateDepth = 0;
         this.internalUpdateGraceUntil = 0;

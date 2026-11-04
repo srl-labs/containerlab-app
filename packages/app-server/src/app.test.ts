@@ -2190,12 +2190,13 @@ test("/api/runtime/lab-operations run exec, save with copy and details", async (
     saveCopy: true,
     inspectDetails: true,
     hostScript: false,
+    hostScriptUnavailable: "unsupported-server",
   });
 
-  // clab-api-server cannot run scripts on its host; script buttons are for local labs.
+  // A clab-api-server that does not advertise host-scripts refuses before calling it.
   const script = await context.app.inject({
     method: "POST",
-    url: "/api/runtime/lab-operations/host-script",
+    url: "/api/runtime/lab-operations/host-script/describe",
     headers: { cookie },
     payload: { script: "echo hi", topologyRef },
   });
@@ -2227,8 +2228,9 @@ test("/api/runtime/lab-operations reject bad input before reaching the lab host"
     ["/api/runtime/lab-operations/snapshots", { timeout: "soon", topologyRef }],
     ["/api/runtime/lab-operations/save", { copyDir: "a\u0000b", topologyRef }],
     ["/api/runtime/lab-operations/nodes/pause", { nodeNames: ["leaf1"], topologyRef }],
-    ["/api/runtime/lab-operations/host-script", { script: "  ", topologyRef }],
-    ["/api/runtime/lab-operations/host-script", { script: "echo hi", timeoutSeconds: -1, topologyRef }],
+    ["/api/runtime/lab-operations/host-script/describe", { script: "  ", topologyRef }],
+    ["/api/runtime/lab-operations/host-script/stream", { script: "echo hi", timeoutSeconds: -1, topologyRef }],
+    ["/api/runtime/lab-operations/host-script/stream", { script: "echo hi", timeoutSeconds: "soon", topologyRef }],
     ["/api/runtime/lab-operations/host-script/stream", { script: " ", topologyRef }],
   ] as const) {
     const response = await context.app.inject({ method: "POST", url, headers: { cookie }, payload });

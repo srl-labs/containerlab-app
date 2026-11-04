@@ -1,4 +1,5 @@
 // Node and annotation palette for the context panel.
+import { useLabOperationsStore } from "../../../stores/labOperationsStore";
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AccountTreeIcon from "@mui/icons-material/AccountTreeOutlined";
 import AddIcon from "@mui/icons-material/Add";
@@ -617,6 +618,7 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
   showInfoTab = false,
   infoTabTitle
 }) => {
+  const hostScriptSupported = useLabOperationsStore((state) => state.support.hostScript);
   const sessionClient = useTopologySessionClient();
   const { customPaletteTabs, disabledTabIds, yamlSchema, paletteTabLabels } = useClabUiRuntime();
   const customNodes = useCustomNodes();
@@ -1085,14 +1087,18 @@ export const PaletteSection: React.FC<PaletteSectionProps> = ({
                 />
               </Box>
 
-              <PanelSectionHeader title="Actions" />
-              <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
-                <DraggableAnnotation
-                  label="Script Button"
-                  icon={<TerminalIcon fontSize="small" />}
-                  payload={{ annotationType: "script-button" }}
-                />
-              </Box>
+              {hostScriptSupported ? (
+                <>
+                  <PanelSectionHeader title="Actions" />
+                  <Box sx={[PALETTE_GRID_SX, PALETTE_SECTION_BODY_SX]}>
+                    <DraggableAnnotation
+                      label="Script Button"
+                      icon={<TerminalIcon fontSize="small" />}
+                      payload={{ annotationType: "script-button" }}
+                    />
+                  </Box>
+                </>
+              ) : null}
             </PaletteBlockContext.Provider>
           )}
         </Box>

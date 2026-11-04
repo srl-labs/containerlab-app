@@ -11,10 +11,16 @@ import {
 } from "../annotations/annotationNodeConverters";
 import type { TopoNode } from "../core/types/graph";
 import type { ScriptButtonAnnotation } from "../core/types/topology";
-import { parseHostScriptResponse, parseLabOperationSupport } from "../host/labOperations";
+import {
+  hostScriptUnavailableMessage,
+  parseHostScriptDescription,
+  parseHostScriptResponse,
+  parseLabOperationSupport
+} from "../host/labOperations";
 import { buildAnnotationSaveCommand, splitNodeIdsByType } from "../services/deleteSelectionCommands";
 
-import { needsConfirmation, scriptTrustKey, trustScript } from "./scriptButtonPolicy";
+import { revealHiddenCharacters } from "./ScriptButtonDialogs";
+import { needsConfirmation, trustScript } from "./scriptButtonPolicy";
 
 const BUTTON: ScriptButtonAnnotation = {
   id: "script-button-1",
@@ -84,7 +90,7 @@ test("host script results are parsed defensively", () => {
   assert.equal(parseLabOperationSupport({}).hostScript, false);
 });
 
-test("first-run confirmation asks once per script and again when an inline script changes", () => {
+test("first-run confirmation asks once per exact script on a host and topology", () => {
   const storage = new Map<string, string>();
   const previous = (globalThis as { localStorage?: unknown }).localStorage;
   (globalThis as { localStorage?: unknown }).localStorage = {
@@ -92,14 +98,51 @@ test("first-run confirmation asks once per script and again when an inline scrip
     setItem: (key: string, value: string) => void storage.set(key, value)
   };
   try {
-    const key = scriptTrustKey("demo|demo.clab.yml", "echo one");
-    assert.equal(needsConfirmation("firstRun", key), true);
-    trustScript(key);
-    assert.equal(needsConfirmation("firstRun", key), false);
-    assert.equal(needsConfirmation("always", key), true);
-    assert.equal(needsConfirmation("firstRun", scriptTrustKey("demo|demo.clab.yml", "echo two")), true);
-    assert.equal(needsConfirmation("never", scriptTrustKey("other|x.clab.yml", "rm -rf /tmp/x")), false);
+    const script = { foreign: false, trustKey: "key-one" };
+    assert.equal(needsConfirmation("firstRun", script), true);
+    trustScript(script.trustKey);
+    assert.equal(needsConfirmation("firstRun", script), false);
+    assert.equal(needsConfirmation("always", script), true);
+    // A changed script, or the same one elsewhere, has another key.
+    assert.equal(needsConfirmation("firstRun", { foreign: false, trustKey: "key-two" }), true);
+    assert.equal(needsConfirmation("never", { foreign: false, trustKey: "key-two" }), false);
   } finally {
     (globalThis as { localStorage?: unknown }).localStorage = previous;
   }
+});
+
+test("a script the user may not have written asks in every mode, even when trusted", () => {
+  const storage = new Map<string, string>();
+  const previous = (globalThis as { localStorage?: unknown }).localStorage;
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => void storage.set(key, value)
+  };
+  try {
+    const script = { foreign: true, trustKey: "shared" };
+    trustScript(script.trustKey);
+    for (const mode of ["firstRun", "always", "never"] as const) {
+      assert.equal(needsConfirmation(mode, script), true, mode);
+    }
+  } finally {
+    (globalThis as { localStorage?: unknown }).localStorage = previous;
+  }
+});
+
+test("a description that says too little is refused, and unclear ownership counts as foreign", () => {
+  assert.throws(() => parseHostScriptDescription({ kind: "inline" }));
+  assert.equal(parseHostScriptDescription({ sha256: "a", trustKey: "b" }).foreign, true);
+  assert.equal(parseHostScriptDescription({ sha256: "a", trustKey: "b", foreign: false }).foreign, false);
+});
+
+test("hidden characters in a script show as codes", () => {
+  assert.equal(revealHiddenCharacters("rm\u202e -rf"), "rm\u27e6U+202E\u27e7 -rf");
+  assert.equal(revealHiddenCharacters("a\tb\nc"), "a\tb\nc");
+});
+
+test("the reason a host cannot run scripts reaches the message", () => {
+  assert.equal(parseLabOperationSupport({ hostScriptUnavailable: "c9s" }).hostScriptUnavailable, "c9s");
+  assert.equal(parseLabOperationSupport({ hostScriptUnavailable: "x" }).hostScriptUnavailable, undefined);
+  assert.match(hostScriptUnavailableMessage("c9s"), /Kubernetes/);
+  assert.match(hostScriptUnavailableMessage("unsupported-server"), /API_HOST_SCRIPTS/);
 });

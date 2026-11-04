@@ -4,6 +4,8 @@ import {
   parseManifestExport,
   parseNodeLocations,
   parseExecResponse,
+  hostScriptOutcome,
+  parseHostScriptDescription,
   parseHostScriptResponse,
   parseInspectDetails,
   parseLabOperationSupport,
@@ -26,6 +28,9 @@ function requireTarget(getTarget: TargetResolver): RuntimeTargetRequest {
   return target;
 }
 
+/** The output a dialog or notification keeps of a script, per stream. */
+const MAX_DIALOG_OUTPUT_CHARS = 512 * 1024;
+
 /** Lab operations of the open topology, straight to the app server. */
 export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUiLabOperationsHost {
   const run = (route: Parameters<typeof requestLabOperation>[0], body: object = {}) =>
@@ -37,10 +42,30 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
     saveSnapshots: async (request) => parseSnapshotSaveResponse(await run("snapshots", request)),
     saveConfigs: async (request) => parseSaveConfigsResponse(await run("save", request)),
     inspectDetails: async () => parseInspectDetails(await run("inspect-details")),
-    runHostScript: async ({ outputTitle, ...request }) => {
+    describeHostScript: async (source) =>
+      parseHostScriptDescription(await run("host-script/describe", source)),
+    runHostScript: async ({ outputTitle, ...request }, options) => {
       const target = requireTarget(getTarget);
+      // Dialog and notification output collects from the stream too, so Stop works the same.
+      const controller = new AbortController();
+      const stopScript = () => controller.abort();
+      options?.signal?.addEventListener("abort", stopScript, { once: true });
       if (outputTitle === undefined) {
-        return parseHostScriptResponse(await requestLabOperation("host-script", { ...target, ...request }));
+        const output = { stdout: "", stderr: "" };
+        try {
+          const result = parseHostScriptResponse(
+            await streamHostScript(
+              { ...target, ...request },
+              (text, stream) => {
+                output[stream] = `${output[stream]}${text}`.slice(-MAX_DIALOG_OUTPUT_CHARS);
+              },
+              controller.signal
+            )
+          );
+          return { ...result, ...output };
+        } finally {
+          options?.signal?.removeEventListener("abort", stopScript);
+        }
       }
       // Terminal output: open the pane now and fill it while the script runs.
       const paneId = runtimeUiActions.openTerminal({
@@ -52,20 +77,26 @@ export function createStandaloneLabOperations(getTarget: TargetResolver): ClabUi
         title: outputTitle,
         streaming: true
       });
+      // Closing the pane stops the script.
+      const unwatchPane = runtimeUiActions.onTerminalPaneClosed(paneId, stopScript);
       try {
         const result = parseHostScriptResponse(
-          await streamHostScript({ ...target, ...request }, (text) =>
-            runtimeUiActions.appendTerminalOutput(paneId, text)
+          await streamHostScript(
+            { ...target, ...request },
+            (text) => runtimeUiActions.appendTerminalOutput(paneId, text),
+            controller.signal
           )
         );
         const seconds = Math.round(result.durationMs / 100) / 10;
-        const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
-        runtimeUiActions.appendTerminalOutput(paneId, `\n[${status} after ${seconds}s]\n`);
+        runtimeUiActions.appendTerminalOutput(paneId, `\n[${hostScriptOutcome(result)} after ${seconds}s]\n`);
         return result;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         runtimeUiActions.appendTerminalOutput(paneId, `\n[failed: ${message}]\n`);
         throw error;
+      } finally {
+        unwatchPane();
+        options?.signal?.removeEventListener("abort", stopScript);
       }
     },
     hostInfo: async () => {

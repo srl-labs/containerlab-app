@@ -1,10 +1,12 @@
+import type { LabHostScriptDescription } from "../host/labOperations";
+
 /** When script buttons ask before they run. */
 export type ScriptButtonConfirm = "firstRun" | "always" | "never";
 
 export const SCRIPT_BUTTON_CONFIRM_OPTIONS: Array<{ value: ScriptButtonConfirm; label: string }> = [
   { value: "firstRun", label: "First run of each script" },
   { value: "always", label: "Every run" },
-  { value: "never", label: "Never" }
+  { value: "never", label: "Only scripts from others" }
 ];
 
 const CONFIRM_STORAGE_KEY = "clab-script-button-confirm";
@@ -46,24 +48,6 @@ export function resolveScriptButtonConfirm(): ScriptButtonConfirm {
   return readPersistedScriptButtonConfirm();
 }
 
-/** FNV-1a, enough to tell scripts apart without storing them. */
-function hash(text: string): string {
-  let value = 0x811c9dc5;
-  for (let index = 0; index < text.length; index += 1) {
-    value ^= text.charCodeAt(index);
-    value = Math.imul(value, 0x01000193);
-  }
-  return (value >>> 0).toString(36);
-}
-
-/**
- * Identifies a script within a lab. A changed inline script needs confirming
- * again; a script file is trusted by path because its content lives on the host.
- */
-export function scriptTrustKey(labKey: string, source: string): string {
-  return hash(`${labKey}\n${source}`);
-}
-
 function readTrusted(): string[] {
   try {
     const value: unknown = JSON.parse(localStorage.getItem(TRUST_STORAGE_KEY) ?? "[]");
@@ -87,9 +71,16 @@ export function trustScript(key: string): void {
   }
 }
 
-/** Whether a run must be confirmed first. */
-export function needsConfirmation(mode: ScriptButtonConfirm, trustKey: string): boolean {
+/**
+ * Whether a run must be confirmed first. A script the user may not have written
+ * always asks: the only check left is them reading it.
+ */
+export function needsConfirmation(
+  mode: ScriptButtonConfirm,
+  script: Pick<LabHostScriptDescription, "foreign" | "trustKey">
+): boolean {
+  if (script.foreign) return true;
   if (mode === "never") return false;
   if (mode === "always") return true;
-  return !isScriptTrusted(trustKey);
+  return !isScriptTrusted(script.trustKey);
 }

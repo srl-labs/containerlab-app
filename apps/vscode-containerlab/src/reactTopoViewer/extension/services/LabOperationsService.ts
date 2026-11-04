@@ -5,10 +5,12 @@
 
 import * as vscode from "vscode";
 import {
+  hostScriptOutcome,
   normalizeLabSettings,
   type LabExecRequest,
   type LabHostScriptEvent,
   type LabHostScriptRequest,
+  type LabHostScriptSource,
   type LabHostScriptResult,
   type LabOperationName,
   type LabSaveConfigsRequest,
@@ -44,7 +46,9 @@ function isOperationName(value: unknown): value is LabOperationName {
     value === "saveSnapshots" ||
     value === "saveConfigs" ||
     value === "inspectDetails" ||
+    value === "describeHostScript" ||
     value === "runHostScript" ||
+    value === "cancelHostScript" ||
     value === "hostInfo" ||
     value === "nodeLocations" ||
     value === "captureInterfaces" ||
@@ -55,9 +59,15 @@ function isOperationName(value: unknown): value is LabOperationName {
   );
 }
 
-function positiveNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+function hostScriptSource(request: Record<string, unknown>): LabHostScriptSource {
+  const scriptPath = optionalString(request.scriptPath);
+  return scriptPath !== undefined
+    ? { scriptPath }
+    : { script: typeof request.script === "string" ? request.script : "" };
 }
+
+/** Running scripts by the id their webview gave them, and the topology they belong to. */
+const runningScripts = new Map<string, { labPath: string; controller: AbortController }>();
 
 let scriptOutput: vscode.OutputChannel | undefined;
 
@@ -79,8 +89,9 @@ async function runScriptInOutputChannel(
       continue;
     }
     const { result } = event;
-    const status = result.timedOut ? "timed out" : `exited with ${result.exitCode ?? "a signal"}`;
-    channel.appendLine(`[${status} after ${Math.round(result.durationMs / 100) / 10}s]`);
+    channel.appendLine(
+      `[${hostScriptOutcome(result)} after ${Math.round(result.durationMs / 100) / 10}s]`
+    );
     channel.appendLine("");
     return result;
   }
@@ -88,6 +99,13 @@ async function runScriptInOutputChannel(
 }
 
 class LabOperationsService {
+  /** Stops the scripts of a topology whose view went away. */
+  stopScripts(labPath: string): void {
+    for (const script of runningScripts.values()) {
+      if (script.labPath === labPath) script.controller.abort();
+    }
+  }
+
   /** Runs one operation for the topology at `labPath`; the raw lab host result. */
   async run(labPath: string, operation: unknown, rawRequest: unknown): Promise<unknown> {
     if (!isOperationName(operation)) {
@@ -127,21 +145,35 @@ class LabOperationsService {
       }
       case "inspectDetails":
         return backend.inspectLabDetails(target);
+      case "describeHostScript":
+        return backend.describeHostScript(target, hostScriptSource(request));
       case "runHostScript": {
-        const scriptPath = optionalString(request.scriptPath);
+        const expectedSha256 = optionalString(request.expectedSha256);
         const script: LabHostScriptRequest = {
-          ...(scriptPath !== undefined
-            ? { scriptPath }
-            : { script: typeof request.script === "string" ? request.script : "" }),
-          timeoutSeconds: positiveNumber(request.timeoutSeconds)
+          ...hostScriptSource(request),
+          ...(typeof request.timeoutSeconds === "number"
+            ? { timeoutSeconds: request.timeoutSeconds }
+            : {}),
+          ...(expectedSha256 !== undefined ? { expectedSha256 } : {})
         };
-        const outputTitle = optionalString(request.outputTitle);
-        if (outputTitle === undefined) return backend.runHostScript(target, script);
-        return runScriptInOutputChannel(
-          outputTitle,
-          await backend.streamHostScript(target, script)
-        );
+        const controller = new AbortController();
+        const runId = optionalString(request.runId) ?? `${labPath}:${Date.now()}`;
+        runningScripts.set(runId, { labPath, controller });
+        try {
+          const run = { signal: controller.signal };
+          const outputTitle = optionalString(request.outputTitle);
+          if (outputTitle === undefined) return await backend.runHostScript(target, script, run);
+          return await runScriptInOutputChannel(
+            outputTitle,
+            await backend.streamHostScript(target, script, run)
+          );
+        } finally {
+          runningScripts.delete(runId);
+        }
       }
+      case "cancelHostScript":
+        runningScripts.get(optionalString(request.runId) ?? "")?.controller.abort();
+        return null;
       case "hostInfo":
         return { ...(await describeLabHost(backend)), host: labHostIdentity(labPath) };
       case "nodeLocations":

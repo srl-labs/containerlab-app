@@ -56,7 +56,8 @@ function atLeast(version: string | undefined, release: readonly [number, number]
 /** What the installed containerlab can do, by its version. */
 export function localOperationSupport(
   version: string | undefined,
-  hostScripts = true
+  hostScripts = true,
+  runtime?: string
 ): LabOperationSupport {
   const snapshots = atLeast(version, SNAPSHOT_RELEASE);
   return {
@@ -65,7 +66,8 @@ export function localOperationSupport(
     deployRestore: snapshots,
     saveCopy: atLeast(version, SAVE_COPY_RELEASE),
     inspectDetails: true,
-    hostScript: hostScripts
+    hostScript: hostScripts,
+    ...(hostScripts ? {} : { hostScriptUnavailable: runtime === "c9s" ? "c9s" : "disabled" })
   };
 }
 

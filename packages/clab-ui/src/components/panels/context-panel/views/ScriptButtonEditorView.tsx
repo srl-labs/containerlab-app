@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { MAX_SCRIPT_TIMEOUT_SECONDS } from "../../../../host/labOperations";
 import Box from "@mui/material/Box";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
@@ -37,14 +38,15 @@ const SOURCE_OPTIONS: Array<{ value: Source; label: string }> = [
 
 function parseTimeout(text: string): number | undefined {
   const value = Number(text);
-  return text.trim() !== "" && Number.isFinite(value) && value > 0 ? value : undefined;
+  if (text.trim() === "" || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.min(value, MAX_SCRIPT_TIMEOUT_SECONDS);
 }
 
 /** Edits the script button whose editor is open; changes apply on the canvas as you type. */
 export const ScriptButtonEditorView: React.FC<{ readOnly?: boolean }> = ({ readOnly = false }) => {
   const sessionClient = useTopologySessionClient();
   const id = useAnnotationUIStore((state) => state.editingScriptButtonId);
-  // Re-read when the graph changes, e.g. undo or the file changing on disk.
+  // Re-read when the button appears or goes away, e.g. with undo.
   const exists = useGraphStore((state) => id !== null && state.nodes.some((node) => node.id === id));
   const [form, setForm] = useState<ScriptButtonAnnotation | undefined>(() =>
     id !== null ? findScriptButton(id) : undefined
@@ -164,6 +166,7 @@ export const ScriptButtonEditorView: React.FC<{ readOnly?: boolean }> = ({ readO
             label="Timeout"
             type="number"
             min={1}
+            max={MAX_SCRIPT_TIMEOUT_SECONDS}
             suffix="s"
             value={timeoutText}
             onChange={(value) => {

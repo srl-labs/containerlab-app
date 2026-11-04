@@ -22,6 +22,7 @@ interface ScriptButtonFileEntry {
 interface TopoViewerApi {
   resetFiles(): Promise<void>;
   gotoFile(filename: "datacenter.clab.yml"): Promise<void>;
+  writeAnnotationsFile(filename: "datacenter.clab.yml", content: object): Promise<void>;
   waitForCanvasReady(): Promise<void>;
   setEditMode(): Promise<void>;
   unlock(): Promise<void>;
@@ -96,6 +97,45 @@ test.describe("Script buttons", () => {
     await expect(output).toContainText("echo fail: failed");
   });
 
+  test("a changed script asks again", async ({ page, topoViewerPage }) => {
+    const api = topoViewerPage as unknown as TopoViewerApi;
+    await setup(page, api);
+    await addInlineScriptButton(page, "echo one");
+    await page.locator(SEL_RUN).click();
+    await page.locator(SEL_CONFIRM_RUN).click();
+    await page.locator(SEL_OUTPUT).getByRole("button", { name: "Close", exact: true }).click();
+
+    await page.locator(`${SEL_EDITOR} textarea#script-button-script`).fill("echo two");
+    await page.locator(SEL_RUN).click();
+    await expect(page.locator(SEL_CONFIRM)).toContainText("echo two");
+  });
+
+  test("a script from someone else asks before every run and says so", async ({ page, topoViewerPage }) => {
+    const api = topoViewerPage as unknown as TopoViewerApi;
+    await setup(page, api);
+    await addInlineScriptButton(page, "echo foreign");
+
+    for (let run = 0; run < 2; run += 1) {
+      await page.locator(SEL_RUN).click();
+      await expect(page.locator('[data-testid="script-button-confirm-foreign"]')).toBeVisible();
+      await page.locator(SEL_CONFIRM_RUN).click();
+      await page.locator(SEL_OUTPUT).getByRole("button", { name: "Close", exact: true }).click();
+    }
+  });
+
+  test("the run control stops a running script", async ({ page, topoViewerPage }) => {
+    const api = topoViewerPage as unknown as TopoViewerApi;
+    await setup(page, api);
+    await addInlineScriptButton(page, "echo slow");
+
+    await page.locator(SEL_RUN).click();
+    await page.locator(SEL_CONFIRM_RUN).click();
+    await expect(page.locator(SEL_RUN)).toHaveAttribute("aria-label", /^Stop /);
+    await page.locator(SEL_RUN).click();
+    await expect(page.locator(SEL_RUN)).toHaveAttribute("aria-label", /^Run /);
+    await expect(page.locator(SEL_OUTPUT)).toHaveCount(0);
+  });
+
   test("deleting a script button removes it from the annotations only", async ({
     page,
     topoViewerPage
@@ -112,5 +152,43 @@ test.describe("Script buttons", () => {
     await expect
       .poll(async () => (await api.getAnnotationsFromFile(DATACENTER_FILE)).scriptButtonAnnotations ?? [])
       .toEqual([]);
+  });
+});
+
+test.describe("Script buttons on a host that cannot run them", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as { __CLAB_UI_HARNESS_LAB_OPERATIONS__?: unknown }).__CLAB_UI_HARNESS_LAB_OPERATIONS__ = {
+        hostScript: false,
+        hostScriptUnavailable: "c9s"
+      };
+    });
+  });
+
+  test("offers no new button, and a button in the file is disabled with the reason", async ({
+    page,
+    topoViewerPage
+  }) => {
+    const api = topoViewerPage as unknown as TopoViewerApi;
+    await api.resetFiles();
+    await api.writeAnnotationsFile(DATACENTER_FILE, {
+      scriptButtonAnnotations: [
+        { id: "script-button-1", label: "Reset", position: { x: 0, y: 0 }, script: "echo hi" }
+      ]
+    });
+    await api.gotoFile(DATACENTER_FILE);
+    await api.waitForCanvasReady();
+    await api.setEditMode();
+    await api.unlock();
+    await fitGraph(page);
+
+    const run = page.locator(SEL_RUN);
+    await expect(run).toBeDisabled();
+    await expect(run).toHaveAttribute("title", /Kubernetes/);
+
+    const area = await getEmptyCanvasArea(page);
+    await rightClick(page, area.x + area.width / 2, area.y + area.height / 2);
+    await expect(page.locator('[data-testid^="context-menu-item-"]').first()).toBeVisible();
+    await expect(page.locator(SEL_ADD_SCRIPT_BUTTON)).toHaveCount(0);
   });
 });

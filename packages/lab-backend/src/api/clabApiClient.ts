@@ -4,6 +4,7 @@ import {
   parseLabHostCaptureInfo,
   type LabHostCaptureInfo,
   type LabHostScriptRequest,
+  type LabHostScriptSource,
   type LabLifecycleOptions,
   type TailscaleStatus,
 } from "@containerlab/clab-ui/host";
@@ -828,24 +829,61 @@ export class ClabApiClient {
     return (await res.json()) as SnapshotSaveResponse;
   }
 
-  /**
-   * Runs a script button's script on the server's host, from the lab's
-   * topology folder, as the signed-in user. Servers that advertise
-   * `host-scripts` accept it; the body and result match `LocalLabBackend`.
-   */
-  async runHostScript(
+  /** What a script button's script is on the server's host, as the signed-in user can read it. */
+  async describeHostScript(
     token: string,
     labName: string,
-    request: LabHostScriptRequest,
+    topologyPath: string | undefined,
+    source: LabHostScriptSource,
   ): Promise<unknown> {
     const res = await this.request(
       "POST",
-      `/api/v1/labs/${enc(labName)}/host-script`,
+      `/api/v1/labs/${enc(labName)}/host-script/describe${topologyQuery(topologyPath)}`,
       token,
-      JSON.stringify(request),
+      JSON.stringify(source),
       "application/json",
     );
     return await res.json();
+  }
+
+  /**
+   * Runs a script button's script on the server's host, from the lab's topology
+   * folder, as the signed-in user. Answers with NDJSON events; closing the
+   * connection stops the script. Servers that advertise `host-scripts` accept it.
+   */
+  async openHostScriptStream(
+    token: string,
+    labName: string,
+    topologyPath: string | undefined,
+    request: LabHostScriptRequest,
+    requestOptions: StreamRequestOptions = {},
+  ): Promise<Response> {
+    const path = `/api/v1/labs/${enc(labName)}/host-script/stream${topologyQuery(topologyPath)}`;
+    let res: Response;
+    try {
+      res = await apiFetch(
+        `${this.baseUrl}${path}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
+          signal: requestOptions.signal,
+        },
+        { stream: true },
+      );
+    } catch (error) {
+      throw new Error(upstreamNetworkErrorMessage(this.baseUrl, error));
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      const err: HttpError = new Error(`POST ${path} failed (${res.status}): ${text}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res;
   }
 
   async inspectLabDetails(
@@ -1624,6 +1662,11 @@ export class ClabApiClient {
     }
     return res;
   }
+}
+
+/** The `?path=` that names a lab's topology, also one that is not deployed. */
+function topologyQuery(topologyPath: string | undefined): string {
+  return topologyPath ? `?${new URLSearchParams({ path: topologyPath }).toString()}` : "";
 }
 
 /** What a capture stream asks of clab-api-server. */

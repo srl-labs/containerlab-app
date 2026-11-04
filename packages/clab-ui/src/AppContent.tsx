@@ -82,6 +82,7 @@ import {
   useTopoViewerStore
 } from "./stores";
 import type { TopoViewerState } from "./stores";
+import { useLabOperationsStore } from "./stores/labOperationsStore";
 import { ScriptButtonDialogs } from "./scriptButtons/ScriptButtonDialogs";
 import { useScriptButtons, type ScriptButtonActions } from "./scriptButtons/useScriptButtons";
 import { executeTopologyCommand, getCustomIconMap, saveViewerSettings } from "./services";
@@ -879,6 +880,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       onEditGroup: forward("editGroup"),
       onDeleteGroup: forward("deleteGroup"),
       onRunScriptButton: (id) => scriptButtonsRef.current?.runScriptButton(id),
+      onStopScriptButton: (id) => scriptButtonsRef.current?.stopScriptButton(id),
       onEditScriptButton: (id) => scriptButtonsRef.current?.editScriptButton(id),
       onDeleteScriptButton: (id) => scriptButtonsRef.current?.deleteScriptButton(id),
       getGroupMembers: (groupId, options) =>
@@ -893,6 +895,7 @@ export const AppContent: React.FC<AppContentProps> = ({
     []
   );
 
+  const hostScriptSupported = useLabOperationsStore((labState) => labState.support.hostScript);
   const scriptButtons = useScriptButtons({
     isLocked: isInteractionLocked,
     onLockedAction: handleLockedAction,
@@ -1416,7 +1419,8 @@ export const AppContent: React.FC<AppContentProps> = ({
       onAddGroupAtPosition: annotationActions.createGroupAtPosition,
       onAddShapeAtPosition: annotationActions.createShapeAtPosition,
       onAddTrafficRateAtPosition: annotationActions.createTrafficRateAtPosition,
-      onAddScriptButtonAtPosition: scriptButtons.createScriptButtonAtPosition,
+      // Only hosts that can run scripts offer new buttons; buttons already in the file stay.
+      onAddScriptButtonAtPosition: hostScriptSupported ? scriptButtons.createScriptButtonAtPosition : undefined,
       onDropCreateNode: handleDropCreateNode,
       onDropCreateNetwork: handleDropCreateNetwork,
       onTopologyNodePositionCommit: layoutControls.markLayoutPreset,
@@ -1446,6 +1450,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       graphHandlers.handleDeleteLink,
       handleOpenNodePalette,
       annotationActions,
+      hostScriptSupported,
       scriptButtons.createScriptButtonAtPosition,
       handleDropCreateNode,
       handleDropCreateNetwork,

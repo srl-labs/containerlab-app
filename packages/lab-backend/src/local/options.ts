@@ -75,7 +75,7 @@ export interface LocalLabBackendOptions {
   env?: NodeJS.ProcessEnv;
   /** The OS user who owns labs on this machine. */
   username?: string;
-  /** Let script buttons run shell scripts on this machine. On by default. */
+  /** Let script buttons run shell scripts on this machine. On by default, never on c9s. */
   hostScripts?: boolean;
 }
 
@@ -197,7 +197,8 @@ export function resolveLocalOptions(options: LocalLabBackendOptions = {}): Resol
     edgesharkExtraEnv: options.edgesharkExtraEnv ?? ["HTTP_PROXY=", "http_proxy="],
     env: c9s ? c9sEnvironment(env, c9s) : env,
     username: options.username?.trim() || defaultUsername(),
-    hostScripts: options.hostScripts !== false
+    // A c9s lab has no host to run on, and this machine is not it.
+    hostScripts: runtime !== "c9s" && options.hostScripts !== false
   };
 }
 

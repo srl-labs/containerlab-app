@@ -561,9 +561,13 @@ function openTerminalWindow(url: string, serverOrigin: string): void {
 
 async function startLocalAppServer(): Promise<string> {
   const local = createDesktopLocalEndpoints();
+  let appPort: number | undefined;
   const server = await createContainerlabAppServer({
     defaultClabApiUrl: DEFAULT_CLAB_API_URL,
     isDev: false,
+    // Only this app's own address: any web page could otherwise reach labs and script
+    // buttons through a name that points at this machine.
+    allowedHosts: () => (appPort === undefined ? [] : [`127.0.0.1:${appPort}`, `localhost:${appPort}`]),
     ...local,
     // Captures of Kubernetes lab hosts open in Wireshark on this machine.
     localWireshark: process.env.CONTAINERLAB_DESKTOP_WIRESHARK?.trim()
@@ -588,6 +592,7 @@ async function startLocalAppServer(): Promise<string> {
   if (!address || typeof address.port !== "number") {
     throw new Error("Containerlab desktop app server did not expose a TCP port");
   }
+  appPort = address.port;
   return `http://127.0.0.1:${address.port}`;
 }
 

@@ -1,14 +1,20 @@
 import { create } from "zustand";
 
-import type { LabHostScriptResult } from "../host/labOperations";
+import type { LabHostScriptDescription, LabHostScriptResult } from "../host/labOperations";
+import { useTopoViewerStore } from "../stores/topoViewerStore";
 
 type ScriptRunStatus = "running" | "success" | "failed";
 
 interface ScriptConfirmRequest {
   label: string;
-  /** The script path, or the script itself, as the user will run it. */
-  source: string;
-  isPath: boolean;
+  /** What will run, as the lab host describes it. */
+  script: LabHostScriptDescription;
+}
+
+/** Button ids repeat from lab to lab, so a run belongs to the lab it started in. */
+export function scriptRunKey(id: string): string {
+  const { labName, yamlFileName } = useTopoViewerStore.getState();
+  return `${labName}|${yamlFileName}|${id}`;
 }
 
 interface PendingConfirm extends ScriptConfirmRequest {
@@ -16,11 +22,14 @@ interface PendingConfirm extends ScriptConfirmRequest {
 }
 
 interface ScriptButtonState {
-  /** Last run state per script button id; cleared a moment after a run ends. */
+  /** Last run state per `scriptRunKey`; cleared a moment after a run ends. */
   status: Record<string, ScriptRunStatus>;
+  /** Stops the running script of a `scriptRunKey`. */
+  stops: Record<string, () => void>;
   confirm: PendingConfirm | null;
   output: { label: string; result: LabHostScriptResult } | null;
-  setStatus: (id: string, status: ScriptRunStatus | undefined) => void;
+  setStatus: (key: string, status: ScriptRunStatus | undefined) => void;
+  setStop: (key: string, stop: (() => void) | undefined) => void;
   /** Resolves true when the user agrees to run the script. */
   askConfirm: (request: ScriptConfirmRequest) => Promise<boolean>;
   answerConfirm: (confirmed: boolean) => void;
@@ -31,14 +40,22 @@ interface ScriptButtonState {
 /** Run state, the run confirmation and the output dialog of script buttons. */
 export const useScriptButtonStore = create<ScriptButtonState>((set, get) => ({
   status: {},
+  stops: {},
   confirm: null,
   output: null,
-  setStatus: (id, status) =>
+  setStatus: (key, status) =>
     set((state) => {
       const next = { ...state.status };
-      if (status === undefined) delete next[id];
-      else next[id] = status;
+      if (status === undefined) delete next[key];
+      else next[key] = status;
       return { status: next };
+    }),
+  setStop: (key, stop) =>
+    set((state) => {
+      const next = { ...state.stops };
+      if (stop === undefined) delete next[key];
+      else next[key] = stop;
+      return { stops: next };
     }),
   askConfirm: (request) =>
     new Promise<boolean>((resolve) => {

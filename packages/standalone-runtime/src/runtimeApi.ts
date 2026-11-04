@@ -400,22 +400,30 @@ function asJsonBody(body: unknown, endpointId?: string): RequestInit {
  * app server); resolves with the exit event's result.
  */
 export async function streamHostScript(
-  input: RuntimeTargetRequest & { scriptPath?: string; script?: string; timeoutSeconds?: number },
-  onOutput: (text: string, stream: "stdout" | "stderr") => void
+  input: RuntimeTargetRequest & {
+    scriptPath?: string;
+    script?: string;
+    timeoutSeconds?: number;
+    expectedSha256?: string;
+  },
+  onOutput: (text: string, stream: "stdout" | "stderr") => void,
+  signal?: AbortSignal
 ): Promise<unknown> {
   const endpointId = resolveTargetEndpointId(input);
   let response: Response;
   try {
     response = await fetchRuntimeResource(
       "/api/runtime/lab-operations/host-script/stream",
-      asJsonBody(input, endpointId)
+      { ...asJsonBody(input, endpointId), ...(signal ? { signal } : {}) }
     );
   } catch (error) {
+    if (signal?.aborted) return abortedScriptResult();
     markEndpointUnavailable(endpointId, "offline");
     throw error;
   }
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
+    // A lab host that refuses a script is still signed in.
+    if (response.status === 401) {
       markEndpointUnavailable(endpointId, "session_expired");
     }
     throw new Error(await readError(response));
@@ -437,15 +445,26 @@ export async function streamHostScript(
       throw new Error(event.error ?? "The script failed.");
     }
   };
-  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
-    buffer += decoder.decode(chunk.value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-    lines.forEach(handle);
+  try {
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      buffer += decoder.decode(chunk.value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      lines.forEach(handle);
+    }
+    handle(buffer);
+  } catch (error) {
+    if (signal?.aborted) return abortedScriptResult();
+    throw error;
   }
-  handle(buffer);
-  if (result === undefined) throw new Error("The script stream ended without an exit status.");
-  return result;
+  if (result !== undefined) return result;
+  if (signal?.aborted) return abortedScriptResult();
+  throw new Error("The script stream ended without an exit status.");
+}
+
+/** Closing the connection stopped the script, so no exit event comes. */
+function abortedScriptResult(): unknown {
+  return { exitCode: null, stdout: "", stderr: "", timedOut: false, cancelled: true, durationMs: 0 };
 }
 
 export async function inspectAllLabs(endpointId?: string): Promise<InspectAllLabsResponse> {
@@ -671,7 +690,7 @@ export type LabOperationRoute =
   | "snapshots"
   | "save"
   | "inspect-details"
-  | "host-script"
+  | "host-script/describe"
   | "node-locations"
   | "capture-interfaces"
   | "manifests"

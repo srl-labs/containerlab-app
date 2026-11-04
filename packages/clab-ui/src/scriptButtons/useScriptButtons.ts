@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import type { Node } from "@xyflow/react";
 
 import {
@@ -9,16 +9,16 @@ import {
 import type { ScriptButtonNodeData } from "../components/canvas/types";
 import type { GroupStyleAnnotation, ScriptButtonAnnotation } from "../core/types/topology";
 import { useClabUiHost } from "../host";
+import { hostScriptUnavailableMessage, type LabHostScriptDescription } from "../host/labOperations";
 import { findDeepestGroupAtPosition } from "../hooks/canvas/groupUtils";
 import type { TopologySessionClient } from "../session";
 import { saveAnnotationNodesFromGraph } from "../services";
 import { useAnnotationUIStore } from "../stores/annotationUIStore";
 import { useGraphStore } from "../stores/graphStore";
 import { useLabOperationsStore } from "../stores/labOperationsStore";
-import { useTopoViewerStore } from "../stores/topoViewerStore";
 
-import { needsConfirmation, resolveScriptButtonConfirm, scriptTrustKey, trustScript } from "./scriptButtonPolicy";
-import { useScriptButtonStore } from "./scriptButtonStore";
+import { needsConfirmation, resolveScriptButtonConfirm, trustScript } from "./scriptButtonPolicy";
+import { scriptRunKey, useScriptButtonStore } from "./scriptButtonStore";
 
 type ToastType = "info" | "success" | "warning" | "error";
 
@@ -37,10 +37,9 @@ interface UseScriptButtonsParams {
 export interface ScriptButtonActions {
   createScriptButtonAtPosition: (position: { x: number; y: number }) => void;
   editScriptButton: (id: string) => void;
-  /** Merges editor changes into the button and saves them. */
-  updateScriptButton: (id: string, updates: Partial<ScriptButtonAnnotation>) => void;
   deleteScriptButton: (id: string) => void;
   runScriptButton: (id: string) => void;
+  stopScriptButton: (id: string) => void;
 }
 
 function isScriptButtonNode(node: Node): node is Node<ScriptButtonNodeData> {
@@ -69,8 +68,9 @@ function nextScriptButtonId(nodes: Node[]): string {
 
 function describeResult(
   label: string,
-  result: { exitCode: number | null; timedOut: boolean }
+  result: { exitCode: number | null; timedOut: boolean; cancelled?: boolean }
 ): { message: string; type: ToastType } {
+  if (result.cancelled === true) return { message: `${label} stopped.`, type: "info" };
   if (result.timedOut) return { message: `${label} timed out.`, type: "error" };
   if (result.exitCode === 0) return { message: `${label} finished.`, type: "success" };
   return { message: `${label} exited with ${result.exitCode ?? "a signal"}.`, type: "error" };
@@ -110,13 +110,6 @@ export function useScriptButtons(params: UseScriptButtonsParams): ScriptButtonAc
     if (findScriptButton(id)) useAnnotationUIStore.getState().setEditingScriptButtonId(id);
   }, []);
 
-  const updateScriptButton = useCallback(
-    (id: string, updates: Partial<ScriptButtonAnnotation>) => {
-      if (updateScriptButtonNode(id, updates)) persist();
-    },
-    [persist]
-  );
-
   const deleteScriptButton = useCallback(
     (id: string) => {
       if (isLocked) {
@@ -131,13 +124,17 @@ export function useScriptButtons(params: UseScriptButtonsParams): ScriptButtonAc
     [isLocked, onLockedAction, persist]
   );
 
+  /** Buttons between the click and the start of their run, so a double click runs once. */
+  const preparing = useRef(new Set<string>());
+
   // Running is not editing, so it works in view mode and while the lab is locked.
   const runScriptButton = useCallback(
     (id: string) => {
       const button = findScriptButton(id);
       if (!button) return;
       const store = useScriptButtonStore.getState();
-      if (store.status[id] === "running") return;
+      const key = scriptRunKey(id);
+      if (store.status[key] === "running" || preparing.current.has(key)) return;
       const label = button.label.trim() || "Script";
       const scriptPath = button.scriptPath?.trim() ?? "";
       const script = button.script ?? "";
@@ -145,8 +142,9 @@ export function useScriptButtons(params: UseScriptButtonsParams): ScriptButtonAc
         addToast("Script buttons need a lab host to run.", "warning");
         return;
       }
-      if (!useLabOperationsStore.getState().support.hostScript) {
-        addToast("This lab host cannot run scripts. Use a local lab or update clab-api-server.", "warning");
+      const { support } = useLabOperationsStore.getState();
+      if (!support.hostScript) {
+        addToast(hostScriptUnavailableMessage(support.hostScriptUnavailable), "warning");
         return;
       }
       if (scriptPath === "" && script.trim() === "") {
@@ -154,34 +152,52 @@ export function useScriptButtons(params: UseScriptButtonsParams): ScriptButtonAc
         return;
       }
 
-      const source = scriptPath !== "" ? scriptPath : script;
-      const viewer = useTopoViewerStore.getState();
-      const trustKey = scriptTrustKey(`${viewer.labName}|${viewer.yamlFileName}`, source);
+      const source = scriptPath !== "" ? { scriptPath } : { script };
+      preparing.current.add(key);
       void (async () => {
-        if (needsConfirmation(resolveScriptButtonConfirm(), trustKey)) {
-          const confirmed = await store.askConfirm({ label, source, isPath: scriptPath !== "" });
-          if (!confirmed) return;
-          trustScript(trustKey);
-        }
-        const status = useScriptButtonStore.getState();
-        status.setStatus(id, "running");
+        let description: LabHostScriptDescription;
         try {
-          const result = await operations.runHostScript({
-            ...(scriptPath !== "" ? { scriptPath } : { script }),
-            ...(button.timeoutSeconds !== undefined ? { timeoutSeconds: button.timeoutSeconds } : {}),
-            ...(button.output === undefined || button.output === "terminal" ? { outputTitle: label } : {})
-          });
-          const outcome = describeResult(label, result);
-          status.setStatus(id, outcome.type === "success" ? "success" : "failed");
-          if (button.output === "dialog") status.showOutput(label, result);
-          else if (button.output === "toast") addToast(outcome.message, outcome.type);
+          description = await operations.describeHostScript(source);
+          if (needsConfirmation(resolveScriptButtonConfirm(), description)) {
+            const confirmed = await store.askConfirm({ label, script: description });
+            if (!confirmed) return;
+            trustScript(description.trustKey);
+          }
         } catch (error) {
-          status.setStatus(id, "failed");
           addToast(`${label}: ${error instanceof Error ? error.message : String(error)}`, "error");
+          return;
+        } finally {
+          preparing.current.delete(key);
+        }
+
+        const status = useScriptButtonStore.getState();
+        const controller = new AbortController();
+        status.setStatus(key, "running");
+        status.setStop(key, () => controller.abort());
+        try {
+          const result = await operations.runHostScript(
+            {
+              ...source,
+              expectedSha256: description.sha256,
+              ...(button.timeoutSeconds !== undefined ? { timeoutSeconds: button.timeoutSeconds } : {}),
+              ...(button.output === undefined || button.output === "terminal" ? { outputTitle: label } : {})
+            },
+            { signal: controller.signal }
+          );
+          const outcome = describeResult(label, result);
+          if (result.cancelled === true) status.setStatus(key, undefined);
+          else status.setStatus(key, outcome.type === "success" ? "success" : "failed");
+          if (button.output === "dialog" && result.cancelled !== true) status.showOutput(label, result);
+          else if (button.output === "toast" || result.cancelled === true) addToast(outcome.message, outcome.type);
+        } catch (error) {
+          status.setStatus(key, "failed");
+          addToast(`${label}: ${error instanceof Error ? error.message : String(error)}`, "error");
+        } finally {
+          status.setStop(key, undefined);
         }
         setTimeout(() => {
-          if (useScriptButtonStore.getState().status[id] !== "running") {
-            useScriptButtonStore.getState().setStatus(id, undefined);
+          if (useScriptButtonStore.getState().status[key] !== "running") {
+            useScriptButtonStore.getState().setStatus(key, undefined);
           }
         }, STATUS_LINGER_MS);
       })();
@@ -189,14 +205,18 @@ export function useScriptButtons(params: UseScriptButtonsParams): ScriptButtonAc
     [operations, addToast]
   );
 
+  const stopScriptButton = useCallback((id: string) => {
+    useScriptButtonStore.getState().stops[scriptRunKey(id)]?.();
+  }, []);
+
   return useMemo(
     () => ({
       createScriptButtonAtPosition,
       editScriptButton,
-      updateScriptButton,
       deleteScriptButton,
-      runScriptButton
+      runScriptButton,
+      stopScriptButton
     }),
-    [createScriptButtonAtPosition, editScriptButton, updateScriptButton, deleteScriptButton, runScriptButton]
+    [createScriptButtonAtPosition, editScriptButton, deleteScriptButton, runScriptButton, stopScriptButton]
   );
 }
